@@ -811,11 +811,11 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
 - [ ] T8 · If M2 holds: the texts. Route: delegated, one writer.
 - [ ] T9 · The trial on GitHub: the workflow on its branch, one run, what it answered, the
       figure and the two questions sent to the orchestrator. Route: inline, one file.
-- [ ] T11 · The merge hook, first and alone: `.githooks/pre-merge-commit` on
+- [x] T11 · The merge hook, first and alone: `.githooks/pre-merge-commit` on
       `feat/gate-merge-hook`, both reviews, its pull request. Route: inline.
 - [ ] T12 · The identical-tree proof (Design, "No repeated control"), after the cut of git
       processes and unless he drops it. Route: inline; built, uncommitted.
-- [ ] T13 · The quick checks that read documents run on a documents-only commit, if they
+- [x] T13 · The quick checks that read documents run on a documents-only commit, if they
       are seconds; the figure to the orchestrator if they are minutes. Route: inline.
 - [ ] T14 · Road 1, first slice (Design): the eval tests take one process snapshot a file.
       Route: delegated, two writers with disjoint files launched together (the context
@@ -1785,6 +1785,23 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   the orchestrator tells him so in its next recap. **Order:** T8 goes behind road 1 and
   the whole run by file, and waits for a day when a gentle-ai review is due, to measure
   its number 2 on it.
+- 2026-10-12 · **T14 is corrected, reviewed and pushed: pull request 79, head `964aafc`**
+  (`t14d-turn.log`, 18:08:05 to 18:21:16; https://github.com/jsaristi/js-harness/pull/79,
+  opened at 18:22, the orchestrator's to merge). RED 18:08:18, against the testkit as
+  committed: 2 of 60 fail, the two new tests. GREEN: 60 of 60. The four eval files under
+  the counting tool: 328 of 329 pass, one skipped, in 182 s, and **the count holds, 729**
+  (331, 176, 123, 99; `t14d-count.json`); no line names EBUSY, EPERM or ENOTEMPTY. The
+  commit, `964aafc` `fix(evals): a run whose root was not seen to exit is swept at once,
+  not at the end of the file`: whole gate PASS in **535 s** (gate log, 18:11:37, load 1.0
+  of 8). gentle-ai: medium risk, 48 lines, not due (under budget). **Codex on the
+  correction, once: "the patch is correct" (0.95), no finding**, recorded for
+  `17c2146..964aafc`; plan 71,000, spent 174,805 input tokens (136,192 cached) in 7
+  requests, 37 s, the machine 26% busy (77 of 300 processor-seconds), `node --test` run
+  once. The eighth session of the day and the sixth over its plan; inside the rate of
+  315,000. The pre-push check: 2 code commits since `origin/main`, all covered. The
+  branch holds `main` `e90e0a4` (behind 0 at 18:21).
+  **The whole suite in the three gates of this branch: 554 s, 605 s, 535 s**, against 705
+  to 830 s before it. Spent on Codex in the feature: 3,246,895 input tokens.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
@@ -1824,72 +1841,62 @@ words read by me in its transcript `65318fd5`, by type and origin, at the lines 
   folder of the gate under an excluded place would be the harness's half) and the
   TypeScript language server of the sessions (the orchestrator's).
 
-The order as it stands at 15:58 on 2026-10-12 (the orchestrator's, from its messages of
-15:31, 15:47 and 15:56; each is a claim of its own, inside his option 3 and with no
-question to him): T13's reviews and pull request; pull request 75 with `main` in it;
-road 1's first slice, written now and gated in a lock turn; then S1's Codex record, T8
-and the close. Closed, measured: the antivirus road (M1d). Compared and parked, his to
-reopen: the Linux roads. Not now: cut 2 of git, the identical-tree proof (T12,
-uncommitted).
+The order as it stands at 18:22 on 2026-10-12 (the orchestrator's, from its messages
+after 17:16; each is a claim of its own, inside his option 3 and with no question to
+him). Done and merged: T11 (pull request 75), T13 (pull request 77). Open, the
+orchestrator's to merge: T14, pull request 79, head `964aafc`. Closed, measured: the
+antivirus road (M1d). Compared and parked, his to reopen: the Linux roads. Parked,
+uncommitted: the identical-tree proof (T12).
 
-1. **T13** (`feat/gate-doc-checks`, worktree `gate-doc-checks`). Read `t13b-turn.log`
-   (`t13-red.log`, `t13-green.log`, `t13-commit.log`). When it committed: gentle-ai's
-   assessment with `--base-ref origin/main --committed-only`, its lifecycle if due, Codex
-   inside the rate (`codex-review --base <the commit>^ --plan` first), in a lock turn;
-   then merge the current `main` in (a lock turn: the merge brings code, and this branch
-   has no merge hook, so make it `--no-commit` and commit, which the pre-commit hook
-   gates), push, pull request, and tell the orchestrator, which asked to know when it has
-   both reviews.
-2. **Pull request 75** (`feat/gate-merge-hook`). Read `hook2-turn.log`: the failing-merge
-   test red and green, its commit, gentle-ai's assessment, Codex on that commit, the
-   merge of `main` gated by the branch's own merge hook. Exit 10 means a review of
-   gentle-ai's is due first; 11, the plan was over the rate or not read; 14, the merged
-   tree failed the suite and the merge is left unfinished. When it ended with 0: push,
-   and the head to the orchestrator.
-3. **Road 1's first slice (T14)** (`feat/gate-wait-eval-sweep`, worktree
-   `gate-wait-eval-sweep`, off `main` `e60cbda`). Two writers work in it since 15:57,
-   with disjoint files and no test run: one on `evals/runner.mjs`, `evals/task-proof.mjs`,
-   `evals/isolation-probe.mjs`, `bin/lib/process-tree.testkit.mjs` and
-   `bin/lib/process-tree.test.mjs` (the run as a parameter of the four entries;
-   `sweepLater` and `sweptLater`; their tests), the other on `evals/runner.test.mjs`,
-   `evals/task-proof.test.mjs` and `evals/isolation-probe.test.mjs` (the deferred sweep
-   handed in through each file's helper, the look in `after`, one test an entry). When
-   both hand back: read each diff against its surface and the design; then one lock turn:
-   RED with the shipping files and the testkit stashed, GREEN with them, the count of
-   children that are not git on the four files with the counting tool of
-   `feat/gate-wait-count` (before: 501, 346, 210, 99; expected 420 to 440 fewer), the
-   commit with its gate. **The orchestrator's three conditions:** the trade for a leak is
-   written (Design); if a removal fails because a child still holds a folder
-   (`evals/runner.mjs:413-414`), stop and bring it with its count over a few runs, no
-   retry and no wait added to make the tests green; if the count is not near the
-   expectation, say why before the pull request. Then both reviews, one whole run for the
-   report, the pull request.
-4. **S1's last commit.** `f04efca` on `feat/gate-wait` needs its Codex record before that
-   branch is pushed: `codex-review --plan --base f04efca^`, run inside the rate, measured
-   by process (M2, number 1 for Codex).
-5. gentle-ai and Codex on `47484bd..fc70dc3` (`feat/gate-wait-count`). T8 (the reviews
-   outside the lock's turn; `AGENTS.md:17` and `bin/gate.mjs:3` say `node --test`). T10,
-   the close.
-6. Left for later, written down: the second note on the merge hook; the 14 by-path sweeps
-   and 7 version probes of the eval tests; the fifth caller
-   (`evals/codex-isolation-probe.mjs:535`); a cheaper process list for the real trial.
+1. **When pull request 79 is merged: one whole run under the counting tool on that
+   `main`**, in a lock turn, no review, no spend: `node
+   D:/js-harness-worktrees/gate-wait-count/scripts/count-git.mjs --json --runner` over the
+   whole suite, from a worktree of that `main` (the shape of `m1d-turn.sh`). Wanted: the
+   table by file of where the wall is, and the wall beside 554 s, 605 s and 535 s (the
+   three gates of T14's branch). The orchestrator orders on that table: slice 2 of road 1
+   if the wall is still an eval file, cut 2 of git if it is `bin/codex-review.test.mjs`
+   and its 6,067 git starts. For cut 2, bring what changed since it was judged at 20 s of
+   736 for a large change of fakes: that was judged when the evals were the wall.
+2. **Road 1, slice 2, if ordered** (sized in Progress, not designed): `proveTask`'s graders
+   and visible suites in tests of a file's shape, by a stand-in run that answers five
+   clean results, and the 14 by-path sweeps and 7 version probes through seams that
+   exist. About 110 to 150 starts for 130 to 180 lines. One reader's attack before it is
+   built, and that attack asks, for each case the real path covers, what the stand-in
+   does with it: the first slice's reader did not, and Codex found the root left running.
+   Slice 3 (the fake agent and the fake Claude as functions inside the test's process) is
+   its own design, its own reader, its own pull request.
+3. **S1's last commit.** `f04efca` on `feat/gate-wait` needs its Codex record before that
+   branch is pushed: `codex-review --plan --base f04efca^`, run once inside the rate, in a
+   lock turn, measured by process. Then `main` merged in (a lock turn), push, pull
+   request.
+4. gentle-ai and Codex on `47484bd..fc70dc3` (`feat/gate-wait-count`).
+5. **T8, as half** (Progress, the entry on what he said yes to): gentle-ai's review
+   leaves the lock, Codex's stays, and a Codex record says when the review ran tests. It
+   needs S1 on `main` first, and waits for a day when a gentle-ai review is due, to
+   measure its number 2 on it.
+6. T10, the close.
+7. Left for later, written down: the second note on the merge hook; the fifth caller
+   (`evals/codex-isolation-probe.mjs:535`); a cheaper process list for the real trial;
+   Codex outside the lock, which needs a guard that keeps it from running tests.
 
 ## Resume here
 - Read the logs before anything is asked again: a turn started before a restart of the
   desktop app sends no notice. `js-harness gate log --last 6` says which turns ended.
-- Seven worktrees under `D:\js-harness-worktrees`. Pushed: `trial/gate-on-github`
-  (`14a6026`, never merged) and `feat/gate-merge-hook` (pull request 75). Not pushed:
-  `feat/gate-wait` (this document; S1's code ends at `f04efca`), `feat/gate-wait-count`
-  (`fc70dc3`: the counting tools and the first cut), `feat/gate-doc-checks` (T13),
-  `feat/gate-wait-eval-sweep` (T14, being written), `feat/gate-wait-same-tree` (T12,
-  uncommitted, parked).
+- Five worktrees under `D:\js-harness-worktrees`. Pushed: `trial/gate-on-github`
+  (`14a6026`, never merged) and `feat/gate-wait-eval-sweep` (T14, pull request 79, head
+  `964aafc`). Not pushed: `feat/gate-wait` (this document; S1's code ends at `f04efca`),
+  `feat/gate-wait-count` (`fc70dc3`: the counting tools and the first cut),
+  `feat/gate-wait-same-tree` (T12, uncommitted, parked). Merged and removed:
+  `feat/gate-merge-hook` (pull request 75), `feat/gate-doc-checks` (pull request 77).
 - The scratchpad is
   `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86\scratchpad`.
   A script is handed to the gate as a file, never inline: `node
   D:/js-harness/bin/js-harness.mjs gate --wait 240 -- sh <script>`, in the background.
-  Turn scripts there: `t13b-turn.sh`, `hook2-turn.sh`, `m1d-turn.sh`. Readers' files:
-  `eval-children-reading.md`, `road1-design-attack.md`; the orchestrator's readers' file
-  is `two-roads-review.md` in its own scratchpad.
+  Turn scripts there: `m1d-turn.sh` (a whole run under the counting tool), `t14-turn.sh`,
+  `t14c-turn.sh`, `t14d-turn.sh`. Readers' files: `eval-children-reading.md`,
+  `road1-design-attack.md`; the orchestrator's readers' file is `two-roads-review.md` in
+  its own scratchpad. A part is appended to Progress with `doc-apply2.cjs <worktree>
+  <part's bare name>`.
 - gentle-ai, for a commit: `gentle-ai review assess --cwd . --agent claude-code --base-ref
   <boundary> --committed-only --json`; when due, its `next_transition.command` with
   `--lenses` and `--lenses-reason` appended; `ga-exec.mjs <json> next_transition.execute
@@ -1898,7 +1905,9 @@ uncommitted).
 - The orchestrator is `JH ORQ · js-harness [ce6e34]`; its transcript is `65318fd5`. Its
   messages are claims: check one thing first. A message he sent while it worked is stored
   there as an attachment of type `queued_command`, not as a user line.
-- Spent in this feature: Codex 1,949,288 input tokens (1,649,068 for S1, 119,953 for the
-  trial's workflow, 180,267 for the merge hook); sub-agents 2,389,643 tokens before 12:45,
-  about 572,000 from then to 14:50, and since then 285,336 (the eval reading), 261,389
-  (the design's attack) and the two writers of T14, not yet counted.
+- Spent in this feature: Codex 3,246,895 input tokens (1,649,068 for S1, 119,953 for the
+  trial's workflow, 180,267 and 87,814 for the merge hook and its test, 499,650 for T13,
+  535,338 and 174,805 for T14 and its correction); sub-agents 2,389,643 tokens before
+  12:45, about 572,000 from then to 14:50, and since then 285,336 (the eval reading),
+  261,389 (the design's attack), 163,483 and 234,978 (the two writers of T14); none after
+  the compaction of 17:16.
