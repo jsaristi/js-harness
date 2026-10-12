@@ -13,8 +13,13 @@
 // - The counting variables are added to an environment a caller writes out (`{ env: { PATH } }`): a child
 //   `node` started without NODE_OPTIONS would run uncounted, with every git process below it. So would one
 //   whose caller kept the rest and cleared NODE_OPTIONS (`{ ...process.env, NODE_OPTIONS: '' }`).
+// - The launch token travels in the environment, not by pid: `execSync` and `execFileSync` give no pid, a shell
+//   stands between a launcher and its `node`, and a pid is used again in a long run. The token is in this
+//   process's environment only while a call that starts `node` runs, and a process takes its own token out of
+//   its environment when it starts, so no other child carries it down.
 // - What it cannot see is said in the tool's report: a process that is killed never reaches its `exit`.
 import childProcess from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
@@ -25,6 +30,7 @@ export const OUT_VARIABLE = 'COUNT_GIT_OUT';
 export const ROOT_VARIABLE = 'COUNT_GIT_ROOT';
 export const TEST_FILE_VARIABLE = 'COUNT_GIT_TEST_FILE';
 export const FRAMES_VARIABLE = 'COUNT_GIT_FRAMES';
+export const LAUNCH_VARIABLE = 'COUNT_GIT_LAUNCH';
 
 const SELF = fileURLToPath(import.meta.url);
 const PRELOAD_OPTION = `--import=${import.meta.url}`;
@@ -113,6 +119,14 @@ function stackHere() {
   return holder.stack;
 }
 
+/** The environment with the launch token of a call set, or without one when the call starts no `node`. */
+const withLaunch = (env, token) => {
+  const next = { ...env };
+  if (token === null) delete next[LAUNCH_VARIABLE];
+  else next[LAUNCH_VARIABLE] = token;
+  return next;
+};
+
 function install(out) {
   const root = process.env[ROOT_VARIABLE] || path.dirname(path.dirname(SELF));
   // `node --test` starts every test file as a process of its own, with NODE_TEST_CONTEXT set and the file as
@@ -123,20 +137,24 @@ function install(out) {
   const testFile = process.env[TEST_FILE_VARIABLE] ?? null;
   const frames = Math.max(1, Number.parseInt(process.env[FRAMES_VARIABLE], 10) || 1);
   const totals = { other: 0, shell: 0, nodes: 0 };
-  // The pids of the `node` processes started here, where the call gives one (`execSync` and `execFileSync`
-  // return the output alone). The tool tells by them whose launch a report answers; behind a shell string
-  // the pid is the shell's, and the `node` that reports is its child.
-  const nodePids = [];
-  // Read now: a child that outlives the process that started it has another parent by its exit.
-  const ppid = process.ppid;
+  // Who this process is, and the token it was started with when the tool counted that launch. The id is unique
+  // to this process, where a pid is used again in a long run. The token is taken out of this environment, so a
+  // child this process starts without counting it (a shell that runs `npm`, a git hook) does not hand it down.
+  const id = crypto.randomUUID();
+  const launch = process.env[LAUNCH_VARIABLE] || null;
+  delete process.env[LAUNCH_VARIABLE];
+  let launched = 0;
+  // The tokens of the `node` launches that started a process here: the reports that carry them answer them.
+  const nodeLaunches = [];
   const git = new Map();
   let depth = 0;
 
-  /** Counts one started process, `pid` when the call gave it, and returns the function that records its end. */
-  const count = (call, caller, started, pid) => {
+  /** Counts one started process, and returns the function that records its end. `token` is the launch token of a
+   * `node` call, and null for the other calls. */
+  const count = (call, caller, started, token) => {
     if (call.node) {
       totals.nodes += 1;
-      if (pid > 0) nodePids.push(pid);
+      nodeLaunches.push(token);
     }
     if (!call.git) {
       totals.other += 1;
@@ -158,17 +176,20 @@ function install(out) {
    * another out file is left alone: it is the run of a count inside this one. One that names the out file of
    * this run is a child of this run, whatever else its caller did to it: `{ ...process.env, NODE_OPTIONS: '' }`
    * keeps the out file and drops the preload, and that child would run uncounted. Only an environment that
-   * has both is passed on as it is. */
-  const withCounting = (arg) => {
+   * has both, and the launch token of this call, is passed on as it is. `token` is the launch token of the call,
+   * or null for a call that starts no `node`: a token that the written environment carries is taken out then. */
+  const withCounting = (arg, token) => {
     const env = arg && typeof arg === 'object' && !Array.isArray(arg) ? arg.env : null;
     if (!env || typeof env !== 'object') return arg;
     if (env[OUT_VARIABLE] !== undefined && env[OUT_VARIABLE] !== out) return arg;
     const options = String(env.NODE_OPTIONS ?? '');
     const preloaded = options.includes(PRELOAD_OPTION);
-    if (env[OUT_VARIABLE] === out && preloaded) return arg;
+    if (env[OUT_VARIABLE] === out && preloaded) {
+      return env[LAUNCH_VARIABLE] === (token ?? undefined) ? arg : { ...arg, env: withLaunch(env, token) };
+    }
     const added = { [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root, [FRAMES_VARIABLE]: String(frames), NODE_OPTIONS: preloaded ? options : `${options} ${PRELOAD_OPTION}`.trim() };
     if (testFile) added[TEST_FILE_VARIABLE] = testFile;
-    return { ...arg, env: { ...env, ...added } };
+    return { ...arg, env: withLaunch({ ...env, ...added }, token) };
   };
 
   const wrap = (name) => {
@@ -179,24 +200,29 @@ function install(out) {
       const call = describeCall(name, args);
       const caller = call.git ? repositoryFrame(stackHere(), root, SELF, frames) : null;
       const started = performance.now();
+      // The token of a `node` launch. It is in this process's environment only while the call runs, which is when
+      // Node reads the environment of the child it starts, `execSync` and the other sync calls included.
+      const token = call.node ? `${id}:${(launched += 1)}` : null;
       let result;
       depth += 1;
+      if (token !== null) process.env[LAUNCH_VARIABLE] = token;
       try {
-        result = original.apply(this, args.map(withCounting));
+        result = original.apply(this, args.map((arg) => withCounting(arg, token)));
       } catch (error) {
         // A sync call throws for a process that ran and failed (`execSync` on a non-zero exit, a timeout): Node
         // puts its pid on the error, and it counts. A command that is not there (ENOENT, pid 0) and arguments
         // Node refuses (no pid at all) started nothing.
-        if (sync && error?.pid > 0) count(call, caller, started, error.pid)();
+        if (sync && error?.pid > 0) count(call, caller, started, token)();
         throw error;
       } finally {
         depth -= 1;
+        delete process.env[LAUNCH_VARIABLE];
       }
       // `spawnSync` and the async functions also return when nothing started: a result with an `error` and
       // pid 0, a child without a pid. `execSync` and `execFileSync` return the output of a process that ran.
       const ran = name === 'execSync' || name === 'execFileSync' || result?.pid > 0;
       if (!ran) return result;
-      const ended = count(call, caller, started, result?.pid);
+      const ended = count(call, caller, started, token);
       if (sync) ended();
       else result?.once?.('close', ended); // no `error` listener: that would hide a failed start from the caller
       return result;
@@ -219,7 +245,7 @@ function install(out) {
   syncBuiltinESMExports();
 
   process.on('exit', () => {
-    const line = { pid: process.pid, ppid, testFile, ...totals, nodePids, git: [...git.values()] };
+    const line = { pid: process.pid, id, launch, testFile, ...totals, nodeLaunches, git: [...git.values()] };
     try {
       // Append only, never create: a process that outlives the tool must not bring the removed file back.
       fs.appendFileSync(out, `${JSON.stringify(line)}\n`, { flag: fs.constants.O_WRONLY | fs.constants.O_APPEND });

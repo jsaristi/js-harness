@@ -122,6 +122,18 @@ const FILES = {
     "import cp from 'node:child_process';",
     "test('inner', () => { cp.spawnSync('git', ['--version']); }); // m-inner",
   ],
+  // A `node` that a shell string starts through `execSync`, which gives no pid: its report answers the launch by the token.
+  'shell.test.mjs': [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import { execSync } from 'node:child_process';",
+    "test('shell', () => {",
+    `  assert.equal(execSync('"' + process.execPath + '" shell-child.mjs', { cwd: import.meta.dirname, encoding: 'utf8' }).trim(), 'child');`,
+    '});',
+  ],
+  'shell-child.mjs': [
+    "console.log('child');",
+  ],
 };
 const at = (file, marker) => `${file}:${FILES[file].findIndex((line) => line.endsWith(`// ${marker}`)) + 1}`;
 
@@ -211,26 +223,33 @@ test('a nested `node --test`: its test file reports, and stands in for no proces
   // Reported: the test file, the test file of the nested run, and the two `node -e 0`. The nested runner is
   // no `node` a report is due from, so the report of its test file answers no launch: the one that is missing
   // is the `node` killed at its timeout. The two `node -e 0` answer their own launches, the one behind a
-  // shell too, where the process the call started is the shell.
+  // shell too, whose token the shell hands on to its child.
   assert.deepEqual(report.processes, { reported: 4, missing: 1, unreadable: 0 });
 });
 
-test('a report answers a launch of the process that started it, and of no other', () => {
-  const line = (pid, ppid, nodePids = [], nodes = nodePids.length) => ({ pid, ppid, testFile: null, other: nodes, shell: 0, nodes, nodePids, git: [] });
+test('a node that a shell string starts through execSync is answered by its report, and none is missing', () => {
+  const run = runTool('--json', 'shell.test.mjs');
+  assert.equal(run.status, 0, run.stderr);
+  const report = JSON.parse(run.stdout);
+  // The test file and the child it started through the shell; execSync gives no pid, the token answers the launch.
+  assert.deepEqual(report.processes, { reported: 2, missing: 0, unreadable: 0 });
+});
+
+test('a report answers the one launch whose token it carries, and of no other', () => {
+  // `id` names the process, `launch` is the token it was started with, `nodeLaunches` the tokens it started.
+  const line = (id, nodeLaunches = [], launch = null, pid = 2) => ({ pid, id, launch, testFile: null, other: nodeLaunches.length, shell: 0, nodes: nodeLaunches.length, nodeLaunches, git: [] });
   const missing = (...lines) => summarize(lines, { runnerPid: 1 }).processes.missing;
-  // Test file 2 started `node` 7, which never reported. 6 is the test file of a nested run: its parent 5 is
-  // the nested runner, which counted no launch and reports nothing.
-  assert.equal(missing(line(2, 1, [7]), line(6, 5)), 1);
-  assert.equal(missing(line(2, 1, [7]), line(7, 2), line(6, 5)), 0, 'with the report of 7 nothing is missing');
-  // Two reports below test file 3 for its one launch do not make up for the one missing below 2.
-  assert.equal(missing(line(2, 1, [7]), line(3, 1, [8]), line(8, 3), line(9, 3)), 1);
-  // Behind a shell the call started the shell (7), and the `node` that reports is its child.
-  assert.equal(missing(line(2, 1, [7]), line(8, 7)), 0);
-  // `execFileSync` gives no pid: the launch is counted in `nodes` alone, and a child of 2 answers it.
-  assert.equal(missing(line(2, 1, [], 1), line(8, 2)), 0);
-  assert.equal(missing(line(2, 1, [], 1), line(8, 5)), 1);
-  // A pid that two processes had one after the other: their launches and the reports below them add up.
-  assert.equal(missing(line(2, 1, [7]), line(2, 1, [8]), line(7, 2)), 1);
+  // Process p started `node` p:1, which never reported. A report with no token answers nothing.
+  assert.equal(missing(line('p', ['p:1']), line('q')), 1);
+  // The child that p started carries the token, and answers it.
+  assert.equal(missing(line('p', ['p:1']), line('c', [], 'p:1')), 0, 'with the report of the launch nothing is missing');
+  // A report of a launch that no reporting process made counts nothing, and answers nothing.
+  assert.equal(missing(line('c', [], 'p:1')), 0, 'the launcher never reported, so its launch is not counted');
+  assert.equal(missing(line('p', ['p:1']), line('c', [], 'nobody:1')), 1, 'a token no launch carries answers nothing');
+  // Two reports with one token answer it once: the other launch of p stays missing.
+  assert.equal(missing(line('p', ['p:1', 'p:2']), line('c', [], 'p:1'), line('d', [], 'p:1')), 1);
+  // All these lines have the one pid 2: the launch of p is answered, the one of q is not, and nothing is summed by pid.
+  assert.equal(missing(line('p', ['p:1']), line('q', ['q:1']), line('c', [], 'p:1')), 1, 'two processes with one pid are told apart by id');
 });
 
 test('a wrong option: exit code 2, the reason and the usage on stderr, and no run', () => {
@@ -307,9 +326,9 @@ test('the caller is the first frames in files of the repository that are not the
 test('the summary is ordered by count and then by name, and says what never reported', () => {
   const entry = (sub, caller, count) => ({ sub, caller, count, ms: 1000, untimed: 0 }); // a second for the whole entry
   const summary = summarize([
-    { pid: 1, ppid: 0, testFile: null, other: 2, shell: 0, nodes: 2, git: [] }, // the runner: its two test files
-    { pid: 2, ppid: 1, testFile: path.resolve('r', 'x.test.mjs'), other: 3, shell: 1, nodes: 2, git: [entry('status', 'b.mjs:1', 2), entry('log', 'a.mjs:9', 2)] },
-    { pid: 3, ppid: 2, testFile: path.resolve('r', 'x.test.mjs'), other: 0, shell: 0, nodes: 0, git: [{ ...entry('status', 'a.mjs:9', 1), untimed: 1 }] },
+    { pid: 1, id: 'r', launch: null, testFile: null, other: 2, shell: 0, nodes: 2, nodeLaunches: ['r:1', 'r:2'], git: [] }, // the runner: its two test files
+    { pid: 2, id: 'x', launch: null, testFile: path.resolve('r', 'x.test.mjs'), other: 3, shell: 1, nodes: 2, nodeLaunches: ['x:1', 'x:2'], git: [entry('status', 'b.mjs:1', 2), entry('log', 'a.mjs:9', 2)] },
+    { pid: 3, id: 'y', launch: 'x:1', testFile: path.resolve('r', 'x.test.mjs'), other: 0, shell: 0, nodes: 0, nodeLaunches: [], git: [{ ...entry('status', 'a.mjs:9', 1), untimed: 1 }] }, // reports the first launch of 2
   ], { runnerPid: 1, root: path.resolve('r') });
   assert.deepEqual(summary.git, { count: 5, seconds: 3, untimed: 1 });
   assert.deepEqual(summary.other, { count: 3, shell: 1 });
