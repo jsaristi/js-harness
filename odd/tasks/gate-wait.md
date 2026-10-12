@@ -405,7 +405,7 @@ session's transcript.
 - [ ] T6 · The head a review reads is pinned (done, `3e0b456`), and two records at once (open). Route: delegated,
       tests first.
 - [ ] T6b · The row of a commit names the commits no record covers, as the row of a push
-      does; and `codex-review` says so when its base is itself a code commit with no
+      does (done, `0dde768`); and `codex-review` says so when its base is itself a code commit with no
       record, since a base is outside its range. From "JH 7" through the orchestrator
       (2026-10-12, a claim, to be read in the code before it is built): its row said "no
       Codex review record for 1 of N code commits" for hours without the name, and the
@@ -505,10 +505,27 @@ session's transcript.
   cannot pin, so a commit made meanwhile may be read; the record is still refused. And
   "two records at once" (`bin/lib/codex-reviews.mjs:75`) was not looked at: it stays in T6
   as open. Sub-agents so far: 1,199,910 tokens.
+- 2026-10-12 · T6b, its first half, one writer on Haiku 5.5 (157,520 tokens), commit
+  `0dde768`. The writer was read before the turn and two things were changed by hand, on
+  Opus. It had given the row of a commit the closing line of the row of a push, which names
+  `<oldest>^`; where work forked before the default branch moved, the same row sized its
+  review from `origin/main`, so it named two bases. The row now lists the commits and gives
+  the command that makes the record the base its size was read from. And one new test
+  expected the newest commit's `^` where the oldest's is the base: a fault of the test. A
+  third file, `bin/codex-review.test.mjs`, read the row's exact lines and was outside the
+  writer's files; it was changed by hand. One turn (`t6b-turn.log`, taken 07:13:01): RED,
+  four tests of the row fail against the check as it was; GREEN, 97 of 97 of the rows'
+  tests and the one test of the command that reads the row; the gate passed on the commit
+  (`PASS  tests`, 842 s, 07:29:30). gentle-ai's row: medium risk, 107 lines, review not due
+  (under the budget). The row is not bounded: a branch with many such commits prints every
+  one at every commit, as the row of a push does. Left as it is, said here. Sub-agents so
+  far: 1,357,430 tokens.
 
 ## Next
-What is left of T6 (two records appended at once) and T6b (the row of a commit names its
-commits), one writer each. Then gentle-ai on what follows `1841b96`.
+What is left of T6 (two records appended at once: the test is drafted in the scratchpad,
+`t6c-test-snippet.mjs`, not run) and the second half of T6b (`codex-review` says when its
+base is itself a code commit no record covers), one writer. Then gentle-ai on what follows
+`1841b96`.
 Codex on the slice when he has answered; its run is also M2's number 1 for Codex, under
 `measure-busy.mjs`. T2 can start beside them: its files are free.
 
