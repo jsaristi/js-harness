@@ -343,7 +343,8 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       is open, so what the board needs goes to "JH 5" through the orchestrator once T3 is
       committed: the two readers of the lock return `session`, the host's session id or
       `null`, and nothing else the board reads changes. Done here when that notice is sent.
-- [ ] T7 · `docs/ROADMAP.md` (the lock's section, near its line 726); the text of
+- [x] T7 · Evidence: the commit after `e1786bf` (roadmap, `gate-lock.md`); the texts of
+      the manifest and of the help changed with T3 (`d133965`). `docs/ROADMAP.md` (the lock's section, near its line 726); the text of
       `bin/lib/manifest.mjs:25-26` and `:98` and the help of `check` and `gate` where they
       describe a wait; the pointer in "Next" of `odd/tasks/gate-lock.md`.
 - [ ] T8 · Close: both reviews of each slice with code, push, pull requests, the closing
@@ -652,6 +653,14 @@ S2 is T4 with T5. S3 is T6.
   reports it. A launch is missing when no report carries its token. Not taken: the
   starter's pid inherited through the environment, which credits to a process a `node`
   it did not count (behind `npm`, behind a hook) and so can hide one that never reported.
+- 2026-10-11 22:28 · T3c committed, `e1786bf`, in a turn of the lock asked at 21:21:10 and
+  taken at 22:12:19 (`t3c-gate.log`): fifty-one minutes behind four gates. Red first: its
+  five new or changed tests against the code before it, 0 of 5 pass (`t3c-red.log`); then
+  the whole gate, `PASS tests`, ended 22:28:28. That gate left `Microsoft/` in this
+  worktree again, removed by hand, as it will until the stop's branch is on `main`.
+  T7 is committed with this entry. The writer of T9 returned (`haiku`, 162,727 tokens,
+  nothing run); its diff was read back here whole and follows the design; its tests, red
+  and green, and its commit are a turn of the lock (`t9-turn.sh`).
 
 ## Next
 The commit of T3c in a turn of the lock (red of its new tests against the old code, then the
