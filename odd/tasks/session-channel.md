@@ -1469,7 +1469,7 @@ session needs beside it to go on; the summary of a compaction is not the record.
 | 1 | T3, T4a | `main`, pull request 58 |
 | 2 | T1 | `main`, pull request 59 |
 | 3 | T1b, T4b, T4c | `main`, pull request 65 |
-| 4 | T5, T6, T5b, T4d, the sweep's items of this session | branch `feat/session-context`, pull request 4 of this feature; its last code commit is `398c3c5`, and `main` is merged in at `1d5cf68` (the merge `ae1f51b`, gated) |
+| 4 | T5, T6, T5b, T4d, the sweep's items of this session | branch `feat/session-context`, pull request 70; its last code commit is `398c3c5`, and `main` is merged in at `1d5cf68` (the merge `ae1f51b`, gated) |
 
 - The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
 - Reviews of the fourth slice: gentle-ai approved it as two candidates and Codex reviewed
@@ -1513,7 +1513,7 @@ T5, T6, T5b, T4d, this session's items of the sweep and the fixes of its reviews
 built, every code commit gated and covered by a Codex record, reviewed by gentle-ai, with the
 practice journey run once, and `main` merged in at `1d5cf68` and gated as `ae1f51b` (Progress,
 2026-10-12 00:19 to 02:33). Owed, in this order:
-1. The push, the fourth pull request and the notice to the lead, who merges it only when its
+1. Pull request 70 is open and the lead has its notice (2026-10-12 02:36). He merges it only when its
    head has today's `main` merged in and a gate ran on that tree, and when the constant of the
    pause reads the value of his latest words. If `main` moves before he merges, it is merged
    in again and that merge gated. The lead installs the resume hook on this machine once the
