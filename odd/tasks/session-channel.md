@@ -395,11 +395,13 @@ that neither the record nor a message can reach. Each sits under the three label
 other session under "where it goes", and says there that he types a line of his own with it.
 
 ### 9. Context
-His rule, the context pause (2026-10-10; relief file, lines 126 and 127): no session stops,
-slows or proposes a cut for a percentage. At the context pause it pauses, writes its state in
-its feature document (done, in flight, next step), and judges: little left, it finishes well;
-much left, the compaction is done there and the same task continues after it, from the
-document.
+His rule, the context pause (2026-10-10; relief file, lines 126 and 127; changed by him on
+2026-10-12, point 14, "Decided by him"): no session stops, slows or proposes a cut for a
+percentage. At the context pause it writes its state where it will be read after a
+compaction (its feature document, committed: done, in flight, next step; the relief file for
+the orchestrator), and its next reply to him says the share and carries the two blocks of a
+cut; then it goes on with the task, whether little or much is left, and the same task
+continues after the compaction, from the document.
 
 The share of the window at which a session pauses has one home: the constant
 `DEFAULT_CONTEXT_PAUSE_PERCENT` of `bin/lib/sessions.mjs`. Where the host compacts has its own
@@ -602,7 +604,7 @@ falta poco" against "siempre … antes de compactar": the incident was a session
 "little is left" until the host compacted, so the judgement stays (a session still finishes
 what is nearly done) and stops being a reason for silence: the state is written and he is
 told at the pause, and the work goes on after that reply. This changes his rule of
-2026-10-10, so it is his to confirm. "Auto compactar y mandar el siguiente prompt" against
+2026-10-10, and he confirmed it ("Decided by him", below). "Auto compactar y mandar el siguiente prompt" against
 two blocks he pastes: once a session is told in time and reads its files when it comes back,
 a compaction the host makes by itself loses nothing and needs no paste, which is the
 automatic path he asked for first; the blocks stay for the cut a session asks him for, until
@@ -704,6 +706,10 @@ Decided by him, in this session's chat (its transcript `e5376fe9`, the line give
 - 2026-10-12 03:01, line 5896, "Sí, después de cada herramienta": a session is told at the
   pause after each tool call, at about 0.15 s a call, and not only at the end of a reply,
   which would cost nothing and miss the long turn.
+- 2026-10-12 03:02, line 5947, "Sí, avisar y escribir en la pausa, y después seguir": his rule
+  of 2026-10-10 changes. At the pause a session always writes its state and tells him in its
+  next reply, with the two blocks, and then goes on; that little is left is no longer a
+  reason to say nothing. Point 9 states the rule so.
 
 Taken by JH 7 for its reply check, as the lead relayed it on 2026-10-12 (claims of that
 session, not his word): a working reply with the two blocks is allowed only past the pause,
@@ -713,8 +719,7 @@ nudge is once for a stretch; the function and the mark are built here first and 
 check imports them. The value of the pause will be declared in its rules list and read from
 there by the constant of `bin/lib/sessions.mjs`: one number either way.
 
-His to decide, asked one at a time: the
-change of the rule of 2026-10-10 (told and written at the pause, then go on); installing the
+His to decide, asked one at a time: installing the
 `PostToolUse` entry on this machine once it is built and tried; whether `install` writes it
 for every project that installs the harness; whether the second block goes once the resume
 hook is installed; and, still open from the sweep, whether the orchestrator is relieved or
@@ -1702,8 +1707,8 @@ The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). Th
 1. T6b, his protocol for a compaction: the design is point 14, version 2, read by two
    independent readers (Progress, 2026-10-12 02:56). Nothing of it is built. It waits for
    his decisions, listed at the end of point 14 and asked one at a time in this chat; the
-   first is answered (after each tool call), and the second asked is the change of his
-   rule of 2026-10-10. With his answers: the contract's "Done when" gains the commands of
+   first two are answered (after each tool call; told and written at the pause, then go
+   on), and the build no longer waits for the rest. With his answers: the contract's "Done when" gains the commands of
    point 14, then the build, test first, one narrow writer a task (Haiku 5.5 at effort high
    for scoped code), in this order: the measure and the lines of the resume hook, which
    change nothing on a machine; then the pause command and its entry.
