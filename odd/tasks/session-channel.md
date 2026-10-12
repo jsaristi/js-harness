@@ -2143,6 +2143,41 @@ summary.
    e. The entry for `install` and the row of `doctor` that runs each entry's command: built
       and tested, and held from `main` until he answers whether `install` writes it for
       every project.
+      STATE AT 2026-10-12 16:20 (read this first after a compaction). Pull request 74 is
+      merged: `main` is `e60cbda` (`gh pr view 74`: MERGED 15:28). The slice's commits
+      and the lead's checks are in Progress, 14:08 to 15:22. Part e is the branch
+      `feat/session-compaction-install`, cut from `e60cbda`, local, with this document's
+      commit alone on it: its code is 13 files STAGED AND NOT COMMITTED in this worktree (the
+      12 of the patch and `bin/js-harness.test.mjs`, whose list of `doctor`'s rows lacked
+      `hook-commands`: 30 pass, 1 fail, found by hand before any gate, fixed, 31 pass), and
+      saved as `part-e-on-main.patch` in the scratchpad. By hand its test files pass
+      (manifest 112, install 64, stack 123, doctor 53, doctor-hook 11, practice-lib 87, tui
+      75, digest 11). NOTHING OF IT IS COMMITTED OR SPENT until he answers the question
+      asked of him at 15:25 in this session's chat and still open: whether `install` writes
+      the pause notice's entry for every project that installs the harness (recommended:
+      yes, the global entry as built, since an entry kept in a project's own settings is
+      not loaded by a session opened in another folder that works in a worktree; a "no"
+      makes it opt-in and changes the entry and its tests). With his answer, written here
+      with its transcript line: one turn at the gate with `turn-commit-journey.sh` (the
+      commit with `commit-msg-install.txt`, gentle-ai, the Codex plan and the run only
+      inside 1.05 times 1,200 a changed line, about 1,533,420 for the 1,217 lines, then
+      the practice journey), the push and its own pull request; the lead installs the
+      entry on his machine once it is on `main` (his yes of 03:45) and has how to prove it
+      (this session's line of 15:33: the entry in the settings file and the manifest,
+      `js-harness doctor`'s row `hook-commands`, and the journey's step `pause-hook`; what
+      none proves is that the app hands `additionalContext` to the model, a try of point
+      14 that is his to allow).
+      Beside it, done while that answer was open: `install` refuses a word it does not
+      know (`install --help` had installed under the real home at 03:25). Branch
+      `fix/install-unknown-flag`, worktree `D:\js-harness-worktrees\install-flags`, commit
+      `0ccf615`, pull request 76, open and clean: test first (exit 0 where 2 was expected),
+      `parseInstallArgs` in `bin/install.mjs`, install's tests 65 pass; gate PASS 16:16;
+      gentle-ai: 64 lines, not due; Codex `e60cbda..0ccf615`: 178,214 input tokens,
+      correct, no finding. The lead merges it; that worktree is removed after.
+      Still on this machine and to remove once part e is committed: the side worktree
+      `D:\js-harness-worktrees\session-channel-hook` and its branch
+      `wip/session-compaction-hook`. The local branch `feat/session-compaction` is merged
+      and can be deleted.
    Not done here, each his: installing anything on this machine; the three tries of point
    14, which open a session.
 2. After T6b, in this order: T16, design first; T7; T8, with the twelve items of the sweep,
@@ -2156,7 +2191,8 @@ machine and does not work until the installed command is brought up to `main`, w
 lead asks him.
 Waiting for him, each asked alone, once, and only when he is back and no work runs. Answered
 at 03:45: the pause's entry is installed on this machine when it is on `main`, by the lead.
-Not asked yet: whether `install` writes that entry for every project; whether the
+Asked at 15:25 on 2026-10-12 and open: whether `install` writes that entry for every
+project. Not asked yet: whether the
 second block goes once the resume hook is installed; tests owed 1, 2, 3 and 6 and the three
 tries of point 14, each before it is run. The yardstick of "the last task" ("Open points",
 its first row) and whether the orchestrator is relieved or compacted (the sweep's A3 89)
