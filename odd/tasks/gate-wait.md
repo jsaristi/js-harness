@@ -602,72 +602,92 @@ suite's time at the commit and not everything untouched; 3a or 3b is a second qu
 only after a yes. Before it is asked: M1d's result, and one cheap reading of what the
 1,681 children are for, since a road 1 that halves them may be enough without any trade.
 
-### Road 1, first slice: an eval test that is not about survival takes no process snapshot (designed; not built)
+### Road 1, first slice: the eval tests take one process snapshot a file, not one a run (designed; not built)
 Ordered by the orchestrator at 15:31 on 2026-10-12, inside his option 3 (a faster suite), so
-no question goes to him. First version, before its reader.
+no question goes to him. Second version, after its reader (`road1-design-attack.md` in the
+scratchpad; what it changed is under "What the readers changed"). Worktree, empty so far:
+`D:\js-harness-worktrees\gate-wait-eval-sweep`, branch `feat/gate-wait-eval-sweep` off
+`main` `e60cbda`.
 
 **What is there.** `runProcess` (`evals/runner.mjs:277`) ends every run, on every way out,
-with `stop(sweep)` (`:345`); `sweep` is its `killSurvivors` option, by default the real one
-(`:278`), which on Windows starts one PowerShell that lists every process of the machine
-(`bin/lib/process-tree.mjs:259`, `:191`). The option is the seam, and it stops there: the
-four entries the tests go through call `runProcess` themselves and pass none on:
-`gradeWorkspace` (`evals/runner.mjs:411`), `runTrial` (`:630`, the agent's run at `:673`),
-`runVisible` and through it `proveTask` (`evals/task-proof.mjs:66`, `:222`), and the
-probe's arm (`evals/isolation-probe.mjs:1086`). About 490 snapshots in a whole run, about
-30 of them in tests that prove survival, a timeout or an interrupt (the reader's count,
-inferred from the code).
+with `stop(sweep)` (`:345`), handing it the child and when it started and exited (`:310`);
+`sweep` is its `killSurvivors` option, by default the real one (`:278`). On Windows the
+real one starts a PowerShell that lists every process of the machine and kills what
+descends from that child (`bin/lib/process-tree.mjs:285`, `:259`); elsewhere it is one
+kill of a process group and starts nothing (`:287-289`). The four entries the tests go
+through call `runProcess` themselves: `gradeWorkspace` (`evals/runner.mjs:411`),
+`runTrial` (`:630`, the agent's run at `:673`), `runVisible` and through it `proveTask`
+(`evals/task-proof.mjs:66`, `:222`), the probe's arm (`evals/isolation-probe.mjs:1086`).
+1,156 children that are not git in those four test files, the same count in four whole
+runs; about 490 of them are these snapshots.
 
-**What changes in the code that ships: one optional pass-through, no behaviour.**
-`killSurvivors` becomes an option of `gradeWorkspace`, `runTrial` (handed to the agent's
-run and to the grading of that trial), `proveTask` (handed to its five runs) and the
-probe's options (handed to the arm's run). Left out, each hands `undefined` on and
-`runProcess` takes its default, so a real trial, a real proof and a real probe sweep
-exactly as today; no entry gets a default of its own and none reads the environment.
-`runSuite` needs nothing: it already takes `runTrial`.
+**What changes in the code that ships: the process run becomes a parameter of the four
+entries, with no behaviour.** Each takes `runProcess`, by default the real one, as
+`runSuite` already takes `runTrial` and `runTrial` takes `readVersion` and `sweep`;
+`runTrial` hands its own to the grading of its trial, `proveTask` to its five runs. Left
+out, everything runs and sweeps exactly as today. No command builds these options from
+what a user types (the reader checked `resolveAgent`, `runSuite` and the probe's `main`),
+so an installed project sees nothing of this. Handing on `killSurvivors` alone, the first
+version's seam, was dropped: that an entry uses what it is handed could then only be shown
+by a real process left behind, with new leaking fixtures; with the run itself as the
+parameter it is shown by a recorded call that starts nothing, and the same seam is what
+the later slices need (graders and fake agents).
 
-**What changes in the tests.** A test whose point is not what a process leaves behind
-passes a stand-in that takes no snapshot. The stand-in lives in the tests, not in the
-package, so nothing that ships can come to run without its sweep. The tests that prove
-survival, a timeout that kills, an interrupt, a sweep that fails, and the nine of
-`killByPath` pass nothing and stay on the real sweep; so do the five real tasks of
-`evals/tasks.test.mjs` for their graders (their hidden tests start programs of their own).
+**What changes in the tests: the same search, once a file.** A stand-in for the sweep
+that hid a leak would be worse than today, and the first version's net could not see one:
+`killByPath` matches a process by its command line alone (`evals/runner.mjs:187`), so a
+child tied to a trial only by its folder is invisible to it, as the repository's own test
+says (`evals/runner.test.mjs:1919-1927`). So the stand-in does the real sweep's search
+later: it records what `runProcess` hands it (the pid, the start and the exit, read at
+that moment), and the file's `after` takes one snapshot and, for each recorded run,
+selects its descendants as the real sweep does (`resolveRoot`, `selectDescendants`:
+children created within the run's life that record its pid, so a reused pid falls
+outside), kills what it finds through the snapshot's own identities and fails the file,
+naming each. It lives beside the shared teardown, `bin/lib/process-tree.testkit.mjs`,
+which is where the repository's rule about pids allows it. On Windows alone: elsewhere
+the stand-in is the real sweep, which costs nothing there, and a recorded pid would have
+nothing to search.
+Its known limit, said and not hidden: a grandchild whose own parent exits between the end
+of the run and the end of the file is no longer tied to the run by parentage. The real
+sweep has the same limit one moment earlier, and the by-path sweep exists for that case
+and is not touched.
 
-**What a test would silently lose with a stand-in, and the net for it.** Today the real
-sweep also hides a test whose child did leave something running: it kills it, and nobody
-is told. With a stand-in that something would live on, hold its folder and fail a removal
-later, far from its cause. So each of the four test files ends with one real look: an
-`after` that asks, once, for the processes still running under the folders that file's
-tests worked in, and fails the file if there is one, naming it. One snapshot a file in
-place of a hundred and more, and stricter than today, since a leak now fails where before
-it was swept. To be confirmed by the reader: that `killByPath` (`evals/runner.mjs:221`)
-or the snapshot of `bin/lib/process-tree.mjs` can answer that question for a file's
-folders, and that those tests do work under folders a file can name.
-That the code that ships still calls its sweep on every way out is already proven where
-it belongs and stays so: the tests of `runProcess` with a recorded `killSurvivors`
-(`evals/runner.test.mjs:827`, `:939`, `:967`, `:985`). To add: one test an entry, four in
-all, that the option handed to it reaches `runProcess`, and that without it the real one
-is used.
+**Which tests stay as they are.** Fewer than the first version said. A timeout and an
+interrupt are proven by `kill`, the tree kill, which nothing here touches; "a sweep that
+fails" and the nine of `killByPath` are the by-path sweep. The post-exit sweep finds
+something in two tests alone, both of which call `runProcess` directly
+(`evals/runner.test.mjs:799`, `:897`, the fake agent's `orphan` and `detached-quiet`),
+and they keep the real one; so does `evals/tasks.test.mjs`, whose graders start programs
+of their own, and the direct runs of `evals/task-proof.test.mjs:377` and `:384`. Every
+way out of `runProcess` calling its sweep stays proven where it is
+(`evals/runner.test.mjs:817`, `:913`, `:928`, `:962`, `:979`, `:996`). Added: one test an
+entry that it calls the run it was handed, and the tests of the deferred look itself
+(nothing found; a descendant found, killed and named; a pid reused after the run; off
+Windows).
 
-**Considered and left.** A sweep that skips itself when the child left nothing: it cannot
-know that without the list of processes, which is the cost. A cheaper list (one
-PowerShell kept alive, or another program): it would shorten real trials too, but it
-changes what ships and how a kill is proven; a candidate after this slice is measured.
-Taking out the graders and fake agents themselves (the other kinds of the reading): later
-slices, each with its own seam.
+**What it may uncover.** Each snapshot also held the test still for a moment before a
+folder was copied or removed with no second try (`evals/runner.mjs:413-414`). Without it
+a removal may meet a child that is still letting go of its folder. Only a run says; if it
+does, that is a finding about the real grader too, to be brought and not papered over.
 
-**The measure, planned against the 95 s of noise.** The count is the proof, as it was for
-git: children that are not git, by file, from the counting tool (`timeLine.otherCount`),
-before and after, on the four files alone; the expectation is about 460 fewer of 1,156 in
-those files and it does not depend on the machine's load. With it, their summed seconds
-and the summed time of the named tests. One whole run at the end for the report, read as
-a wall time only beside M1b, M1c and M1d.
+**Not in this slice, named.** A fifth caller, `evals/codex-isolation-probe.mjs:535`.
+`sweepError` is reported by one entry of the four (`evals/runner.mjs:682`). Some 14
+by-path sweeps and 7 version probes that tests could already stand in for with no change
+of shipping code. And the real trial pays one snapshot a run as well: a cheaper list (one
+PowerShell kept alive) would shorten real trials too, changes what ships and how a kill
+is proven, and is a candidate after this slice is measured.
 
-**Size.** Shipping code: about 30 lines in three files. Tests: the stand-in at the call
-sites, which go through a helper in three of the four files, the four `after` looks and
-the four pass-through tests; between 150 and 300 changed lines by this reading, one slice,
-one pull request, both reviews. Not high risk by the list (an option is added, nothing
-that exists changes), and its regression is caught by the tests that stay on the real
-sweep.
+**The measure, against the 95 s of noise.** The count is the proof: children that are not
+git, by file (`timeLine.otherCount` of the counting tool), on the four files alone, before
+and after. It was 501, 346, 210 and 99 in four whole runs whose wall times ranged from
+519 s to 830 s for the same file. Expected: about 420 to 440 fewer of the 1,156. With it,
+their summed seconds and the named tests' summed time; one whole run at the end, read as
+a wall time beside M1b, M1c and M1d.
+
+**Size.** Shipping code: about 30 lines in three files. The testkit's deferred look and
+its tests: about 120. The four test files: thirteen places, through one helper in each of
+three. About 250 to 350 changed lines, one slice, one pull request, both reviews. Not
+high risk by the list: a parameter is added and nothing that exists changes.
 
 ## What the readers changed
 The first version is `335ce6f`. Two read-only readers, 2026-10-12; their reports are in this
@@ -731,6 +751,29 @@ by me against the log or table named in the section).
   3b, which is not being designed).
 - What the revision says that neither reader did: every road but the cheaper Windows run
   is that one trade, so one question would go to him, not a choice among five roads.
+
+**Road 1's first slice, 2026-10-12** (one reader at high, read-only, no test run, 261,389
+tokens; its file is `road1-design-attack.md` in the scratchpad).
+- Its blocker, checked by me (`evals/runner.mjs:187` and the test at
+  `evals/runner.test.mjs:1919-1927`): the net of the first version could not see what the
+  stand-in stopped killing, since the by-path sweep matches a command line and a leaked
+  child is tied to its trial by its folder alone; and it would have swept the whole temp
+  folder for `evals/tasks.test.mjs`. Taken, with what it said would work: the stand-in
+  records what `runProcess` hands it and one snapshot at the end of the file searches by
+  parentage, as the real sweep does.
+- Taken as well: the stand-in is for Windows alone (elsewhere the sweep starts nothing and
+  is the only cleanup); the keep-list was wrong, timeouts and interrupts being proven by
+  the tree kill and only two tests needing the post-exit sweep; "without it the real one
+  is used" could not be shown without a real leak, so the seam is now the process run
+  itself, shown by a recorded call; the expectation is 420 to 440 fewer, not 460; the
+  settle time a snapshot gave before a removal is named as what a run may uncover; the
+  fifth caller and the one entry that reports `sweepError` are named.
+- Not taken into this slice: the 14 by-path sweeps and 7 version probes the tests could
+  already stand in for (named for the next), and a real-process proof of each entry's
+  default (new leaking fixtures for what a default parameter already says).
+- Added by me after its reading: the stand-in reads the exit time at the moment it is
+  called, so that a run whose exit `runProcess` did not hand over is not searched up to
+  the end of the file, where a reused pid's children could fall inside.
 
 ## Tasks
 - [x] T1 · The design read twice by readers that did not write it; their findings taken or
