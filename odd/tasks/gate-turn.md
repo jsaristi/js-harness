@@ -773,6 +773,23 @@ S2 is T4 with T5. S3 is T6.
      the scenario after the older gate left, is added with 1.
   Route: one writer on `haiku`, T3d, five files, nothing run. Then red, green and commit
   in a turn of the lock, and Codex on that commit alone.
+- 2026-10-12 00:58 · `feat/gate-stop`, one turn asked at 00:06:30 and taken at 00:38:43
+  (`stop-fix-turn.log`): `main` (`d94a765`) merged, `2ce3100`; the two tests of the
+  bounded listing red against the code before it and green with it; the fix committed,
+  `53ca672`, with the whole gate on the merged tree (`PASS tests`, 00:53:27); then Codex
+  on `d94a765..53ca672` in 3 parts: 883,726 input tokens for 937 changed lines, about 940
+  a line, under the rate; recorded. Parts 1 and 3 correct. Part 2, one finding of the
+  second priority, right and taken, route inline (one line of a test): the test of the
+  cache variable sets `PSMODULEANALYSISCACHEPATH` and expects one variable of that name at
+  a sensor on Linux and macOS, where a caller that already exports another spelling has
+  two; the test now removes every spelling first. It cannot be seen red on this machine,
+  whose environment names are not case-sensitive, and its commit says so. Its commit and
+  Codex on that commit alone are a turn asked at 00:58:50 (`stop-fix2-turn.sh`).
+- 2026-10-12 00:50 · T3d returned by its writer (`haiku`, 179,853 tokens, nothing run), its
+  code read back here whole. It corrected this session's brief in one place: in the
+  scenario the brief called "after", the change of hands read beside the older gate is
+  never counted, so the flag rightly stays on there, and the test asserts that. Its turn
+  (`t3d-turn.sh`): red, green, commit, and Codex on that commit alone.
 
 ## Next
 The commit of T3c in a turn of the lock (red of its new tests against the old code, then the
