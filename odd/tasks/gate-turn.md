@@ -322,12 +322,20 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       from the last change of hands, the
       mark, the session, the words of `check` and `gate`, the test at
       `bin/check.test.mjs:1688`. Test first. Route: one writer.
-- [ ] T3b · The four findings of gentle-ai on S1 (Progress, 19:23). Route: one writer.
+- [x] T3b · The four findings of gentle-ai on S1 (Progress, 19:23). Route: one writer.
+      Evidence: Progress, "T3b built".
+- [ ] T3c · With what Codex finds on S1, one narrow writer: the words of a refusal for the
+      bound beside a gate of an older version (`refusalSaid`, `bin/check.mjs`) say "still
+      held … after the whole wait" and "without the lock changing hands", and there the
+      holder did change and the count is from the arrival; the refusal must carry that the
+      gate stood beside an older one. And a touch of the own file that fails leaves the
+      caller told `ahead` without the gate it did not read (said, no channel added).
 - [ ] T4 · The stop in `bin/check.mjs`, its line in the gate log, the
       three states of the lock. Test first. Route: one writer.
 - [ ] T5 · `PSModuleAnalysisCachePath` in the sensor's environment, and
       the row that lists what the sensors left in the tree.
-- [ ] T6 · The session's title beside each gate that waits, on the board. Not built here
+- [x] T6 · Notice sent to the orchestrator for "JH 5" on 2026-10-11 19:35, after `d133965`.
+      The session's title beside each gate that waits, on the board. Not built here
       (the orchestrator, 2026-10-11): `bin/lib/sessions.mjs` is "JH 5"'s and its fourth slice
       is open, so what the board needs goes to "JH 5" through the orchestrator once T3 is
       committed: the two readers of the lock return `session`, the host's session id or
@@ -503,8 +511,39 @@ S2 is T4 with T5. S3 is T6.
   and was idle when sampled ten minutes later (0.2 s in 4 s). So a session's writers load
   the machine through its language server while another session's gate runs: one more
   case of `odd/tasks/gate-lock.md`, "Rules learnt" (a `tsserver.js` of its own).
+- 2026-10-11 20:10 · Two working rules from the orchestrator, on his words (relief file, line
+  282, read here: "me gusta mucho que apliquemos lo de los ahorros"): a writer sub-agent
+  never waits for the gate, it returns its work and this session runs the tests and commits
+  through the lock (a sub-agent pays its whole context again after a wait of over five
+  minutes); and a writer gets a narrow piece that ends in tens of turns. Applied from now:
+  the writer of T4 and T5 was told to return without waiting; T3b's writer had its one run
+  already queued and is left to end. The writers of T2, T3 and T3b waited inside their
+  sub-agents before this rule (about 20, 30 and 35 minutes a run).
+- 2026-10-11 20:35 · T3b built, route one writer (214,958 tokens; its one run waited behind
+  three gates inside the sub-agent, before the rule above). (1) `gatesAhead` answers `null`
+  beside a live gate of an older version, and `handsRead` does not move the anchor at such
+  a look; two tests. (2) A test with the real gate log: a refusal with reason `ahead` is
+  read back as one event, none skipped; no fix was needed. (3) A test where the touch of
+  the own file answers busy: the take does not reject, the lock is not taken while held,
+  and the gate takes it at the release; it passed without a change of code. (4) The margin
+  of a second either side of the stale time, the one existing assertion changed. Red, in
+  the lock's turn: of the five new tests against the committed lock, the two of (1) failed
+  and three passed. Green: the three files, 271 of 271. Left: T3c; an older gate that
+  takes the lock with no other older gate waiting still starts the count again, as the
+  design says; `bin/lib/gate-log.mjs:293`, changed in `feat/gate-stop`.
+- 2026-10-11 20:40 · From `feat/gate-stop`, the writer of T4 and T5 returned without waiting
+  (343,499 tokens), nothing run but its red and the reproduction: 854 lines added and 57
+  removed in six files. Red, on a snapshot with the new tests and the old code: 232 tests,
+  21 fail, all new. The reproduction, in the lock's turn: with `USERPROFILE` at an empty
+  folder, `GetFolderPath("LocalApplicationData")` answers an empty text whatever
+  `LOCALAPPDATA` says, and PowerShell wrote `Microsoft/Windows/PowerShell/
+  ModuleAnalysisCache` (57,408 bytes) into the empty working folder, about 13 s after the
+  analysis; with `PSModuleAnalysisCachePath` set the folder stayed empty and the cache was
+  in the home. So the inference of Design, 3 is a fact, and the folder only appears when a
+  PowerShell lives that long, which is why no single test file left it. Its diff of
+  `bin/check.mjs` read back here. Green is run by this session, queued at 20:38.
 
 ## Next
-T3b (one writer, here), its commit through the lock, then Codex on `main..HEAD` in its turn,
+The commit of T3b through the lock, then Codex on `main..HEAD` in its turn,
 the notice of T6, a real gate with this branch's own lock. In `feat/gate-stop`: the writer's
 report, its diff read back, its commit through the lock, its two reviews.

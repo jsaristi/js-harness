@@ -311,7 +311,8 @@ function readInLine(io, file) {
 
 /** The gates that are before the gate `me` (`{ token, since }`, its arrival in milliseconds) in the line
  * for the lock of `root`: `[{ token, since, waiter }]` in the order of their turn, `waiter` being the gate
- * as `readGateWaiters` gives one. Empty when `me` is at the head, which is when it may try the rename.
+ * as `readGateWaiters` gives one. Empty when `me` is at the head, which is when it may try the rename, and
+ * `null` when no line is kept at this look, beside a gate of an older version (below).
  *
  * The order of the turn is the arrival, then the token: two gates that arrived in the same millisecond
  * compute the same order, each from the other's file. A gate is in the line while it is alive, which is
@@ -331,7 +332,12 @@ function readInLine(io, file) {
  *
  * A live gate whose file reads and has no mark of the line (`KEEPS_LINE`) is a gate of an older version,
  * as is one whose file never read (above). It takes no turn: it tries the rename at every poll. Beside
- * one, nobody is ahead at this look, whoever else waits, and the gate behaves as before the line.
+ * one, nobody is ahead at this look, whoever else waits, and the gate behaves as before the line. The
+ * answer is then `null` and not the empty list: no line is kept at this look, which is not the head of a
+ * line that is. Both let the gate try the rename, and the turn is the same for the two. The caller tells
+ * them apart for the bound of its wait alone, which a change of hands starts again only where the line is
+ * kept (`takeGateLock`): a first version answered `[]` for both, and a gate that lost every race beside
+ * a gate of an older version never gave up (found in review, 2026-10-11).
  *
  * Throws when the folder `root` cannot be listed, for its caller to read as no line at all. */
 function gatesAhead(io, root, me, met, { now, staleMs }) {
@@ -356,7 +362,7 @@ function gatesAhead(io, root, me, met, { now, staleMs }) {
         Object.assign(gate, { read: true, keepsLine: said.line === KEEPS_LINE && Number.isFinite(since), since, waiter: waiterSaid(said, token) });
       }
     }
-    if (gate.read ? !gate.keepsLine : now() - gate.seenAt >= staleMs) return [];
+    if (gate.read ? !gate.keepsLine : now() - gate.seenAt >= staleMs) return null;
     if (!gate.read || gate.since < me.since || (gate.since === me.since && token < me.token)) ahead.push({ token, since: gate.since, waiter: gate.waiter });
   }
   // A gate whose arrival is not known yet is `Infinity` here: after those whose turn is known.
@@ -425,7 +431,8 @@ function unreadable(dir, { token, since, answer }) {
  * and never a gate that only waits. `line` is `{ ahead, head }`: how many gates are before this one, the
  * holder included, and the gate that waits first among them, as `readGateWaiters` gives one, or `null`
  * when only the holder is before this one. `waitedMs` is the whole wait, and `stillMs` how long the lock
- * had not changed hands when the wait ended.
+ * had not changed hands when the wait ended, as the bound counts it (below): a change of hands that did
+ * not start the count again, beside a gate of an older version, is not in it.
  *
  * The bound of a wait is `waitMs` without the lock changing hands, counted from the last time it did and
  * not from the arrival (`boundFrom`, the one place the count is anchored). Counted from the arrival, a
@@ -438,10 +445,22 @@ function unreadable(dir, { token, since, answer }) {
  * lock the gate ahead never takes `waitMs` after it last changed hands. No bound is set on the whole of
  * a wait: behind a line that moves, a gate waits for as long as the line is.
  *
+ * That is where the line is kept. A change of hands read at a look with a live gate of an older version
+ * beside this one (`gatesAhead` answers `null`) does not start the count again. No line is kept there:
+ * every gate tries the rename at every poll, this one may lose each of those races, and a count that
+ * started again with each new holder would then never end. A first version started it again there too,
+ * and a gate that lost every race never gave up, where it gave up `waitMs` after its arrival before the
+ * line (found in review, 2026-10-11). So beside such a gate the bound counts as it did before the line:
+ * from the arrival, or from the last change of hands that was read while the line was kept. A change that
+ * was passed over so is not counted later either, at the first look after the older gate left: what the
+ * lock read is kept at every look, and only the anchor stays. A gate of an older version that takes the
+ * lock itself is, at the look that reads it as the holder, a gate that waits no more: with no other such
+ * gate beside this one, that change does start the count again, since it is a gate that ran.
+ *
  * `onWait(holder, leftMs, line)` is called when the wait begins, and again when the gate waited for
  * changes, or when its beat stops being readable or becomes so, with how long that gate is waited for at
- * most from then on: what is left of the bound, which with a new holder is the whole of it, or less for a
- * holder that cannot be read (below). So a notice of the minute an unreadable holder is given is never
+ * most from then on: what is left of the bound, which with a new holder is the whole of it where the line
+ * is kept (above), or less for a holder that cannot be read (below). So a notice of the minute an unreadable holder is given is never
  * the last word before the whole of a wait. Where the lock is free and a gate ahead is to take it,
  * `holder` is `null` and `line.head` is that gate: told once for each such gate, and again as the holder
  * once it holds the lock. No notice is given only because `line.ahead` changed.
@@ -508,6 +527,8 @@ export async function takeGateLock({
   // hands. To count the bound from the arrival again, as before 2026-10-11, the one line that moves it has
   // to go: every use below then reads the whole wait, and the callers' words follow (`takeGateTurn` says
   // what is left, and tells a lock that moved from one that did not, from the numbers it is given).
+  // That is already how it counts beside a gate of an older version, where no line is kept: the same line
+  // leaves the anchor where it is at such a look (`handsRead`).
   let boundFrom = startedWaiting;
   // What the last look that could tell read of the lock: `undefined` before any did, `null` for a free
   // lock, else the token of its holder.
@@ -516,9 +537,15 @@ export async function takeGateLock({
    * is not what the look before read, another holder or a free lock, is the lock changing hands, which
    * starts the count of the bound again; the first thing read does not, there being no change to see, nor
    * does a lock that reads free, nor the same holder read again. A look that could not tell who holds the
-   * lock (a folder that could not be listed) is not handed here. */
-  const handsRead = (read) => {
-    if (read !== null && hands !== undefined && hands !== read) boundFrom = now();
+   * lock (a folder that could not be listed) is not handed here.
+   *
+   * `besideOlder` is whether a live gate of an older version was beside this one at this look, so that no
+   * line was kept (`gatesAhead` answered `null`). A change of hands read then does not start the count
+   * again: every gate races for the rename there, and a gate that lost each race would wait without end
+   * (found in review, 2026-10-11). What was read is kept all the same, so the change is not seen a second
+   * time, and counted, at the first look after that gate left. */
+  const handsRead = (read, besideOlder) => {
+    if (read !== null && hands !== undefined && hands !== read && !besideOlder) boundFrom = now();
     hands = read;
   };
   let told;
@@ -596,9 +623,15 @@ export async function takeGateLock({
     // each of those failures. So the line can cost a gate its place, and never a take.
     let fresh = false;
     let ahead = [];
+    // Whether no line is kept at this look because a live gate of an older version is beside this one. The
+    // turn is that of a look with nobody ahead; only the bound reads the difference (`handsRead`). A line
+    // that could not be read is not that case: nothing says a gate races there.
+    let besideOlder = false;
     try {
       fresh = showUp();
-      ahead = gatesAhead(io, root, me, met, clock);
+      const before = gatesAhead(io, root, me, met, clock);
+      besideOlder = before === null;
+      ahead = before ?? [];
     } catch {
       ahead = [];
     }
@@ -638,7 +671,7 @@ export async function takeGateLock({
     const nobodyKnown = seen?.holder !== undefined && seen.file === undefined;
     // What this look read of the lock, for the bound: free, or whose it is. Not a folder that could not be
     // listed, of which nothing was read.
-    if (!nobodyKnown) handsRead(seen?.holder?.token ?? null);
+    if (!nobodyKnown) handsRead(seen?.holder?.token ?? null, besideOlder);
     // What a caller is told of the line: the gates before this one, the holder included.
     const line = { ahead: ahead.length + (seen?.holder ? 1 : 0), head: ahead[0]?.waiter ?? null };
 
@@ -735,7 +768,8 @@ export async function takeGateLock({
     }
     // Said for each gate waited for, and again when its beat stops being readable or becomes so: what is
     // left of the wait is not the same for the two. With a new holder what is left of the bound is the
-    // whole of it, since the lock has just changed hands.
+    // whole of it, since the lock has just changed hands; beside a gate of an older version it is what is
+    // left since the anchor, which that change did not move.
     const telling = `${holder.token}|${unread ? 'unread' : 'read'}`;
     if (wait && told !== telling) {
       told = telling;

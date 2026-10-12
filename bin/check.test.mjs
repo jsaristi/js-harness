@@ -2662,6 +2662,29 @@ test('main --no-wait is refused for a gate that waits ahead of it when the lock 
   assert.deepEqual(fs.readdirSync(gateDir(home)), ['wait-22-aaaaaaaaaaaa']);
 }));
 
+// Found in review, 2026-10-11: the reason `ahead` came with the line, and the test above reads it from a
+// stand-in for the writer of the log. Nothing showed that the line the real writer makes of it is one the
+// real reader takes: a reader that knew only `held` and `timeout` would count every such refusal among the
+// lines it could not read.
+test('a gate refused with --no-wait behind a gate that waits ahead is in the real gate log of its home as one refusal whose reason is ahead: its reader takes the line and counts none unreadable', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const since = new Date(Date.now() - 5000).toISOString();
+  const folder = path.join(gateDir(home), 'wait-22-aaaaaaaaaaaa');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'holder-22-aaaaaaaaaaaa.json'), `${JSON.stringify({ token: '22-aaaaaaaaaaaa', pid: 22, cwd: 'C:\\work\\two', command: 'check', startedAt: since, waitingSince: since, line: 1, session: null })}\n`);
+  // Handed no writer, the gate writes the log of its home, as it does outside a test.
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home, '--no-wait'], {}, gateDeps());
+  assert.equal(code, 1);
+  assert.match(gateRows(output).join('\n'), /^FAIL {2}gate {2}no sensor ran: .* waits ahead of this one for the machine's gate lock/);
+  assert.doesNotMatch(output, /gate log/);
+  assert.deepEqual(fs.readdirSync(gateLogDir(home)), ['log.jsonl']);
+  const { events, skipped } = readGateLog(home);
+  assert.deepEqual([events.length, skipped], [1, 0]);
+  assert.deepEqual(
+    gatesOf(events).map(({ start, refused }) => [start, refused?.event, refused?.reason, refused?.cwd, refused?.command, refused?.pid, refused?.waitedFor]),
+    [[undefined, 'refused', 'ahead', path.resolve(dir), 'check', process.pid, []]],
+  );
+}));
+
 test('main tells the lock which session started the gate, from the environment it was given, and none where the host says none', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const take = lockTakenAtOnce();
   const argv = ['--cwd', dir, '--home', home];
