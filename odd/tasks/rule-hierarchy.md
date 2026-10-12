@@ -1574,10 +1574,63 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   to the question at line 2958, not read). `f45176a` adds three sightings the orchestrator
   reported. The parent task stays open: four places of T17b are left with their reason and
   the six of `odd/tasks/codex-parity.md` wait for that document's branch.
+- 2026-10-11 and 12, T16b, design and first slice, on `feat/rules-list` (pull request 67, T17c,
+  is merged; `main` is `d94a765`, merged into this branch).
+  - The design is "How a rule is declared (T16b)" above: written after a read-only explorer
+    mapped where each value lives (145,816 tokens), then read by two readers that did not
+    write it (137,131 and 144,123 tokens), and what each changed is its last paragraph. Two
+    of this session's readings changed with it (differences 2 and 8) and the orchestrator
+    agreed they stay inside letter B.
+  - The slice (route: delegated, one writer at a time, each a narrow piece from an exact
+    specification, tests first; the specifications are this session's): the library
+    (`8ada9cc`), the check and the command (`8668dfc`), after the documents commit `859a797`.
+    Both gates passed on their first run. Run alone, each new test file passed before its
+    gate: no whole run was made beside a gate.
+  - It was the first slice of a trial his words opened (the orchestrator's transcript
+    `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, lines 2037 and 2891, both read): effort by
+    kind of work, alternated by slice. This one ran with the session at medium (read with the
+    app's tool; the first two specifications were written at high, before the change applied)
+    and its writers on Haiku 5.5 (`claude-haiku-5-5`, read in the first one's transcript):
+    four writers, 620,003 tokens, none wrong twice, three corrections by this session after
+    them (a literal 12 that is itself a declared rule; a unit not refused on a rule with no
+    value; a throw on a malformed source, which the third writer found in code that was not
+    its own). One slip of this session: two small test files run while a writer could have
+    been running its own.
+  - gentle-ai reviewed each code commit by itself, the first from a detached worktree,
+    because its assessment is always base to HEAD: both approved and acknowledged, twelve
+    notes, six of them warnings, none blocking, no requirement missed. It accepted the commit
+    of 1,275 lines: the size of a commit it will review was known at 1,185 (taken) and 2,250
+    (refused), and this is the third point. Eleven notes are corrected in `79f9bbf`, written
+    by a fifth Haiku writer (209,074 tokens) with the session at high and read by it; its
+    gate passed on its first run. gentle-ai on that commit: medium, 319 lines, not due.
+  - The seed is fourteen rules. A value entered only with a source of one of the two kinds:
+    his words by transcript line, each read by this session with `sessions --quote`, or a
+    design. Four are his by one answer of 2026-10-11 (line 2963, to the question at line
+    2958, both read): the Codex rate by changed line, its floor a review, the size of a
+    reviewed commit, the number of work sessions. Before that answer three of them were left
+    out, because each number had been the orchestrator's, approved inside a whole list.
+  - Decided with it, by his "Sí, que entre al plan" (line 2891): the rows of model and effort
+    by kind of work become rules of this list, each with the engine version and the model id
+    it was checked on, a mark of shipped or local, and a mark of stale when the engine or a
+    model changes. Not designed yet. The proposal it comes from is the orchestrator's
+    (`modelo-esfuerzo-propuesta.md` in its scratchpad, read whole by this session, not yet
+    copied into the repository).
+  - Owed in documents, not done here: that copy; `docs/ROADMAP.md:62`, `:353-360` and
+    `:539-541`, which say something else about models and effort; and
+    `odd/tasks/codex-review-lean.md:46`, which dates the review's effort 2026-10-06 when the
+    high in force is his word of 2026-10-08.
+  - This session's context stood at 86 percent when this was written, past which it tells
+    the orchestrator; its resume point is this entry, the Next step below and the engram
+    topic `odd/rule-hierarchy/state-addendum`.
 
 ## Next step
-In this order. (1) The pull request of T17c is open: the lead merges it. (2) T16b, on
-`feat/rules-list`: its design and its first slice are there; its Progress is written on that
-branch once this one is on `main`. (3) T3e. (4) T1. T2
+In this order. (1) Codex reviews the slice on `feat/rules-list` by its plan
+(`js-harness codex-review --base 859a797 --plan`, then the review in a turn of the gate lock);
+its allowance is the greater of 300,000 input tokens a review and 1,200 a changed line. Then
+the push and the pull request. (2) The documents owed in the entry above. (3) The second
+slice of T16b, with the session at high: each constant reads its declaration, one file at a
+time, each told to the orchestrator before it is touched; then the rows of model and effort,
+designed and read by a reader that did not write the design before they are built. (4) T3e.
+(5) T1, which takes section D of the proposal. T2
 and T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts
 of "What the hosts allow" that T2 rests on are confirmed with a logging hook.
