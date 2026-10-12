@@ -6,6 +6,20 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { childEnv, runProcess } from './runner.mjs';
 import { applyReference, isDiscovered, proveTask } from './task-proof.mjs';
+import { sweptLater } from '../bin/lib/process-tree.testkit.mjs';
+
+// The runs of this file are not about what a process leaves behind, so their sweep is put off: each run is
+// recorded and the search the real sweep makes is made once, when the file ends (`sweptLater`). A process a
+// run left behind therefore lives until then, and fails the file by name here.
+const later = sweptLater(runProcess);
+after(() => {
+  const left = later.check();
+  assert.deepEqual(
+    left,
+    [],
+    `processes outlived the run that started them: ${left.map(({ pid, name }) => `${name} (${pid})`).join(', ')}`,
+  );
+});
 
 // Every directory a test makes lives under one root that is removed at the end.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-proof-test-'));
@@ -86,7 +100,7 @@ function writeTask(files) {
 
 /** Proves a task built from `files`, and checks what holds for every problem: it names the task. */
 async function prove(files, { workRoot = tmp('work') } = {}) {
-  const result = await proveTask(writeTask(files), { workRoot });
+  const result = await proveTask(writeTask(files), { workRoot, runProcess: later.runProcess });
   for (const problem of result.problems) assert.match(problem, /^task quote: /);
   return result;
 }
@@ -108,6 +122,21 @@ test('a valid task has no problems and the three scores the rules ask for', asyn
   assert.deepEqual(result.reference, { score: 1, passed: 3, total: 3, error: null });
   assert.deepEqual(result.empty, { score: 0, passed: 0, total: 3, error: null });
   assert.deepEqual(result.visible, { fixture: { passed: 2, total: 2, failed: 0, error: null }, reference: { passed: 2, total: 2, failed: 0, error: null } });
+  assert.deepEqual(fs.readdirSync(workRoot), [], 'every workspace is removed');
+});
+
+test('proveTask makes its five runs through the run it is given, and starts no process of its own', async () => {
+  const calls = [];
+  // Every run gets the same answer, so the proof's problems are not what this test is about: only the runs are.
+  const runProcess = async (options) => {
+    calls.push(options);
+    return { stdout: '# tests 3\n# pass 2\n# fail 1\n', stderr: '', exitCode: 1, timedOut: false };
+  };
+  const workRoot = tmp('work');
+  await proveTask(writeTask(validFiles()), { workRoot, runProcess });
+  const graded = calls.filter((call) => call.args.includes('.eval-grader/*.grade.mjs'));
+  assert.equal(graded.length, 3, 'the grader on the fixture, on the fixture plus reference, and on the empty workspace');
+  assert.equal(calls.length - graded.length, 2, 'and the visible suite on the fixture and on the reference');
   assert.deepEqual(fs.readdirSync(workRoot), [], 'every workspace is removed');
 });
 
@@ -146,7 +175,7 @@ test('a reference that is not a directory is a problem', async () => {
 test('a reference directory with no file is a problem', async () => {
   const dir = writeTask({ ...validFiles(), 'reference/calc.mjs': null });
   fs.mkdirSync(path.join(dir, 'reference'));
-  const result = await proveTask(dir, { workRoot: tmp('work') });
+  const result = await proveTask(dir, { workRoot: tmp('work'), runProcess: later.runProcess });
   some(result, /reference\/ holds no file/);
 });
 
@@ -210,7 +239,7 @@ setTimeout(() => {
   process.on('unhandledRejection', onUnhandled);
   const workRoot = tmp('work');
   try {
-    await assert.rejects(proveTask(writeTask(files), { workRoot }), Error);
+    await assert.rejects(proveTask(writeTask(files), { workRoot, runProcess: later.runProcess }), Error);
     const count = (name) => (fs.existsSync(path.join(marks, name)) ? fs.readFileSync(path.join(marks, name), 'utf8').split('\n').length - 1 : 0);
     assert.ok(count('started') > 0, 'a grader had started when the preparation threw');
     assert.equal(count('finished'), count('started'), 'the rejection came after every started grader finished');

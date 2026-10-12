@@ -1083,7 +1083,7 @@ async function runArm(p, arm, before) {
       const agent = resolveAgent(config, { effort: PROBE_EFFORT, task: undefined, home, workspace, prepared });
       p.log(`${arm}: running the agent`);
       const began = performance.now();
-      run = await runProcess({ ...agent, env: childEnv(agent.env), cwd: workspace, input: probePrompt(nonce), timeoutMs: o.timeoutMs });
+      run = await (o.runProcess ?? runProcess)({ ...agent, env: childEnv(agent.env), cwd: workspace, input: probePrompt(nonce), timeoutMs: o.timeoutMs });
       result.wallMs = Math.round(performance.now() - began);
     } catch (err) {
       result.error = errorMessage(err);
@@ -1225,7 +1225,9 @@ function armFailures(result) {
  * where the `claude` scratch folder to watch is), `trees` (default `defaultTrees`), `nonce`, `runInit` (passed to the seed), `adaptConfig(config, { arm })` (changes the
  * command and arguments, never the sandbox), `sweep(roots, { within })` (default `killByPath`: kills what the
  * agent left running under the sandbox, before the final scan of the real trees and again before the
- * removal if that sweep was not reached), `allocatePort()` and `killPort(port)` (the config builders' seams for the
+ * removal if that sweep was not reached), `runProcess(options)` (default the real one: the run of the arm's agent,
+ * a caller hands in another only to record what it leaves behind), `allocatePort()` and `killPort(port)` (the
+ * config builders' seams for the
  * trial's engram port: a real free port, and the kill of what listens on it), `isListening(port)` (a connection to
  * the loopback) and `listEngram()` (the engram processes now running, default `findProcesses('engram')`), `wait(ms)`,
  * `log(message)`, `concurrency`, `chunkSize`, `openRead(file,
