@@ -184,6 +184,7 @@ const METHOD =
 
 test('a run starts the declared count of parts without being told to', () => {
   assert.equal(MAX_PARTS_WITHOUT_FLAG, ruleValue('review-parts-unflagged', 'parts'));
+  assert.ok(Number.isInteger(MAX_PARTS_WITHOUT_FLAG) && MAX_PARTS_WITHOUT_FLAG > 0);
 });
 
 test('the plan names the range, the model, the effort, the parts with their files and lines, and what each is estimated to send', () => {

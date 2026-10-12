@@ -25,11 +25,6 @@ function plainId(model) {
   return model.replace(DATE_SUFFIX, '');
 }
 
-/** Gives the day of a time: its first ten characters. The records hold ISO times in universal time (they end in Z), so this is the UTC day. */
-function dayOf(at) {
-  return at.slice(0, 10);
-}
-
 /** Gives a day (YYYY-MM-DD) as a count of whole days since the epoch, in universal time. */
 function dayNumber(day) {
   return Date.parse(`${day}T00:00:00Z`) / MS_PER_DAY;
@@ -42,9 +37,12 @@ function byText(a, b) {
   return 0;
 }
 
-/** Compares two parts of a version: as numbers when both are digits, as text otherwise. */
+/** Compares two parts of a version: two of digits as numbers, a part of digits before one that is not, and two that are not digits as text. The order is one order whatever the mix, so the sort does not depend on the input. */
 function comparePart(a, b) {
-  if (/^\d+$/.test(a) && /^\d+$/.test(b)) return Number(a) - Number(b);
+  const digitsA = /^\d+$/.test(a);
+  const digitsB = /^\d+$/.test(b);
+  if (digitsA && digitsB) return Number(a) - Number(b);
+  if (digitsA !== digitsB) return digitsA ? -1 : 1;
   return byText(a, b);
 }
 
@@ -96,12 +94,12 @@ function keep(entry, kind, today, days, skipped) {
     skipped.synthetic += 1;
     return null;
   }
-  const timed = typeof entry.at === 'string' && !Number.isNaN(Date.parse(entry.at)) && DAY.test(dayOf(entry.at));
-  if (!timed) {
+  const ms = typeof entry.at === 'string' ? Date.parse(entry.at) : NaN;
+  if (Number.isNaN(ms)) {
     skipped.noTime += 1;
     return null;
   }
-  const day = dayOf(entry.at);
+  const day = new Date(ms).toISOString().slice(0, 10);
   if (dayNumber(today) - dayNumber(day) >= days) {
     skipped.old += 1;
     return null;
@@ -114,7 +112,7 @@ function keep(entry, kind, today, days, skipped) {
     plain: plainId(entry.model),
     effort: isText(entry.effort) ? entry.effort : null,
     day,
-    ms: Date.parse(entry.at),
+    ms,
     file: typeof entry.file === 'string' ? entry.file : '',
     alias: kind === 'launch' && isText(entry.alias) ? entry.alias : null,
     agentType: kind === 'launch' && isText(entry.agentType) ? entry.agentType : null,
@@ -254,8 +252,12 @@ function heldCompare(item, rule, entries) {
 
 /** Gives, for each declared rule that carries an alias, for the records a window keeps and for each held item, the engine items, the failing engines, the exit code, the held comparisons and the other counts. */
 export function appliedOf(rules, launches, sessions, { today, days = 7, held = [] } = {}) {
-  if (typeof today !== 'string' || !DAY.test(today)) {
+  const todayMs = typeof today === 'string' && DAY.test(today) ? Date.parse(`${today}T00:00:00Z`) : NaN;
+  if (Number.isNaN(todayMs) || new Date(todayMs).toISOString().slice(0, 10) !== today) {
     throw new Error('appliedOf needs today as a day');
+  }
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error('appliedOf needs days as a whole number of 1 or more');
   }
 
   // The day of each entry is a UTC day, so `today` and the window are counted in UTC too.

@@ -11,6 +11,7 @@ const paths = (parts) => parts.map((part) => part.files);
 
 test('the bound of a part is the declared rule review-part-lines', () => {
   assert.equal(PART_MAX_CHANGED_LINES, ruleValue('review-part-lines', 'changed lines'));
+  assert.ok(Number.isInteger(PART_MAX_CHANGED_LINES) && PART_MAX_CHANGED_LINES > 0);
 });
 
 test('a range at or under the bound is one part, with its files in path order', () => {
@@ -82,6 +83,7 @@ test('the same range gives the same parts in whatever order its files are given,
 
 test('a part holds the declared count of files at most (40 in this case), however few lines they change', () => {
   assert.equal(PART_MAX_FILES, ruleValue('review-part-files', 'files'));
+  assert.ok(Number.isInteger(PART_MAX_FILES) && PART_MAX_FILES > 0);
   // A hundred files of one line each: far under the bound of changed lines, and too many paths for one command.
   const files = Array.from({ length: 100 }, (_, index) => file(`src/f${String(index).padStart(3, '0')}.mjs`, 1));
   const parts = reviewParts(files);
