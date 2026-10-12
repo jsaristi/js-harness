@@ -53,6 +53,7 @@ const WHOLE = [
   }),
   retiredRule('gamma-retired', {
     was: [{ value: 9, until: '2026-09-01' }],
+    unit: 'minutes',
     successors: ['alpha-value'],
     patterns: ['x'],
     row: { refuses: '2026-10-11' },
@@ -305,6 +306,25 @@ test('a successor that is the id of no rule in the list is refused, and one decl
 
 test('a retired rule with no successor reads with no fault', () => {
   assert.deepEqual(readRules([retiredRule('alpha-retired', { successors: [] })]), []);
+});
+
+test('a retired rule whose earlier values are numbers reads with its unit, and is refused without one', () => {
+  const was = [{ value: 60, until: '2026-10-01' }];
+  assert.deepEqual(readRules([retiredRule('alpha-retired', { was, unit: 'minutes' })]), []);
+  assert.deepEqual(readRules([retiredRule('alpha-retired', { was })]), [
+    'rule "alpha-retired": a retired rule whose earlier values are numbers keeps its unit',
+  ]);
+  assert.deepEqual(readRules([retiredRule('alpha-retired', { was, unit: '' })]), [
+    'rule "alpha-retired": a retired rule whose earlier values are numbers keeps its unit',
+  ]);
+});
+
+test('a unit on a retired rule whose earlier values are not numbers keeps its fault, and a retired rule with no unit reads with none', () => {
+  assert.deepEqual(readRules([retiredRule('alpha-retired', { was: [{ value: 'sixty minutes', until: '2026-10-01' }], unit: 'minutes' })]), [
+    'rule "alpha-retired": a unit goes with a value',
+  ]);
+  assert.deepEqual(readRules([retiredRule('alpha-retired', { unit: 'minutes' })]), ['rule "alpha-retired": a unit goes with a value']);
+  assert.deepEqual(readRules([retiredRule('alpha-retired')]), []);
 });
 
 // ── Fault 14: a flag or earlier values on a rule of the wrong body ─────────────────────────────
@@ -639,6 +659,11 @@ test('rulesHash is different when a rule is retired', () => {
   assert.notEqual(rulesHash([retiredRule('alpha-value')]), rulesHash([valueRule('alpha-value')]));
 });
 
+test('rulesHash of a retired rule moves when its unit changes', () => {
+  const was = [{ value: 60, until: '2026-10-01' }];
+  assert.notEqual(rulesHash([retiredRule('alpha-retired', { was, unit: 'minutes' })]), rulesHash([retiredRule('alpha-retired', { was, unit: 'seconds' })]));
+});
+
 test('rulesHash is different when a unit, a flag, a path or the phrases change, and the same when a row is added', () => {
   const base = rulesHash([valueRule('alpha-value')]);
   assert.notEqual(rulesHash([valueRule('alpha-value', { unit: 'seconds' })]), base);
@@ -747,6 +772,22 @@ test('renderList keeps the fraction digits of a value, so 0.0001 seconds and 123
   assert.ok(renderList([valueRule('alpha-value', { value: 0.0001, unit: 'seconds' })]).split('\n').includes('The test value of a thing: 0.0001 seconds.'));
   assert.ok(renderList([valueRule('alpha-value', { value: 1234.5678 })]).split('\n').includes('The test value of a thing: 1,234.5678 characters.'));
   assert.ok(renderList([valueRule('alpha-value', { value: 1200 })]).split('\n').includes('The test value of a thing: 1,200 characters.'));
+});
+
+test('renderList shows a number as its own value: grouped in threes, and a very small or large one in exponent form, never as another number', () => {
+  const shownAs = (value) => renderList([valueRule('alpha-value', { value, unit: 'characters' })]).split('\n')
+    .find((line) => line.startsWith('The test value of a thing: '));
+  assert.equal(shownAs(1200), 'The test value of a thing: 1,200 characters.');
+  assert.equal(shownAs(1234.5678), 'The test value of a thing: 1,234.5678 characters.');
+  assert.equal(shownAs(0.0001), 'The test value of a thing: 0.0001 characters.');
+  assert.equal(shownAs(1e-21), 'The test value of a thing: 1e-21 characters.');
+  assert.equal(shownAs(-1234567), 'The test value of a thing: -1,234,567 characters.');
+  assert.equal(shownAs(1e21), 'The test value of a thing: 1e+21 characters.');
+});
+
+test('renderList gives the earlier values of a retired rule with its unit, as a value with a unit', () => {
+  const lines = renderList([retiredRule('alpha-retired', { was: [{ value: 60, until: '2026-10-01' }], unit: 'minutes' })]).split('\n');
+  assert.ok(lines.includes('- Was: 60 minutes until 2026-10-01.'));
 });
 
 test('renderList shows a source it cannot read as not readable, and does not throw on it', () => {

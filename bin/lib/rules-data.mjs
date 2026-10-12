@@ -94,17 +94,17 @@ export const RULES = [
   },
   {
     "id": "subagent-reader-model",
-    "subject": "the least model of a sub-agent that explores, reviews or verifies",
+    "subject": "the model of a sub-agent that explores, reviews or verifies",
     "owner": "sebastian",
     "since": "2026-10-10",
-    "value": "Opus 5.5"
+    "value": "claude-opus-5-5"
   },
   {
     "id": "subagent-writer-model",
     "subject": "the model of a sub-agent that writes scoped code, in this repository",
     "owner": "sebastian",
     "since": "2026-10-11",
-    "value": "Haiku 5.5"
+    "value": "claude-haiku-5-5"
   },
   {
     "id": "work-sessions",

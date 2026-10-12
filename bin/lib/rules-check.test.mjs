@@ -1,9 +1,11 @@
 // Tests for rules-check.mjs. Every text is an inline string, so no test reads the disk.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkRules, findReads, namedRules, sentenceOf } from './rules-check.mjs';
+import { readFileSync } from 'node:fs';
+import { beforeProgress, checkRules, findReads, namedRules, sentenceOf } from './rules-check.mjs';
 import { RULES } from './rules-data.mjs';
 import { renderList, writeRules } from './rules.mjs';
+import { holdsPhrase } from './failures.mjs';
 
 const HOME = 'docs/REVIEW.md';
 const HOME_TEXT = 'The review leaves a note on every slice.';
@@ -93,6 +95,16 @@ test('sentenceOf runs to the end of a text that has no final period', () => {
 
 test('sentenceOf finds a phrase whose words are split by a line break', () => {
   assert.equal(sentenceOf('Alpha beta.\nThe review\nleaves a note. Gamma.', 'review\nleaves  a note'), 'The review leaves a note.');
+});
+
+test('sentenceOf ends the sentence after a phrase that ends with its own terminator, not in the next sentence', () => {
+  assert.equal(sentenceOf('The review leaves a note. Next unrelated sentence.', 'review leaves a note.'), 'The review leaves a note.');
+  assert.equal(sentenceOf('The review leaves a note? Next unrelated sentence.', 'review leaves a note?'), 'The review leaves a note?');
+  assert.equal(sentenceOf('The review leaves a note! Next unrelated sentence.', 'review leaves a note!'), 'The review leaves a note!');
+});
+
+test('sentenceOf of a phrase that ends at the end of the text gives the last sentence', () => {
+  assert.equal(sentenceOf('Alpha beta. The review leaves a note.', 'review leaves a note.'), 'The review leaves a note.');
 });
 
 test('sentenceOf gives null when the text does not hold the phrase', () => {
@@ -326,4 +338,72 @@ test('a retired rule whose source is malformed is a finding, and a retired rule 
     'rule "old-wait": its source is not a design with its path, or his words with their quotes, reading, acceptance and check',
   ]);
   assert.deepEqual(checkRules(build({ rules })).findings, []);
+});
+
+test('rules-check.mjs imports no module that reads a rule: only rules-data.mjs and rules.mjs', () => {
+  const source = readFileSync(new URL('./rules-check.mjs', import.meta.url), 'utf8');
+  const imports = [...source.matchAll(/^import\b[^\n]*?\bfrom '([^']+)';/gm)].map((match) => match[1]);
+  assert.deepEqual(imports, ['./rules-data.mjs', './rules.mjs']);
+});
+
+test('a phrase is found as the failures register finds a control', () => {
+  const cases = [
+    ['The review leaves a note on every slice.', 'review leaves a note', true],
+    ['The review\nleaves   a note on every slice.', 'review leaves a note', true],
+    ['The review leaves a note on every slice.', 'review leaves a\nnote', true],
+    ['A review writes a comment on a slice.', 'review leaves a note', false],
+  ];
+  for (const [text, phrase, holds] of cases) {
+    const rules = [{ id: 'review-note', subject: 'the note a review leaves on a slice', owner: 'project', since: '2026-10-10', path: HOME, phrases: [phrase] }];
+    const result = checkRules({ rules, sources: null, dataText: null, listText: null, codeFiles: [], textFiles: [], readFile: () => text });
+    assert.equal(holdsPhrase(text, phrase), holds, JSON.stringify([text, phrase]));
+    assert.deepEqual(result.findings, holds ? [] : [`rule "review-note": ${HOME} no longer holds the phrase "${phrase}"`], JSON.stringify([text, phrase]));
+  }
+});
+
+test('beforeProgress gives a text with no Progress line whole', () => {
+  const text = '# Feature\n\nNo plan heading here.\n';
+  assert.equal(beforeProgress(text), text);
+});
+
+test('beforeProgress cuts a text at its Progress line, which is left out with everything after it', () => {
+  assert.equal(beforeProgress('Intro.\n\n## Progress\n\n- [x] T1\n'), 'Intro.\n\n');
+});
+
+test('beforeProgress does not cut at a Progress line inside a backtick fence, and cuts at the real one after the fence', () => {
+  const text = '# F\n```\n## Progress\n```\nText.\n\n## Progress\n\n- [ ] T2\n';
+  assert.equal(beforeProgress(text), '# F\n```\n## Progress\n```\nText.\n\n');
+});
+
+test('beforeProgress does not cut at a Progress line inside a tilde fence, and cuts at the real one after the fence', () => {
+  const text = '# F\n~~~\n## Progress\n~~~\n## Progress\nrest\n';
+  assert.equal(beforeProgress(text), '# F\n~~~\n## Progress\n~~~\n');
+});
+
+test('beforeProgress keeps a four-mark fence open over a three-mark line, so a Progress line inside it does not cut', () => {
+  assert.equal(beforeProgress('````\n```\n## Progress\n````\n'), '````\n```\n## Progress\n````\n');
+  assert.equal(beforeProgress('````\n```\n## Progress\n````\n## Progress\n'), '````\n```\n## Progress\n````\n');
+});
+
+test('beforeProgress does not cut at a heading that only starts with Progress', () => {
+  const text = '## Progress notes\n### Progress\n';
+  assert.equal(beforeProgress(text), text);
+});
+
+test('beforeProgress cuts a CRLF text at the right byte, after its CRLF line ends', () => {
+  assert.equal(beforeProgress('Intro.\r\n\r\n## Progress\r\n\r\n- [x] T1\r\n'), 'Intro.\r\n\r\n');
+});
+
+test('a words source whose date is not a real calendar day is a finding, in a quote or in its check', () => {
+  const malformed = [
+    { ...WORDS, quotes: [{ ...WORDS.quotes[0], date: '2026-99-99' }] },
+    { ...WORDS, checked: { date: 'not a date', by: 'session' } },
+    { ...WORDS, checked: { date: '2026-02-30', by: 'session' } },
+  ];
+  for (const source of malformed) {
+    const result = checkRules(build({ sources: { 'gate-wait': source, 'review-note': DESIGN } }));
+    assert.deepEqual(result.findings, [
+      'rule "gate-wait": its source is not a design with its path, or his words with their quotes, reading, acceptance and check',
+    ], JSON.stringify(source));
+  }
 });

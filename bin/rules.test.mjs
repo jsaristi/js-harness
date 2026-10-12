@@ -182,6 +182,32 @@ test('a feature document that names an undeclared rule fails check above its Pro
   });
 });
 
+test('a feature document whose fenced example holds a Progress line is cut at the real one, so a mark after the fence is checked', async () => {
+  const feature = [
+    '# Feature',
+    '',
+    '```markdown',
+    '## Progress',
+    '```',
+    '',
+    'The limit is `rule:no-such-rule`.',
+    '',
+    '## Progress',
+    '',
+    '- [x] T1 done',
+    '',
+  ].join('\n');
+  await inProject(BASE(), async (dir) => {
+    await run(['render'], dir);
+    write(dir, { 'odd/tasks/feature.md': feature });
+    assert.deepEqual(await run(['check'], dir), {
+      code: 1,
+      out: ['FAIL  rules  1 finding', '      odd/tasks/feature.md: names rule "no-such-rule", which is declared nowhere'],
+      err: [],
+    });
+  });
+});
+
 // ── the listing and one rule ────────────────────────────────────────────────────────────────────
 
 test('rules prints one line per rule, with its value and unit, then the count line', async () => {

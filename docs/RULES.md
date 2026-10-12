@@ -2,7 +2,7 @@
 
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 
-Hash `807fdc507a1d`. In force: 14 (9 of Sebastián, 5 of the project). Retired: 0.
+Hash `aee76ff2804f`. In force: 14 (9 of Sebastián, 5 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -37,12 +37,12 @@ The effort every sub-agent is launched with: high.
 - Since 2026-10-07. Row: reports. Source: his words of 2026-10-07, checked by a session on 2026-10-11.
 
 ### subagent-reader-model
-The least model of a sub-agent that explores, reviews or verifies: Opus 5.5.
+The model of a sub-agent that explores, reviews or verifies: claude-opus-5-5.
 - Read by: none.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-11.
 
 ### subagent-writer-model
-The model of a sub-agent that writes scoped code, in this repository: Haiku 5.5.
+The model of a sub-agent that writes scoped code, in this repository: claude-haiku-5-5.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
 

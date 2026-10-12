@@ -29,7 +29,7 @@ const isObject = (value) => typeof value === 'object' && value !== null && !Arra
 const isText = (value) => typeof value === 'string' && value.length > 0;
 
 /** True for a real day written `YYYY-MM-DD`: `2026-02-30` has the shape and is no date. */
-function isDay(value) {
+export function isDay(value) {
   const match = typeof value === 'string' ? DATE_PATTERN.exec(value) : null;
   if (!match) return false;
   const [year, month, day] = match.slice(1).map(Number);
@@ -100,6 +100,9 @@ function valueFaults({ value, unit, flag }) {
   return faults;
 }
 
+/** True when `was` is a list that holds at least one earlier value that is a number, whatever else it holds. */
+const holdsNumber = (was) => Array.isArray(was) && was.some((item) => isObject(item) && typeof item.value === 'number');
+
 /** The faults of a rule's text body: both its path and its phrases, and each phrase long enough to be
  * found only on purpose. A field that is missing is named once, by the missing message. */
 function textFaults({ path, phrases }, minPhrase) {
@@ -123,7 +126,8 @@ function textFaults({ path, phrases }, minPhrase) {
   return faults;
 }
 
-/** The faults of a retired rule's body: its day, and its successors, each one a rule of the list. */
+/** The faults of a retired rule's body: its day, and its successors, each one a rule of the list. Its unit is read
+ * in `ruleFaults`, with the earlier values, because a retired rule keeps its unit only when those values are numbers. */
 function retiredFaults({ id, retired, successors }, declared) {
   const faults = [];
   if (!isDay(retired)) faults.push('retired is not a day written YYYY-MM-DD');
@@ -199,7 +203,10 @@ function ruleFaults(rule, { minPhrase, declared }) {
   if (body === 'value') faults.push(...valueFaults(rule));
   if (body === 'text') faults.push(...textFaults(rule, minPhrase));
   if (body === 'retired') faults.push(...retiredFaults(rule, declared));
-  if (rule.unit !== undefined && (body === 'text' || body === 'retired')) faults.push('a unit goes with a value');
+  // A retired rule whose earlier values are numbers keeps its unit, so that its history says minutes or seconds.
+  if (body === 'retired' && holdsNumber(rule.was)) {
+    if (!isText(rule.unit)) faults.push('a retired rule whose earlier values are numbers keeps its unit');
+  } else if (rule.unit !== undefined && (body === 'text' || body === 'retired')) faults.push('a unit goes with a value');
   if (rule.flag !== undefined && body !== 'value') faults.push('a flag goes with a value');
   if (rule.successors !== undefined && (body === 'value' || body === 'text')) faults.push('successors go with a retired rule');
   if (rule.was !== undefined && body === 'text') faults.push('earlier values go with a value or a retired rule');
@@ -345,8 +352,18 @@ export function rulesHash(list) {
 /** `text` with its first character in upper case, for a sentence that opens with a subject. */
 const upper = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
-/** A number with its digits grouped as an English reader sees them (1200 is 1,200), and any other value as text. */
-const shown = (value) => (typeof value === 'number' ? value.toLocaleString('en-US', { maximumFractionDigits: 20 }) : String(value));
+/** A number as text with its whole digits grouped in threes (1200 is 1,200), its fraction kept as it is (0.0001 stays
+ * 0.0001). A number that `String` writes in exponent form keeps that form (1e-21 stays 1e-21), so no digit is lost. */
+const shownNumber = (value) => {
+  const text = String(value);
+  if (/[eE]/.test(text)) return text;
+  const [whole, fraction] = text.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fraction === undefined ? grouped : `${grouped}.${fraction}`;
+};
+
+/** A number shown by `shownNumber`, and any other value as text. */
+const shown = (value) => (typeof value === 'number' ? shownNumber(value) : String(value));
 
 /** A value and its unit with a space between them, or the value alone when the rule has no unit. */
 const amount = (value, unit) => (unit === undefined ? shown(value) : `${shown(value)} ${unit}`);

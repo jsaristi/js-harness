@@ -3,8 +3,7 @@
 // reads what it is given and returns what is wrong, one sentence each, and what was left out. It holds no fs
 // and no process access, so the caller reads every file and passes its text in.
 import { RULES } from './rules-data.mjs';
-import { readRules, renderList, writeRules } from './rules.mjs';
-import { holdsPhrase } from './failures.mjs';
+import { isDay, readRules, renderList, writeRules } from './rules.mjs';
 
 // A read of a rule by a literal id. A call whose first argument is not a string literal is not found: the
 // pattern cannot know what a variable holds, so such a call is not guaranteed to be seen.
@@ -15,9 +14,15 @@ const NAME_PATTERN = /`rule:([a-z][a-z0-9-]*)`/g;
 const FENCE_RUN = /^(`{3,}|~{3,})/;
 // The characters that can end a sentence.
 const TERMINATORS = '.?!';
+// The line that ends a feature document's plan: what follows it is history.
+const PROGRESS_LINE = /^## Progress\r?$/;
 
 /** `text` with every run of white space read as one space and the ends trimmed. */
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
+
+/** True when `text` holds `phrase`, each with every run of white space read as one space: the same test that the
+ * failures register applies to a control, kept here so that this file reads no module that reads a rule. */
+const holds = (text, phrase) => squash(text).includes(squash(phrase));
 
 /** `text` with each `\r\n` read as `\n`, or `null` as it is, so that a file from Windows compares as one from Unix. */
 const normal = (text) => (text === null ? null : text.replace(/\r\n/g, '\n'));
@@ -27,9 +32,6 @@ const isPlain = (value) => typeof value === 'object' && value !== null && !Array
 
 /** True for a non-empty text. */
 const isText = (value) => typeof value === 'string' && value.length > 0;
-
-/** True for a day written `YYYY-MM-DD`, as the rules list writes its dates. */
-const isDay = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 /** True for a source that is a design: `{ kind: 'design', path }` with a non-empty path. */
 const isDesign = (source) => isPlain(source) && source.kind === 'design' && isText(source.path);
@@ -44,7 +46,7 @@ const isQuote = (item) => isPlain(item)
 
 /** True for the check that read his words: a date, and `by` is the session or the command. */
 const isChecked = (checked) => isPlain(checked)
-  && isText(checked.date)
+  && isDay(checked.date)
   && (checked.by === 'session' || checked.by === 'command');
 
 /** True for a source that is his words: `{ kind: 'words', quotes, reading, accepted, checked }`, well formed. */
@@ -69,7 +71,8 @@ export function findReads(codeFiles) {
 
 /** The sentence of `text` that holds `phrase`, with white space read as one space, or `null` when the text does
  * not hold the phrase. A sentence starts after the last `. `, `? ` or `! ` that ends before the phrase, and ends
- * with the first `.`, `?` or `!` at or after the phrase's end that is followed by a space or the end of the text. */
+ * with the first `.`, `?` or `!` at or after the phrase's last character that is followed by a space or the end of
+ * the text, so a phrase that ends with its own terminator does not run on into the next sentence. */
 export function sentenceOf(text, phrase) {
   const body = squash(text);
   const wanted = squash(phrase);
@@ -82,7 +85,7 @@ export function sentenceOf(text, phrase) {
     if (TERMINATORS.includes(body[i]) && body[i + 1] === ' ') start = i + 2;
   }
   let stop = body.length;
-  for (let i = after; i < body.length; i += 1) {
+  for (let i = Math.max(at, after - 1); i < body.length; i += 1) {
     if (TERMINATORS.includes(body[i]) && (i + 1 === body.length || body[i + 1] === ' ')) {
       stop = i + 1;
       break;
@@ -91,28 +94,49 @@ export function sentenceOf(text, phrase) {
   return body.slice(start, stop);
 }
 
-/** Every `rule:<id>` mark in code marks, on a line that is not inside a fenced block: `{ path, id }`. A fence
- * opens on a line that starts with three or more backticks or tildes, and closes on the next line that starts with
- * the same character as many times or more, so a longer fence can hold a shorter one. The lines that open and close
- * a fence are not read for marks. */
+/** Each line of `text` with whether it lies outside a fenced block: `{ line, outside }`. A fence opens on a line that
+ * starts with three or more backticks or tildes, and closes on the next line that starts with the same character as
+ * many times or more, so a longer fence can hold a shorter one. The lines that open and close a fence are not outside. */
+function fenceWalk(text) {
+  const walked = [];
+  let fence = null;
+  for (const line of text.split('\n')) {
+    const run = FENCE_RUN.exec(line.trim());
+    if (fence !== null) {
+      if (run !== null && run[1][0] === fence[0] && run[1].length >= fence.length) fence = null;
+      walked.push({ line, outside: false });
+    } else if (run !== null) {
+      fence = run[1];
+      walked.push({ line, outside: false });
+    } else {
+      walked.push({ line, outside: true });
+    }
+  }
+  return walked;
+}
+
+/** Every `rule:<id>` mark in code marks, on a line that is not inside a fenced block: `{ path, id }`. The lines that
+ * open and close a fence are not read for marks. */
 export function namedRules(textFiles) {
   const named = [];
   for (const { path, text } of textFiles) {
-    let fence = null;
-    for (const line of text.split('\n')) {
-      const trimmed = line.trim();
-      const run = FENCE_RUN.exec(trimmed);
-      if (fence !== null) {
-        if (run !== null && run[1][0] === fence[0] && run[1].length >= fence.length) fence = null;
-        continue;
-      }
-      if (run !== null) fence = run[1];
-      else {
-        for (const match of line.matchAll(NAME_PATTERN)) named.push({ path, id: match[1] });
-      }
+    for (const { line, outside } of fenceWalk(text)) {
+      if (outside) for (const match of line.matchAll(NAME_PATTERN)) named.push({ path, id: match[1] });
     }
   }
   return named;
+}
+
+/** `text` cut at its first `## Progress` line outside a fenced block, which is left out with everything after it: the
+ * text before that line, byte for byte, or the whole text when there is no such line. That line is exactly
+ * `## Progress`, with a trailing `\r` allowed and nothing else. */
+export function beforeProgress(text) {
+  let offset = 0;
+  for (const { line, outside } of fenceWalk(text)) {
+    if (outside && PROGRESS_LINE.test(line)) return text.slice(0, offset);
+    offset += line.length + 1;
+  }
+  return text;
 }
 
 /** The faults that make the rules list hold no check: what `checkRules` returns when `readRules` finds faults in it,
@@ -151,7 +175,7 @@ export function checkRules(input) {
       continue;
     }
     for (const phrase of rule.phrases) {
-      if (!holdsPhrase(text, phrase)) findings.push(`rule "${rule.id}": ${rule.path} no longer holds the phrase "${phrase}"`);
+      if (!holds(text, phrase)) findings.push(`rule "${rule.id}": ${rule.path} no longer holds the phrase "${phrase}"`);
     }
     const sentence = sentenceOf(text, rule.phrases[0]);
     if (sentence !== null) sentences[rule.id] = sentence;

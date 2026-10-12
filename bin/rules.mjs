@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
-import { checkRules } from './lib/rules-check.mjs';
+import { beforeProgress, checkRules } from './lib/rules-check.mjs';
 import { renderList, rulesHash } from './lib/rules.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,8 +17,6 @@ const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
 const LIST_FINDINGS = ['docs/RULES.md is missing:', 'docs/RULES.md is not what the declarations render:'];
-// The line that ends a feature document's plan: what follows it is history.
-const PROGRESS = /^## Progress\r?$/m;
 
 class RulesArgError extends Error {}
 
@@ -75,12 +73,6 @@ function codeFilesUnder(root) {
   return found
     .map((file) => ({ path: relative(root, file), text: fs.readFileSync(file, 'utf8') }))
     .sort(byPath);
-}
-
-/** `text` up to its first `## Progress` line, which is left out with everything after it. */
-function beforeProgress(text) {
-  const found = PROGRESS.exec(text);
-  return found === null ? text : text.slice(0, found.index);
 }
 
 /** The progress records and plans read for the marks of rules: the roadmap and the spec when they exist, then each
