@@ -62,9 +62,10 @@ export function applyReference(taskDir, workspace) {
 
 /** The fixture's own visible suite, run as `npm test` would, in `workspace`: `{ passed, total, failed,
  * error }`, with `error` `spawn`, `timeout` or `unparsable` (no TAP summary, or zero tests: a suite that
- * ran nothing proved nothing). Run in a copy of its own, so it sees what an agent sees. */
-async function runVisible(workspace) {
-  const run = await runProcess({
+ * ran nothing proved nothing). Run in a copy of its own, so it sees what an agent sees. `start` is the process run
+ * (`runProcess` of `runner.mjs`, or the one `proveTask` was handed). */
+async function runVisible(workspace, start) {
+  const run = await start({
     command: process.execPath,
     args: ['--test', '--test-reporter=tap', 'tests/**/*.spec.mjs'],
     env: childEnv(),
@@ -88,8 +89,9 @@ async function runVisible(workspace) {
  *
  * Preparing a workspace is part of its own run, so a preparation that throws (a reference file that
  * cannot be laid over the fixture) is one rejected run like any other: the wait still covers every grader
- * already started, nothing is removed under a live process, and the first rejection is rethrown after it. */
-async function measure(task, taskDir, workRoot) {
+ * already started, nothing is removed under a live process, and the first rejection is rethrown after it.
+ * `start` is the process run every grader and visible suite goes through (see `proveTask`). */
+async function measure(task, taskDir, workRoot, start) {
   fs.mkdirSync(workRoot, { recursive: true });
   const made = [];
   const run = async (prepare, work) => {
@@ -101,9 +103,9 @@ async function measure(task, taskDir, workRoot) {
   const fixture = (dir) => copyFixture(task, dir);
   const reference = (dir) => { copyFixture(task, dir); applyReference(taskDir, dir); };
   const hasReference = isDirectory(path.join(taskDir, 'reference'));
-  const graded = (prepare) => run(prepare, (dir) => gradeWorkspace(task, dir));
+  const graded = (prepare) => run(prepare, (dir) => gradeWorkspace(task, dir, { runProcess: start }));
   // The visible suite runs in a copy that is never graded, so it sees what an agent sees.
-  const visible = (prepare) => run(prepare, runVisible);
+  const visible = (prepare) => run(prepare, (dir) => runVisible(dir, start));
   try {
     const settled = await Promise.allSettled([
       graded(fixture),
@@ -218,8 +220,11 @@ function checkRuns({ fixture, reference, empty, visible }, proof, complain) {
  *
  * A broken candidate is reported whole, so a rule violation is never thrown, and a task that does not
  * load is the one case where nothing else can be checked. Nothing here runs an agent, so the workspaces
- * go under `os.tmpdir()` by default; every one is removed on every path. */
-export async function proveTask(taskDir, { workRoot = os.tmpdir() } = {}) {
+ * go under `os.tmpdir()` by default; every one is removed on every path.
+ *
+ * `runProcess` (by default the real one) is the run of each of the five measurements; a caller can hand in
+ * another, and nothing that ships does. */
+export async function proveTask(taskDir, { workRoot = os.tmpdir(), runProcess: start = runProcess } = {}) {
   const dir = path.resolve(taskDir);
   const id = path.basename(dir);
   const problems = [];
@@ -233,7 +238,7 @@ export async function proveTask(taskDir, { workRoot = os.tmpdir() } = {}) {
   }
   checkFiles(dir, task, complain);
   const proof = readProof(dir, complain);
-  const runs = await measure(task, dir, path.resolve(workRoot));
+  const runs = await measure(task, dir, path.resolve(workRoot), start);
   checkRuns(runs, proof, complain);
   return { id, ...runs, problems };
 }

@@ -279,6 +279,8 @@ commit can break a test, pass its own gate, and fail the next gate with code in 
   claimed): the skip is `bin/check.mjs:279-287`, and `bin/rules.test.mjs:480` runs `rules check`
   on the real `docs/RULES.md` and `docs/rule-sources.json` (`bin/rules.mjs:24-25`); until the gate
   runs the readers of a staged document, `rules check` is run by hand after such a commit
+- Control: check — bin/check.test.mjs — "a commit of documents alone runs the sensors of documents,
+  in their order and with a bound of two minutes" — since 2026-10-12
 
 ### engram-writes-lost
 A session lost what it had written to engram after each of its two compactions.
@@ -568,6 +570,8 @@ the harness's.
 - Seen: 2026-10-12 — relief file, line 425 — `evals/paths.mjs:6` lets `ENOTDIR` through for a
   path below a file (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144, line 1040);
   the run is still refused
+- Control: check — evals/paths.test.mjs — "exists says a path below a file is not there, where the
+  system says ENOTDIR" — since 2026-10-12
 
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
@@ -704,7 +708,8 @@ nothing to say so.
 - Class: unseen-state
 - Seen: 2026-10-12 — relief file, line 425 — `bin/lib/project.test.mjs:1936` expects a reason that
   changed at ae471e7; Windows skips the test, and the first run on Linux (run 38296748258) showed
-  it red (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144)
+  it red (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144); the expectation was
+  corrected by reading ae471e7 and no run has shown it green, since this machine skips the test
 
 ### test-wrote-real-home
 A test that forgot `--home` wrote into the real home.

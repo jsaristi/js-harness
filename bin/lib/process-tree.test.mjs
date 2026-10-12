@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CLOCK_TOLERANCE_MS, identifyProcesses, killProcesses, killSurvivors, killTree, parseSnapshot, resolveRoot, selectDescendants, selectTrees, takeSnapshot,
 } from './process-tree.mjs';
-import { createReaper } from './process-tree.testkit.mjs';
+import { createReaper, sweepLater, sweptLater } from './process-tree.testkit.mjs';
 
 const proc = (pid, ppid, createdAt) => ({ pid, ppid, createdAt });
 const sorted = (pids) => [...pids].sort((a, b) => a - b);
@@ -452,6 +452,99 @@ test('on POSIX a group that cannot be killed falls back to the child itself', ()
   killTree({ pid: 77, kill: (signal) => killed.push(signal) }, undefined, { platform: 'linux', spawnSync: never, kill: () => { throw new Error('EPERM'); } });
   assert.deepEqual(killed, ['SIGKILL']);
   killTree({ pid: 77, kill: () => { throw new Error('already gone'); } }, undefined, { platform: 'linux', spawnSync: never, kill: () => { throw new Error('EPERM'); } });
+});
+
+// ---- the sweep put off to the end of a file (the shared teardown's `sweepLater`) ----------------------------------------
+
+test('a deferred sweep with nothing recorded takes no snapshot and finds nothing', () => {
+  const sync = scripted([]);
+  const later = sweepLater({ platform: 'win32', spawnSync: sync });
+  assert.deepEqual(later.check(), []);
+  assert.equal(sync.calls.length, 0);
+});
+
+test('a run that exited leaving a descendant is found and killed by the look, and a second look takes no snapshot', () => {
+  const sync = scripted([{ stdout: rows({ pid: 200, ppid: 100, createdAt: 5500, name: 'agent.exe' }) }, { stdout: 'K\t200\r\n' }]);
+  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => 6100 });
+  later.killSurvivors({ pid: 100 }, { startedAt: 5000, exitedAt: 6000 });
+  assert.deepEqual(later.check(), [{ pid: 200, name: 'agent.exe' }]);
+  assert.equal(sync.calls[1].options.env.JS_HARNESS_KILL_TARGETS, '200@5500');
+  assert.deepEqual(later.check(), []);
+  assert.equal(sync.calls.length, 2, 'the runs were consumed: the second look takes no snapshot and kills nothing');
+});
+
+test('a process created after the run exited that records its pid is a reused pid\'s, and is not found', () => {
+  const sync = scripted([{ stdout: rows({ pid: 300, ppid: 100, createdAt: 6500, name: 'other.exe' }) }]);
+  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => 6100 });
+  later.killSurvivors({ pid: 100 }, { startedAt: 5000, exitedAt: 6000 });
+  assert.deepEqual(later.check(), []);
+  assert.equal(sync.calls.length, 1, 'only the snapshot: nothing selected, so no kill is started');
+});
+
+test('several recorded runs are searched with one snapshot, and what each left behind is killed in one command', () => {
+  const sync = scripted([
+    { stdout: rows({ pid: 200, ppid: 100, createdAt: 5500, name: 'a.exe' }, { pid: 250, ppid: 150, createdAt: 5600, name: 'b.exe' }) },
+    { stdout: 'K\t200\r\nK\t250\r\n' },
+  ]);
+  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => 6100 });
+  later.killSurvivors({ pid: 100 }, { startedAt: 5000, exitedAt: 6000 });
+  later.killSurvivors({ pid: 150 }, { startedAt: 5000, exitedAt: 6000 });
+  assert.deepEqual(later.check(), [{ pid: 200, name: 'a.exe' }, { pid: 250, name: 'b.exe' }]);
+  assert.equal(sync.calls.length, 2, 'one snapshot and one kill');
+  assert.equal(sync.calls[1].options.env.JS_HARNESS_KILL_TARGETS, '200@5500\n250@5600');
+});
+
+test('a run whose root was not seen to exit is handed to the real sweep at once, and nothing of it waits for the end of the file', () => {
+  const sync = scripted([]);
+  const handed = [];
+  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => 6000, killSurvivors: (...args) => handed.push(args) });
+  const child = { pid: 100 };
+  later.killSurvivors(child, { startedAt: 5000 });
+  assert.equal(handed.length, 1, 'a kill that failed leaves the root running: only the real sweep kills a root');
+  assert.equal(handed[0][0], child);
+  assert.deepEqual(handed[0][1], { startedAt: 5000 });
+  assert.equal(handed[0][2].platform, 'win32');
+  assert.equal(handed[0][2].spawnSync, sync);
+  assert.deepEqual(later.check(), []);
+  assert.equal(sync.calls.length, 0, 'the run was not recorded: the look has nothing to search');
+});
+
+test('a root still running when its run ends is killed at once with what it started, not left for a look that would not select it', () => {
+  const sync = scripted([
+    { stdout: rows({ pid: 100, ppid: 1, createdAt: 5100, name: 'agent.exe' }, { pid: 200, ppid: 100, createdAt: 5500, name: 'child.exe' }) },
+    { stdout: 'K\t100\r\nK\t200\r\n' },
+  ]);
+  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => 6000 });
+  later.killSurvivors({ pid: 100 }, { startedAt: 5000 });
+  assert.equal(sync.calls.length, 2, 'one snapshot and one kill, when the run ends');
+  assert.deepEqual(sync.calls[1].options.env.JS_HARNESS_KILL_TARGETS.split('\n').sort(), ['100@5100', '200@5500']);
+  assert.deepEqual(later.check(), []);
+  assert.equal(sync.calls.length, 2, 'nothing was left to the end of the file');
+});
+
+test('a run whose start is not known makes the recorder throw, and nothing is looked up', () => {
+  const sync = scripted([]);
+  const later = sweepLater({ platform: 'win32', spawnSync: sync });
+  assert.throws(() => later.killSurvivors({ pid: 100 }, { exitedAt: 6000 }), /cannot search later what pid 100 left behind: when it started is not known/);
+  assert.equal(sync.calls.length, 0);
+});
+
+test('off Windows the deferred sweep is the real one handed in, and the look starts nothing', () => {
+  const real = () => {};
+  const later = sweepLater({ platform: 'linux', killSurvivors: real, spawnSync: () => assert.fail('nothing is spawned on POSIX') });
+  assert.equal(later.killSurvivors, real);
+  assert.deepEqual(later.check(), []);
+});
+
+test('a run handed the deferred sweep gets the caller\'s options with the recorder as its killSurvivors', () => {
+  const sync = scripted([{ stdout: rows({ pid: 200, ppid: 100, createdAt: 5500, name: 'agent.exe' }) }, { stdout: 'K\t200\r\n' }]);
+  const received = [];
+  const swept = sweptLater((options) => received.push(options), { platform: 'win32', spawnSync: sync, now: () => 6000 });
+  swept.runProcess({ command: 'agent', timeoutMs: 1000 });
+  assert.equal(received[0].command, 'agent');
+  assert.equal(received[0].timeoutMs, 1000);
+  received[0].killSurvivors({ pid: 100 }, { startedAt: 5000, exitedAt: 6000 });
+  assert.deepEqual(swept.check(), [{ pid: 200, name: 'agent.exe' }]);
 });
 
 /** Every source file under `dir`, recursively, without the comment lines; the tests (`*.test.mjs`) only with `withTests`. */
