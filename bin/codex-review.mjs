@@ -158,7 +158,7 @@ import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStale
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
-import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
@@ -179,6 +179,8 @@ export const REVIEW_EFFORT = 'high';
 // path, taken from `--cwd` when it is relative. `--part-lines` is how many changed lines a part of a large
 // range holds at most, in place of `PART_MAX_CHANGED_LINES`. `--plan` prints what the run would start and
 // starts nothing, and `--max-parts` is how many parts a run may start, in place of `MAX_PARTS_WITHOUT_FLAG`.
+// `--fresh` asks every part of a range reviewed in parts again, where a run otherwise takes from the run log the
+// parts that passed in an earlier run of the same range.
 //
 // The second line of the usage is there because a person has to know that their own Codex configuration
 // is not loaded, and that nothing they pass or configure changes the model and the effort. The third, because
@@ -187,7 +189,7 @@ export const REVIEW_EFFORT = 'high';
 // reviews less than it was asked, or nothing, must not come as a surprise, and `--again` is the way round it.
 // `--session` is not in the usage: there is one session, so there is nothing to choose (see `SESSION`).
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
+  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
@@ -268,7 +270,9 @@ function parseArgs(argv) {
   if (plan && unavailable !== undefined) throw new ArgError('--plan does not go with --unavailable: a plan starts nothing and records nothing, and a skip is a record');
   // The range as it was given, whatever the records say of it: beside a plan and beside a skip too.
   const again = argv.includes('--again');
-  return { base, unavailable, home, keepHome, prompt, doc, partLines, maxParts, plan, again, cwd: get('--cwd') ?? process.cwd() };
+  // The parts that passed in earlier runs of the range are asked again, not taken from the run log.
+  const fresh = argv.includes('--fresh');
+  return { base, unavailable, home, keepHome, prompt, doc, partLines, maxParts, plan, again, fresh, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -784,21 +788,59 @@ const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' 
  * a part that was not measured is not known, and is never the sum of the rest. */
 const totalOf = (attempts, pick) => attempts.reduce((total, attempt) => (total === null || pick(attempt) === null ? null : total + pick(attempt)), 0);
 
+/** What a kept part spent, as an attempt's `spent` gives it, read off its run line: the four counts and the
+ * requests the line holds, each `null` when it does not hold it. */
+function spentOfKept(run) {
+  const count = (value) => (Number.isInteger(value) && value >= 0 ? value : null);
+  const usage = run.usage ?? {};
+  return {
+    ...noRolloutReading(),
+    usage: {
+      inputTokens: count(usage.inputTokens),
+      cachedInputTokens: count(usage.cachedInputTokens),
+      outputTokens: count(usage.outputTokens),
+      reasoningOutputTokens: count(usage.reasoningOutputTokens),
+    },
+    requests: count(run.requests),
+  };
+}
+
+/** What the kept parts of a run had used when they ran, as the sentence that ends the totals of a run: their
+ * input tokens, or that they are not known. `kept` are their results. */
+function keptSentence(kept) {
+  const input = totalOf(kept, (attempt) => attempt.spent.usage.inputTokens);
+  const parts = kept.length === 1 ? 'kept part' : `${kept.length} kept parts`;
+  if (input === null) return `What the ${parts} had used is not known.`;
+  return `The ${parts} had used ${spoken(input)} input tokens when ${kept.length === 1 ? 'it' : 'they'} ran.`;
+}
+
 /** What the parts of a range spent together, as one line, once all of them passed: `attempts` are their
  * results, each with its `spent` (a `rolloutReading`) and its `durationMs`. When a part left no token
- * count the line says the tokens of the whole are not known, as `spentLine` does for one session. */
+ * count the line says the tokens of the whole are not known, as `spentLine` does for one session. A part
+ * kept from an earlier run (`kept`) spent nothing in this one: with one, the line says what this run's parts
+ * spent, and what the kept parts had spent when they ran, apart. */
 function totalsLine(attempts) {
-  const ms = totalOf(attempts, (attempt) => attempt.durationMs);
+  const kept = attempts.filter((attempt) => attempt.kept === true);
+  const asked = attempts.filter((attempt) => attempt.kept !== true);
+  if (asked.length === 0) return `All ${attempts.length} parts passed in earlier runs and are kept, so this run asked Codex nothing. ${keptSentence(kept)}`;
+  const ms = totalOf(asked, (attempt) => attempt.durationMs);
   const seconds = ms === null ? 'unknown' : Math.round(ms / 1000);
-  const [input, cached, output, reasoning] = ['inputTokens', 'cachedInputTokens', 'outputTokens', 'reasoningOutputTokens'].map((name) => totalOf(attempts, (attempt) => attempt.spent.usage[name]));
+  const [input, cached, output, reasoning] = ['inputTokens', 'cachedInputTokens', 'outputTokens', 'reasoningOutputTokens'].map((name) => totalOf(asked, (attempt) => attempt.spent.usage[name]));
+  // With no kept part the line is the one it always was. With some, it names what this run's parts spent.
+  const head = kept.length === 0 ? `All ${attempts.length} parts passed` : `All ${attempts.length} parts passed, ${kept.length} of them kept from ${kept.length === 1 ? 'an earlier run' : 'earlier runs'}`;
+  const subject = kept.length === 0 ? 'Codex' : `this run's ${asked.length === 1 ? 'part' : `${asked.length} parts`}`;
+  let line;
   if ([input, cached, output, reasoning].every((count) => count === null)) {
-    return `All ${attempts.length} parts passed, in ${seconds} s; the tokens of the whole are not known, since the Codex home of a part held no token count.`;
+    line = kept.length === 0
+      ? `${head}, in ${seconds} s; the tokens of the whole are not known, since the Codex home of a part held no token count.`
+      : `${head}: ${subject} ran in ${seconds} s; the tokens of this run are not known, since the Codex home of a part held no token count.`;
+  } else {
+    const requests = totalOf(asked, (attempt) => attempt.spent.requests);
+    line =
+      `${head}: ${subject} used ${spoken(input)} input tokens (${spoken(cached)} cached) and ${spoken(output)} output ` +
+      `(${spoken(reasoning)} reasoning) in ${seconds} s over ${spoken(requests)} request${requests === 1 ? '' : 's'}.`;
   }
-  const requests = totalOf(attempts, (attempt) => attempt.spent.requests);
-  return (
-    `All ${attempts.length} parts passed: Codex used ${spoken(input)} input tokens (${spoken(cached)} cached) and ${spoken(output)} output ` +
-    `(${spoken(reasoning)} reasoning) in ${seconds} s over ${spoken(requests)} request${requests === 1 ? '' : 's'}.`
-  );
+  return kept.length === 0 ? line : `${line} ${keptSentence(kept)}`;
 }
 
 /** The files `from..head` changes (both full commit ids), as a review of the range takes them. The files it
@@ -1299,14 +1341,38 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
      * its run line (`undefined` when the line could not be written), its answer as data, the review as
      * Codex rendered it, what it spent and how long it took. It prints what a
      * single review prints, but for what a part answered: the review Codex rendered, the findings and the
-     * verdict of a part wait for the other parts, and are shown by the caller or not at all. */
-    const attempt = async ({ expectedKeys, prompt, promptText: asked, promptVersion, part = null }) => {
+     * verdict of a part wait for the other parts, and are shown by the caller or not at all.
+     *
+     * `keptRuns`, the run log when a range in parts may take a part from it, is what a part that passed in
+     * an earlier run is taken from instead of launching Codex: then the result has `kept: true` and no run
+     * line is written for it. */
+    const attempt = async ({ expectedKeys, prompt, promptText: asked, promptVersion, part = null, keptRuns = null }) => {
       const ownPrompt = prompt === 'own';
       // Whether this is the only session of its run, whose answer waits for no other.
       const alone = part === null || part.of === 1;
       // What Codex is launched with, worked out before anything is made: an injected effort or setting that
       // cannot go on a command line is the caller's mistake, and leaves no home behind.
       const codexArgv = codexArgs(from, platform, prompt, { effort, extraConfig: extraCodexConfig });
+      // The key of what this part's session is sent. A part whose key is in the run log passed in an earlier
+      // run that sent the very same thing, and is taken from there: nothing is launched and no line is written.
+      // Only a part of a range reviewed in parts has one: the one session of a range that leaves files out, or
+      // of a range within the bound, keeps nothing, so its line has the fields a whole range's line has.
+      const key = alone ? null : partKey({ base, from, head, prompt: asked, argv: codexArgv });
+      const keptLine = keptRuns === null || key === null ? null : keptPartFor(keptRuns, key);
+      if (keptLine !== null) {
+        const kept = runKept(keptLine);
+        const when = typeof keptLine.startedAt === 'string' && keptLine.startedAt !== '' ? keptLine.startedAt : 'an earlier day';
+        log(`Part ${part.index} of ${part.of} of ${range} passed in the run of ${when} and is kept: it is not asked again.`);
+        return {
+          exit: 0,
+          runId: typeof keptLine.id === 'string' && keptLine.id !== '' ? keptLine.id : undefined,
+          review: kept.review,
+          rendered: kept.rendered,
+          spent: spentOfKept(keptLine),
+          durationMs: Number.isFinite(keptLine.durationMs) ? keptLine.durationMs : null,
+          kept: true,
+        };
+      }
       // The session's own Codex home, named after the run: the id is made here, before the launch, and the
       // run line reuses it. Until the home exists nothing is launched, so a failure here writes no run line
       // and no record.
@@ -1447,6 +1513,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             findings: review ? findingCounts(review.findings) : null,
             verdict: review ? review.verdict : null,
             answerSource: review ? 'rollout' : null,
+            // A part that passed keeps what it answered, and the key of what its session was sent, so that a later
+            // run of the same range does not ask it again (`runKept`, `keptPartFor`). No other line keeps one.
+            ...(runOutcome === 'reviewed' && key !== null && review !== null ? { kept: { key, review, rendered: evidence.review } } : {}),
           };
           appendCodexReviewRun(root, run, { spawn, where });
           logged = true;
@@ -1585,16 +1654,30 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // does not pass ends the run with the exit code of its own failure. The lines of the parts before
       // it stay in the run log, as measurements; none of them is a review of the range, so nothing they
       // answered is shown: what each part answered is held here until the last one has passed.
+      // The parts that passed in earlier runs of this range are taken from the run log, where their lines keep
+      // what they answered: not under `--fresh`, and not for a caller that asked for the result of every attempt
+      // (`onResult`), which must see each one run. A log that cannot be read measured nothing, so nothing is kept.
+      let keptRuns = null;
+      if (!args.fresh && onResult === null) {
+        try {
+          keptRuns = readCodexReviewRuns(root, { spawn, where });
+        } catch {
+          keptRuns = [];
+        }
+      }
       const passed = [];
       for (const part of parts) {
-        const one = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: REVIEW_PART_PROMPT_VERSION, part });
+        const one = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: REVIEW_PART_PROMPT_VERSION, part, keptRuns });
         if (one.exit !== 0) {
           const later = part.of - part.index;
           const unstarted = later === 0 ? '' : later === 1 ? 'the part after it was not started and ' : `the ${later} parts after it were not started and `;
           // Said only when a part did pass: a person who saw it pass would look for what it found.
           const held = passed.length === 0 ? ''
             : `\n${passed.length === 1 ? 'The part before it passed, and what it answered is' : `The ${passed.length} parts before it passed, and what they answered is`} not shown: without every part it is no review of ${range}.`;
-          error(`Part ${part.index} of ${part.of} (${listed(part.files)}) did not pass, so ${unstarted}no review of ${range} was recorded.${held}`);
+          // And that what passed is kept for the next run of the range, which asks only the parts that did not pass.
+          const keptHeld = passed.length === 0 || onResult !== null ? ''
+            : '\nWhat passed is kept in the run log: the next run of this range asks only the parts that did not pass (`--fresh` asks every part again).';
+          error(`Part ${part.index} of ${part.of} (${listed(part.files)}) did not pass, so ${unstarted}no review of ${range} was recorded.${held}${keptHeld}`);
           return one.exit;
         }
         passed.push(one);

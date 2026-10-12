@@ -1224,7 +1224,7 @@ test('the usage names no session: its flags are those of a review, and its secon
   const result = await run(['--cwd', '.']);
   assert.equal(result.code, 2);
   const [, , usage, loads, ...more] = result.err.split('\n');
-  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
+  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
   assert.equal(
     loads,
     `Codex gets the diff, the repository to read and the project's AGENTS.md, and none of your Codex configuration; the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
@@ -3391,7 +3391,7 @@ test('the totals of a range reviewed in parts say what is not known instead of a
   assert.equal(none.code, 0, none.err);
   assert.ok(none.out.split('\n').includes('All 2 parts passed, in 9 s; the tokens of the whole are not known, since the Codex home of a part held no token count.'), none.out);
   // One part did and one did not, and one wall time was not measured: neither total is known, and none is made up.
-  const some = await run(['--base', 'HEAD~1', '--again', ...TWO_PARTS, '--cwd', root], {
+  const some = await run(['--base', 'HEAD~1', '--again', '--fresh', ...TWO_PARTS, '--cwd', root], {
     ...fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: [ranThread] }, { stdout: partShown(root, base, head, 'c.txt') }), randomUUID: runIds(), monotonicNow: ticking(0, 4000, Number.NaN),
   });
   assert.equal(some.code, 0, some.err);
@@ -3485,7 +3485,7 @@ test('a later part that does not pass leaves the lines of the parts before it in
 
   // The last part failing is the same: every part must pass for the range to be reviewed.
   const last = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt') }, { stdout: partShown(root, base, head, 'b.txt') }, { stdout: partShown(root, base, head, 'c.txt'), answer: { status: 9 } });
-  const failed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...last, randomUUID: runIds() });
+  const failed = await run(['--base', 'HEAD~1', '--fresh', ...THREE_PARTS, '--cwd', root], { ...last, randomUUID: runIds() });
   assert.equal(failed.code, 9);
   assert.match(failed.err, /^Part 3 of 3 \(c\.txt\) did not pass, so no review of .* was recorded\.$/m);
   assert.deepEqual(readCodexReviewRuns(root).slice(2).map((line) => line.outcome), ['reviewed', 'reviewed', 'failed']);
@@ -3493,10 +3493,165 @@ test('a later part that does not pass leaves the lines of the parts before it in
 
   // And the first of three: both later parts are left unstarted, and said to be.
   const early = fakeCodexInParts({ stdout: reviewedWith(cmd('git status')) });
-  const stopped = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...early, randomUUID: runIds() });
+  const stopped = await run(['--base', 'HEAD~1', '--fresh', ...THREE_PARTS, '--cwd', root], { ...early, randomUUID: runIds() });
   assert.equal(stopped.code, 1);
   assert.match(stopped.err, /^Part 1 of 3 \(a\.txt\) did not pass, so the 2 parts after it were not started and no review of .* was recorded\.$/m);
   assert.equal(early.calls.length, 1);
+});
+
+// The three parts of `makeThreeFileRepo` as a run of THREE_PARTS leaves them when its third part fails: the first
+// two pass and are kept in the run log, the third exits with 9 and no record is written. `threads` are what the
+// first two sessions leave in their homes.
+async function thirdPartFailed(root, base, head, ids, threads) {
+  return run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], {
+    ...fakeCodexInParts(
+      { stdout: partShown(root, base, head, 'a.txt'), said: answerWith(root), threads },
+      { stdout: partShown(root, base, head, 'b.txt'), threads },
+      { stdout: partShown(root, base, head, 'c.txt'), answer: { status: 9 } },
+    ),
+    platform: process.platform,
+    randomUUID: ids,
+  });
+}
+
+/** Three sessions that each pass their part of `makeThreeFileRepo`, each leaving `threads` in its home. */
+const threePassingParts = (root, base, head, threads) => fakeCodexInParts(
+  { stdout: partShown(root, base, head, 'a.txt'), threads },
+  { stdout: partShown(root, base, head, 'b.txt'), threads },
+  { stdout: partShown(root, base, head, 'c.txt'), threads },
+);
+
+test('a range that failed at its last part is run again from that part: the parts that passed are kept in the run log and not asked again', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  const failed = await thirdPartFailed(root, base, head, ids);
+  assert.equal(failed.code, 9, failed.err);
+  // The second run starts one session, for the part that did not pass.
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'c.txt') });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1, 'only the part that did not pass was asked');
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  for (const index of [1, 2]) {
+    assert.match(result.out, new RegExp(`^Part ${index} of 3 of ${short} passed in the run of .* and is kept: it is not asked again\\.$`, 'm'), `part ${index}`);
+  }
+  // What the kept part answered is shown again, with the findings of the range.
+  assert.ok(result.out.split('\n').some((line) => FINDING_LINE.test(line)), result.out);
+  assert.equal(wrote(root), true);
+  // The record names the lines of its three parts: the two kept from the first run, and the one of this run.
+  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(4), runs: [idOf(1), idOf(2), idOf(4)] }]);
+});
+
+test('the totals of a run that keeps parts say what this run spent and what the kept parts had spent, apart', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  await thirdPartFailed(root, base, head, ids, [parentThread, ranThread]);
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'c.txt'), threads: [parentThread, ranThread] });
+  // The same platform as the run that failed: the arguments Codex is started with differ by platform, and so would the key.
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.out, /^All 3 parts passed, 2 of them kept from earlier runs: this run's part used 297,479 input tokens \(240,640 cached\) and 2,396 output \(703 reasoning\) in \d+ s over 7 requests\. The 2 kept parts had used 594,958 input tokens when they ran\.$/m);
+});
+
+test('a run whose parts all passed in earlier runs asks Codex nothing, and says what the kept parts had spent', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  const passed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...threePassingParts(root, base, head, [parentThread, ranThread]), randomUUID: ids });
+  assert.equal(passed.code, 0, passed.err);
+  // The record of that run covers the range whole, so the run asks for `--again`, which takes the range as it was given.
+  const fake = fakeCodexInParts();
+  const result = await run(['--base', 'HEAD~1', '--again', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 0, 'no session was started');
+  assert.match(result.out, /^All 3 parts passed in earlier runs and are kept, so this run asked Codex nothing\. The 3 kept parts had used 892,437 input tokens when they ran\.$/m);
+});
+
+test('the line of a part that passed holds what it answered, and the line of a part that did not pass holds nothing kept', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  await thirdPartFailed(root, base, head, runIds());
+  const [first, second, third] = readCodexReviewRuns(root);
+  assert.match(first.kept.key, /^[0-9a-f]{64}$/);
+  assert.equal(reviewRuns.runKept(first)?.key, first.kept.key);
+  assert.equal(first.kept.review.findings.length, 3);
+  assert.ok(['correct', 'incorrect'].includes(first.kept.review.verdict));
+  assert.equal(typeof first.kept.rendered, 'string');
+  assert.equal(second.outcome, 'reviewed');
+  assert.equal(third.outcome, 'failed');
+  assert.equal('kept' in third, false);
+});
+
+test('the error of a run in which a part passed and a later one did not says what passed is kept, and the error of a run whose first part did not pass does not', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const later = await thirdPartFailed(root, base, head, runIds());
+  assert.equal(later.code, 9);
+  assert.ok(later.err.split('\n').includes('What passed is kept in the run log: the next run of this range asks only the parts that did not pass (`--fresh` asks every part again).'), later.err);
+  const first = makeThreeFileRepo();
+  const failing = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', first.root], { ...fakeCodexInParts({ answer: { status: 9 } }), randomUUID: runIds() });
+  assert.equal(failing.code, 9, failing.err);
+  assert.doesNotMatch(failing.err, /What passed is kept/);
+});
+
+test('--fresh asks every part of a range again, though the parts that passed in an earlier run are in the run log', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  await thirdPartFailed(root, base, head, ids);
+  const fake = threePassingParts(root, base, head);
+  const result = await run(['--base', 'HEAD~1', '--fresh', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 3);
+  assert.equal(result.out.split('\n').some((line) => / is kept: it is not asked again\.$/.test(line)), false, result.out);
+});
+
+test('a run at another effort reuses no part: what passed at one effort is asked again at another', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  await thirdPartFailed(root, base, head, ids);
+  const fake = threePassingParts(root, base, head);
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, effort: 'medium', randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 3);
+});
+
+test('a range whose head moved since the failed run reuses no part', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  await thirdPartFailed(root, base, head, ids);
+  git(root, 'commit', '--allow-empty', '-m', 'moved');
+  const moved = git(root, 'rev-parse', 'HEAD');
+  const fake = threePassingParts(root, base, moved);
+  const result = await run(['--base', base, ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 3);
+});
+
+test('a line of the run log that has no kept part is never reused: its part is asked again', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  await thirdPartFailed(root, base, head, ids);
+  // The same log as it was before a line kept its part: no `kept` on any line.
+  const log = codexReviewRunsPath(root);
+  const older = fs.readFileSync(log, 'utf8').split('\n').filter((line) => line !== '').map((line) => {
+    const parsed = JSON.parse(line);
+    delete parsed.kept;
+    return parsed;
+  });
+  fs.writeFileSync(log, older.map((line) => `${JSON.stringify(line)}\n`).join(''), 'utf8');
+  const fake = threePassingParts(root, base, head);
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 3);
+});
+
+test('a caller that asked for the result of every attempt sees each part run, though the parts that passed are in the run log', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  await thirdPartFailed(root, base, head, ids);
+  const fake = threePassingParts(root, base, head);
+  const handed = [];
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids, onResult: (one) => handed.push(one) });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 3);
+  assert.equal(handed.length, 3);
 });
 
 // What Codex rendered of a review is passed through to the user (`write`), apart from what the command logs.
@@ -3557,7 +3712,7 @@ test('a part that does not pass shows nothing of what any part answered: not wha
   for (const [name, code, sessions, said] of failures) {
     const heard = inOrder();
     const before = readCodexReviewRuns(root).length;
-    const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fakeCodexInParts(...sessions), platform: process.platform, randomUUID: runIds(), log: heard.log, write: heard.write });
+    const result = await run(['--base', 'HEAD~1', '--fresh', ...THREE_PARTS, '--cwd', root], { ...fakeCodexInParts(...sessions), platform: process.platform, randomUUID: runIds(), log: heard.log, write: heard.write });
     assert.equal(result.code, code, name);
     assert.deepEqual(heard.written(), [], `${name}: nothing Codex rendered was passed through`);
     const logged = heard.said.map(([, text]) => text);
@@ -3579,7 +3734,7 @@ test('a part whose session rendered no review does not pass, so no part is shown
   for (const silent of [null, '', '  \n ']) {
     const heard = inOrder();
     const fake = fakeCodexInParts({ stdout: partSaid(RENDERED[0], root, base, head, 'a.txt') }, { stdout: partSaid(silent, root, base, head, 'b.txt') });
-    const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: runIds(), log: heard.log, write: heard.write });
+    const result = await run(['--base', 'HEAD~1', '--fresh', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: runIds(), log: heard.log, write: heard.write });
     const name = JSON.stringify(silent);
     assert.equal(result.code, 1, name);
     assert.equal(fake.calls.length, 2, `${name}: the third part was never started`);
@@ -3719,7 +3874,7 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   // And the lines of the file the pattern also matches are no evidence for this part: a session that showed
   // that other file alone did not show its own.
   const other = fakeCodexInParts({ stdout: partShown(root, base, head, 'a1.txt') }, { stdout: partShown(root, base, head, 'a1.txt') });
-  const refused = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...other, randomUUID: runIds() });
+  const refused = await run(['--base', 'HEAD~1', '--again', '--fresh', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...other, randomUUID: runIds() });
   assert.equal(refused.code, 1);
   assert.match(refused.err, /showed 0 of 2 changed lines of part 2 of 3/);
 });
@@ -3760,7 +3915,7 @@ test('a range over the default bound of 400 changed lines is reviewed in parts w
     const which = flags.join(' ') || 'no flag';
     const before = readCodexReviewRuns(root).length;
     const fake = fakeCodexInParts(...[0, 2, 4].map((at) => ({ stdout: partShown(root, base, head, names[at], names[at + 1]) })));
-    const inParts = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], { ...fake, randomUUID: runIds() });
+    const inParts = await run(['--base', 'HEAD~1', '--again', '--fresh', ...flags, '--cwd', root], { ...fake, randomUUID: runIds() });
     assert.equal(inParts.code, 0, `${which}: ${inParts.err}`);
     assert.equal(fake.calls.length, 3, which);
     assert.match(inParts.out, /^The range .* changes 1,200 lines in 6 files, more than the 400 a part holds, so it is reviewed in 3 parts, one after another\.$/m, which);
@@ -3803,7 +3958,7 @@ test('a renamed file and a binary one, in parts: the renamed file is shown whole
   // not show every line of its part: the file is new there, and all of it is to be read.
   const renamed = git(root, 'diff', '--no-color', base, head, '--', 'old.txt', 'new.txt');
   const partial = fakeCodexInParts({ stdout: partShown(root, base, head, 'blob.bin') }, { stdout: reviewedWith(cmd('git diff', 0, renamed)) });
-  const refused = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...partial, randomUUID: runIds() });
+  const refused = await run(['--base', 'HEAD~1', '--again', '--fresh', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...partial, randomUUID: runIds() });
   assert.equal(refused.code, 1);
   assert.match(refused.err, /showed 1 of 8 changed lines of part 2 of 4/);
   assert.equal(readCodexReviews(root).length, 1, 'no second record');
@@ -3941,11 +4096,11 @@ test('a run prints its plan before its first session starts, and the estimate of
     { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: ran, during },
     { stdout: partShown(root, base, head, 'c.txt'), threads: ran, during },
   );
-  /** A run in two parts, with what it had logged by the time each of its sessions started. */
-  const inTwoParts = async () => {
+  /** A run in two parts, with what it had logged by the time each of its sessions started. `flags` are added to it. */
+  const inTwoParts = async (...flags) => {
     const out = [];
     const onScreen = [];
-    const result = await run(['--base', 'HEAD~1', '--again', ...TWO_PARTS, '--cwd', root], { ...twoSessions(() => onScreen.push([...out])), randomUUID: runIds(), log: (line) => out.push(line) });
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, ...TWO_PARTS, '--cwd', root], { ...twoSessions(() => onScreen.push([...out])), randomUUID: runIds(), log: (line) => out.push(line) });
     assert.equal(result.code, 0, result.err);
     return { out, onScreen };
   };
@@ -3970,7 +4125,7 @@ test('a run prints its plan before its first session starts, and the estimate of
   assert.deepEqual(plan.out.split('\n'), measured);
   nothing.untouched('--plan');
   // And the next run prints that same plan, before its first session.
-  const second = await inTwoParts();
+  const second = await inTwoParts('--fresh');
   assert.deepEqual(second.onScreen[0].slice(0, measured.length), measured);
   // A range reviewed whole is planned as its one part, on the same stream, before its session.
   const out = [];
@@ -4017,7 +4172,7 @@ test('a run log that cannot be read is one that measured nothing: the plan says 
     // The run prints the same plan and then goes on: its two sessions, their two lines in the log, its record.
     const [records, lines] = [readCodexReviews(root).length, readCodexReviewRuns(root).length];
     const fake = twoSessions();
-    const result = await run(['--base', 'HEAD~1', '--again', ...TWO_PARTS, '--cwd', root], { ...fake, spawn: logNotFound(fake.spawn, instead), randomUUID: runIds() });
+    const result = await run(['--base', 'HEAD~1', '--again', '--fresh', ...TWO_PARTS, '--cwd', root], { ...fake, spawn: logNotFound(fake.spawn, instead), randomUUID: runIds() });
     assert.equal(result.code, 0, `${which}: ${result.err}`);
     assert.equal(result.err, '', which);
     assert.deepEqual(result.out.split('\n').slice(0, none.length), none, which);
@@ -5072,7 +5227,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   // The whole usage: the flags, then the line that says what a review loads and what it runs on, then the
   // one that says how its cost is seen first, then the one that says what it leaves out.
   assert.deepEqual(usage.err.split('\n').slice(2), [
-    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
+    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       'the review runs on gpt-6.1-sol at high effort, which the command fixes.',
