@@ -12,19 +12,23 @@
 // (`git diff <from> <head> -- <files>`) and what a finding names. A file is never cut in two: a file larger
 // than the bound is a part of its own, and whether one session can read it is for the evidence rule to say.
 
+import { ruleValue } from './rules.mjs';
+
 // How many changed lines (additions plus deletions) a part holds at most. Measured against larger parts and
 // kept by decision: one review in larger parts cost less and did not find one defect that parts of this
 // size had found (odd/tasks/codex-review-cost.md, `## Progress`, the entry of T5 on 2026-10-09).
-// `js-harness codex-review --part-lines <n>` takes another.
-export const PART_MAX_CHANGED_LINES = 400;
+// `js-harness codex-review --part-lines <n>` takes another. The number is the declared rule's
+// (`review-part-lines` in ./rules-data.mjs), written there and nowhere else.
+export const PART_MAX_CHANGED_LINES = ruleValue('review-part-lines', 'changed lines');
 
 // How many files a part holds at most, however few lines they change. Every path of a part goes on one git
 // command line (the diff this command checks the part against) and into the one command the prompt names
 // for the model to run, and Windows limits a command line: 8,191 characters through `cmd.exe`, 32,767 for a
 // process started without it. Bounded by changed lines alone, a range of many small or binary files would be
-// one part whose command cannot be run, and the review would fail without saying why. Forty paths stay
-// under the smaller limit up to about 190 characters a path, the two commit ids included.
-export const PART_MAX_FILES = 40;
+// one part whose command cannot be run, and the review would fail without saying why. The declared count
+// (`review-part-files` in ./rules-data.mjs, forty when this was written) stays under the smaller limit up
+// to about 190 characters a path, the two commit ids included.
+export const PART_MAX_FILES = ruleValue('review-part-files', 'files');
 
 // One record of `git diff --numstat -z --no-renames`: the additions, the deletions (`-` for both when the
 // file is binary) and the path, which may hold anything but a NUL.
