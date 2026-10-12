@@ -1925,7 +1925,20 @@ summary.
         flight named. Said plainly: the second writer saw its tests fail together (22 of 46)
         and the third wrote some tests after their code; each behavior has a test, and the
         two reviews read them.
-      - Next commit (`snap-c`, four writers and two lines by the parent): the watch returns
+        That commit is `b4b0594` (gate PASS 11:24; gentle-ai: 1,137 lines, approved, one
+        warning and two suggestions: the hook read whatever path the input named, and a
+        commit time that does not parse was read as "not committed", both fixed in the next
+        commit as this text said; and no test of a transcript path with no session id, a
+        case the next commit removes, since the path is followed only with one).
+      - In the commit that holds this text (`snap-c`; five writers and two lines by the
+        parent; read by the parent at 11:30 in this worktree: `node --test` of
+        `bin/resume.test.mjs` 64 pass, `bin/lib/pause.test.mjs` 41, `bin/js-harness.test.mjs`
+        31, `scripts/practice-lib.test.mjs` 80; `bin/lib/sessions.test.mjs` 247 in the side
+        tree), with one more piece than was planned: the practice journey's eleventh step,
+        `pause-hook`, which writes a made-up transcript past the pause under the journey's
+        own home and holds `resume --pause` to one JSON line the first time, nothing the
+        second, and nothing outside a project. The journey itself is run with the merge of
+        `main`, in that turn at the gate. The planned pieces: the watch returns
         once for a compaction the board had not seen (`lastCompaction` in `sessionFacts`,
         "was compacted by the host 2m ago: it held … before it"); `compactionMeasures` and
         `holdsCompactBlock`, the reader of part d (told, kept, announced, a verdict only for
@@ -1942,7 +1955,27 @@ summary.
         unknown command and no stack trace.
       Left after those two: `sessions --measures` (T9) hands `toldBetween` and a `git log`
       of the document to `compactionMeasures`; the board's mark for a session whose last
-      compaction of the host misses a fact; e, below.
+      compaction of the host misses a fact; e, below. Then, for the pull request: Codex on
+      `f117eff..` the head (plan first, inside the rate), the merge of `main` (`3088960` at
+      10:41 by the lead's line; read `docs/RULES.md` first) gated with the journey in the
+      same turn, the push, pull request 5, one line to the lead.
+      Part e is written in the side worktree and held from that pull request (snapshot
+      `snap-e` in the scratchpad; it goes to a branch of its own, `feat/session-compaction-
+      install`, cut from this one's head, pushed and with no pull request until he answers
+      whether `install` writes the entry for every project): the entry `claude-pause-hook`
+      (`hooks.PostToolUse` of Claude Code's settings, no matcher, two seconds, the command
+      `js-harness resume --pause || exit 0`; no Codex entry, since the pause is read from a
+      Claude Code transcript); the check of `doctor` that runs each recorded `js-harness
+      resume …` command without its guard, with empty input and a home that does not exist,
+      and names the one the copy on the path does not answer (only in `js-harness doctor`,
+      never in the session-start report); the practice journey's knowledge of that entry.
+      Found there by the parent and being fixed there: `uninstall` left `"PostToolUse": []`
+      in a settings file that existed before and had no such list (and would leave
+      `"SessionStart": []` the same way, a defect older than this feature that the journey
+      never met because it seeds that list), which is not the exact undo this project
+      promises; a writer had loosened the journey's byte-for-byte check to accept it, and
+      that is put back: `install` records the containers it created and `uninstall` removes
+      them when they are empty again.
    d. The measure (told, kept, announced, for automatic compactions) in the sessions
       library; `--measures` itself is T9.
    e. The entry for `install` and the row of `doctor` that runs each entry's command: built

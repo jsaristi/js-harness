@@ -334,7 +334,9 @@ test('a bad session id is a TypeError from pauseNotice too, before the transcrip
 test('the newer place wins: a home that became unwritable after it was armed does not tell the session again', inHome((home) => {
   const tmpdir = path.join(home, 'tmp');
   fs.mkdirSync(tmpdir);
-  const guard = lockableFs(path.join(home, '.js-harness'));
+  // The lock covers the folder the home's state is written in, as `statePath` names it, so the writes of the home are the ones refused.
+  const guard = lockableFs(path.dirname(statePath(home, SESSION)));
+  const tempFile = path.join(tmpdir, `js-harness-pause-${SESSION}.json`);
   const options = (at) => ({ transcript, sessionId: SESSION, home, now: () => at, tmpdir, fileSystem: guard.fileSystem });
   // the first call is under the pause and writes the compaction point it was seen to have, armed, into the home
   const transcript = write(home, 't.jsonl', [boundary(COMPACTION), reply(UNDER)]);
@@ -343,15 +345,43 @@ test('the newer place wins: a home that became unwritable after it was armed doe
   guard.lock();
   write(home, 't.jsonl', [boundary(COMPACTION), reply(OVER)]);
   assert.ok(pauseNotice(options(NOW + 1000)), 'the crossing tells, and its disarmed state can only be kept in the temp folder');
+  assert.equal(stateOf(home).armed, true, 'the home still holds its armed state: the crossing took no write there');
+  assert.equal(JSON.parse(fs.readFileSync(tempFile, 'utf8')).armed, false, 'the temp folder holds the disarmed state of the crossing');
   assert.equal(pauseNotice(options(NOW + 2000)), null, 'the next call reads the temp folder, which is newer, and says nothing');
 }));
 
-test('a state with no stamp is the oldest: a stamped one in the temp folder is read before it', inHome((home) => {
+test('a state with no stamp takes the time its file was written: an older one is passed over for the stamped state in the temp folder', inHome((home) => {
   const tmpdir = path.join(home, 'tmp');
-  putState(statePath(home, SESSION), { compaction: null, armed: true, told: [] });
+  const homeFile = statePath(home, SESSION);
+  putState(homeFile, { compaction: null, armed: true, told: [] });
+  // the home's file was written a minute before the stamp of the temp folder's state, so that state is the newer one
+  fs.utimesSync(homeFile, new Date(NOW - 60000), new Date(NOW - 60000));
   putState(path.join(tmpdir, `js-harness-pause-${SESSION}.json`), { compaction: null, armed: false, told: [], written: new Date(NOW).toISOString() });
   const transcript = write(home, 't.jsonl', [reply(OVER)]);
   assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW + 1000, tmpdir }), null);
+}));
+
+test('a state with no stamp written after the stamp of the temp folder\'s state is the newer one, and is read', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  const homeFile = statePath(home, SESSION);
+  putState(homeFile, { compaction: null, armed: true, told: [] });
+  fs.utimesSync(homeFile, new Date(NOW + 60000), new Date(NOW + 60000));
+  putState(path.join(tmpdir, `js-harness-pause-${SESSION}.json`), { compaction: null, armed: false, told: [], written: new Date(NOW).toISOString() });
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW + 120000, tmpdir }), 'the home state is the newer one and is armed, so the crossing tells');
+}));
+
+test('a state with no stamp whose file cannot be statted ranks oldest, and nothing throws', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  const tempFile = path.join(tmpdir, `js-harness-pause-${SESSION}.json`);
+  putState(statePath(home, SESSION), { compaction: null, armed: true, told: [] });
+  putState(tempFile, { compaction: null, armed: false, told: [], written: new Date(NOW).toISOString() });
+  const fileSystem = { ...fs, statSync: () => { throw new Error('stat is refused'); } };
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW + 1000, tmpdir, fileSystem }), null, 'the stamped state in the temp folder speaks for the session');
+  // With no state in the temp folder, the unstamped state is still read: an unreadable time only ranks it oldest.
+  fs.rmSync(tempFile);
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW + 1000, tmpdir, fileSystem }));
 }));
 
 test('equal stamps: the home\'s state is read, the first place winning the tie', inHome((home) => {

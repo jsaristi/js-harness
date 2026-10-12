@@ -131,7 +131,7 @@ const USER_LINE = (count, lines) => `The user wrote at ${count} lines of it, the
 const REPLY_LINE = (line, at, text) => `This session's last reply with text is line ${line} (${at}); it ended: "${text}"`;
 // The feature document of `titled` and `notified`, and the state line the hook says of it: written 12 minutes before the test's now, committed at 09:00.
 const DOCUMENT_OF = (machine) => path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md');
-const STATE_OF = (machine) => `State: ${DOCUMENT_OF(machine)} was last written at 2026-01-01T11:48:00.000Z (12m ago) and last committed at 2026-01-01T09:00:00+00:00 (1111111).`;
+const STATE_OF = (machine) => `State: ${DOCUMENT_OF(machine)} was last written at 2026-01-01T11:48:00.000Z (12m ago) and last committed at 2026-01-01T09:00:00.000Z (1111111).`;
 // The worktree line of `titled` and `notified`: the machine's worktree is clean, on its branch.
 const CLEAN_OF = (machine) => `Worktree ${machine.worktree}: branch feat/channel, head 1111111, nothing changed and not committed.`;
 // What a transcript of `titled` says of its stretch: no boundary, the user wrote nothing, and the one reply is on line 2.
@@ -298,7 +298,7 @@ test('the feature document is the last one the session wrote, by its transcript,
   assert.deepEqual(await feature(), fromNotice);
   // A transcript that cannot be read gives nothing here, and the hook goes on.
   transcriptWith(machine, [editedAt('2026-01-01T10:10:00.000Z', forward)]);
-  assert.deepEqual(await feature({ transcript_path: path.join(machine.dir, 'missing.jsonl') }), fromNotice);
+  assert.deepEqual(await feature({ transcript_path: path.join(machine.claudeHome, 'projects', 'other-project', `${SESSION}.jsonl`) }), fromNotice);
   // The branch of the document's worktree is not known when git does not say it.
   assert.deepEqual(await feature({}, { git: fakeGit(machine, { failing: ['branch'] }) }), [`Feature document: ${forward}  (branch not known, the last feature document this session wrote, by its transcript)`, READ]);
 }));
@@ -818,6 +818,75 @@ test('a step that throws is said as not read in its place, and the rest of the h
   assert.deepEqual(lines.slice(at + 2), [NOTIFY]);
 }));
 
+// The hook reads the transcript the input names only when it is the session's own file under the projects folder of the
+// Claude home, in any project's folder: a session opened in another folder is filed under another project. Any other
+// path is not read, and the session's own file is read instead.
+/** A transcript at `file` whose one reply edits `edited`, written as the host writes one; returns `file`. */
+function transcriptAt(file, edited) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, [{ type: 'custom-title', customTitle: TITLE, sessionId: SESSION }, editedAt('2026-01-01T10:10:00.000Z', edited)].map((entry) => `${JSON.stringify(entry)}\n`).join(''));
+  return file;
+}
+/** A `readFile` that records the files it reads, so a test can say which transcript the hook read. */
+const recording = (read) => (file) => {
+  read.push(file);
+  return fs.readFileSync(file, 'utf8');
+};
+
+test('a transcript the input names under another project folder of the same Claude home is read', withMachine(async (machine) => {
+  notified(machine);
+  const edited = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md').replaceAll('\\', '/');
+  const other = transcriptAt(path.join(machine.claudeHome, 'projects', 'other-project', `${SESSION}.jsonl`), edited);
+  const read = [];
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: other }), { readFile: recording(read) });
+  assert.ok(read.includes(other), 'the other folder\'s transcript is read');
+  assert.ok(lines.includes(`Feature document: ${edited}  (branch feat/channel, the last feature document this session wrote, by its transcript)`));
+}));
+
+test('a transcript the input names outside the Claude home, or in its projects folder under another session\'s name, or in a look-alike folder, is not read', withMachine(async (machine) => {
+  notified(machine);
+  const edited = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md').replaceAll('\\', '/');
+  const own = path.join(machine.projectDir, `${SESSION}.jsonl`);
+  // The session's own file is read, and has no edit: the reading is the notice's.
+  transcriptWith(machine, []);
+  const outside = transcriptAt(path.join(machine.dir, 'elsewhere', `${SESSION}.jsonl`), edited);
+  const otherSession = transcriptAt(path.join(machine.projectDir, 'bbbbbbbb-2222-4222-8222-222222222222.jsonl'), edited);
+  // `projects-backup` starts with the name of the projects folder, but it is not inside it: the separator makes the difference.
+  const lookAlike = transcriptAt(path.join(machine.claudeHome, 'projects-backup', machine.slug, `${SESSION}.jsonl`), edited);
+  for (const named of [outside, otherSession, lookAlike]) {
+    const read = [];
+    const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: named }), { readFile: recording(read) });
+    assert.equal(read.includes(named), false, named);
+    assert.ok(read.includes(own), `the session's own file is read instead, for ${named}`);
+    assert.ok(lines.includes(`Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`), named);
+  }
+}));
+
+test('a transcript the input names by a path that leaves the projects folder through `..` is not read', withMachine(async (machine) => {
+  notified(machine);
+  const edited = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md').replaceAll('\\', '/');
+  transcriptWith(machine, []);
+  const outside = transcriptAt(path.join(machine.claudeHome, 'elsewhere', `${SESSION}.jsonl`), edited);
+  // The string is given as the host would give it: the `..` segments are not normalized away before the hook sees them.
+  const raw = `${machine.projectDir}${path.sep}..${path.sep}..${path.sep}elsewhere${path.sep}${SESSION}.jsonl`;
+  const read = [];
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: raw }), { readFile: recording(read) });
+  assert.equal(read.includes(outside), false, 'the file the path resolves to is not read');
+  assert.equal(read.includes(raw), false, 'nor is the path as it was given');
+  assert.ok(lines.includes(`Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`));
+}));
+
+test('on win32 a path into the Claude home is compared without case: the folder named in capitals is the same folder', { skip: process.platform !== 'win32' }, withMachine(async (machine) => {
+  notified(machine);
+  const edited = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md').replaceAll('\\', '/');
+  const capitals = path.join(machine.claudeHome.toUpperCase(), 'projects', machine.slug, `${SESSION}.jsonl`);
+  transcriptAt(path.join(machine.projectDir, `${SESSION}.jsonl`), edited);
+  const read = [];
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: capitals }), { readFile: recording(read) });
+  assert.ok(read.includes(capitals), 'the transcript named in capitals is read');
+  assert.ok(lines.includes(`Feature document: ${edited}  (branch feat/channel, the last feature document this session wrote, by its transcript)`));
+}));
+
 test('a transcript the hook cannot read is no stretch: its lines are left out, and the rest prints', withMachine(async (machine) => {
   notified(machine);
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: machine.projectDir }));
@@ -905,7 +974,7 @@ test('the block says when the feature document was last written and last committ
   const document = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md');
   const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
   const pause = lines.indexOf(`  ${NOT_TOLD}`);
-  assert.equal(lines[pause + 1], `  State: ${document} was last written at 2026-01-01T11:48:00.000Z (12m ago) and last committed at 2026-01-01T09:00:00+00:00 (1111111).`);
+  assert.equal(lines[pause + 1], `  State: ${document} was last written at 2026-01-01T11:48:00.000Z (12m ago) and last committed at 2026-01-01T09:00:00.000Z (1111111).`);
 }));
 
 test('the block says what git says of the worktree of the feature document: its branch, its head and what is not committed, read without the index lock', withMachine(async (machine) => {
@@ -949,15 +1018,29 @@ test('the state line says what the pause\'s notice of the stretch says of the ti
   const stateOf = async (git) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git })).lines.find((line) => line.startsWith('  State: '));
   const written = `  State: ${document} was last written at 2026-01-01T11:48:00.000Z (12m ago)`;
   // Committed before the notice, and written after it: what is written is not committed.
-  assert.equal(await stateOf(fakeGit(machine)), `${written} and last committed at 2026-01-01T09:00:00+00:00 (1111111). It was written after the pause's notice and that is not committed.`);
+  assert.equal(await stateOf(fakeGit(machine)), `${written} and last committed at 2026-01-01T09:00:00.000Z (1111111). It was written after the pause's notice and that is not committed.`);
   // Committed after the notice too.
-  assert.equal(await stateOf(fakeGit(machine, { commitTime: '2026-01-01T10:30:00+00:00' })), `${written} and last committed at 2026-01-01T10:30:00+00:00 (1111111). Both are after the pause's notice.`);
+  assert.equal(await stateOf(fakeGit(machine, { commitTime: '2026-01-01T10:30:00+00:00' })), `${written} and last committed at 2026-01-01T10:30:00.000Z (1111111). Both are after the pause's notice.`);
   // In no commit yet, and no commit that git can say of.
   assert.equal(await stateOf(fakeGit(machine, { uncommitted: true })), `${written} and is in no commit yet. It was written after the pause's notice and that is not committed.`);
   assert.equal(await stateOf(fakeGit(machine, { failing: ['log'] })), `${written} and its commit is not read (fatal: made up). It was written after the pause's notice, and whether that is committed is not read.`);
   // Written before the notice: what it holds may be older than the work, and the reply is told so.
   writtenAt(document, 180);
-  assert.equal(await stateOf(fakeGit(machine)), `  State: ${document} was last written at 2026-01-01T09:00:00.000Z (3h ago) and last committed at 2026-01-01T09:00:00+00:00 (1111111). It was last written before the pause's notice of ${minute(2)}: what it holds may be older than the work, so say so in your next reply to the user.`);
+  assert.equal(await stateOf(fakeGit(machine)), `  State: ${document} was last written at 2026-01-01T09:00:00.000Z (3h ago) and last committed at 2026-01-01T09:00:00.000Z (1111111). It was last written before the pause's notice of ${minute(2)}: what it holds may be older than the work, so say so in your next reply to the user.`);
+}));
+
+test('the state line gives the commit\'s time as ISO in UTC, whatever offset git gave it with; a time that does not parse is printed as git gave it', withMachine(async (machine) => {
+  notified(machine);
+  const transcript = path.join(machine.projectDir, `${SESSION}.jsonl`);
+  transcriptWith(machine, [answered(2, 'past the pause', { input_tokens: PAUSED }), askedBoundary(4)]);
+  assert.notEqual(pauseNotice({ transcript, sessionId: SESSION, home: machine.home, now: () => Date.parse(minute(2)), tmpdir: path.join(machine.home, 'tmp') }), null);
+  const document = DOCUMENT_OF(machine);
+  const stateOf = async (git) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git })).lines.find((line) => line.startsWith('  State: '));
+  const written = `  State: ${document} was last written at 2026-01-01T11:48:00.000Z (12m ago)`;
+  // Five hours behind UTC, committed at 10:30 UTC: the same instant as the one a UTC offset would give, and after the notice.
+  assert.equal(await stateOf(fakeGit(machine, { commitTime: '2026-01-01T05:30:00-05:00' })), `${written} and last committed at 2026-01-01T10:30:00.000Z (1111111). Both are after the pause's notice.`);
+  // A time git gave that does not parse is printed as it was given, and nothing is taken from it.
+  assert.equal(await stateOf(fakeGit(machine, { commitTime: 'made up' })), `${written} and last committed at made up (1111111). It was written after the pause's notice, and whether that is committed is not read.`);
 }));
 
 test('an orchestrator\'s state line is its relief file\'s: when it was written, and no commit, since a relief file is in no repository', withMachine(async (machine) => {

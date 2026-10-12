@@ -373,7 +373,7 @@ export function gateLogFolder(home, platform = process.platform) {
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-/** The journey of `run`, in order: the ten steps of the feature document ("The journey"). An `id` goes into
+/** The journey of `run`, in order: the ten steps of the feature document ("The journey"), and `pause-hook`, which that document does not list yet. An `id` goes into
  * the record, so it never changes once a line was written with it; a feature that changes what a project
  * receives adds its own step here, with its test. */
 export const JOURNEY = Object.freeze([
@@ -385,6 +385,7 @@ export const JOURNEY = Object.freeze([
   { id: 'commit-refused', title: 'a commit that breaks the test of the project is refused, and the file is restored' },
   { id: 'project-uninstall', title: 'uninstall removes what init wrote and nothing the project owns; init again' },
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
+  { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
 ].map((step) => Object.freeze(step)));
@@ -511,4 +512,55 @@ export function parseArgs(argv = [], platform = process.platform) {
   const ofRoot = rootRefusal(root, platform);
   if (ofRoot !== null) return { error: ofRoot };
   return { command, root };
+}
+
+// ---- the context pause, as the hook of the installed command meets it ----
+
+/** One line of a made-up transcript: a reply of the session whose usage counts `tokens` input tokens, written as the
+ * host writes one (`type`, `uuid`, `timestamp`, `message.usage`). The model is a made-up name, not `<synthetic>`,
+ * which the reader of the pause does not count. The caller ends the line. */
+export function pauseReplyLine({ uuid, timestamp, tokens }) {
+  return JSON.stringify({
+    type: 'assistant',
+    uuid,
+    timestamp,
+    message: { model: 'made-up-model', role: 'assistant', usage: { input_tokens: tokens } },
+  });
+}
+
+/** The hook input the host sends the pause command on standard input after a tool call, as JSON text: the session,
+ * its transcript, its folder and the event (`PostToolUse`), the fields `pauseLine` of `bin/resume.mjs` reads. */
+export function pauseHookInput({ sessionId, transcriptPath, cwd }) {
+  return JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath, cwd, hook_event_name: 'PostToolUse' });
+}
+
+/** What is wrong with the three runs of the pause command, or `null` when nothing is. `first` is a run in a project
+ * with the session past the pause: it must exit 0 and print one line, the notice, which is JSON naming the event
+ * `PostToolUse` with a non-empty `additionalContext`. `second` is the same input again, and `outside` a run in a
+ * folder that is no project's, with a session past the pause too: both must exit 0 and print nothing. Each run is
+ * `{ status, stdout }` of the child. The message names the run and says what it did, in words. */
+export function pauseHookProblem({ first, second, outside }) {
+  if (first.status !== 0) return `the first run exited ${first.status}, not 0`;
+  // The line break `console.log` ends the line with is not part of what the hook printed.
+  const notice = (first.stdout ?? '').replace(/\r?\n$/, '');
+  if (notice.trim() === '') return 'the first run printed nothing, though the session was past the pause';
+  if (/\r?\n/.test(notice)) return 'the first run printed more than one line, though its notice is one';
+  let parsed;
+  try {
+    parsed = JSON.parse(notice);
+  } catch {
+    return `the first run printed text that is not JSON: ${notice}`;
+  }
+  const output = parsed?.hookSpecificOutput;
+  if (output?.hookEventName !== 'PostToolUse') return `the first run names the event ${JSON.stringify(output?.hookEventName)}, not PostToolUse`;
+  if (typeof output.additionalContext !== 'string' || output.additionalContext.trim() === '') {
+    return 'the first run gives no additionalContext, or an empty one, so the session would be told nothing';
+  }
+  if (second.status !== 0) return `the second run exited ${second.status}, not 0`;
+  const again = (second.stdout ?? '').replace(/\r?\n$/, '');
+  if (again.trim() !== '') return `the second run printed ${again}, though the pause is said once`;
+  if (outside.status !== 0) return `the run outside a project exited ${outside.status}, not 0`;
+  const elsewhere = (outside.stdout ?? '').replace(/\r?\n$/, '');
+  if (elsewhere.trim() !== '') return `the run outside a project printed ${elsewhere}, though no harness.json is above its folder`;
+  return null;
 }

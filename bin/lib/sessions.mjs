@@ -414,6 +414,13 @@ function end(work, at, status) {
  * the session held at its own latest automatic compaction, with its time, when the transcript records one
  * (`compactionOf`), and otherwise `contextCompactionDefault` (tokens), with `measured: false`. The
  * session's own measure wins because the point is the host's and has not been the same for every session.
+ *
+ * `lastCompaction` is the session's newest compaction of any kind, `{ uuid, at, automatic, before }`, or `null`
+ * when the transcript records none (`compactionOf`): what a watch tells when the host or the person compacts
+ * the session. The newest is the one with the latest time, never the last in the file: the host writes a
+ * boundary again with its `uuid` and time, and an older one again when it continues a session, so a copy
+ * changes nothing. `uuid` is `null` for an entry that has none.
+ *
  * `contextRoom` is what is left before it, in tokens: below zero for a session already past the point,
  * `null` with no context.
  *
@@ -459,6 +466,7 @@ export function sessionFacts(
   let stretch = null; // the work the last instruction started
   let finished = null; // the stretch before it
   let measured = null; // the session's latest automatic compaction, `{ tokens, at }`
+  let lastCompaction = null; // the session's newest compaction of any kind, `{ uuid, at, automatic, before }`
   const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
   const workByCall = new Map(); // tool_use id -> work
   const endsByTask = new Map(); // task id -> the latest end that closed nothing, and the index of its entry
@@ -486,6 +494,11 @@ export function sessionFacts(
     if (typeof entry.uuid === 'string') written.add(entry.uuid);
     if (!repeated) {
       const compaction = compactionOf(entry);
+      // The newest by its time, not by its place: a resumed session writes an older boundary again after the
+      // newer one, and an equal time keeps the later entry, as `measured` does.
+      if (compaction && (lastCompaction === null || (compaction.at ?? '') >= (lastCompaction.at ?? ''))) {
+        lastCompaction = { uuid: typeof entry.uuid === 'string' ? entry.uuid : null, at: compaction.at, automatic: compaction.automatic, before: compaction.before };
+      }
       const sentWith = compaction ? null : contextOf(entry);
       const by = compaction || sentWith ? null : instructionBy(entry);
       // A reply answers the instruction before it even when it records no usage: counted by the replies
@@ -639,6 +652,7 @@ export function sessionFacts(
     contextPercent: context === null ? null : percentOf(context.tokens, contextWindow),
     atContextPause: context === null ? null : context.tokens >= contextPause,
     contextCompaction: compactsAt,
+    lastCompaction,
     contextRoom: room,
     lastTask,
     lastTaskFits: room === null || lastTask.unavailable !== undefined ? null : lastTask.tokens <= room,
@@ -1575,6 +1589,53 @@ function within(at, { after, before }) {
   return (after === null || (at !== null && at > after)) && (before === null || (at !== null && at < before));
 }
 
+/** Whether `text` holds a compact block: a fenced code block whose whole content, trimmed, is `/compact`. */
+export function holdsCompactBlock(text) {
+  const lines = text.split('\n').map((line) => line.trim());
+  for (let open = 0; open < lines.length; open += 1) {
+    if (!/^```[\w+#.-]*$/.test(lines[open])) continue;
+    // The block ends at the next bare fence; a fence that closes a block is never an opening one.
+    const close = lines.indexOf('```', open + 1);
+    if (close === -1) return false;
+    const content = lines.slice(open + 1, close).filter((line) => line !== '');
+    if (content.length === 1 && content[0] === '/compact') return true;
+    open = close;
+  }
+  return false;
+}
+
+/** The compactions of `counted` once each, oldest first, as `{ uuid, at, automatic, before, line }`. */
+function boundariesOf(counted) {
+  return counted
+    .filter(({ entry }) => !entry.isSidechain)
+    .flatMap(({ line, entry, at, uuid }) => {
+      const compaction = compactionOf(entry);
+      return compaction === null ? [] : [{ uuid, at, automatic: compaction.automatic, before: compaction.before, line }];
+    })
+    .sort(oldestFirst);
+}
+
+/** The Edit and Write calls the session made in `counted`, oldest first, as `{ line, at, path }`. */
+function writesOf(counted) {
+  return counted
+    .filter(({ entry }) => isOwnReply(entry))
+    .flatMap(({ line, entry, at }) =>
+      blocksOf(entry)
+        .filter((block) => block.type === 'tool_use' && (block.name === 'Edit' || block.name === 'Write') && typeof block.input?.file_path === 'string' && block.input.file_path !== '')
+        .map((block) => ({ line, at, path: block.input.file_path })),
+    )
+    .sort(oldestFirst);
+}
+
+/** A feature document: `odd/tasks/<name>.md`, under any folder, with either slash. */
+const FEATURE_DOCUMENT = /(?:^|[\\/])odd[\\/]tasks[\\/][^\\/]+\.md$/;
+
+/** The path of the last feature document that `wrote` holds written before `at`, or `null`. */
+function documentBefore(wrote, at) {
+  const found = wrote.filter((write) => write.at !== null && at !== null && write.at < at && FEATURE_DOCUMENT.test(write.path));
+  return found.at(-1)?.path ?? null;
+}
+
 /** What a transcript holds of the stretch of work before its newest compaction, `{ boundaries, current, stretch,
  * person, sessions, lastReply, wrote }`:
  * - `boundaries`: every compaction of the file once, oldest first, as `{ uuid, at, automatic, before, line }`;
@@ -1589,13 +1650,7 @@ function within(at, { after, before }) {
  * A side chain never counts. */
 export function compactionStretch(text) {
   const counted = firstAppearances(text);
-  const boundaries = counted
-    .filter(({ entry }) => !entry.isSidechain)
-    .flatMap(({ line, entry, at, uuid }) => {
-      const compaction = compactionOf(entry);
-      return compaction === null ? [] : [{ uuid, at, automatic: compaction.automatic, before: compaction.before, line }];
-    })
-    .sort(oldestFirst);
+  const boundaries = boundariesOf(counted);
   const last = boundaries.at(-1);
   let current = null;
   let stretch = { after: null, before: null };
@@ -1611,14 +1666,6 @@ export function compactionStretch(text) {
   const inStretch = counted.filter(({ entry, at }) => !entry.isSidechain && within(at, stretch));
   const replies = inStretch.filter(({ entry }) => isOwnReply(entry) && blocksOf(entry).some(isText)).sort(oldestFirst);
   const lastReply = replies.at(-1);
-  const wrote = counted
-    .filter(({ entry }) => isOwnReply(entry))
-    .flatMap(({ line, entry, at }) =>
-      blocksOf(entry)
-        .filter((block) => block.type === 'tool_use' && (block.name === 'Edit' || block.name === 'Write') && typeof block.input?.file_path === 'string' && block.input.file_path !== '')
-        .map((block) => ({ line, at, path: block.input.file_path })),
-    )
-    .sort(oldestFirst);
   return {
     boundaries,
     current,
@@ -1629,8 +1676,79 @@ export function compactionStretch(text) {
       return message?.from === 'session' ? [{ line, at, name: message.name }] : [];
     }),
     lastReply: lastReply === undefined ? null : { line: lastReply.line, at: lastReply.at },
-    wrote,
+    wrote: writesOf(counted),
   };
+}
+
+const NOT_TOLD = { known: false, at: null };
+const NOT_KEPT = { known: false, kept: null };
+
+/** What the reader of the pause's state answered for the stretch from `after` to `at`, `{ known, at }`. A reader that
+ * throws, or answers without `known`, knows nothing: its fact is not judged, and nothing is thrown. */
+function toldOf(reader, after, at) {
+  let answer;
+  try {
+    answer = reader(after, at);
+  } catch {
+    return NOT_TOLD;
+  }
+  const known = isObject(answer) && answer.known === true;
+  return { known, at: known && typeof answer.at === 'string' ? answer.at : null };
+}
+
+/** What the reader of the feature document's state answered, `{ known, kept }`, read as `toldOf` reads the pause's. */
+function keptOf(reader, query) {
+  let answer;
+  try {
+    answer = reader(query);
+  } catch {
+    return NOT_KEPT;
+  }
+  const known = isObject(answer) && answer.known === true;
+  return { known, kept: known && typeof answer.kept === 'boolean' ? answer.kept : null };
+}
+
+/** The first reply of the session in the stretch from `after` to `before` that is at or after `toldAt`, the time the
+ * pause was told, and holds the compact block, as `{ line, at }`, or `null` when no reply does. */
+function announcedOf(counted, { after, before, toldAt }) {
+  const found = counted
+    .filter(({ entry, at }) => isOwnReply(entry) && at !== null && at >= toldAt && within(at, { after, before }))
+    .filter(({ entry }) => blocksOf(entry).some((block) => isText(block) && holdsCompactBlock(block.text)))
+    .sort(oldestFirst);
+  return found.length === 0 ? null : { line: found[0].line, at: found[0].at };
+}
+
+/** Each compaction of `text` once, oldest first, with what the transcript holds of the stretch before it:
+ * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, announced, verdict }`. The readers
+ * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each. */
+export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT } = {}) {
+  const counted = firstAppearances(text);
+  const boundaries = boundariesOf(counted);
+  const wrote = writesOf(counted);
+  return boundaries.map((boundary, index) => {
+    const { uuid, at, automatic, before, line } = boundary;
+    const after = boundaries[index - 1]?.at ?? null;
+    const stretch = { after, before: at };
+    const inThisFile = counted.some(({ entry, at: when }) => isOwnReply(entry) && within(when, stretch));
+    const document = documentBefore(wrote, at);
+    const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, announced: null, verdict: null };
+    if (!automatic || !inThisFile) return item;
+    const toldState = toldOf(told, after, at);
+    const keptState = toldState.at === null || document === null ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
+    const announced = toldState.at === null ? null : announcedOf(counted, { after, before: at, toldAt: toldState.at });
+    const verdicts = {
+      told: toldState.known ? toldState.at !== null : null,
+      kept: keptState.kept,
+      announced: toldState.at === null ? null : announced !== null,
+    };
+    return {
+      ...item,
+      told: toldState,
+      kept: keptState,
+      announced,
+      verdict: { ...verdicts, missing: ['told', 'kept', 'announced'].filter((name) => verdicts[name] === false) },
+    };
+  });
 }
 
 // ---- what changed between two boards ------------------------------------------------------------------
@@ -1685,6 +1803,23 @@ const sessionLabel = (session) => `session ${session.id.slice(0, 8)} ${JSON.stri
 const pieces = (count) => `${count} piece${count === 1 ? '' : 's'} of work`;
 const byKey = (items, key) => new Map(items.map((item) => [item[key], item]));
 
+/** Whether `now`, a session's last compaction, is one the earlier look did not have (`lastCompaction` of
+ * `sessionFacts`): another `uuid`, or, where either has none, another time. `null` is no compaction. */
+function isNewCompaction(was, now) {
+  if (was === null) return true;
+  return was.uuid !== null && now.uuid !== null ? was.uuid !== now.uuid : was.at !== now.at;
+}
+
+/** What a watch says of a compaction the session gained: who asked for it, how long ago it was (`ago`, as the
+ * board says the age of an entry, from the time the board was read) and what the session held before it when
+ * the transcript says. */
+function compactionLine(session, sizes, readAt) {
+  const compaction = session.lastCompaction;
+  const who = compaction.automatic ? 'by the host' : "at the user's request";
+  const held = Number.isFinite(compaction.before) ? `: it held ${sizes.of(compaction.before)} before it` : '';
+  return `${sessionLabel(session)} was compacted ${who} ${ago(compaction.at, readAt)}${held}`;
+}
+
 function sessionChanges(before, after, self) {
   const lines = [];
   const earlier = byKey(before.sessions, 'id');
@@ -1712,6 +1847,11 @@ function sessionChanges(before, after, self) {
     } else if (session.state === 'waiting' && session.turnEndedAt !== was.turnEndedAt) {
       // Waiting at both looks, but not at the same point: it was given something and finished it.
       lines.push(`${sessionLabel(session)} finished another turn and is waiting`);
+    }
+    // Once, when the host or the person compacted it since the last look. A board from before the field was
+    // kept has none to compare with (`undefined`), so nothing is said of the compactions it already had.
+    if (was && was.lastCompaction !== undefined && session.lastCompaction && isNewCompaction(was.lastCompaction, session.lastCompaction)) {
+      lines.push(compactionLine(session, sizes, Date.parse(after.generatedAt)));
     }
     // Once, when it reaches the pause: what it does there is its own judgment, and the line carries what
     // that judgment needs. A last task that no longer fits is said in it and wakes nobody by itself.
@@ -2009,7 +2149,7 @@ function workLine(work, now) {
 }
 
 /** `275k` for 275,400 tokens: the board is read at a glance, and the exact count is in `--json`. */
-const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
+export const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
 
 /** A count of tokens above zero, in thousands: `under 1k` for one that rounds to none. `0k` of a room
  * would say a session has none left when it has some, and `0k past` that it is at the point when it is

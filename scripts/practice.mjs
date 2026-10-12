@@ -10,11 +10,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf } from '../bin/lib/sessions.mjs';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, HARNESS_HOOKS, hostHooksProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem,
 } from './practice-lib.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
@@ -174,6 +177,15 @@ const harness = (ctx, ...args) => withOutput(run(process.execPath, [installedBin
 
 /** The real npm CLI (never a PATH `npm`, which may be a shim), with its cache inside the practice root. */
 const npmIn = (ctx, cwd, ...args) => withOutput(npm(ctx.npmCli, [...args, '--cache', ctx.layout.npmCache, ...NPM_QUIET], childOptions(ctx, cwd)));
+
+/** The pause command run as the host runs its `PostToolUse` hook: the installed entry file, `resume --pause`, the hook
+ * input on standard input and `cwd` as the folder of the call. `input` is the JSON text of `pauseHookInput`. */
+const pauseHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'resume', '--pause'], { ...childOptions(ctx, cwd), input }));
+
+/** The tokens of a made-up reply that is past the context pause: the share the host compacts at, which is above the
+ * pause's share of the same window, so the reply passes the pause and is not yet a compaction. Built from the constants
+ * of the candidate's own `bin/lib/sessions.mjs`, never written as a number. */
+const PAUSED_TOKENS = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT);
 
 /** How a child ended, for a FAIL line: the spawn error (a timeout, a program that is not there) or the exit
  * code, then the last lines it printed. */
@@ -378,6 +390,28 @@ const STEPS = {
     expectOk(harness(ctx, 'install', '--home', home), 'js-harness install, again');
     assertThat(fs.existsSync(manifest), `the second js-harness install left no ${manifest}`);
     return `uninstall --global left no manifest, no skill and no gate log in ${home}, and both host files byte for byte as seeded; installed again`;
+  },
+
+  'pause-hook': (ctx) => {
+    const { project, home, root } = ctx.layout;
+    // The session ids are new for each run: the state the pause keeps under the home says a session was told once, and
+    // a run after the first must not find that state of an earlier run.
+    const sessionId = `practice-pause-${randomUUID()}`;
+    const elsewhereId = `practice-pause-${randomUUID()}`;
+    // A transcript of the practice's own, under its home, with one reply past the pause; the hook reads its end.
+    const transcript = path.join(home, 'transcripts', `${sessionId}.jsonl`);
+    fs.mkdirSync(path.dirname(transcript), { recursive: true });
+    fs.writeFileSync(transcript, `${pauseReplyLine({ uuid: randomUUID(), timestamp: ctx.date, tokens: PAUSED_TOKENS })}\n`);
+    // A folder of the journey's root that is no project: no `harness.json` lies above it. Its session is past the pause too,
+    // so only the missing project can keep the hook silent there.
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(outside, { recursive: true });
+    const first = pauseHook(ctx, project, pauseHookInput({ sessionId, transcriptPath: transcript, cwd: project }));
+    const second = pauseHook(ctx, project, pauseHookInput({ sessionId, transcriptPath: transcript, cwd: project }));
+    const elsewhere = pauseHook(ctx, outside, pauseHookInput({ sessionId: elsewhereId, transcriptPath: transcript, cwd: outside }));
+    const problem = pauseHookProblem({ first, second, outside: elsewhere });
+    assertThat(problem === null, problem);
+    return `the first run printed one PostToolUse notice of ${first.stdout.trim().length} characters; the second run printed nothing, and so did the run from ${outside}, where no harness.json lies above; all three exited 0`;
   },
 
   'real-home-after': (ctx) => {

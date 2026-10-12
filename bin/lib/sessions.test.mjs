@@ -515,6 +515,25 @@ test('the room left is counted to where the host compacts: the point this sessio
   assert.deepEqual([none.contextRoom, none.contextCompaction.tokens], [null, COMPACTION]);
 });
 
+test('sessionFacts gives lastCompaction null when the transcript records no compaction', () => {
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 400000, 0)))).lastCompaction, null);
+});
+
+test('sessionFacts gives lastCompaction as the newest compaction by its time, whatever its place in the file', () => {
+  const newer = compaction(5, 'auto', 412000, 15000, { uuid: 'c2' });
+  const older = compaction(3, 'auto', 398000, 14000, { uuid: 'c1' });
+  const newest = { uuid: 'c2', at: at(5), automatic: true, before: 412000 };
+  assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), older, newer, spoke(6, usage(0, 400000, 0)))).lastCompaction, newest);
+  assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), newer, older, spoke(6, usage(0, 400000, 0)))).lastCompaction, newest, 'a resumed session writes the older one after the newer');
+  // A copy of the older boundary written after the newer one, as a resumed session does, changes nothing.
+  assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), newer, older, older, spoke(6, usage(0, 400000, 0)))).lastCompaction, newest, 'a copy of the older one');
+});
+
+test('sessionFacts says whether the newest compaction was asked for by the user, which is not automatic', () => {
+  const asked = compaction(5, 'manual', 412000, 15000, { uuid: 'm1' });
+  assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), asked, spoke(6, usage(0, 400000, 0)))).lastCompaction, { uuid: 'm1', at: at(5), automatic: false, before: 412000 });
+});
+
 // A task, for the board, is the work one instruction started: a prompt the person sent, or a message from
 // another session. Its cost is how much the context grew from the instruction to the last reply before
 // the next one.
@@ -1234,6 +1253,59 @@ test('boardChanges: a session that appears, one that leaves the window, one that
   assert.deepEqual(changes({ sessions: [seen(A, 'working', { atContextPause: null })] }, { sessions: [seen(A, 'working', big)] }), [reached]);
   // A task that no longer fits is a fact of the row, not a second reason to wake: below the pause it wakes nobody.
   assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working', { ...big, atContextPause: false })] }), []);
+});
+
+// The watch says once that the session was compacted since the last look: by the host, or at the user's request,
+// how long ago (the board's own age of an entry, from when the board was read) and what it held before it.
+test('boardChanges: a session compacted by the host since the last look is said once, with how long ago and what it held before', () => {
+  const compacted = { uuid: 'c1', at: before(150), automatic: true, before: 412000 };
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', { lastCompaction: null })] }, { sessions: [seen(A, 'working', { lastCompaction: compacted })] }), [
+    `session aaaaaaaa "title a" was compacted by the host 2m ago: it held ${share(412000)} before it`,
+  ]);
+  // What the host did not write is not said: a compaction the transcript holds no count for has no "it held".
+  const unsized = { ...compacted, uuid: 'c2', before: null };
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', { lastCompaction: null })] }, { sessions: [seen(A, 'working', { lastCompaction: unsized })] }), [
+    'session aaaaaaaa "title a" was compacted by the host 2m ago',
+  ]);
+});
+
+test('boardChanges: a compaction the person asked for is said as asked for', () => {
+  const asked = { uuid: 'm1', at: before(150), automatic: false, before: 412000 };
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', { lastCompaction: null })] }, { sessions: [seen(A, 'working', { lastCompaction: asked })] }), [
+    `session aaaaaaaa "title a" was compacted at the user's request 2m ago: it held ${share(412000)} before it`,
+  ]);
+});
+
+test('boardChanges: a compaction is said once, a board kept before the field says none, a session that appears says none, the watching session says none', () => {
+  const compacted = { uuid: 'c1', at: before(150), automatic: true, before: 412000 };
+  const later = { uuid: 'c2', at: before(60), automatic: true, before: 400000 };
+  const withIt = (lastCompaction) => ({ sessions: [seen(A, 'working', { lastCompaction })] });
+  assert.deepEqual(changes(withIt(compacted), withIt(compacted)), [], 'the same boards give nothing');
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, withIt(compacted)), [], 'a board kept before the field has none to compare with');
+  assert.deepEqual(changes({ sessions: [] }, { sessions: [seen(A, 'working', { lastCompaction: compacted })] }), [
+    'session aaaaaaaa "title a" appeared (working)',
+  ], 'a session that appears says nothing of its past compactions');
+  assert.deepEqual(changes(withIt(compacted), withIt(later), { self: A }), [], 'the watching session is never said');
+});
+
+test('boardChanges: a compaction and the pause reached in one look are both said, the compaction first', () => {
+  const compacted = { uuid: 'c1', at: before(150), automatic: true, before: 412000 };
+  const reached = seen(A, 'working', { lastCompaction: compacted, atContextPause: true, context: { tokens: PAUSE + 5000, model: 'model-x', at: before(40) } });
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', { lastCompaction: null })] }, { sessions: [reached] }), [
+    `session aaaaaaaa "title a" was compacted by the host 2m ago: it held ${share(412000)} before it`,
+    `session aaaaaaaa "title a" reached the context pause, ${PAUSE_SAID}: context ${share(PAUSE + 5000)}`,
+  ]);
+});
+
+test('boardChanges: a compaction is told from the one before it by its uuid, or by its time where an entry has no uuid', () => {
+  const line = `session aaaaaaaa "title a" was compacted by the host 2m ago: it held ${share(412000)} before it`;
+  const withIt = (lastCompaction) => ({ sessions: [seen(A, 'working', { lastCompaction })] });
+  const first = { uuid: 'c1', at: before(400), automatic: true, before: 412000 };
+  assert.deepEqual(changes(withIt(first), withIt({ ...first, uuid: 'c2', at: before(150) })), [line]);
+  assert.deepEqual(changes(withIt({ ...first, at: before(150) }), withIt({ ...first, uuid: 'c2', at: before(150) })), [line], 'another uuid is another compaction, at the same time');
+  const untimed = { uuid: null, at: before(400), automatic: true, before: 412000 };
+  assert.deepEqual(changes(withIt(untimed), withIt({ ...untimed, at: before(150) })), [line]);
+  assert.deepEqual(changes(withIt(untimed), withIt({ ...untimed })), [], 'the same time with no uuid is the same compaction');
 });
 
 test('boardChanges: what does not matter wakes nobody', () => {
@@ -2949,6 +3021,242 @@ test('a line that does not parse, a line that is not an object and an empty text
   assert.deepEqual(lib.compactionStretch(torn).person, [{ line: 4, at: at(1) }]);
 });
 
+test('holdsCompactBlock is true for a fenced block whose whole content is /compact', () => {
+  assert.equal(lib.holdsCompactBlock('```\n/compact\n```\n'), true);
+});
+
+test('holdsCompactBlock accepts a language word after the opening fence', () => {
+  assert.equal(lib.holdsCompactBlock('```text\n/compact\n```\n'), true);
+});
+
+test('holdsCompactBlock allows blank lines around /compact inside the block', () => {
+  assert.equal(lib.holdsCompactBlock('```\n\n  /compact  \n\n```\n'), true);
+});
+
+test('holdsCompactBlock is false for /compact inside a sentence', () => {
+  assert.equal(lib.holdsCompactBlock('Type `/compact` when the pause comes.\n'), false);
+});
+
+test('holdsCompactBlock is false for a block with any other line besides /compact', () => {
+  assert.equal(lib.holdsCompactBlock('```\n/compact\nand then wait\n```\n'), false);
+  assert.equal(lib.holdsCompactBlock('```\nwait\n/compact\n```\n'), false);
+});
+
+test('holdsCompactBlock finds the compact block among other blocks, and a fence that closes a block is never an opening one', () => {
+  assert.equal(lib.holdsCompactBlock('```\nfirst\n```\n\n```\n/compact\n```\n'), true);
+  assert.equal(lib.holdsCompactBlock('```\nfirst\n```\n/compact\n```\n'), false);
+});
+
+test('holdsCompactBlock reads CRLF line ends', () => {
+  assert.equal(lib.holdsCompactBlock('```\r\n/compact\r\n```\r\n'), true);
+});
+
+test('compactionMeasures of a transcript with no compaction is empty', () => {
+  assert.deepEqual(lib.compactionMeasures(transcript(prompt('hello', 1), reply('hi', 2))), []);
+});
+
+test('compactionMeasures judges a host compaction whose pause was told and announced, and asks the reader of the stretch', () => {
+  const COMPACT = '```\n/compact\n```';
+  const asked = [];
+  const told = (after, before) => {
+    asked.push(['told', after, before]);
+    return { known: true, at: at(3) };
+  };
+  const kept = (query) => {
+    asked.push(['kept', query]);
+    return { known: true, kept: true };
+  };
+  const text = transcript(
+    prompt('go', 1),
+    reply(`Saved.\n\n${COMPACT}`, 4),
+    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
+  );
+  assert.deepEqual(lib.compactionMeasures(text, { told, kept }), [
+    {
+      uuid: 'b1', at: at(6), automatic: true, before: 900, line: 3, after: null, inThisFile: true,
+      told: { known: true, at: at(3) }, document: null, kept: { known: false, kept: null },
+      announced: { line: 2, at: at(4) }, verdict: { told: true, kept: null, announced: true, missing: [] },
+    },
+  ]);
+  assert.deepEqual(asked, [['told', null, at(6)]], 'no feature document was written, so kept is not asked');
+});
+
+test('compactionMeasures of a host compaction told, kept and announced is judged true in every fact, and kept is asked from the notice on', () => {
+  const COMPACT = '```\n/compact\n```';
+  const DOCUMENT = 'C:\\proj\\odd\\tasks\\session-channel.md';
+  const asked = [];
+  const told = (after, before) => {
+    asked.push(['told', after, before]);
+    return { known: true, at: at(3) };
+  };
+  const kept = (query) => {
+    asked.push(['kept', query]);
+    return { known: true, kept: true };
+  };
+  const text = transcript(
+    prompt('go', 1),
+    call('e1', 'Edit', { file_path: DOCUMENT, old_string: 'x', new_string: 'y' }, 2),
+    reply(`Saved.\n\n${COMPACT}`, 4),
+    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
+  );
+  const [measure] = lib.compactionMeasures(text, { told, kept });
+  assert.deepEqual(measure, {
+    uuid: 'b1', at: at(6), automatic: true, before: 900, line: 4, after: null, inThisFile: true,
+    told: { known: true, at: at(3) }, document: DOCUMENT, kept: { known: true, kept: true },
+    announced: { line: 3, at: at(4) }, verdict: { told: true, kept: true, announced: true, missing: [] },
+  });
+  assert.deepEqual(asked, [['told', null, at(6)], ['kept', { document: DOCUMENT, after: at(3), before: at(6) }]]);
+});
+
+test('compactionMeasures of a pause told but not announced after the notice is not announced: a reply before the notice, or after the boundary, does not count', () => {
+  const COMPACT = '```\n/compact\n```';
+  const told = () => ({ known: true, at: at(3) });
+  const before = transcript(
+    prompt('go', 1),
+    reply(COMPACT, 2),
+    reply('still working, no block', 4),
+    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
+  );
+  assert.deepEqual(lib.compactionMeasures(before, { told })[0].announced, null);
+  assert.deepEqual(lib.compactionMeasures(before, { told })[0].verdict, { told: true, kept: null, announced: false, missing: ['announced'] });
+  const after = transcript(
+    prompt('go', 1),
+    reply('still working, no block', 4),
+    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
+    reply(COMPACT, 7),
+  );
+  assert.deepEqual(lib.compactionMeasures(after, { told })[0].announced, null);
+  assert.deepEqual(lib.compactionMeasures(after, { told })[0].verdict.missing, ['announced']);
+});
+
+test('compactionMeasures of a host compaction the notice never reached is not told, and kept is not asked; no state is not judged', () => {
+  const COMPACT = '```\n/compact\n```';
+  const text = transcript(
+    prompt('go', 1),
+    call('e1', 'Edit', { file_path: 'C:\\proj\\odd\\tasks\\session-channel.md' }, 2),
+    reply(COMPACT, 3),
+    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
+  );
+  const asked = [];
+  const kept = (query) => {
+    asked.push(query);
+    return { known: true, kept: true };
+  };
+  const notTold = lib.compactionMeasures(text, { told: () => ({ known: true, at: null }), kept })[0];
+  assert.deepEqual(notTold.told, { known: true, at: null });
+  assert.deepEqual([notTold.kept, notTold.announced], [{ known: false, kept: null }, null]);
+  assert.deepEqual(notTold.verdict, { told: false, kept: null, announced: null, missing: ['told'] });
+  assert.deepEqual(asked, [], 'kept is not asked when the notice was not told');
+  const noState = lib.compactionMeasures(text, { told: () => ({ known: false, at: null }), kept })[0];
+  assert.deepEqual(noState.told, { known: false, at: null });
+  assert.deepEqual(noState.verdict, { told: null, kept: null, announced: null, missing: [] });
+  assert.deepEqual(asked, [], 'kept is not asked when the state is not known');
+});
+
+test('compactionMeasures names the last feature document the session wrote before the boundary, and no Bash call, side chain or other file', () => {
+  const EARLY = 'C:\\proj\\odd\\tasks\\earlier.md';
+  const LAST = 'C:/proj/odd/tasks/session-channel.md';
+  const text = transcript(
+    prompt('go', 1),
+    call('e1', 'Edit', { file_path: EARLY }, 2),
+    call('b1', 'Bash', { command: 'echo', file_path: 'C:\\proj\\odd\\tasks\\bash.md' }, 3),
+    { ...call('e2', 'Edit', { file_path: 'C:\\proj\\odd\\tasks\\side.md' }, 4), isSidechain: true },
+    call('e3', 'Edit', { file_path: LAST }, 5),
+    call('e4', 'Write', { file_path: 'C:\\proj\\README.md' }, 5),
+    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
+    call('e5', 'Edit', { file_path: 'C:\\proj\\odd\\tasks\\after.md' }, 7),
+  );
+  const asked = [];
+  const kept = (query) => {
+    asked.push(query);
+    return { known: true, kept: false };
+  };
+  const [measure] = lib.compactionMeasures(text, { told: () => ({ known: true, at: at(2) }), kept });
+  assert.equal(measure.document, LAST);
+  assert.deepEqual(asked, [{ document: LAST, after: at(2), before: at(6) }]);
+  assert.deepEqual(measure.verdict, { told: true, kept: false, announced: false, missing: ['kept', 'announced'] });
+});
+
+test('compactionMeasures of two compactions of the host in one file: the second stretch starts at the first, and told is asked with each stretch\'s own bounds', () => {
+  const COMPACT = '```\n/compact\n```';
+  const asked = [];
+  const told = (after, before) => {
+    asked.push(['told', after, before]);
+    return { known: true, at: after === null ? at(2) : at(4) };
+  };
+  const text = transcript(
+    prompt('go', 1),
+    reply('one', 2),
+    compaction(3, 'auto', 900, 300, { uuid: 'b1' }),
+    prompt('again', 4),
+    reply(`Saved.\n\n${COMPACT}`, 5),
+    compaction(6, 'auto', 800, 200, { uuid: 'b2' }),
+  );
+  const [first, second] = lib.compactionMeasures(text, { told });
+  assert.equal(first.after, null);
+  assert.equal(second.after, at(3));
+  assert.deepEqual(first.verdict, { told: true, kept: null, announced: false, missing: ['announced'] });
+  assert.deepEqual(second.verdict, { told: true, kept: null, announced: true, missing: [] });
+  assert.deepEqual(second.announced, { line: 5, at: at(5) });
+  assert.deepEqual(asked, [['told', null, at(3)], ['told', at(3), at(6)]]);
+});
+
+test('compactionMeasures counts a copied entry once: a copy of the first boundary before the second adds no item and moves no line', () => {
+  const COMPACT = '```\n/compact\n```';
+  const early = id('p1', prompt('early', 1));
+  const earlyReply = id('r1', reply('early answer', 2));
+  const boundary = id('b1', compaction(3, 'auto', 900, 300));
+  const stretchPrompt = id('p2', prompt('stretch', 4));
+  const stretchReply = id('r2', reply(`Saved.\n\n${COMPACT}`, 5));
+  const newest = id('b2', compaction(6, 'auto', 800, 200));
+  const text = transcript(early, earlyReply, boundary, stretchPrompt, stretchReply, boundary, early, earlyReply, stretchPrompt, stretchReply, newest);
+  const measures = lib.compactionMeasures(text, { told: () => ({ known: true, at: at(2) }) });
+  assert.deepEqual(measures.map(({ uuid, line, after }) => [uuid, line, after]), [['b1', 3, null], ['b2', 11, at(3)]]);
+  assert.deepEqual(measures[1].announced, { line: 5, at: at(5) });
+});
+
+test('compactionMeasures of a file the host continued holds no stretch of this file: it is not judged and no reader is asked', () => {
+  const asked = [];
+  const reader = (...args) => {
+    asked.push(args);
+    return { known: true, at: at(2), kept: true };
+  };
+  const text = transcript(id('b1', compaction(3, 'auto', 900, 300)), id('p2', prompt('resumed', 4)), reply('after the resume', 5));
+  const [measure] = lib.compactionMeasures(text, { told: reader, kept: reader });
+  assert.deepEqual([measure.inThisFile, measure.verdict], [false, null]);
+  assert.deepEqual(asked, []);
+});
+
+test('compactionMeasures reads a reader that throws as not known, and throws nothing', () => {
+  const COMPACT = '```\n/compact\n```';
+  const text = transcript(
+    prompt('go', 1),
+    call('e1', 'Edit', { file_path: 'C:\\proj\\odd\\tasks\\session-channel.md' }, 2),
+    reply(`Saved.\n\n${COMPACT}`, 4),
+    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
+  );
+  const broken = () => {
+    throw new Error('unreadable');
+  };
+  const toldThrows = lib.compactionMeasures(text, { told: broken, kept: broken })[0];
+  assert.deepEqual([toldThrows.told, toldThrows.announced, toldThrows.verdict], [{ known: false, at: null }, null, { told: null, kept: null, announced: null, missing: [] }]);
+  const keptThrows = lib.compactionMeasures(text, { told: () => ({ known: true, at: at(2) }), kept: broken })[0];
+  assert.deepEqual([keptThrows.kept, keptThrows.verdict], [{ known: false, kept: null }, { told: true, kept: null, announced: true, missing: [] }]);
+});
+
+test('compactionMeasures counts a compaction the user asked for, judges none and asks no one', () => {
+  const asked = [];
+  const reader = (name) => (...args) => {
+    asked.push([name, ...args]);
+    return { known: true, at: at(2), kept: true };
+  };
+  const text = transcript(prompt('go', 1), reply('answer', 2), compaction(3, 'manual', 900, 300, { uuid: 'm1' }));
+  assert.deepEqual(lib.compactionMeasures(text, { told: reader('told'), kept: reader('kept') }), [
+    { uuid: 'm1', at: at(3), automatic: false, before: 900, line: 3, after: null, inThisFile: true, told: { known: false, at: null }, document: null, kept: { known: false, kept: null }, announced: null, verdict: null },
+  ]);
+  assert.deepEqual(asked, []);
+});
+
 test('replyOf gives the text of the session\'s own reply, its text blocks joined with a blank line, and its time', () => {
   const twoParts = { type: 'assistant', ...base(2), message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'first' }, { type: 'tool_use', id: 'toolu_1', name: 'Bash', input: {} }, { type: 'text', text: 'second' }] } };
   const text = transcript(prompt('go', 1), twoParts);
@@ -2985,6 +3293,16 @@ test('replyOf refuses, in words, every line that is not the session\'s own reply
   assert.deepEqual(said(1.5), { reply: false, what: 'no line of the transcript, which has 9 lines' });
   // No line is both the person's words and the session's reply.
   for (let line = 1; line <= 9; line += 1) assert.ok(!(lib.quoteOf(text, line).person && said(line).reply), `line ${line}`);
+});
+
+test('replyOf answers in words, and never throws, for an attachment that is no queued command and for an entry that is no reply', () => {
+  const hookSuccess = { type: 'attachment', ...base(1), attachment: { type: 'hook_success', hookName: 'SessionStart' } };
+  const noAttachment = { type: 'attachment', ...base(2) };
+  const system = { type: 'system', subtype: 'informational', ...base(3), content: 'made up' };
+  const text = transcript(hookSuccess, noAttachment, system);
+  assert.deepEqual(lib.replyOf(text, 1), { reply: false, what: 'an attachment of type "hook_success": the host wrote it, not the person' });
+  assert.deepEqual(lib.replyOf(text, 2), { reply: false, what: 'an entry of type "attachment" that holds no attachment' });
+  assert.deepEqual(lib.replyOf(text, 3), { reply: false, what: 'an entry of type "system"' });
 });
 
 // T4d: what the person sends while the session works is not written as a `user` entry. The host queues it

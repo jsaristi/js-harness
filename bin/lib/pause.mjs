@@ -151,8 +151,8 @@ function readStates(files, fileSystem) {
   return files.map((file) => readStateFile(file, fileSystem)).filter((state) => state !== null);
 }
 
-/** The newest of `states`, or `null` when there is none. A state stamped with its write's time is newer than one
- * with no stamp, which a state written before stamps were kept is, and a tie keeps the state that comes first.
+/** The newest of `states`, or `null` when there is none. Each state is ranked by when it was written (`writtenOf`), and
+ * only a state whose time cannot be read at all ranks oldest; a tie keeps the state that comes first.
  * The newest is the one a session reads: a place written before the other one, and then made unwritable, must
  * not speak for the session again. */
 function newestOf(states) {
@@ -167,18 +167,31 @@ function readState(files, fileSystem) {
 }
 
 /** One place of the state, or `null` when the file cannot be read or does not parse as a state. `written` is the
- * time the state was written, in milliseconds, or `null` for a state that carries none. */
+ * time the state was written, in milliseconds, or `null` when neither the state nor its file tells it. */
 function readStateFile(file, fileSystem) {
   try {
     const value = JSON.parse(fileSystem.readFileSync(file, 'utf8'));
     if (!isObject(value)) return null;
-    const written = typeof value.written === 'string' ? Date.parse(value.written) : NaN;
     return {
       compaction: pointOf(value.compaction),
       armed: typeof value.armed === 'boolean' ? value.armed : true,
       told: Array.isArray(value.told) ? value.told : [],
-      written: Number.isFinite(written) ? written : null,
+      written: writtenOf(value, file, fileSystem),
     };
+  } catch {
+    return null;
+  }
+}
+
+/** When a state was written, in milliseconds: its own stamp, or for a state written before stamps were kept, the
+ * modification time of its file, which is the write that made it. `null` when neither can be read, so the state
+ * ranks oldest and is still read. */
+function writtenOf(value, file, fileSystem) {
+  const stamp = typeof value.written === 'string' ? Date.parse(value.written) : NaN;
+  if (Number.isFinite(stamp)) return stamp;
+  try {
+    const { mtimeMs } = fileSystem.statSync(file);
+    return Number.isFinite(mtimeMs) ? mtimeMs : null;
   } catch {
     return null;
   }

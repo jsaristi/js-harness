@@ -29,7 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { findOpenings, openingsDir, placeOf, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { pauseNotice, toldBetween } from './lib/pause.mjs';
-import { comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, readPlans, reliefTail, replyOf, roleOfTitle, sessionFacts, titleRead, workNameOf } from './lib/sessions.mjs';
+import { comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, readPlans, reliefTail, replyOf, roleOfTitle, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness resume --hook',
@@ -146,18 +146,30 @@ function checkoutOf(run, cwd) {
   return top === '' ? cwd : path.resolve(top);
 }
 
-/** The file of the session's transcript: the one the host names in the input, else the session's own in the
- * sessions folder by its id; `null` when neither is known. */
-function transcriptFileOf(input, sessionId, projectDir) {
-  if (typeof input.transcript_path === 'string' && input.transcript_path !== '') return input.transcript_path;
+/** The file of the session's transcript, resolved: the one the host names in the input when that is the session's own
+ * file under the projects folder (`isOwnTranscript`), else the session's own file in this project's sessions folder by
+ * its id; `null` when no session id is known. The host's path is not read on trust: a session opened in another folder
+ * is filed under another project, so any project's folder counts, but a path that leaves the projects folder does not. */
+function transcriptFileOf(input, sessionId, { projectDir, projectsDir }) {
+  if (sessionId !== null && typeof input.transcript_path === 'string' && isOwnTranscript(input.transcript_path, sessionId, projectsDir)) return path.resolve(input.transcript_path);
   return sessionId === null ? null : path.join(projectDir, `${sessionId}.jsonl`);
 }
 
-/** The session's transcript as text, or `null` when there is none that can be read. The host names it in the
- * input (`transcript_path`), and that is the one read when it names one; otherwise the session's own file in
- * the project's sessions folder, by its id, as the board finds it. Nothing else is read for the session. */
-function transcriptOf(input, sessionId, { projectDir, readFile }) {
-  const file = transcriptFileOf(input, sessionId, projectDir);
+/** Whether `file` is the session's own transcript under `projectsDir`: its name is exactly `<session id>.jsonl`, and
+ * resolved it lies inside the folder below a separator, so `projects-backup` is not inside `projects`. On win32 the two
+ * paths are compared without case, as the file system compares them. */
+function isOwnTranscript(file, sessionId, projectsDir) {
+  const resolved = path.resolve(file);
+  if (path.basename(resolved) !== `${sessionId}.jsonl`) return false;
+  const folded = (name) => (process.platform === 'win32' ? name.toLowerCase() : name);
+  return folded(resolved).startsWith(folded(path.resolve(projectsDir)) + path.sep);
+}
+
+/** The session's transcript as text, or `null` when there is none that can be read. The file is the one `transcriptFileOf`
+ * gives: the host's path when it is the session's own under the projects folder, else the session's own file in the
+ * project's sessions folder, by its id, as the board finds it. Nothing else is read for the session. */
+function transcriptOf(input, sessionId, { projectDir, projectsDir, readFile }) {
+  const file = transcriptFileOf(input, sessionId, { projectDir, projectsDir });
   if (file === null) return null;
   try {
     return readFile(file);
@@ -369,9 +381,6 @@ const TRUST = 'and "State for a resume" if it has one, and trust them over the s
 const WRITTEN_FROM = 'in the worktree this session\'s last notice was written from';
 const RELIEF_READ = 'Read its last lines before anything else: it is the orchestrator\'s state, and no feature document is. Trust it over the summary. Then repeat to the user any question that is still open.';
 
-/** `467k` for 467,000 tokens, as the board writes a count of tokens; `sessions.mjs` keeps its own, which is not exported. */
-const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
-
 /** The temp folder the pause's state falls back to: under the harness home when `JS_HARNESS_HOME` is set, so a made-up
  * home never reaches the real temp folder, and the system's otherwise. */
 const tempOf = (env) => (env.JS_HARNESS_HOME ? path.join(env.JS_HARNESS_HOME, 'tmp') : undefined);
@@ -431,15 +440,17 @@ function gitReasonOf(asked) {
 }
 
 /** The last commit of `file` in `worktree`: `{ hash, at }`, `null` for a file in no commit, or `{ unavailable }` with why git
- * could not say. `at` is git's own ISO time of the commit. */
+ * could not say. `at` is the commit's time as ISO in UTC, the form the file's own time takes too; git's offset is only
+ * converted, and a time that does not parse is kept as git gave it. */
 function commitOf(run, worktree, file) {
   const relative = path.relative(worktree, file).split(path.sep).join('/');
   const asked = run('git', gitIn(worktree, ['log', '-1', '--format=%h%x09%cI', '--', relative]), { cwd: worktree });
   if (asked.error || asked.status !== 0) return { unavailable: gitReasonOf(asked) };
   const said = String(asked.stdout ?? '').trim();
   if (said === '') return null;
-  const [hash, at] = said.split('\t');
-  return { hash, at };
+  const [hash, given] = said.split('\t');
+  const time = Date.parse(given);
+  return { hash, at: Number.isNaN(time) ? given : new Date(time).toISOString() };
 }
 
 /** When the state file was last written, and for a file in a worktree when it was last committed, as the line `State:` says
@@ -461,7 +472,10 @@ function stateLineOf(file, { run, stat, now, worktree, noticedAt }) {
   if (worktree === null) return `${line} It was written after the pause's notice.`;
   if (commit === null) return `${line} It was written after the pause's notice and that is not committed.`;
   if (commit.unavailable !== undefined) return `${line} It was written after the pause's notice, and whether that is committed is not read.`;
-  return Date.parse(commit.at) >= noticed ? `${line} Both are after the pause's notice.` : `${line} It was written after the pause's notice and that is not committed.`;
+  // A commit time git gave in a form that does not parse proves nothing either way.
+  const committed = Date.parse(commit.at);
+  if (Number.isNaN(committed)) return `${line} It was written after the pause's notice, and whether that is committed is not read.`;
+  return committed >= noticed ? `${line} Both are after the pause's notice.` : `${line} It was written after the pause's notice and that is not committed.`;
 }
 
 // How many of a worktree's uncommitted paths the line names; the rest are a count and "…".
@@ -530,7 +544,7 @@ function stepLines(step, work) {
 }
 
 /** The lines of the stretch the user wrote, `person` (`{ line, at }`): how many, the last few line numbers, oldest first, and
- * the command that reads each of them, for `target` (the session's id, or the transcript's path in double quotes). */
+ * the command that reads each of them, for `target` (the session's id). */
 function userSaid(person, target) {
   if (person.length === 0) return 'The user wrote nothing in this stretch.';
   const last = person.slice(-LISTED).map((item) => item.line);
@@ -628,11 +642,12 @@ function resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, 
   // found as they find them.
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const projectDir = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects', slug);
+  const projectsDir = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects');
+  const projectDir = path.join(projectsDir, slug);
   const harnessHome = env.JS_HARNESS_HOME || homedir();
   const sessionId = typeof input.session_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/.test(input.session_id) ? input.session_id : null;
   const record = readNotices(harnessHome, slug, { readFile });
-  const transcript = transcriptOf(input, sessionId, { projectDir, readFile });
+  const transcript = transcriptOf(input, sessionId, { projectDir, projectsDir, readFile });
   const { title, from } = titleOf(input, sessionId, { transcript, record });
 
   const lines = ['js-harness resume: this session was just compacted. What follows is read from files; the summary of the compaction is not the record.'];
@@ -690,10 +705,9 @@ function resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, 
   // The stretch's own steps after the folders: a stretch the deadline passed names the pause and the reply with it.
   if (transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
   if (transcript !== null && stretch !== null) {
-    // The session is named by its id, or, when the hook has none, by its transcript's path, as `sessions --quote` takes it.
-    const file = transcriptFileOf(input, sessionId, projectDir);
-    const target = sessionId ?? `"${file}"`;
-    lines.push(...beforeLines(file, stretch, { transcript, sessionId, target, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
+    // The session is named by its id, as `sessions --quote` takes it: a transcript is read only when the hook has one.
+    const file = transcriptFileOf(input, sessionId, { projectDir, projectsDir });
+    lines.push(...beforeLines(file, stretch, { transcript, sessionId, target: sessionId, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
   }
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
