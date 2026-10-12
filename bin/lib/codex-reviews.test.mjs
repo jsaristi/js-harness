@@ -148,6 +148,54 @@ test('finding the record, appending to it and reading it each start one git proc
   assert.equal(started, 3);
 });
 
+test('a caller that knows where the git folder is says so, and the record is found, appended to and read with no git process', () => {
+  const root = makeRepo();
+  const file = codexReviewsPath(root);
+  const none = () => {
+    throw new Error('no git process is started');
+  };
+  const where = { commonGitDir: path.dirname(path.dirname(file)) };
+  assert.equal(codexReviewsPath(root, { spawn: none, where }), file);
+  assert.equal(appendCodexReview(root, record, { spawn: none, where }), file);
+  assert.deepEqual(readCodexReviews(root, { spawn: none, where }), [record]);
+  // `null` there is git's answer that `root` is in no repository, and is taken as that: nothing is asked
+  // again, there is no path, nothing is read, and an append has no honest place to write.
+  const nowhere = { commonGitDir: null };
+  assert.equal(codexReviewsPath(root, { spawn: none, where: nowhere }), null);
+  assert.deepEqual(readCodexReviews(root, { spawn: none, where: nowhere }), []);
+  assert.throws(() => appendCodexReview(root, record, { spawn: none, where: nowhere }), /not a git repository/);
+  assert.deepEqual(readCodexReviews(root), [record]);
+  // It is read once a call, so a caller that asks git only when it is read asks once.
+  let read = 0;
+  const lazy = {
+    get commonGitDir() {
+      read += 1;
+      return where.commonGitDir;
+    },
+  };
+  for (const call of [() => codexReviewsPath(root, { spawn: none, where: lazy }), () => appendCodexReview(root, record, { spawn: none, where: lazy }), () => readCodexReviews(root, { spawn: none, where: lazy })]) {
+    read = 0;
+    call();
+    assert.equal(read, 1);
+  }
+});
+
+test('a caller that does not say where the git folder is has git asked, as before: one process a call', () => {
+  const root = makeRepo();
+  const file = codexReviewsPath(root);
+  let started = 0;
+  const spawn = (cmd, args, opts) => {
+    started += 1;
+    return spawnSync(cmd, args, opts);
+  };
+  // No `where`, an empty one, and one that knows something else of the repository.
+  for (const where of [undefined, {}, { top: root }]) {
+    started = 0;
+    assert.equal(codexReviewsPath(root, { spawn, where }), file);
+    assert.equal(started, 1);
+  }
+});
+
 test('a well-formed reviewed or unavailable record is valid', () => {
   assert.equal(isValidCodexReview(record), true);
   assert.equal(isValidCodexReview({ ...record, base: 'a'.repeat(64), head: 'b'.repeat(64) }), true);

@@ -540,10 +540,10 @@ test('sessionFacts lists the messages a session sent to another session: when, t
     ),
   );
   assert.deepEqual(facts.sent, [
-    { at: at(2), to: 'JH ORQ · made up', toKind: 'name', id: 'msg-7', failed: false },
-    { at: at(3), to: 'uds:made-up', toKind: 'session', id: null, failed: false },
-    { at: at(4), to: 'JH 9 · made up', toKind: 'name', id: null, failed: true },
-    { at: at(5), to: 'JH 2 · made up', toKind: 'name', id: null, failed: false },
+    { at: at(2), to: 'JH ORQ · made up', toKind: 'name', id: 'msg-7', failed: false, summary: 'made up' },
+    { at: at(3), to: 'uds:made-up', toKind: 'session', id: null, failed: false, summary: 'made up' },
+    { at: at(4), to: 'JH 9 · made up', toKind: 'name', id: null, failed: true, summary: 'made up' },
+    { at: at(5), to: 'JH 2 · made up', toKind: 'name', id: null, failed: false, summary: 'made up' },
   ]);
   assert.deepEqual(facts.work, [], 'a message to a session is not background work');
 });
@@ -554,8 +554,65 @@ test('a follow-up to a subagent is work and not a message to a session, and a se
   const older = [send('toolu_f2', { to: 'a2' }, 3), result('toolu_f2', { success: true, pin: { id: 'a2' } }, 3), send('toolu_f3', { to: 'JH 1 · made up' }, 4), result('toolu_f3', { success: true, msg_id: 'msg-8' }, 4)];
   const again = [send('toolu_f3', { to: 'JH 1 · made up' }, 4), result('toolu_f3', { success: true, msg_id: 'msg-8' }, 4)];
   const facts = lib.sessionFacts(transcript(prompt('go', 1), ...toAgent, ...older, ...again));
-  assert.deepEqual(facts.sent, [{ at: at(4), to: 'JH 1 · made up', toKind: null, id: 'msg-8', failed: false }]);
+  assert.deepEqual(facts.sent, [{ at: at(4), to: 'JH 1 · made up', toKind: null, id: 'msg-8', failed: false, summary: 'made up' }]);
   assert.deepEqual(facts.work.map((work) => [work.id, work.resumed]), [['a1', true]]);
+});
+
+// Every `SendMessage` call of this project's transcripts carries a `summary` (290 of 290, 2026-10-11): the
+// sender's own line about the message, 17 to 69 characters in the 182 sent to a session. It is a field of
+// the call, not the message: the board prints it and still keeps no message text.
+test('a sent message carries the summary its call gives, as one short line, and none when the call gives none', () => {
+  const long = `${'palabra '.repeat(30)}fin`;
+  const facts = lib.sessionFacts(
+    transcript(
+      prompt('go', 1),
+      send('toolu_s1', { to: 'JH ORQ · made up', recipient_kind: 'name', summary: '  T4b gated,\n  commit follows ' }, 2),
+      send('toolu_s2', { to: 'JH ORQ · made up', recipient_kind: 'name', summary: long }, 3),
+      send('toolu_s3', { to: 'JH ORQ · made up', recipient_kind: 'name', summary: 7 }, 4),
+      send('toolu_s4', { to: 'JH ORQ · made up', recipient_kind: 'name', summary: '   ' }, 5),
+    ),
+  );
+  assert.deepEqual(facts.sent.map((message) => message.summary), ['T4b gated, commit follows', `${long.slice(0, 99)}…`, null, null]);
+  assert.equal(Object.keys(facts.sent[0]).join(','), 'at,to,toKind,id,failed,summary', 'and nothing of the message itself');
+});
+
+// --- sessionFacts: a task that was stopped ---
+//
+// From a tally of this project's transcripts (2026-10-11, keys and values only): `TaskStop` is called with
+// `task_id` (13 calls), and its result is `{ task_id, task_type: "local_bash", command, message }`, never
+// an error among those 13. Ten of the tasks so stopped were background shells of the same transcript, and
+// none of the ten has a task notification before or after the stop: the result of the call is the only
+// thing a transcript records of it.
+
+const stop = (id, task, minute) => call(id, 'TaskStop', { task_id: task }, minute);
+const stopped = (id, task, minute, block = {}) => result(id, { message: 'made up', task_id: task, task_type: 'local_bash', command: 'made up' }, minute, block);
+
+test('a task stopped with TaskStop ended when the call returned, with the status stopped, and its session no longer has background work', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...backgroundBash('toolu_1', 'b1', 2), ...backgroundBash('toolu_2', 'b2', 3, 'Watch the board'), stop('toolu_3', 'b2', 6), stopped('toolu_3', 'b2', 7), reply('Stopped it.', 8)));
+  assert.deepEqual(facts.work.map((work) => [work.id, work.ended, work.endedAt, work.status]), [['b1', false, null, null], ['b2', true, at(7), 'stopped']]);
+  assert.equal(facts.state, 'background', 'the other shell is still open');
+  const alone = lib.sessionFacts(transcript(prompt('go', 1), ...backgroundBash('toolu_2', 'b2', 3), stop('toolu_3', 'b2', 6), stopped('toolu_3', 'b2', 7), reply('Stopped it.', 8)));
+  assert.equal(alone.state, 'waiting');
+});
+
+test('a TaskStop that failed, that names a task of no call, or that has no result yet ends nothing', () => {
+  const launched = [prompt('go', 1), ...backgroundBash('toolu_1', 'b1', 2)];
+  const open = (...more) => lib.sessionFacts(transcript(...launched, ...more)).work.map((work) => work.ended);
+  assert.deepEqual(open(stop('toolu_3', 'b1', 6), result('toolu_3', 'Error: made up', 7, { is_error: true })), [false]);
+  assert.deepEqual(open(stop('toolu_3', 'b9', 6), stopped('toolu_3', 'b9', 7)), [false]);
+  assert.deepEqual(open(stop('toolu_3', 'b1', 6)), [false]);
+  // The result names the task when the call's input does not (a host that takes another key).
+  assert.deepEqual(open(call('toolu_3', 'TaskStop', {}, 6), stopped('toolu_3', 'b1', 7)), [true]);
+});
+
+test('a stop is the end of the work launched before it: a notification that arrives later changes nothing, and work launched afterwards under the same id stays open', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...backgroundBash('toolu_1', 'b1', 2), stop('toolu_3', 'b1', 6), stopped('toolu_3', 'b1', 7), notified({ task: 'b1', status: 'killed' }, 8), reply('done', 9)));
+  assert.deepEqual(facts.work.map((work) => [work.endedAt, work.status]), [[at(7), 'stopped']]);
+  // A resumed session writes the stop and its result again, after a subagent of that id was sent a follow-up.
+  const again = lib.sessionFacts(
+    transcript(prompt('go', 1), ...asyncAgent('toolu_a', 'a1', 2), stop('toolu_3', 'a1', 3), stopped('toolu_3', 'a1', 4), ...followUp('toolu_f', 'a1', 5), stop('toolu_3', 'a1', 3), stopped('toolu_3', 'a1', 4)),
+  );
+  assert.deepEqual(again.work.map((work) => [work.resumed, work.ended, work.status]), [[false, true, 'stopped'], [true, false, null]]);
 });
 
 test('sessionFacts gives the permission mode the last entry that records one has, and none when no entry does', () => {
@@ -733,12 +790,13 @@ test('planOf reads a feature document: title, steps done and total, what is pend
     done: 2,
     total: 4,
     pending: ['T5', 'a step that carries no id and runs on fo…'],
+    tasks: ['T1 the library', 'T3b review follow-ups', 'T5 `sessions --watch`: the command waits', 'a step that carries no id and runs on for longer than forty characters'],
     nextStep: ['T5 with the delegated writer.', 'Then T6, the skill.', 'Before any push: his word.', 'A fourth line.'],
   });
 });
 
 test('planOf of a document with no title, no checkbox and no next step says so with empty facts', () => {
-  assert.deepEqual(lib.planOf('some notes\n', 'odd/tasks/loose-notes.md'), { path: 'odd/tasks/loose-notes.md', title: 'loose-notes', done: 0, total: 0, pending: [], nextStep: [] });
+  assert.deepEqual(lib.planOf('some notes\n', 'odd/tasks/loose-notes.md'), { path: 'odd/tasks/loose-notes.md', title: 'loose-notes', done: 0, total: 0, pending: [], tasks: [], nextStep: [] });
 });
 
 test('readPlans lists the feature documents that differ from origin/main on the branch or in the working tree, and reads each', () => {
@@ -1047,11 +1105,15 @@ const gate = (pid, worktree) => ({ pid, startedAt: before(10), worktree, knowsLo
 /** A board's gates, on a machine whose worktrees are `D:/a` and `D:/b`. */
 const gates = (...items) => ({ gates: { available: true, items }, worktrees: { available: true, items: [{ path: 'D:/a' }, { path: 'D:/b' }] } });
 
-test('boardChanges: a gate that starts, alone or while another runs, and one that ends', () => {
-  assert.deepEqual(changes(gates(), gates(gate(5, 'D:/a'))), ['gate started in D:/a (pid 5)']);
+// Seen live on 2026-10-11: the orchestrator's watch returned for every gate of every session, which is
+// progress and decides nothing. What is left is the alarm: two gates that run at once.
+test('boardChanges: a gate that starts alone or ends wakes nobody, and one that starts while another runs does', () => {
+  assert.deepEqual(changes(gates(), gates(gate(5, 'D:/a'))), [], 'a gate that starts alone');
   assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates(gate(5, 'D:/a'), gate(6, 'D:/b'))), ['gate started in D:/b (pid 6) while another runs in D:/a (pid 5)']);
-  assert.deepEqual(changes(gates(gate(5, 'D:/a'), gate(6, { unavailable: 'relative path' })), gates(gate(6, { unavailable: 'relative path' }))), ['gate ended in D:/a (pid 5)']);
-  assert.deepEqual(changes(gates(), gates(gate(7, { unavailable: 'relative path' }))), ['gate started in an unknown worktree (pid 7)']);
+  assert.deepEqual(changes(gates(gate(5, 'D:/a'), gate(6, { unavailable: 'relative path' })), gates(gate(6, { unavailable: 'relative path' }))), [], 'a gate that ends');
+  assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates()), [], 'the last gate that ends');
+  assert.deepEqual(changes(gates(), gates(gate(7, { unavailable: 'relative path' }))), []);
+  assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates(gate(5, 'D:/a'), gate(7, { unavailable: 'relative path' }))), ['gate started in an unknown worktree (pid 7) while another runs in D:/a (pid 5)']);
   const down = { gates: { available: false, reason: 'the process listing: boom' } };
   assert.deepEqual(changes(gates(gate(5, 'D:/a')), down), [], 'a listing that failed is not a gate that ended');
   assert.deepEqual(changes(down, gates(gate(5, 'D:/a'))), []);
@@ -1064,9 +1126,9 @@ test('boardChanges: a gate in a folder that is none of the worktrees wakes nobod
   assert.deepEqual(changes(gates(), gates(stray)), []);
   assert.deepEqual(changes(gates(stray), gates()), []);
   assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates(gate(5, 'D:/a'), stray)), []);
-  assert.deepEqual(changes(gates(stray), gates(stray, gate(5, 'D:/a'))), ['gate started in D:/a (pid 5)'], 'and it is not "another" a real gate runs beside');
-  // The worktree is named as the board spells it, whatever the command line's slashes and case.
-  assert.deepEqual(changes(gates(), gates(gate(5, 'd:\\A\\'))), ['gate started in d:\\A\\ (pid 5)']);
+  assert.deepEqual(changes(gates(stray), gates(stray, gate(5, 'D:/a'))), [], 'and it is not "another" a real gate runs beside');
+  // A worktree's gate is one whatever its command line's slashes and case, and is named as that spells it.
+  assert.deepEqual(changes(gates(gate(6, 'D:/b')), gates(gate(6, 'D:/b'), gate(5, 'd:\\A\\'))), ['gate started in d:\\A\\ (pid 5) while another runs in D:/b (pid 6)']);
 });
 
 test('boardChanges compares no gate at a look that could not list the worktrees: it cannot tell which are theirs', () => {
@@ -1082,11 +1144,11 @@ test('boardChanges: a worktree removed or added while a gate keeps its pid is ne
   const running = gate(5, 'D:/b');
   assert.deepEqual(changes(on(['D:/a', 'D:/b'], running), on(['D:/a'], running)), [], 'its worktree is no longer listed');
   assert.deepEqual(changes(on(['D:/a'], running), on(['D:/a', 'D:/b'], running)), [], 'its folder became a worktree');
-  // The list changing does not hide a gate that really ends or starts at the same look.
-  assert.deepEqual(changes(on(['D:/a', 'D:/b'], running), on(['D:/a'])), ['gate ended in D:/b (pid 5)']);
-  assert.deepEqual(changes(on(['D:/a']), on(['D:/a', 'D:/b'], running)), ['gate started in D:/b (pid 5)']);
+  // The list changing does not hide a gate that really starts beside another at the same look.
+  const other = gate(6, 'D:/a');
+  assert.deepEqual(changes(on(['D:/a'], other), on(['D:/a', 'D:/b'], other, running)), ['gate started in D:/b (pid 5) while another runs in D:/a (pid 6)']);
   // And a gate in a folder that is no worktree yet is still not the "another" a new gate runs beside.
-  assert.deepEqual(changes(on(['D:/a'], running), on(['D:/a'], running, gate(6, 'D:/a'))), ['gate started in D:/a (pid 6)']);
+  assert.deepEqual(changes(on(['D:/a'], running), on(['D:/a'], running, other)), []);
 });
 
 // Codex review of 764c9b0, finding 3: a gate was known by its pid alone, so a gate that ended and another
@@ -1094,9 +1156,9 @@ test('boardChanges: a worktree removed or added while a gate keeps its pid is ne
 test('boardChanges: a pid that carries another start time is another gate, and the same gate when either look has no start time', () => {
   const startedAt = (seconds, item) => ({ ...item, startedAt: before(seconds) });
   const first = startedAt(300, gate(5, 'D:/a'));
-  assert.deepEqual(changes(gates(first), gates(startedAt(20, gate(5, 'D:/b')))), ['gate started in D:/b (pid 5)', 'gate ended in D:/a (pid 5)']);
-  // The gate that took the pid starts beside one that was running all along, and that is still said.
-  assert.deepEqual(changes(gates(first, gate(7, 'D:/b')), gates(startedAt(20, gate(5, 'D:/a')), gate(7, 'D:/b'))), ['gate started in D:/a (pid 5) while another runs in D:/b (pid 7)', 'gate ended in D:/a (pid 5)']);
+  assert.deepEqual(changes(gates(first), gates(startedAt(20, gate(5, 'D:/b')))), [], 'one gate ended and one started, each alone');
+  // The gate that took the pid starts beside one that was running all along, and that is said.
+  assert.deepEqual(changes(gates(first, gate(7, 'D:/b')), gates(startedAt(20, gate(5, 'D:/a')), gate(7, 'D:/b'))), ['gate started in D:/a (pid 5) while another runs in D:/b (pid 7)']);
   assert.deepEqual(changes(gates(first), gates(startedAt(300, gate(5, 'D:/a')))), []);
   // `ps` gives no start time, and a row of the Windows listing may have none: then the pid is all there is.
   const untimed = { ...gate(5, 'D:/a'), startedAt: { unavailable: 'the process listing gave no start time' } };
@@ -1111,12 +1173,37 @@ test('boardChanges: a pull request that opens and one that is no longer open', (
   assert.deepEqual(changes(prs(pr(40)), { pullRequests: { available: false, reason: 'gh pr: exit 1' } }), []);
 });
 
-test('boardChanges: a feature plan whose steps, pending tasks or next step changed, one that appears and one that goes', () => {
-  const plan = (more = {}) => ({ path: 'odd/tasks/board.md', title: 'Board', done: 1, total: 3, pending: ['T2', 'T3'], nextStep: ['T2 with the writer.', 'Then T3.'], ...more });
-  const trees = (...plans) => ({ worktrees: { available: true, items: [{ path: 'D:/wt', branch: 'feat/board', plans: { available: true, items: plans } }] } });
+const TASKS = ['T1 Read the transcripts', 'T2 Print the board', 'T3 Watch it'];
+const plan = (more = {}) => ({ path: 'odd/tasks/board.md', title: 'Board', done: 1, total: 3, pending: ['T2', 'T3'], tasks: TASKS, nextStep: ['T2 with the writer.', 'Then T3.'], ...more });
+const trees = (...plans) => ({ worktrees: { available: true, items: [{ path: 'D:/wt', branch: 'feat/board', plans: { available: true, items: plans } }] } });
+
+// Seen live on 2026-10-11: every box a session ticked woke the orchestrator. A ticked box is progress; a
+// task that is added, removed or reworded is the plan changing, which is the orchestrator's to know.
+test('boardChanges: a plan whose boxes are ticked or unticked wakes nobody, and one whose tasks are added, removed or reworded does', () => {
+  const planOf = (markdown) => lib.planOf(`# Board\n\n${markdown}\n\n## Next step\n\nT2 with the writer.\n`, 'odd/tasks/board.md');
+  const was = planOf('- [x] T1 Read the transcripts\n- [ ] T2 Print the board\n- [ ] Review it');
+  assert.deepEqual(was.tasks, ['T1 Read the transcripts', 'T2 Print the board', 'Review it'], 'a plan keeps the text of each task, as its line has it');
+  const said = (markdown) => changes(trees(was), trees(planOf(markdown)));
+  assert.deepEqual(said('- [x] T1 Read the transcripts\n- [x] T2 Print the board\n- [ ] Review it'), [], 'a box that is ticked');
+  assert.deepEqual(said('- [ ] T1 Read the transcripts\n- [ ] T2 Print the board\n- [x] Review it'), [], 'one unticked and another ticked');
+  assert.deepEqual(said('- [x] T1 Read the transcripts\n- [x] T2 Print the board\n- [x] Review it'), [], 'all of them, so nothing is pending');
+  assert.deepEqual(said('- [x] T1 Read the transcripts\n- [ ] T2 Print the board\n- [ ] Review it\n- [ ] T3 Watch it'), ['plan odd/tasks/board.md in D:/wt changed: task added "T3 Watch it"']);
+  assert.deepEqual(said('- [x] T1 Read the transcripts\n- [ ] Review it'), ['plan odd/tasks/board.md in D:/wt changed: task removed "T2 Print the board"']);
+  assert.deepEqual(said('- [x] T1 Read the transcripts\n- [x] T2 Print the board and the roster\n- [ ] Review it'), ['plan odd/tasks/board.md in D:/wt changed: task T2 reworded, now "T2 Print the board and the roster"']);
+  // A task with no id is known by its text alone, so a new wording is one task gone and another there.
+  assert.deepEqual(said('- [x] T1 Read the transcripts\n- [ ] T2 Print the board\n- [ ] Review it twice'), ['plan odd/tasks/board.md in D:/wt changed: task added "Review it twice"; task removed "Review it"']);
+  // Two tasks of one text are two tasks.
+  assert.deepEqual(said('- [x] T1 Read the transcripts\n- [ ] T2 Print the board\n- [ ] Review it\n- [ ] Review it'), ['plan odd/tasks/board.md in D:/wt changed: task added "Review it"']);
+  // The order of the tasks is not compared: the same tasks are the same plan.
+  assert.deepEqual(said('- [ ] Review it\n- [x] T1 Read the transcripts\n- [ ] T2 Print the board'), []);
+  const long = `T9 ${'x'.repeat(200)}`;
+  assert.deepEqual(changes(trees(plan()), trees(plan({ tasks: [...TASKS, long] }))), [`plan odd/tasks/board.md in D:/wt changed: task added "${long.slice(0, 99)}…"`]);
+});
+
+test('boardChanges: a feature plan whose next step changed, one that appears and one that goes', () => {
   assert.deepEqual(changes(trees(plan()), trees(plan())), []);
-  assert.deepEqual(changes(trees(plan()), trees(plan({ done: 2, pending: ['T3'] }))), ['plan odd/tasks/board.md in D:/wt changed: 2/3 done (was 1/3); pending T3 (was T2, T3)']);
-  assert.deepEqual(changes(trees(plan()), trees(plan({ total: 4, pending: ['T2', 'T3', 'T4'] }))), ['plan odd/tasks/board.md in D:/wt changed: 1/4 done (was 1/3); pending T2, T3, T4 (was T2, T3)']);
+  assert.deepEqual(changes(trees(plan()), trees(plan({ done: 2, pending: ['T3'] }))), [], 'the counts alone are progress');
+  assert.deepEqual(changes(trees(plan()), trees(plan({ total: 4, pending: ['T2', 'T3', 'T4'], tasks: [...TASKS, 'T4 Ship it'], nextStep: [] }))), ['plan odd/tasks/board.md in D:/wt changed: task added "T4 Ship it"; its next step is now empty']);
   assert.deepEqual(changes(trees(plan()), trees(plan({ nextStep: ['T2 with the writer.', 'Then T3, reopened: the gate failed.'] }))), ['plan odd/tasks/board.md in D:/wt changed: next step now starts "T2 with the writer."']);
   assert.deepEqual(changes(trees(plan({ pending: [] })), trees(plan({ pending: [], nextStep: [] }))), ['plan odd/tasks/board.md in D:/wt changed: its next step is now empty']);
   assert.deepEqual(changes(trees(), trees(plan())), ['plan odd/tasks/board.md appeared in D:/wt: 1/3 done, pending T2, T3']);
@@ -1150,12 +1237,12 @@ test('watchBaseline is the newer board, keeping from the older one whatever the 
 // Which gates a watch compares depends on the worktrees, so a look that could not list them compares none;
 // the gate that started at that look must still be new at the next one.
 test('watchBaseline keeps the older gates across a look that could not list the worktrees, so a gate that started then is still said', () => {
-  const older = boardOf(gates());
-  const blind = boardOf({ ...gates(gate(5, 'D:/a')), worktrees: { available: false, reason: 'git worktree: boom' } });
+  const older = boardOf(gates(gate(7, 'D:/b')));
+  const blind = boardOf({ ...gates(gate(7, 'D:/b'), gate(5, 'D:/a')), worktrees: { available: false, reason: 'git worktree: boom' } });
   assert.deepEqual(lib.boardChanges(older, blind), []);
   const baseline = lib.watchBaseline(older, blind);
   assert.deepEqual(baseline.gates, older.gates);
-  assert.deepEqual(lib.boardChanges(baseline, boardOf(gates(gate(5, 'D:/a')))), ['gate started in D:/a (pid 5)']);
+  assert.deepEqual(lib.boardChanges(baseline, boardOf(gates(gate(7, 'D:/b'), gate(5, 'D:/a')))), ['gate started in D:/a (pid 5) while another runs in D:/b (pid 7)']);
 });
 
 // --- the machine's gate lock: which gate runs and which wait ---
@@ -1301,17 +1388,17 @@ test('boardGates: a gate the lock tells of is given even when no listed process 
 const runs = { ...gates(aware(5, 'D:/a')), ...lockOf(holds(5, 'D:\\a')) };
 const runsAndWaits = { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...lockOf(holds(5, 'D:\\a'), waits(6, 'D:\\b')) };
 
-test('boardChanges: a gate that starts and waits for the lock is said to wait, not to run beside another', () => {
-  assert.deepEqual(changes(runs, runsAndWaits), ['gate started in D:/b (pid 6), waiting for the gate in D:/a (pid 5)']);
+test('boardChanges: a gate that starts and waits for the lock wakes nobody: it is in line, not beside another', () => {
+  assert.deepEqual(changes(runs, runsAndWaits), []);
   // The gate it waits for may be another project's: the lock is the machine's.
-  assert.deepEqual(changes(gates(), { ...gates(aware(6, 'D:/b')), ...lockOf(holds(99, 'C:\\other'), waits(6, 'D:\\b')) }), ['gate started in D:/b (pid 6), waiting for the gate in C:\\other (pid 99)']);
+  assert.deepEqual(changes(gates(), { ...gates(aware(6, 'D:/b')), ...lockOf(holds(99, 'C:\\other'), waits(6, 'D:\\b')) }), []);
   // Read in the instant between a release and its take, the lock has no holder.
-  assert.deepEqual(changes(gates(), { ...gates(aware(6, 'D:/b')), ...lockOf(null, waits(6, 'D:\\b')) }), ["gate started in D:/b (pid 6), waiting for the machine's gate lock"]);
+  assert.deepEqual(changes(gates(), { ...gates(aware(6, 'D:/b')), ...lockOf(null, waits(6, 'D:\\b')) }), []);
 });
 
-test('boardChanges: nothing is said when the gate that waited takes the lock, beyond the end of the gate before it', () => {
+test('boardChanges: nothing is said when the gate that waited takes the lock, nor of the end of the gate before it', () => {
   const tookIt = lockOf(holds(6, 'D:\\b'));
-  assert.deepEqual(changes(runsAndWaits, { ...gates(aware(6, 'D:/b')), ...tookIt }), ['gate ended in D:/a (pid 5)']);
+  assert.deepEqual(changes(runsAndWaits, { ...gates(aware(6, 'D:/b')), ...tookIt }), []);
   // The gate before it is still there for a moment, writing its report with the lock released.
   assert.deepEqual(changes(runsAndWaits, { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...tookIt }), []);
   // Neither the lock alone starts or ends a gate: a holder no listed process has the pid of is only shown.
@@ -1337,8 +1424,9 @@ test('boardChanges: a gate that does not know the lock is said to run beside ano
 });
 
 test('boardChanges: a gate that only waits, a holder that stopped beating and a lock of which nothing could be read are not another gate', () => {
-  const alone = ['gate started in D:/b (pid 8)'];
-  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b'), aware(6, 'D:/a')), ...lockOf(null, waits(6, 'D:\\a')) }), ["gate started in D:/a (pid 6), waiting for the machine's gate lock", ...alone]);
+  // A gate that starts with none of them beside it starts alone, which wakes nobody.
+  const alone = [];
+  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b'), aware(6, 'D:/a')), ...lockOf(null, waits(6, 'D:\\a')) }), alone);
   assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b')), ...lockOf(holds(99, 'C:\\other', { stale: true })) }), alone);
   // Found in review, 2026-10-10: a lock folder that could not be listed, or a holder's file that is not
   // a gate's, named nobody and was still "another gate" a gate ran beside.
@@ -1355,22 +1443,22 @@ test('boardChanges: a gate that only waits, a holder that stopped beating and a 
 test('boardChanges: a gate that knows the lock is never said to run beside the gate that holds it, whatever it is doing', () => {
   const holder = lockOf(holds(5, 'D:\\a'));
   // Listed before it has staged its folder in line: neither holder nor waiter yet.
-  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b', 1)), ...holder }), ['gate started in D:/b (pid 6)']);
+  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b', 1)), ...holder }), []);
   // Past its sensors, with the lock released, writing its report while the next gate takes the lock: at
   // the look after its release, and at any later one, when no look remembers that it held the lock.
   const released = gates(aware(5, 'D:/a'), aware(7, 'D:/b'));
-  assert.deepEqual(changes(runs, { ...released, ...lockOf(holds(7, 'D:\\b')) }), ['gate started in D:/b (pid 7)']);
-  assert.deepEqual(changes({ ...gates(aware(5, 'D:/a')), ...lockOf(null) }, { ...released, ...lockOf(holds(7, 'D:\\b')) }), ['gate started in D:/b (pid 7)']);
+  assert.deepEqual(changes(runs, { ...released, ...lockOf(holds(7, 'D:\\b')) }), []);
+  assert.deepEqual(changes({ ...gates(aware(5, 'D:/a')), ...lockOf(null) }, { ...released, ...lockOf(holds(7, 'D:\\b')) }), []);
   // A new gate that got the pid of a gate that died holding the lock, whose file still reads alive.
-  assert.deepEqual(changes(gates(), { ...gates(aware(5, 'D:/b', 3)), ...holder }), ['gate started in D:/b (pid 5)']);
+  assert.deepEqual(changes(gates(), { ...gates(aware(5, 'D:/b', 3)), ...holder }), []);
   // Two gates that know the lock and that the lock says nothing of.
-  assert.deepEqual(changes(gates(aware(5, 'D:/a')), { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...lockOf(null) }), ['gate started in D:/b (pid 6)']);
+  assert.deepEqual(changes(gates(aware(5, 'D:/a')), { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...lockOf(null) }), []);
   // Nor when the lock could not be read at this look: the process list alone says nothing of such a gate.
-  assert.deepEqual(changes(gates(aware(5, 'D:/a')), { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), gateLock: { available: false, reason: 'the gate lock: boom' } }), ['gate started in D:/b (pid 6)']);
+  assert.deepEqual(changes(gates(aware(5, 'D:/a')), { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), gateLock: { available: false, reason: 'the gate lock: boom' } }), []);
 });
 
 test('boardChanges: a gate that does not know the lock and has the pid of a holder that died is not said to run beside itself', () => {
-  assert.deepEqual(changes(gates(), { ...gates(gate(5, 'D:/b')), ...lockOf(holds(5, 'D:\\a')) }), ['gate started in D:/b (pid 5)']);
+  assert.deepEqual(changes(gates(), { ...gates(gate(5, 'D:/b')), ...lockOf(holds(5, 'D:\\a')) }), []);
 });
 
 // Not built, and pinned so that it is a decision: a gate that knows the lock, waited for it, and then ran
@@ -1382,17 +1470,19 @@ test('boardChanges says nothing of a gate that knows the lock and leaves the lin
 });
 
 test('boardChanges: a gate started as npm run check is one that waits when the lock has its pid in line, and one without the lock otherwise', () => {
-  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), unplaced(6)), ...lockOf(holds(5, 'D:\\a'), waits(6, 'D:\\b')) }), ['gate started in D:/b (pid 6), waiting for the gate in D:/a (pid 5)']);
-  assert.deepEqual(changes(gates(), { ...gates(unplaced(5)), ...lockOf(holds(5, 'D:\\a')) }), ['gate started in D:/a (pid 5)']);
+  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), unplaced(6)), ...lockOf(holds(5, 'D:\\a'), waits(6, 'D:\\b')) }), []);
+  assert.deepEqual(changes(gates(), { ...gates(unplaced(5)), ...lockOf(holds(5, 'D:\\a')) }), []);
   assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), unplaced(6)), ...lockOf(holds(5, 'D:\\a')) }), ['gate started in an unknown worktree (pid 6) while another runs in D:/a (pid 5)']);
 });
 
 test('boardChanges: the lock names the folder of a gate whose command line names none, so another project\'s gate wakes nobody', () => {
   const installed = { pid: 5, startedAt: before(300), worktree: { unavailable: 'its command line names none' }, knowsLock: true, commandLine: 'node C:/pnpm/js-harness/bin/js-harness.mjs check' };
-  assert.deepEqual(changes(gates(), gates(installed)), ['gate started in an unknown worktree (pid 5)']);
-  assert.deepEqual(changes(gates(), { ...gates(installed), ...lockOf(holds(5, 'D:\\b')) }), ['gate started in D:/b (pid 5)']);
-  assert.deepEqual(changes(gates(), { ...gates(installed), ...lockOf(holds(5, 'C:\\other\\project')) }), []);
-  assert.deepEqual(changes({ ...gates(installed), ...lockOf(holds(5, 'C:\\other\\project')) }, gates()), []);
+  // It starts beside a gate that never asks for the lock, which is the alarm, unless it is another project's.
+  const old = gate(8, 'D:/a');
+  assert.deepEqual(changes(gates(old), gates(old, installed)), ['gate started in an unknown worktree (pid 5) while another runs in D:/a (pid 8)']);
+  assert.deepEqual(changes(gates(old), { ...gates(old, installed), ...lockOf(holds(5, 'D:\\b')) }), ['gate started in D:/b (pid 5) while another runs in D:/a (pid 8)']);
+  assert.deepEqual(changes(gates(old), { ...gates(old, installed), ...lockOf(holds(5, 'C:\\other\\project')) }), []);
+  assert.deepEqual(changes({ ...gates(old, installed), ...lockOf(holds(5, 'C:\\other\\project')) }, gates(old)), []);
 });
 
 test('watchBaseline keeps what the lock said last across a look that could not read it', () => {
@@ -1707,7 +1797,7 @@ test('roleNamed reads the role an --address asks for: the orchestrator by either
 const C = 'cccccccc-3333-4333-8333-333333333333';
 const D = 'dddddddd-4444-4444-8444-444444444444';
 const member = (id, title, seconds, more = {}) => ({ id, title, titleSource: 'custom-title', state: 'waiting', lastEntryAt: before(seconds), cwd: 'D:\\proj', gitBranch: 'main', permissionMode: 'bypassPermissions', work: [], tail: [], ...more });
-const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], ...more });
+const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], record: null, ...more });
 
 test('rosterOf gives one row per title, with its role, what it is for, its mode, where it works and when it last wrote', () => {
   const roster = lib.rosterOf([member(A, 'JH 2 · the board', 60, { permissionMode: 'auto', cwd: 'C:\\elsewhere', gitBranch: 'feat/x' }), member(B, 'JH ORQ · proj', 600)]);
@@ -1885,6 +1975,615 @@ test('boardChanges does not compare the roster: it is the sessions again, and a 
     return { sessions, roster: lib.rosterOf(sessions) };
   };
   assert.deepEqual(changes(titled('JH ORQ nueva · proj'), titled('JH ORQ · proj')), []);
+});
+
+// --- the record on the board: titles from the openings read, the roster's place in it, the channel ---
+//
+// The record is the file `notify` writes (bin/lib/channel.mjs). This library reads no file: it is handed
+// the notices and the readings as the record's reader gives them. Everything below is made up.
+
+const noticeOf = (seconds, from, to, kind, text, more = {}) => ({
+  schema: 'js-harness.channel-notice/v1',
+  at: before(seconds),
+  from: { host: 'claude-code', id: null, source: 'environment', title: null, permissionMode: null, ...from },
+  to: to === 'orchestrator' ? { role: 'orchestrator', number: null } : { role: 'work', number: to },
+  kind,
+  text,
+  cwd: null,
+  worktree: null,
+  branch: null,
+  ...more,
+});
+const readingOf = (seconds, id, title) => ({ schema: 'js-harness.channel-reading/v1', at: before(seconds), reader: { host: 'claude-code', id, source: 'environment' }, title });
+const recordOf = (notices = [], more = {}) => ({ path: 'H:\\.js-harness\\channel\\D--proj.jsonl', notices, readings: [], skipped: 0, ...more });
+
+test('a session whose transcript carries no title takes the title of the opening it read last, and a title in its transcript wins', () => {
+  const readings = [readingOf(900, B, 'JH 2 · first wording'), readingOf(600, B, 'JH 2 · the board'), readingOf(500, A, 'JH 9 · not this one'), readingOf(400, 'zzzzzzzz-0000', 'JH 7 · nobody here')];
+  assert.deepEqual([lib.titleRead(readings, B), lib.titleRead(readings, C), lib.titleRead([], B), lib.titleRead(readings, null)], ['JH 2 · the board', null, null, null]);
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'corré js-harness sessions --opening', 120, { titleSource: 'first-prompt' }), member(C, null, 180, { titleSource: null }), { id: D, unavailable: 'EBUSY' }];
+  const titled = lib.titledByReadings(sessions, readings);
+  assert.deepEqual(titled.map((session) => [session.title ?? null, session.titleSource ?? null]), [['JH ORQ · proj', 'custom-title'], ['JH 2 · the board', 'reading'], [null, null], [null, null]]);
+  assert.equal(sessions[1].titleSource, 'first-prompt', 'the sessions given are left as they were');
+  // So the roster has it under its role, and a transcript of the same title that carries it is the same row.
+  assert.deepEqual(lib.rosterOf(titled).rows.map((item) => [item.role, item.number, item.title, item.titleSource]), [['orchestrator', null, 'JH ORQ · proj', 'custom-title'], ['work', 2, 'JH 2 · the board', 'reading'], [null, null, null, null]]);
+  const joined = lib.rosterOf(lib.titledByReadings([member(B, null, 120, { titleSource: null }), member(C, 'JH 2 · the board', 60)], readings)).rows;
+  assert.deepEqual(joined.map((item) => [item.title, item.titleSource, item.transcripts.map((transcript) => transcript.id)]), [['JH 2 · the board', 'custom-title', [C, B]]]);
+  assert.deepEqual(lib.roleHolders(lib.rosterOf(titled), lib.roleNamed('2')).map((item) => item.title), ['JH 2 · the board']);
+});
+
+// Review of ce8bdf7, finding 1: a notice written under the start of an id was its row's, and a reading
+// written under the same start (`sessions --opening --self <start>`) gave nobody its title.
+test('a reading written under the start of a session id gives that session its title, by the rule that makes a notice its row\'s', () => {
+  const readings = [readingOf(600, B.slice(0, 8), 'JH 2 · the board'), readingOf(500, B.slice(0, 7), 'JH 9 · seven characters name nobody')];
+  assert.deepEqual([lib.titleRead(readings, B), lib.titleRead(readings, C)], ['JH 2 · the board', null]);
+  const [titled] = lib.titledByReadings([member(B, null, 120, { titleSource: null })], readings);
+  assert.deepEqual([titled.title, titled.titleSource], ['JH 2 · the board', 'reading']);
+  // The last reading is still the one that counts, whichever way its id was written.
+  assert.equal(lib.titleRead([...readings, readingOf(400, B, 'JH 2 · renamed')], B), 'JH 2 · renamed');
+  assert.equal(lib.titleRead([readingOf(700, B, 'JH 2 · first'), ...readings], B), 'JH 2 · the board');
+  // And it is the same row for the record: the notice under that start is this session's.
+  const roster = lib.rosterOf([titled], { record: recordOf([noticeOf(300, { id: B.slice(0, 8), source: 'flag' }, 'orchestrator', 'opened', 'the board')]) });
+  assert.deepEqual(roster.rows.map((item) => [item.title, item.record?.status?.kind]), [['JH 2 · the board', 'opened']]);
+});
+
+test('rosterOf says of each row what the record says of its session: the last of opened, waiting, closed and relieved, and where its notices were written from', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120), member(C, 'JH 3 · the lock', 180), member(D, 'Board feature', 240)];
+  const notices = [
+    noticeOf(900, { id: B, title: 'JH 2 · the board' }, 'orchestrator', 'opened', 'session board, T4', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' }),
+    noticeOf(800, { id: A, title: 'JH ORQ · proj' }, 2, 'note', 'the gate is free', { worktree: 'D:\\proj', branch: 'main' }),
+    // The start of an id, as `--self` gives it when no transcript could be read to complete it.
+    noticeOf(700, { id: 'bbbbbbbb', source: 'flag', title: null }, 'orchestrator', 'waiting', 'on the gate of JH 3; it is JH 3 that holds it', { worktree: 'D:\\proj-worktrees\\board-2', branch: 'feat/board-2' }),
+    noticeOf(650, { id: B }, 'orchestrator', 'note', 'written where git gave no worktree'),
+    // Its id is of no transcript of the board (the app restarted the session into a new one): by its title.
+    noticeOf(600, { id: 'eeeeeeee-9999', title: 'JH 3 · the lock' }, 'orchestrator', 'closed', 'delivered; nothing more goes to this session', { worktree: 'D:\\proj-worktrees\\lock', branch: 'feat/lock' }),
+    // The id wins over the title the notice carries.
+    noticeOf(500, { id: A, title: 'JH 3 · the lock' }, 'orchestrator', 'relieved', 'JH ORQ nueva · proj has the role now'),
+    noticeOf(400, {}, 'orchestrator', 'note', 'from a session the host does not name'),
+    noticeOf(300, { id: 'ffffffff-0000', title: 'JH 8 · gone' }, 'orchestrator', 'closed', 'of no row'),
+  ];
+  const roster = lib.rosterOf(sessions, { record: recordOf(notices) });
+  assert.deepEqual(roster.rows.map((item) => [item.title, item.record]), [
+    ['JH ORQ · proj', { status: { kind: 'relieved', at: before(500), text: 'JH ORQ nueva · proj has the role now' }, worktree: 'D:\\proj', branch: 'main', notices: 2 }],
+    ['JH 2 · the board', { status: { kind: 'waiting', at: before(700), text: 'on the gate of JH 3; it is JH 3 that holds it' }, worktree: 'D:\\proj-worktrees\\board-2', branch: 'feat/board-2', notices: 3 }],
+    ['JH 3 · the lock', { status: { kind: 'closed', at: before(600), text: 'delivered; nothing more goes to this session' }, worktree: 'D:\\proj-worktrees\\lock', branch: 'feat/lock', notices: 1 }],
+    ['Board feature', null],
+  ]);
+  // The folder a row records is left as the transcript has it: the record replaces nothing.
+  assert.deepEqual(roster.rows.map((item) => item.cwd), ['D:\\proj', 'D:\\proj', 'D:\\proj', 'D:\\proj']);
+  // A row whose notices say nothing of its state has none, and with no record no row has anything.
+  const noted = lib.rosterOf(sessions, { record: recordOf([notices[1]]) }).rows[0].record;
+  assert.deepEqual(noted, { status: null, worktree: 'D:\\proj', branch: 'main', notices: 1 });
+  assert.deepEqual(lib.rosterOf(sessions).rows.map((item) => item.record), [null, null, null, null]);
+  assert.deepEqual(lib.rosterOf(sessions, { record: recordOf([]) }).rows.map((item) => item.record), [null, null, null, null]);
+});
+
+const SENT = (seconds, to, id, more = {}) => ({ at: before(seconds), to, toKind: 'name', id, failed: false, summary: null, ...more });
+const RECEIVED = (seconds, name, id, more = {}) => ({ at: before(seconds), from: 'session', name, session: 'local_made-up', mode: 'bypass', id, ...more });
+/** An orchestrator and a work session that wrote to each other, a message to a title nobody of the window
+ * has, a send that failed, and a message from a session whose transcript is not on the board. */
+const talking = () => [
+  member(A, 'JH ORQ · proj', 60, {
+    sent: [SENT(300, 'JH 2 · the board', 'm1', { summary: 'merge when green' }), SENT(100, 'JH 9 · nobody', 'm3'), SENT(90, 'JH 9 · nobody', null, { failed: true, summary: 'again' })],
+    received: [RECEIVED(200, 'JH 2 · the board', 'm2'), { at: before(150), from: 'subagent', name: null, session: null, mode: null, id: null }, RECEIVED(50, 'JH 7 · outside', 'm9', { mode: 'auto' })],
+  }),
+  member(B, 'JH 2 · the board', 120, { sent: [SENT(201, 'JH ORQ · proj', 'm2', { summary: 'T4b gated' })], received: [RECEIVED(299, 'JH ORQ · proj', 'm1')] }),
+  // A session the app restarted writes its earlier entries again in a new transcript: one message, once.
+  member(C, 'JH 2 · the board', 110, { sent: [SENT(201, 'JH ORQ · proj', 'm2', { summary: 'T4b gated' })], received: [RECEIVED(299, 'JH ORQ · proj', 'm1')] }),
+  { id: D, unavailable: 'EBUSY' },
+];
+
+test('channelOf gives the last notices of the record, those for the orchestrator apart, and the messages between sessions with whether each was seen to arrive', () => {
+  const orq = { session: A, title: 'JH ORQ · proj' };
+  const two = { session: B, title: 'JH 2 · the board' };
+  const notices = [noticeOf(900, { id: B }, 'orchestrator', 'opened', 'one'), noticeOf(800, { id: A }, 2, 'note', 'two'), noticeOf(700, { id: B }, 'orchestrator', 'waiting', 'three'), noticeOf(600, { id: A }, 2, 'note', 'four')];
+  const channel = lib.channelOf(recordOf(notices, { skipped: 2 }), talking(), { count: 3 });
+  assert.deepEqual([channel.path, channel.skipped, channel.unavailable, channel.noticeCount, channel.notices.map((one) => one.text)], ['H:\\.js-harness\\channel\\D--proj.jsonl', 2, undefined, 4, ['two', 'three', 'four']]);
+  assert.deepEqual([channel.forOrchestrator.count, channel.forOrchestrator.notices.map((one) => one.text)], [2, ['one', 'three']]);
+  assert.equal(channel.messageCount, 5);
+  assert.deepEqual(channel.messages, [
+    { id: 'm3', at: before(100), from: orq, to: { address: 'JH 9 · nobody', session: null, title: null }, summary: null, state: 'not-seen' },
+    { id: null, at: before(90), from: orq, to: { address: 'JH 9 · nobody', session: null, title: null }, summary: 'again', state: 'failed' },
+    // Its sender's transcript is not on the board: the receiver's says who it came from.
+    { id: 'm9', at: before(50), from: { session: null, title: 'JH 7 · outside' }, to: { address: null, ...orq }, summary: null, state: 'arrived' },
+  ]);
+  const all = lib.channelOf(recordOf(), talking(), { count: 10 }).messages;
+  assert.deepEqual(all.slice(0, 2), [
+    { id: 'm1', at: before(300), from: orq, to: { address: 'JH 2 · the board', ...two }, summary: 'merge when green', state: 'arrived' },
+    { id: 'm2', at: before(201), from: two, to: { address: 'JH ORQ · proj', ...orq }, summary: 'T4b gated', state: 'arrived' },
+  ]);
+  assert.equal(JSON.stringify(all).includes('held'), false, 'a transcript cannot show that a message is held');
+  // Five by default, and a record that could not be read says so and gives none.
+  assert.deepEqual([lib.CHANNEL_LINES, lib.channelOf(recordOf(Array.from({ length: 7 }, (_, n) => noticeOf(n, {}, 'orchestrator', 'note', `n${n}`))), []).notices.length], [5, 5]);
+  const unread = lib.channelOf(recordOf([], { unavailable: 'EACCES' }), []);
+  assert.deepEqual(unread, { path: 'H:\\.js-harness\\channel\\D--proj.jsonl', unavailable: 'EACCES', skipped: 0, noticeCount: 0, notices: [], forOrchestrator: { count: 0, notices: [] }, messageCount: 0, messages: [] });
+  // Sessions the board could not read, or that the reader gave no messages for, have none.
+  assert.deepEqual(lib.channelOf(recordOf(), [{ id: D, unavailable: 'EBUSY' }, member(A, 'JH ORQ · proj', 60)]).messages, []);
+});
+
+// Review of ce8bdf7, finding 3: a send with no id (it failed, or its result was never written) that a
+// restarted session wrote again in its new transcript was two messages.
+test('channelOf counts once a message with no id that a restarted session wrote again in a second transcript, and merges no two that are not one', () => {
+  const count = (...sessions) => lib.channelOf(recordOf(), sessions).messageCount;
+  const again = SENT(90, 'JH ORQ · proj', null, { failed: true, summary: 'again' });
+  const first = member(B, 'JH 2 · the board', 120, { sent: [again, SENT(80, 'JH ORQ · proj', null, { summary: 'another' })] });
+  const restarted = (sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.equal(count(first, restarted([{ ...again }])), 2, 'the copy is the message it copies');
+  assert.equal(count(first, restarted([{ ...again }]), member(D, 'JH 2 · the board', 100, { sent: [{ ...again }] })), 2, 'and so is the copy of a second restart');
+  // What is not the same message stays two: another summary, another address, a send that did not fail,
+  // another moment, a session of another title, and a send with no time.
+  for (const other of [{ summary: 'again, differently' }, { to: 'JH 9 · other' }, { at: before(91) }]) {
+    assert.equal(count(first, restarted([{ ...again, ...other }])), 3, JSON.stringify(other));
+  }
+  assert.equal(count(first, member(C, 'JH 3 · the lock', 110, { sent: [{ ...again }] })), 3, 'a session of another title sent its own');
+  const untimed = { ...again, at: null };
+  assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [untimed] }), restarted([{ ...untimed }])), 2, 'no time, nothing to know it by');
+  // Two calls of one transcript are two messages, whatever they share: one reply can make both.
+  assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [again, { ...again }] })), 2);
+  assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [again, { ...again }] }), restarted([{ ...again }, { ...again }])), 2, 'and their two copies are those two');
+});
+
+// Codex review of 7a19710, finding 1: the result of a send can be in one transcript only (the session was
+// restarted between the call and its result), so one copy has no id and the other the id the result gave.
+// The two were told apart by that, counted twice, and the stale one printed as never seen to arrive.
+test('channelOf counts once a send whose copies differ in what is known of its outcome, and keeps the copy that knows more', () => {
+  const channel = (...sessions) => lib.channelOf(recordOf(), sessions, { count: 10 });
+  const shown = (...sessions) => channel(...sessions).messages.map((message) => [message.id, message.state, message.from.session]);
+  const unresolved = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const orq = member(A, 'JH ORQ · proj', 60, { received: [RECEIVED(200, 'JH 2 · the board', 'm2')] });
+  const old = member(B, 'JH 2 · the board', 120, { sent: [unresolved] });
+  const restarted = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  // Whichever transcript the board reads first.
+  assert.deepEqual(shown(orq, old, restarted({ ...unresolved, id: 'm2' })), [['m2', 'arrived', C]]);
+  assert.deepEqual(shown(orq, restarted({ ...unresolved, id: 'm2' }), old), [['m2', 'arrived', C]]);
+  // A failure is an outcome too, and an id says more than a failure.
+  assert.deepEqual(shown(old, restarted({ ...unresolved, failed: true })), [[null, 'failed', C]]);
+  assert.deepEqual(shown(restarted({ ...unresolved, failed: true }), old), [[null, 'failed', C]]);
+  assert.deepEqual(shown(member(B, 'JH 2 · the board', 120, { sent: [{ ...unresolved, failed: true }] }), restarted({ ...unresolved, id: 'm2' })), [['m2', 'not-seen', C]]);
+  // Two calls of one reply and their two copies are two messages, each with the id of its own copy.
+  const twice = member(B, 'JH 2 · the board', 120, { sent: [unresolved, { ...unresolved }] });
+  assert.deepEqual(shown(twice, restarted({ ...unresolved, id: 'm2' }, { ...unresolved, id: 'm3' })).map(([id]) => id), ['m2', 'm3']);
+  assert.deepEqual(shown(twice, restarted({ ...unresolved, id: 'm2' })).map(([id]) => id), ['m2', null], 'and the one that has no copy stays');
+  // What is not the same send stays two: other words, and two calls of one transcript, which are never one.
+  assert.equal(channel(old, restarted({ ...unresolved, id: 'm2', summary: 'another' })).messageCount, 2);
+  assert.equal(channel(member(B, 'JH 2 · the board', 120, { sent: [unresolved, { ...unresolved, id: 'm2' }] })).messageCount, 2);
+  // An id written in two transcripts under two titles (the session was renamed between) is still one.
+  assert.equal(channel(old, member(C, 'JH 2 · renamed', 110, { sent: [{ ...unresolved, id: 'm2' }] }), member(D, 'JH 2 · the board', 100, { sent: [{ ...unresolved, id: 'm2' }] })).messageCount, 1);
+});
+
+// Codex review of 25cf031: copies were matched by their place alone, the n-th send of a key in one
+// transcript with the n-th in another. A transcript that holds only some of the sends of a key (a session
+// resumed part way) put a send with one id in the place of a send with another, and the second was lost
+// when the shorter transcript was read first.
+test('channelOf never takes two sends with two ids for one, whichever transcript is read first', () => {
+  const ids = (...sessions) => lib.channelOf(recordOf(), sessions, { count: 10 }).messages.map((message) => message.id).sort();
+  const same = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const whole = member(B, 'JH 2 · the board', 120, { sent: [{ ...same, id: 'm1' }, { ...same, id: 'm2' }] });
+  const resumed = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.deepEqual(ids(resumed({ ...same, id: 'm2' }), whole), ['m1', 'm2'], 'the shorter transcript first');
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm2' })), ['m1', 'm2'], 'and last');
+  // A copy with no id is a copy of the send it can still be: the one no copy of its transcript is yet.
+  assert.deepEqual(ids(resumed({ ...same }, { ...same, id: 'm2' }), whole), ['m1', 'm2']);
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm2' }, { ...same })), ['m1', 'm2']);
+  // And a send with an id takes the place of a copy with none, never of one with another id.
+  const unresolved = member(B, 'JH 2 · the board', 120, { sent: [{ ...same }, { ...same, id: 'm2' }] });
+  assert.deepEqual(ids(unresolved, resumed({ ...same, id: 'm1' }, { ...same, id: 'm2' })), ['m1', 'm2']);
+  assert.deepEqual(ids(resumed({ ...same, id: 'm1' }, { ...same, id: 'm2' }), unresolved), ['m1', 'm2']);
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm3' })), ['m1', 'm2', 'm3'], 'a third id is a third send');
+});
+
+// Codex review of 0543030, and gentle-ai's of the same change: the calls of a transcript were taken key by
+// key, so three sends of one reply (one moment) with the keys K, L, K came out as the first, the third,
+// the second, and the last message of the board was not the last one sent.
+test('channelOf keeps the sends of one moment in the order their transcript has them, whatever their keys and whichever transcript is read first', () => {
+  const order = (sessions, options = { count: 10 }) => lib.channelOf(recordOf(), sessions, options).messages.map((message) => message.id ?? message.summary);
+  const one = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const other = { ...one, summary: 'and pushed' };
+  const reply = member(B, 'JH 2 · the board', 120, { sent: [{ ...one, id: 'm1' }, { ...other, id: 'm2' }, { ...one, id: 'm3' }] });
+  assert.deepEqual(order([reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([reply], { count: 1 }), ['m3'], 'the last one shown is the last one sent');
+  // A transcript that holds only some of them, read first, does not put its own before the rest.
+  const resumed = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.deepEqual(order([resumed({ ...one, id: 'm3' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([resumed({ ...other, id: 'm2' }, { ...one, id: 'm3' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([resumed({ ...one, id: 'm1' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([reply, resumed({ ...one, id: 'm3' }, { ...other, id: 'm4' })]), ['m1', 'm2', 'm3', 'm4']);
+  // Sends with no time have no key; they stay in the order of their transcript among themselves.
+  const untimed = (summary) => ({ ...one, at: null, summary });
+  assert.deepEqual(order([member(B, 'JH 2 · the board', 120, { sent: [untimed('first'), { ...one, id: 'm1' }, untimed('second'), { ...other, id: 'm2' }, untimed('third')] })]), ['first', 'second', 'third', 'm1', 'm2']);
+});
+
+// Codex review of 7a19710, finding 4: the session whose notices were written from a gate's folder was
+// named as the gate's, and a session opened in that folder, which could have started it, was left out.
+test('renderBoard: a gate in a folder one session wrote its notices from and another was opened in hangs from one of them, each named with what places it', () => {
+  const beside = { cwd: 'D:\\proj-worktrees\\board', gitBranch: 'feat/board' };
+  const sessions = [member(B, 'JH 2 · the board', 120), member(C, 'JH 5 · beside', 180, beside), member(D, 'JH 6 · also', 200, beside)];
+  const notices = [noticeOf(900, { id: B }, 'orchestrator', 'opened', 'session board', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' })];
+  const lock = { gateLock: { available: true, holder: holds(4242, 'D:\\proj-worktrees\\board'), waiters: [] } };
+  const said = (list) => {
+    const lines = lib.renderBoard({ ...BOARD, sessions: list, roster: lib.rosterOf(list, { record: recordOf(notices) }), gates: { available: true, items: [] }, ...lock }, { now: NOW });
+    return lines.find((line) => line.startsWith('  pid 4242  ')).split('  ')[4];
+  };
+  assert.equal(said(sessions.slice(0, 2)), 'one of 2 sessions in this folder: JH 2 · the board (its notices were written from this folder), JH 5 · beside (its transcript records this folder)');
+  assert.equal(said(sessions), 'one of 3 sessions in this folder: JH 2 · the board (its notices were written from this folder), JH 5 · beside (its transcript records this folder), JH 6 · also (its transcript records this folder)');
+  // One session alone is the gate's, by whichever places it, and several placed the same way are said as before.
+  assert.equal(said(sessions.slice(0, 1)), 'session JH 2 · the board (its notices were written from this folder)');
+  assert.equal(said(sessions.slice(1, 2)), 'session JH 5 · beside (its transcript records this folder)');
+  assert.equal(said(sessions.slice(1)), 'one of 2 sessions whose transcripts record this folder: JH 5 · beside, JH 6 · also');
+});
+
+// Codex review of 7a19710, finding 3: at a look that could not read the record the roster knows of no
+// session that ended, so one that had said `closed` and ended a turn was said to wait, and woke the watch.
+test('boardChanges: a session known as closed is not said to wait at a look that could not read the record, and the look after it still knows', () => {
+  const title = (id) => (id === A ? 'JH ORQ · proj' : 'JH 2 · the board');
+  const titled = (id, state, more = {}) => member(id, title(id), 60, { ...seen(id, state), title: title(id), ...more });
+  const from = { id: B, title: 'JH 2 · the board' };
+  const look = (two, notices, more = {}) => {
+    const sessions = [titled(A, 'waiting'), two];
+    return boardOf({ sessions, roster: lib.rosterOf(sessions, { record: recordOf(notices, more) }), ...channelWith(notices, more) });
+  };
+  const blind = (two) => look(two, [], { unavailable: 'EBUSY' });
+  const opened = noticeOf(900, from, 'orchestrator', 'opened', 'the board');
+  const closed = noticeOf(300, from, 'orchestrator', 'closed', 'delivered');
+  const waits = 'session bbbbbbbb "JH 2 · the board" is waiting (was working)';
+  const read = look(titled(B, 'working'), [opened, closed]);
+  assert.deepEqual(lib.boardChanges(read, blind(titled(B, 'waiting'))), []);
+  // A second look that cannot read it is compared with the first, which must still hold what was read.
+  const kept = lib.watchBaseline(read, blind(titled(B, 'working')));
+  assert.deepEqual(lib.boardChanges(kept, blind(titled(B, 'waiting'))), []);
+  const twice = lib.watchBaseline(kept, blind(titled(B, 'waiting')));
+  assert.deepEqual(lib.boardChanges(twice, blind(titled(B, 'waiting', { turnEndedAt: before(40) }))), []);
+  // Read again, the record is what counts: still closed, nothing; opened again, its notice and its waiting are said.
+  assert.deepEqual(lib.boardChanges(twice, look(titled(B, 'waiting', { turnEndedAt: before(40) }), [opened, closed])), []);
+  const again = noticeOf(20, from, 'orchestrator', 'opened', 'the board, again');
+  assert.deepEqual(lib.boardChanges(twice, look(titled(B, 'waiting', { turnEndedAt: before(40) }), [opened, closed, again])), ['session bbbbbbbb "JH 2 · the board" finished another turn and is waiting', 'notice for the orchestrator, opened from "JH 2 · the board": the board, again']);
+  // A session the record did not say had ended wakes at such a look, as at any other.
+  assert.deepEqual(lib.boardChanges(look(titled(B, 'working'), [opened]), blind(titled(B, 'waiting'))), [waits]);
+  assert.deepEqual(lib.boardChanges(lib.watchBaseline(look(titled(B, 'working'), [opened]), blind(titled(B, 'working'))), blind(titled(B, 'waiting'))), [waits]);
+  // And a look that reads a record with nothing of the session is believed: it is not a look that could not read.
+  assert.deepEqual(lib.boardChanges(read, look(titled(B, 'waiting'), [])), [waits]);
+});
+
+// Review of ce8bdf7, finding 4: a board from before the tasks were kept read as a plan with no task, so
+// the first look after an update said "task added" for every task of every plan.
+test('boardChanges: a plan with no list of tasks on either side has none to compare, and its next step is still compared', () => {
+  const { tasks: _tasks, ...before } = plan();
+  assert.deepEqual(changes(trees(before), trees(plan())), []);
+  assert.deepEqual(changes(trees(plan()), trees(before)), []);
+  assert.deepEqual(changes(trees(plan({ tasks: undefined })), trees(plan({ tasks: [...TASKS, 'T4 Ship it'] }))), []);
+  assert.deepEqual(changes(trees(before), trees(plan({ nextStep: [] }))), ['plan odd/tasks/board.md in D:/wt changed: its next step is now empty']);
+  // A plan that has a list with nothing in it has no task, and gains each one.
+  assert.deepEqual(changes(trees(plan({ tasks: [] })), trees(plan({ tasks: ['T1 Read the transcripts'] }))), ['plan odd/tasks/board.md in D:/wt changed: task added "T1 Read the transcripts"']);
+});
+
+// Seen live on 2026-10-11: a session that had said `closed` woke the orchestrator each time it ended a turn.
+test('boardChanges: a session whose last word in the record is closed or relieved wakes nobody by waiting', () => {
+  const titled = (id, state, more = {}) => member(id, id === A ? 'JH ORQ · proj' : 'JH 2 · the board', 60, { ...seen(id, state), title: id === A ? 'JH ORQ · proj' : 'JH 2 · the board', ...more });
+  const from = { id: B, title: 'JH 2 · the board' };
+  const withRecord = (sessions, ...notices) => ({ sessions, roster: lib.rosterOf(sessions, { record: recordOf(notices) }) });
+  const said = (was, is, ...notices) => changes({ sessions: [titled(A, 'waiting'), was] }, withRecord([titled(A, 'waiting'), is], ...notices));
+  const working = titled(B, 'working');
+  const waiting = titled(B, 'waiting');
+  const again = titled(B, 'waiting', { turnEndedAt: before(40) });
+  const opened = noticeOf(900, from, 'orchestrator', 'opened', 'the board');
+  const closed = noticeOf(300, from, 'orchestrator', 'closed', 'delivered');
+  for (const kind of ['closed', 'relieved']) {
+    const ended = noticeOf(300, from, 'orchestrator', kind, 'nothing more goes to this session');
+    assert.deepEqual(said(working, waiting, opened, ended), [], `${kind}, and it starts waiting`);
+    assert.deepEqual(said(waiting, again, opened, ended), [], `${kind}, and it finished another turn`);
+    assert.deepEqual(changes({ sessions: [titled(A, 'waiting')] }, withRecord([titled(A, 'waiting'), waiting], opened, ended)), [], `${kind}, and it appears waiting`);
+  }
+  // Its neighbours still wake: a session with no word in the record, one that waits by its own notice,
+  // and one that said `closed` and then `opened` again.
+  const waits = 'session bbbbbbbb "JH 2 · the board" is waiting (was working)';
+  assert.deepEqual(said(working, waiting), [waits]);
+  assert.deepEqual(said(working, waiting, opened, noticeOf(300, from, 'orchestrator', 'waiting', 'the review')), [waits]);
+  assert.deepEqual(said(working, waiting, closed, noticeOf(200, from, 'orchestrator', 'opened', 'the board, again')), [waits]);
+  assert.deepEqual(said(waiting, again, opened), ['session bbbbbbbb "JH 2 · the board" finished another turn and is waiting']);
+  // What a closed session does that is not waiting is still said: it works again, or passes the limit.
+  assert.deepEqual(changes({ sessions: [titled(A, 'waiting')] }, withRecord([titled(A, 'waiting'), working], opened, closed)), ['session bbbbbbbb "JH 2 · the board" appeared (working)']);
+  assert.deepEqual(said(working, titled(B, 'waiting', { pastContextLimit: true }), opened, closed), ['session bbbbbbbb "JH 2 · the board" passed the context limit: 100k tokens (21%), limit 73% (350k)']);
+  // A notice of another session's ends nothing of this one.
+  assert.deepEqual(said(working, waiting, noticeOf(300, { id: A, title: 'JH ORQ · proj' }, 'all', 'relieved', 'JH ORQ nueva · proj has the role now')), [waits]);
+});
+
+const channelWith = (notices, more = {}) => ({ channel: lib.channelOf(recordOf(notices, more), []) });
+const FROM_TWO = { id: B, title: 'JH 2 · the board' };
+
+test('boardChanges: a notice for the orchestrator that the record gained since the last look, with who wrote it', () => {
+  const first = noticeOf(900, FROM_TWO, 'orchestrator', 'opened', 'session board, T4');
+  const second = noticeOf(20, FROM_TWO, 'orchestrator', 'waiting', 'on the gate of JH 3');
+  assert.deepEqual(changes(channelWith([first]), channelWith([first, second])), ['notice for the orchestrator, waiting from "JH 2 · the board": on the gate of JH 3']);
+  assert.deepEqual(changes(channelWith([]), channelWith([first, second])).length, 2, 'a record that begins');
+  // A sender with no title is named by the start of its id, and one the host does not name is said so.
+  assert.deepEqual(changes(channelWith([]), channelWith([noticeOf(5, { id: C }, 'orchestrator', 'closed', 'delivered'), noticeOf(4, {}, 'orchestrator', 'note', 'from Codex')])), [
+    'notice for the orchestrator, closed from session cccccccc: delivered',
+    'notice for the orchestrator, note from a sender the host does not name: from Codex',
+  ]);
+  // A long text is cut: the record has it whole.
+  const long = changes(channelWith([]), channelWith([noticeOf(5, FROM_TWO, 'orchestrator', 'note', 'x'.repeat(500))]))[0];
+  assert.equal(long, `notice for the orchestrator, note from "JH 2 · the board": ${'x'.repeat(159)}…`);
+});
+
+test('boardChanges: a notice for another role, one the watching session wrote itself, and a record that could not be read wake nobody', () => {
+  const first = noticeOf(900, FROM_TWO, 'orchestrator', 'opened', 'session board, T4');
+  assert.deepEqual(changes(channelWith([first]), channelWith([first, noticeOf(20, { id: A }, 2, 'note', 'the gate is free')])), []);
+  const own = [first, noticeOf(20, { id: A, title: 'JH ORQ · proj' }, 'orchestrator', 'relieved', 'JH ORQ nueva has the role')];
+  assert.deepEqual(changes(channelWith([first]), channelWith(own), { self: A }), []);
+  assert.deepEqual(changes(channelWith([first]), channelWith(own), { self: 'aaaaaaaa' }), []);
+  assert.equal(changes(channelWith([first]), channelWith(own), { self: B }).length, 1);
+  // Codex review of 7a19710, finding 2: its own notice written under the start of its id (`notify --self`,
+  // with no transcript to complete it) is its own too when it watches under its whole id.
+  const short = [first, noticeOf(20, { id: A.slice(0, 8), source: 'flag' }, 'orchestrator', 'note', 'written with --self')];
+  assert.deepEqual(changes(channelWith([first]), channelWith(short), { self: A }), []);
+  assert.deepEqual(changes(channelWith([first]), channelWith(short), { self: A.slice(0, 8) }), []);
+  assert.equal(changes(channelWith([first]), channelWith(short), { self: B }).length, 1, 'and nobody else\'s');
+  const tooShort = [first, noticeOf(20, { id: A.slice(0, 7), source: 'flag' }, 'orchestrator', 'note', 'seven characters name nobody')];
+  assert.equal(changes(channelWith([first]), channelWith(tooShort), { self: A }).length, 1);
+  // Nothing new, a record that shrank (an uninstall removes it), a look that could not read it, a board without one.
+  assert.deepEqual(changes(channelWith([first]), channelWith([first])), []);
+  assert.deepEqual(changes(channelWith([first, first]), channelWith([first])), []);
+  assert.deepEqual(changes(channelWith([first]), channelWith([], { unavailable: 'EBUSY' })), []);
+  assert.deepEqual(changes(channelWith([], { unavailable: 'EBUSY' }), channelWith([first])), []);
+  assert.deepEqual(changes({}, channelWith([first])), []);
+  assert.deepEqual(changes(channelWith([first]), {}), []);
+});
+
+test('boardChanges: more notices for the orchestrator than the board holds are said by their number, and where the rest are', () => {
+  const many = Array.from({ length: 7 }, (_, n) => noticeOf(70 - n, FROM_TWO, 'orchestrator', 'note', `n${n}`));
+  const lines = changes(channelWith([]), channelWith(many));
+  assert.deepEqual(lines, [...[2, 3, 4, 5, 6].map((n) => `notice for the orchestrator, note from "JH 2 · the board": n${n}`), '2 earlier notices for the orchestrator are in the record: H:\\.js-harness\\channel\\D--proj.jsonl']);
+  // The rest wake the watch even when every notice the board holds is the watcher's own.
+  assert.deepEqual(changes(channelWith([]), channelWith(many), { self: B }), ['2 earlier notices for the orchestrator are in the record: H:\\.js-harness\\channel\\D--proj.jsonl']);
+});
+
+test('watchBaseline keeps the channel of the older board across a look that could not read the record, so a notice written then is still said', () => {
+  const first = noticeOf(900, FROM_TWO, 'orchestrator', 'opened', 'session board, T4');
+  const second = noticeOf(20, FROM_TWO, 'orchestrator', 'waiting', 'on the gate of JH 3');
+  const older = boardOf(channelWith([first]));
+  const failed = boardOf(channelWith([], { unavailable: 'EBUSY' }));
+  const kept = lib.watchBaseline(older, failed);
+  assert.deepEqual(kept.channel, older.channel);
+  assert.equal(lib.boardChanges(kept, boardOf(channelWith([first, second]))).length, 1);
+  assert.deepEqual(lib.watchBaseline(older, boardOf(channelWith([first, second]))).channel.noticeCount, 2);
+  assert.equal('channel' in lib.watchBaseline(boardOf(), boardOf()), false, 'a board without a channel gains none');
+});
+
+const channelSection = (parts) => {
+  const lines = lib.renderBoard({ ...BOARD, ...parts }, { now: NOW });
+  const start = lines.indexOf('Channel');
+  return start === -1 ? null : lines.slice(start, lines.indexOf('', start));
+};
+
+test('renderBoard prints the channel after the roster: the last notices of the record, who to whom, then the last messages between sessions', () => {
+  const notices = [
+    noticeOf(900, FROM_TWO, 'orchestrator', 'opened', 'session board, T4'),
+    noticeOf(800, { id: A, title: 'JH ORQ · proj' }, 2, 'answer', 'A, as automatic as possible', { transcript: '1d16beeb', line: 406 }),
+    noticeOf(400, {}, 'orchestrator', 'note', 'y'.repeat(200)),
+    noticeOf(300, { id: C }, 5, 'closed', 'delivered'),
+  ];
+  const sessions = talking();
+  const board = { sessions, roster: lib.rosterOf(sessions), channel: lib.channelOf(recordOf(notices, { skipped: 1 }), sessions, { count: 3 }) };
+  assert.deepEqual(channelSection(board), [
+    'Channel',
+    '  H:\\.js-harness\\channel\\D--proj.jsonl  4 notices, the last 3:',
+    '  | 13m ago  JH ORQ · proj to work 2  answer  A, as automatic as possible  (his words: transcript 1d16beeb, line 406)',
+    `  | 6m ago  a sender the host does not name to orchestrator  note  ${'y'.repeat(159)}…`,
+    '  | 5m ago  session cccccccc to work 5  closed  delivered',
+    '  1 line of the record is neither a notice nor a reading: skipped',
+    '  5 messages between sessions in the transcripts of the window, the last 3:',
+    '  | 1m ago  JH ORQ · proj to JH 9 · nobody  not seen in a transcript of the window',
+    '  | 1m ago  JH ORQ · proj to JH 9 · nobody  failed  "again"',
+    '  | 50s ago  JH 7 · outside to JH ORQ · proj  arrived',
+    `  ${lib.CHANNEL_NOT_KNOWN}`,
+  ]);
+  const lines = lib.renderBoard({ ...BOARD, ...board }, { now: NOW });
+  assert.ok(lines.indexOf('Roster') < lines.indexOf('Channel') && lines.indexOf('Channel') < lines.indexOf('Worktrees'));
+  assert.match(lib.CHANNEL_NOT_KNOWN, /never the user's word/);
+  // A message that arrived where its address no longer is: the title was handed over, or it went by a session's own address.
+  const moved = [member(A, 'JH ORQ relevada · proj', 60, { received: [RECEIVED(30, 'JH 2 · the board', 'm5')] }), member(B, 'JH 2 · the board', 40, { sent: [SENT(31, 'JH ORQ · proj', 'm5', { summary: 'closed' }), SENT(20, 'uds:made-up', 'm6', { toKind: 'session' })] }), member(C, null, 10, { titleSource: null, received: [RECEIVED(19, 'JH 2 · the board', 'm6')] })];
+  assert.deepEqual(channelSection({ sessions: moved, channel: lib.channelOf(recordOf(), moved) }), [
+    'Channel',
+    '  2 messages between sessions in the transcripts of the window:',
+    '  | 31s ago  JH 2 · the board to JH ORQ · proj  arrived at JH ORQ relevada · proj  "closed"',
+    '  | 20s ago  JH 2 · the board to uds:made-up  arrived at session cccccccc',
+    `  ${lib.CHANNEL_NOT_KNOWN}`,
+  ]);
+});
+
+test('renderBoard prints no channel when there is nothing to show, and says so when the record could not be read', () => {
+  assert.equal(channelSection({}), null, 'a board that was given none');
+  assert.equal(channelSection({ channel: lib.channelOf(recordOf(), []) }), null, 'no record yet, and no message');
+  assert.deepEqual(channelSection({ channel: lib.channelOf(recordOf([], { unavailable: 'EACCES' }), []) }), ['Channel', '  H:\\.js-harness\\channel\\D--proj.jsonl  unavailable: EACCES', `  ${lib.CHANNEL_NOT_KNOWN}`]);
+  assert.deepEqual(channelSection({ channel: lib.channelOf(recordOf([noticeOf(60, FROM_TWO, 'orchestrator', 'note', 'one')]), []) }), [
+    'Channel',
+    '  H:\\.js-harness\\channel\\D--proj.jsonl  1 notice:',
+    '  | 1m ago  JH 2 · the board to orchestrator  note  one',
+    `  ${lib.CHANNEL_NOT_KNOWN}`,
+  ]);
+  assert.deepEqual(channelSection({ channel: lib.channelOf(recordOf([], { skipped: 3 }), []) }), ['Channel', '  H:\\.js-harness\\channel\\D--proj.jsonl  no notice', '  3 lines of the record are neither a notice nor a reading: skipped', `  ${lib.CHANNEL_NOT_KNOWN}`]);
+});
+
+test('renderBoard: a row of the roster says what the record says of its session, and from where its notices were written', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120, { self: true }), member(C, 'JH 3 · the lock', 180), member(D, 'JH 4 · the roster', 240), member('eeeeeeee-5555', 'JH 6 · from the phone', 30, { titleSource: 'reading' })];
+  const notices = [
+    noticeOf(900, { id: B }, 'orchestrator', 'opened', 'session board, T4', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' }),
+    noticeOf(700, { id: C }, 'orchestrator', 'waiting', `on the gate of JH 2 ${'z'.repeat(200)}`, { worktree: 'D:\\proj-worktrees\\lock', branch: null }),
+    noticeOf(3600, { id: D }, 'orchestrator', 'closed', 'delivered; nothing more goes to this session'),
+    noticeOf(1800, { id: A }, 'orchestrator', 'relieved', 'JH ORQ nueva · proj has the role now', { worktree: 'D:\\proj', branch: 'main' }),
+    noticeOf(600, { id: B }, 'orchestrator', 'closed', 'delivered', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' }),
+  ];
+  const section = rosterSection(sessions, { record: recordOf(notices) });
+  assert.deepEqual(section.slice(1, -1), [
+    '  orchestrator  JH ORQ · proj  relieved 30m ago, last entry 1m ago',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript aaaaaaaa',
+    '    record: relieved 30m ago: JH ORQ nueva · proj has the role now  notices written from D:\\proj on main',
+    '  work 2  JH 2 · the board  this session, closed 10m ago, last entry 2m ago',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript bbbbbbbb',
+    '    record: closed 10m ago: delivered  notices written from D:\\proj-worktrees\\board on feat/board',
+    '  work 3  JH 3 · the lock  silent since 3m ago',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript cccccccc',
+    `    record: waiting since 11m ago: on the gate of JH 2 ${'z'.repeat(139)}…  notices written from D:\\proj-worktrees\\lock, no branch read`,
+    '  work 4  JH 4 · the roster  closed 1h 00m ago, last entry 4m ago',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript dddddddd',
+    '    record: closed 1h 00m ago: delivered; nothing more goes to this session',
+    '  work 6  JH 6 · from the phone  silent since 30s ago',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript eeeeeeee  title from the opening it read',
+  ]);
+  assert.match(lib.ROSTER_NOT_KNOWN, /one session the app restarted or several sessions under one title/);
+  assert.match(lib.ROSTER_NOT_KNOWN, /unless a notice of the session says it/);
+});
+
+// Failure 8 of 2026-10-10 (odd/tasks/rule-hierarchy.md): stopped tasks and archived sessions printed as
+// live. No transcript says that a session was archived; a session that wrote `closed`, or that was
+// relieved, said so itself, and its line no longer reads as one that works or waits.
+test('renderBoard: a stopped task reads as stopped, and a session that closed or was relieved no longer reads as live', () => {
+  const work = (id, more) => ({ tool: 'Bash', kind: null, id, description: 'Watch the board', launchedAt: before(3600), ended: false, ...more });
+  const sessions = [
+    seen(A, 'waiting', { title: 'JH 1 · the lock', titleSource: 'custom-title', cwd: 'D:\\proj', gitBranch: 'main', skippedLines: 0, work: [work('b1', { ended: true, endedAt: before(300), status: 'stopped' })], tail: [] }),
+    seen(B, 'background', { title: 'JH 2 · the board', titleSource: 'custom-title', cwd: 'D:\\proj', gitBranch: 'main', skippedLines: 0, work: [work('b2', { file: { path: 'x', modifiedAt: before(30) } })], tail: [] }),
+    seen(C, 'working', { title: 'JH ORQ relevada · proj', titleSource: 'custom-title', cwd: 'D:\\proj', gitBranch: 'main', skippedLines: 0, tail: [] }),
+    seen(D, 'waiting', { title: 'JH 4 · still here', titleSource: 'custom-title', cwd: 'D:\\proj', gitBranch: 'main', skippedLines: 0, tail: [] }),
+  ];
+  const notices = [noticeOf(1200, { id: B }, 'orchestrator', 'closed', 'delivered'), noticeOf(900, { id: C }, 'orchestrator', 'relieved', 'JH ORQ · proj has the role now'), noticeOf(800, { id: D }, 'orchestrator', 'closed', 'delivered'), noticeOf(700, { id: D }, 'orchestrator', 'opened', 'a second feature')];
+  const lines = lib.renderBoard({ ...BOARD, sessions, roster: lib.rosterOf(sessions, { record: recordOf(notices) }) }, { now: NOW });
+  const firstLines = lines.filter((line) => /^[0-9a-f]{8} {2}/.test(line));
+  assert.deepEqual(firstLines, [
+    'aaaaaaaa  waiting  JH 1 · the lock  last entry 10m ago',
+    'bbbbbbbb  closed 20m ago by its own notice (its transcript: background)  JH 2 · the board  last entry 10m ago',
+    'cccccccc  relieved 15m ago by its own notice (its transcript: working)  JH ORQ relevada · proj  last entry 10m ago',
+    'dddddddd  waiting  JH 4 · still here  last entry 10m ago',
+  ]);
+  assert.ok(lines.includes('  work: 0 with no recorded end, 1 ended (last: Bash "Watch the board" stopped 5m ago)'));
+  // A board without a roster, or without a record, prints its sessions as before.
+  assert.equal(lib.renderBoard({ ...BOARD, sessions }, { now: NOW }).filter((line) => / by its own notice /.test(line)).length, 0);
+});
+
+// Failure 7 of 2026-10-10: a process that waited for a free machine could not be attributed from the
+// board, which printed neither its owner nor its pid. A wait is a gate in line for the machine's gate
+// lock (`check`, or `js-harness gate -- <command>`); its line has the pid, the folder it waits in, and
+// the session of the roster whose notices were written from that folder, or that was opened in it.
+test('renderBoard: each gate that waits is printed with the session it hangs from, by the folder it waits in', () => {
+  const sessions = [
+    member(A, 'JH ORQ · proj', 60),
+    member(B, 'JH 2 · the board', 120),
+    member(C, 'JH 3 · the lock', 180, { cwd: 'D:\\proj-worktrees\\lock', gitBranch: 'feat/lock' }),
+    member(D, 'JH 4 · the roster', 240),
+  ];
+  const notices = [noticeOf(900, { id: B }, 'orchestrator', 'opened', 'session board', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' }), noticeOf(600, { id: B }, 'orchestrator', 'waiting', 'on the gate of JH 3', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' })];
+  const waiter = (pid, folder, seconds) => ({ pid, cwd: folder, command: 'check', waitingSince: before(seconds) });
+  const lock = { gateLock: { available: true, holder: holds(4242, 'D:\\elsewhere'), waiters: [waiter(4250, 'D:\\proj-worktrees\\board', 120), waiter(4260, 'D:\\proj-worktrees\\lock', 60), waiter(4270, 'D:\\proj', 30)] } };
+  const section = (roster) => {
+    const lines = lib.renderBoard({ ...BOARD, sessions, ...(roster && { roster }), gates: { available: true, items: [] }, ...lock }, { now: NOW });
+    return lines.slice(lines.indexOf('Gates') + 1, lines.indexOf('Pull requests') - 1).map((line) => line.split('  ').slice(1, 5));
+  };
+  assert.deepEqual(section(lib.rosterOf(sessions, { record: recordOf(notices) })), [
+    ['pid 4242', 'D:\\elsewhere', 'running, took the gate lock 2m ago', 'session not known: no row of the roster is in this folder'],
+    // Two waits, each with its session: one by the worktree its notices were written from, one by the folder its transcript records.
+    ['pid 4250', 'D:/proj-worktrees/board', 'waiting for the gate of pid 4242, began 2m ago', 'session JH 2 · the board (its notices were written from this folder)'],
+    ['pid 4260', 'D:\\proj-worktrees\\lock', 'waiting for the gate of pid 4242, began 1m ago', 'session JH 3 · the lock (its transcript records this folder)'],
+    // The main checkout is where two sessions were opened and none says it works: one of them, not known which.
+    // JH 2 was opened there too, and is left out: its notices say where it works.
+    ['pid 4270', 'D:/proj', 'waiting for the gate of pid 4242, began 30s ago', 'one of 2 sessions whose transcripts record this folder: JH ORQ · proj, JH 4 · the roster'],
+  ]);
+  // The waits a session's notices tell of are in its row of the roster, so they hang from it as well.
+  const roster = rosterSection(sessions, { record: recordOf(notices) });
+  assert.deepEqual(roster.filter((line) => line.includes('waiting since')), ['    record: waiting since 10m ago: on the gate of JH 3  notices written from D:\\proj-worktrees\\board on feat/board']);
+  // A gate whose folder is not known, and a board with no roster, which prints its gates as before.
+  const unplaced = lib.renderBoard({ ...BOARD, sessions, roster: lib.rosterOf(sessions) }, { now: NOW }).find((line) => line.startsWith('  pid 77  '));
+  assert.equal(unplaced.split('  ')[4], 'session not known: the gate names no folder');
+  assert.deepEqual(section(null)[1], ['pid 4250', 'D:/proj-worktrees/board', 'waiting for the gate of pid 4242, began 2m ago', 'check (no process of the listing has this pid)']);
+});
+
+// --- `sessions --quote`: whose words a line of a transcript holds ---
+//
+// The shapes are from a tally of this project's transcripts (2026-10-11, keys and values only, 14,878
+// `user` entries): what the person sends has `origin.kind: "human"` (583); a message from another session
+// `"peer"` with `isMeta` (196); a task notification `"task-notification"` (1,036); a tool result, a
+// compaction summary and the host's own meta entries record no origin. A paste arrives inside
+// `<pasted_content id="…">` and `</pasted_content id="…">` with the same id: 22 entries are that and
+// nothing else, 7 have a line typed before it and 1 after it.
+
+const pasted = (text, id = 'be4a') => `<pasted_content id="${id}">\n${text}\n</pasted_content id="${id}">`;
+
+test('quoteOf gives the entry at a line only when it is what the person sent, with its time and its text', () => {
+  const lines = [
+    { type: 'custom-title', customTitle: 'JH ORQ · proj' },
+    { ...prompt('La A, pero lo más automático posible', 5), permissionMode: 'bypassPermissions' },
+    reply('Anotado.', 6),
+    { ...prompt('', 7), message: { role: 'user', content: [{ type: 'image', source: {} }, { type: 'text', text: 'mirá esto' }, { type: 'text', text: 'y esto' }] } },
+  ];
+  const text = transcript(...lines);
+  assert.deepEqual(lib.quoteOf(text, 2), { person: true, at: at(5), text: 'La A, pero lo más automático posible', images: 0, pastedOnly: false });
+  assert.deepEqual(lib.quoteOf(text, 4), { person: true, at: at(7), text: 'mirá esto\ny esto', images: 1, pastedOnly: false });
+  // The same with the line endings of a Windows file.
+  assert.equal(lib.quoteOf(text.replace(/\n/g, '\r\n'), 2).text, 'La A, pero lo más automático posible');
+});
+
+test('quoteOf says which entry it is when it is not the person\'s: another session, a task, the host, the model, or no entry at all', () => {
+  const lines = [
+    reply('Anotado.', 1),
+    peer(2),
+    handback(3),
+    injected(4),
+    notified({ task: 'b1', status: 'completed' }, 5),
+    { type: 'user', ...base(6), isMeta: true, message: { role: 'user', content: 'a reminder of the host' } },
+    result('toolu_1', { stdout: '' }, 7),
+    { type: 'user', ...base(8), isCompactSummary: true, message: { role: 'user', content: 'a summary' } },
+    { ...prompt('in a side chain', 9), isSidechain: true },
+    { type: 'user', ...base(10), message: { role: 'user', content: 'from a host that recorded no origin' } },
+    { ...prompt('x', 11), origin: { kind: 'something-new' } },
+    { type: 'custom-title', customTitle: 'JH ORQ · proj' },
+    '{"type":"user","message":{"content":"torn',
+    '',
+    { ...prompt('x', 12), origin: 'human' },
+  ];
+  const text = transcript(...lines);
+  const said = (line) => lib.quoteOf(text, line);
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 99].map((line) => said(line).what), [
+    'an assistant entry',
+    'a message from another session ("JH 1 · made up")',
+    'what a subagent handed back',
+    'a message the app put in',
+    'a task notification',
+    'a meta entry: the host wrote it, not the person',
+    'the result of a tool call',
+    'a compaction summary',
+    'an entry of a side chain',
+    'a user entry that records no origin: it cannot be told whose it is',
+    'a user entry of origin "something-new"',
+    'an entry of type "custom-title"',
+    'not an entry: the line does not parse',
+    'an empty line',
+    'a user entry that records no origin: it cannot be told whose it is',
+    'no line of the transcript, which has 15 lines',
+    'no line of the transcript, which has 15 lines',
+  ]);
+  for (const line of [1, 5, 13, 16]) assert.deepEqual(Object.keys(said(line)), ['person', 'what']);
+  assert.equal(said(1).person, false);
+  assert.equal(lib.quoteOf('', 1).what, 'no line of the transcript, which has 0 lines');
+  assert.equal(lib.quoteOf(transcript(reply('x', 1)), 2).what, 'no line of the transcript, which has 1 line');
+});
+
+// Review of ce8bdf7, finding 2: line 1.5 passed the range check and then read no line, with a TypeError.
+test('quoteOf answers that there is no such line for whatever is not a whole number inside the transcript', () => {
+  const text = transcript(prompt('one', 1), prompt('two', 2));
+  for (const line of [1.5, 0.5, 2.000001, 0, -1, 3, NaN, Infinity, '2', null, undefined]) {
+    assert.deepEqual(lib.quoteOf(text, line), { person: false, what: 'no line of the transcript, which has 2 lines' }, `line ${String(line)}`);
+  }
+  assert.equal(lib.quoteOf(text, 2).text, 'two');
+});
+
+test('quoteOf says when the person\'s entry is only pasted content: nothing typed before it or after it', () => {
+  const only = (content) => lib.quoteOf(transcript(prompt(content, 1)), 1).pastedOnly;
+  assert.equal(only(`\n\n${pasted('Sos JH 5.\nLeé el documento.')}\n`), true);
+  assert.equal(only(`${pasted('one', 'be4a')}\n\n${pasted('two', '7e90')}`), true, 'two pastes and nothing else');
+  assert.equal(only(`Dale con esto:\n${pasted('Sos JH 5.')}`), false, 'a line typed before it');
+  assert.equal(only(`${pasted('Sos JH 5.')}\nDale.`), false, 'a line typed after it');
+  assert.equal(only('Sí'), false);
+  assert.equal(only('<pasted_content id="be4a">\nnever closed'), false, 'what is not a whole paste is text');
+  assert.equal(only('<pasted_content id="be4a">\nclosed by another\n</pasted_content id="7e90">'), false);
+  // The text is given as the transcript has it, wrapper and all: the caller sees what was sent.
+  assert.equal(lib.quoteOf(transcript(prompt(pasted('Sos JH 5.'), 1)), 1).text, pasted('Sos JH 5.'));
 });
 
 // --- the project a folder belongs to ---

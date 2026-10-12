@@ -1,7 +1,7 @@
 # Codex review, lean and measured
 
 Locator: `odd/tasks/codex-review-lean.md` · Engram mirror: `odd/codex-review-lean/tasks` · Branch:
-`feat/codex-review-lean`, in the linked worktree `D:\js-harness-worktrees\codex-review-lean`
+`feat/codex-review-lean`, merged via `jsaristi/js-harness#43` as `ba7bf03`
 
 ## Goal
 `js-harness codex-review` runs the Codex review in a session that loads only what a review needs,
@@ -43,11 +43,12 @@ a feature; a cheaper one that finds less is not, which is why the switch waits o
   resumes on them. gentle-ai's review. The real `~/.codex`, engram store and gentle-ai state.
 
 ## Constraints
-- Decided, not reopened (Sebastián, 2026-10-06): the review runs on `gpt-6.1-sol` at `medium`,
-  set by the command itself; it loads the diff, read access to the repository, the project's
-  `AGENTS.md` and Codex's own review rubric, and leaves out gentle-ai's orchestrator, ODD,
-  engram, persona, skills, plugins, MCP servers and hooks; it is an integration of this
-  repository over `codex exec review`, not over the plugin.
+- Decided (Sebastián, 2026-10-06): the review runs on one model at one effort, set by the
+  command itself (`REVIEW_MODEL` and `REVIEW_EFFORT` in `bin/codex-review.mjs`; the effort is
+  his decision of 2026-10-08, `odd/tasks/codex-review-cost.md`); it loads the diff, read
+  access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and
+  leaves out gentle-ai's orchestrator, ODD, engram, persona, skills, plugins, MCP servers and
+  hooks; it is an integration of this repository over `codex exec review`, not over the plugin.
 - Nothing writes into the real `~/.codex`, and the content of `auth.json` is never read, parsed,
   printed, logged or committed — because Codex refreshes that file in place and a refresh inside
   a copy may leave the real login invalid (unverified; `odd/tasks/codex-parity.md`, Constraints),
@@ -70,11 +71,11 @@ a feature; a cheaper one that finds less is not, which is why the switch waits o
   line changes there only by replacing words, and the gate measures it.
 - Zero dependencies, and the review's prompt and schema ship inside `bin/` — because
   `package.json` publishes `bin/` and `AGENTS.md` only, and every command runs with no install.
-- Never two gates at once; a commit runs in the background; after a failed gate `git config
+- A commit runs in the background; after a failed gate `git config
   --local core.bare` is read in `D:\js-harness` before anything else, and `git status --short`
-  after every gate — because parallel spawns on this host fail with `0xC0000142`, a gate from a
-  linked worktree turned the repository bare twice on 2026-10-04, and a gate once left an
-  untracked file behind (`odd/tasks/codex-parity.md`, Constraints and Follow-ups).
+  after every gate — because a gate from a linked worktree turned the repository bare twice
+  on 2026-10-04, and a gate once left an untracked file behind (`odd/tasks/codex-parity.md`,
+  Constraints and Follow-ups).
 
 ## Effort
 high
@@ -82,8 +83,7 @@ high
 ## Ask me before
 Any call to the model through Codex (the probes of T5, the runs of T12), with the count of
 reviews; copying `auth.json` anywhere, if T4 finds no way without it; changing the default
-configuration of `codex-review` (T13); anything about the plugin (T14 only proposes); push, pull
-request, merge.
+configuration of `codex-review` (T13); anything about the plugin (T14 only proposes).
 
 ## TDD
 Mode: strict (source: user global config). Runner: `node --test`. Exceptions: T4 is reading and
@@ -1380,19 +1380,6 @@ T1 to T15 are checked. What is left is Sebastián's:
    (jsaristi/js-harness#43, merged as `ba7bf03`, after `main` was merged into the branch
    in `3bd9162` for a conflict in the roadmap). The feature built on it,
    `odd/tasks/codex-review-cost.md`, went in with jsaristi/js-harness#44.
-
-Open, for him (item 1 is done: the review of the whole branch ran on 2026-10-08 and is
-recorded, Progress; kept as it was put to him):
-1. The Codex review of the code range `7deddfc..87854b1` before any push, or a recorded
-   skip. Counted on 2026-10-08 with `reviewParts`: 13,350 changed lines in 71 files, 28
-   parts, so 28 Codex reviews, by the four parts of the run above about 2.7 million input
-   tokens and a quarter of an hour. Eight parts are one file above the 400 lines of a
-   part, the largest the test file of the command, 2,968 lines: if Codex does not print
-   all of that diff, the part fails the evidence rule, and a range is recorded only when
-   every part passes, so the 28 could end with no record. This is a choice with two ways
-   and not a step to state and do, so it is put to him: run the 28, or record the skip
-   with its reason (each commit of the range reviewed by gentle-ai or by its tests and the
-   gate, as Progress says commit by commit). `87854b1..81bb786` has its record.
 
 On the cap: fifty Codex reviews spent in this feature (one read nothing, forty-nine read their
 diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`

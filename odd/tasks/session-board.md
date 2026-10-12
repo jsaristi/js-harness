@@ -1,8 +1,8 @@
 # Session board
 
-Locator: `odd/tasks/session-board.md` · Engram mirror: `odd/session-board/tasks` (pending: engram
-refused writes in the session that opened this document) · Branch: `feat/session-board`, worktree
-`D:\js-harness-worktrees\session-board`, cut from `main` at `3915b88`.
+Locator: `odd/tasks/session-board.md` · Engram mirror: `odd/session-board/tasks` · Branch:
+`feat/session-board`, worktree `D:\js-harness-worktrees\session-board`, cut from `main` at
+`3915b88`.
 
 ## Goal
 `js-harness sessions` prints, from facts on disk, every recent Claude Code session of the project
@@ -421,8 +421,7 @@ that ends and another that starts with the same pid between two looks read as th
 
 ## Constraints on the work
 - TDD strict, runner `node --test`: each behavior has its failing test first.
-- No commit by the writer: the parent commits, in the background, and only when no other
-  `check.mjs` is running, because the `codex-review-lean` session commits through the same gate.
+- No commit by the writer: the parent commits, in the background.
 
 ## Effort
 medium
@@ -430,7 +429,6 @@ medium
 ## Ask me before
 - Running the Codex review of this branch's code commits: it spends the same quota F6 and the lean
   review need.
-- Push, pull request, merge.
 - Anything that would make the command act on a session instead of reading it.
 - Running `js-harness install` on this machine: it writes into the real `~/.claude` and `~/.codex`,
   where no machine install exists today (`~/.js-harness/manifest.json` has no files).
@@ -1618,9 +1616,9 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
       as a share of the window.
 
 ## Next step
-Every task is checked: the feature is closed with the commit that holds this line, on
-branch `docs/session-board-t7-close` (cut from `main` at `06543ae`), in a pull request of
-documents only that the orchestrator merges under the charter. T7's proof, by criterion
+Every task is checked: the feature is closed, by a pull request of documents only
+(`jsaristi/js-harness#50`, branch `docs/session-board-t7-close`) that the orchestrator merged
+under the charter as `d3bc399`. T7's proof, by criterion
 (entries of 2026-10-09 and 2026-10-10): 1 and 2 seen; 3 partly seen, with its commit test
 owed in `docs/ROADMAP.md` under the session channel; 4 seen for sessions opened in the
 desktop app, across two reliefs of the orchestrator, and failed for one opened from the
@@ -1633,22 +1631,20 @@ State on 2026-10-10 at 06:30, for whoever reads this next. The feature's work se
 of that day and is archived on his word once the pull request is merged; nothing of it
 runs after that. The orchestrator is reached by message at the title `JH ORQ ·
 js-harness`, whatever session holds it. Nothing of this feature is left unbuilt or
-uncommitted beyond that pull request. The rules the stretch left stand for every session
-until the gate lock exists: no gate without a turn from the orchestrator, no whole gate
-as a diagnostic, no test run and no board read while a gate runs (a wait goes on the
-gate's process id), and the folder `Microsoft/` a test run leaves is never committed. The
-engram mirror `odd/session-board/tasks` (observation 3290) holds a condensed copy, since
-the document is too long to copy whole; the file is the source.
+uncommitted beyond that pull request. The engram mirror `odd/session-board/tasks`
+(observation 3290) holds a condensed copy, since the document is too long to copy whole; the
+file is the source.
 
-Left by this feature as work for later, none started: the watch's starting picture kept
+Left by this feature as work for later: the watch's starting picture kept
 between runs (behind `feat/gate-lock`, same files); a board read made cheap, and neither
 the watch nor a waiting script reading the board while a gate runs; the folder
 `Microsoft/Windows/PowerShell/ModuleAnalysisCache` a test run leaves in its worktree; a
 command that writes outside the repository refusing a flag it does not know; `upgrade` and
-the version that cannot tell copies apart; and from the batch of 2026-10-10: a
-phone-opened session printed under its title, a gate started by a relative path placed in
-its worktree, a stopped task that reads as stopped, and the roster as a section of the
-board (the notices that go to a role and the rule for a wait handed to a session that
-cannot be reached belong to the session channel). When the feature closes, Sebastián is
+the version that cannot tell copies apart; and from the batch of 2026-10-10, taken up by
+the session channel (`odd/tasks/session-channel.md`, T4, where what is built of them is
+read): a phone-opened session printed under its title, a gate started by a relative path
+placed in its worktree, a stopped task that reads as stopped, and the roster as a section
+of the board (the notices that go to a role and the rule for a wait handed to a session
+that cannot be reached belong to the session channel too). When the feature closes, Sebastián is
 brought back to the plan in the roadmap to settle each part before it is built; the
 orchestrator already does that feature by feature (the gate's plan first).
