@@ -383,6 +383,11 @@ Hours written in the relief file were not read from a clock.
 - Aka: failure 18 (odd/tasks/rule-hierarchy.md); unnumbered in relief file, line 202
 - Seen: 2026-10-10 — relief file, line 96 — a roster line said 04:40 and was written about 04:29
 - Seen: 2026-10-10 — relief file, line 172 — seven hours in lines 166, 169 and 171 were guessed
+- Seen: 2026-10-12 — relief file, line 407 — three messages of the lead carried hours it guessed
+  (13:02, 13:09, 13:10 for 13:00 to 13:06); the control stamps a relief line, not a message
+- Seen: 2026-10-12 — relief file, line 436 — a message of JH 7 stamped 14:58 was sent at 14:53;
+  a second one the same day said 16:47 for 16:45 (odd/tasks/rule-hierarchy.md, Progress of that
+  day)
 - Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
   of the clock, and says the command wrote it" — since 2026-10-11
 
@@ -625,6 +630,15 @@ prompt, or the name of a feature it no longer did.
   used, for work that was not F6
 - Seen: 2026-10-11 — relief file, line 218 — a phone-opened session's transcript carries no title,
   so its roster row has no role (claimed)
+
+### short-name-judged-outside
+A path spelled with a Windows 8.3 short name was judged outside the repository, so a hook was not
+written.
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 427 — on GitHub's Windows the runner's TEMP is
+  `C:\Users\RUNNER~1\...`; `isWithinBase` (`bin/lib/project.mjs:186`) folds case and not short
+  names (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at 6a9f605); on the safe side:
+  nothing is written outside
 
 ### stacked-pr-base-order
 A stacked pull request had its base changed after the one under it was merged; GitHub reported a

@@ -2364,6 +2364,28 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     register entry: it is reproduced only on Linux.
     NEXT: this correction through the gate; Codex on that one commit, plan first; push and
     the pull request on `main`.
+  - The correction is `e9b1711` (the gate passed at 15:48, after 56 minutes in its line).
+    Codex reviewed `f7649b8..e9b1711` and found the patch correct; the review is recorded
+    (127,297 input tokens, 90,240 cached, against the floor of 300,000). Codex on this branch:
+    975,539 input tokens in two runs. No finding is open.
+    `main` moved three times while the branch waited (pull requests 74, 76 and 75, to
+    `af20747`), and one more move is announced. Twice a merge of `main` was staged and put in
+    the gate's line, and twice it was taken out before it ran, by stopping this session's own
+    waiter (a dead waiter is passed after the stale time of 60 s, `bin/lib/gate-lock.mjs:60`):
+    nothing was committed, the head stayed `e9b1711`. From now the merge is made inside the
+    turn of the gate, of `main` as it stands when the turn starts (the lead's way, 16:49, a
+    claim): a script fetches, merges without committing, and commits, whose hook runs the gate
+    under the lock the turn holds (`JS_HARNESS_GATE_HELD`, `bin/check.mjs:445-463`). A merge
+    that does not apply clean is undone and nothing is committed.
+    A slip of this session, twice on this day: a message to the lead carried an hour that was
+    guessed and not read (14:58 for 14:53; 16:47 for 16:45). Both are corrected to the lead
+    and added to the register under `hours-guessed`, whose control stamps a relief line and
+    not a message. Until a message is stamped by the channel, this session writes an hour
+    only when `date` printed it in the same turn. The register also gets
+    `short-name-judged-outside` (relief file line 427).
+    NEXT: the merge in its turn of the gate; push; the pull request on `main`. Then
+    `fix/linux-run-findings` off `main`, and the pause percent of `bin/lib/sessions.mjs` as a
+    declared rule, each its own branch.
 
 ## Next step
 In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
