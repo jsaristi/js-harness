@@ -1819,7 +1819,7 @@ session needs beside it to go on; the summary of a compaction is not the record.
 | 2 | T1 | `main`, pull request 59 |
 | 3 | T1b, T4b, T4c | `main`, pull request 65 |
 | 4 | T5, T6, T5b, T4d, the sweep's items of this session | `main`, pull request 70 |
-| 5 | T6b, parts a to d: the pause command, the resume hook after a compaction, the watch and the measure | `feat/session-compaction`, its pull request open against `main` |
+| 5 | T6b, parts a to d: the pause command, the resume hook after a compaction, the watch and the measure | `feat/session-compaction`, pull request 74, pushed up to `bd1459c`; the merge of `main` and what follows it are local until his decision ("Next step", 1c) |
 | 5e | T6b, part e: the entry of `install`, the check of `doctor`, the exact undo | built and held: the patch `part-e.patch` and the folder `snap-e` of the scratchpad, for the branch `feat/session-compaction-install` |
 
 - The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
@@ -2049,8 +2049,17 @@ summary.
       everything `main` brought, planned at about 4,130,000 input tokens for 5,457 changed
       lines in 12 parts (the rate gives it 6,875,820). Not run: whether one line needs it is
       his, put to him by the lead, who reads the resolution in the pull request.
-      Pushed, and pull request 5 opened against `main`, after the commit that holds this
-      text.
+      Pull request 5 is number 74, opened at 14:10 and pushed up to `bd1459c` only: the
+      pre-push check refuses the merge (`check --push`: "1 of 8 code commits since
+      origin/main have no Codex review record: 33269c9"), since a hand wrote in it, and
+      passes at `bd1459c`. So `33269c9` and the document commits after it are on this
+      machine and wait for his decision, which the lead puts to him with three ways: the
+      range above; a review of what the hand wrote alone, from a commit made with `git
+      commit-tree` whose parents are the merge's and whose tree is the merge's with
+      `bin/js-harness.mjs` as this branch had it, so the range holds the merge and a diff of
+      two lines (recommended here; a new way to make a record, so his to allow); or a
+      recorded skip, not proposed, since Codex can run. The pull request's body shows the
+      resolution.
       Part e is written in the side worktree and held from that pull request (snapshot
       `snap-e` in the scratchpad; it goes to a branch of its own, `feat/session-compaction-
       install`, cut from this one's head, pushed and with no pull request until he answers
