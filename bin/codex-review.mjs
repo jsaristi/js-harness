@@ -1674,8 +1674,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           // Said only when a part did pass: a person who saw it pass would look for what it found.
           const held = passed.length === 0 ? ''
             : `\n${passed.length === 1 ? 'The part before it passed, and what it answered is' : `The ${passed.length} parts before it passed, and what they answered is`} not shown: without every part it is no review of ${range}.`;
-          // And that what passed is kept for the next run of the range, which asks only the parts that did not pass.
-          const keptHeld = passed.length === 0 || onResult !== null ? ''
+          // And that what passed is kept for the next run of the range, which asks only the parts that did not pass: said only when one of them has its line in the run log, since a part whose line could not be written is kept nowhere.
+          const keptHeld = onResult !== null || !passed.some((one) => one.runId !== undefined) ? ''
             : '\nWhat passed is kept in the run log: the next run of this range asks only the parts that did not pass (`--fresh` asks every part again).';
           error(`Part ${part.index} of ${part.of} (${listed(part.files)}) did not pass, so ${unstarted}no review of ${range} was recorded.${held}${keptHeld}`);
           return one.exit;

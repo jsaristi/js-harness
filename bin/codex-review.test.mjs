@@ -3556,7 +3556,12 @@ test('the totals of a run that keeps parts say what this run spent and what the 
 test('a run whose parts all passed in earlier runs asks Codex nothing, and says what the kept parts had spent', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ids = runIds();
-  const passed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...threePassingParts(root, base, head, [parentThread, ranThread]), randomUUID: ids });
+  const first = fakeCodexInParts(
+    { stdout: partShown(root, base, head, 'a.txt'), said: answerWith(root), threads: [parentThread, ranThread] },
+    { stdout: partShown(root, base, head, 'b.txt'), threads: [parentThread, ranThread] },
+    { stdout: partShown(root, base, head, 'c.txt'), threads: [parentThread, ranThread] },
+  );
+  const passed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...first, randomUUID: ids });
   assert.equal(passed.code, 0, passed.err);
   // The record of that run covers the range whole, so the run asks for `--again`, which takes the range as it was given.
   const fake = fakeCodexInParts();
@@ -3564,6 +3569,12 @@ test('a run whose parts all passed in earlier runs asks Codex nothing, and says 
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 0, 'no session was started');
   assert.match(result.out, /^All 3 parts passed in earlier runs and are kept, so this run asked Codex nothing\. The 3 kept parts had used 892,437 input tokens when they ran\.$/m);
+  // The findings of the kept parts are shown again, as the run that measured them showed them.
+  assert.ok(result.out.split('\n').some((line) => FINDING_LINE.test(line)), result.out);
+  // Each run leaves its own record, and the second names the same three run lines: none was written by it.
+  const records = readCodexReviews(root);
+  assert.equal(records.length, 2);
+  assert.deepEqual(records[1].runs, records[0].runs);
 });
 
 test('the line of a part that passed holds what it answered, and the line of a part that did not pass holds nothing kept', async () => {
@@ -3591,12 +3602,26 @@ test('the error of a run in which a part passed and a later one did not says wha
   assert.doesNotMatch(failing.err, /What passed is kept/);
 });
 
+test('a run whose parts passed, but whose run lines could not be written, does not say that what passed is kept', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  blockRunLog(root);
+  const fake = fakeCodexInParts(
+    { stdout: partShown(root, base, head, 'a.txt') },
+    { stdout: partShown(root, base, head, 'b.txt') },
+    { stdout: partShown(root, base, head, 'c.txt'), answer: { status: 9 } },
+  );
+  const failed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: runIds() });
+  assert.equal(failed.code, 9, failed.err);
+  assert.equal(fake.calls.length, 3);
+  assert.doesNotMatch(failed.err, /What passed is kept/);
+});
+
 test('--fresh asks every part of a range again, though the parts that passed in an earlier run are in the run log', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ids = runIds();
   await thirdPartFailed(root, base, head, ids);
   const fake = threePassingParts(root, base, head);
-  const result = await run(['--base', 'HEAD~1', '--fresh', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids });
+  const result = await run(['--base', 'HEAD~1', '--fresh', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 3);
   assert.equal(result.out.split('\n').some((line) => / is kept: it is not asked again\.$/.test(line)), false, result.out);
@@ -3607,7 +3632,7 @@ test('a run at another effort reuses no part: what passed at one effort is asked
   const ids = runIds();
   await thirdPartFailed(root, base, head, ids);
   const fake = threePassingParts(root, base, head);
-  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, effort: 'medium', randomUUID: ids });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, effort: 'medium', platform: process.platform, randomUUID: ids });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 3);
 });
@@ -3619,7 +3644,7 @@ test('a range whose head moved since the failed run reuses no part', async () =>
   git(root, 'commit', '--allow-empty', '-m', 'moved');
   const moved = git(root, 'rev-parse', 'HEAD');
   const fake = threePassingParts(root, base, moved);
-  const result = await run(['--base', base, ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids });
+  const result = await run(['--base', base, ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 3);
 });
@@ -3637,7 +3662,7 @@ test('a line of the run log that has no kept part is never reused: its part is a
   });
   fs.writeFileSync(log, older.map((line) => `${JSON.stringify(line)}\n`).join(''), 'utf8');
   const fake = threePassingParts(root, base, head);
-  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 3);
 });
@@ -3648,10 +3673,27 @@ test('a caller that asked for the result of every attempt sees each part run, th
   await thirdPartFailed(root, base, head, ids);
   const fake = threePassingParts(root, base, head);
   const handed = [];
-  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: ids, onResult: (one) => handed.push(one) });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids, onResult: (one) => handed.push(one) });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 3);
   assert.equal(handed.length, 3);
+});
+
+test('a run whose run log cannot be read keeps no part: every part is asked again, and the review is still recorded', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  await thirdPartFailed(root, base, head, ids);
+  // The log is put out of reach the way the test of a run line that cannot be written puts it: the file is kept
+  // aside, and a folder stands in its place, so that nothing can be read from it and nothing appended to it.
+  const log = codexReviewRunsPath(root);
+  fs.renameSync(log, `${log}.of-the-failed-run`);
+  fs.mkdirSync(log);
+  const fake = threePassingParts(root, base, head);
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  // Nothing is kept when the log cannot be read: every part is asked, and the review of the range is recorded.
+  assert.equal(fake.calls.length, 3, 'every part was asked');
+  assert.equal(wrote(root), true);
 });
 
 // What Codex rendered of a review is passed through to the user (`write`), apart from what the command logs.
