@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PART_MAX_CHANGED_LINES } from './codex-review-parts.mjs';
+import { ruleValue } from './rules.mjs';
 import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, needsFlagLine, planLines, reviewPlan, RUNS_FOR_A_BAND, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
 
 const PAIR = { model: 'gpt-6.1-sol', effort: 'high' };
@@ -181,8 +182,9 @@ const MEASURED = [partRun(100, 30000), partRun(200, 60000), partRun(300, 90000),
 const METHOD =
   'a part is put at its changed lines times the median input tokens a changed line cost in them, the parts of up to 400 changed lines apart from the larger ones, and never under what the cheapest of them cost.';
 
-test('a run starts six parts without being told to', () => {
-  assert.equal(MAX_PARTS_WITHOUT_FLAG, 6);
+test('a run starts the declared count of parts without being told to', () => {
+  assert.equal(MAX_PARTS_WITHOUT_FLAG, ruleValue('review-parts-unflagged', 'parts'));
+  assert.ok(Number.isInteger(MAX_PARTS_WITHOUT_FLAG) && MAX_PARTS_WITHOUT_FLAG > 0);
 });
 
 test('the plan names the range, the model, the effort, the parts with their files and lines, and what each is estimated to send', () => {

@@ -8,16 +8,29 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import {
-  assertReading, checkFixtureLinks, childEnv, classifyAgentFailure, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
+  assertReading, checkFixtureLinks, childEnv, classifyAgentFailure, gradeWorkspace, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
   runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
 import { parseCodexOutput, readClaudeOutput, readCodexOutput } from './agent-output.mjs';
 import { trialListCost } from './transcript-usage.mjs';
-import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
+import { createReaper, sweptLater } from '../bin/lib/process-tree.testkit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
 const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
+
+// The runs of this file are not about what a process leaves behind, so their sweep is put off: each run is
+// recorded and the search the real sweep makes is made once, when the file ends (`sweptLater`). A process a
+// run left behind therefore lives until then, and fails the file by name here.
+const later = sweptLater(runProcess);
+after(() => {
+  const left = later.check();
+  assert.deepEqual(
+    left,
+    [],
+    `processes outlived the run that started them: ${left.map(({ pid, name }) => `${name} (${pid})`).join(', ')}`,
+  );
+});
 
 // Every directory a test makes lives under one root that is removed at the end.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-evals-test-'));
@@ -258,8 +271,9 @@ function trialEnv(mode, { env = {}, config, configExtra = {}, task = loadTask(SA
   return {
     workRoot, runsDir, report, countFile,
     // The sweep by path costs about a second (a PowerShell start), so trials that are not about it skip it;
-    // the tests that are pass `sweep: undefined` to get the real one.
-    options: { task, config: cfg, effort: 'medium', repeat: 1, readVersion: () => '9.9.9 (Fake Agent)', workRoot, runsDir, sweep: () => ({ killed: [] }), ...options },
+    // the tests that are pass `sweep: undefined` to get the real one. Their runs go through `later`, so the
+    // survivors of an agent are searched for once, at the end of the file, not after each run.
+    options: { task, config: cfg, effort: 'medium', repeat: 1, readVersion: () => '9.9.9 (Fake Agent)', workRoot, runsDir, sweep: () => ({ killed: [] }), runProcess: later.runProcess, ...options },
     readReport: () => JSON.parse(fs.readFileSync(report, 'utf8')),
   };
 }
@@ -288,6 +302,27 @@ test('a solved trial scores 1 and records tokens, turns, version and identity', 
   );
   assert.ok(record.wallMs >= 0);
   assert.equal(new Date(record.startedAt).toISOString(), record.startedAt);
+});
+
+test('runTrial hands its agent run and its grading to the run it is given, and starts no process of its own', async () => {
+  const calls = [];
+  // The first call is the agent's run and the second the grader's. The agent prints nothing, so its reading is
+  // unparsable and the record says so; the grader's TAP summary still scores the trial.
+  const runProcess = async (options) => {
+    calls.push(options);
+    return calls.length === 1
+      ? { stdout: '', stderr: '', exitCode: 0, timedOut: false }
+      : { stdout: '# tests 2\n# pass 1\n# fail 1\n', stderr: '', exitCode: 1, timedOut: false };
+  };
+  const { options } = trialEnv('noop', { runProcess });
+  const { record } = await runTrial(options);
+  assert.equal(calls.length, 2, 'the agent, then the grader, and nothing else');
+  assert.equal(calls[0].command, process.execPath);
+  assert.deepEqual(calls[0].args, [FAKE_AGENT]);
+  assert.equal(calls[1].command, process.execPath);
+  assert.deepEqual(calls[1].args, ['--test', '--test-reporter=tap', '.eval-grader/sample.grade.mjs']);
+  assert.equal(record.score, 0.5, 'the score is the one of the grader run');
+  assert.equal(record.error, 'agent-output-unparsable');
 });
 
 test('a result without a cost, model usage or subagent stats is recorded with those fields null', async () => {
@@ -468,6 +503,22 @@ test('a grader that never ends costs one trial: grader-timeout, score 0, workspa
   assert.equal(record.error, 'grader-timeout');
   assert.equal(record.score, 0);
   assert.deepEqual(entriesOf(workRoot), []);
+});
+
+test('gradeWorkspace runs the grader in the workspace through the run it is given, and scores from its TAP summary', async () => {
+  const calls = [];
+  const runProcess = async (options) => {
+    calls.push(options);
+    return { stdout: '# tests 4\n# pass 3\n# fail 1\n', stderr: '', exitCode: 1, timedOut: false };
+  };
+  const workspace = tmp('graded');
+  const task = loadTask(SAMPLE);
+  const result = await gradeWorkspace(task, workspace, { runProcess });
+  assert.equal(calls.length, 1, 'one grader run, and no other process');
+  assert.equal(calls[0].command, process.execPath);
+  assert.deepEqual(calls[0].args, task.grader.args);
+  assert.equal(calls[0].cwd, workspace);
+  assert.deepEqual(result, { score: 0.75, passed: 3, total: 4, error: null });
 });
 
 test('the workspace is removed even when the trial throws', async () => {
@@ -1046,6 +1097,7 @@ test('a suite whose grader cannot be spawned stops with reason grader-spawn and 
   const options = {
     tasks: [task],
     configs: [fakeConfig('solve')],
+    runTrial: (trial) => runTrial({ ...trial, runProcess: later.runProcess }),
     efforts: ['medium'],
     repeats: 2,
     resultsPath: path.join(tmp('results'), 'results.jsonl'),
@@ -1393,6 +1445,7 @@ test('a suite probes a config with a per-trial home once per trial, since its en
   const options = {
     tasks: [loadTask(SAMPLE)],
     configs: [fakeConfig('solve', {}, { prepare: writeMarker, envFor: homeEnv })],
+    runTrial: (trial) => runTrial({ ...trial, runProcess: later.runProcess }),
     efforts: ['medium'],
     repeats: 2,
     resultsPath: path.join(tmp('results'), 'results.jsonl'),
@@ -2298,6 +2351,7 @@ test('a suite against a Codex-shaped agent that hits the cap stops and leaves th
   const options = {
     tasks: [loadTask(SAMPLE)],
     configs: [fakeConfig('codex-cap', {}, { reader: readCodexOutput })],
+    runTrial: (trial) => runTrial({ ...trial, runProcess: later.runProcess }),
     efforts: ['medium'],
     repeats: 3,
     resultsPath: path.join(tmp('results'), 'results.jsonl'),
@@ -2326,7 +2380,7 @@ function readerSuite(reader, { mode = 'noop', repeats = 2, extra = {} } = {}) {
     resultsPath: path.join(tmp('results'), 'results.jsonl'),
     runsDir,
     workRoot,
-    runTrial: (trial) => runTrial({ ...trial, sweep: () => ({ killed: [] }) }),
+    runTrial: (trial) => runTrial({ ...trial, sweep: () => ({ killed: [] }), runProcess: later.runProcess }),
   };
   const agentRuns = () => (fs.existsSync(countFile) ? fs.readFileSync(countFile, 'utf8').trim().split('\n').length : 0);
   return { options, workRoot, runsDir, agentRuns };

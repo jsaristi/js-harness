@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
@@ -2226,6 +2226,217 @@ test('a gate that runs no sensor for staged documents takes no gate lock, with t
   }
 });
 
+// --- the sensors of documents: what a commit of documents alone still runs ---
+// A commit of documents runs none of the project's sensors, and a document may be what a check reads: a
+// rule kept in one, a text a test holds to a figure. `harness.json` `documentSensors` are the checks of
+// seconds that run there, with no gate lock taken.
+
+/** A stand-in for `runSensor` that records each command it was asked to run, the time it was given and
+ * whether it was given the mark of a held lock, and answers what `results` says for that command, a pass
+ * when it says nothing. */
+function recordedSensors(results = {}) {
+  const spawn = (command, { timeout, env }) => {
+    spawn.ran.push([command, timeout, env.JS_HARNESS_GATE_HELD ?? null]);
+    return results[command] ?? sensorRan();
+  };
+  spawn.ran = [];
+  return spawn;
+}
+
+const DOCUMENT_SENSORS_SHAPE = 'harness.json "documentSensors" must be an object of names to non-empty command strings';
+
+test("a commit of documents alone runs the sensors of documents, in their order and with a bound of two minutes, and none of the project's sensors", async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests', lint: 'run-lint' }, documents: ['docs/'], documentSensors: { rules: 'check-rules', texts: 'check-texts' } });
+    const spawn = recordedSensors();
+    const rows = await checkSensors(dir, { spawn, git: stagedGit(['docs/guide.md', 'docs/b.md']) });
+    assert.equal(DOCUMENT_SENSOR_TIMEOUT_MS, 120_000);
+    assert.deepEqual(spawn.ran, [['check-rules', 120_000, null], ['check-texts', 120_000, null]]);
+    assert.deepEqual(rows.map(({ name, pass, info }) => [name, pass, info === true]), [['sensors', true, true], ['rules', true, false], ['texts', true, false]]);
+    assert.equal(rows[0].detail, 'the sensors did not run (tests, lint): all 2 staged paths are documents declared in harness.json "documents"; its "documentSensors" ran in their place (rules, texts), with no gate lock taken');
+    assert.deepEqual(rows[0].lines, ['docs/guide.md', 'docs/b.md']);
+    assert.equal(rows[1].detail, 'check-rules passed');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a commit that holds anything that is no document runs the project's sensors and none of the sensors of documents", async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'], documentSensors: { rules: 'check-rules' } });
+    const spawn = recordedSensors();
+    const rows = await checkSensors(dir, { spawn, git: stagedGit(['docs/guide.md', 'src/app.js']) });
+    assert.deepEqual(spawn.ran.map(([command]) => command), ['run-tests']);
+    assert.deepEqual(rows.map((row) => row.name), ['tests']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a sensor of documents that fails fails the commit and says what it printed, the one after it still runs, and no gate lock or gate log is written', async () => {
+  const dir = sensorProject({ tests: 'run-tests' });
+  const home = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'], documentSensors: { rules: 'check-rules', texts: 'check-texts' } });
+    const take = lockTakenAtOnce();
+    const spawn = recordedSensors({ 'check-rules': { status: 3, signal: null, stdout: 'rule 7 is broken\n', stderr: '' } });
+    const run = (env) => runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, git: stagedGit(['docs/guide.md']), takeGateLock: take }));
+    const { code, output } = await run({});
+    assert.equal(code, 1, output);
+    assert.match(output, /^INFO {2}sensors {2}the sensors did not run \(tests\): the one staged path is a document declared in harness\.json "documents"; its "documentSensors" ran in their place \(rules, texts\), with no gate lock taken\n {6}docs\/guide\.md$/m);
+    assert.match(output, /^FAIL {2}rules {2}check-rules exited 3$/m);
+    assert.match(output, /^PASS {2}texts {2}check-texts passed$/m);
+    assert.match(output, /\nrule 7 is broken\n/);
+    assert.deepEqual(gateRows(output), []);
+    assert.doesNotMatch(output, /^\w+ {2}(tests|load) /m);
+    // A gate started in a turn of the lock says so to the sensors of documents as to any sensor; another never does.
+    await run({ JS_HARNESS_GATE_HELD: '1' });
+    assert.deepEqual(spawn.ran, [['check-rules', 120_000, null], ['check-texts', 120_000, null], ['check-rules', 120_000, '1'], ['check-texts', 120_000, '1']]);
+    assert.equal(take.asked.length, 0);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nothing of the lock or of the gate log was written');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a gate whose static row failed still runs the sensors of documents: there is no wait and no suite for the stop to save', async () => {
+  const dir = makeTmpDir();
+  const home = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'], documentSensors: { rules: 'check-rules' } });
+    const take = lockTakenAtOnce();
+    const spawn = recordedSensors();
+    const lock = { home, wait: true, waitMinutes: 1, session: null, stoppedBy: ['budget'] };
+    const rows = await checkSensors(dir, { spawn, git: stagedGit(['docs/guide.md']), takeGateLock: take }, lock);
+    assert.deepEqual(rows.map((row) => row.name), ['sensors', 'rules']);
+    assert.deepEqual([spawn.ran.length, take.asked.length], [1, 0]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a sensor of documents whose time ran out fails and says where a longer check belongs, and a shorter time of the caller is kept', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'], documentSensors: { rules: 'check-rules' } });
+    const given = [];
+    const spawn = (command, { timeout }) => {
+      given.push(timeout);
+      return { error: Object.assign(new Error('spawnSync ETIMEDOUT'), { code: 'ETIMEDOUT' }), status: null, signal: 'SIGTERM', stdout: '', stderr: '' };
+    };
+    const ran = (sensorTimeout) => checkSensors(dir, { spawn, git: stagedGit(['docs/guide.md']), ...(sensorTimeout && { sensorTimeout }) });
+    const [, row] = await ran();
+    assert.deepEqual([row.name, row.pass, row.timedOut], ['rules', false, true]);
+    assert.equal(row.detail, 'check-rules timed out after 120 s; a sensor of documents runs with no gate lock taken, so it is a check of seconds: a longer one belongs in "sensors"');
+    await ran(500);
+    await ran(10 * 60 * 1000);
+    assert.deepEqual(given, [120_000, 500, 120_000]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a declaration of sensors of documents that cannot be taken fails the gate and runs nothing; an empty one declares none', async () => {
+  const dir = makeTmpDir();
+  try {
+    const neverRun = 'harness.json declares "documentSensors" and no "documents", so no commit would ever run them';
+    const faulty = [
+      [{ documents: ['docs/'], documentSensors: ['check-rules'] }, DOCUMENT_SENSORS_SHAPE],
+      [{ documents: ['docs/'], documentSensors: { rules: '' } }, DOCUMENT_SENSORS_SHAPE],
+      [{ documents: ['docs/'], documentSensors: { rules: 3 } }, DOCUMENT_SENSORS_SHAPE],
+      [{ documents: ['docs/'], documentSensors: null }, DOCUMENT_SENSORS_SHAPE],
+      [{ documentSensors: { rules: 'check-rules' } }, neverRun],
+      [{ documents: [], documentSensors: { rules: 'check-rules' } }, neverRun],
+    ];
+    for (const [harness, said] of faulty) {
+      writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, ...harness });
+      const spawn = countedSensors();
+      assert.deepEqual(await checkSensors(dir, { spawn, git: stagedGit(['src/app.js']) }), [{ name: 'sensors', pass: false, detail: said }], JSON.stringify(harness));
+      assert.equal(spawn.ran, 0);
+      assert.deepEqual(discoverDocumentSensors(dir, harness.documents ?? []), { sensors: [], error: said });
+    }
+    // An empty map declares none: the commit of documents is the one row it always was.
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'], documentSensors: {} });
+    const spawn = countedSensors();
+    const rows = await checkSensors(dir, { spawn, git: stagedGit(['docs/guide.md']) });
+    assert.deepEqual(rows.map((row) => row.detail), ['no sensor ran (tests): the one staged path is a document declared in harness.json "documents"']);
+    assert.equal(spawn.ran, 0);
+    assert.deepEqual(discoverDocumentSensors(dir, ['docs/']), { sensors: [] });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a project that declares no sensor runs its sensors of documents at a commit of documents, and nothing at any other', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: {}, documents: ['docs/'], documentSensors: { rules: 'check-rules' } });
+    const spawn = recordedSensors();
+    const documents = await checkSensors(dir, { spawn, git: stagedGit(['docs/guide.md']) });
+    assert.deepEqual(documents.map((row) => row.name), ['sensors', 'rules']);
+    assert.equal(documents[0].detail, 'the one staged path is a document declared in harness.json "documents": its "documentSensors" ran (rules), with no gate lock taken');
+    const other = await checkSensors(dir, { spawn, git: stagedGit(['src/app.js']) });
+    assert.deepEqual(other, [{ name: 'sensors', pass: true, info: true, detail: 'harness.json declares no sensors, so none ran' }]);
+    assert.deepEqual(spawn.ran.map(([command]) => command), ['check-rules']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("this repository's sensors of documents name the two test files that read its documents, and the rules check", () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const { sensors, error } = discoverDocumentSensors(root, discoverDocuments(root).documents);
+  assert.equal(error, undefined);
+  const commands = sensors.map((sensor) => sensor.command).join('\n');
+  // Found on 2026-10-12 by a search of every test file for a read of `docs/` or `odd/tasks/` of the
+  // repository itself: these two, and the rules a document declares.
+  for (const file of ['bin/rules.test.mjs', 'bin/sessions.test.mjs']) {
+    assert.ok(commands.includes(file), `${file} is run by no sensor of documents`);
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} is not there`);
+  }
+  assert.match(commands, /js-harness\.mjs rules check/);
+});
+
+// --- an argument check does not know ---
+
+test('check refuses an argument it does not know: exit 2 with the usage, no row computed and no gate started', async () => {
+  const dir = sensorProject({ tests: 'run-tests' });
+  const home = makeTmpDir();
+  try {
+    const spawn = countedSensors();
+    const take = lockTakenAtOnce();
+    const run = (argv) => runCheck(argv, {}, gateDeps({ spawn, takeGateLock: take }));
+    const unknown = [
+      [['--help'], '--help'],
+      [['-h'], '-h'],
+      [['help'], 'help'],
+      [['--pus'], '--pus'],
+      [['--cwd', dir, '--home', home, '--verbose'], '--verbose'],
+      [['--push', 'origin'], 'origin'],
+      [['--no-wait', '--cwd', dir, 'now'], 'now'],
+    ];
+    for (const [argv, token] of unknown) {
+      const { code, output, errOutput } = await run(argv);
+      assert.equal(code, 2, argv.join(' '));
+      assert.ok(errOutput.startsWith(`unknown argument: ${token}\n\nUsage: js-harness check`), errOutput);
+      assert.equal(output, '');
+    }
+    assert.deepEqual([spawn.ran, take.asked.length], [0, 0]);
+    // Every flag it knows is taken as it was, a value that looks like nothing it knows included.
+    const known = await run(['--cwd', dir, '--home', home, '--remote', 'upstream', '--head', 'help', '--wait', '5']);
+    assert.notEqual(known.code, 2, known.errOutput);
+    assert.match(known.output, /^PASS {2}tests /m);
+    assert.deepEqual([spawn.ran, take.asked.length], [1, 1]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- the load a gate starts under: one sample before the first sensor, said in a row named `load` ---
 // The sample itself is tested in lib/machine-load.test.mjs; here, when a gate takes one and what it says
 // of it. Every sampler is a stand-in that answers at once, but for the last test of this part.
@@ -3775,7 +3986,7 @@ function hookedRepo() {
   const remove = () => {
     for (const dir of [repo, home, checkout]) fs.rmSync(dir, { recursive: true, force: true });
   };
-  return { repo, home, marker, commit, remove };
+  return { repo, home, marker, commit, env, remove };
 }
 
 /** The paths the last commit of `cwd` holds. */
@@ -3844,6 +4055,95 @@ test('a commit of documents alone runs no sensor however it is made: plain, with
     assert.equal(code.status, 0, code.said);
     assert.match(code.said, /^PASS {2}tests /m);
     assert.equal(fs.existsSync(marker), true, 'the sensor did not run for a commit that holds a code file');
+  } finally {
+    remove();
+  }
+});
+
+// Git runs no pre-commit hook for the commit a merge makes by itself: it runs `pre-merge-commit`, with the
+// merged index staged. `.githooks/pre-merge-commit` starts the gate there, so such a merge is a gate as a
+// commit is.
+test('the hook of a merge starts the same command as the hook of a commit', () => {
+  const hooks = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.githooks');
+  const command = (hook) => fs.readFileSync(path.join(hooks, hook), 'utf8').split(/\r?\n/).filter((line) => line.startsWith('exec '));
+  assert.deepEqual(command('pre-merge-commit'), command('pre-commit'));
+  assert.equal(command('pre-commit').length, 1);
+});
+
+/** `hookedRepo` with the hook of a merge installed beside the hook of a commit, and the two moves the
+ * tests of a merge make. `branch` commits a change of `file` on a branch off the trunk with no gate: only
+ * the merge is looked at. `merge` moves the trunk on first, so that the merge is no fast-forward, which
+ * makes no commit and runs no hook, and then merges the branch as git does it by itself. */
+function mergingRepo() {
+  const hooked = hookedRepo();
+  const { repo, home, env } = hooked;
+  const hooks = path.join(home, 'hooks');
+  fs.copyFileSync(path.join(hooks, 'pre-commit'), path.join(hooks, 'pre-merge-commit'));
+  fs.chmodSync(path.join(hooks, 'pre-merge-commit'), 0o755);
+  const trunk = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD');
+  const branch = (name, file) => {
+    git(repo, 'checkout', '--quiet', '-b', name, trunk);
+    writeFile(repo, file, `written on ${name}\n`);
+    git(repo, 'add', file);
+    git(repo, ...commitAs, '--no-verify', '-m', name);
+    git(repo, 'checkout', '--quiet', trunk);
+  };
+  const merge = (name) => {
+    writeFile(repo, `trunk-${name}.txt`);
+    git(repo, 'add', `trunk-${name}.txt`);
+    git(repo, ...commitAs, '--no-verify', '-m', `the trunk before ${name}`);
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'merge', '--no-edit', name], { cwd: repo, env, encoding: 'utf8' });
+    return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+  };
+  return { ...hooked, branch, merge };
+}
+
+test('a merge git commits by itself goes through the gate: one that brings documents alone runs no sensor, and one that brings a code file runs them', async () => {
+  const { repo, marker, branch, merge, remove } = mergingRepo();
+  try {
+    branch('documents', 'docs/guide.md');
+    branch('code', 'src/app.js');
+
+    const documents = merge('documents');
+    assert.equal(documents.status, 0, documents.said);
+    assert.deepEqual(sensorsRow(documents.said), noSensorRan(['docs/guide.md']), documents.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge that brings documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '1');
+
+    const code = merge('code');
+    assert.equal(code.status, 0, code.said);
+    assert.match(code.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that brings a code file');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
+  } finally {
+    remove();
+  }
+});
+
+test('a merge whose gate fails is not committed: git merge exits with a failure, the trunk stays where it was and the merge is left unfinished', async () => {
+  const { repo, branch, merge, remove } = mergingRepo();
+  try {
+    // The project's one sensor now fails, on the trunk and so on every branch off it.
+    const failing = `"${process.execPath}" -e "process.exit(3)"`;
+    writeJson(repo, 'harness.json', { sensors: { tests: failing }, documents: ['docs/', 'notes.md'] });
+    git(repo, ...commitAs, '--no-verify', '-m', 'a sensor that fails', '--', 'harness.json');
+    branch('code', 'src/app.js');
+
+    const code = merge('code');
+    assert.notEqual(code.status, 0, code.said);
+    assert.match(code.said, /^FAIL {2}tests /m);
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '0', 'the merge was committed though its gate failed');
+    assert.equal(git(repo, 'log', '-1', '--format=%s'), 'the trunk before code');
+    // What git leaves is a merge to finish or to give up, with what it brings staged: nothing is lost.
+    assert.equal(git(repo, 'rev-parse', '--verify', '--quiet', 'MERGE_HEAD'), git(repo, 'rev-parse', 'code'));
+    assert.deepEqual(git(repo, 'diff', '--cached', '--name-only').split(/\r?\n/), ['src/app.js']);
+
+    // A merge that brings documents alone runs no sensor, so the failing one does not stop it.
+    git(repo, 'merge', '--abort');
+    branch('documents', 'docs/guide.md');
+    const documents = merge('documents');
+    assert.equal(documents.status, 0, documents.said);
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '1');
   } finally {
     remove();
   }

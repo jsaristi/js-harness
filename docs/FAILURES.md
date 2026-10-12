@@ -162,6 +162,14 @@ waited for his answer.
 - Seen: 2026-10-11 — relief file, line 220 — gate log: three slices do not fit in 3 million; both
   raised to 7 million at line 232
 
+### codex-model-at-capacity
+A Codex review ended on its first part with "Selected model is at capacity", recorded nothing, and
+the input tokens it had read were spent.
+- Class: tool
+- Seen: 2026-10-12 — odd/tasks/rule-hierarchy.md, Progress, "T16b, design and first slice" —
+  `859a797..6a721cc`, part 1 of 7, 49,568 input tokens; run again in a turn of the gate lock, on
+  the same model, and not recorded as a skip
+
 ### codex-review-incomplete
 A Codex review followed the delegation rules of its home instead of reading the patch, read a tenth
 of it and recorded nothing.
@@ -180,6 +188,10 @@ A session ran a command it did not know, to read its help, and the command acted
 - Seen: 2026-10-10 — relief file, line 54 — `claude remote-control --help` printed nothing and hung
   120 s; odd/tasks/session-board.md:1335-1339 calls it the same mistake, a day after the rule was
   written
+- Seen: 2026-10-12 — relief file, line 349 — the lead ran `install --help` to read the help and it
+  installed four files and a hook entry on his machine
+- Seen: 2026-10-12 — relief file, line 409 — JH 8 ran `check --help` and it started a gate, which
+  went to wait and was stopped before it ran anything (claimed)
 - Control: owed — odd/tasks/rule-hierarchy.md — "Every command that writes outside the repository
   refuses a flag it does not know"
 
@@ -211,8 +223,8 @@ Sessions were told to cut, or proposed a cut, near 70 percent of their context b
   (line 122)
 - Seen: 2026-10-10 — relief file, line 137 — JH 1 proposed a cut at 70 after his rule of lines 126
   and 127; withdrawn at line 138
-- Control: owed — odd/tasks/session-channel.md — "The context figure as room left against the last
-  task's cost; the 73% mark removed"
+- Control: check — bin/sessions.test.mjs — "no text of this feature writes a share the context rule
+  left behind" — since 2026-10-12
 - Proof: count of cuts proposed under 85% is 0 (owed: nothing prints it yet)
 
 ### context-fills-unnoticed
@@ -226,8 +238,8 @@ A session's context reached a level nobody had looked at.
   own context "read too seldom"
 - Seen: 2026-10-11 — relief file, lines 276 to 285 — the orchestrator passed the pause, judged four
   times that little was left, and the host compacted it with no word to him (its own report)
-- Control: check — bin/sessions.test.mjs — "and whether it is past --context-limit" — since
-  2026-10-09
+- Control: check — bin/sessions.test.mjs — "--watch returns when a session reaches the context
+  pause" — since 2026-10-09
 
 ### cross-session-message-held
 A message between a session opened from the phone and a desktop session is held and expires, so that
@@ -258,6 +270,17 @@ machine for nothing.
 - Class: machine
 - Seen: 2026-10-10 — relief file, line 83 — the third run, 03:21 to 03:41 (claimed); also
   odd/tasks/session-board.md:1350-1351
+
+### documents-commit-skips-suite
+A commit of declared documents alone runs no sensor, and the suite reads those documents: such a
+commit can break a test, pass its own gate, and fail the next gate with code in any session.
+- Class: rule-not-acting
+- Seen: 2026-10-12 — relief file, line 407 — found by reading and not by a gate that broke (JH 8,
+  claimed): the skip is `bin/check.mjs:279-287`, and `bin/rules.test.mjs:480` runs `rules check`
+  on the real `docs/RULES.md` and `docs/rule-sources.json` (`bin/rules.mjs:24-25`); until the gate
+  runs the readers of a staged document, `rules check` is run by hand after such a commit
+- Control: check — bin/check.test.mjs — "a commit of documents alone runs the sensors of documents,
+  in their order and with a bound of two minutes" — since 2026-10-12
 
 ### engram-writes-lost
 A session lost what it had written to engram after each of its two compactions.
@@ -362,6 +385,11 @@ Hours written in the relief file were not read from a clock.
 - Aka: failure 18 (odd/tasks/rule-hierarchy.md); unnumbered in relief file, line 202
 - Seen: 2026-10-10 — relief file, line 96 — a roster line said 04:40 and was written about 04:29
 - Seen: 2026-10-10 — relief file, line 172 — seven hours in lines 166, 169 and 171 were guessed
+- Seen: 2026-10-12 — relief file, line 407 — three messages of the lead carried hours it guessed
+  (13:02, 13:09, 13:10 for 13:00 to 13:06); the control stamps a relief line, not a message
+- Seen: 2026-10-12 — relief file, line 436 — a message of JH 7 stamped 14:58 was sent at 14:53;
+  a second one the same day said 16:47 for 16:45 (odd/tasks/rule-hierarchy.md, Progress of that
+  day)
 - Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
   of the clock, and says the command wrote it" — since 2026-10-11
 
@@ -392,6 +420,19 @@ loads it in lines under the load row"); that row tells of it and stops nothing.
   1.1 s of CPU per 2 s (claimed)
 - Seen: 2026-10-11 — relief file, line 224 — "THIRD SIGHTING": pid 7996 at a whole processor beside
   a gate of 1,188 s of 1,200; also odd/tasks/gate-log.md:597-609
+- Seen: 2026-10-12 — odd/tasks/rule-hierarchy.md, `## Progress`, the entry of the second part of
+  T16b — pid 59656 of the session of this feature spun one processor from 01:48 to 08:53; the gate
+  of 07:50 named it and the session reported it without looking at whose it was
+
+### linux-probe-misnames-process
+On Linux the probe of a port named the process that listened by `ps -o comm=`, which answered the
+thread's name, so a listener was left alone as "not engram".
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 425 — run 38296748258 of the suite on GitHub's Linux
+  (claimed; classified in odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144, lines 1037-1039):
+  `evals/ports.mjs:168-169` got `MainThread` for a Node child; whether the real engram binary is
+  named right is not known. It can be reproduced only on Linux: a run there in which the probe
+  names a Node listener and the engram binary by what they are would prove a fix
 
 ### lock-folder-left
 The gate lock left an empty folder under his home after every run, and `uninstall` did not remove
@@ -522,6 +563,16 @@ stood.
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
 
+### refusal-in-system-words
+A path helper let a system error through, so a run was refused in the system's words and not in
+the harness's.
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 425 — `evals/paths.mjs:6` lets `ENOTDIR` through for a
+  path below a file (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144, line 1040);
+  the run is still refused
+- Control: check — evals/paths.test.mjs — "exists says a path below a file is not there, where the
+  system says ENOTDIR" — since 2026-10-12
+
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
 without that review, and the choice went to him.
@@ -584,6 +635,15 @@ prompt, or the name of a feature it no longer did.
 - Seen: 2026-10-11 — relief file, line 218 — a phone-opened session's transcript carries no title,
   so its roster row has no role (claimed)
 
+### short-name-judged-outside
+A path spelled with a Windows 8.3 short name was judged outside the repository, so a hook was not
+written.
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 427 — on GitHub's Windows the runner's TEMP is
+  `C:\Users\RUNNER~1\...`; `isWithinBase` (`bin/lib/project.mjs:186`) folds case and not short
+  names (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at 6a9f605); on the safe side:
+  nothing is written outside
+
 ### stacked-pr-base-order
 A stacked pull request had its base changed after the one under it was merged; GitHub reported a
 conflict git did not reproduce and the merge was refused.
@@ -642,6 +702,15 @@ disk.
 - Seen: 2026-10-10 — relief file, line 101 — 2,357 `js-harness-*` folders dated 10-01 to 10-10,
   counted by the orchestrator; 2,358 at line 105; also odd/tasks/gate-lock.md:316-317
 
+### test-skipped-here-never-run
+A test that this machine skips is run by no gate, so its expectation went stale and stood red with
+nothing to say so.
+- Class: unseen-state
+- Seen: 2026-10-12 — relief file, line 425 — `bin/lib/project.test.mjs:1936` expects a reason that
+  changed at ae471e7; Windows skips the test, and the first run on Linux (run 38296748258) showed
+  it red (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144); the expectation was
+  corrected by reading ae471e7 and no run has shown it green, since this machine skips the test
+
 ### test-wrote-real-home
 A test that forgot `--home` wrote into the real home.
 - Class: tool
@@ -666,6 +735,10 @@ was not so.
   line 61
 - Seen: 2026-10-11 — relief file, line 196 — the lead's reading that pull requests 53 and 54 put the
   gate at its bound; they add 3.4 s (it had been said as an assumption)
+- Seen: 2026-10-12 — the orchestrator's transcript 65318fd5, line 2008 (claimed) — the lead told him
+  four times that JH 8's cut was pending after he had sent both blocks: a notice between sessions
+  carried forward as a present fact; the stopgap is one line to the lead as a session's first act
+  after a compaction
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 

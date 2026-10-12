@@ -48,7 +48,7 @@ First request of a one-word prompt, estimated tokens:
 | Release source | Decided and not built: git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. No release is tagged, `update` asks the registry (`<pm> view js-harness version`, `bin/lib/version.mjs`), and a machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
-| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`) |
+| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
 | Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
 | Command scope | A command that exists at both levels acts by location, like npm: inside an initialized project (a git repo with `harness.json` or a project manifest) it acts on the project, anywhere else on the machine; `--global` forces the machine from anywhere. Inside a git repository that is not an initialized project, or with an explicit `--cwd` that is not one, the command refuses and names `--global`, so repeating it never reaches the machine by accident. `uninstall` first, `sync` next (decided 2026-09-28) |
@@ -59,7 +59,7 @@ First request of a one-word prompt, estimated tokens:
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
-| Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model; Haiku 5.5 is a candidate only for a sub-agent that writes code (Sebastián, 2026-10-10; "Subagent models result" below); the cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
+| Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
 
@@ -361,6 +361,13 @@ at high effort. Two measurements would settle what this one leaves open, each hi
 the same three tasks with Opus 5.5 alone at high effort on this version (9 trials, about $9), so
 that not delegating is in the same table; and one task hard enough to leave the ceiling.
 
+Decided for this repository's way of working (Sebastián, 2026-10-11, "apliquemos lo que
+investigaste", the orchestrator's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line
+2037): the sub-agent that writes scoped code is launched on Haiku 5.5, set on the call, and the
+ones that explore, review and verify stay on Opus 5.5 at high effort. What the harness turns on
+by default in a project stays open, and so do the two measurements. The table it belongs to, the
+mechanism that will apply it and the measurements still to run are in `docs/model-effort.md`.
+
 ## Rule hierarchy
 
 Designed on 2026-10-10 in `odd/tasks/rule-hierarchy.md`, by one design session that also wrote
@@ -536,9 +543,10 @@ whatever the other open sessions hold only in their conversations. Missing from 
 - How he is reported to (what needs him, what runs alone, what was done, everyday words):
   this file and memory. For the orchestrator skill, with the session channel.
 - The direct channel between sessions: this file and memory. Same place.
-- High effort on every sub-agent: memory and feature documents. Waits for his answer on the
-  result of the sub-agent models comparison ("Subagent models result" above, the
-  recommendation).
+- High effort on every sub-agent: memory and feature documents. It waited for his answer on
+  the result of the sub-agent models comparison ("Subagent models result" above), which came
+  on 2026-10-11; since the first slice of the rules list it is a declared rule,
+  `rule:subagent-effort`.
 - The context percentage reported and the cut proposed: half in `AGENTS.md` here. For a
   check or the status line, not prose.
 - Every proposal judged twice: this file and memory. For `AGENTS.md` of this repository
@@ -776,6 +784,8 @@ podamos implementar todo"), each a feature of its own with its own document and 
      runs no test sensor (see Sensors above): 205 of 410 commits since 2026-09-26 touched
      only Markdown, each paying a gate of 13 minutes that no document could fail, since no
      test reads `docs/` or `odd/tasks/`.
+     That was no longer so on 2026-10-12: `bin/rules.test.mjs` and `bin/sessions.test.mjs`
+     read them, so such a commit now runs the sensors of documents (see Sensors above).
    - Fewer git processes, counted and not timed (2026-10-11, `odd/tasks/gate-log.md`): a
      time on this machine depends on what else runs, a count does not.
      `node scripts/count-git.mjs [--frames <n>] <test files>` runs test files and says how
@@ -1149,8 +1159,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    only reports it.
 5. Whether the Codex review stays at `high` at what it costs (the number is in "Codex review
    cost result").
-6. What enters the harness from the sub-agent models result ("Subagent models result", the
-   recommendation).
+6. What the harness turns on by default in a project from the sub-agent models result
+   ("Subagent models result", the recommendation). For this repository's way of working it is
+   decided (2026-10-11): the writing sub-agent on Haiku 5.5.
 7. The gate run by GitHub on every pull request: the repository is private, so its runs spend
    the account's minutes ("Session channel", the order, item 2).
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks

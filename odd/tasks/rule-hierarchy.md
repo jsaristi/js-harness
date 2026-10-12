@@ -166,7 +166,7 @@ twice because he could not tell "working" from "waiting on you". It reads `last_
 and refuses a final reply when:
 - it closes with none of the four states, or with more than one;
 - the state is decision and the reply has no block, more than one, a block not under the three
-  labels (what it is, where it goes, what sending it does), or no line naming which of his six
+  labels (what it is, where it goes, what sending it does), or no line naming which of his
   items the question falls under;
 - the state is decision and `background_tasks` is not empty (never asked while work runs);
 - the state is working or finished and the reply carries a block for this chat;
@@ -185,6 +185,23 @@ as the board reads it, is at or past the context pause (a number the board's cod
 written here: "One home for every rule"), it adds one
 line to the model's context saying so and naming the rule (write the state in the feature
 document, then judge what is left). It says it once per session, not at every stop.
+
+Three changes to this check are taken from the design of a compaction that loses nothing
+(`odd/tasks/session-channel.md`, point 14, version 2, read on 2026-10-12 at `bfb9199`), written
+here when his answers to that session arrive and built with T2, not before:
+- One more shape of a reply: working, past the pause, with the two blocks of a cut. The check
+  allows it only past the pause; under it a working reply with a block for this chat stays
+  refused. And the first final reply after a session was told is refused when it lacks the
+  share and the blocks, so that "announced" is a refusal and not only a count. How many blocks
+  a cut has once the resume hook is installed is his, and is read from one place.
+- The line at the pause is said once for each stretch between two compactions, not once for a
+  session: as written above it would be silent after the first compaction.
+- The function that decides it and the mark that it was said are one, built by the session
+  channel's session for its hook that runs after each tool call; this check imports them and
+  writes none, so a session is told once, by whichever comes first. By that session's notice
+  of the same day (a peer's claim): the function is `pauseNotice` of `bin/lib/pause.mjs`, on
+  `feat/session-compaction`, and a stretch ends when the context falls under the pause again,
+  kept in a state file for each session, not at the boundary of a compaction.
 
 The refusal prints the missing piece and the exact shape, in the project's language. It lets a
 reply through when `stop_hook_active` is true, so a session is refused once per stop and never
@@ -635,6 +652,572 @@ keeps its design in `odd/tasks/gate-turn.md` on `feat/gate-turn`, not read by th
 The entry of the context pause is written when JH 5's fourth slice is on `main` (relief file,
 line 247).
 
+### How a rule is declared (T16b)
+Designed on 2026-10-11, after a read-only explorer mapped what exists and two readers that did
+not write it read the first draft, one to attack it and one to find what it lacks. It designs
+letter B of the approved protocol and the second of the nine differences. Not built.
+
+What exists today, on `main` at `40ccb45` (the explorer's report, not read again line by line):
+- No list of rules and no module of constants (`docs/RULES*`, `bin/lib/*rule*`,
+  `bin/lib/*constant*`: nothing).
+- Values with an exported constant: the wait for the lock (`bin/lib/gate-lock.mjs:42`, 60
+  minutes); a review part (`bin/lib/codex-review-parts.mjs:19` and `:27`, 400 lines and 40 files;
+  `bin/lib/codex-review-plan.mjs:46`, 6 parts); the review's model and effort
+  (`bin/codex-review.mjs:173-174`).
+- Values whose constant is not exported, so no test can import them: the gate's bound
+  (`bin/check.mjs:79`, 20 minutes), the budget of `AGENTS.md` (`bin/check.mjs:23`, 1,500), a
+  review's timeout (`bin/codex-review.mjs:641`, 30 minutes), a contract run's timeout
+  (`bin/contract.mjs:16`).
+- Values with no constant anywhere in `bin/`: the context pause (88; the board holds the older
+  73 at `bin/lib/sessions.mjs:21` and a window of 480,000 at `:14`, both changed by a branch not
+  merged); the Codex rate (1,200 input tokens a changed line); the size of a reviewed commit
+  (about 1,200 lines); three work sessions; the models and efforts of sub-agents.
+- Copies not derived, in code that acts: "60 minutes at most" in the `js-harness` skill
+  (`bin/lib/manifest.mjs:26`, pinned by `bin/lib/manifest.test.mjs:1291`) and "(73%)" in an error
+  (`bin/sessions.mjs:169`). The skills' texts interpolate only the version. The wait is also
+  written "an hour" in comments (`bin/check.mjs:983`, `bin/gate.mjs:164`,
+  `bin/lib/gate-lock.mjs:319`).
+- The package ships `bin/` and `AGENTS.md` and not `docs/` (`package.json:9-12`).
+
+**The decision.** Every declaration lives in one module that is data and nothing else,
+`bin/lib/rules-data.mjs`, and for a rule with a value the declaration is the home: the value is
+written there, in the unit a person says it in (minutes, percent, lines), and nowhere else. The
+code that needs it reads it (`ruleValue('gate-wait', 'minutes') * 60_000`), so a derived form is
+computed and never written. This changes two of this session's readings, and the orchestrator
+is told:
+- Difference 2 said "declared once, beside its home". Beside is still two places, and the one
+  command of letter C would have to edit a constant in whichever source file holds it, by
+  pattern. With the value inside the declaration the command rewrites one file whose whole
+  shape it owns.
+- Difference 8 said a value no command can hold is a rule in prose. The module can hold any
+  value, read by code or not, so the Codex rate can have a home before any command applies it.
+It keeps the approved letter: the value is a constant in code, and its change is a code commit
+(gate, both reviews, a pull request of its own).
+
+What is declared. A value is a rule when it is stated, or would be, outside the code that reads
+it in a text in force (the roadmap, a skill, `AGENTS.md`, an open feature document, a message to
+a person), or when a person decided it. A tuning constant nobody states stays where it is. The
+state of the work, the third kind of letter A, is out of the declarations on purpose: `progress`
+and the board compute it.
+
+**The declaration.** One object per rule in `RULES`, sorted by id.
+- `id`: lower case and hyphens, unique, never reused. A rule that returns after it was retired
+  is a new id; a rule in prose that becomes a value keeps its id.
+- `subject`: a label of what the rule is about, with no value in it ("the wait for a turn of
+  the gate lock"). It is not the rule's text.
+- `owner`: `sebastian` or `project`. A rule of his has a source of his words, and only that.
+- `since`: the day the value or the text in force entered.
+- Exactly one of three bodies:
+  - A value: `value` (a number or a string) and `unit` (required for a number). Optional
+    `flag`, the option that overrides it for one run (`--wait`): the value is then a default,
+    and the list says so. Optional `was`, the earlier values with the day each ended, newest
+    first, so that a reader holding an old number finds it. A pair is two rules (a model and its
+    effort); a rule with a value and a behaviour is two rules, the second in prose and naming
+    the first.
+  - A text: `path` and `phrases`, one or more pieces of the rule's text, twelve characters or
+    more each, all found in the file the way the failures register finds a control
+    (`holdsPhrase`, white space squashed). A list (the things that are his to decide) is a rule
+    in prose with one phrase for each item. No id and no marker enters `AGENTS.md`.
+  - `retired`, the day, with `successors`, a list of ids that may be empty (a split has two): a
+    retired rule keeps its id, its subject, its owner and its `was`, with its unit when those
+    earlier values are numbers (found by Codex: without it "60 until 2026-10-11" no longer says
+    minutes), and no value and no text.
+- Optional, for the letters built later, so that the shape does not change under them:
+  - `patterns` (T16d): the patterns that find a statement of a value on the rule's subject, one
+    per line of text, in any wording or unit ("1,200 s" for twenty minutes, "an hour").
+  - `row` (T16d): absent while the rule's row reports; `{ refuses: <day> }` from the day its
+    findings were zero on `main`; `{ reports: <reason>, since: <day> }` when a red row that is
+    wrong is switched back by the command. Stored, not computed, so that a new finding cannot
+    turn a refusing rule into a reporting one.
+  - `failure` (T16d): the id in `docs/FAILURES.md` under which a refusal is a sighting.
+  - `differs`: for a rule that exists because this project differs from another tool, that
+    tool and its rule. Rules of other tools are not declared otherwise.
+  - `review`: a day on which the rule is looked at again, for a rule that is temporary.
+
+**The source is kept apart**, in `docs/rule-sources.json`, keyed by id and written by the same
+command: a quotation of his and the place of a transcript are not shipped to every project that
+installs the package. One of the two kinds the approved text has:
+- `words`: the quotation, its day, the session id and the line of the transcript, the reading
+  of it, where he accepted the reading, and `checked`, the day and who checked the line (the
+  command of T16c, or the session that seeded it). The check is the one `quoteOf` of
+  `bin/lib/sessions.mjs` already makes: an entry he typed, not a paste.
+- `design`: a path in the repository.
+There is no third kind. A value whose source cannot be traced to one of the two is not declared:
+it is named in this document with what is missing, and stays where it is.
+
+How a text names a rule: `rule:<id>` in code marks. The texts read are those in force: the
+roadmap, `docs/SPEC.md`, the open feature documents outside `## Progress`, the skills' texts as
+rendered, and the project template. Places that are history by letter B, and fenced blocks, are
+not read. Every id found resolves; one that resolves to a retired rule is reported with its
+successors.
+
+**The files.**
+- `bin/lib/rules-data.mjs`: `export const RULES`, in the one shape `writeRules` gives. It
+  imports nothing, so any module may import it. Until the command of T16c exists it is written
+  by hand in that shape, and the list's first lines say so.
+- `bin/lib/rules.mjs`, which imports the data and nothing that reads a rule:
+  - `readRules(list)`: what makes a list of declarations unreadable.
+  - `ruleValue(id, unit)`: the value; it throws for an unknown id, a rule with no value, and a
+    unit that is not the declared one, so a unit never changes under a multiplication.
+  - `writeRules(list)`: the text of `rules-data.mjs`, the serializer T16c will use.
+  - `renderList(list, sources)`: the text of `docs/RULES.md`.
+  - `rulesHash(list)`: a hash of ids, bodies and retirements, for letter F.
+- `bin/lib/rules-check.mjs`, what needs the file system, each finding with its rule: a phrase
+  its file no longer holds; a call of `ruleValue` in `bin/` that names an id with no value (a
+  retired rule that code still reads is found here, before it is merged); a live rule with no
+  source, or a rule of his whose source is not his words; an id named by a text that does not
+  resolve; `rules-data.mjs` different from `writeRules` of itself; `docs/RULES.md` different
+  from its rendering. Who reads a value is found by that scan and never declared.
+- `bin/rules.mjs`, the command `js-harness rules`: the list; `rules <id>` one declaration with
+  its source and who reads it; `rules check`, exit 1 on a finding; `rules render` writes
+  `docs/RULES.md`. It imports no module that reads a rule, and runs as `node bin/rules.mjs`
+  when the dispatcher cannot load.
+- `docs/RULES.md`, rendered, and the one text that shows a value because nobody writes it. Its
+  head: that it is rendered and how a rule is changed, the hash, the counts. Then the rules of
+  his and the project's, one line each: id, subject, value with unit or the sentence of its
+  text that holds the first phrase, the flag that overrides it, the earlier values, who reads
+  it or "read by: none", since, the state of its row, where its source is. Retired rules last.
+  In an installed project there is no `docs/RULES.md` and no sources file: `js-harness rules` is
+  the list there, and `rules check` says which checks it left out.
+
+**What T16b builds, in two slices.**
+1. The library, the command, the sources file, `docs/RULES.md`, and the declarations of two
+   groups. The values whose constant is exported: the wait for the lock, the three bounds of a
+   review part, the review's model and effort; each constant is bound to its declaration by a
+   test until it is rewired. The values no code holds, each only with a source of one of the
+   two kinds, as the orchestrator's explorer found them and this session read them:
+   - the models and the effort of sub-agents are his, in his words (the transcripts
+     `182ad401-252a-4cbe-afcc-929fcd905c6a.jsonl`, line 990, of 2026-10-10: Haiku only to write
+     code, at least Opus 5.5 at high for the rest; `729ed66b-83fe-4cf2-809a-2edf5c5c4462.jsonl`,
+     line 7049, of 2026-10-07: always high; `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line
+     2037, of 2026-10-11; the first two read by this session with `sessions --quote`). That
+     "the rest" means the sub-agents that explore, review and verify is the orchestrator's
+     reading, stored as the reading;
+   - the size of a reviewed commit is the project's, by design (`odd/tasks/gate-lock.md:697-698`);
+   - the Codex rate and the number of work sessions are left out: each number was the
+     orchestrator's, approved by him inside a whole list and never by itself (its message of
+     2026-10-11). The orchestrator asks him whether they stand; they enter with his answer, with
+     no change of shape.
+   A test runs `rules check` on the real tree, so
+   the gate holds the list with no change to `bin/check.mjs`; the row is T16d. One shared file
+   is touched, told first: `bin/js-harness.mjs`, for the command's entry.
+2. The rewiring, one file at a time, each told to the orchestrator before it is touched because
+   other sessions edit them (`bin/check.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`,
+   `bin/codex-review.mjs`, `bin/contract.mjs`): the constant reads the declaration, the skill's
+   text and the messages interpolate it, the tests import it. The four values whose constant is
+   not exported are declared here, in the commit that rewires them, never before. Done for a
+   file when no test of it states the value as a literal.
+   The values the second reader found that the first draft did not name wait in this queue,
+   each declared or left with its reason when its file is reached: the shortest phrase of a
+   control (`bin/lib/failures.mjs:19`), the channel's four limits (`bin/lib/channel.mjs:35-44`),
+   the exit code of a wait that gave up (`bin/gate.mjs:37`), the gate log's size
+   (`bin/lib/gate-log.mjs:26`), the runs a plan needs (`bin/lib/codex-review-plan.mjs:51,54`),
+   the prompt's bound (`bin/lib/codex-review-prompt.mjs:45`), the board's timeout
+   (`bin/sessions.mjs:64`), the goal's length (`bin/contract.mjs:21`), the efforts a contract
+   takes (`bin/lib/contract.mjs:32`), the review's session (`bin/codex-review.mjs:200`).
+Not in T16b: the context pause and the window, declared when the branch that changes them is on
+`main`; the rules in prose, declared with their homes (T8 for `AGENTS.md`, the protocols skill).
+
+**Where the rest of the protocol lands.** T16c, the command: the check of his words, the relief
+line that names the one it supersedes, the memory update owed, the mark of the one change that
+is open, a retirement refused while the scan finds a reader, a change of a phrase of
+`AGENTS.md` arriving only by the approved draft. T16d: the patterns, the row, the sightings.
+T16f: `diffRules` and where the last hash seen is kept, the hash in the installed command, which
+rules reach an installed project (a field added then; the ninth difference is his), the
+orchestrator skill's "read the relief file" becoming "read the list", which cannot happen
+before the context pause is declared. T15 and T8: the roadmap's sentence that makes the relief
+file a home is removed.
+
+**Tests first.** Each refusal of `readRules` seen failing first on a fixture: two ids alike; no
+body or two; a number with no unit; a retired rule with a value; a successor that does not
+resolve; a phrase under twelve characters; a subject that holds a digit; an unknown owner; a
+list not sorted by id. `ruleValue`: its three throws. `writeRules`: the real file equals
+`writeRules` of what it exports, byte for byte, and with either line ending. `renderList`: an
+expected text. `rules-check`: each finding on a fixture project, a call of `ruleValue` found in
+single and in double quotes, and a planted violation on a copy of the real list. That
+`rules-data.mjs` has no import. The command through the dispatcher and on its own. The bindings
+of slice 1, one per constant.
+
+**Not guaranteed.** A hand edit of `rules-data.mjs` that keeps its shape passes, until T16c. A
+value with no reader is borne out by nothing: the list prints "read by: none". A value restated
+in a text with no `rule:<id>` beside it, in another wording or with no number at all ("past the
+limit"), is found only by its rule's patterns, in T16d, and the declarations alone make that
+detector no better. A text whose phrases survive a rewrite that changes its meaning keeps its
+`since` and its source. A call of `ruleValue` whose result is ignored. A mistyped id in code
+stops every command when it loads, and the gate with it: the test on the real tree is what
+keeps it off `main`. A source of his words seeded by this session is as good as its reading of
+the transcript line, and is marked as checked by a session.
+
+**Cost.** One import and one call where a constant was a literal; a reader of the code follows
+one hop to learn a number. A change of a value is one line of one file, and a code commit.
+
+What the two readers changed. The attack: who reads a value and where copies stand are found by
+a scan and no longer declared by hand (the first draft's two lists were the hand-kept index
+again); slice 1 declares only what a test can bind, so the list shows nothing the code could
+contradict; the third kind of source is gone; a rule's text is rendered from its home and the
+declaration holds only a label; the sources left the shipped package; the load-time throw is
+kept and its cost said. What was missing: the stored state of a rule's row, the earlier values,
+the overriding flag, the unit checked at the read, several phrases for a list, successors as a
+list, the serializer and its round trip, the hash, the texts the id scan reads, and where each
+later letter lands.
+
+### Model and effort as rules (T16b, third part)
+Designed on 2026-10-12, after a read-only explorer mapped what the code and the records hold and
+three readers that did not write it read it in two rounds: one to attack the first draft, one to
+find what it lacks, and a third on the two decisions the first round turned over; what each
+changed is the last paragraph. Not built. It designs B1 of
+`docs/model-effort.md`: the table of model and effort by kind of work has one home, the rules
+list; each row carries its value, its source, the engine version and the model id it was checked
+on, and its date; a new engine version or a new model marks the rows stale; rows are marked
+shipped or local. It builds on "How a rule is declared (T16b)" and changes of it only what "What
+the first slice gains" lists. The rewiring stays the second part; this is the third, a task of
+its own in the list.
+
+What exists (the explorer's report and the attacking reader's counts, both of 2026-10-12, and one
+sample read by this session):
+- Five rows are declared, with nobody reading them: `review-model`, `review-effort`,
+  `subagent-effort`, `subagent-reader-model`, `subagent-writer-model`
+  (`bin/lib/rules-data.mjs:41-52`, `:89-107`). The three sub-agent values are names a person says
+  ("Haiku 5.5"), not what a record holds.
+- No code under `bin/` reads the Claude Code version. The records hold it: an assistant entry of
+  a transcript carries `version`, `effort` and `message.model`, for a session and for a
+  sub-agent, on 213 of 215 launches back to engine 2.1.281. A model can be `<synthetic>`, which
+  `bin/lib/sessions.mjs:157` already skips, and an id can end in a date
+  (`claude-haiku-4-5-20251001`).
+- A sub-agent leaves two files under `<session>/subagents/`: `agent-<id>.meta.json` with the
+  short name passed on the call (`model`: `haiku`, `opus`, `sonnet`; never a full id), its
+  `effort` and its `agentType`; and `agent-<id>.jsonl`, whose assistant entries hold the model
+  that answered. 97 of 215 launches passed no model, and those do not always run on the
+  session's: the agent type can set it (`claude-code-guide` was answered by a Haiku). 57 passed
+  `sonnet`: gentle-ai's own reviewers, another tool's agents.
+- The call cannot pass a full id, and what a short name gives is the engine's: `haiku` gave Haiku
+  4.5 on 2.1.292 (`evals/configs.mjs:281`) and on 2.1.286 (a launch of 2026-10-04), and
+  `claude-haiku-5-5` on 2.1.295.
+- Two engines write into this project's records on the same days: 2.1.295, and 2.1.296 from
+  another entry point with four launches and no model passed. So "the newest engine" is not the
+  engine in use.
+- The Codex review measures itself: it reads the model and the effort its session ran on from
+  the rollout file, refuses a review that ran on another (`bin/codex-review.mjs:753-757`,
+  `:1516-1519`) and writes the Codex version on each line of its run log (`:1417`).
+- The package ships `bin/`, so `bin/lib/rules-data.mjs` reaches every project that installs it,
+  with this repository's ways of working in it (three work sessions, his Codex rate).
+
+**The decisions.**
+
+1. A row of the table is two rules, as a pair already is. An effort rule is the level, exact:
+   "never low, above high only with a measurement" needs no rule of its own while every row says
+   high. Declared in this part, each only with a source of one of the two kinds:
+   - `session-model` and `session-effort`, new: what a session runs on (design, a protocol,
+     verification, review, orchestrating, a build): his words of 2026-10-10 (`182ad401-…`, line
+     990, read by this session for the first slice).
+   - `subagent-writer-model`, `subagent-reader-model`, `subagent-effort`: declared; the two
+     models change form (2).
+   - `review-model`, `review-effort`: declared, unchanged.
+   Not declared, each with its reason:
+   - The trial of medium on a closed-scope build. The text he decided on says it "becomes a rule
+     only by C2", the opening of his rule it needs is not decided (F3), and the line that opened
+     it names neither medium nor a trial. It is a measurement in progress, recorded in this
+     document; a check that finds a session at medium finds a difference, and the record of the
+     trial is what explains it.
+   - A Codex work session. His words of 2026-09-29 say high, his later words allow more for a
+     review, and his machine is set above high (`docs/model-effort.md`, G): the source does not
+     settle one value, so it is his to say first.
+   - Documentation: not decided.
+   - gentle-ai's reviewers, the agent types that set their own model, the evals: another tool's,
+     the engine's, and a measurement's own settings. None is a rule here; `rules applied` shows
+     the first two by agent type so that they are seen and not taken for a breach.
+
+2. The value of a model rule is the id a record holds (`claude-haiku-5-5`), not the name a person
+   says: a check compares records, and code that reads the rule needs the string the host knows.
+   That his "haiku" is that id goes in the source as the reading, his to correct, as
+   `review-model` already does for "sol 6.1". The subject of the reader's rule loses "least": his
+   words allow Opus 5.5 and, once it exists, Fable 5.5, "ningun otro modelo hasta la fecha", so
+   today it is one id, and the day a second is allowed the rule changes with his words. The
+   change of form rides the commit that corrects the first slice after its Codex review, before
+   the list reaches `main`, so the list never shows the names and no `was` records a change
+   that was none.
+
+3. One new optional field of a value body, `alias`: the short name the host takes where the id
+   cannot be passed (`haiku` for `subagent-writer-model`, `opus` for the reader's). It is how
+   the project applies his rule, not his decision: it is recorded in the source's reading, and
+   an engine that gives another model for the name changes the alias, or the way of launching,
+   with no new words of his. It is in the hash.
+
+4. "The engine version and the model id it was checked on, and its date" is computed from the
+   records and stored nowhere. Stored, it would be a line someone must remember to write at each
+   engine release, and a mark written by hand can be false: the reason the failures register
+   computes its states. `js-harness rules applied` reads the records of the project it is run in,
+   on this machine, and prints for each rule with an alias one line for each engine in the
+   window. An engine is an entry point and a version (the same version writes as the desktop app
+   and as the command line, and only one of them may have launched anything), in numeric order.
+   A launch's day is the time of its first assistant entry, never the file's: the host rewrites
+   old files in batches. Each line holds:
+   - the launches that passed the alias on or after the rule's `since`, by the model that
+     answered, with the day of the last;
+   - `agrees` when every one was answered by the rule's value (a date at the end of an id is not
+     part of it);
+   - `differed` when one was not, with the id and the file;
+   - `no launch yet` when the engine has an entry on or after `since` and no launch passed the
+     alias on it. This is the stale mark, engine by engine, and the next launch settles it.
+   What the alias gives today is its most recent launch on each entry point: when that one was
+   answered by another model the line says `differs`, the command exits 1 and prints the line to
+   send to the lead. An older difference on an engine that has launched since is shown and does
+   not fail. A change of a value's form never moves `since`.
+   Then, once: the short names passed that no rule's alias names, by agent type; the launches
+   that passed no model, by agent type and the model that answered; each model id that no rule's
+   value names; and what it read (the days, the files, the ones it could not read, whether the
+   cap cut the window). An entry with no version or a `<synthetic>` model is skipped and counted.
+   A project with no records prints that and exits 0.
+   For a rule with no alias nothing here depends on the engine, and the command says who holds
+   it: `review-model` and `review-effort` by `codex-review` itself, at every review; the session
+   rows and the sub-agents' effort by the check of B3.
+   It is not part of `rules check` and not of the gate: the answer depends on the machine and on
+   the day, and a gate turned red by an engine that updated itself would be a false red. Its
+   place among the machine's facts is a row of `doctor`, a later task that touches a shared file
+   and is told first. The head of `docs/RULES.md` gains one line: the list holds no engine and no
+   date, and `js-harness rules applied` prints them.
+
+5. The read is bounded, because a read of every transcript loaded the machine before
+   (`board-read-loads-gate`). `bin/lib/rules-applied.mjs` picks the sub-agent files changed in
+   the last seven days, newest first and at most 500, and reads of each the meta file whole and
+   the transcript up to its first assistant entry, at most 1 MB (the largest seen ends at 257
+   KB); a launch whose entry is older than seven days is then left out. For the session files
+   changed in the same days: the last assistant entry, read from the end in doubling steps from
+   64 KB to 1 MB (the farthest seen starts 52 KB from the end). The pure part,
+   `appliedOf(rules, launches, sessions, today)`, takes entries; the reader of files is apart,
+   so no test reads his home.
+   Two roots, both printed: the records are those of the main checkout, whatever worktree the
+   command runs in (the host keeps one folder for all of them; `mainCheckout` and `projectSlug`
+   exist, imported and not changed), and the project is the git top level of where it runs. The
+   form `applied` does not run the check of the list: it reads no document.
+   The list of launches (alias, id, effort, agent type, engine, day, file) is what the check of
+   B3 and C8 of this document (T13) need: one reader of those files, offered to whoever builds
+   that check.
+
+6. Shipped or local is a field, `scope: "repository"`, absent for a rule of the harness wherever
+   it is installed. Marked `repository`: the Codex rate and floor, the size of a reviewed commit,
+   the number of work sessions, and the five rows of session and sub-agent. Not marked: the two
+   of the Codex review, which the shipped command fixes for anyone. The rows of session and
+   sub-agent are marked because what the harness turns on in a project by default is his and not
+   answered (the roadmap's list of his decisions, item 6); the day he answers, the mark of those
+   rows is removed or stays, and nothing else changes.
+   A rule of scope `repository` is in force only in the repository that declares it: a project
+   whose own `bin/lib/rules-data.mjs` is, line endings apart, the list the running copy holds.
+   A project that installs the harness has no such file. This repository has it, and so does
+   each of its worktrees; and when the copy that runs is the installed one and is behind the
+   checkout, the two differ and no value is given, which is the truth: that copy does not know
+   the rule as it stands. So:
+   - `ruleValue` refuses such a rule, and `rules check` finds the call. Code that ships reads it
+     with `ruleHere(id, unit, projectData)`, given the text of the project's file or nothing,
+     and gets the value, or that the rule is not of this project, or that the copy is behind.
+     The reader has to say what it does in each case (`contract goal` prints no mode, or that
+     the installed command is behind; `rules applied` leaves the rule out and says how many it
+     left out). It is called where the project is known, never when a module loads: the
+     rewiring's "the constant reads its declaration" is for rules with no scope.
+     `ruleOf(id)` gives a declaration, for a text that names the alias.
+   - That is the path B2 and B3 need: their code ships and reads this table, and with the mark
+     it acts here and is silent in a project until he decides otherwise. For B5: a skill's text
+     is written into his home when the harness is installed, where no project is known, so it
+     never holds a value of such a rule; it names the command that prints it.
+   - One JSON line in a project cannot switch a rule of his on: the switch is the whole list.
+   - `docs/RULES.md`, `js-harness rules` and `rules <id>` show the mark. The plain listing still
+     reads no file.
+   - The hash stamped in an installed command (letter F, T16f) is taken over the rules with no
+     scope, so that a change of his Codex rate does not call every installed copy behind in
+     every project; in this repository the comparison above is what says it: named here, built
+     there.
+   - When the skills' texts and the template are among the texts scanned (T16d, T16f), a
+     `rule:<id>` of scope `repository` in them is a finding: named here, built there.
+   The values of those rules still travel inside `rules-data.mjs`; no words of his do. Whether an
+   installed project gets a list of its own is the ninth difference, his, and nothing here
+   needs it.
+
+**What the first slice gains**, so that the shape changes once: `alias` and `scope` in the keys
+`readRules` accepts, in the order `writeRules` gives and in the hash (`bin/lib/rules.mjs:12-18`,
+`:295-300`); `renderList` prints the alias, the scope, and the `review` day, which is accepted
+today and printed nowhere; the scan of readers finds `ruleHere(` and `ruleOf(` beside
+`ruleValue(` (`bin/lib/rules-check.mjs:11`), for "Read by" and for the refusal of (6); the
+command takes the word `applied`, and its head no longer says it reads only under the package;
+the readings of the two model rules in `docs/rule-sources.json`; the list rendered again, with a
+new hash.
+
+**A change before T16c exists.** By hand, in the shape `writeRules` gives, with the source edited
+in the same commit: a code commit through the gate and both reviews, in a pull request of its
+own. A rule of his changes only with his words by transcript line; an alias changes with a
+reading.
+
+**Tests first.** `readRules`: an alias on a rule with no value; an alias that is not one short
+lower-case word; a scope that is not `repository`. `rulesHash` moves with each. `ruleValue`
+refuses a rule of scope `repository`; `ruleHere` gives the value when the project's file is the
+running list, with either line ending, says "not of this project" with no file and "behind" with
+another list, and throws as `ruleValue` does for the rest. `appliedOf`, on entries written in
+the test: `agrees`; `differs` on the most recent launch, exit 1; `differed` on an older one,
+exit 0; a launch before `since` not counted; one version on two entry points, one with no
+launch; an engine whose entries are all before `since`, with no line; a dated id; a
+`<synthetic>` model and an entry with no version skipped; a short name no rule names; a launch
+with no model. The reader: a temporary folder with two launches, one transcript cut short, a
+file changed today whose entry is a month old, and a session whose last assistant entry is past
+64 KB. `rules-check`:
+`ruleValue` of a `repository` rule under `bin/`; a `ruleHere` call listed as a reader. The
+command: `rules applied` on a temporary records folder, its exit 1, a project with no sources.
+`renderList`: an expected text with an alias, a scope and a review day.
+
+**Not guaranteed.** That a writer was launched with the alias at all: that is the check of B3.
+A launch older than seven days, or past the cap. A machine whose records were cleared, and a
+host that keeps none (Codex): the command says it read nothing. A sub-agent resumed on another
+engine: its first entry gives the older one. A model that exists and nobody used. An engine that
+renames an effort level. Code that walks the whole of `RULES` instead of naming an id escapes
+the refusal of (6). `rules applied` not run: until the row of `doctor` exists, a session runs
+it. A project that copies the whole list into its own `bin/lib/rules-data.mjs` switches his
+rules on for itself: a deliberate act, not an accident. A read from `evals/`, which the scan
+of readers does not cover. The texts that state a model or an effort in other words (the roadmap's rows, `docs/model-effort.md`'s table, which is the text he
+decided on and not a home) are found only by a rule's patterns, in T16d.
+
+**Told, and to whom.** The orchestrator: where this differs from B1 as he let it enter the plan
+(the engine, the id and the date are computed and not stored; a model's value is the id; the
+trial and the Codex work session are not declared; "local" is a rule in force only in the
+repository that declares it, read by shipped code through a guarded read); that T13 of this
+document and B3 are one check; that B4 had no owner in the proposal; the two things on his machine that the proposal's G already holds. The session of the session channel,
+through the orchestrator: `ruleHere`, `ruleOf`, the list of launches, and that
+`bin/lib/sessions.mjs` gains an importer.
+Settled by the orchestrator the same day (its message of 2026-10-12, a peer's and not his
+words): T13 and the checking half of B3 are one check and this session's, since it reads the
+launches; the session channel's session keeps B2, the applying half of B3 and B5; B4 is this
+session's, with the alias. The first three differences and the last stand as design and are
+told to him in a recap. What a Codex work session runs at, and what the harness turns on by
+default in a project (item 6 of his decisions), go to him one at a time; both stay undeclared
+until he answers.
+
+**Cost.** One command more and one module that reads his home's records, bounded. Two declared
+values change form and five rows gain a mark. Every shipped reader of a `repository` rule writes
+one more branch: what it does where the rule is not in force.
+
+What the readers changed, three of them in two rounds. The second round, one reader on the two
+decisions the first had turned over: "in force where the source is recorded" had no project root
+the code agrees on, took the switch from one copy and the value from another, and could be
+turned on by one line of JSON, so the switch became the list itself; a launch's day comes from
+its entry and not from the file, because old files are rewritten in batches; an engine is an
+entry point and a version; the exit is 1 only for what the alias gives today; a skill's text
+holds no value of a scoped rule; `session-effort` cites the line that opened the trial. The first
+round, the attack: the state is given engine by engine, because two
+engines write on the same days and "the newest" was a false stale mark that would not heal; a
+launch is compared only from the rule's `since`, with dated ids and `<synthetic>` handled; the
+trial is not a rule; the refusal of every read under `bin/` became a guarded read, because it
+refused this design's own command and the three parts another session builds; the floor in the
+reader's subject is gone; the tail read steps back; "inherits the session's" was false. What was
+missing: the path for B2, B3 and B5; what the first slice gains, field by field; the change path
+before T16c; the kinds of work that are not rules, each with its reason; what computing loses,
+said under "Not guaranteed" and in the list's head; the hash of an installed copy; T13 and B4;
+who is told what; and that this is a third part with a task of its own.
+
+### What ran, against the rules with no short name (T16b, third part: the checking half of B3)
+Designed on 2026-10-12 and read by one reader that did not write it, whose changes are the last
+paragraph. Built on `feat/rules-held`, stacked on `feat/rules-rewire`. It adds one block to
+`js-harness rules applied`.
+
+**The problem.** Three declared rules say what runs, and nothing compares them with what ran:
+`session-model` and `session-effort` (what a session runs on) and `subagent-effort` (the effort
+of every sub-agent). `rules applied` answers another question, what a short name gives on each
+engine. B3 of `docs/model-effort.md` asks for this one: "the level a task really ran at is read
+from the session's records and a row of `check` compares it with the table, as INFO", and names
+the case that matters most: a sub-agent call that passes no effort takes the session's, so a
+session at another level silently lowers its reviewers.
+
+**What exists.** `readRecords` gives, for the last seven days, the last answer of each session
+and the first answer of each launch, with the model, the effort, the engine, the time and the
+file; `appliedOf` keeps or skips each entry and takes the rules in force. So the comparison
+needs no new read. Two things it does not have yet: `appliedOf` drops the effort of an entry it
+keeps, and the reader gives a launch the effort its meta file holds before the one its answer
+records.
+
+**The decisions.**
+
+1. One more key of what `appliedOf` returns, `held`, and one more block of `appliedLines`: not
+   a second command and not a second reader.
+
+2. Which rule is held to which field is said by the command, `bin/rules.mjs`, in three literal
+   reads: `ruleOf('session-model')` for the model of a session, `ruleOf('session-effort')` for
+   its effort, `ruleOf('subagent-effort')` for the effort of a launch. So `rules check` lists
+   the command as the reader of the three rules and refuses an id that is renamed or retired;
+   the pure module still imports nothing and is passed the three as
+   `{ id, of, field }`. One of them that is not among the rules in force (left out, in a project
+   that is not this repository) has no item.
+
+3. What ran is what the answer records. A launch's effort is the one its first answer holds,
+   not the one its meta file holds: the first is what the engine ran, the second what the call
+   asked for, and a call clamped by the engine would otherwise print as agreeing. The reader
+   changes for that. A record with no effort is counted apart, never as a difference.
+
+4. It is not a list of breaches. The folder holds records that are no rule's: a headless run
+   another tool started, an agent type that sets its own level, gentle-ai's reviewers. So each
+   other value is shown with what it came from, the entry point for a session and the agent
+   type for a launch, with its count, the day of the last and the file of the last on a line of
+   its own. The words are "agree" and the other value; nothing says "breach".
+
+5. It is information: it never changes the exit. B3 says INFO; the command is outside the gate
+   because its answer depends on the machine and the day; and no case here is free of a false
+   red, since the records do not say which sessions are work sessions. One case is not left
+   silent: a launch that passed a declared short name is this repository's own, so when such a
+   launch ran at another effort than `subagent-effort` says, a line "To the lead" says how
+   many, with the exit unchanged.
+
+6. The last lines say what they are about. `PASS` names the short names; a last line counts
+   the records that ran at another value than a rule of the block says, so that a pass above a
+   difference is not read as "all agrees". The closing note says only that a Codex review
+   holds its own model and effort.
+
+7. The last answer of a session, or the first of a launch, can be one the engine wrote itself
+   (`<synthetic>`): the reader steps past those to an answer a model gave, and gives the
+   synthetic one only when the read holds no other.
+
+A sub-agent's model with no short name passed is not held to a rule: the records do not say
+whether a launch wrote code or reviewed. The block "Launches that passed no model" shows them.
+
+**The lines**, after the three counted blocks and before "Left out", only when a rule of the
+three is in force:
+
+    What ran, against the rules with no short name (information, never a failure):
+      session-effort: high, since 2026-10-10
+        agree: 25 of 27 sessions
+        medium: 2 sessions on claude-desktop, the last on 2026-10-11
+          <file>
+      subagent-effort: high, since 2026-10-07
+        agree: 160 of 163 launches
+        no effort recorded: 2 launches
+        medium: 1 launch of general-purpose, the last on 2026-10-12
+          <file>
+
+**Tests first.** The reader: a launch whose meta file and answer hold two efforts gives the
+answer's; a launch with an effort only in its meta file gives none; a synthetic last answer
+after a real one, and a synthetic first answer before a real one; a transcript of synthetic
+answers only. `appliedOf`: all agree; another value by entry point and by agent type, most
+first; nothing to compare; an entry before `since`; a record with no effort; a dated model id
+agrees; a rule of the three not in force has no item; the exit is 0 with a difference; the
+count for the lead, only of launches that passed a declared short name. `appliedLines`: the
+block whole, its singular forms, the file on its own line, the last lines with and without a
+difference, no block when nothing is held. The command: the three rules are listed as read by
+`bin/rules.mjs`.
+
+**Not guaranteed.** A session's level in the middle of its life: only its last answer is read.
+Which sessions are work sessions of the project. A launch's kind of work. An engine that
+renames an effort level, or records it as something that is not a text: it prints as another
+value or as no effort. A rule's `since` is a day as he said it and a record's day is in
+universal time: an entry of the first hours can fall on the day before. Older than seven days,
+past the cap, or a host that keeps no records.
+
+**Cost.** One key and one block; the effort kept on an entry; two changes of the reader; three
+reads in the command; the last lines reworded.
+
+What the reader changed. Three things would have misled: the effort of a launch was the meta
+file's, so a clamped launch agreed; every other tool's record counted as a difference with no
+word of where it came from; and `PASS` or "Nothing compared" closed a block that showed
+differences. Taken as notes: `keep` drops the effort, so the cost was understated; a synthetic
+last answer hid its session; the renamed level and the two kinds of day under "Not
+guaranteed"; a line for the lead in the one case B3 names; the file on a line of its own, for
+a phone; zero compared, which read as a pass; and the home of the three ids, which as a table
+in the pure module no check could see, so they are literal reads in the command. Cut on its
+advice: a test of the table, and a promise about rows of `check` and `doctor`.
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build
@@ -644,7 +1227,11 @@ session:
    the agreed protocols; nothing stated that was not checked; what is passed on is complete and
    true; each mistake leaves a control, of the smallest kind that does the job. With the meaning
    of done: a rule is not recorded until it has its place in a check, a line here or a protocol.
-2. What is his, the six items: spend outside the plan; anything installed or changed on a
+2. What is his, the six items of 2026-10-10 (they stand, by the lead's reading of its record
+   on 2026-10-12, a peer's claim: the merge of code, once a seventh, is the lead's under the
+   charter, and his later answer adds one of another kind, a report published outside, such
+   as an issue in another repository; T8's draft holds the list he passes, and the check of T2
+   names no count): spend outside the plan; anything installed or changed on a
    machine; a product choice; what cannot be undone; a change of the plan or of its order; a new
    protocol. Narrowed on 2026-10-11 (the relief file's line 236, as the sweep reads it; T8
    drafts the line from both): what the harness writes under the home's `.js-harness` and
@@ -690,7 +1277,12 @@ the section, it is withdrawn.
 
 1. Asking him for a decision: what the yes covers in everyday words, what it does to him, what
    it does not authorize, what the other option means; one thing per yes; the block; a question
-   asked again says first that the earlier answer still holds and what changed.
+   asked again says first that the earlier answer still holds and what changed. Two rules
+   adopted since, with no task anywhere until the lead's inventory of 2026-10-12 named this
+   section as their home: a choice is put as an everyday situation with its options A and B
+   (his memory note on one prompt a reply, its last paragraph); and a short answer of his that
+   fits two readings is asked about, not guessed (relief file, line 331, not read by this
+   session).
 2. Closing a reply: the four states; before a block, what was done, what is next and why, and
    for which session; the map from `js-harness progress`; a cut at the end of a task.
 3. Running something that costs (a gate, an eval batch, a review, a push): its count said first;
@@ -845,7 +1437,7 @@ board), GL the gate lock, MF a machine fact that stays in memory, DROP stale.
 | 55 | A message between sessions is a claim, never his word | RM, MEM, REL | L+T, with 20 |
 | 56 | His answers travel with exact words and transcript line | REL, MEM | CH |
 | 57 | A bare paste is not his word | MEM, REL | CH (the opening) |
-| 58 | An unused block is repeated whole | REL | CH |
+| 58 | An unused block is repeated whole; while he is away an open block is given once and held (his rule of 2026-10-11, later than this row) | REL | CH |
 | 59 | Never two gates | SK, MEM, RM | GL |
 | 60 | While a gate runs: no test, board read or reviewer; one try | MEM, REL | GL, P3 |
 | 61 | No gate turn is asked of the orchestrator | MEM, REL | GL |
@@ -905,7 +1497,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 - [x] T0 Design: the survey, the placement of the 83 rules, the checks, the outline of
   `AGENTS.md`, the protocols, the signals (route: inline, with three read-only sub-agents for
   the survey and the host documentation)
-- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec`
+- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec`. It takes section D of
+  `docs/model-effort.md` (documentation by model, graded by a test that rebuilds a capability
+  from the documents alone): one of the two measurements that spend, his to allow before it
+  runs, asked once when he is back
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json`
 - [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
@@ -961,11 +1556,29 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - [ ] T16b The homes and the list: how a rule is declared, designed and read by a reader
     that did not write it; then the declarations of the rules that have a value today, and
     `docs/RULES.md` rendered from them
+    - [x] First part: the design, the library, the check, the command, fourteen rules with
+      their sources and the rendered list (commits `859a797`, `8ada9cc`, `8668dfc`, `79f9bbf`
+      and the correction `331090b`; gentle-ai approved each code commit and Codex's records
+      cover `859a797..6a721cc` and `b0ccff1..331090b`)
+    - [ ] Second part: each constant reads its declaration, one file at a time, each told to
+      the orchestrator before it is touched. Done: the four bounds whose files were free
+      (commit `21b391f`). Left: the model and the effort of a Codex review, when
+      `feat/gate-wait` is on `main`; the context pause, declared when its file is free
+    - [ ] Third part: model and effort as rules, as "Model and effort as rules" designs it:
+      `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
+      `docs/model-effort.md`, and with T13 the checking half of B3 (the orchestrator's
+      settlement of 2026-10-12). Built: the fields, the guarded read and the declarations
+      (commit `528bf56`, approved by gentle-ai), the command (`34c2dfc` and the commit after
+      it). Left before it is checked off: gentle-ai on the command, Codex on all of it (held
+      for him by its plan), the row of `doctor`, and the check of launches (T13 with B3)
   - [ ] T16c The one command that changes a rule
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
     its sensors
-  - [ ] T16e The merge command, the rule rows first
+  - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
+    inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
+    loop over what the reviews cover looks at each record itself, and the evidence of a
+    review is written in a document on the pull request's own branch
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
 - [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
@@ -1367,10 +1980,475 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   to the question at line 2958, not read). `f45176a` adds three sightings the orchestrator
   reported. The parent task stays open: four places of T17b are left with their reason and
   the six of `odd/tasks/codex-parity.md` wait for that document's branch.
+- 2026-10-11 and 12, T16b, design and first slice, on `feat/rules-list` (pull request 67, T17c,
+  is merged; `main` is `d94a765`, merged into this branch).
+  - The design is "How a rule is declared (T16b)" above: written after a read-only explorer
+    mapped where each value lives (145,816 tokens), then read by two readers that did not
+    write it (137,131 and 144,123 tokens), and what each changed is its last paragraph. Two
+    of this session's readings changed with it (differences 2 and 8) and the orchestrator
+    agreed they stay inside letter B.
+  - The slice (route: delegated, one writer at a time, each a narrow piece from an exact
+    specification, tests first; the specifications are this session's): the library
+    (`8ada9cc`), the check and the command (`8668dfc`), after the documents commit `859a797`.
+    Both gates passed on their first run. Run alone, each new test file passed before its
+    gate: no whole run was made beside a gate.
+  - It was the first slice of a trial his words opened (the orchestrator's transcript
+    `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, lines 2037 and 2891, both read): effort by
+    kind of work, alternated by slice. This one ran with the session at medium (read with the
+    app's tool; the first two specifications were written at high, before the change applied)
+    and its writers on Haiku 5.5 (`claude-haiku-5-5`, read in the first one's transcript):
+    four writers, 620,003 tokens, none wrong twice, three corrections by this session after
+    them (a literal 12 that is itself a declared rule; a unit not refused on a rule with no
+    value; a throw on a malformed source, which the third writer found in code that was not
+    its own). One slip of this session: two small test files run while a writer could have
+    been running its own.
+  - gentle-ai reviewed each code commit by itself, the first from a detached worktree,
+    because its assessment is always base to HEAD: both approved and acknowledged, twelve
+    notes, six of them warnings, none blocking, no requirement missed. It accepted the commit
+    of 1,275 lines: the size of a commit it will review was known at 1,185 (taken) and 2,250
+    (refused), and this is the third point. Eleven notes are corrected in `79f9bbf`, written
+    by a fifth Haiku writer (209,074 tokens) with the session at high and read by it; its
+    gate passed on its first run. gentle-ai on that commit: medium, 319 lines, not due.
+  - The seed is fourteen rules. A value entered only with a source of one of the two kinds:
+    his words by transcript line, each read by this session with `sessions --quote`, or a
+    design. Four are his by one answer of 2026-10-11 (line 2963, to the question at line
+    2958, both read): the Codex rate by changed line, its floor a review, the size of a
+    reviewed commit, the number of work sessions. Before that answer three of them were left
+    out, because each number had been the orchestrator's, approved inside a whole list.
+  - Decided with it, by his "Sí, que entre al plan" (line 2891): the rows of model and effort
+    by kind of work become rules of this list, each with the engine version and the model id
+    it was checked on, a mark of shipped or local, and a mark of stale when the engine or a
+    model changes. Not designed yet. The proposal it comes from is the orchestrator's
+    (`modelo-esfuerzo-propuesta.md` in its scratchpad, read whole by this session, not yet
+    copied into the repository).
+  - Owed in documents, not done here: that copy; `docs/ROADMAP.md:62`, `:353-360` and
+    `:539-541`, which say something else about models and effort; and
+    `odd/tasks/codex-review-lean.md:46`, which dates the review's effort 2026-10-06 when the
+    high in force is his word of 2026-10-08.
+  - This session's context stood at 86 percent when this was written, past which it tells
+    the orchestrator; its resume point is this entry, the Next step below and the engram
+    topic `odd/rule-hierarchy/state-addendum`.
+- 2026-10-12, T16b: Codex's review of the first part, its correction, the documents owed and
+  the design of the third part.
+  - Codex. The first run ended on part 1 of 7 with "Selected model is at capacity" (49,568
+    input tokens, nothing recorded; `codex-model-at-capacity` in the register). Run again in a
+    turn of the gate lock, on the same model, never recorded as a skip: it waited about 17 minutes
+    behind other sessions' gates and reviewed `859a797..6a721cc` in 7 parts, recorded, with
+    1,909,398 input tokens (1,523,200 cached) for 2,500 changed lines: 764 a line, 784 with
+    the failed part, where its plan had said about 2,130,000. Six findings, five of second
+    priority and one of third, each real:
+    - the check imported the phrase matcher from `bin/lib/failures.mjs`, which reads a rule
+      when it loads, so `node bin/rules.mjs check` could not start on a list without that rule;
+    - a source's dates were held to a shape and not to the calendar, and the day of its check
+      to nothing;
+    - a phrase that ends with its sentence's last character ran on into the next sentence;
+    - a retired rule lost the unit of its earlier values;
+    - a number as small as 1e-21 was shown as 0;
+    - a `## Progress` line inside a fenced example cut a feature document there, and the marks
+      of rules after it were never read.
+    All six are corrected, each with its test seen failing first, by a sixth Haiku writer
+    (175,017 tokens) from this session's specification, with the session at high and its diff
+    read by it.
+  - The first of the six is a requirement of the design that was missed ("it imports no module
+    that reads a rule"). The specification that asked for that import was this session's,
+    written at medium; gentle-ai did not see it either. By C2 of `docs/model-effort.md` one
+    missed requirement ends the trial for the session: the orchestrator answered that medium
+    is off for every session and the Haiku writer stays (its message of 2026-10-12, a peer's).
+    The trial's figures for this slice, at medium: three gates green on the first run of
+    three; one correction round after gentle-ai and one after Codex; no finding above second
+    priority; writers 620,003 tokens for 2,260 lines of code and tests, 829,077 with the first
+    correction writer.
+  - The two model values change form in the same commit, from the names he says to the ids a
+    record holds, before the list reaches `main` ("Model and effort as rules", decision 2).
+  - `main` at `1d5cf68` (pull request 68) is merged into the branch, clean. The documents owed
+    are commit `b0ccff1`: the proposal copied as `docs/model-effort.md`, four places of the
+    roadmap, the register's new entry. `odd/tasks/codex-review-lean.md:46` needed nothing: the
+    sweep had already dated the review's effort to 2026-10-08.
+  - The third part is designed above, after an explorer (123,692 tokens) and three readers in
+    two rounds (176,101, 168,848 and 155,382 tokens), written in a separate worktree while
+    Codex waited for the lock. The first round found three faults that would have stopped it;
+    the second, on the two decisions rewritten, two more. Its owners are settled by the
+    orchestrator and recorded in the section.
+  - The correction is commit `331090b`; its gate passed on its first run. gentle-ai reviewed it
+    alone (base `b0ccff1`, medium, 594 lines, one lens): approved and acknowledged, lineage
+    `review-438746f99975c9a8`, three notes and none blocking, each left for the next commit
+    that touches its file: the test that holds the check's imports reads only imports written
+    on one line; a retired rule whose earlier values mix a number and a text keeps a unit that
+    the text would be shown with; a fence left open above a `## Progress` line hides the marks
+    after it and nothing says so.
+  - Codex on the correction was held: its plan for `b0ccff1..331090b` is one part, 270 changed
+    lines, about 330,000 input tokens, and the allowance is 324,000. Asked of him by the
+    orchestrator, and allowed: "La opción A" (the orchestrator's transcript
+    `65318fd5-80e7-4bb8-92b5-06737140185b.jsonl`, line 2329, read by this session with
+    `sessions --quote`; the question it answers is the assistant entry at line 2318, "Opción
+    A: se hace la revisión, aunque pase el tope por 6.000"). It covers this one review at
+    about its plan: no new rate, and no second run after a fall without asking him again (the
+    orchestrator's reading). It ran from a worktree at `331090b`, so that the merges below did
+    not widen its range: one part, 247,253 input tokens (172,032 cached), under the allowance
+    after all, "the patch is correct", no finding, recorded.
+  - The lead's inventory of 2026-10-12 (each adopted rule against `main` and the feature
+    documents) gave this document five things, all taken and none built here: two rules with
+    no task, placed in protocol 1; two needs of the merge command, in T16e; the paid
+    measurement of documentation, in T1; a row of the survey his later rule on blocks
+    overtook; and the count of his items, which the check of T2 no longer names.
+  - `main` moved three times while this closed, each merged clean: `78bbc80` (pull request 70,
+    the session channel's fourth slice), on which the whole check passed in a turn of the
+    lock; `5f011cc` (pull request 71, the lock as a line by order of arrival); and `7411fe6`
+    (pull request 69, a script that counts git launches), merged while the second check still
+    waited for its turn, so that the check is run once on the tree that is pushed.
+    It moved two controls of the register, corrected with this entry: the flag of the board's
+    pause was renamed, and the item that owed the removal of the 73 percent mark is done, so
+    that failure has its control in place. One sighting is added from the orchestrator's
+    notice of the day. The pause is now one constant on `main`
+    (`bin/lib/sessions.mjs`); by "How a rule is declared" it is declared in the list and that
+    file reads it, in the second part, told before the file is touched.
+  - The first push was refused, by the control that exists for it: the branch's first commit,
+    `859a797`, holds `docs/rule-sources.json`, which a review counts as code, and no record
+    covered it. This session's slip: it gave Codex `--base 859a797`, and a base is left out of
+    its range. The line `check` prints at every commit had said for hours that one code commit
+    had no record, without naming it, and this session took it for the correction still to be
+    reviewed. The fix is a review of that commit by itself (123 changed lines, about 150,000
+    input tokens by its plan, inside the allowance): it found nothing, at 137,431 input tokens,
+    and is recorded as `40ccb45..859a797`. Then the push. What would have told it
+    sooner: the line at a commit naming the commit, as the push row does; told to the
+    orchestrator for the owner of that row.
+- 2026-10-12, T16b, the second part started. The first part is on `main` (pull request 72,
+  merged by the lead at `47484bd`). Branch `feat/rules-rewire`, worktree
+  `D:/js-harness-worktrees/rules-rewire`, cut from that commit. Route: delegated, one narrow
+  writer a piece on Haiku 5.5 from this session's specification, the session at high.
+  - Piece 1, the five constants of the Codex review (`review-part-lines`,
+    `review-part-files`, `review-parts-unflagged`, `review-model`, `review-effort`) read their
+    declarations: `bin/lib/codex-review-parts.mjs`, `bin/lib/codex-review-plan.mjs`,
+    `bin/codex-review.mjs`, their tests and `bin/lib/rules-bindings.test.mjs`, told to the
+    orchestrator before they were touched. The specification is `t16b-rewire-1.md` in this
+    session's scratchpad (session `9265156a-3a86-4da5-80f9-aebe66cd887c`). When the writer
+    returns: read its diff, commit through the gate, gentle-ai's assessment from `47484bd`,
+    and Codex with `--base 47484bd` (the base is left out of the range, and that commit is
+    `main`'s).
+  - Waiting for their branches to reach `main`: `bin/lib/gate-lock.mjs` (the wait for the
+    lock) and `bin/lib/sessions.mjs` (the context pause).
+  - Piece 1 is held before anything was written (the writer was stopped with the tree
+    clean): the lead found `bin/codex-review.mjs` and its test changed and uncommitted on
+    `feat/gate-wait`, and asks that session whether the other two modules are free. Taken
+    while that branch is open: `bin/codex-review.mjs`, `bin/lib/codex-review-runs.mjs`,
+    `bin/lib/codex-reviews.mjs`, `bin/check.mjs`, `bin/gate.mjs`, `bin/lib/gate-lock.mjs`,
+    `bin/lib/gate-log.mjs`; and on `feat/session-compaction`: `bin/lib/sessions.mjs`,
+    `bin/lib/pause.mjs`, `bin/sessions.mjs`, `bin/resume.mjs`, `bin/install.mjs`,
+    `bin/lib/manifest.mjs`.
+  - Taken instead, on the same branch, in files that are this session's alone: piece A of
+    the third part (`alias`, `scope`, `ruleHere`, `ruleOf`, the three readers found by the
+    scan, and the three notes gentle-ai left on the correction), in `bin/lib/rules.mjs`,
+    `bin/lib/rules-check.mjs` and their tests. Its specification is `t16b-third-a.md` in the
+    same scratchpad. After the writer: read its diff; then this session declares the aliases,
+    the scopes and the two session rows in `bin/lib/rules-data.mjs` with their sources (his
+    line 990 read again), renders the list, and commits through the gate; then both reviews,
+    Codex with `--base 47484bd`.
+  - Piece A is written and not committed. Read so far: the diff of `bin/lib/rules.mjs`, taken
+    as it is (the two constants the editor marked are read by the faults). Also read and taken:
+    `bin/lib/rules-check.mjs`. The two test files are not read line by line. NEXT: this
+    session declares the aliases, the scopes and the two session rows, then the gate. The
+    writer's changes stand uncommitted
+    in the worktree, in the four files (207,285 tokens; by its report, each alone:
+    `bin/lib/rules.test.mjs` 102 pass, `bin/lib/rules-check.test.mjs` 55, `bin/rules.test.mjs`
+    17, and `rules check` passes with the hash unmoved). Its calls where the specification was
+    silent, each to be judged when the diff is read: `ruleOf` of a rule in prose is no
+    finding; `ruleValue` on a rule in prose of scope `repository` gets both findings; the
+    three new lines of the list go right after the value line; mixed and unordered earlier
+    values give both faults; a `projectData` that is no text and not null is "behind"; the
+    reader of imports in the test would take a comment that holds the word import and a quote
+    for an import. The editor also marks `ALIAS_PATTERN` and `REPOSITORY_SCOPE` in
+    `bin/lib/rules.mjs` as never read: look at whether the faults use literals instead.
+    After that the lead's relay of the same hour frees more files for the rewiring:
+    `bin/lib/codex-review-parts.mjs`, `bin/lib/codex-review-plan.mjs`, `bin/lib/gate-lock.mjs`
+    and `bin/lib/gate-log.mjs` with their tests; `bin/codex-review.mjs` stays another
+    session's, so `review-model` and `review-effort` wait for `feat/gate-wait` on `main`.
+  - This session's context stood at 90 percent, with him away: the cut was given once in its
+    reply, and it goes on.
+  - The app compacted this session at about 05:00 on 2026-10-12; it resumed from this entry at
+    22 percent and sent the lead its line. Then the declarations, in one commit with the
+    writer's code: `alias` on the two sub-agent models (`opus`, `haiku`); `scope: "repository"`
+    on the seven rows the design names; the new rows `session-model` (`claude-opus-5-5`) and
+    `session-effort` (`high`), both of the repository, since 2026-10-10, from his line 990 of
+    `182ad401-…` read again with `sessions --quote`. The sources say that the id and the
+    aliases are this session's readings, and that the trial of medium is no rule. The list has
+    16 rules, hash `950f2423e296`; `rules check` passes. The head line of `docs/RULES.md` about
+    `rules applied` waits for the command (piece B). NEXT: the gate's answer on that commit,
+    then gentle-ai from `47484bd` and Codex with `--base 47484bd`, plan first.
+  - Piece A is commit `528bf56` (the gate passed at 05:39). gentle-ai approved it and the
+    approval is acknowledged (`review-2f492055c33125b4`, medium, one lens, run from a detached
+    worktree `rules-rewire-review` at that commit, because the working one held untracked
+    files). Its three notes are all taken and corrected by a writer, in the last commit of
+    piece B: a `ruleOf` read of a retired rule passed the check and would throw when run; a
+    `projectData` that is no text was answered "behind" instead of refused; the test's reader
+    of imports took only single quotes.
+    **Codex on piece A is held for him**: the plan of `47484bd..528bf56` is 2 parts, 466
+    changed lines, about 570,000 input tokens, and the allowance is 1,200 x 466 = 559,200. Not
+    run, not split; the lead has the figure (its estimator's median is about 1,224 a line
+    today, so every range over about 250 lines plans over the rate).
+  - The rewiring of what is free is commit `21b391f` (the gate passed at 06:09): the bound of
+    lines and of files of a part, the count of parts without a flag and the wait of the gate
+    lock each read their rule; the three tests that stated the numbers hold each constant to
+    its rule; `bin/lib/rules-bindings.test.mjs` keeps only the review's model and effort,
+    which wait for `feat/gate-wait` on `main`. Route: inline, one line a file.
+  - Piece B, the command `js-harness rules applied`, is written by four narrow writers on
+    Haiku 5.5 (134,004 + 121,836 + 204,700 + 195,167 tokens) from four specifications in the
+    scratchpad (`t16b-third-b1.md` to `-b4.md`), the first three in a folder apart while the
+    gate ran on this worktree. `bin/lib/rules-applied.mjs`: `appliedOf`, pure, and
+    `appliedLines`, what is printed. `bin/lib/rules-applied-read.mjs`: `readRecords`, the
+    bounded reader. `bin/rules.mjs`: the form `applied`. The head of `docs/RULES.md` says where
+    the engine and the date are read. This session read the three modules whole and the diff of
+    the command; the test files are not read line by line. One call of this session against
+    its own specification: a window with no launch of a declared alias prints `Nothing
+    compared`, never `PASS` (a writer saw that the specified line read as a pass). It goes in
+    two commits, each under about 1,200 lines: the pure module, then the reader, the command
+    and the notes of the review. The pure module is commit `34c2dfc` (the gate passed at 06:40).
+    The command, run once on the real records inside a turn of the gate (06:57, exit 0):
+    163 launches and 27 sessions of 2026-10-06 to 12 read from 210 and 43 files, 60 older than
+    the window, 1 with no model that answered, 2 session files with no assistant entry in
+    their last 1 MB; `opus` gave `claude-opus-5-5` on all 50 launches and `haiku` gave
+    `claude-haiku-5-5` on all 26, both on claude-desktop 2.1.295; sdk-cli 2.1.296 has no
+    launch of either yet; 87 launches passed no model (67 general-purpose and 12 Explore
+    answered by Opus 5.5, 8 claude-code-guide by Haiku 5.5). NEXT: the last commit through the
+    gate, then gentle-ai from `528bf56` on the three commits; Codex by its plan, and over the
+    rate it waits for him.
+  - The last commit is `c8ef7b5` (the gate passed at 07:12): the reader, the form `applied`,
+    the head line of the list and the three notes. The branch is four code commits on
+    `47484bd`, not pushed. gentle-ai goes slice by slice from the detached worktree:
+    `528bf56..34c2dfc` (1,288 lines, medium, one lens, `review-bf548f33bb522cc9`) started at
+    07:15; `34c2dfc..c8ef7b5` after it.
+    **Codex is one review of the whole range, inside the rate.** `codex-review --base 47484bd
+    --plan` on `c8ef7b5`: 7 parts, 2,616 changed lines in 18 files, about 2,530,000 input
+    tokens, against an allowance of 1,200 x 2,616 = 3,139,200; it needs `--max-parts 7`. The
+    range was not shaped to move the figure: it is the branch as it stands, the commits were
+    cut by the size a commit is reviewed at before any plan was asked for, and piece A alone
+    had planned over (570,000 against 559,200) only because the estimator's median stands a
+    little above the rate today. The lead saw no reason against it (its message of 07:20, a
+    peer's and not his words). It runs once gentle-ai has approved the slices. If it falls
+    midway it is not rerun: the lead is told the tokens read and the part. If the first part
+    answers at capacity at once, one more try after ten minutes, then stop.
+  - gentle-ai approved `528bf56..34c2dfc` and the approval is acknowledged
+    (`review-bf548f33bb522cc9`). Its four notes are all taken and corrected by a writer
+    (123,564 tokens) in one commit on this branch, before Codex, so that Codex does not pay to
+    find them again: `appliedOf` took a `today` that was no real day, or a `days` that was no
+    number, and then skipped nothing as old, so old records could decide the exit (now both
+    are refused); the day of an entry was the first ten characters of its time, which is
+    another day than its instant when the text carries an offset (now the day of the instant
+    in universal time); the order of versions was not an order when digits and letters mix
+    (now digits first); and the tests of the four rewired bounds passed for any value (each
+    now also proves a whole number above 0, and the wait of the gate lock has its test back).
+    NEXT: that commit through the gate; gentle-ai on `34c2dfc..` its head; then Codex, whose
+    plan is asked again on the new head.
+  - That commit is `878e2e8` (the gate passed at 08:06). gentle-ai approved `34c2dfc..878e2e8`
+    (1,061 lines, medium, one lens) and the approval is acknowledged; its five notes go into
+    `feat/rules-held`, so that this branch does not move again for what a review calls later
+    work: a time with no zone is read in the machine's own zone; no test runs the path where
+    git names the project and the main checkout; an empty `CLAUDE_CONFIG_DIR` counts as set;
+    no test proves that an error of the form `applied` is said and exits 1; the reader has no
+    test of the cap of sessions and takes a `now` that is no number in silence.
+  - **Codex reviewed the whole range once** (`codex-review --base 47484bd --max-parts 7`, in a
+    turn of the gate, 08:51 to 09:41): `65578da..878e2e8`, 7 parts, 2,682 changed lines,
+    **1,769,808 input tokens** (1,365,888 cached) against a plan of about 2,560,000 and an
+    allowance of 3,218,400; 660 a changed line. Recorded. Six parts with no defect, one
+    finding of the second priority, taken and corrected by this session, inline, test first:
+    `fenceWalk` took a line that starts with a code span in three backticks for the opening
+    of a fence, so `rules check` reported a fence that was not there and `rules render`
+    refused a valid document. A line of backticks whose words hold another backtick opens
+    nothing now, as in Markdown. The correction is commit `88cde75` (the gate passed at
+    10:16). Codex reviewed it alone (`878e2e8..c6b04ab`, 21 changed lines, 129,139 input
+    tokens against a plan of about 71,000 and the floor of 300,000): correct, no defect;
+    recorded. gentle-ai's assessment of `878e2e8..c6b04ab`: medium, 51 lines, not due, under
+    the budget of a slice; it stays pending and is reviewed with the next commits, on
+    `feat/rules-held`. Codex on this branch in all: 1,898,947 input tokens for 2,703 changed
+    lines of code, 703 a line. NEXT: push and the pull request; the lead merges it.
+  - This session's own language server (`node tsserver.js`, pid 59656) spun one logical
+    processor from 01:48 to 08:53 and slowed every gate of the machine (the lead's figures:
+    842 s to about 945 s). The gate printed it at 07:50 and this session reported it as a
+    process whose owner it did not know, when one look at its parents would have said it was
+    its own: the lead said so at 08:51, the chain was checked in the process list
+    (59656, 39296, 59764, 54748, the ancestor of this session's own shell) and the process
+    stopped. It is the register's `language-server-load` again, with a sighting added; what would stop it is the
+    gate's load line naming the session a spinning process belongs to, which is the lead's to
+    place.
+  - On `feat/rules-held`, stacked on that branch so that its reviews do not move: the block
+    "What ran, against the rules with no short name", as its design section above says, which
+    one reader on Opus 5.5 attacked before it was built (117,949 tokens; three things that
+    would have misled, all taken). Two writers on Haiku 5.5 in files apart (115,309 and 193,629
+    tokens): the reader gives a launch the effort its answer records and steps past synthetic
+    answers; `appliedOf` returns `held`, `heldOther` and `forLead`, and `appliedLines` prints
+    the block and the new last lines. The three reads in `bin/rules.mjs` and their tests are
+    this session's, inline: one file of code. Commit `3f576ed` (the gate passed at 07:48);
+    the correction of the first branch (`878e2e8`) is merged into it, with one conflict in
+    `bin/lib/rules-applied.mjs` resolved by hand (both sides kept; its 78 tests pass). Route:
+    delegated for the two modules, inline for the command. NEXT here: the merge through the
+    gate, the command run once on the real records, then gentle-ai from `878e2e8` and Codex by
+    its plan; its pull request opens on `feat/rules-rewire`'s, or on `main` once that merges.
+  - Pull request 73 (`feat/rules-rewire`) is merged: `main` is `3088960` (the lead's notice of
+    10:45, checked with git: `ddac8b7` is an ancestor of `origin/main`). `feat/rules-held`
+    took it, with one conflict in this document, both sides kept.
+    On this branch since: commit `80a3032` (the gate passed at 10:54) corrects the five notes
+    of gentle-ai's last slice, by one writer on Haiku 5.5 (133,441 tokens): a time is taken
+    only when it names its zone; `readRecords` refuses a `now` that is no number; an empty
+    `CLAUDE_CONFIG_DIR` is read as unset; two paths of the form `applied` have their tests
+    (git naming a project and a main checkout that is another folder; an error said on stderr
+    with exit 1), and so has the cap of sessions. Left unproved, and said: a picked file that
+    cannot be opened, which no test can make here without a file system passed in.
+    The command with the new block, run once on the real records in a turn of the gate
+    (09:44, exit 0): `session-model` 21 of 21 sessions on `claude-opus-5-5`; `session-effort`
+    20 of 21 at high and one that ended at medium on 2026-10-11 (the trial); `subagent-effort`
+    172 of 173 launches at high and one at low on 2026-10-07, the day the rule was said;
+    `opus` 52 of 52 and `haiku` 42 of 42 on claude-desktop 2.1.295.
+    This session's context stood at 86 percent when this was written.
+    NEXT: this merge through the gate; gentle-ai from the detached worktree
+    `rules-rewire-review` on `3088960..` this branch's head (it holds the correction `88cde75`
+    that was left pending, already on `main`, so the slice is what this branch adds); Codex
+    with `--base 3088960`, plan first, inside the rate without asking; then push and a pull
+    request on `main`.
+  - The merge is commit `8a73dde`. gentle-ai approved `3088960..8a73dde` (1,032 lines, medium,
+    one lens, `review-2cec5a5174e2ea28`; its capture waited more than an hour for a turn of
+    the gate) and the approval is acknowledged. Three notes, none blocking, NOT corrected yet:
+    (1) a warning: no test shows what a held model rule gives for an entry with no text model
+    (`keep` skips such an entry, so `none` cannot count one for a model: prove it with a test
+    or drop the line `no model recorded`); (2) `ZONED_TIME` takes an offset with no colon
+    (`+0200`), which is outside the format the language defines, so its reading depends on the
+    engine: take only the colon form; (3) no test of the command writes a session record and
+    sees its model and effort reach the block.
+    Also to do, from his answer of 12:20 as the lead relays it (not read by this session): a
+    Codex plan up to 5 percent over the rate counts as inside it; declare that margin in the
+    rules list with its source, his line 3800 and the lead's question at 3736 of transcript
+    `65318fd5-…`, read first with `sessions --quote`.
+    This session stopped here at 88 percent of its context, for a compaction. NEXT, in this
+    order: one writer for the three notes (one commit through the gate); the margin as a new
+    rule in the same commit or the next; Codex with `--base 3088960`, plan first; push and a
+    pull request on `main`.
+  - After the compaction (2026-10-12, back at 13:10, context at 23 percent). The three notes
+    are corrected by one writer on Haiku 5.5 (126,930 tokens, 117 s), in the commit after
+    `b156d7e`: (1) a test shows a held model rule never counts `none`, since `keep` skips an
+    entry with no text model before the comparison (it passed at once: it pins what was true,
+    and the line `no model recorded` stays, unreachable for a model and reachable for an
+    effort); (2) `ZONED_TIME` takes an offset only with its colon, test first (it failed on
+    `skipped.noTime`, 0 for 1), and the older zone test that kept `+0200` as a good form now
+    writes `+02:00`; (3) a test of the command writes one session record and sees
+    `session-model` agree and `session-effort` name its other value, exit 0 (it passed at
+    once). The three rule test files after it: 81, 33 and 161 tests, none failing.
+    The margin is declared: `codex-review-margin`, 5 percent of the allowance, his, of this
+    repository only, since 2026-10-12. Its source is his line 3800 of transcript `65318fd5-…`
+    ("listo la A …", read with `sessions --quote`) and the option it answers at line 3736, an
+    assistant entry read directly: "un estimado hasta 5 % arriba del tope cuenta como dentro".
+    Nothing reads the rule yet: `codex-review --plan` is open in `feat/gate-wait`, so its
+    reader joins the rest of the second part of T16b. The list has 17 rules, hash
+    `1ccb54f9013d`; `rules check` passes.
+    The register gets `documents-commit-skips-suite` (the lead's notice of 13:07, relief file
+    line 407): a commit of declared documents alone runs no sensor while the suite reads them.
+    Until the gate covers it, `rules check` is run by hand after a commit of documents that
+    touches `docs/RULES.md` or `docs/rule-sources.json`.
+    NEXT: this commit through the gate; gentle-ai assessed from `8a73dde`; Codex with
+    `--base 3088960`, plan first, run when the plan is at most 1.05 times the allowance; push
+    and a pull request on `main`.
+  - That commit is `f7649b8` (the gate passed at 14:16, after an hour in its line). gentle-ai
+    assessed `8a73dde..f7649b8` as medium and not due (`under_budget`). Codex reviewed
+    `3088960..f7649b8` in 3 parts and the review is recorded: 848,242 input tokens (678,912
+    cached), 206 s, against a plan of about 750,000 and an allowance of 1,125,600 for 938
+    changed lines. Two parts with no defect and one finding of the second priority, taken:
+    `heldOther` summed the other values of every held item, so a session that differs in its
+    model and in its effort was said as "2 records". It now counts each differing record
+    once, test first (2 for 1 before the change); 82 and 33 tests pass.
+    The register also gets, from the first run of the suite on GitHub's Linux (run
+    38296748258, relief file line 425, classified by JH 8): `test-skipped-here-never-run`,
+    `linux-probe-misnames-process`, `refusal-in-system-words`; and two more sightings of
+    `command-run-for-help` (`install --help` at 03:25 and `check --help` at 13:16, both on
+    2026-10-12), four in all with its control still owed.
+    Taken from the lead (14:48, a claim): after this pull request, one small branch off `main`
+    corrects the stale expectation (`bin/lib/project.test.mjs:1936`, by reading ae471e7; no
+    run can show it green here, since this machine skips the test) and the `ENOTDIR` of
+    `evals/paths.mjs:6`, test first. The probe of `evals/ports.mjs:168-169` waits as its
+    register entry: it is reproduced only on Linux.
+    NEXT: this correction through the gate; Codex on that one commit, plan first; push and
+    the pull request on `main`.
+  - The correction is `e9b1711` (the gate passed at 15:48, after 56 minutes in its line).
+    Codex reviewed `f7649b8..e9b1711` and found the patch correct; the review is recorded
+    (127,297 input tokens, 90,240 cached, against the floor of 300,000). Codex on this branch:
+    975,539 input tokens in two runs. No finding is open.
+    `main` moved three times while the branch waited (pull requests 74, 76 and 75, to
+    `af20747`), and one more move is announced. Twice a merge of `main` was staged and put in
+    the gate's line, and twice it was taken out before it ran, by stopping this session's own
+    waiter (a dead waiter is passed after the stale time of 60 s, `bin/lib/gate-lock.mjs:60`):
+    nothing was committed, the head stayed `e9b1711`. From now the merge is made inside the
+    turn of the gate, of `main` as it stands when the turn starts (the lead's way, 16:49, a
+    claim): a script fetches, merges without committing, and commits, whose hook runs the gate
+    under the lock the turn holds (`JS_HARNESS_GATE_HELD`, `bin/check.mjs:445-463`). A merge
+    that does not apply clean is undone and nothing is committed.
+    A slip of this session, twice on this day: a message to the lead carried an hour that was
+    guessed and not read (14:58 for 14:53; 16:47 for 16:45). Both are corrected to the lead
+    and added to the register under `hours-guessed`, whose control stamps a relief line and
+    not a message. Until a message is stamped by the channel, this session writes an hour
+    only when `date` printed it in the same turn. The register also gets
+    `short-name-judged-outside` (relief file line 427).
+    NEXT: the merge in its turn of the gate; push; the pull request on `main`. Then
+    `fix/linux-run-findings` off `main`, and the pause percent of `bin/lib/sessions.mjs` as a
+    declared rule, each its own branch.
+  - The turn ran from 17:12:32 to 17:27:05: it merged `origin/main` at `6785ec7` (pull
+    request 77, the document sensors, was in it) into `80987cb`, clean, and the gate passed
+    on the merged tree: commit `b33ef94`. Pushed; the push row said 5 code commits since
+    `origin/main`, all covered by a Codex record. Pull request 78 is open on `main`, for the
+    lead to merge.
+    Branch `fix/linux-run-findings`, cut from `b33ef94` in its own worktree so that it does
+    not wait for that merge, holds two small corrections from the run on Linux, inline:
+    (1) `exists` of `evals/paths.mjs` says a path below a file is not there where the system
+    says `ENOTDIR`, as it already said on Windows, and throws any other error; test first, in
+    a new `evals/paths.test.mjs` through a file system passed in (with the seam alone the
+    test failed on `ENOTDIR`; 4 tests pass, and the 74 of its two callers' files).
+    (2) `bin/lib/project.test.mjs`, the test "uninstallProject never follows a symlink placed
+    where a written file used to be", expected the reason `changed since init`; since ae471e7
+    the check that a path is still inside its base comes first and follows a link in the last
+    component (`realish`, `bin/lib/project.mjs:137-167`; `uninstallProject`, `:1159-1163`),
+    so the reason is `moved outside`. The expectation was corrected by reading ae471e7 and no
+    run has shown it green, since this machine skips the test.
+    In the register: `documents-commit-skips-suite` has its control, read on `main`
+    (`harness.json` `documentSensors`, `bin/check.mjs:206-225`, and its test);
+    `refusal-in-system-words` has its control; `command-run-for-help` stays owed, since
+    `install` (pull request 76) and `check` (77) refuse a word they do not know and `gate`
+    does not yet. Not taken, and told to the lead: three more tests fail on Linux by their
+    own fault (`bin/lib/payload.test.mjs:197` and `:212`, a Windows absolute path;
+    `evals/codex-isolation-probe.test.mjs:301`, `HOMEDRIVE`), by JH 8's classification.
+    NEXT: this branch's commit through the gate; Codex by its plan; push and its pull request
+    once 78 is merged. Then the pause percent as a declared rule.
+  - Pull request 78 was merged at 17:28 (`main` at `e90e0a4`). This branch's commit is
+    `2f81a63`: its turn of the gate (17:40:04 to 17:54:23) first moved the branch forward to
+    `origin/main`, a fast-forward under the uncommitted changes, then committed, so the one
+    gate ran on a tree that holds `main`. gentle-ai assessed `e90e0a4..2f81a63` as medium and
+    not due. Codex reviewed it and found the patch correct; the review is recorded (156,971
+    input tokens, 113,152 cached, against a plan of about 80,000 and the floor of 300,000).
+    Candidates, not taken, owed until a run on Linux can prove them (JH 8's classification,
+    `odd/tasks/gate-wait.md` of `feat/gate-wait` at ea02144; the lead's word of 17:36, a
+    claim): `bin/lib/payload.test.mjs:197` and `:212` feed a Windows absolute path, which
+    `path.isAbsolute` rightly calls relative on Linux; `evals/codex-isolation-probe.test.mjs:301`
+    asks for `HOMEDRIVE`, set on Windows alone (`evals/configs.mjs:144`).
+    `command-run-for-help`, read on `main`: its sightings inside the harness have their
+    refusal, `install` (`bin/install.test.mjs`, pull request 76), `check`
+    (`bin/check.test.mjs`, pull request 77) and `gate` (`bin/gate.mjs:109` and `:129`). Its
+    control stays owed for what its sentence says of every command: one test at the
+    dispatcher that each command of `js-harness` refuses a word it does not know. Not assigned.
+    The pause percent is built on its own branch, `feat/rules-context-pause` (commit
+    `ca83a3d`, the gate passed at 18:08), and its entry is written there after this branch is
+    merged, so the two do not meet in this document.
+    NEXT: push and this branch's pull request; then the context pause's Codex result, its
+    entry here, its push and pull request.
 
 ## Next step
-In this order. (1) The pull request of T17c is open: the lead merges it. (2) T16b, on
-`feat/rules-list`: its design and its first slice are there; its Progress is written on that
-branch once this one is on `main`. (3) T3e. (4) T1. T2
-and T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts
-of "What the hosts allow" that T2 rests on are confirmed with a logging hook.
+In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
+through the gate, gentle-ai on what the branch adds, Codex by its plan, push and the pull
+request on `main`. That closes the checking half of B3 as a block of `rules applied`; the
+hook of C8 that refuses a launch (T13) stays his, and a row of `check` or `doctor` that calls
+the command waits for those files. (2) The third part of T16b is then checked off, with what
+it leaves named. (3) The rest of the
+second part of T16b when its files are free: the review's model and effort
+(`bin/codex-review.mjs`, after `feat/gate-wait`), the context pause
+(`bin/lib/sessions.mjs`). (4) T3e. (5) T1, which takes section D of the proposal. T2 and
+T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
+"What the hosts allow" that T2 rests on are confirmed with a logging hook.
+His, written here and asked once when he is back (he is away from 2026-10-12 03:38 for about
+eight hours, by the lead's notice): what a Codex work session runs at; what the harness turns
+on by default in a project that installs it; the paid measurement of documentation.
+A working rule since 2026-10-12, by the lead's notice of his words: after a compaction this
+session's first act is one line to the lead with its title, the hour, the share of its
+context and what it resumes.
