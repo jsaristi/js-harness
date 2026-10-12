@@ -1,0 +1,47 @@
+# A trial of feature gate-wait (odd/tasks/gate-wait.md, T9), not a gate: nothing waits for it and nothing is
+# refused by it. It answers two questions about running the suite off the one machine every session shares:
+# does `npm test` pass on a runner GitHub hosts, on Linux and on Windows, and how long does it take there.
+#
+# It runs on a push to this one branch and on nothing else, so no other branch, pull request or schedule
+# spends a minute. A private repository pays for hosted runners out of the minutes its account includes, so
+# each job is bounded: the two together cannot use more than twice `timeout-minutes`. The token reads the
+# repository and writes nothing.
+name: trial-gate
+
+on:
+  push:
+    branches:
+      - trial/gate-on-github
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trial-gate
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: suite on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      # Each system answers for itself: one that fails does not stop the other.
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history, as the clone on the machine has it: a test that reads the repository's own
+          # commits would find one alone in the shallow clone that is the default.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: What the runner is
+        run: node -e "const os = require('node:os'); console.log(process.version, os.platform(), os.release(), os.availableParallelism() + ' logical processors', Math.round(os.totalmem() / 2 ** 30) + ' GB')"
+      - name: The suite
+        run: npm test
