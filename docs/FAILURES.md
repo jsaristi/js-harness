@@ -120,6 +120,8 @@ check said or before its answer was read.
   assessment's answer was read; also relief file, line 144
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:430-441 — a review command printed that the lock was held
   and went on
+- Seen: 2026-10-11 — relief file, line 286 — the line that records "merged" was written by the command
+  whose merge was refused; corrected in line 287 (the orchestrator's own report, not read here)
 - Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
 
 ### checked-not-read
