@@ -1769,6 +1769,22 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   4. *The lowered priority* of the design: it bounds the time taken from a gate, not the
      second copy.
   Not read: whether Codex's sandbox can refuse a process by name.
+- 2026-10-12 · **T8 is ordered as half of what he said yes to, and the document says so
+  plainly** (the orchestrator's order, received after my notice of 17:46). His item, in
+  his paste of 12:26 (the orchestrator's transcript, line 3913): "Sacar las revisiones del
+  turno del control". **What T8 will deliver: gentle-ai's review leaves the lock, and
+  Codex's stays in it.** Why only half: a Codex review may choose to run `node --test`
+  itself (it did in two of the day's seven sessions), and outside the lock that is a
+  second copy of the tests beside a gate, which is what the lock exists to prevent and
+  what a standing rule of his forbids; nothing read so far can stop it (the default
+  prompt cannot be told anything, and the read-only session ran the tests all the same).
+  gentle-ai's reviewer has no tools, so it cannot run one. With it goes the report: the
+  record of a Codex review says when the review ran tests, so the case is counted.
+  **Codex outside the lock stays a candidate that needs a guard** (the sandbox refusing a
+  process by name: not read); if he wants that half, it comes back as his decision, and
+  the orchestrator tells him so in its next recap. **Order:** T8 goes behind road 1 and
+  the whole run by file, and waits for a day when a gentle-ai review is due, to measure
+  its number 2 on it.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
