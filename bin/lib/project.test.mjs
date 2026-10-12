@@ -1931,9 +1931,11 @@ test('uninstallProject never follows a symlink placed where a written file used 
     const result = uninstallProject(root, { spawn: spawnSync });
 
     assert.equal(result.code, 0);
+    // The link leads outside the repository, so the entry is no longer this run's to judge: the check
+    // that a path is still inside its base comes before the look at what is there (`uninstallProject`).
     assert.deepEqual(
       result.actions.find((a) => a.path === 'AGENTS.md'),
-      { kind: 'kept', path: 'AGENTS.md', reason: 'changed since init' },
+      { kind: 'kept', path: 'AGENTS.md', reason: 'moved outside' },
     );
     assert.equal(fs.lstatSync(agentsPath).isSymbolicLink(), true); // the link itself untouched
     assert.equal(fs.existsSync(target), true); // and never followed into removing its target

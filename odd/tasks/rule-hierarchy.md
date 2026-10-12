@@ -2386,6 +2386,32 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     NEXT: the merge in its turn of the gate; push; the pull request on `main`. Then
     `fix/linux-run-findings` off `main`, and the pause percent of `bin/lib/sessions.mjs` as a
     declared rule, each its own branch.
+  - The turn ran from 17:12:32 to 17:27:05: it merged `origin/main` at `6785ec7` (pull
+    request 77, the document sensors, was in it) into `80987cb`, clean, and the gate passed
+    on the merged tree: commit `b33ef94`. Pushed; the push row said 5 code commits since
+    `origin/main`, all covered by a Codex record. Pull request 78 is open on `main`, for the
+    lead to merge.
+    Branch `fix/linux-run-findings`, cut from `b33ef94` in its own worktree so that it does
+    not wait for that merge, holds two small corrections from the run on Linux, inline:
+    (1) `exists` of `evals/paths.mjs` says a path below a file is not there where the system
+    says `ENOTDIR`, as it already said on Windows, and throws any other error; test first, in
+    a new `evals/paths.test.mjs` through a file system passed in (with the seam alone the
+    test failed on `ENOTDIR`; 4 tests pass, and the 74 of its two callers' files).
+    (2) `bin/lib/project.test.mjs`, the test "uninstallProject never follows a symlink placed
+    where a written file used to be", expected the reason `changed since init`; since ae471e7
+    the check that a path is still inside its base comes first and follows a link in the last
+    component (`realish`, `bin/lib/project.mjs:137-167`; `uninstallProject`, `:1159-1163`),
+    so the reason is `moved outside`. The expectation was corrected by reading ae471e7 and no
+    run has shown it green, since this machine skips the test.
+    In the register: `documents-commit-skips-suite` has its control, read on `main`
+    (`harness.json` `documentSensors`, `bin/check.mjs:206-225`, and its test);
+    `refusal-in-system-words` has its control; `command-run-for-help` stays owed, since
+    `install` (pull request 76) and `check` (77) refuse a word they do not know and `gate`
+    does not yet. Not taken, and told to the lead: three more tests fail on Linux by their
+    own fault (`bin/lib/payload.test.mjs:197` and `:212`, a Windows absolute path;
+    `evals/codex-isolation-probe.test.mjs:301`, `HOMEDRIVE`), by JH 8's classification.
+    NEXT: this branch's commit through the gate; Codex by its plan; push and its pull request
+    once 78 is merged. Then the pause percent as a declared rule.
 
 ## Next step
 In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
