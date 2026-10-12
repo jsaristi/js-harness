@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './codex-review-parts.mjs';
+import { ruleValue } from './rules.mjs';
 
 const file = (path, changedLines) => ({ path, changedLines });
 /** The parts as lists of paths, which is what most tests compare. */
@@ -8,8 +9,8 @@ const paths = (parts) => parts.map((part) => part.files);
 
 // --- the parts of a range ---
 
-test('the bound of a part is 400 changed lines, until the comparison runs set it', () => {
-  assert.equal(PART_MAX_CHANGED_LINES, 400);
+test('the bound of a part is the declared rule review-part-lines', () => {
+  assert.equal(PART_MAX_CHANGED_LINES, ruleValue('review-part-lines', 'changed lines'));
 });
 
 test('a range at or under the bound is one part, with its files in path order', () => {
@@ -79,8 +80,8 @@ test('the same range gives the same parts in whatever order its files are given,
 
 // --- the files of a part: every path of a part goes on one command line ---
 
-test('a part holds 40 files at most, however few lines they change', () => {
-  assert.equal(PART_MAX_FILES, 40);
+test('a part holds the declared count of files at most (40 in this case), however few lines they change', () => {
+  assert.equal(PART_MAX_FILES, ruleValue('review-part-files', 'files'));
   // A hundred files of one line each: far under the bound of changed lines, and too many paths for one command.
   const files = Array.from({ length: 100 }, (_, index) => file(`src/f${String(index).padStart(3, '0')}.mjs`, 1));
   const parts = reviewParts(files);

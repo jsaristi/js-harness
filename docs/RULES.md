@@ -81,22 +81,22 @@ The shortest phrase by which a control or a rule in prose is found in its file: 
 
 ### gate-wait
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
-- Read by: none.
+- Read by: `bin/lib/gate-lock.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
 
 ### review-part-files
 The most files one part of a Codex review holds: 40 files.
-- Read by: none.
+- Read by: `bin/lib/codex-review-parts.mjs`.
 - Since 2026-10-09. Row: reports. Source: design, `odd/tasks/codex-review-lean.md`.
 
 ### review-part-lines
 The most changed lines one part of a Codex review holds, by default: 400 changed lines. The flag `--part-lines` overrides it for one run.
-- Read by: none.
+- Read by: `bin/lib/codex-review-parts.mjs`.
 - Since 2026-10-09. Row: reports. Source: design, `odd/tasks/codex-review-cost.md`.
 
 ### review-parts-unflagged
 The most parts a Codex review runs in without being told its count: 6 parts. The flag `--max-parts` overrides it for one run.
-- Read by: none.
+- Read by: `bin/lib/codex-review-plan.mjs`.
 - Since 2026-10-09. Row: reports. Source: design, `odd/tasks/codex-review-cost.md`.
 
 ## Retired

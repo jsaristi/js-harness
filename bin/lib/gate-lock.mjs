@@ -52,6 +52,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { ruleValue } from './rules.mjs';
 
 /** How often a holder touches its file. */
 export const GATE_BEAT_MS = 5_000;
@@ -61,8 +62,8 @@ export const GATE_STALE_MS = 60_000;
 export const GATE_POLL_MS = 2_000;
 /** How long a gate that waits lets the lock go without changing hands before it gives up on it: the bound
  * of a wait, which counts from the last time the lock changed hands and not from the arrival
- * (`takeGateLock`). */
-export const GATE_WAIT_MS = 60 * 60_000;
+ * (`takeGateLock`). The minutes are the declared rule's (`gate-wait` in ./rules-data.mjs). */
+export const GATE_WAIT_MS = ruleValue('gate-wait', 'minutes') * 60_000;
 
 const HOLDER_FILE = /^holder-(.+)\.json$/;
 const WAIT_DIR = /^wait-(.+)$/;
