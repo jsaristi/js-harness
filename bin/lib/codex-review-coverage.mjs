@@ -343,9 +343,10 @@ export function defaultBranch(spawn, cwd, remote) {
  * It is this case only when all of these hold: `remote` has a default branch; `from` is not an ancestor of
  * it nor the commit it names, so `from` is a commit of the branch under review; `from` has a parent, the
  * first one, as `reviewStart` takes it; and the coverage of `<parent>..<from>` reads, and lists `from` as an
- * uncovered code commit. Every other case is `null`, and so is every case in which git cannot say, a failed
- * git among them. It never throws: the caller prints a note or nothing. */
-export function baseLeftOut(cwd, { from, remote = 'origin', spawn = spawnSync, where }) {
+ * uncovered code commit, and so does that of `<parent>..<tip>` when the caller gives `tip`, the head of the
+ * review. Every other case is `null`, and so is every case in which git cannot say, a failed git among
+ * them. It never throws: the caller prints a note or nothing. */
+export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSync, where }) {
   try {
     // Every review asks this, and most repositories a test builds have no remote: one question says so,
     // where finding no default branch takes three.
@@ -357,9 +358,19 @@ export function baseLeftOut(cwd, { from, remote = 'origin', spawn = spawnSync, w
     // A root commit has no `<from>^`, and so no range to be a code commit of.
     const parent = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${from}^`]);
     if (parent === null) return null;
-    const coverage = reviewCoverage(cwd, { from: parent, tip: from, spawn, where });
-    if (coverage.unknown !== undefined) return null;
-    const commit = coverage.uncovered.find((entry) => entry.id === from);
+    // `from` as a code commit no record covers in `<parent>..<upTo>`: the commit, `null` when it is not one,
+    // and `undefined` when the coverage does not read.
+    const uncoveredUpTo = (upTo) => {
+      const coverage = reviewCoverage(cwd, { from: parent, tip: upTo, spawn, where });
+      return coverage.unknown !== undefined ? undefined : coverage.uncovered.find((entry) => entry.id === from) ?? null;
+    };
+    // Asked at `from` first, the short range, where most bases have their answer. A base with no record
+    // there is asked again at `tip`, the head of the review: a record of nothing to review, and one that
+    // left marked files out, cover only a range that holds their head (`reviewCoverage`), so a base such a
+    // record covers from a later commit of the branch reads as left out at `from` and as covered at `tip`,
+    // which is where the push check reads it.
+    let commit = uncoveredUpTo(from);
+    if (commit && tip !== undefined && tip !== from) commit = uncoveredUpTo(tip);
     return commit ? { id: commit.id, shortId: commit.shortId, subject: commit.subject } : null;
   } catch {
     return null;

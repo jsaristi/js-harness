@@ -3611,6 +3611,32 @@ test('a range that failed at its last part is run again from that part: the part
   assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(4), runs: [idOf(1), idOf(2), idOf(4)] }]);
 });
 
+test('a part that passed while a tracked file was not as the range is not kept, and the parts after it are not started: the next run of the range asks every part', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  // A tracked file is edited while the first session reads, and nothing is committed.
+  const edited = fakeCodexInParts({
+    stdout: partShown(root, base, head, 'a.txt'),
+    during: () => fs.appendFileSync(path.join(root, 'c.txt'), 'edited while Codex reads\n', 'utf8'),
+  });
+  const refused = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...edited, platform: process.platform, randomUUID: ids });
+  assert.equal(refused.code, 1, refused.err);
+  assert.equal(edited.calls.length, 1, 'the parts after the one that read another tree were not started');
+  assert.match(refused.err, /^Tracked files differ from HEAD after part 1 of 3 passed, so what its session read is not the committed range alone; it is not kept and no record was written\./m);
+  assert.equal(wrote(root), false);
+  const lines = readCodexReviewRuns(root);
+  assert.deepEqual(lines.map((line) => [line.outcome, reviewRuns.runKept(line)]), [['failed', null]]);
+  // The file is as it was committed again, and the same range is asked whole: nothing of the refused run is taken.
+  git(root, 'checkout', '--', 'c.txt');
+  const fake = threePassingParts(root, base, head);
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 3, 'every part was asked');
+  assert.doesNotMatch(result.out, new RegExp(`of ${short} passed in the run of .* and is kept`));
+  assert.equal(wrote(root), true);
+});
+
 test('the totals of a run that keeps parts say what this run spent and what the kept parts had spent, apart', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ids = runIds();

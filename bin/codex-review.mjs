@@ -1165,7 +1165,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * before what the records say (`baseLeftOutSaid`), whichever way they come out. */
   const startingAt = (given) => {
     if (args.again || everyFile || given === head) return given;
-    const leftOut = baseLeftOut(root, { from: given, spawn, where });
+    const leftOut = baseLeftOut(root, { from: given, tip: head, spawn, where });
     if (leftOut !== null) log(baseLeftOutSaid(leftOut));
     const left = leftByRecords(spawn, root, { from: given, head, given: `${base.slice(0, 7)}..${head.slice(0, 7)}`, where });
     if (left.covered !== undefined) {
@@ -1386,6 +1386,20 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           kept: true,
         };
       }
+      // Why HEAD and the tracked tree are not the range, or `null` when they are. Asked of a part alone, after
+      // its session: a part that passes is kept for a later run (`kept`, below), and the check that follows the
+      // whole review would refuse the record and leave that part in the run log, to be taken as a review of
+      // the range by the next run of it. Before its session nothing is asked: the review started on a tree with
+      // no tracked change, and the part before it asked this a moment ago. The one session of a whole range
+      // keeps nothing, and is held by the check that follows the review alone.
+      const notTheRange = () => {
+        if (key === null) return null;
+        const headNow = git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
+        const tree = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+        if (headNow === null || tree === null) return 'HEAD and the state of the tree could not be read';
+        if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
+        return tree === '' ? null : 'tracked files differ from HEAD';
+      };
       // The session's own Codex home, named after the run: the id is made here, before the launch, and the
       // run line reuses it. Until the home exists nothing is launched, so a failure here writes no run line
       // and no record.
@@ -1633,6 +1647,16 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         const ran = evidence.commands.length ? '' : '\nCodex ran no commands.';
         logRun('not-inspected', why);
         error(`Codex's turn completed, but ${why}; nothing was recorded.${unread}${missing}${ran}\n${WAYS_ON}`);
+        return { exit: 1 };
+      }
+      // After the session of a part, and before its line can keep what it answered: a part that passed while
+      // HEAD or a tracked file was not the range read something else, so it is a failed attempt, which keeps
+      // nothing, and the parts after it are not started.
+      const after = notTheRange();
+      if (after !== null) {
+        const why = `${after} after part ${part.index} of ${part.of} passed, so what its session read is not the committed range alone`;
+        logRun('failed', why);
+        error(`${why[0].toUpperCase()}${why.slice(1)}; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.`);
         return { exit: 1 };
       }
       // The run line goes first, so that the record can name it. If the record then cannot be written

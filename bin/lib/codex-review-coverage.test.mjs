@@ -468,6 +468,34 @@ test('the base of a review that a record covers, from a later commit of the bran
   assert.equal(baseLeftOut(root, { from: one }), null);
 });
 
+test('the base of a review that a record of nothing to review covers from a later commit is no base left out once the head of the review is given', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const one = commit(root, 'b.js', 'two', 'feat: two');
+  // The commit and its revert: the range changes no file, and its record covers only a range that holds its head.
+  fs.rmSync(path.join(root, 'b.js'));
+  git(root, 'add', '-A');
+  git(root, 'commit', '-m', 'revert: two');
+  const two = git(root, 'rev-parse', 'HEAD');
+  record(root, first, two, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const three = commit(root, 'c.js', 'three', 'feat: three');
+  // Read up to the base alone, that record is not one of the range, and the base reads as left out.
+  assert.equal(baseLeftOut(root, { from: one })?.id, one);
+  // Read up to the head of the review, where the push check reads it, a record covers it.
+  assert.equal(baseLeftOut(root, { from: one, tip: three }), null);
+});
+
+test('the base of a review that no record covers is left out at the head of the review too', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const one = commit(root, 'b.js', 'two', 'feat: two');
+  const two = commit(root, 'c.js', 'three', 'feat: three');
+  assert.equal(baseLeftOut(root, { from: one, tip: two })?.id, one);
+  assert.equal(baseLeftOut(root, { from: one, tip: one })?.id, one);
+});
+
 test('the base of a review that changes only a Markdown file is no base left out', () => {
   const { root, first } = makeRepo();
   remoteMainAt(root, first);

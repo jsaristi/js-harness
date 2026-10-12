@@ -137,8 +137,18 @@ export function partKey(what) {
 }
 
 const KEPT_KEY = /^[0-9a-f]{64}$/;
-const isKeptReview = (review) => review !== null && typeof review === 'object' && Array.isArray(review.findings)
-  && (review.verdict === 'correct' || review.verdict === 'incorrect');
+const isScore = (value) => value === null || Number.isFinite(value);
+// A finding as the command prints and orders it (`findingLine`, `byPlace`) and counts it (`findingCounts`).
+const isKeptFinding = (finding) => finding !== null && typeof finding === 'object'
+  && typeof finding.file === 'string' && Number.isInteger(finding.start) && Number.isInteger(finding.end)
+  && typeof finding.title === 'string' && (finding.severity === null || typeof finding.severity === 'string');
+// Every field the command reads of a kept answer when it shows it again: a line of the run log that was
+// damaged or written by hand, and lacks one, would throw there, after every part had passed, and the review
+// would end with no record. Such a line keeps nothing, and its part is asked again.
+const isKeptReview = (review) => review !== null && typeof review === 'object'
+  && Array.isArray(review.findings) && review.findings.every(isKeptFinding)
+  && (review.verdict === 'correct' || review.verdict === 'incorrect')
+  && typeof review.explanation === 'string' && isScore(review.confidence);
 
 /** What a part's line keeps of its answer, `{ key, review, rendered }`, or `null` when it keeps none: every
  * line written before a part was kept, every line of an attempt that did not pass, and a line whose `kept` is

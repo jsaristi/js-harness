@@ -330,7 +330,7 @@ const parts = {
 const keptKey = 'a'.repeat(64);
 const keptLine = (over = {}) => ({
   id: 'r1', outcome: 'reviewed', part: { index: 1, of: 3, files: 2, changedLines: 40 },
-  kept: { key: keptKey, review: { findings: [], verdict: 'correct' }, rendered: 'No findings.' }, ...over,
+  kept: { key: keptKey, review: { findings: [], verdict: 'correct', explanation: '', confidence: null }, rendered: 'No findings.' }, ...over,
 });
 
 test('partKey: the same inputs give the same key, a 64-character lowercase hex string', () => {
@@ -374,7 +374,7 @@ test('partKey: the key is the SHA-256 of the format number and what was sent, so
 });
 
 test('runKept: a valid kept gives its key, review and rendered, with the review the very same object', () => {
-  const review = { findings: [], verdict: 'correct', confidence: 0.9 };
+  const review = { findings: [], verdict: 'correct', explanation: 'Nothing breaks.', confidence: 0.9 };
   const kept = runKept(keptLine({ kept: { key: keptKey, review, rendered: '' } }));
   assert.deepEqual(kept, { key: keptKey, review, rendered: '' });
   assert.equal(kept.review, review);
@@ -382,7 +382,7 @@ test('runKept: a valid kept gives its key, review and rendered, with the review 
 });
 
 test('runKept: null for a line that keeps no answer, or keeps one that is not valid', () => {
-  const good = { key: keptKey, review: { findings: [], verdict: 'correct' }, rendered: 'No findings.' };
+  const good = { key: keptKey, review: { findings: [], verdict: 'correct', explanation: '', confidence: null }, rendered: 'No findings.' };
   const bad = [
     { id: 'old', outcome: 'reviewed' },
     keptLine({ kept: null }),
@@ -391,10 +391,10 @@ test('runKept: null for a line that keeps no answer, or keeps one that is not va
     keptLine({ kept: { ...good, key: 'A'.repeat(64) } }),
     keptLine({ kept: { ...good, review: 'correct' } }),
     keptLine({ kept: { ...good, review: null } }),
-    keptLine({ kept: { ...good, review: { findings: {}, verdict: 'correct' } } }),
-    keptLine({ kept: { ...good, review: { verdict: 'correct' } } }),
-    keptLine({ kept: { ...good, review: { findings: [], verdict: 'Correct' } } }),
-    keptLine({ kept: { ...good, review: { findings: [], verdict: 'pass' } } }),
+    keptLine({ kept: { ...good, review: { ...good.review, findings: {} } } }),
+    keptLine({ kept: { ...good, review: { verdict: 'correct', explanation: '', confidence: null } } }),
+    keptLine({ kept: { ...good, review: { ...good.review, verdict: 'Correct' } } }),
+    keptLine({ kept: { ...good, review: { ...good.review, verdict: 'pass' } } }),
     keptLine({ kept: { ...good, rendered: null } }),
     keptLine({ kept: { ...good, rendered: undefined } }),
     undefined,
@@ -402,6 +402,35 @@ test('runKept: null for a line that keeps no answer, or keeps one that is not va
     'a line',
   ];
   for (const line of bad) assert.equal(runKept(line), null, JSON.stringify(line));
+});
+
+test('runKept: null for a kept answer that lacks a field the command reads when it shows the answer again', () => {
+  const finding = { file: 'a.txt', start: 2, end: 3, severity: 'P2', title: 'A title', body: 'A body.', confidence: 0.7 };
+  const whole = { findings: [finding], verdict: 'incorrect', explanation: 'One line is wrong.', confidence: 0.8 };
+  const kept = (review) => keptLine({ kept: { key: keptKey, review, rendered: 'One finding.' } });
+  assert.notEqual(runKept(kept(whole)), null);
+  // A finding the model gave no priority, and an answer it gave no confidence, are whole answers.
+  assert.notEqual(runKept(kept({ ...whole, confidence: null, findings: [{ ...finding, severity: null }] })), null);
+  const { explanation, ...noExplanation } = whole;
+  const { confidence, ...noConfidence } = whole;
+  const withFinding = (over) => ({ ...whole, findings: [{ ...finding, ...over }] });
+  const lacking = [
+    noExplanation,
+    { ...whole, explanation: null },
+    noConfidence,
+    { ...whole, confidence: 'high' },
+    { ...whole, findings: [null] },
+    { ...whole, findings: ['a.txt:2'] },
+    withFinding({ file: undefined }),
+    withFinding({ start: '2' }),
+    withFinding({ end: undefined }),
+    withFinding({ title: undefined }),
+    withFinding({ severity: 2 }),
+    { ...whole, findings: [finding, { ...finding, title: null }] },
+  ];
+  for (const review of lacking) assert.equal(runKept(kept(review)), null, JSON.stringify(review));
+  assert.equal(typeof explanation, 'string');
+  assert.equal(typeof confidence, 'number');
 });
 
 test('keptPartFor: of two lines that hold the same key, the later one in the list is returned', () => {
@@ -412,7 +441,7 @@ test('keptPartFor: of two lines that hold the same key, the later one in the lis
 });
 
 test('keptPartFor: a line is not taken when it did not review, has no part, has an invalid part, or keeps another key', () => {
-  const other = { key: 'b'.repeat(64), review: { findings: [], verdict: 'correct' }, rendered: '' };
+  const other = { key: 'b'.repeat(64), review: { findings: [], verdict: 'correct', explanation: '', confidence: null }, rendered: '' };
   const refused = [
     keptLine({ outcome: 'failed' }),
     keptLine({ part: undefined }),
