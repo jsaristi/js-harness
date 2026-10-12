@@ -1321,6 +1321,15 @@ names it, and the entry stays open until it does.
   minutes and a main thread's one hour; and a writer is given a narrow piece that ends in tens
   of turns. Both are candidates for the delegation rules of this feature (protocol 6), not
   designed, and applied by this session from now on.
+- 2026-10-11, 21:00, the register is pull request 66 (`feat/failures-register`, tip of its
+  code and register `9a1c99d`), read by the host as mergeable and clean; the orchestrator was
+  told. This session's context stood at 89 percent then, past the pause: the state is this
+  document and the engram topic `odd/rule-hierarchy/state`, and the scratchpad of session
+  `9265156a-3a86-4da5-80f9-aebe66cd887c` keeps the scripts that commit and review through the
+  gate lock (`gate-commit.sh`, `gate-run.sh`, `commit-then-codex.sh`, `review/capture.mjs`,
+  `lock.mjs`, `own-tsservers.ps1`). Spent on the slice: two reader and writer sub-agents before
+  the afternoon, one reader of the protocol (111,898 tokens), four Codex runs (1,385,676 input
+  tokens).
 
 ## Next step
 In this order. (1) The pull request of the register (T3) is open: the lead merges it when it
