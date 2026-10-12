@@ -5,6 +5,7 @@
 // needs to know about another file is asked through a `holds` function the caller supplies, so the
 // tests use inline strings.
 import { tokenize } from './progress.mjs';
+import { ruleValue } from './rules.mjs';
 
 /** The seven states an entry can be in. None is written in the file: a state written by hand would
  * be one more statement that can be false, so each is computed from the fields (`entryState`). */
@@ -15,8 +16,8 @@ const FIELDS = ['Class', 'Aka', 'Seen', 'Control', 'Proof', 'Was'];
 const FIELD_LIST = `${FIELDS.slice(0, -1).join(', ')} and ${FIELDS.at(-1)}`;
 // The three levels of the placement rule a control in place sits at.
 const LEVELS = ['check', 'line', 'protocol'];
-// A phrase shorter than this could be found in a file by accident.
-const MIN_PHRASE = 12;
+// A phrase shorter than this could be found in a file by accident. The number is a declared rule.
+const MIN_PHRASE = ruleValue('control-phrase-min', 'characters');
 // What cuts a field into its parts. Never a bare dash: a note or a phrase may hold those.
 const SEPARATOR = ' — ';
 
