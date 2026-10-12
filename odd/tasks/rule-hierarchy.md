@@ -2014,11 +2014,28 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     `main`'s).
   - Waiting for their branches to reach `main`: `bin/lib/gate-lock.mjs` (the wait for the
     lock) and `bin/lib/sessions.mjs` (the context pause).
-  - This session's context stood at 86 percent, with him away: the cut was given once in its
+  - Piece 1 is held before anything was written (the writer was stopped with the tree
+    clean): the lead found `bin/codex-review.mjs` and its test changed and uncommitted on
+    `feat/gate-wait`, and asks that session whether the other two modules are free. Taken
+    while that branch is open: `bin/codex-review.mjs`, `bin/lib/codex-review-runs.mjs`,
+    `bin/lib/codex-reviews.mjs`, `bin/check.mjs`, `bin/gate.mjs`, `bin/lib/gate-lock.mjs`,
+    `bin/lib/gate-log.mjs`; and on `feat/session-compaction`: `bin/lib/sessions.mjs`,
+    `bin/lib/pause.mjs`, `bin/sessions.mjs`, `bin/resume.mjs`, `bin/install.mjs`,
+    `bin/lib/manifest.mjs`.
+  - Taken instead, on the same branch, in files that are this session's alone: piece A of
+    the third part (`alias`, `scope`, `ruleHere`, `ruleOf`, the three readers found by the
+    scan, and the three notes gentle-ai left on the correction), in `bin/lib/rules.mjs`,
+    `bin/lib/rules-check.mjs` and their tests. Its specification is `t16b-third-a.md` in the
+    same scratchpad. After the writer: read its diff; then this session declares the aliases,
+    the scopes and the two session rows in `bin/lib/rules-data.mjs` with their sources (his
+    line 990 read again), renders the list, and commits through the gate; then both reviews,
+    Codex with `--base 47484bd`.
+  - This session's context stood at 88 percent, with him away: the cut was given once in its
     reply, and it goes on.
 
 ## Next step
-In this order. (1) Piece 1 of the second part, as the last Progress entry says. (2) The rest
+In this order. (1) Piece A of the third part, as the last Progress entry says; piece 1 of the
+second part when its files are free. (2) The rest
 of the second part of T16b: each constant reads its declaration, one file at a time, each
 told to the orchestrator before it is touched; the context pause, one constant on `main` now
 (`bin/lib/sessions.mjs`), is declared with it. (3) The third part, as designed: the fields
