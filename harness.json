@@ -1,3 +1,10 @@
 {
-  "documents": ["docs/", "odd/tasks/"]
+  "documents": [
+    "docs/",
+    "odd/tasks/"
+  ],
+  "documentSensors": {
+    "rules": "node bin/js-harness.mjs rules check",
+    "document tests": "node --test bin/rules.test.mjs bin/sessions.test.mjs"
+  }
 }
