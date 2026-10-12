@@ -1999,11 +1999,27 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     and is recorded as `40ccb45..859a797`. Then the push. What would have told it
     sooner: the line at a commit naming the commit, as the push row does; told to the
     orchestrator for the owner of that row.
+- 2026-10-12, T16b, the second part started. The first part is on `main` (pull request 72,
+  merged by the lead at `47484bd`). Branch `feat/rules-rewire`, worktree
+  `D:/js-harness-worktrees/rules-rewire`, cut from that commit. Route: delegated, one narrow
+  writer a piece on Haiku 5.5 from this session's specification, the session at high.
+  - Piece 1, the five constants of the Codex review (`review-part-lines`,
+    `review-part-files`, `review-parts-unflagged`, `review-model`, `review-effort`) read their
+    declarations: `bin/lib/codex-review-parts.mjs`, `bin/lib/codex-review-plan.mjs`,
+    `bin/codex-review.mjs`, their tests and `bin/lib/rules-bindings.test.mjs`, told to the
+    orchestrator before they were touched. The specification is `t16b-rewire-1.md` in this
+    session's scratchpad (session `9265156a-3a86-4da5-80f9-aebe66cd887c`). When the writer
+    returns: read its diff, commit through the gate, gentle-ai's assessment from `47484bd`,
+    and Codex with `--base 47484bd` (the base is left out of the range, and that commit is
+    `main`'s).
+  - Waiting for their branches to reach `main`: `bin/lib/gate-lock.mjs` (the wait for the
+    lock) and `bin/lib/sessions.mjs` (the context pause).
+  - This session's context stood at 86 percent, with him away: the cut was given once in its
+    reply, and it goes on.
 
 ## Next step
-In this order. (1) The first part is delivered: the push of `feat/rules-list` and its pull
-request, which the lead merges. (2) The second part of T16b, on a new branch from `main` once
-that pull request is merged: each constant reads its declaration, one file at a time, each
+In this order. (1) Piece 1 of the second part, as the last Progress entry says. (2) The rest
+of the second part of T16b: each constant reads its declaration, one file at a time, each
 told to the orchestrator before it is touched; the context pause, one constant on `main` now
 (`bin/lib/sessions.mjs`), is declared with it. (3) The third part, as designed: the fields
 and the guarded read first, with the three notes gentle-ai left on the correction, then the
