@@ -356,6 +356,117 @@ its own pull request to `main`:
 - S4 · the texts, if M2 holds (T8), about 60.
 - The trial (T9): one commit on its own branch, never merged, and this document.
 
+### No repeated control (slice S4, branch `feat/gate-wait-same-tree`, off `main` 3088960)
+
+His decision of 2026-10-12 (the lead's transcript, line 3913, on the list of line 3860): a tree identical to
+one that already passed runs no suite again; a clean merge of `main` that brings only documents runs none
+either; a merge that brings any code runs the whole suite, so no verification is lost.
+
+What the code is today, read by one reader on `main` and spot-checked at `bin/check.mjs:842-843` and
+`:866-884`:
+
+- A gate's sensors read the working tree on disk, never the index: they are started in `cwd` with every git
+  binding variable removed (`bin/check.mjs:497-507`). Nothing asks whether the working tree is the index.
+- The gate log (`bin/lib/gate-log.mjs:350-399`, `gateRecord`) holds no identity of what a gate tested: its
+  `end` line is `seconds`, `result`, `sensors`.
+- A commit that stages declared documents alone already runs no sensor (`stagedDocuments`,
+  `bin/check.mjs:237-264`), and that holds for a merge of `main` made as `git merge --no-commit` and then
+  `git commit`, whose staged paths are read against the first parent. So the second of his three sentences
+  is already true of a merge committed through the hook, and this slice builds nothing for it.
+- A plain `git merge` runs no `pre-commit` hook (`odd/tasks/gate-log.md:805-813`), so today a merge that
+  brings code can be made with no gate at all. Git has a hook for it, `pre-merge-commit`, which this
+  repository does not install.
+- No notion of "this tree already passed" exists: `rg -n -i "write-tree|tree id|already passed|same tree"
+  bin scripts .githooks` finds two sentences about timing and nothing else.
+
+**How "already passed" is proven.** By one line of the gate log, written by a gate that ran every sensor and
+passed, which names the same tree as the gate that asks. Nothing else counts: not a gate that ran no sensor,
+not a `gate -- <command>` turn (its line ends `exit 0`, never `pass`), not a record written by hand.
+
+1. *The tree of a gate* is a key, 64 hex characters: the SHA-256 of a format number, the listing of the
+   index the hook was handed (`git ls-files -s -z`: each entry a mode, an object id, a stage and a path, so
+   two listings that are equal hold the same bytes at the same paths), how each file is written in the
+   folder (`git ls-files --eol`: the same blob can be on disk with other line ends), the sensors (each
+   name and command, in order), and what runs them (`process.version`, `process.platform`,
+   `process.arch`). Every path is in it, the declared documents too: this repository's suite reads them
+   (`bin/sessions.test.mjs:553`, and `bin/rules.test.mjs:390-394` through `bin/rules.mjs:94-100`), so a key
+   that left them out would call two trees the same that the suite answers differently.
+2. *The key exists only when the folder is that index.* All of: `git status --porcelain -z
+   --untracked-files=all --ignore-submodules=none` shows no unstaged change and no untracked file; no entry
+   is marked assume-unchanged or skip-worktree (`git ls-files -v`: a lowercase tag, or `S`), since git
+   reports those clean over changed bytes; and `cwd` is the top of the repository. Every one of these
+   questions is asked under the binding the hook was given, after the test `stagedDocuments` already makes
+   that the binding is of this repository (`bin/check.mjs:249-259`): `git commit <path>` hands the hook a
+   temporary index, and a status asked without it reads the other index and calls the folder clean. Where
+   git does not answer, or any of it fails, there is no key: the gate runs its sensors as today and its
+   line holds none.
+3. *A gate that runs its sensors* computes the key before them and again after them, before its `end` line
+   is written, and writes it on that line, as `code`, only when both are the same key and the result is
+   `pass`. A throw leaves none.
+4. *A gate that has a key* looks, after its static rows and the stop they can cause and before it asks for
+   the lock or samples the load, for an `end` line with `result: "pass"` and that `code`. With one it runs
+   no sensor and takes no lock, so it does not wait in the queue either; its row says that no sensor ran,
+   and which gate proved the tree: its id and when it ended, and its folder when its `start` line is still
+   in the log. It writes one line of a new kind, `same`, with the key and the id of that gate, so the log
+   says which proof stood behind which commit. A gate that waited for the lock looks once more before its
+   sensors: the gate it waited for may have been of the same tree. A gate started in its parent's turn
+   looks as well. One whose log is switched off (`JS_HARNESS_GATE_LOG=off`) neither looks nor writes.
+5. The static rows (failures, budget, contracts, payload) run on every gate as before, and so do the
+   `review` row and the Codex debt: only the sensors are not repeated.
+6. The rule is on only where the project declares it, `"sameTree": "skip"` in `harness.json`; any other
+   value is a fault of the declaration, said in the `sensors` row as a faulty `documents` is. This
+   repository declares it. A project that says nothing runs its sensors at every gate, as today.
+7. `.githooks/pre-merge-commit` runs the same gate as `pre-commit`, so a merge git commits by itself is a
+   gate too. `js-harness init` is not changed here: what it writes in another project is recorded for its
+   undo, and one more hook there is a change of its own.
+
+**Why a merge with any code still runs the whole suite.** The key is of the result, not of what a commit
+changes, and it holds every path. A merge of `main` that brings one line gives a listing no gate has
+passed, so no line of the log names it and every sensor runs: there is no partial run. The one merge that
+finds a proof is the one whose result is, byte for byte and path for path, a tree whose suite already ran
+on this machine, as when a branch merges the `main` that already holds all of its own work. With the hook
+of point 7 this is true of every merge commit, where today a plain `git merge` runs nothing.
+
+**What it does not hold, said so that nobody reads more into a gate that ran no sensor.**
+
+- Files git ignores are in no listing: a suite that reads one can change its answer with the key
+  unchanged. Here `node --test` walks `evals/runs/`, ignored, which holds no test file today; a project
+  with dependencies has `node_modules`. This is why the rule is declared, not on by default.
+- A file changed and changed back while the suite ran: both keys are equal, and the suite read something
+  else in between. Sessions share folders, and two looks cannot see it.
+- The machine outside the three values of the key: another git, another `PATH` (tests skip without bash or
+  the right to make symlinks), a Windows update. The log is rotated at about 700 gates, which bounds how
+  old a proof can be, and no more than that.
+- A fast-forward, a rebase and a cherry-pick run no hook, before this slice and after it.
+- The gate log is a file of the home, and a hook can be skipped with `--no-verify`: this is no guard
+  against somebody who wants to cheat it, as the gate itself is not.
+- The rule that is already there, a commit of declared documents alone runs no sensor, loses a
+  verification in this repository, since its suite reads those documents; it heals at the next commit with
+  code. Found by the reader of this design, not changed here, told to the lead.
+
+**How much it gives, said before it is built.** With documents in the key, a gate finds a proof when the
+very same tree is gated twice: a commit amended in its message alone, a commit made again after something
+other than the gate refused it, `npm run check` by hand on a tree just committed, a merge whose result
+`main` already passed. A turn that runs its tests and then commits is not one of them: the commit's gate
+is the first gate of that tree. So this takes some gates out of the queue, and does not shorten one.
+
+**Tests, one per rule, each through `checkSensors` or `main`:** the same tree a second time runs no sensor,
+names the gate that proved it and writes its `same` line; a document changed in between is another key and
+runs them; one code file changed runs every sensor; an unstaged change, an untracked file, a file marked
+skip-worktree, each gives no key and runs them; `git commit <path>` with another file staged gives no key;
+a file changed while the sensors ran leaves no `code` on the line; a `fail` line proves nothing; another
+sensor command is another key; a project that does not declare the rule runs as today, and a wrong value
+fails the `sensors` row; a gate that waited finds the proof the gate before it left; git that does not
+answer is no key, never a skip; the merge hook runs the gate on `git merge --no-ff`.
+
+**What the reader changed** (one independent reader, 2026-10-12, with git run in a scratch repository):
+documents are in the key (they were left out, which lost a verification the suite makes and made the
+merge claim false); the status and the listing are asked under the hook's binding; assume-unchanged and
+skip-worktree give no key; submodules are never ignored by the status; line ends in the folder are in the
+key; the listing is read with `ls-files`, which writes no object, not `write-tree`; the second key is
+computed before the `end` line; a gate that runs no sensor leaves a line; the merge hook is added; and
+the gain is stated, smaller than the first draft implied.
+
 ## What the readers changed
 The first version is `335ce6f`. Two read-only readers, 2026-10-12; their reports are in this
 session's transcript.
@@ -420,10 +531,16 @@ session's transcript.
       alone. The remote `origin` of that note stays, said as a limit: the command has no
       `--remote`. Route: delegated, one writer, tests first, on `feat/gate-wait`.
 - [ ] T7 · M2: what a review spends against its number, and one review beside one gate.
-      Route: inline, with the reviews of S1.
+      Route: inline, with the reviews of S1. gentle-ai measured; Codex not yet (Progress).
 - [ ] T8 · If M2 holds: the texts. Route: delegated, one writer.
 - [ ] T9 · The trial on GitHub: the workflow on its branch, one run, what it answered, the
       figure and the two questions sent to the orchestrator. Route: inline, one file.
+- [ ] T11 · The merge hook, first and alone: `.githooks/pre-merge-commit` on
+      `feat/gate-merge-hook`, both reviews, its pull request. Route: inline.
+- [ ] T12 · The identical-tree proof (Design, "No repeated control"), after the cut of git
+      processes and unless he drops it. Route: inline; built, uncommitted.
+- [ ] T13 · The quick checks that read documents run on a documents-only commit, if they
+      are seconds; the figure to the orchestrator if they are minutes. Route: inline.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -726,6 +843,91 @@ session's transcript.
   19 of 19 of the records' tests, `PASS  tests` at 10:31:47 (889 s). No RED: the tests
   describe what the code does; none was proven by breaking the code. gentle-ai's row: 52
   lines, under the budget. Sub-agents so far: 2,389,643 tokens.
+- 2026-10-12 · **Codex reviewed S1, once: three findings, all real, fixed in `f04efca`.**
+  The turn was taken at 12:31:47 and ended 12:40:05, exit 0 (`s1-codex-turn.log`,
+  `s1-codex-out.log`); the desktop app restarted at 12:32:42 (the orchestrator's reading),
+  so the turn's notice never came and its log was read instead. Range `5127be1..88e2414`,
+  three parts, recorded in `codex-reviews.jsonl`. Found: (P1) a part that passed was kept
+  in the run log before the check that follows the review read `HEAD` and the tree again,
+  so a run refused for a tracked file edited meanwhile left every part reusable, and the
+  next run of the range wrote a record with no session started; (P2) a kept answer was
+  taken as valid with its findings and verdict alone, and one without its explanation
+  threw when the verdict was printed, after every part had passed; (P2) the note on a base
+  left out read the coverage up to the base alone, where a record of nothing to review or
+  one that left marked files out, headed at a later commit, does not count, so a covered
+  base was called left out. Fixes, in one commit: a part asks `HEAD` and the tracked tree
+  after its session, and when they are not the range it is a failed attempt that keeps
+  nothing and the parts after it are not started (a check before the session was written
+  too and taken out: the review already refuses to start on a tree with a tracked change,
+  `bin/codex-review.mjs:1232`, and a test of it failed for that reason); `runKept` asks
+  every field the command reads of a kept answer; `baseLeftOut` takes the head of the
+  review and asks again there. RED observed for the three (`s1-fix-turn.log`, 13:11:39),
+  GREEN 13:17:59, `PASS  tests` at 13:31:33. gentle-ai's row on `f04efca`: 162 lines, under
+  the budget. It has no Codex record yet: `88e2414..f04efca`, to plan.
+- 2026-10-12 · **What that review cost, as a sample against the estimator.** Plan: 3 parts,
+  1,074 changed lines, about 1,210,000 input tokens, against a rate of 1,288,800. Spent:
+  1,649,068 input tokens (1,373,440 cached, 83%), 426 s, 32 requests: 36% over the plan
+  and 28% over the rate, on a plan that was under it. By part: 287 lines, planned 320,000,
+  spent 513,922 in 10 requests; 397 lines, planned 450,000, spent 277,741 in 7; 390 lines,
+  planned 440,000, spent 857,405 in 15. Then the run log itself, read with one script and
+  no Codex run: in its 196 measured parts, a part's input tokens follow the requests its
+  session made (R² 0.94) and not its changed lines (R² 0.06). Requests: median 7, nine in
+  ten parts at 11 or fewer, 15 at most. Tokens a changed line: 424, 844, 1,431 and 2,198
+  at the quarter, the median, three quarters and nine in ten. So the plan by lines cannot
+  see which part will make 15 requests, and a plan under the rate ends over it whenever
+  two of three parts do. What the estimator would have to change, not built: put a part at
+  what a session of the median number of requests costs, say beside it what one of the
+  nine-in-ten number costs, and judge the rate on a figure that holds in three runs of
+  four, not in one of two. Told to the orchestrator, who put it in his queue.
+- 2026-10-12 · **M2, number 1 for Codex: not measured.** `measure-busy.mjs` took the minute
+  before the review as the quiet baseline, and that minute was the tail of another gate:
+  124 busy processor-seconds in 60 s against 524 in the 437 s of the review, so the
+  difference is negative and says nothing. To measure by process on the next Codex run
+  (`scripts/measure-run.mjs` reads what each process spent), no extra run.
+- 2026-10-12 · **Cut 2, the count** (`c2-turn.log`, 12:26:16 to 12:31:40, table
+  `c2-frames.json`): `bin/codex-review.test.mjs` alone starts 6,067 git processes, 288 s of
+  its 323 s. By command: `rev-parse` 2,107, `diff` 1,639, `merge-base` 502, `check-attr`
+  474, `status` 430, `rev-list` 376, `log` 316. The test file runs the command 397 times;
+  each run asks `rev-parse` about four times (`bin/codex-review.mjs:1124`, `:1129`,
+  `bin/lib/project.mjs:230`, and where the git folder is), which one process can answer.
+  Not cut yet.
+- 2026-10-12 · **T9, the trial: committed, not pushed.** Branch `trial/gate-on-github`,
+  worktree `D:\js-harness-worktrees\gate-on-github`, off `main` `3088960`, commit `14a6026`
+  (`PASS  tests`, 869 s, 13:11:31): `.github/workflows/trial-gate.yml` runs `npm test` on
+  `ubuntu-latest` and `windows-latest`, Node 24, on a push to that branch alone, each job
+  bounded at 60 minutes, token read-only. Read before it: the repository is private,
+  Actions is enabled, no run ever (`gh api`); GitHub Free includes 2,000 minutes a month
+  for private repositories and blocks usage at the quota without a payment method
+  (docs.github.com/en/billing/concepts/product-billing/github-actions, read that day). Not
+  read: his plan and the minutes used this month, since the token has no `user` scope and
+  it is not widened. The orchestrator was told the branch and what it runs at 13:06 and
+  answered: push when the gate and the Codex record are done; after the run read
+  `gh api repos/jsaristi/js-harness/actions/runs/<id>/timing` for what was billed by
+  system; tell it at 45 minutes if a job still runs; no second push without telling it.
+  Reviews: gentle-ai due (high risk, a workflow), lens risk, lineage
+  `review-87c85e6c3a5374d2`, granted; Codex plan about 71,000. Both in `t9-review-turn.sh`.
+- 2026-10-12 · **No repeated control: designed, attacked, built, not committed.** The
+  design is in Design ("No repeated control"), with what one independent reader changed.
+  The orchestrator's order of 13:09, taken: the merge hook first and alone, then the cut
+  of git processes, then the identical-tree proof. So: (a) the hook is branch
+  `feat/gate-merge-hook`, worktree `D:\js-harness-worktrees\gate-merge-hook`, off `main`
+  `3088960`: `.githooks/pre-merge-commit` and two tests with real git; its turn is
+  `hook-turn.sh`. (b) The proof is branch `feat/gate-wait-same-tree`, worktree
+  `D:\js-harness-worktrees\gate-wait-same-tree`, uncommitted: `bin/lib/gate-tree.mjs`,
+  `bin/lib/gate-log.mjs`, `bin/check.mjs`, `harness.json`, tests in three files; its turn
+  `s4-turn.sh` was asked with `nocommit`, which stops after GREEN. It holds a copy of the
+  hook and its small test, to take out when the hook is in `main`.
+- 2026-10-12 · **A hole older than this feature, told to the orchestrator:** the rule that
+  a commit of declared documents alone runs no sensor loses a verification here, since the
+  suite reads them (`bin/sessions.test.mjs:553`; `bin/rules.test.mjs:390-394` through
+  `bin/rules.mjs:94-100`). Its answer, from his decision of 2026-10-10 (its file, line 164,
+  item 3: "the quick document checks still run"): measure alone what reads `docs/` and
+  `odd/tasks/`; if it is seconds, a documents-only commit runs it; if minutes, the figure
+  is his. Mine to build after the hook (T13).
+- 2026-10-12 · **A slip, said to the orchestrator in four parts:** at 13:16:07 I ran
+  `js-harness check --help`; `check` knows no such flag and started a gate, which waited
+  for the lock; stopped at about 13:18 before it ran anything. Candidate: `check` and
+  `gate` refuse a flag they do not know.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
@@ -765,59 +967,67 @@ words read by me in its transcript `65318fd5`, by type and origin, at the lines 
   folder of the gate under an excluded place would be the harness's half) and the
   TypeScript language server of the sessions (the orchestrator's).
 
-1. (Done: the first cut is `fc70dc3` and M1 again is in Progress.) Was: read its log
-   (`t4-turn.log`), then the second run's tables (`m1b-count.json`, `m1b-machine.json`,
-   `m1b-machine.txt` in the scratchpad) against the first: where the last file ends, the
-   wall time, the counts. Write it in Progress as it came out, plainly if it gave nothing.
-2. gentle-ai on S2 (`47484bd..` on `feat/gate-wait-count`, over the budget: due) and on the
-   cut's commit: start, run the `granted` choice, capture in a turn of the lock.
-3. (T6c is done, `3b810a4`.)
-4. Cuts 2 and 3 of T3, each judged by a run; or say plainly that the session ended before.
-5. Codex on both slices when he has answered on the margin (S1's plan: 1,026 lines, about
-   1,250,000 input tokens against a rate of 1,231,200, 1.5% over; told to the orchestrator).
-   A Codex run is also M2's number 1 for Codex: wrap it in
-   `scripts/measure-run.mjs`.
-6. T8 (the texts, if M2 holds for Codex too), T9 (the trial on GitHub: nothing done yet;
-   tell the orchestrator before the branch is pushed), T10 (the close; before any pull
-   request, merge the current `main` into each branch and gate that tree). `AGENTS.md:17`
-   and `bin/gate.mjs:3` say the tests run under `node --test`: true of each file still, to
-   be read again at T8.
+The order, as the orchestrator set it at 13:09 on 2026-10-12 from his list (a claim of its
+own, checked against his lines above): the trial; the merge hook, first and alone; the cut
+of git processes; the identical-tree proof, unless he drops it; the quick document checks
+on a documents-only commit; the reviews outside the lock's turn.
+
+1. **The trial (T9).** Read `t9-review-turn.log`. When gentle-ai acknowledged and Codex
+   recorded `3088960..14a6026`: `git push -u origin trial/gate-on-github` from
+   `D:\js-harness-worktrees\gate-on-github`, then `gh run list --branch
+   trial/gate-on-github` and `gh run watch`. Report to the orchestrator by system: passed
+   or not, the failing tests by name, wall time, billed minutes
+   (`gh api repos/jsaristi/js-harness/actions/runs/<id>/timing`). At 45 minutes of a job
+   still running, tell it. No second push to make it pass without telling it first: a
+   suite that fails on Linux is a finding. Then the monthly figure, GitHub against
+   Cloudflare, back to him before anything is paid.
+2. **The merge hook (T11).** Read `hook-turn.log`. After its commit: gentle-ai's assess
+   with `--base-ref origin/main --committed-only`, Codex inside the rate, push, pull
+   request. The sentence for the other sessions is in its commit and was sent to the
+   orchestrator at 13:20.
+3. **S1's last commit.** `f04efca` needs its Codex record before `feat/gate-wait` is
+   pushed: plan `88e2414..f04efca` (`codex-review --plan --base 88e2414`), run inside the
+   rate, measured by process (M2, number 1 for Codex: `scripts/measure-run.mjs`, which is
+   on `feat/gate-wait-count`).
+4. **Cut 2 (T4).** From `c2-frames.json`: one `rev-parse` for the three or four a run of
+   the review command asks; then the `diff`s. It edits `bin/codex-review.mjs`, which S1
+   also edits, so it goes on top of S1. Judged by a count of that one test file (6,067 git
+   processes, 288 s) and then by an M1 run.
+5. **The identical-tree proof (T12).** Read `s4-turn.log` (`s4-red.log`, `s4-green.log`):
+   fix what GREEN shows, keep it uncommitted until cut 2 is done and he has not dropped
+   it. Then the hook out of that branch, the commit (`s4-turn.sh` with no argument,
+   message `s4-msg.txt`), both reviews.
+6. **The quick document checks (T13).** Measure alone `rules check`, `bin/rules.test.mjs`
+   and the context-text test of `bin/sessions.test.mjs`; seconds: a documents-only commit
+   runs them; minutes: the figure to the orchestrator.
+7. gentle-ai on S2 and the cut (`47484bd..fc70dc3` on `feat/gate-wait-count`, due), Codex
+   on it inside the rate.
+8. T8 (the reviews outside the lock's turn, the texts), T10 (the close; before any pull
+   request, merge the current `main` into each branch and gate that tree, in a lock turn).
+   `AGENTS.md:17` and `bin/gate.mjs:3` say the tests run under `node --test`: to be read
+   again at T8.
 
 ## Resume here
-- `feat/gate-wait` is not pushed; its head is the commit that holds this entry, on
-  `7411fe6`. S1 is `1841b96`, `8bae23f`, `3e0b456`, `0dde768`, `4ca3c05`, `b165cde`, each
-  gated, the first reviewed by gentle-ai, none with a Codex record yet.
-- `feat/gate-wait-count` (worktree `D:\js-harness-worktrees\gate-wait-count`, off `main`
-  at `47484bd`, not pushed) holds S2. This document stays on `feat/gate-wait` only.
-- (Done at 12:08: `fc70dc3`, M1 again written in Progress.) The cut's turn was asked a third time at 11:10 on 2026-10-12 (by `date`, 11:11:04 just after) (`t4-turn.sh`, log
-  `t4-turn.log`, the commit's gate in `t4-gate.log`, all in the scratchpad). First check
-  whether `feat/gate-wait-count` moved past `c844f29` and whether `m1b-count.json` and
-  `m1b-machine.json` exist: if the commit is there and they are not, M1 again is one
-  command of that script, to be run in a turn of its own. If the tree still holds the
-  eight files uncommitted, read the tail of the log before asking again; never the whole
-  log. To compare the two runs: the scratchpad's `m1-count.json` against `m1b-count.json`
-  (`timeLine`: where each long file starts and where the last one ends; `git.count`), and
-  `m1-machine.txt` against `m1b-machine.txt`.
-- `main` moved to `3088960` (pull request 73) at 10:41; both branches merge clean against
-  it by the orchestrator's `merge-tree`. Take it with a merge, and gate that tree, before
-  any pull request.
-- gentle-ai's lifecycle, as run twice here: `gentle-ai review assess --cwd . --agent
-  claude-code --base-ref <boundary> --committed-only --json`; its `next_transition.command`
-  verbatim; `review start` with the returned tokens (the scratchpad's `ga-exec.mjs` runs a
-  transition's tokens unchanged); the `granted` choice's invocation as given; the bound
-  status; the capture in a turn of the lock (`s1b-review-turn.sh` is the pattern); then
-  the acknowledgement command as returned.
-- No Codex run until the orchestrator relays his answer on the margin over the rate.
-- `odd/tasks/gate-turn.md` on `main` holds the feature before this one, closed.
-- The scratchpad of this session
-  (`…/Temp/claude/D--js-harness/d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86/scratchpad`) holds
-  the turn scripts and logs (`t5-turn.sh`, `t5b-turn.log`, `s1-review-turn.sh`),
-  `measure-busy.mjs`, and the review's files (`s1-*.json`).
-- Every test run and commit with code goes through the lock: `node
-  D:/js-harness/bin/js-harness.mjs gate --wait 180 -- <command>`, in the background, from
-  this session and never from a sub-agent; a turn is one command, and a script handed to it
-  ends with the code of its first step that failed. Nothing is edited in a worktree while a
-  turn of that worktree is asked or running.
-- No Codex call in a loop, none on a range already paid for; `--plan` first.
-- After a compaction, the first act is one line to the lead: title, hour, context share,
-  what is resumed.
+- Read the logs before anything is asked again: a turn started before a restart of the
+  desktop app sends no notice. `js-harness gate log --last 6` says which turns ended.
+- Five worktrees, none pushed. `feat/gate-wait` (this document; S1, head the commit that
+  holds this entry, on `f04efca`). `feat/gate-wait-count` (`fc70dc3`: the count scripts and
+  the first cut). `trial/gate-on-github` (`14a6026`). `feat/gate-merge-hook` (the hook,
+  committed by `hook-turn.sh` when green). `feat/gate-wait-same-tree` (uncommitted).
+- The scratchpad is
+  `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86\scratchpad`.
+  Turn scripts and their logs there: `s1-fix-turn`, `t9-turn`, `t9-review-turn`
+  (`t9-bound.json` is the bound status its capture reads; `ga-capture.mjs` runs the capture
+  and, when it approved, the acknowledgement), `s4-turn`, `hook-turn`. A script is handed
+  to the gate as a file, never inline: `node D:/js-harness/bin/js-harness.mjs gate --wait
+  240 -- sh <script>`, in the background.
+- gentle-ai, for a commit: `gentle-ai review assess --cwd . --agent claude-code --base-ref
+  <boundary> --committed-only --json`; when due, its `next_transition.command` with
+  `--lenses` and `--lenses-reason` appended; `ga-exec.mjs <json> next_transition.execute
+  <out> .` runs the start; the consent envelope's `granted` invocation is a string, run as
+  it is; then the bound status, and the capture in a turn of the lock.
+- The orchestrator is addressed as `JH ORQ · js-harness [ce6e34]` since the restart; its
+  transcript is `65318fd5`. Its messages are claims: check one thing first.
+- Spent in this feature: Codex 1,649,068 input tokens (the review of S1) plus what
+  `t9-review-turn.log` says; sub-agents 2,389,643 tokens before 12:45 and about 249,000
+  after (two readers).
