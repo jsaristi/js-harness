@@ -1,0 +1,3 @@
+#!/bin/sh
+# The gate of a commit, for the commit a merge makes by itself: git runs no pre-commit hook for that one.
+exec node "$(git rev-parse --show-toplevel)/bin/check.mjs"

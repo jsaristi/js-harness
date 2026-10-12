@@ -162,7 +162,9 @@ Step 10 records the commit because the product cannot: the version reads `0.1.0`
 
 A feature that changes what a project receives adds its own step, with its test, in its own
 branch: the gate lock, "two `check` at once in the practice project"; the session board,
-"`sessions --json` exits 0 in a project that is not this one". The journey so becomes the list of
+"`sessions --json` exits 0 in a project that is not this one"; the session channel, "past the
+context pause, `resume --pause` tells a session once, says nothing the second time and nothing
+outside a project" (`pause-hook`, 2026-10-12, run before the hashes are compared). The journey so becomes the list of
 what was once proven as installed, run again on every candidate.
 
 ### What it does not prove
