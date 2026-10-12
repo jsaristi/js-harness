@@ -831,6 +831,27 @@ podamos implementar todo"), each a feature of its own with its own document and 
      existed, from the gates' own reports: the lock gives no turns in order of arrival (a
      commit waited 36 minutes while one that asked five minutes later ran), which the
      `waitedFor` of each start will now put on record.
+   - The stop before the sensors (2026-10-11, `odd/tasks/gate-turn.md`): a gate knows its
+     static rows (the register of failures, the budget, the contracts) in a second, and it
+     took the lock and ran every sensor even when one of them had already failed and the
+     commit could not pass. A gate whose static row fails now stops there: it asks for no
+     lock and waits for none, samples no load, runs no sensor and prints neither the
+     `review` row nor the Codex debt. One FAIL row named `gate` says that no sensor ran and
+     which rows stopped it, and the gate log keeps one line of a kind of its own,
+     `stopped`, with those rows and no start, so the stops can be counted. The rule names
+     no row: a row added to the static ones stops the gate by being there, which is what
+     the rows of the rule hierarchy need, and a row that states a rule of the project
+     (`failures` today) is the first of the report. A push and the inner check of a sensor
+     are as they were. Two things a gate of that day showed came with it. The sensors'
+     PowerShell wrote its module cache into the working tree, since under the sensors'
+     empty home it finds no folder for local application data and falls back to the
+     current directory, and that untracked folder made gentle-ai refuse to assess the
+     change; the sensors now get `PSModuleAnalysisCachePath` under their temporary home.
+     And a gate that ran its sensors names, in an INFO row `tree`, the untracked paths that
+     appeared in the working tree while they ran. It compares two listings of the whole
+     tree, so it says when a path appeared and not who wrote it: a file an editor or
+     another process made meanwhile is named too. Each listing is bounded at twenty
+     seconds, since it is asked while the lock is held.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
