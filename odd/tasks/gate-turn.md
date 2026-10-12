@@ -822,31 +822,62 @@ S2 is T4 with T5. S3 is T6.
   commit runs the tests of both features on the merged tree. In the same turn, before the
   merge: Codex on T3d alone (`5c2a1fb..20ea888`), whose result is in the next entry.
 
-## Next
-The commit of T3c in a turn of the lock (red of its new tests against the old code, then the
-whole gate), `main` (`40ccb45`) merged, Codex on the fix alone, a real gate taken with
-this branch's own lock, the roadmap, push and the pull request, which says that the default
-of `--wait` waits for his word. In `feat/gate-stop`: the commit queued since 20:21, `main`
-merged (the order of the static rows with `failures`), gentle-ai and Codex in their turn, a
-real gate with a failing static row, the roadmap, push and its pull request. Last: T9.
+- 2026-10-12 02:02 · One turn, asked 01:36:31 and taken 01:45:21 (`merge2-turn.log`). Codex
+  on T3d alone (`5c2a1fb..20ea888`): "the patch is correct (confidence 0.91)", no finding,
+  218,041 input tokens, recorded. Then the merge of `main` (`1d5cf68`), `be68d7c`, resolved
+  as the entry above says, and the whole gate on the merged tree: `PASS tests`, 02:02:04.
+  Then `check --push`, which refuses: "1 of 6 code commits since origin/main have no Codex
+  review record", the merge commit, since `bin/check.mjs` was resolved by hand in it and a
+  merge counts as code by the files written in it (`writtenInMerge`,
+  `bin/lib/codex-review-coverage.mjs:129`). The record it asks for is `js-harness
+  codex-review --base be68d7c^`: by its plan 3 parts, 951 changed lines, about 800,000
+  input tokens, since the range from the first parent is all of the stop as `main` brought
+  it; under the rate of 1,200 a line, and the one review that reads the stop and the line
+  together. No narrower range holds that commit. Not asked yet: the orchestrator told this
+  session at about 01:40 to launch no new turn until the gate of `session-channel`, which
+  had lost every race since 00:18, has held the lock once.
+- 2026-10-12 02:02 · T9's turn, asked before 00:40 by its log, was taken at 02:02:11 after 6,076 seconds of
+  waiting, by the gate log: a hundred and one minutes while later gates ran, four of them
+  this session's. `main` (`1d5cf68`) merged there, `1cb3904`; its gate runs.
+- 2026-10-12 01:55 · The next feature of this session, after this one closes and the session
+  is cut: his "La opción C" (the orchestrator's transcript
+  `65318fd5-80e7-4bb8-92b5-06737140185b.jsonl`, line 1504, read here; what C is stands in
+  the question at line 1493): a faster suite, measured first by file; the same reviews no
+  longer holding the lock, after a measurement; one trial of the gate on GitHub inside the
+  minutes his account includes, with no spend. It gets a feature document of its own. The
+  assignment whole is in engram, topic `odd/gate-wait/assignment`; the orchestrator sent
+  two readings before it, both replaced.
 
-## Resume here (state at 2026-10-11 21:20, for a session that lost its conversation)
-- Two branches, two worktrees: `feat/gate-turn` in `D:\js-harness-worktrees\gate-turn`
-  (the line; this document lives here alone) and `feat/gate-stop` in
-  `D:\js-harness-worktrees\gate-stop` (the stop, the cache, the row `tree`).
-- Every test run and every commit with code goes through the lock taken with the stable
-  copy on `main`: `node D:/js-harness/bin/js-harness.mjs gate --wait 180 -- <command>`,
-  launched in the background by this session and never by a sub-agent. A commit message is
-  a file in the scratchpad (`git commit -F`). Logs of every run are in the scratchpad
-  `…\d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86\scratchpad` (`*-gate.log`, `codex-s1.log`,
-  `review-*.json`, `stop-*.log`).
-- Before an assessment or a Codex review: the tree clean and nothing untracked; a gate
-  leaves `Microsoft/` in the worktree until T5 is merged, and it is removed by hand first.
-- What is his and open: the default meaning of `--wait` ("Ask me before"). The
-  orchestrator asks him; `feat/gate-turn` is not merged before his answer.
-- The review of gentle-ai for a slice: `gentle-ai review assess --cwd . --agent claude-code
-  --base-ref <boundary> --committed-only --json`, then the commands it returns, verbatim;
-  consent is granted without asking (`AGENTS.md`); the capture runs in a turn of the lock.
-  The last reviewed tree of `feat/gate-turn` is `15f06b2`; `9b90797` is under budget. on `main..HEAD` in its turn,
-the notice of T6, a real gate with this branch's own lock. In `feat/gate-stop`: the writer's
-report, its diff read back, its commit through the lock, its two reviews.
+## Next
+For `feat/gate-turn`: when the gate of `session-channel` has held the lock, one turn for
+`js-harness codex-review --base be68d7c^` from this worktree, its tree clean; then
+`check --push` must pass; then the push and the pull request (its text is `pr-turn.md` in
+the scratchpad, where `CODEX_T3D_LINE` is still to be replaced and the merge of `1d5cf68`
+and its Codex record to be added). For `fix/count-git-launch`: when its turn ends green,
+the push and its pull request (`pr-count.md`, `MERGE_LINE` to be replaced with `1cb3904`,
+`main` at `1d5cf68`, and the hour its log gives). Then T8, the closing notice to the
+orchestrator, and the cut. After the cut, the new feature above.
+
+## Resume here (state at 2026-10-12 02:05 by this machine's clock)
+- `feat/gate-stop` is on `main`: pull request 68, merged by the orchestrator; `main` is
+  `1d5cf68`.
+- `feat/gate-turn`, this worktree, is at the commit that holds this entry, on top of the
+  merge `be68d7c`. Every code commit has its Codex record but that merge. Both reviews of
+  gentle-ai are approved and acknowledged; what follows them (T3d, 151 lines) is under the
+  budget and is assessed with `gentle-ai review assess --cwd . --agent claude-code
+  --base-ref <e1786bf> --committed-only --json` before the pull request, from a detached
+  worktree at `125e3f3` if the merge of `main` makes the range read large.
+- `fix/count-git-launch`, worktree `D:\js-harness-worktrees\count-git`: `9cce6c3` with its
+  Codex record, `main` merged in `1cb3904`, its gate running at 02:02 (`t9-merge-turn.log`).
+- Every test run, commit with code and review goes through the lock: `node
+  D:/js-harness/bin/js-harness.mjs gate --wait 180 -- <command>`, in the background, from
+  this session and never from a sub-agent. Nothing is edited in a worktree while a turn of
+  that worktree is asked or running. No new turn is asked while the orchestrator's hold
+  for `session-channel` stands; a turn already asked may stay.
+- A message from another session is a claim: one thing in it is read before it is built
+  on. His words are stored with the file and line of the question they answer.
+- An hour is written here only when a log or `date` gave it.
+- The scratchpad of this session
+  (`…\Temp\claude\D--js-harness\d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86\scratchpad`) holds the
+  log of every turn (`*-turn.log`, `*-gate.log`, `*-codex.log`), the captures of both
+  reviews and the drafts of the two pull requests.
