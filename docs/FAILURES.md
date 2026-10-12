@@ -219,8 +219,8 @@ Sessions were told to cut, or proposed a cut, near 70 percent of their context b
   (line 122)
 - Seen: 2026-10-10 — relief file, line 137 — JH 1 proposed a cut at 70 after his rule of lines 126
   and 127; withdrawn at line 138
-- Control: owed — odd/tasks/session-channel.md — "The context figure as room left against the last
-  task's cost; the 73% mark removed"
+- Control: check — bin/sessions.test.mjs — "no text of this feature writes a share the context rule
+  left behind" — since 2026-10-12
 - Proof: count of cuts proposed under 85% is 0 (owed: nothing prints it yet)
 
 ### context-fills-unnoticed
@@ -234,8 +234,8 @@ A session's context reached a level nobody had looked at.
   own context "read too seldom"
 - Seen: 2026-10-11 — relief file, lines 276 to 285 — the orchestrator passed the pause, judged four
   times that little was left, and the host compacted it with no word to him (its own report)
-- Control: check — bin/sessions.test.mjs — "and whether it is past --context-limit" — since
-  2026-10-09
+- Control: check — bin/sessions.test.mjs — "--watch returns when a session reaches the context
+  pause" — since 2026-10-09
 
 ### cross-session-message-held
 A message between a session opened from the phone and a desktop session is held and expires, so that
@@ -674,6 +674,10 @@ was not so.
   line 61
 - Seen: 2026-10-11 — relief file, line 196 — the lead's reading that pull requests 53 and 54 put the
   gate at its bound; they add 3.4 s (it had been said as an assumption)
+- Seen: 2026-10-12 — the orchestrator's transcript 65318fd5, line 2008 (claimed) — the lead told him
+  four times that JH 8's cut was pending after he had sent both blocks: a notice between sessions
+  carried forward as a present fact; the stopgap is one line to the lead as a session's first act
+  after a compaction
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 

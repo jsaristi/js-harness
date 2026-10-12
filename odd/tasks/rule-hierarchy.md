@@ -166,7 +166,7 @@ twice because he could not tell "working" from "waiting on you". It reads `last_
 and refuses a final reply when:
 - it closes with none of the four states, or with more than one;
 - the state is decision and the reply has no block, more than one, a block not under the three
-  labels (what it is, where it goes, what sending it does), or no line naming which of his six
+  labels (what it is, where it goes, what sending it does), or no line naming which of his
   items the question falls under;
 - the state is decision and `background_tasks` is not empty (never asked while work runs);
 - the state is working or finished and the reply carries a block for this chat;
@@ -185,6 +185,23 @@ as the board reads it, is at or past the context pause (a number the board's cod
 written here: "One home for every rule"), it adds one
 line to the model's context saying so and naming the rule (write the state in the feature
 document, then judge what is left). It says it once per session, not at every stop.
+
+Three changes to this check are taken from the design of a compaction that loses nothing
+(`odd/tasks/session-channel.md`, point 14, version 2, read on 2026-10-12 at `bfb9199`), written
+here when his answers to that session arrive and built with T2, not before:
+- One more shape of a reply: working, past the pause, with the two blocks of a cut. The check
+  allows it only past the pause; under it a working reply with a block for this chat stays
+  refused. And the first final reply after a session was told is refused when it lacks the
+  share and the blocks, so that "announced" is a refusal and not only a count. How many blocks
+  a cut has once the resume hook is installed is his, and is read from one place.
+- The line at the pause is said once for each stretch between two compactions, not once for a
+  session: as written above it would be silent after the first compaction.
+- The function that decides it and the mark that it was said are one, built by the session
+  channel's session for its hook that runs after each tool call; this check imports them and
+  writes none, so a session is told once, by whichever comes first. By that session's notice
+  of the same day (a peer's claim): the function is `pauseNotice` of `bin/lib/pause.mjs`, on
+  `feat/session-compaction`, and a stretch ends when the context falls under the pause again,
+  kept in a state file for each session, not at the boundary of a compaction.
 
 The refusal prints the missing piece and the exact shape, in the project's language. It lets a
 reply through when `stop_hook_active` is true, so a session is refused once per stop and never
@@ -1102,7 +1119,11 @@ session:
    the agreed protocols; nothing stated that was not checked; what is passed on is complete and
    true; each mistake leaves a control, of the smallest kind that does the job. With the meaning
    of done: a rule is not recorded until it has its place in a check, a line here or a protocol.
-2. What is his, the six items: spend outside the plan; anything installed or changed on a
+2. What is his, the six items of 2026-10-10 (they stand, by the lead's reading of its record
+   on 2026-10-12, a peer's claim: the merge of code, once a seventh, is the lead's under the
+   charter, and his later answer adds one of another kind, a report published outside, such
+   as an issue in another repository; T8's draft holds the list he passes, and the check of T2
+   names no count): spend outside the plan; anything installed or changed on a
    machine; a product choice; what cannot be undone; a change of the plan or of its order; a new
    protocol. Narrowed on 2026-10-11 (the relief file's line 236, as the sweep reads it; T8
    drafts the line from both): what the harness writes under the home's `.js-harness` and
@@ -1148,7 +1169,12 @@ the section, it is withdrawn.
 
 1. Asking him for a decision: what the yes covers in everyday words, what it does to him, what
    it does not authorize, what the other option means; one thing per yes; the block; a question
-   asked again says first that the earlier answer still holds and what changed.
+   asked again says first that the earlier answer still holds and what changed. Two rules
+   adopted since, with no task anywhere until the lead's inventory of 2026-10-12 named this
+   section as their home: a choice is put as an everyday situation with its options A and B
+   (his memory note on one prompt a reply, its last paragraph); and a short answer of his that
+   fits two readings is asked about, not guessed (relief file, line 331, not read by this
+   session).
 2. Closing a reply: the four states; before a block, what was done, what is next and why, and
    for which session; the map from `js-harness progress`; a cut at the end of a task.
 3. Running something that costs (a gate, an eval batch, a review, a push): its count said first;
@@ -1303,7 +1329,7 @@ board), GL the gate lock, MF a machine fact that stays in memory, DROP stale.
 | 55 | A message between sessions is a claim, never his word | RM, MEM, REL | L+T, with 20 |
 | 56 | His answers travel with exact words and transcript line | REL, MEM | CH |
 | 57 | A bare paste is not his word | MEM, REL | CH (the opening) |
-| 58 | An unused block is repeated whole | REL | CH |
+| 58 | An unused block is repeated whole; while he is away an open block is given once and held (his rule of 2026-10-11, later than this row) | REL | CH |
 | 59 | Never two gates | SK, MEM, RM | GL |
 | 60 | While a gate runs: no test, board read or reviewer; one try | MEM, REL | GL, P3 |
 | 61 | No gate turn is asked of the orchestrator | MEM, REL | GL |
@@ -1363,7 +1389,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 - [x] T0 Design: the survey, the placement of the 83 rules, the checks, the outline of
   `AGENTS.md`, the protocols, the signals (route: inline, with three read-only sub-agents for
   the survey and the host documentation)
-- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec`
+- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec`. It takes section D of
+  `docs/model-effort.md` (documentation by model, graded by a test that rebuilds a capability
+  from the documents alone): one of the two measurements that spend, his to allow before it
+  runs, asked once when he is back
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json`
 - [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
@@ -1419,9 +1448,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - [ ] T16b The homes and the list: how a rule is declared, designed and read by a reader
     that did not write it; then the declarations of the rules that have a value today, and
     `docs/RULES.md` rendered from them
-    - [ ] First part: the design, the library, the check, the command, fourteen rules with
-      their sources and the rendered list (commits `859a797`, `8ada9cc`, `8668dfc`, `79f9bbf`,
-      both reviews recorded; the correction after Codex's review owes its own two)
+    - [x] First part: the design, the library, the check, the command, fourteen rules with
+      their sources and the rendered list (commits `859a797`, `8ada9cc`, `8668dfc`, `79f9bbf`
+      and the correction `331090b`; gentle-ai approved each code commit and Codex's records
+      cover `859a797..6a721cc` and `b0ccff1..331090b`)
     - [ ] Second part: each constant reads its declaration, one file at a time, each told to
       the orchestrator before it is touched
     - [ ] Third part: model and effort as rules, as "Model and effort as rules" designs it:
@@ -1432,7 +1462,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
     its sensors
-  - [ ] T16e The merge command, the rule rows first
+  - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
+    inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
+    loop over what the reviews cover looks at each record itself, and the evidence of a
+    review is written in a document on the pull request's own branch
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
 - [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
@@ -1923,16 +1956,54 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     Codex waited for the lock. The first round found three faults that would have stopped it;
     the second, on the two decisions rewritten, two more. Its owners are settled by the
     orchestrator and recorded in the section.
+  - The correction is commit `331090b`; its gate passed on its first run. gentle-ai reviewed it
+    alone (base `b0ccff1`, medium, 594 lines, one lens): approved and acknowledged, lineage
+    `review-438746f99975c9a8`, three notes and none blocking, each left for the next commit
+    that touches its file: the test that holds the check's imports reads only imports written
+    on one line; a retired rule whose earlier values mix a number and a text keeps a unit that
+    the text would be shown with; a fence left open above a `## Progress` line hides the marks
+    after it and nothing says so.
+  - Codex on the correction was held: its plan for `b0ccff1..331090b` is one part, 270 changed
+    lines, about 330,000 input tokens, and the allowance is 324,000. Asked of him by the
+    orchestrator, and allowed: "La opción A" (the orchestrator's transcript
+    `65318fd5-80e7-4bb8-92b5-06737140185b.jsonl`, line 2329, read by this session with
+    `sessions --quote`; the question it answers is the assistant entry at line 2318, "Opción
+    A: se hace la revisión, aunque pase el tope por 6.000"). It covers this one review at
+    about its plan: no new rate, and no second run after a fall without asking him again (the
+    orchestrator's reading). It ran from a worktree at `331090b`, so that the merges below did
+    not widen its range: one part, 247,253 input tokens (172,032 cached), under the allowance
+    after all, "the patch is correct", no finding, recorded.
+  - The lead's inventory of 2026-10-12 (each adopted rule against `main` and the feature
+    documents) gave this document five things, all taken and none built here: two rules with
+    no task, placed in protocol 1; two needs of the merge command, in T16e; the paid
+    measurement of documentation, in T1; a row of the survey his later rule on blocks
+    overtook; and the count of his items, which the check of T2 no longer names.
+  - `main` moved three times while this closed, each merged clean: `78bbc80` (pull request 70,
+    the session channel's fourth slice), on which the whole check passed in a turn of the
+    lock; `5f011cc` (pull request 71, the lock as a line by order of arrival); and `7411fe6`
+    (pull request 69, a script that counts git launches), merged while the second check still
+    waited for its turn, so that the check is run once on the tree that is pushed.
+    It moved two controls of the register, corrected with this entry: the flag of the board's
+    pause was renamed, and the item that owed the removal of the 73 percent mark is done, so
+    that failure has its control in place. One sighting is added from the orchestrator's
+    notice of the day. The pause is now one constant on `main`
+    (`bin/lib/sessions.mjs`); by "How a rule is declared" it is declared in the list and that
+    file reads it, in the second part, told before the file is touched.
 
 ## Next step
-In this order. (1) The correction commit's own reviews: gentle-ai's assessment from the commit
-before it, and Codex on the same range in a turn of the gate lock (its allowance is the
-greater of 300,000 input tokens a review and 1,200 a changed line). Then the first part is
-checked off, the push and the pull request. (2) The second part of T16b: each constant reads
-its declaration, one file at a time, each told to the orchestrator before it is touched.
-(3) The third part, as designed: the fields and the guarded read first, then the reader of
-launches and `js-harness rules applied`; the new session rows need his line 990 read again
-for their source. (4) T3e.
-(5) T1, which takes section D of the proposal. T2
-and T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts
-of "What the hosts allow" that T2 rests on are confirmed with a logging hook.
+In this order. (1) The first part is delivered: the push of `feat/rules-list` and its pull
+request, which the lead merges. (2) The second part of T16b, on a new branch from `main` once
+that pull request is merged: each constant reads its declaration, one file at a time, each
+told to the orchestrator before it is touched; the context pause, one constant on `main` now
+(`bin/lib/sessions.mjs`), is declared with it. (3) The third part, as designed: the fields
+and the guarded read first, with the three notes gentle-ai left on the correction, then the
+reader of launches and `js-harness rules applied`; the new session rows need his line 990
+read again for their source. (4) T3e. (5) T1, which takes section D of the proposal. T2 and
+T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
+"What the hosts allow" that T2 rests on are confirmed with a logging hook.
+His, written here and asked once when he is back (he is away from 2026-10-12 03:38 for about
+eight hours, by the lead's notice): what a Codex work session runs at; what the harness turns
+on by default in a project that installs it; the paid measurement of documentation.
+A working rule since 2026-10-12, by the lead's notice of his words: after a compaction this
+session's first act is one line to the lead with its title, the hour, the share of its
+context and what it resumes.
