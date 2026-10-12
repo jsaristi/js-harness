@@ -699,8 +699,21 @@ session's own last replies and the messages of other sessions, which the transcr
 holds; the orchestrator's path through its relief file; the work in flight; the shape of the
 pause reply in JH 7's check; and the decisions below, which version 1 did not list as his.
 
-His to decide, asked one at a time: whether a session is told after each tool call, at 0.15 s
-a call, or only at the end of a reply, which costs nothing and misses the long turn; the
+Decided by him, in this session's chat (its transcript `e5376fe9`, the line given, read with
+`sessions --quote`, exit 0):
+- 2026-10-12 03:01, line 5896, "Sí, después de cada herramienta": a session is told at the
+  pause after each tool call, at about 0.15 s a call, and not only at the end of a reply,
+  which would cost nothing and miss the long turn.
+
+Taken by JH 7 for its reply check, as the lead relayed it on 2026-10-12 (claims of that
+session, not his word): a working reply with the two blocks is allowed only past the pause,
+by the shared function, and the first final reply after the mark of a stretch is refused when
+it lacks the share and the blocks, so "announced" is a refusal and not only a count; the
+nudge is once for a stretch; the function and the mark are built here first and its `Stop`
+check imports them. The value of the pause will be declared in its rules list and read from
+there by the constant of `bin/lib/sessions.mjs`: one number either way.
+
+His to decide, asked one at a time: the
 change of the rule of 2026-10-10 (told and written at the pause, then go on); installing the
 `PostToolUse` entry on this machine once it is built and tried; whether `install` writes it
 for every project that installs the harness; whether the second block goes once the resume
@@ -1689,8 +1702,8 @@ The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). Th
 1. T6b, his protocol for a compaction: the design is point 14, version 2, read by two
    independent readers (Progress, 2026-10-12 02:56). Nothing of it is built. It waits for
    his decisions, listed at the end of point 14 and asked one at a time in this chat; the
-   first asked is whether a session is told at the pause after each tool call or only at
-   the end of a reply. With his answers: the contract's "Done when" gains the commands of
+   first is answered (after each tool call), and the second asked is the change of his
+   rule of 2026-10-10. With his answers: the contract's "Done when" gains the commands of
    point 14, then the build, test first, one narrow writer a task (Haiku 5.5 at effort high
    for scoped code), in this order: the measure and the lines of the resume hook, which
    change nothing on a machine; then the pause command and its entry.
