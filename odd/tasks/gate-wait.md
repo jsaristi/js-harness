@@ -1063,6 +1063,20 @@ session's transcript.
   that fails on a clean Windows. What a fix of the suite would be, not built: make each
   fixture's root canonical once with `fs.realpathSync.native` before a path from it is
   compared or hashed beside one git reports.
+- 2026-10-12 · **M1 a third time, after his word that the folders are excluded: the antivirus did
+  not fall.** `m1c-turn.log`, 14:33:16 to 14:47:10, tree `fc70dc3`, the command of the second
+  run (tables `m1c-count.json`, `m1c-machine.json`, `m1c-machine.txt`). Wall 830.2 s against
+  735.6; busy 6,209 of 6,642 processor-seconds (93%, as before); git 12,041 processes, 1,729 s
+  against 1,516; `MsMpEng` 1,171 s against 917. Not a clean pair: `claude` spent 435 s against
+  144 (two readers of mine and the other sessions ran beside it), which is part of the longer
+  wall. But the antivirus rose with the work instead of falling, so the exclusion does not show
+  in what the suite costs: either the paths he typed are not the two folders, or, as likely,
+  what is scanned is the tests' repositories, which they make under his Temp folder, outside
+  both. Nobody can read the exclusions without an administrator. Five tests fail under the
+  counting tool by the tool's own doing (its `COUNT_GIT_*` variables and `NODE_OPTIONS` reach
+  children whose environment those tests assert), not in a gate. To tell the orchestrator
+  plainly, with the candidate that is the harness's half and not built: a temp root for the
+  gate's tests under an excluded place.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
