@@ -393,11 +393,13 @@ session's transcript.
 ## Tasks
 - [x] T1 · The design read twice by readers that did not write it; their findings taken or
       answered. Evidence: "What the readers changed"; the commit that holds it.
-- [ ] T2 · The counting tool answers by file, by test in the long files, by who spent the
+- [x] T2 · The counting tool answers by file, by test in the long files, by who spent the
       machine, and what a start costs (Design, M1). Route: delegated, one writer a piece,
-      tests first. After pull request 69 is on `main`.
-- [ ] T3 · M1: one whole run under the lock; the tables in Progress; the cuts chosen, with
-      the counts they are judged by. Route: inline, no source written.
+      tests first. After pull request 69 is on `main`. Evidence: `c844f29` on
+      `feat/gate-wait-count`; the machine and the starts are `scripts/measure-run.mjs`.
+- [x] T3 · M1: one whole run under the lock; the tables in Progress; the cuts chosen, with
+      the counts they are judged by. Route: inline, no source written. Evidence: the entry
+      of T3 in Progress.
 - [ ] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3.
 - [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
 - [x] T5b · The four notes gentle-ai left on T5 (Progress; `8bae23f`). Route: delegated, one writer,
@@ -411,6 +413,12 @@ session's transcript.
       Codex review record for 1 of N code commits" for hours without the name, and the
       commit was the branch's first, which it had given as `--base`. Route: delegated,
       tests first, in S1 after T6.
+- [ ] T6c · The notes gentle-ai left on S1 (Progress): a test of the record refused when
+      `HEAD` or the tree cannot be read again; a deadline for the writers of the test of
+      appends at once and an assertion for a spawn that fails, and its comment says what it
+      can and cannot catch; the note on a base left out tested on a skip, not on a plan
+      alone. The remote `origin` of that note stays, said as a limit: the command has no
+      `--remote`. Route: delegated, one writer, tests first, on `feat/gate-wait`.
 - [ ] T7 · M2: what a review spends against its number, and one review beside one gate.
       Route: inline, with the reviews of S1.
 - [ ] T8 · If M2 holds: the texts. Route: delegated, one writer.
@@ -574,15 +582,123 @@ session's transcript.
   since before the first gate of this feature, so no gate recorded here ran without it;
   M1 is the first run that does.
   Sub-agents so far: 2,101,354 tokens. Codex in this feature: none.
+- 2026-10-12 · gentle-ai on S1 after `1841b96` (`788bcbc..833a9b9`, 8 files, 720 lines, one
+  lens, reliability; consent pre-granted, the `granted` choice run): **approved** and
+  acknowledged (lineage `review-a1061d8e43757870`, authority burned). Its capture ran alone
+  in a turn (asked 08:55:02, taken 09:41:46, ended 09:43:59) under `measure-busy.mjs`:
+  72.2 s, 47.9 busy processor-seconds above a baseline of 1.7 a second, so **at most 12 s
+  added to a gate** against the bound of 30 s written before it (M2, gentle-ai, second
+  reading; the first was 2.3 s). Five notes, none blocking, taken as T6c below: the branch
+  that refuses a record when `HEAD` or the tree cannot be read again has no test (its one
+  warning); the test of appends at once can only catch a tear the scheduler happens to make,
+  and says so nowhere; its writers wait for the go file with no deadline and a failed spawn
+  is no assertion; the note on a base left out always asks the remote `origin`; and that
+  note is tested through `--plan` only.
+- 2026-10-12 · **T2 committed, `c844f29`** on `feat/gate-wait-count` (turn `t2-turn.log`,
+  asked 08:51:05, taken 09:05:51): RED, 13 of 27 of the tool's tests fail against the tool
+  at HEAD; GREEN, 27 of 27 and 14 of 14; `PASS  tests` at 09:20:15 (839 s). gentle-ai's row:
+  973 lines, review due.
+- 2026-10-12 · **T3, M1: one whole run under the lock**, 09:20:15 to 09:33:19, at `c844f29`,
+  77 test files, 3,767 tests (5 fail under the tool, as its header says), the counting tool
+  wrapped by the measuring script. Raw tables in the scratchpad: `m1-count.json`,
+  `m1-machine.json`, `m1-machine.txt`, `m1-tests.log`.
+
+  *The machine.* Wall 780.6 s. Eight logical processors: 5,524.5 busy processor-seconds of
+  6,244.8, **88%**. The machine is processor-bound: that much work over eight processors is
+  690 s at best, however the files are arranged.
+
+  | Who spent it | processor-seconds | of busy |
+  |---|---|---|
+  | The antivirus (`MsMpEng`), one process | 1,077.4 | 19.5% |
+  | The sessions (`claude`, 21 processes) | 291.4 | 5.3% |
+  | `WmiPrvSE` (2), `System`, `dwm` | 149.9, 113.3, 106.5 | 6.7% |
+  | `svchost` (80), long-lived `node` (48), `SearchIndexer`, `chrome` (21), `ChatGPT` (17) | 70.3, 60.0, 49.9, 35.4, 20.8 | 4.3% |
+  | Every other process that lived through the run | 43.6 | 0.8% |
+  | The tests' Node processes, by their own report (1,005 reported, 87 never did) | 489.2 | 8.9% |
+  | **Not attributed**: git (12,041 processes, 1,610 s of summed wall time, its upper bound), the 87 Node processes that never reported, shells, consoles | 3,017 | 54.6% |
+
+  The tool listed the idle process of Windows (pid 0, 743 s) as a row; it is taken out of
+  the figures above and of the tool (the fix is in the cut's commit).
+
+  *What a start costs* (median, range): `git --version` 62 ms (57 to 73) on the quiet
+  machine, **209 ms** (178 to 274) 300 s into the run; `node -e ""` 95 ms (92 to 100) and
+  **320 ms** (248 to 423). Free memory 7,009 MB and 6,472 MB; entries in the temporary
+  folder 3,511 and 3,889.
+
+  *By test file, the ten longest* (seconds from the start of the run):
+
+  | Test file | start | end | seconds | tests | Node | their s | git | git s | other | other s |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | `bin/codex-review.test.mjs` | 0.2 | 686.0 | 685.8 | 237 | 1 | 59.0 | 6,067 | 641.5 | 0 | 0 |
+  | `evals/runner.test.mjs` | 261.0 | 780.3 | 519.3 | 164 | 199 | 39.4 | 0 | 0 | 501 | 666.7 |
+  | `evals/isolation-probe.test.mjs` | 204.8 | 635.7 | 430.9 | 122 | 93 | 76.9 | 270 | 61.5 | 210 | 336.9 |
+  | `evals/task-proof.test.mjs` | 311.2 | 695.8 | 384.6 | 34 | 223 | 55.4 | 5 | 0.4 | 346 | 1,142.9 |
+  | `bin/check-codex-reviews.test.mjs` | 0.2 | 311.1 | 310.9 | 94 | 1 | 18.6 | 2,146 | 298.4 | 0 | 0 |
+  | `evals/configs.test.mjs` | 148.4 | 389.9 | 241.5 | 79 | 25 | 10.0 | 123 | 34.9 | 70 | 202.7 |
+  | `evals/suite.test.mjs` | 275.6 | 447.1 | 171.5 | 79 | 37 | 14.6 | 0 | 0 | 82 | 174.4 |
+  | `bin/remote.test.mjs` | 106.6 | 245.6 | 139.0 | 111 | 4 | 10.0 | 451 | 78.5 | 20 | 94.2 |
+  | `bin/lib/project.test.mjs` | 69.1 | 204.7 | 135.6 | 143 | 1 | 9.7 | 852 | 126.2 | 0 | 0 |
+  | `bin/check.test.mjs` | 0.2 | 130.8 | 130.6 | 166 | 49 | 18.9 | 260 | 48.1 | 54 | 94.0 |
+
+  All 77 files: 1,005 Node processes, 12,041 git processes (1,610 s), 1,662 other children
+  (3,630 s of wall time). git by sub-command: `rev-parse` 4,645 (526 s), `diff` 1,770,
+  `check-attr` 670, `rev-list` 660, `init` 640 (145 s), `merge-base` 581, `commit` 556
+  (174 s), `status` 504, `add` 501, `log` 494, `config` 289. By caller: one line,
+  `bin/codex-review.test.mjs:277`, starts 4,618 of them, 38% (`rev-parse` 1,695, `diff`
+  1,136, `merge-base` 427, `check-attr` 414): the git the command under test asks, a review
+  after another; then `bin/lib/codex-review-coverage.mjs:19` 1,036,
+  `bin/codex-review.test.mjs:45` 752, `bin/check-codex-reviews.test.mjs:32` 570,
+  `bin/lib/project.test.mjs:79` 530, `evals/configs.mjs:164` 477 (`init`, `add`, `commit`,
+  159 each).
+
+  *Inside the long files*: no one test is the file. `bin/codex-review.test.mjs` is 237
+  tests, median 1.8 s, 35 of them over 5 s, the longest 34.6 s; `evals/runner.test.mjs` 164
+  tests, the longest 57.1 s; `evals/task-proof.test.mjs` 34 tests, median 9.2 s.
+
+  *The cuts chosen from the tables, largest first.*
+  1. **The order the files start in.** The run ends at 780 s and its longest file at 686 s:
+     `node --test` sorts the files it is given (tried: given d, c, b, a it runs a, b, c, d),
+     seven at a time, so the three long files of `evals/` start 204 to 311 s in and the last
+     94 s wait for `evals/runner.test.mjs` alone. `run()` of `node:test` keeps the order it
+     is given (tried). A runner that starts the seven longest first: claimed, the run ends
+     with its longest file, about 700 s. No count drops; it is judged by the time line of a
+     second run. Taken, in flight (below).
+  2. **The git a review asks** (`codex-review.test.mjs:277`, 4,618 processes, a third of
+     all, 18 a review): the cut is in the command, so a real review pays less too. Not
+     started: it needs the callers split two frames deep (`--frames 2`) on that file first.
+  3. **Repositories of fixtures built once** (`init` 640, `commit` 556, `add` 501, `config`
+     289: 1,986 processes, 16% of git): a folder copied instead. Not started.
+  4. **The antivirus, 1,077 processor-seconds of 5,524**: nothing is built. The number goes
+     to him with what an exclusion of the tests' temporary folder would be.
+  How many files side by side (`--test-concurrency`) is not tried: at 88% busy the
+  processors are the limit, not the number of files.
+- 2026-10-12 · **T4, the first cut, in flight**: `scripts/run-tests.mjs`, `npm test` through
+  it, and `scripts/count-git.mjs --runner`, one writer on Haiku 5.5 (170,219 tokens). Its
+  `main` did not work (tried on four trivial files: nothing printed, one event of four
+  lost) and was rewritten on Opus in the form tried first in the scratchpad: the events of
+  `run()` by their type, the spec reporter through `compose`. Tried again: output whole,
+  four events of four, exit 1 with a failing file. Turn asked (`t4-turn.sh`): RED, GREEN,
+  the commit with its gate, which is the first whole run through the runner, and M1 again
+  through it (`m1b-*.json` in the scratchpad). Sub-agents so far: 2,271,573 tokens.
 
 ## Next
-gentle-ai on what follows `1841b96` (661 lines, due): start it, run the `granted` choice,
-capture in a turn of the lock. Codex on the slice when he has answered; its run is also M2's
-number 1 for Codex, now under `scripts/measure-run.mjs` once S2 is committed.
-In the other worktree: the turn of T2 (`t2-turn.sh`: RED, GREEN, the commit with its gate,
-and then M1, the whole suite under the counting tool wrapped by the measuring script; its
-tables land in the scratchpad as `m1-count.json`, `m1-machine.json`, `m1-machine.txt`).
-Then T3: the tables into Progress, and the cuts chosen from them.
+1. The turn of the first cut (`t4-turn.sh`, in `gate-wait-count`): read its log
+   (`t4-turn.log`), then the second run's tables (`m1b-count.json`, `m1b-machine.json`,
+   `m1b-machine.txt` in the scratchpad) against the first: where the last file ends, the
+   wall time, the counts. Write it in Progress as it came out, plainly if it gave nothing.
+2. gentle-ai on S2 (`47484bd..` on `feat/gate-wait-count`, over the budget: due) and on the
+   cut's commit: start, run the `granted` choice, capture in a turn of the lock.
+3. T6c, one writer, on `feat/gate-wait`.
+4. Cuts 2 and 3 of T3, each judged by a run; or say plainly that the session ended before.
+5. Codex on both slices when he has answered on the margin (S1's plan: 1,026 lines, about
+   1,250,000 input tokens against a rate of 1,231,200, 1.5% over; told to the orchestrator).
+   A Codex run is also M2's number 1 for Codex: wrap it in
+   `scripts/measure-run.mjs`.
+6. T8 (the texts, if M2 holds for Codex too), T9 (the trial on GitHub: nothing done yet;
+   tell the orchestrator before the branch is pushed), T10 (the close; before any pull
+   request, merge the current `main` into each branch and gate that tree). `AGENTS.md:17`
+   and `bin/gate.mjs:3` say the tests run under `node --test`: true of each file still, to
+   be read again at T8.
 
 ## Resume here
 - `feat/gate-wait` is not pushed; its head is the commit that holds this entry, on
