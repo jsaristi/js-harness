@@ -719,6 +719,94 @@ test('entryComponents declare the SessionStart hook for Claude and Codex', () =>
   assert.deepEqual(codexHook.entry(), entry);
 });
 
+// --- Session channel, T6: the resume hook, a second `SessionStart` entry per host, for the matcher `compact` ---
+
+const [, , claudeResume, codexResume] = entryComponents;
+// What a host file holds of ours after an install: the doctor's entry, then the resume hook's.
+const ourEntries = () => [claudeHook.entry(), claudeResume.entry()];
+
+test('entryComponents declare the resume hook for Claude and Codex: a SessionStart entry for the matcher compact', () => {
+  assert.equal(entryComponents.length, 4);
+  assert.deepEqual([claudeResume.id, codexResume.id], ['claude-resume-hook', 'codex-resume-hook']);
+  assert.deepEqual([claudeResume.pointer, codexResume.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
+  assert.deepEqual([claudeResume.target('/h'), codexResume.target('/h')], [claudeHook.target('/h'), codexHook.target('/h')], 'the files the first entry is in');
+  const entry = claudeResume.entry();
+  assert.deepEqual(entry, { matcher: 'compact', hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }] });
+  assert.deepEqual(codexResume.entry(), entry);
+});
+
+test('install writes the resume entry beside the doctor\'s in each host file and records both; uninstall removes both and the file it created', () => {
+  const home = makeTmpHome();
+  try {
+    const manifest = install(home, '0.1.0');
+    for (const target of [claudeHook.target(home), codexHook.target(home)]) {
+      assert.deepEqual(readJson(target), { hooks: { SessionStart: ourEntries() } }, target);
+      const records = manifest.entries.filter((e) => e.path === target);
+      assert.deepEqual(records.map((record) => record.entry), ourEntries());
+      // The file is the install's whichever entry made it: the last one removed is the one that deletes it.
+      assert.deepEqual(records.map((record) => [record.createdFile, record.skipped]), [[true, false], [true, false]], target);
+      assert.equal(records[1].sha256, sha256(JSON.stringify(claudeResume.entry())));
+    }
+    assert.deepEqual(readManifest(home).entries, manifest.entries, 'what is recorded is what was written');
+
+    const result = uninstall(home);
+    assert.deepEqual(result.entriesKept, []);
+    assert.deepEqual([...result.entriesRemoved].sort(), [claudeHook.target(home), claudeHook.target(home), codexHook.target(home), codexHook.target(home)].sort());
+    assert.deepEqual([fs.existsSync(claudeHook.target(home)), fs.existsSync(codexHook.target(home))], [false, false]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an update from an install made before the resume hook adds its entry, and uninstall still leaves the host file as it found it', () => {
+  for (const created of [true, false]) {
+    const home = makeTmpHome();
+    try {
+      const target = claudeHook.target(home);
+      const unrelated = { matcher: 'startup', hooks: [{ type: 'command', command: 'echo unrelated', timeout: 5 }] };
+      if (!created) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [unrelated] } }, null, 2)}\n`, 'utf8');
+      }
+      // The older install: what `install` wrote and recorded when the doctor's entry was the only one.
+      const older = install(home, '0.1.0');
+      for (const file of [claudeHook.target(home), codexHook.target(home)]) {
+        const data = readJson(file);
+        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact');
+        fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+      }
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact') }, null, 2), 'utf8');
+      assert.deepEqual(readJson(target).hooks.SessionStart, created ? [claudeHook.entry()] : [unrelated, claudeHook.entry()]);
+
+      const manifest = sync(home, '0.2.0');
+      assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created]]);
+
+      uninstall(home);
+      if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
+      else assert.deepEqual(readJson(target), { hooks: { SessionStart: [unrelated] } });
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test('uninstall removes the entry that is still there when the user removed the other, and says which file kept one', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const target = claudeHook.target(home);
+    // The user took the resume hook out by hand and put a hook of their own in the file.
+    const theirs = { matcher: 'compact', hooks: [{ type: 'command', command: 'user command', timeout: 1 }] };
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs] } }, null, 2)}\n`, 'utf8');
+    const result = uninstall(home);
+    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [1, 1]);
+    assert.deepEqual(readJson(target), { hooks: { SessionStart: [theirs] } }, 'the entry that was still ours is gone, and theirs stays');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('install creates a missing hook file from {} and records createdFile: true', () => {
   const home = makeTmpHome();
   try {
@@ -727,7 +815,7 @@ test('install creates a missing hook file from {} and records createdFile: true'
 
     const claudeTarget = claudeHook.target(home);
     const data = readJson(claudeTarget);
-    assert.deepEqual(data, { hooks: { SessionStart: [claudeHook.entry()] } });
+    assert.deepEqual(data, { hooks: { SessionStart: ourEntries() } });
 
     const record = manifest.entries.find((e) => e.path === claudeTarget);
     assert.equal(record.createdFile, true);
@@ -757,9 +845,9 @@ test('install appends the hook entry to an existing file without disturbing othe
     const manifest = install(home, '0.1.0');
 
     const data = readJson(target);
-    assert.equal(data.hooks.SessionStart.length, 2);
+    assert.equal(data.hooks.SessionStart.length, 3);
     assert.deepEqual(data.hooks.SessionStart[0], seeded.hooks.SessionStart[0]);
-    assert.deepEqual(data.hooks.SessionStart[1], claudeHook.entry());
+    assert.deepEqual(data.hooks.SessionStart.slice(1), ourEntries());
     assert.deepEqual(data.hooks.Stop, seeded.hooks.Stop);
 
     const record = manifest.entries.find((e) => e.path === target);
@@ -784,7 +872,7 @@ test('install preserves 2-space indent, trailing newline and CRLF line endings',
     assert.ok(raw.includes('\r\n'), 'expected CRLF line endings to be preserved');
     assert.ok(!/[^\r]\n/.test(raw), 'expected every newline to be preceded by \\r');
     assert.ok(raw.endsWith('\r\n'), 'expected the trailing newline to be preserved');
-    assert.deepEqual(JSON.parse(raw), { hooks: { SessionStart: [claudeHook.entry()] } });
+    assert.deepEqual(JSON.parse(raw), { hooks: { SessionStart: ourEntries() } });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -818,7 +906,7 @@ test('install is idempotent: a second install adds no duplicate hook entry', () 
     const after = fs.readFileSync(target, 'utf8');
     assert.equal(after, before, 'a repeat install must not rewrite an already-correct file');
     const data = readJson(target);
-    assert.equal(data.hooks.SessionStart.length, 1);
+    assert.equal(data.hooks.SessionStart.length, 2, 'the doctor\'s entry and the resume hook\'s, once each');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.createdFile, true, 'createdFile must still be true on the second install');
   } finally {
@@ -1112,7 +1200,7 @@ test('R3-005: install preserves 4-space indentation when appending to an existin
     install(home, '0.1.0');
 
     const raw = fs.readFileSync(target, 'utf8');
-    assert.equal(raw, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }, null, 4)}\n`);
+    assert.equal(raw, `${JSON.stringify({ hooks: { SessionStart: ourEntries() } }, null, 4)}\n`);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1129,7 +1217,7 @@ test('R3-005: install preserves tab indentation when appending to an existing ho
     install(home, '0.1.0');
 
     const raw = fs.readFileSync(target, 'utf8');
-    assert.equal(raw, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }, null, '\t')}\n`);
+    assert.equal(raw, `${JSON.stringify({ hooks: { SessionStart: ourEntries() } }, null, '\t')}\n`);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1145,7 +1233,7 @@ test('R3-005: install keeps compact single-line JSON compact when appending', ()
     install(home, '0.1.0');
 
     const raw = fs.readFileSync(target, 'utf8');
-    assert.equal(raw, JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }));
+    assert.equal(raw, JSON.stringify({ hooks: { SessionStart: ourEntries() } }));
     assert.ok(!raw.includes('\n'), 'expected the rewritten file to stay on one line');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
