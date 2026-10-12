@@ -1786,10 +1786,14 @@ summary.
       under the pause again, not by a boundary's `uuid`, which may be megabytes before the
       end; the state file of a session keeps when it was told. That commit is `575ab94`,
       gated; gentle-ai approved it with six findings (Progress, 2026-10-12 03:38 to 04:50).
-      In flight when this was written (04:55): one writer on the six, brief
-      `brief-pause-fixes.md` in this session's scratchpad; its work is read by the parent
-      (`node --test bin/lib/pause.test.mjs`), then committed through the gate with
-      `turn-commit-review.sh` of the same scratchpad. Codex is owed for the slice, once, from
+      The six are fixed in the commit that holds this text (one writer on Haiku 5.5, 51 tool
+      calls, test first; read by the parent at 05:12: `node --test bin/lib/pause.test.mjs`
+      29 pass, and on this session's own transcript, at 89% of its window, the library told
+      once and answered nothing the second time). Left by the writer and not fixed: a state
+      written armed in the home that then cannot be written is read before the newer one in
+      the temp folder, so the notice repeats in that case; the newer of the two should win.
+      Owed for that commit: what its gate and gentle-ai said (log `jh5-s5-turn-2.log` in the
+      system's temp folder). Codex is owed for the slice, once, from
       `8f4e010`, after the command is in. Next, its brief ready as `brief-pause-command.md`:
       `js-harness resume --pause` for a
       `PostToolUse` input (it reads the hook's JSON, finds the project's `harness.json` by

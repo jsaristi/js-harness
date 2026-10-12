@@ -1,8 +1,9 @@
 // The context pause, as one library: `pauseNotice` is run by the hook after every tool call of a session,
 // so it reads the end of the session's transcript and nothing more, and says the pause to the session once.
 // Another hook (a `Stop` one) imports the same function, so the rule lives here and in the constants of
-// `./sessions.mjs`, and nowhere else. Zero dependencies: it imports only `node:fs`, `node:path` and `./sessions.mjs`.
+// `./sessions.mjs`, and nowhere else. Zero dependencies: it imports only `node:fs`, `node:os`, `node:path` and `./sessions.mjs`.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, shareOf } from './sessions.mjs';
 
@@ -10,13 +11,26 @@ import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFA
  * file of megabytes costs what this many bytes cost: the end is all it may look at. */
 const END_BYTES = 262144;
 
+/** The most of a transcript's end that the hook reads while it looks for a reply with usage. The first `END_BYTES`
+ * may hold only one large tool result after the last reply, and the reply before it is still the session's count,
+ * so the read grows; past this bound a file with no such reply costs no more than this many bytes. */
+const END_MAX_BYTES = 8388608;
+
 /** The shape `bin/resume.mjs` accepts for a session id, since the id becomes a file name. */
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/;
 
 /** The compaction point of a session that has measured none: the share the host compacts at, in tokens. */
 const DEFAULT_COMPACTION = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT);
 
+/** The least compaction point a measure may give: a tenth of the default, because no window the host offers is a
+ * tenth of the default. A point under it is a broken measure (a zero would put every reply past the pause), so
+ * it is read as if it were absent. */
+const LEAST_COMPACTION = DEFAULT_COMPACTION / 10;
+
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** `point` when it is a compaction point a measure may give, else `null`. */
+const pointOf = (point) => (Number.isFinite(point) && point >= LEAST_COMPACTION ? point : null);
 
 /** The text of `count` with a comma between each group of three digits: what a person reads for tokens. */
 const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -48,11 +62,12 @@ function tokensOf(entry) {
 }
 
 /** The `preTokens` of a compaction the host made by itself, or `null` for any other entry (a manual one is
- * the user's, and a boundary without a count says nothing about the point). */
+ * the user's, and a boundary without a count says nothing about the point). A count under the least point is
+ * `null` too, so the scan goes on to an earlier boundary. */
 function automaticCompactionOf(entry) {
   if (entry.type !== 'system' || entry.subtype !== 'compact_boundary' || !isObject(entry.compactMetadata)) return null;
   const { compactMetadata: said } = entry;
-  return said.trigger === 'auto' && Number.isFinite(said.preTokens) ? said.preTokens : null;
+  return said.trigger === 'auto' ? pointOf(said.preTokens) : null;
 }
 
 /** What the end of a transcript says: its last own reply's tokens and the last automatic compaction's
@@ -74,25 +89,41 @@ function endOf(text) {
   return tokens === null ? null : { tokens, compaction };
 }
 
+/** The bytes of `fd` from `from` up to `to`, in as many reads as the file system takes: fewer when the file ends. */
+function readBack(fileSystem, fd, from, to) {
+  const piece = Buffer.alloc(Math.max(0, to - from));
+  let done = 0;
+  while (done < piece.length) {
+    const read = fileSystem.readSync(fd, piece, done, piece.length - done, from + done);
+    if (read === 0) break;
+    done += read;
+  }
+  return piece.subarray(0, done);
+}
+
 /** The end of a session's transcript: `{ tokens, compaction }`, or `null` when the file cannot be read or
- * holds no reply with usage in its end. It reads at most the last `bytes` of the file (open, read at an
- * offset, close; never the whole file), and the first line of that piece may be cut, which is why a line
- * that does not parse is skipped rather than fatal. `compaction` is the `preTokens` of the last automatic
- * compaction in the piece, or `null`: it is what the session held when the host last compacted it by itself. */
-export function readEnd(file, { bytes = END_BYTES, fileSystem = fs } = {}) {
+ * holds no reply with usage in its end. It reads the last `bytes` of the file (open, read at an offset, close;
+ * never the whole file). When that piece holds no reply with usage, which one large tool result after the last
+ * reply is enough to cause, it reads a longer end, four times as long each time, up to `maxBytes`, and stops at
+ * the first piece that holds one or at the whole file. Only the bytes before the piece read so far are read on a
+ * longer end, so the bytes read in all are the longest piece and never more than `maxBytes`. The first line of a
+ * piece may be cut, which is why a line that does not parse is skipped rather than fatal. `compaction` is the
+ * `preTokens` of the last automatic compaction in the piece that was read, or `null`: it is what the session held
+ * when the host last compacted it by itself. */
+export function readEnd(file, { bytes = END_BYTES, maxBytes = END_MAX_BYTES, fileSystem = fs } = {}) {
   let fd;
   try {
     fd = fileSystem.openSync(file, 'r');
     const { size } = fileSystem.fstatSync(fd);
-    const start = Math.max(0, size - bytes);
-    const piece = Buffer.alloc(size - start);
-    let done = 0;
-    while (done < piece.length) {
-      const read = fileSystem.readSync(fd, piece, done, piece.length - done, start + done);
-      if (read === 0) break;
-      done += read;
+    let piece = Buffer.alloc(0);
+    let want = Math.max(1, Math.min(bytes, maxBytes));
+    for (;;) {
+      const start = Math.max(0, size - want);
+      piece = Buffer.concat([readBack(fileSystem, fd, start, size - piece.length), piece]);
+      const end = endOf(piece.toString('utf8'));
+      if (end !== null || start === 0 || want >= maxBytes) return end;
+      want = Math.min(want * 4, maxBytes);
     }
-    return endOf(piece.subarray(0, done).toString('utf8'));
   } catch {
     return null;
   } finally {
@@ -114,33 +145,54 @@ export function statePath(home, sessionId) {
 
 const freshState = () => ({ compaction: null, armed: true, told: [] });
 
-/** The state a session's file holds. A missing, unreadable or unparseable file reads as a session that has
- * never been told and is armed, so a crossing tells it: telling twice is better than never. */
-function readState(file, fileSystem) {
+/** The state a session holds, read from the first of `files` that holds a readable one. A place that is missing,
+ * unreadable or unparseable is passed over; when none holds one the session reads as never told and armed, so
+ * a crossing tells it. */
+function readState(files, fileSystem) {
+  for (const file of files) {
+    const state = readStateFile(file, fileSystem);
+    if (state !== null) return state;
+  }
+  return freshState();
+}
+
+/** One place of the state, or `null` when the file cannot be read or does not parse as a state. */
+function readStateFile(file, fileSystem) {
   try {
     const value = JSON.parse(fileSystem.readFileSync(file, 'utf8'));
-    if (!isObject(value)) return freshState();
+    if (!isObject(value)) return null;
     return {
-      compaction: Number.isFinite(value.compaction) ? value.compaction : null,
+      compaction: pointOf(value.compaction),
       armed: typeof value.armed === 'boolean' ? value.armed : true,
       told: Array.isArray(value.told) ? value.told : [],
     };
   } catch {
-    return freshState();
+    return null;
   }
 }
 
-/** Writes the state as a temp file beside the state file, then renames it over the state file, so a reader
- * never sees half of it. A write that fails is not fatal: the notice of a crossing is still given, and the
- * session is told again at the next crossing rather than never. */
-function writeState(file, state, fileSystem) {
+/** Writes the state to the first of `files` that takes it, and says whether one did. Each place is written as a
+ * temp file beside it that is renamed over it, so a reader never sees half of it. */
+function writeState(files, state, fileSystem) {
+  return files.some((file) => writeStateFile(file, state, fileSystem));
+}
+
+/** Writes one place of the state, `true` when it is kept there. A write that fails leaves nothing behind: the
+ * rename is the last step, and a temp file that outlived a failed one is removed, its own failure swallowed. */
+function writeStateFile(file, state, fileSystem) {
   const temp = `${file}.${process.pid}.tmp`;
   try {
     fileSystem.mkdirSync(path.dirname(file), { recursive: true });
     fileSystem.writeFileSync(temp, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
     fileSystem.renameSync(temp, file);
+    return true;
   } catch {
-    // the state could not be kept: nothing else depends on the write being there
+    try {
+      fileSystem.unlinkSync(temp);
+    } catch {
+      // there may be no temp file to remove: the write failed before it was made, and that is no reason to fail again
+    }
+    return false;
   }
 }
 
@@ -150,10 +202,11 @@ function writeState(file, state, fileSystem) {
  * different size is measured against its own compaction and not against the default. */
 function noticeOf(tokens, compaction) {
   const window = (compaction * 100) / DEFAULT_CONTEXT_COMPACTION_PERCENT;
-  const share = percentOf(tokens, window);
-  const room = Math.max(0, compaction - tokens);
+  const whole = Math.round(tokens);
+  const share = percentOf(whole, window);
+  const room = Math.round(Math.max(0, compaction - tokens));
   const text = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%: about ${thousands(room)} tokens are left. This is the context pause. Now write your state where it is read after a compaction (the "Next step" of the session's feature document, committed; the relief file for an orchestrator), say this share to the user in your next reply with the two blocks of a cut, once, and then go on with the task.`;
-  return { tokens, share, compactionShare: DEFAULT_CONTEXT_COMPACTION_PERCENT, room, text };
+  return { tokens: whole, share, compactionShare: DEFAULT_CONTEXT_COMPACTION_PERCENT, room, text };
 }
 
 /** The context pause for a session, run after every tool call: `null`, or the notice the one time a stretch
@@ -164,12 +217,19 @@ function noticeOf(tokens, compaction) {
  * The session's compaction point is the one its own transcript measured, else the one remembered in its
  * state, else the default, and the pause is that point scaled to the share the host compacts at. A state is
  * written only when something in it changes (a re-arm, a crossing, a new point), so under the pause with
- * nothing new no file is made. It never throws for a transcript or a state it cannot read or write. */
-export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(), fileSystem = fs } = {}) {
+ * nothing new no file is made.
+ *
+ * The state is kept in its file under `home`, or, when that cannot be written, in a file of the same name in
+ * `tmpdir`. A crossing gives the notice only when the disarmed state was kept in one of them: when neither
+ * takes it the session is not told, and the board and the reply check still say the pause. Telling a session
+ * twice, once each time the write fails, would cost it the context the pause is there to protect. It never
+ * throws for a transcript or a state it cannot read or write. */
+export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(), fileSystem = fs, tmpdir = os.tmpdir() } = {}) {
   const file = statePath(home, sessionId);
+  const files = [file, path.join(tmpdir, `js-harness-pause-${sessionId}.json`)];
   const end = readEnd(transcript, { fileSystem });
   if (end === null) return null;
-  const state = readState(file, fileSystem);
+  const state = readState(files, fileSystem);
   const compaction = end.compaction ?? state.compaction ?? DEFAULT_COMPACTION;
   const past = end.tokens >= pauseAt(compaction);
   const told = past && state.armed;
@@ -178,6 +238,7 @@ export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(
     armed: !past,
     told: told ? [...state.told, { at: new Date(now()).toISOString(), tokens: end.tokens }] : state.told,
   };
-  if (told || next.armed !== state.armed || next.compaction !== state.compaction) writeState(file, next, fileSystem);
-  return told ? noticeOf(end.tokens, compaction) : null;
+  if (told) return writeState(files, next, fileSystem) ? noticeOf(end.tokens, compaction) : null;
+  if (next.armed !== state.armed || next.compaction !== state.compaction) writeState(files, next, fileSystem);
+  return null;
 }

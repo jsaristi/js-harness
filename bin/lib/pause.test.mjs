@@ -18,6 +18,7 @@ const PAUSE = pauseAt(COMPACTION);
 const UNDER = PAUSE - 1000;
 const OVER = PAUSE + 1000;
 const SAID = (count) => count.toLocaleString('en-US');
+const TINY = shareOf(DEFAULT_CONTEXT_WINDOW, 1);
 
 function inHome(body) {
   return () => {
@@ -50,6 +51,9 @@ function watchedFs() {
 }
 
 const stateOf = (home) => JSON.parse(fs.readFileSync(statePath(home, SESSION), 'utf8'));
+
+/** The temp files a folder holds, which a failed write must not leave: none when the folder does not exist. */
+const tmpFilesIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')) : []);
 
 // --- readEnd: the end of the transcript ---
 
@@ -94,6 +98,23 @@ test('readEnd: a file larger than the bytes asked is read at its end only, never
   assert.ok(asked > 0 && asked <= 4096, `asked ${asked} bytes`);
 }));
 
+test('readEnd: a reply followed by one line larger than the bytes asked is found, from a longer end', inHome((home) => {
+  const file = write(home, 'long.jsonl', [reply(300), { type: 'user', text: 'x'.repeat(5000) }]);
+  assert.deepEqual(readEnd(file, { bytes: 1024 }), { tokens: 300, compaction: null });
+}));
+
+test('readEnd: a file with no reply at all reads as null, and no more bytes than the most asked', inHome((home) => {
+  const file = write(home, 'none.jsonl', Array.from({ length: 2000 }, (_, index) => ({ type: 'user', text: `line ${index} ${'q'.repeat(100)}` })));
+  let asked = 0;
+  const counting = { ...fs, readSync: (fd, buffer, offset, length, position) => {
+    asked += length;
+    return fs.readSync(fd, buffer, offset, length, position);
+  } };
+  assert.equal(readEnd(file, { bytes: 1024, maxBytes: 8192, fileSystem: counting }), null);
+  assert.ok(fs.statSync(file).size > 8192);
+  assert.equal(asked, 8192, `asked ${asked} bytes`);
+}));
+
 test('readEnd: a missing file reads as null', inHome((home) => {
   assert.equal(readEnd(path.join(home, 'missing.jsonl')), null);
 }));
@@ -122,14 +143,14 @@ test('statePath: a session id that is not of the shape of a session id throws a 
 test('under the pause nothing is said, nothing is written and no state file is made', inHome((home) => {
   const transcript = write(home, 't.jsonl', [reply(UNDER)]);
   const { writes, fileSystem } = watchedFs();
-  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, fileSystem }), null);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp'), fileSystem }), null);
   assert.deepEqual(writes, []);
   assert.equal(fs.existsSync(statePath(home, SESSION)), false);
 }));
 
 test('the crossing: the first call at the pause says the share, the room and the text; the second says nothing; the state keeps the time', inHome((home) => {
   const transcript = write(home, 't.jsonl', [reply(OVER)]);
-  const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW });
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
   assert.equal(notice.tokens, OVER);
   assert.equal(notice.share, percentOf(OVER, WINDOW));
   assert.equal(notice.compactionShare, DEFAULT_CONTEXT_COMPACTION_PERCENT);
@@ -137,20 +158,20 @@ test('the crossing: the first call at the pause says the share, the room and the
   assert.ok(notice.text.includes(`holds ${notice.share}% of its context window`), notice.text);
   assert.ok(notice.text.includes(`compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%`), notice.text);
   assert.ok(notice.text.includes(`about ${SAID(notice.room)} tokens are left`), notice.text);
-  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }), null);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
   assert.equal(stateOf(home).armed, false);
   assert.deepEqual(stateOf(home).told, [{ at: new Date(NOW).toISOString(), tokens: OVER }]);
 }));
 
 test('a new stretch: under the pause after a crossing the state re-arms and keeps what it told, and the next crossing tells again', inHome((home) => {
   const transcript = write(home, 't.jsonl', [reply(OVER)]);
-  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }));
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }));
   write(home, 't.jsonl', [reply(UNDER)]);
-  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }), null);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
   assert.equal(stateOf(home).armed, true);
   assert.equal(stateOf(home).told.length, 1);
   write(home, 't.jsonl', [reply(OVER)]);
-  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }));
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }));
   assert.equal(stateOf(home).told.length, 2);
 }));
 
@@ -161,7 +182,7 @@ test('a session whose own compaction is lower is told below the default pause', 
   const below = pauseAt(LOW) + 1000;
   assert.ok(below < PAUSE, 'the context is under the default pause');
   const transcript = write(home, 't.jsonl', [boundary(LOW), reply(below)]);
-  const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW });
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
   assert.ok(notice, 'the session tells at its own pause');
   assert.equal(notice.room, LOW - below);
 }));
@@ -171,7 +192,7 @@ test('a session whose own compaction is higher is not told at the default pause,
   const above = PAUSE + 1000;
   assert.ok(above < pauseAt(HIGH), 'the context is under the session\'s own pause');
   const transcript = write(home, 't.jsonl', [boundary(HIGH), reply(above)]);
-  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }), null);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
   assert.equal(stateOf(home).compaction, HIGH);
   assert.equal(stateOf(home).armed, true);
 }));
@@ -179,12 +200,12 @@ test('a session whose own compaction is higher is not told at the default pause,
 test('the session\'s own point is remembered when a later end no longer holds the boundary', inHome((home) => {
   const LOW = COMPACTION - 50000;
   const transcript = write(home, 't.jsonl', [boundary(LOW), reply(pauseAt(LOW) + 1000)]);
-  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }));
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }));
   assert.equal(stateOf(home).compaction, LOW);
   write(home, 't.jsonl', [reply(pauseAt(LOW) - 1000)]);
-  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }), null);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
   write(home, 't.jsonl', [reply(pauseAt(LOW) + 1000)]);
-  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }));
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }));
   assert.equal(stateOf(home).told.length, 2);
 }));
 
@@ -192,7 +213,7 @@ test('the session\'s own point is remembered when a later end no longer holds th
 
 test('an unreadable transcript is no notice, and nothing is written', inHome((home) => {
   const { writes, fileSystem } = watchedFs();
-  assert.equal(pauseNotice({ transcript: path.join(home, 'missing.jsonl'), sessionId: SESSION, home, now: () => NOW, fileSystem }), null);
+  assert.equal(pauseNotice({ transcript: path.join(home, 'missing.jsonl'), sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp'), fileSystem }), null);
   assert.deepEqual(writes, []);
 }));
 
@@ -200,7 +221,7 @@ test('a state file that is not JSON reads as armed and empty, so the crossing te
   fs.mkdirSync(path.dirname(statePath(home, SESSION)), { recursive: true });
   fs.writeFileSync(statePath(home, SESSION), 'not json {');
   const transcript = write(home, 't.jsonl', [reply(OVER)]);
-  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW }));
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }));
   assert.equal(stateOf(home).told.length, 1);
 }));
 
@@ -208,8 +229,81 @@ test('a home that cannot be written still gives the notice at the crossing, and 
   const notAFolder = path.join(home, 'not-a-folder');
   fs.writeFileSync(notAFolder, 'a file, not a folder');
   const transcript = write(home, 't.jsonl', [reply(OVER)]);
-  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home: notAFolder, now: () => NOW }));
-  assert.equal(pauseNotice({ transcript: write(home, 'u.jsonl', [reply(UNDER)]), sessionId: SESSION, home: notAFolder, now: () => NOW }), null);
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home: notAFolder, now: () => NOW, tmpdir: path.join(home, 'tmp') }));
+  assert.equal(pauseNotice({ transcript: write(home, 'u.jsonl', [reply(UNDER)]), sessionId: SESSION, home: notAFolder, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
+}));
+
+test('a home that cannot be written keeps the state in the temp folder: told once, and the next call under the disarm says nothing', inHome((home) => {
+  const notAFolder = path.join(home, 'not-a-folder');
+  fs.writeFileSync(notAFolder, 'a file, not a folder');
+  const tmpdir = path.join(home, 'tmp');
+  fs.mkdirSync(tmpdir);
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  const options = { transcript, sessionId: SESSION, home: notAFolder, now: () => NOW, tmpdir };
+  assert.ok(pauseNotice(options));
+  assert.equal(pauseNotice(options), null);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(tmpdir, `js-harness-pause-${SESSION}.json`), 'utf8')).armed, false);
+}));
+
+test('a home and a temp folder that cannot be written: no notice on any call, and nothing thrown', inHome((home) => {
+  const notAFolder = path.join(home, 'not-a-folder');
+  fs.writeFileSync(notAFolder, 'a file, not a folder');
+  const notATemp = path.join(home, 'not-a-temp-folder');
+  fs.writeFileSync(notATemp, 'a file, not a folder');
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  const options = { transcript, sessionId: SESSION, home: notAFolder, now: () => NOW, tmpdir: notATemp };
+  for (let call = 1; call <= 3; call += 1) {
+    assert.equal(pauseNotice(options), null, `call ${call}`);
+  }
+}));
+
+test('a rename that fails leaves no temp file behind, in the state folder or in the temp folder', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  fs.mkdirSync(tmpdir);
+  const fileSystem = { ...fs, renameSync: () => { throw new Error('the rename is refused'); } };
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir, fileSystem }), null);
+  assert.deepEqual(tmpFilesIn(path.dirname(statePath(home, SESSION))), []);
+  assert.deepEqual(tmpFilesIn(tmpdir), []);
+}));
+
+test('a compaction point of the transcript that is zero, negative or tiny is as if absent, and an earlier boundary holds', inHome((home) => {
+  for (const point of [0, -TINY, TINY]) {
+    const transcript = write(home, 't.jsonl', [boundary(point), reply(UNDER)]);
+    assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null, `point ${point}`);
+  }
+  const LOW = COMPACTION - 50000;
+  const earlier = write(home, 'e.jsonl', [boundary(LOW), boundary(0), reply(pauseAt(LOW) + 1000)]);
+  assert.deepEqual(readEnd(earlier), { tokens: pauseAt(LOW) + 1000, compaction: LOW });
+}));
+
+test('a compaction point of the state that is zero, negative or tiny is as if absent', inHome((home) => {
+  for (const point of [0, -TINY, TINY]) {
+    fs.mkdirSync(path.dirname(statePath(home, SESSION)), { recursive: true });
+    fs.writeFileSync(statePath(home, SESSION), JSON.stringify({ compaction: point, armed: true, told: [] }));
+    const transcript = write(home, 't.jsonl', [reply(UNDER)]);
+    assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null, `point ${point}`);
+  }
+}));
+
+test('the pause point itself is told', inHome((home) => {
+  const transcript = write(home, 't.jsonl', [reply(PAUSE)]);
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }));
+}));
+
+test('one token under the pause point is not told, and no state is written', inHome((home) => {
+  const transcript = write(home, 't.jsonl', [reply(PAUSE - 1)]);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
+  assert.equal(fs.existsSync(statePath(home, SESSION)), false);
+}));
+
+test('a compaction point that is not a whole number gives a whole room, and the text groups it as tokens', inHome((home) => {
+  const point = COMPACTION + 0.123456;
+  const transcript = write(home, 't.jsonl', [boundary(point), reply(OVER)]);
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
+  const room = Math.round(point - OVER);
+  assert.equal(notice.room, room);
+  assert.ok(notice.text.includes(`about ${SAID(room)} tokens are left`), notice.text);
 }));
 
 test('a bad session id is a TypeError from pauseNotice too, before the transcript is read', inHome((home) => {
