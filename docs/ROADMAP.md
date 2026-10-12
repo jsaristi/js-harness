@@ -59,7 +59,7 @@ First request of a one-word prompt, estimated tokens:
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
-| Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model; Haiku 5.5 is a candidate only for a sub-agent that writes code (Sebastián, 2026-10-10; "Subagent models result" below); the cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
+| Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
 
@@ -361,6 +361,13 @@ at high effort. Two measurements would settle what this one leaves open, each hi
 the same three tasks with Opus 5.5 alone at high effort on this version (9 trials, about $9), so
 that not delegating is in the same table; and one task hard enough to leave the ceiling.
 
+Decided for this repository's way of working (Sebastián, 2026-10-11, "apliquemos lo que
+investigaste", the orchestrator's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line
+2037): the sub-agent that writes scoped code is launched on Haiku 5.5, set on the call, and the
+ones that explore, review and verify stay on Opus 5.5 at high effort. What the harness turns on
+by default in a project stays open, and so do the two measurements. The table it belongs to, the
+mechanism that will apply it and the measurements still to run are in `docs/model-effort.md`.
+
 ## Rule hierarchy
 
 Designed on 2026-10-10 in `odd/tasks/rule-hierarchy.md`, by one design session that also wrote
@@ -536,9 +543,10 @@ whatever the other open sessions hold only in their conversations. Missing from 
 - How he is reported to (what needs him, what runs alone, what was done, everyday words):
   this file and memory. For the orchestrator skill, with the session channel.
 - The direct channel between sessions: this file and memory. Same place.
-- High effort on every sub-agent: memory and feature documents. Waits for his answer on the
-  result of the sub-agent models comparison ("Subagent models result" above, the
-  recommendation).
+- High effort on every sub-agent: memory and feature documents. It waited for his answer on
+  the result of the sub-agent models comparison ("Subagent models result" above), which came
+  on 2026-10-11; since the first slice of the rules list it is a declared rule,
+  `rule:subagent-effort`.
 - The context percentage reported and the cut proposed: half in `AGENTS.md` here. For a
   check or the status line, not prose.
 - Every proposal judged twice: this file and memory. For `AGENTS.md` of this repository
@@ -1124,8 +1132,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    only reports it.
 5. Whether the Codex review stays at `high` at what it costs (the number is in "Codex review
    cost result").
-6. What enters the harness from the sub-agent models result ("Subagent models result", the
-   recommendation).
+6. What the harness turns on by default in a project from the sub-agent models result
+   ("Subagent models result", the recommendation). For this repository's way of working it is
+   decided (2026-10-11): the writing sub-agent on Haiku 5.5.
 7. The gate run by GitHub on every pull request: the repository is private, so its runs spend
    the account's minutes ("Session channel", the order, item 2).
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks

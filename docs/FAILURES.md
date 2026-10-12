@@ -162,6 +162,14 @@ waited for his answer.
 - Seen: 2026-10-11 — relief file, line 220 — gate log: three slices do not fit in 3 million; both
   raised to 7 million at line 232
 
+### codex-model-at-capacity
+A Codex review ended on its first part with "Selected model is at capacity", recorded nothing, and
+the input tokens it had read were spent.
+- Class: tool
+- Seen: 2026-10-12 — odd/tasks/rule-hierarchy.md, Progress, "T16b, design and first slice" —
+  `859a797..6a721cc`, part 1 of 7, 49,568 input tokens; run again in a turn of the gate lock, on
+  the same model, and not recorded as a skip
+
 ### codex-review-incomplete
 A Codex review followed the delegation rules of its home instead of reading the patch, read a tenth
 of it and recorded nothing.
