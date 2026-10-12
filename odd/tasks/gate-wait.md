@@ -602,6 +602,73 @@ suite's time at the commit and not everything untouched; 3a or 3b is a second qu
 only after a yes. Before it is asked: M1d's result, and one cheap reading of what the
 1,681 children are for, since a road 1 that halves them may be enough without any trade.
 
+### Road 1, first slice: an eval test that is not about survival takes no process snapshot (designed; not built)
+Ordered by the orchestrator at 15:31 on 2026-10-12, inside his option 3 (a faster suite), so
+no question goes to him. First version, before its reader.
+
+**What is there.** `runProcess` (`evals/runner.mjs:277`) ends every run, on every way out,
+with `stop(sweep)` (`:345`); `sweep` is its `killSurvivors` option, by default the real one
+(`:278`), which on Windows starts one PowerShell that lists every process of the machine
+(`bin/lib/process-tree.mjs:259`, `:191`). The option is the seam, and it stops there: the
+four entries the tests go through call `runProcess` themselves and pass none on:
+`gradeWorkspace` (`evals/runner.mjs:411`), `runTrial` (`:630`, the agent's run at `:673`),
+`runVisible` and through it `proveTask` (`evals/task-proof.mjs:66`, `:222`), and the
+probe's arm (`evals/isolation-probe.mjs:1086`). About 490 snapshots in a whole run, about
+30 of them in tests that prove survival, a timeout or an interrupt (the reader's count,
+inferred from the code).
+
+**What changes in the code that ships: one optional pass-through, no behaviour.**
+`killSurvivors` becomes an option of `gradeWorkspace`, `runTrial` (handed to the agent's
+run and to the grading of that trial), `proveTask` (handed to its five runs) and the
+probe's options (handed to the arm's run). Left out, each hands `undefined` on and
+`runProcess` takes its default, so a real trial, a real proof and a real probe sweep
+exactly as today; no entry gets a default of its own and none reads the environment.
+`runSuite` needs nothing: it already takes `runTrial`.
+
+**What changes in the tests.** A test whose point is not what a process leaves behind
+passes a stand-in that takes no snapshot. The stand-in lives in the tests, not in the
+package, so nothing that ships can come to run without its sweep. The tests that prove
+survival, a timeout that kills, an interrupt, a sweep that fails, and the nine of
+`killByPath` pass nothing and stay on the real sweep; so do the five real tasks of
+`evals/tasks.test.mjs` for their graders (their hidden tests start programs of their own).
+
+**What a test would silently lose with a stand-in, and the net for it.** Today the real
+sweep also hides a test whose child did leave something running: it kills it, and nobody
+is told. With a stand-in that something would live on, hold its folder and fail a removal
+later, far from its cause. So each of the four test files ends with one real look: an
+`after` that asks, once, for the processes still running under the folders that file's
+tests worked in, and fails the file if there is one, naming it. One snapshot a file in
+place of a hundred and more, and stricter than today, since a leak now fails where before
+it was swept. To be confirmed by the reader: that `killByPath` (`evals/runner.mjs:221`)
+or the snapshot of `bin/lib/process-tree.mjs` can answer that question for a file's
+folders, and that those tests do work under folders a file can name.
+That the code that ships still calls its sweep on every way out is already proven where
+it belongs and stays so: the tests of `runProcess` with a recorded `killSurvivors`
+(`evals/runner.test.mjs:827`, `:939`, `:967`, `:985`). To add: one test an entry, four in
+all, that the option handed to it reaches `runProcess`, and that without it the real one
+is used.
+
+**Considered and left.** A sweep that skips itself when the child left nothing: it cannot
+know that without the list of processes, which is the cost. A cheaper list (one
+PowerShell kept alive, or another program): it would shorten real trials too, but it
+changes what ships and how a kill is proven; a candidate after this slice is measured.
+Taking out the graders and fake agents themselves (the other kinds of the reading): later
+slices, each with its own seam.
+
+**The measure, planned against the 95 s of noise.** The count is the proof, as it was for
+git: children that are not git, by file, from the counting tool (`timeLine.otherCount`),
+before and after, on the four files alone; the expectation is about 460 fewer of 1,156 in
+those files and it does not depend on the machine's load. With it, their summed seconds
+and the summed time of the named tests. One whole run at the end for the report, read as
+a wall time only beside M1b, M1c and M1d.
+
+**Size.** Shipping code: about 30 lines in three files. Tests: the stand-in at the call
+sites, which go through a helper in three of the four files, the four `after` looks and
+the four pass-through tests; between 150 and 300 changed lines by this reading, one slice,
+one pull request, both reviews. Not high risk by the list (an option is added, nothing
+that exists changes), and its regression is caught by the tests that stay on the real
+sweep.
+
 ## What the readers changed
 The first version is `335ce6f`. Two read-only readers, 2026-10-12; their reports are in this
 session's transcript.
