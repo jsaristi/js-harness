@@ -647,7 +647,7 @@ test('a completed turn that ended without a review message writes nothing', asyn
 });
 
 test('our own diff is computed from the resolved base to HEAD, with room for a large patch', async () => {
-  const { root, base } = makeRepo();
+  const { root, base, head } = makeRepo();
   const calls = [];
   const fake = fakeCodex(reviewed(root, base));
   const spawn = (command, args, opts) => {
@@ -656,7 +656,7 @@ test('our own diff is computed from the resolved base to HEAD, with room for a l
   };
   await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, spawn });
   const diff = calls.find((call) => call.args[0] === 'diff');
-  assert.deepEqual(diff.args, ['diff', '--no-color', '--no-ext-diff', base, 'HEAD']);
+  assert.deepEqual(diff.args, ['diff', '--no-color', '--no-ext-diff', base, head]);
   assert.equal(fs.realpathSync(diff.opts.cwd), fs.realpathSync(root));
   assert.ok(diff.opts.maxBuffer > 1024 * 1024, `maxBuffer ${diff.opts.maxBuffer}`);
 });
@@ -916,6 +916,53 @@ test('staged but uncommitted changes refuse the review too', async () => {
   const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
   assert.equal(result.code, 1);
   assert.equal(fake.calls.length, 0);
+});
+
+test('a commit made while Codex reviews leaves no record: the range it names is not the one that was read', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  // A commit lands in the worktree during the session: HEAD is no longer the commit the run began with.
+  const spawnAsync = fake.spawnAsync;
+  let moved;
+  fake.spawnAsync = (command, args, opts) => {
+    const child = spawnAsync(command, args, opts);
+    git(root, 'commit', '--allow-empty', '-m', 'moved');
+    moved = git(root, 'rev-parse', 'HEAD');
+    return child;
+  };
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 1, result.err);
+  assert.match(result.err, /^HEAD moved from [0-9a-f]{7} to [0-9a-f]{7} while Codex was reviewing/m);
+  assert.ok(result.err.includes(`from ${head.slice(0, 7)} to ${moved.slice(0, 7)} while`), result.err);
+  assert.equal(wrote(root), false);
+});
+
+test('an edit of a tracked file made while Codex reviews leaves no record: the tree is no longer the committed range', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  // The file is edited during the session, and nothing is committed: the tracked tree is not the range any more.
+  const spawnAsync = fake.spawnAsync;
+  fake.spawnAsync = (command, args, opts) => {
+    const child = spawnAsync(command, args, opts);
+    fs.appendFileSync(path.join(root, 'f.txt'), 'edited while Codex reads\n', 'utf8');
+    return child;
+  };
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 1, result.err);
+  assert.match(result.err, /^Tracked files changed while Codex was reviewing, so what it read is not the committed range /m);
+  assert.ok(result.err.includes(`committed range ${base.slice(0, 7)}..${head.slice(0, 7)} alone`), result.err);
+  assert.equal(wrote(root), false);
+});
+
+test('the review asks git about the end of its range by the commit it resolved, never by the word HEAD', async () => {
+  const { root, base, head } = makeRepo();
+  const { deps, asked } = countingGit(fakeCodex(reviewed(root, base)));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], deps);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(asked.filter(({ args }) => args.some((arg) => arg === 'HEAD' || arg.endsWith('..HEAD'))), []);
+  assert.ok(asked.some(({ args }) => args[0] === 'diff' && args.includes(head)), 'the diff is of the commit id');
+  // Resolved at the start, and again at the end, before the record is written.
+  assert.equal(timesAsked(asked, 'rev-parse', 'HEAD^{commit}'), 2);
 });
 
 test('an untracked file does not block the review', async () => {
@@ -5135,9 +5182,10 @@ test('a review asks git where the git folder is once, whatever it reads and writ
   assert.equal(timesAsked(asked, '--show-toplevel'), 1);
   assert.equal(timesAsked(asked, '--show-cdup'), 0);
   assert.deepEqual(asked.filter(({ args }) => args[0] === 'check-attr').map(({ args, cwd, input }) => [args[2], cwd, input]), [[three, topOf(root), 'c.txt\0b.txt\0a.txt\0']]);
-  // The two ends of the range are resolved once each, and no question is put to git twice.
-  assert.equal(timesAsked(asked, 'rev-parse', '--verify'), 2);
-  assert.deepEqual(askedTwice(asked), []);
+  // The two ends of the range are resolved once each, and HEAD and the tree are asked again before the record
+  // is written, the two questions asked at the start; no other question is put to git twice.
+  assert.equal(timesAsked(asked, 'rev-parse', '--verify'), 3);
+  assert.deepEqual(askedTwice(asked).map((question) => JSON.parse(question).args), [['rev-parse', '--verify', 'HEAD^{commit}'], ['status', '--porcelain', '--untracked-files=no']]);
 });
 
 test('a range reviewed in parts, a plan and a skip each ask where the git folder is once', async () => {

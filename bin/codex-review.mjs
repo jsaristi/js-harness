@@ -1169,7 +1169,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // hold uncommitted changes, which stop a review: a plan is of the committed range and claims nothing.
   // It never refuses a range for its size either, since saying the size is what it is for.
   if (args.plan) {
-    const given = git(spawn, root, ['merge-base', base, 'HEAD']);
+    const given = git(spawn, root, ['merge-base', base, head]);
     if (!given) {
       error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
       return 1;
@@ -1231,7 +1231,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // The branch's own changes start at the merge-base: a base that moved past the fork point (a
     // fetched main) would add its newer commits to a two-point diff, lines no review of the branch
     // prints. Codex reviews from the same commit, so both sides mean the same patch.
-    const given = git(spawn, root, ['merge-base', base, 'HEAD']);
+    const given = git(spawn, root, ['merge-base', base, head]);
     if (!given) {
       error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.`);
       return 1;
@@ -1240,7 +1240,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const from = startingAt(given);
     if (from === null) return 0;
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
-    const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', from, 'HEAD'], { maxBuffer: REVIEW_MAX_BUFFER });
+    const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', from, head], { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
       error(`Could not run \`git diff ${from.slice(0, 7)} HEAD\` to know what the review must see, so it was not started and nothing was recorded.`);
       return 1;
@@ -1707,8 +1707,37 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // A skip follows the records as a review does: it is recorded for the range the records leave, and not
     // at all over a range they cover whole, where it would say of commits that have a record that their
     // review could not be made. A base that shares no history with HEAD is still a range a skip can name.
-    const from = startingAt(git(spawn, root, ['merge-base', base, 'HEAD']) ?? base);
+    const from = startingAt(git(spawn, root, ['merge-base', base, head]) ?? base);
     if (from === null) return 0;
+  }
+
+  // The record claims the committed range as it was when the review started. A commit made, or a tracked file
+  // edited, while Codex read would be reviewed in part and recorded as if it were not there, so HEAD and the
+  // tracked tree are read again here, after the review, and nothing is written unless both are as they were.
+  // A skip reviewed nothing, so there is nothing to hold.
+  if (args.unavailable === undefined) {
+    const headNow = git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
+    const tree = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+    if (headNow !== null && headNow !== head) {
+      error(
+        `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)} while Codex was reviewing, so what it read is not the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written. ` +
+          'Nothing is committed in a worktree while its review runs; run the review again.',
+      );
+      return 1;
+    }
+    if (tree !== null && tree !== '') {
+      error(
+        `Tracked files changed while Codex was reviewing, so what it read is not the committed range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written. ` +
+          'Nothing is edited in a worktree while its review runs; run the review again.',
+      );
+      return 1;
+    }
+    if (headNow === null || tree === null) {
+      error(
+        `Could not read HEAD and the state of the tree again after the review, so it is not known that Codex read the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written.`,
+      );
+      return 1;
+    }
   }
 
   const file = writeRecord({
