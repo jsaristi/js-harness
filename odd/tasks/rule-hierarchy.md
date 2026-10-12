@@ -913,6 +913,10 @@ names it, and the entry stays open until it does.
   - [x] T3d `docs/FAILURES.md` seeded from the records, not only with the eighteen: every
     failure the relief file and the feature documents tell, each control in place found by the
     command in the file it names
+  - [ ] T3e The tokenizer measures a fence from the list item it is under, not from the margin
+    (found by Codex in `21686a5`, second priority): today a fence under an item that opens
+    within three spaces and closes deeper is left open, and with the option off a checkbox
+    shown in a fence indented past three spaces is counted as a step by `js-harness progress`
 - [ ] T4 Every command that writes outside the repository refuses a flag it does not know; and
   the push row hints the merge commit as the base after `main` is merged in (failure 15)
 - [ ] T5 The row `citations`, INFO
@@ -1282,6 +1286,17 @@ names it, and the entry stays open until it does.
   round that could go on: this is the last correcting commit of the slice; the push rule
   wants a Codex record for it, and whatever that run finds is written in the pull request as
   work to follow, not corrected in a fifth round.
+- 2026-10-11, the last correcting commit is `21686a5`, with its Codex review in the same turn
+  of the gate lock (19:07 to 19:41: `PASS  tests`, then the review): 168,132 input tokens for
+  22 changed lines. The slice's four runs are 1,385,676 input tokens for 1,721 lines, 805 a
+  line. It found one thing, of the second priority: under a list item, a fence opened within
+  three spaces of the margin and closed deeper (two spaces, then four) is not closed, because
+  CommonMark measures a fence from its list item and the tokenizer measures it from the
+  margin; the tasks after it are then read as fenced. It is not corrected: the tokenizer on
+  `main` reads that case the same way today, for `js-harness progress` too, and the real
+  register reads as before (59 failures, 17 not settled). The orchestrator's condition for the
+  round's end (its message of that evening) is met by it: second priority, and nothing that
+  `progress` or the row says today changes. It is task T3e.
 
 ## Next step
 In this order. (1) The reviews of what follows `5b754dd`:
