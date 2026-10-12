@@ -2118,6 +2118,18 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     peer's and not his words). It runs once gentle-ai has approved the slices. If it falls
     midway it is not rerun: the lead is told the tokens read and the part. If the first part
     answers at capacity at once, one more try after ten minutes, then stop.
+  - gentle-ai approved `528bf56..34c2dfc` and the approval is acknowledged
+    (`review-bf548f33bb522cc9`). Its four notes are all taken and corrected by a writer
+    (123,564 tokens) in one commit on this branch, before Codex, so that Codex does not pay to
+    find them again: `appliedOf` took a `today` that was no real day, or a `days` that was no
+    number, and then skipped nothing as old, so old records could decide the exit (now both
+    are refused); the day of an entry was the first ten characters of its time, which is
+    another day than its instant when the text carries an offset (now the day of the instant
+    in universal time); the order of versions was not an order when digits and letters mix
+    (now digits first); and the tests of the four rewired bounds passed for any value (each
+    now also proves a whole number above 0, and the wait of the gate lock has its test back).
+    NEXT: that commit through the gate; gentle-ai on `34c2dfc..` its head; then Codex, whose
+    plan is asked again on the new head.
 
 ## Next step
 In this order. (1) The reviews of `feat/rules-rewire` as the last Progress entry says:

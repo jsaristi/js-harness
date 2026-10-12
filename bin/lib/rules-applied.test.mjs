@@ -213,6 +213,15 @@ test('engines are ordered by entry point as text and by version as numbers', () 
   ]);
 });
 
+test('the parts 2, 10 and 1a come out in one order whatever order they came in: 2 before 10, and both before 1a', () => {
+  const versions = ['2.1.2', '2.1.10', '2.1.1a'];
+  const orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+  for (const order of orders) {
+    const out = run([rule()], [], order.map((index) => session({ version: versions[index] })));
+    assert.deepEqual(out.rules[0].engines.map((engine) => engine.version), versions, `order ${order.join(' ')}`);
+  }
+});
+
 test('entries with no version, a synthetic model, no time or too old are skipped, each counted once, and none reaches a result', () => {
   const out = run([rule()], [
     launch({ version: '' }),
@@ -249,6 +258,25 @@ test('the window keeps the day six days before today and drops the day seven day
   assert.equal(out.skipped.old, 1);
   assert.equal(out.read.firstDay, '2026-10-06');
   assert.equal(out.read.lastDay, '2026-10-06');
+});
+
+test('the day of an entry is the day of its instant in universal time, whatever offset its text carries', () => {
+  const late = run([rule()], [launch({ at: '2026-10-12T23:30:00-05:00' })]);
+  assert.equal(late.read.firstDay, '2026-10-13');
+  assert.equal(late.rules[0].engines[0].last, '2026-10-13');
+  const early = run([rule()], [launch({ at: '2026-10-12T02:00:00+05:00' })]);
+  assert.equal(early.read.firstDay, '2026-10-11');
+  assert.equal(early.rules[0].engines[0].last, '2026-10-11');
+});
+
+test('the window counts the day of the instant: 23:30 at -05:00 is kept with one day, 02:00 at +05:00 is old', () => {
+  const out = run([rule()], [
+    launch({ at: '2026-10-12T23:30:00-05:00', file: 'late.jsonl' }),
+    launch({ at: '2026-10-12T02:00:00+05:00', file: 'early.jsonl' }),
+  ], [], { days: 1 });
+  assert.equal(out.read.launches, 1);
+  assert.equal(out.skipped.old, 1);
+  assert.equal(out.read.firstDay, '2026-10-13');
 });
 
 test('an entry with no entry point is kept under the entry point unknown', () => {
@@ -350,6 +378,29 @@ test('a today that is not a day throws the plain message', () => {
   const message = 'appliedOf needs today as a day';
   assert.throws(() => appliedOf([rule()], [], [], {}), { name: 'Error', message });
   assert.throws(() => appliedOf([rule()], [], [], { today: '12/10/2026' }), { name: 'Error', message });
+});
+
+test('a today of the shape of a day that is not a real day throws the plain message', () => {
+  const message = 'appliedOf needs today as a day';
+  assert.throws(() => run([rule()], [], [], { today: '2026-13-40' }), { name: 'Error', message });
+  assert.throws(() => run([rule()], [], [], { today: '2026-02-30' }), { name: 'Error', message });
+});
+
+test('days must be a whole number of 1 or more, or the window is not counted', () => {
+  const message = 'appliedOf needs days as a whole number of 1 or more';
+  for (const days of [0, -1, 1.5, NaN, '7', null]) {
+    assert.throws(() => run([rule()], [], [], { days }), { name: 'Error', message }, `days ${String(days)}`);
+  }
+});
+
+test('days of 1 keeps the entries of today and skips those of yesterday', () => {
+  const out = run([rule()], [
+    launch({ at: '2026-10-12T08:00:00.000Z', file: 'today.jsonl' }),
+    launch({ at: '2026-10-11T08:00:00.000Z', file: 'yesterday.jsonl' }),
+  ], [], { days: 1 });
+  assert.equal(out.read.launches, 1);
+  assert.equal(out.skipped.old, 1);
+  assert.equal(out.read.firstDay, '2026-10-12');
 });
 
 test('the arguments are not changed', () => {
