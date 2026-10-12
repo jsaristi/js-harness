@@ -125,6 +125,41 @@ test('installMain resolves home from JS_HARNESS_HOME when --home is not given', 
   }
 });
 
+// `install` once took any word it did not know as nothing at all, so `js-harness install --help`, typed to read
+// its flags, installed. The home of each case is a temp one through the environment: a case that did install
+// would write there and never under the real home.
+test('installMain refuses a word it does not know before it writes anything: exit 2, with the word and the usage', async () => {
+  for (const argv of [['--help'], ['-h'], ['--dry-run'], ['now'], ['--global']]) {
+    const home = makeTmpHome();
+    try {
+      for (const words of [argv, ['--home', home, ...argv], [...argv, '--home', home]]) {
+        const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
+        assert.equal(code, 2, words.join(' '));
+        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>]`], words.join(' '));
+        assert.deepEqual(outLines, [], words.join(' '));
+        assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test('installMain refuses --home with no path after it: exit 2, and nothing is written under the home of the environment', async () => {
+  const home = makeTmpHome();
+  try {
+    for (const words of [['--home'], ['--home', '--home', home]]) {
+      const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
+      assert.equal(code, 2, words.join(' '));
+      assert.deepEqual(errLines, ['--home requires a value\n\nUsage: js-harness install [--home <path>]'], words.join(' '));
+      assert.deepEqual(outLines, [], words.join(' '));
+      assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): a component write that
 // fails on an already-installed target is reported to the user, not silently dropped. Injected
 // through the `deps.writeFile` seam manifest.mjs's `install`/`sync` now accept (chmod is unreliable

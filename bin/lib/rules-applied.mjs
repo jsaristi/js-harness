@@ -8,6 +8,8 @@
 const MS_PER_DAY = 86400000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_SUFFIX = /-\d{8}$/;
+// A time that names its zone (a Z or an offset written with its colon, as the date-time format writes it), so its day is the same on every machine; a text without one is no time.
+const ZONED_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const SYNTHETIC = '<synthetic>';
 
 /** Gives true when a value is a text that is not blank. */
@@ -94,7 +96,7 @@ function keep(entry, kind, today, days, skipped) {
     skipped.synthetic += 1;
     return null;
   }
-  const ms = typeof entry.at === 'string' ? Date.parse(entry.at) : NaN;
+  const ms = typeof entry.at === 'string' && ZONED_TIME.test(entry.at) ? Date.parse(entry.at) : NaN;
   if (Number.isNaN(ms)) {
     skipped.noTime += 1;
     return null;
@@ -110,6 +112,7 @@ function keep(entry, kind, today, days, skipped) {
     version: entry.version,
     model: entry.model,
     plain: plainId(entry.model),
+    effort: isText(entry.effort) ? entry.effort : null,
     day,
     ms,
     file: typeof entry.file === 'string' ? entry.file : '',
@@ -191,8 +194,66 @@ function engineItemsOf(rule, launches, sessions) {
   return { item: { id: rule.id, alias: rule.alias, value: rule.value, since: rule.since, engines: items }, fails };
 }
 
-/** Gives, for each declared rule that carries an alias and for the records a window keeps, the engine items, the failing engines, the exit code and the other counts. */
-export function appliedOf(rules, launches, sessions, { today, days = 7 } = {}) {
+const HELD_OF = ['sessions', 'launches'];
+const HELD_FIELDS = ['model', 'effort'];
+
+/** Gives the rule of a held item, when the item is an object with an id, `of` and `field` that the module knows and the rule has that id and a text value; null otherwise. */
+function heldRuleOf(item, declared) {
+  if (item === null || typeof item !== 'object') return null;
+  if (!('id' in item) || !('of' in item) || !('field' in item)) return null;
+  if (!isText(item.id) || !HELD_OF.includes(item.of) || !HELD_FIELDS.includes(item.field)) return null;
+  return declared.find((rule) => rule.id === item.id && isText(rule.value)) ?? null;
+}
+
+/** Gives the value an entry holds for a held field: its plain model, or its effort, which is null when it has none. */
+function heldValueOf(entry, field) {
+  return field === 'model' ? entry.plain : entry.effort;
+}
+
+/** Gives where an entry came from: its entry point for a session, its agent type for a launch, which is null when it has none. */
+function fromOf(entry) {
+  return entry.kind === 'session' ? entry.entrypoint : entry.agentType;
+}
+
+/** Compares the kept entries from the rule's day on with the rule's value for a held item: gives the item, with its counts and its other values, and the entries that differ. */
+function heldCompare(item, rule, entries) {
+  const since = typeof rule.since === 'string' ? rule.since : '';
+  const valueOfEntry = (entry) => heldValueOf(entry, item.field);
+  const taken = entries.filter((entry) => entry.day >= since);
+  const differing = taken.filter((entry) => valueOfEntry(entry) !== null && valueOfEntry(entry) !== rule.value);
+
+  // Sorted oldest first, so the last entry of a group is its latest by time, then by file.
+  const groups = new Map();
+  for (const entry of [...differing].sort(oldestFirst)) {
+    const key = JSON.stringify([valueOfEntry(entry), fromOf(entry)]);
+    const group = groups.get(key) ?? { value: valueOfEntry(entry), from: fromOf(entry), count: 0, last: null, file: null };
+    group.count += 1;
+    group.last = entry.day;
+    group.file = entry.file;
+    groups.set(key, group);
+  }
+  const others = [...groups.values()].sort(
+    (a, b) => b.count - a.count || byText(a.value, b.value) || nullFirst(a.from, b.from),
+  );
+
+  return {
+    item: {
+      id: item.id,
+      value: rule.value,
+      since: rule.since,
+      of: item.of,
+      field: item.field,
+      compared: taken.length,
+      agree: taken.filter((entry) => valueOfEntry(entry) === rule.value).length,
+      none: taken.filter((entry) => valueOfEntry(entry) === null).length,
+      others,
+    },
+    differing,
+  };
+}
+
+/** Gives, for each declared rule that carries an alias, for the records a window keeps and for each held item, the engine items, the failing engines, the exit code, the held comparisons and the other counts. */
+export function appliedOf(rules, launches, sessions, { today, days = 7, held = [] } = {}) {
   const todayMs = typeof today === 'string' && DAY.test(today) ? Date.parse(`${today}T00:00:00Z`) : NaN;
   if (Number.isNaN(todayMs) || new Date(todayMs).toISOString().slice(0, 10) !== today) {
     throw new Error('appliedOf needs today as a day');
@@ -223,6 +284,24 @@ export function appliedOf(rules, launches, sessions, { today, days = 7 } = {}) {
     fails.push(...found.fails);
   }
 
+  // Each held item is compared with the kept entries of its own kind, from its rule's day on.
+  const heldFound = listOf(held)
+    .map((item) => ({ item, rule: heldRuleOf(item, declared) }))
+    .filter(({ rule }) => rule !== null)
+    .map(({ item, rule }) => heldCompare(item, rule, item.of === 'sessions' ? keptSessions : keptLaunches));
+  const heldItems = heldFound.map(({ item }) => item);
+  // A record that differs from two rules, a session's model and its effort, is one record.
+  const heldOther = new Set(heldFound.flatMap(({ differing }) => differing)).size;
+  // A launch that passed a declared short name is this repository's own: the lead is told how many ran at another effort.
+  const forLead = heldFound
+    .filter(({ item }) => item.of === 'launches' && item.field === 'effort')
+    .map(({ item, differing }) => ({
+      id: item.id,
+      value: item.value,
+      count: differing.filter((launch) => launch.alias !== null && aliases.has(launch.alias)).length,
+    }))
+    .filter((lead) => lead.count > 0);
+
   const otherAliases = countBy(
     keptLaunches.filter((launch) => launch.alias !== null && !aliases.has(launch.alias)),
     (launch) => [launch.alias, launch.agentType],
@@ -247,6 +326,9 @@ export function appliedOf(rules, launches, sessions, { today, days = 7 } = {}) {
     rules: ruleItems,
     fails,
     exit: fails.length > 0 ? 1 : 0,
+    held: heldItems,
+    heldOther,
+    forLead,
     otherAliases,
     noModel,
     otherModels,
@@ -261,7 +343,7 @@ export function appliedOf(rules, launches, sessions, { today, days = 7 } = {}) {
 }
 
 // The closing note of the lines: what this command does not compare, and who holds it.
-const NOT_COMPARED = 'Not compared here: a rule with no alias. A Codex review holds its own model and effort at every run; what a session runs on and the effort of a sub-agent are for the check of launches, which is not built.';
+const NOT_COMPARED = 'Not compared here: the model and the effort of a Codex review, which the review holds itself at every run.';
 
 /** Gives the count with its noun: the noun is singular only for 1, so 1 launch, 2 launches and 0 launches. */
 function countOf(count, singular, plural) {
@@ -288,6 +370,29 @@ function engineLineOf(engine) {
   }
   const models = engine.models.map((item) => `${item.model} x ${item.count}`).join(', ');
   return `${head}: ${engine.state}, ${countOf(engine.launches, 'launch', 'launches')}, the last on ${engine.last} (${models})`;
+}
+
+/** Gives the lines of the block "What ran, against the rules with no short name": a head line, then for each held item its line, its agree and none counts, and each other value with its file. */
+function heldLinesOf(held) {
+  const lines = ['What ran, against the rules with no short name (information, never a failure):'];
+  for (const item of held) {
+    const [singular, plural] = item.of === 'sessions' ? ['session', 'sessions'] : ['launch', 'launches'];
+    lines.push(`  ${item.id}: ${item.value}, since ${item.since}`);
+    if (item.compared === 0) {
+      lines.push(`    nothing to compare: no ${singular} in the window since that day`);
+      continue;
+    }
+    lines.push(`    agree: ${item.agree} of ${countOf(item.compared, singular, plural)}`);
+    if (item.none > 0) {
+      lines.push(`    no ${item.field} recorded: ${countOf(item.none, singular, plural)}`);
+    }
+    for (const other of item.others) {
+      const where = item.of === 'sessions' ? `on ${other.from ?? 'unknown'}` : `of ${other.from ?? 'no agent type'}`;
+      lines.push(`    ${other.value}: ${countOf(other.count, singular, plural)} ${where}, the last on ${other.last}`);
+      lines.push(`      ${other.file}`);
+    }
+  }
+  return lines;
 }
 
 /** Gives the lines that `js-harness rules applied` prints for a result of appliedOf and the facts of the run in `context`, as texts. It reads nothing and prints nothing. */
@@ -358,6 +463,10 @@ export function appliedLines(result, context) {
     }
   }
 
+  const held = result.held ?? [];
+  if (held.length > 0) {
+    lines.push('', ...heldLinesOf(held));
+  }
   lines.push('', ...leftOutLines(leftOut), NOT_COMPARED);
   for (const fail of result.fails) {
     lines.push(`FAIL  ${fail.id}: \`${fail.alias}\` gave ${fail.model} on ${fail.entrypoint} ${fail.version} (${fail.day}, ${fail.file}), and the rule says ${fail.value}`);
@@ -366,10 +475,17 @@ export function appliedLines(result, context) {
     const ids = [...new Set(result.fails.map((fail) => fail.id))].join(' and ');
     lines.push(`To the lead: the short name of ${ids} no longer gives the declared model on the engine in use; the alias or the way of launching changes, by a reading.`);
   } else if (result.rules.some((rule) => rule.engines.some((engine) => engine.launches > 0))) {
-    lines.push('PASS  rules applied');
+    lines.push('PASS  rules applied: each short name gave its model');
   } else if (result.rules.length > 0) {
     // A window in which no launch passed a declared alias proves nothing: it is not written as a pass.
     lines.push('Nothing compared: no launch passed a declared alias in the window');
+  }
+  for (const lead of result.forLead ?? []) {
+    lines.push(`To the lead: ${countOf(lead.count, 'launch', 'launches')} that passed a declared short name ran at another effort than ${lead.id} says (${lead.value}); a call that passes no effort takes its session's.`);
+  }
+  const heldOther = result.heldOther ?? 0;
+  if (heldOther > 0) {
+    lines.push(`Information: ${countOf(heldOther, 'record', 'records')} ran at another value than a rule of the block above says; this is no failure.`);
   }
   return lines;
 }

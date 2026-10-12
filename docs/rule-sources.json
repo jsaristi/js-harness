@@ -16,6 +16,23 @@
       "by": "session"
     }
   },
+  "codex-review-margin": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "listo la A pero quiero saber como mas usamos mas potencia y que mas podemos hacer para que podamos avanzar mas",
+        "date": "2026-10-12",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 3800
+      }
+    ],
+    "reading": "His answer names no value: \"la A\" is the first of two options the orchestrator put to him (same session, line 3736, an assistant entry read by this session): \"Opción A: un estimado hasta 5 % arriba del tope cuenta como dentro.\" The estimate is the input tokens `codex-review --plan` gives; the allowance (\"el tope\") is the greater of the floor and the rate times the changed lines. So a review runs without asking him when its plan is at most 1.05 times that allowance; over that he is asked. A second run after a review fell midway is his whatever its plan: that part is the orchestrator's relay, not these words.",
+    "accepted": "The answer picks the option the orchestrator recommended in that question; the block it offered read \"La opción A\" and he wrote the choice in his own words.",
+    "checked": {
+      "date": "2026-10-12",
+      "by": "session"
+    }
+  },
   "codex-review-rate": {
     "kind": "words",
     "quotes": [
