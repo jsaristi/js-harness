@@ -1689,6 +1689,34 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   buy load, not wall. One whole run under the counting tool on the merged tree (a turn of
   about ten minutes, no review, no spend) says which; proposed as the step after T14's
   pull request and before either design.
+- 2026-10-12 · **Codex found a real defect in T14, and the slice is not pushed**
+  (`t14c-turn.log`, 17:27:11 to 17:39:58). Verdict on `e60cbda..e3e6b2d`: "the patch is
+  incorrect" (0.96), one finding, P2, `bin/lib/process-tree.testkit.mjs:165`. When a
+  timeout's or an interrupt's kill fails, `runProcess` ends the run with no exit time
+  (`evals/runner.mjs:304-310`, `:345`); the stand-in wrote the moment of the record in its
+  place, which makes a root that may still run look exited, and the search at the end of
+  the file leaves an exited root out (`bin/lib/process-tree.mjs:35`, `:94`). The one
+  process the net exists for was neither killed nor named. Read in the code by me: true.
+  **The design's reader and I both missed it**: the attack asked whether the net could see
+  a leak and stopped at the descendants; nobody asked what the search does with the root.
+  **The correction** (2 files, about 40 lines, written inline): a run handed in with no
+  exit time goes to the real sweep at once, root and what it started, and is not recorded;
+  the test that pinned the old behavior is replaced by two. Its turn, `t14d-turn.sh`,
+  asked at 17:43: RED against the testkit as committed, GREEN, the four eval files under
+  the counting tool (the 729 must hold), the commit with the whole gate, then Codex on
+  that commit, once, if its plan is inside 315,000.
+  **What the first turn did besides.** `main` `e90e0a4` (pull request 78 merged at
+  17:28:44, the orchestrator; read by me) is in the branch as `17c2146`, gated: **605 s**
+  (gate log, 17:29:50, load 3.9 of 8), the second reading of the 554 s, on a tree with
+  more tests in it. **Codex spent 535,338 input tokens (466,944 cached) in 12 requests
+  against a plan of 390,000**: 37% over its plan and 34% over the rate with its margin;
+  the day's third sample and the third under. **M2 for Codex, second sample**
+  (`t14c-codex-machine.json`): 145.7 s, the machine 43% busy, 499 of 1,166
+  processor-seconds (`node` 148, `MsMpEng` 98, `claude` 38): Codex ran `node --test`
+  itself this time, so number 1 is not one figure: against the same quiet rate (1.7 to
+  2.2 a second) this review put 178 to 251 processor-seconds above it, **45 to 63 s added
+  to a gate at most, over the bound of 30 s**. T8's first number does not hold for a
+  review in which Codex runs tests. Spent on Codex in the feature: 3,072,090 input tokens.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
