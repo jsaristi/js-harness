@@ -322,6 +322,7 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       from the last change of hands, the
       mark, the session, the words of `check` and `gate`, the test at
       `bin/check.test.mjs:1688`. Test first. Route: one writer.
+- [ ] T3b · The four findings of gentle-ai on S1 (Progress, 19:23). Route: one writer.
 - [ ] T4 · The stop in `bin/check.mjs`, its line in the gate log, the
       three states of the lock. Test first. Route: one writer.
 - [ ] T5 · `PSModuleAnalysisCachePath` in the sensor's environment, and
@@ -453,7 +454,57 @@ S2 is T4 with T5. S3 is T6.
   tests; that a commit hook inherits the session id. Left for T4, which works in that file:
   `bin/lib/gate-log.mjs:293` documents `reason` as `held` or `timeout`, and `ahead` is
   written too.
+- 2026-10-11 19:03 · T3 committed: `d133965`, through the lock taken with the stable copy
+  (`node D:/js-harness/bin/js-harness.mjs gate --wait 180 -- git commit`), 39 minutes from
+  launch behind two gates; the whole gate passed (`PASS tests`). `main` (`5af56c1`) merged
+  at `15f06b2`, clean; that merged tree has not had a gate yet. Its report: "review due
+  (slice_budget_reached)", medium risk.
+- 2026-10-11 · gentle-ai review of the slice S1 started, consent granted without asking as
+  `AGENTS.md` says: lineage `review-bc8d2e73453d6b39`, base `main`, committed only, 14
+  paths and 1,923 changed lines (this document among them), one lens, `review-reliability`,
+  correction budget 200. Its capture runs in a turn of the lock (`gate --wait 180 --
+  gentle-ai review capture-result …`); the commands and their outputs are in this session's
+  scratchpad (`review-*.json`). Nothing is committed on this branch until it is
+  acknowledged, since the candidate is the committed tree.
+- 2026-10-11 · The stop is a slice with a branch of its own: `feat/gate-stop`, cut from
+  `main` at `5af56c1`, in the worktree `D:\js-harness-worktrees\gate-stop`, so that the
+  orchestrator can merge it without waiting for his word on `--wait`, which holds the line
+  (the rows of "JH 7" need the stop, not the line). A writer works there on T4 and T5 while
+  the review runs here (`odd/tasks/gate-lock.md`, "Rules learnt": a writer works in a
+  worktree of its own while a gate runs here). This document stays on `feat/gate-turn`
+  alone and records both; the two branches change different functions of `bin/check.mjs`.
+  Decided for T4 before the writer began: the stop is decided inside `checkSensors`, after
+  the two declarations and the returns for no sensors and for documents alone; its row is
+  a failure named so that it cannot read as passing tests; `main` then skips `review` and
+  the Codex debt; the gate log gets `record.stopped`. For T5: the variable on Windows only,
+  one reproduction tried and reported, and a row `tree` only when a path appeared.
+- 2026-10-11 19:23 · gentle-ai approved S1 (`main..15f06b2`, T2 and T3) and the approval is
+  acknowledged (authority burned, `review-ack.json` in the scratchpad). The capture waited
+  18 minutes for its turn. Four findings, none blocking, all four taken as task T3b before
+  Codex reads the range, so that Codex is paid once:
+  1. `R3-unbounded-wait-mixed-versions` (warning): beside a live gate of an older version
+     the line is off and every gate races for the rename; there the bound still starts
+     again at each change of hands, so a gate that loses every race never gives up, where
+     it gave up an hour after its arrival before. True. Taken: a change of hands read at a
+     look where the gate keeps no line (a gate of an older version is live) does not move
+     the anchor, so beside such a gate the bound counts as it did, which is what the
+     design already says of that case ("behaves as today").
+  2. `R3-ahead-reason-unproved-in-real-log` (warning): the new reason `ahead` reaches the
+     gate log only through a stand-in in the tests. Taken: one test with the real writer
+     and the real reader.
+  3. `R3-own-file-touch-failure-untested` (suggestion): the `try` around the line turns
+     any error into "nobody ahead", and only an unlistable folder is tested. Taken: a test
+     with a touch of the own file that answers busy.
+  4. `R3-exact-stale-boundary-assertion` (suggestion): a test rests on a file time equal to
+     the stale time to the millisecond. Taken: a margin, as its neighbours have.
+- 2026-10-11 · Seen at the capture's start: 5.6 of 8 processors busy, 1.3 s of CPU in 2 s by
+  a `tsserver.js` that is this session's own (pid 57964, its parent chain ends in this
+  session's process). It works while a writer of this session edits the long test files
+  and was idle when sampled ten minutes later (0.2 s in 4 s). So a session's writers load
+  the machine through its language server while another session's gate runs: one more
+  case of `odd/tasks/gate-lock.md`, "Rules learnt" (a `tsserver.js` of its own).
 
 ## Next
-The commit of T3 through the lock, then `main` (`5af56c1`) merged, then the reviews of
-`b016699..` in their turn (gentle-ai, then Codex), the notice of T6, then T4 and T5.
+T3b (one writer, here), its commit through the lock, then Codex on `main..HEAD` in its turn,
+the notice of T6, a real gate with this branch's own lock. In `feat/gate-stop`: the writer's
+report, its diff read back, its commit through the lock, its two reviews.
