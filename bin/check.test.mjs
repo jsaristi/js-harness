@@ -2643,6 +2643,19 @@ test('takeGateTurn words a timeout beside a gate of an older version without "wi
   assert.match(turn.refused, /older version/);
   assert.doesNotMatch(turn.refused, /without the lock changing hands/);
   assert.deepEqual([turn.reason, said], ['timeout', []]);
+
+  // The other arm of the same sentence: the lock is free, and the gate ahead that was to take it is the one
+  // named, as a gate that waits and holds nothing. The older gate is still said to have waited beside it.
+  const WAITER = 'the gate of C:\\work\\two (pid 77, waiting since 2026-10-11T06:59:00.000Z)';
+  const waiter = { token: '77-bb', pid: 77, cwd: 'C:\\work\\two', command: 'gate -- node --test', waitingSince: '2026-10-11T06:59:00.000Z', session: null };
+  const free = await turnSaid(async () => ({ refused: 'timeout', holder: null, line: { ahead: 1, head: waiter }, waitedMs: 3_700_000, stillMs: 3_700_000, besideOlder: true }));
+  assert.equal(
+    free.turn.refused,
+    `${WAITER} waits ahead of this one for the machine's gate lock, which no gate holds; this gate had waited 61 min 40 s in all, and a gate of an older version of js-harness waited beside it, which keeps no line, so the bound counted from its arrival or from the last change of hands read while the line was kept (--wait gives up after 1 minute)`,
+  );
+  assert.match(free.turn.refused, /a gate of an older version of js-harness waited beside it/);
+  assert.doesNotMatch(free.turn.refused, /without the lock changing hands/);
+  assert.deepEqual([free.turn.reason, free.said], ['timeout', []]);
 });
 
 test('main stands behind a gate that arrived before it when the lock is free, says that this gate waits and holds nothing, and keeps it in its log as a gate it waited for from the moment it held the lock', () => withGate({ tests: 'run-tests' }, async (dir, home) => {

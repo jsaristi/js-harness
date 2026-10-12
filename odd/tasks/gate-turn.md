@@ -331,6 +331,8 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       `bin/check.test.mjs:1688`. Test first. Route: one writer.
 - [x] T3b · The four findings of gentle-ai on S1 (Progress, 19:23). Route: one writer.
       Evidence: Progress, "T3b built".
+- [ ] T3d · The two notes of gentle-ai on T3b and T3c that are taken (Progress,
+      2026-10-12 00:38). Route: one writer.
 - [x] T3c · Evidence: Progress, "T3c written", and its commit. With what Codex finds on
       S1, one narrow writer: the words of a refusal for the
       bound beside a gate of an older version (`refusalSaid`, `bin/check.mjs`) say "still
@@ -743,6 +745,34 @@ S2 is T4 with T5. S3 is T6.
   due; started with consent granted, lineage `review-5057e024d1ac90a4`, one lens. Its
   capture and the Codex review of T3c alone (`--base e1786bf^`, 102 lines by the gate's
   own row) are one turn of the lock (`turn2-review-turn.sh`).
+- 2026-10-12 00:38 · Both reviews of T3b and T3c, in one turn asked at 00:20:36 and taken at
+  00:36:02 (`turn2-review-turn.log`). Codex on T3c alone (`bd7d5a4..e1786bf`): "the patch
+  is correct (confidence 0.94)", no finding, 281,297 input tokens, recorded; with it every
+  code commit of this branch has its record. Codex on T9 (`40ccb45..9cce6c3`), at 00:20:
+  correct (0.87), no finding, 271,475 input tokens, recorded. gentle-ai on
+  `15f06b2..e1786bf`: approved and acknowledged (`turn2-capture.json`, `turn2-ack.json`),
+  three notes, none blocking. Judged here:
+  1. Taken. `besideOlder` of a refusal was true if any look of the take had stood beside
+     a gate of an older version. When that gate left, the line was kept again, a change of
+     hands started the count again and the wait ended a whole bound after it, the refusal
+     was still worded as one beside an older gate. The flag now means "since the count
+     that ran out last started" and is cleared when the count starts again. The second
+     half of the note (a timeout from the shorter allowance of a holder that cannot be
+     read) is not a case: that path throws `unreadable` and never reaches these words
+     (`bin/lib/gate-lock.mjs`, the block above the refusal). The arm of the sentence for a
+     free lock had no assertion and gets one.
+  2. Taken, between the two reviewers. Codex had found that `look` answered "not alive"
+     for a recorded pid listed with no creation time, which lets a survivor pass as gone,
+     and T3c made it throw. gentle-ai notes that a process in the middle of its exit may
+     be listed so for an instant, and a throw there is a test that fails now and then.
+     Both hold: `look` looks again, three snapshots in all, and throws only for a row that
+     stays without a creation time.
+  3. Not taken, answered by a log the reviewer did not have: that the test of a gate
+     ahead which becomes the holder might pass without its fix. `t3c-red.log` shows it
+     failing against the code before T3c. Its other half, an assertion of `besideOlder` in
+     the scenario after the older gate left, is added with 1.
+  Route: one writer on `haiku`, T3d, five files, nothing run. Then red, green and commit
+  in a turn of the lock, and Codex on that commit alone.
 
 ## Next
 The commit of T3c in a turn of the lock (red of its new tests against the old code, then the

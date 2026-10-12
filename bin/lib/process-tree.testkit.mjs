@@ -14,6 +14,9 @@ import { spawnSync as spawnChildSync } from 'node:child_process';
 import { CLOCK_TOLERANCE_MS, identifyProcesses, killProcesses, takeSnapshot } from './process-tree.mjs';
 
 const createdOn = (ms) => (Number.isFinite(ms) ? `created ${new Date(ms).toISOString()}` : 'whose creation time Windows does not give');
+// How many snapshots a look takes at most while a recorded pid answers under a row with no creation time: a process in
+// the middle of its exit can be listed so for an instant, and the look is taken again before it is thrown.
+const SNAPSHOTS_PER_LOOK = 3;
 
 /** One sentence about what answered to the number `pid`: `recorded` is the identity it was learned with (or none),
  * `row` the process the snapshot `rows` (pid -> row) lists under that number (or none). */
@@ -38,9 +41,10 @@ function describeLook(pid, recorded, row, rows) {
  * creation time, its parent), for the message of a failure, and `null` when nothing answered. The number is asked
  * first, which takes no time, and a snapshot is taken only when one answered: "nothing answers" is true of the instant
  * of the call, while a number that answered is judged by what a snapshot saw a second or so later, so a process that
- * ended in between is not alive, and `found` says that it answered. A snapshot that failed throws, and so does a
- * recorded pid that answers under a row with no creation time: its identity cannot be told, so it is neither
- * alive nor gone. POSIX: the answer to the number stands. Nothing is ever signalled by a look. */
+ * ended in between is not alive, and `found` says that it answered. A snapshot that failed throws at once. A
+ * row with no creation time is looked at again, the whole look taken anew, three snapshots in all, and only then
+ * thrown: a process in the middle of its exit can be listed so for an instant. Thrown, its identity cannot be told,
+ * so it is neither alive nor gone. POSIX: the answer to the number stands. Nothing is ever signalled by a look. */
 export function createReaper({ platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill } = {}) {
   const children = new Set();
   const learned = new Map(); // pid -> identity
@@ -91,22 +95,30 @@ export function createReaper({ platform = process.platform, spawnSync: sync = sp
       stop(identify(pids, options));
     },
     look(pids) {
-      const answering = new Set(pids.filter(answers));
+      let answering = new Set(pids.filter(answers));
       if (platform !== 'win32') {
         return pids.map((pid) => ({ pid, alive: answering.has(pid), found: answering.has(pid) ? `pid ${pid} answers (no creation time is read on POSIX, so the number is all there is)` : null }));
       }
-      const rows = new Map(answering.size === 0 ? [] : takeSnapshot({ spawnSync: sync }).map((row) => [row.pid, row]));
-      return pids.map((pid) => {
-        if (!answering.has(pid)) return { pid, alive: false, found: null };
-        const recorded = learned.get(pid);
-        const row = rows.get(pid);
+      for (let snapshot = 1; ; snapshot += 1) {
+        const rows = new Map(answering.size === 0 ? [] : takeSnapshot({ spawnSync: sync }).map((row) => [row.pid, row]));
         // A recorded pid that answers, under a row with no creation time, is neither the recorded process nor
-        // proved another one: "not alive" would let a survivor pass as gone. Found in review, 2026-10-11.
-        if (recorded && row && !Number.isFinite(row.createdAt)) {
-          throw new Error(`pid ${pid} answers, and the snapshot lists ${row.name || 'a process without a name'} under it with no creation time, so its identity could not be told: the process recorded was ${createdOn(recorded.createdAt)}`);
+        // proved another one: "not alive" would let a survivor pass as gone. Found in review, 2026-10-11. Such a
+        // row is looked at again, the whole look taken anew, before it is thrown (`SNAPSHOTS_PER_LOOK`).
+        const unnamed = pids.find((pid) => answering.has(pid) && learned.has(pid) && rows.get(pid) && !Number.isFinite(rows.get(pid).createdAt));
+        if (unnamed === undefined) {
+          return pids.map((pid) => {
+            if (!answering.has(pid)) return { pid, alive: false, found: null };
+            const recorded = learned.get(pid);
+            const row = rows.get(pid);
+            return { pid, alive: Boolean(recorded && row && row.createdAt === recorded.createdAt), found: describeLook(pid, recorded, row, rows) };
+          });
         }
-        return { pid, alive: Boolean(recorded && row && row.createdAt === recorded.createdAt), found: describeLook(pid, recorded, row, rows) };
-      });
+        if (snapshot === SNAPSHOTS_PER_LOOK) {
+          const row = rows.get(unnamed);
+          throw new Error(`pid ${unnamed} answers, and the snapshot lists ${row.name || 'a process without a name'} under it with no creation time, so its identity could not be told, and it stayed so over ${SNAPSHOTS_PER_LOOK} snapshots: the process recorded was ${createdOn(learned.get(unnamed).createdAt)}`);
+        }
+        answering = new Set(pids.filter(answers));
+      }
     },
     sweep() {
       for (const child of children) {

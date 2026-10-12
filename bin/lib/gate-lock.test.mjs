@@ -1593,6 +1593,37 @@ test('beside a live gate of an older version, where no line is kept and every ga
   release();
 }));
 
+test('beside a live gate of an older version, and then not: the change of hands that starts the count again clears the flag, so a refusal for a holder that then stays is an ordinary one', withHome(async (home) => {
+  // The older gate stands beside the take for the first looks and leaves at the poll `leaves`. At that same
+  // poll the lock goes to the gate of pid 21, and the first look that keeps the line reads it: that change
+  // starts the count again and clears the flag. The holder never changes after that, so the wait ends a
+  // bound after the change of hands, which is not the arrival, and the refusal is worded as an ordinary one.
+  const clock = fakeClock();
+  const waitMs = 5 * POLL_MS;
+  const leaves = 3;
+  let holder = await take(home, clock, { pid: 11 });
+  const old = inLine(home, tokenOf(20), saysNoLine(20, clock.now() - 1000), new Date(clock.now()));
+  const next = parked(home, clock, { pid: 21 });
+  let sleeps = 0;
+  clock.onSleep = async () => {
+    sleeps += 1;
+    holder.beat();
+    if (sleeps < leaves) {
+      old.touch(new Date(clock.now()));
+    } else if (sleeps === leaves) {
+      fs.rmSync(old.folder, { recursive: true, force: true });
+      holder.release();
+      await next.turn();
+      holder = next.lock;
+    }
+  };
+  const back = await take(home, clock, { pid: 33, waitMs });
+  // The change is read at the look after the third poll, and the bound counts from that look: the refusal
+  // comes `waitMs` after it, so the whole wait is the `leaves` polls before it plus the bound.
+  assert.deepEqual([back.refused, back.holder?.pid, back.besideOlder, back.stillMs, back.waitedMs], ['timeout', 21, false, waitMs, leaves * POLL_MS + waitMs]);
+  holder.release();
+}));
+
 test('the bound is anchored to the last change of hands read while the line was kept: one read beside a gate of an older version stays out of it once that gate has left, and one read after it left starts the count again', withHome(async (home) => {
   // The older gate leaves a poll after the lock went to the gate of pid 21. The change it stood beside is
   // not counted late, at the first look that keeps the line again: the wait still ends a bound after the
@@ -1600,6 +1631,10 @@ test('the bound is anchored to the last change of hands read while the line was 
   const after = await atTheBackBesideAnOlderGate(home, 4);
   assert.deepEqual([after.back.refused, after.back.holder?.pid, after.back.stillMs, after.back.waitedMs], ['timeout', 21, after.waitMs, after.waitMs]);
   assert.deepEqual([after.back.line?.ahead, after.back.line?.head?.pid], [3, 22]);
+  // The flag is still on here, and that is right. The change of hands the older gate stood beside (the look
+  // at poll 3) moved no anchor, and the count ran from the arrival, which a look beside that gate was part of.
+  // The older gate left after that, and no look since then moved the anchor, so nothing cleared the flag.
+  assert.equal(after.back.besideOlder, true);
   after.release();
   fs.rmSync(gateDir(home), { recursive: true, force: true });
 

@@ -433,10 +433,11 @@ function unreadable(dir, { token, since, answer }) {
  * when only the holder is before this one. `waitedMs` is the whole wait, and `stillMs` how long the lock
  * had not changed hands when the wait ended, as the bound counts it (below): a change of hands that did
  * not start the count again, beside a gate of an older version, is not in it. `besideOlder` is whether a
- * look of this take was beside a live gate of an older version, which kept no line (`gatesAhead` answered
- * `null`): at any look of the take, not only the last one. Then the bound counted as it did before the line
- * (below), and a refusal for it is worded so by `check`, which says the wait was not counted from the last
- * change of hands alone.
+ * look stood beside a live gate of an older version, which kept no line (`gatesAhead` answered `null`),
+ * since the count that ran out last started. Then the bound counted as it did before the line (below), and
+ * a refusal for it is worded so by `check`, which says the wait was not counted from the last change of
+ * hands alone. A change of hands read after that gate left, while the line was kept, starts the count
+ * again and clears it, so a refusal after that is an ordinary one.
  *
  * The bound of a wait is `waitMs` without the lock changing hands, counted from the last time it did and
  * not from the arrival (`boundFrom`, the one place the count is anchored). Counted from the arrival, a
@@ -537,6 +538,9 @@ export async function takeGateLock({
   // What the last look that could tell read of the lock: `undefined` before any did, `null` for a free
   // lock, else the token of its holder.
   let hands;
+  // Whether a look since the count of the bound last started was beside a live gate of an older version
+  // (`besideOlder` in each refusal). `handsRead` clears it when it starts the count again.
+  let besideOlderSinceCount = false;
   /** Keeps what this look read of the lock: free (`null`) or the token of its holder. A holder whose token
    * is not what the look before read, another holder or a free lock, is the lock changing hands, which
    * starts the count of the bound again; the first thing read does not, there being no change to see, nor
@@ -546,10 +550,14 @@ export async function takeGateLock({
    * `besideOlder` is whether a live gate of an older version was beside this one at this look, so that no
    * line was kept (`gatesAhead` answered `null`). A change of hands read then does not start the count
    * again: every gate races for the rename there, and a gate that lost each race would wait without end
-   * (found in review, 2026-10-11). What was read is kept all the same, so the change is not seen a second
-   * time, and counted, at the first look after that gate left. */
+   * (found in review, 2026-10-11). What was read is kept all the same, so that change is not counted later
+   * either, at the first look after that gate left: only a change read after it is. Starting the count again
+   * clears `besideOlderSinceCount`, so a refusal after that is an ordinary one. */
   const handsRead = (read, besideOlder) => {
-    if (read !== null && hands !== undefined && hands !== read && !besideOlder) boundFrom = now();
+    if (read !== null && hands !== undefined && hands !== read && !besideOlder) {
+      boundFrom = now();
+      besideOlderSinceCount = false;
+    }
     hands = read;
   };
   let told;
@@ -565,8 +573,6 @@ export async function takeGateLock({
   let everRead = false;
   // How many looks this take has had at a lock it could not take.
   let looks = 0;
-  // Whether any look of this take was beside a live gate of an older version (`besideOlder` in each refusal).
-  let besideOlderSeen = false;
 
   /** This gate's own folder, with its file as it must read at the instant it becomes the lock: started
    * now, beaten now. Made again when it is gone, which happens to a gate that slept the stale time.
@@ -641,7 +647,7 @@ export async function takeGateLock({
     } catch {
       ahead = [];
     }
-    if (besideOlder) besideOlderSeen = true;
+    if (besideOlder) besideOlderSinceCount = true;
     // The rename is tried at the head of the line only. It is still the one step that grants the lock:
     // two gates that both read themselves at the head both try it, and the file system lets one through.
     // `refusedBy` is what it answered; it stays `undefined` for a gate that left it to the gate ahead.
@@ -705,7 +711,7 @@ export async function takeGateLock({
       const refused = !wait ? 'ahead' : stillMs >= waitMs ? 'timeout' : undefined;
       if (refused) {
         unstage();
-        return { refused, holder: null, line, waitedMs, stillMs, besideOlder: besideOlderSeen };
+        return { refused, holder: null, line, waitedMs, stillMs, besideOlder: besideOlderSinceCount };
       }
       // Said once for each gate stood behind, as for each holder waited for.
       const telling = `behind|${ahead[0].token}`;
@@ -776,7 +782,7 @@ export async function takeGateLock({
     const refused = !wait && !holder.stale ? 'held' : over ? 'timeout' : undefined;
     if (refused) {
       unstage();
-      return { refused, holder, line, waitedMs, stillMs, besideOlder: besideOlderSeen };
+      return { refused, holder, line, waitedMs, stillMs, besideOlder: besideOlderSinceCount };
     }
     // Said for each gate waited for, and again when its beat stops being readable or becomes so: what is
     // left of the wait is not the same for the two. With a new holder what is left of the bound is the
