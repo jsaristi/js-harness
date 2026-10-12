@@ -311,6 +311,38 @@ test('checkSensor drops inherited case variants of the variables it overrides', 
   assert.ok(env.npm_config_cache.startsWith(env.HOME));
 });
 
+// A gate once left `Microsoft/Windows/PowerShell/ModuleAnalysisCache` in the working tree it checked. With
+// the profile moved to an empty home, Windows PowerShell finds no local application data folder under it
+// and writes its cache of analysed modules to a path from the folder it runs in.
+test('checkSensor on Windows points the module analysis cache of PowerShell into the throwaway home, whatever case the inherited variable has, and sets no such variable on another system', async () => {
+  const saved = { ...process.env };
+  const envs = {};
+  const during = {};
+  try {
+    process.env.PSMODULEANALYSISCACHEPATH = 'C:\\real\\cache';
+    for (const platform of ['win32', 'linux', 'darwin']) {
+      const spawn = (_command, options) => {
+        envs[platform] = options.env;
+        during[platform] = fs.existsSync(options.env.HOME);
+        return { status: 0, stdout: '', stderr: '' };
+      };
+      await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn, platform });
+    }
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  const cacheKeys = (env) => Object.keys(env).filter((key) => key.toLowerCase() === 'psmoduleanalysiscachepath');
+  assert.deepEqual(cacheKeys(envs.win32), ['PSModuleAnalysisCachePath']);
+  const cache = envs.win32.PSModuleAnalysisCachePath;
+  // A file of the home itself: the home is there while the sensor runs, and the file goes with it.
+  assert.equal(path.dirname(cache), envs.win32.HOME);
+  assert.deepEqual([during.win32, fs.existsSync(envs.win32.HOME)], [true, false]);
+  // Elsewhere PowerShell keeps that cache under the home, which is the throwaway one already: the variable
+  // this process was given is the caller's own and goes through as it is.
+  for (const platform of ['linux', 'darwin']) assert.deepEqual(cacheKeys(envs[platform]).map((key) => envs[platform][key]), ['C:\\real\\cache'], platform);
+});
+
 // A hook's git exports the variables that bind every git command to its repository; a sensor that
 // inherits them runs its own `git init` or `git add` against that repository instead of its fixture.
 test('checkSensor drops the variables that bind git to one repository, and keeps the others', async () => {
@@ -1215,7 +1247,8 @@ test('main prints the codex-review row last, as information, and runs its git th
     const rows = output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
     assert.match(rows.at(-2), /^INFO {2}review /);
     assert.match(rows.at(-1), /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /);
-    assert.ok(asked.length > 0 && asked.every((line) => line.startsWith('git rev-parse ')), asked.join('\n'));
+    // The questions of this row, and before them the one a gate asks of its working tree before its sensors.
+    assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status) /.test(line)), asked.join('\n'));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2714,6 +2747,412 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
   assert.equal(fs.readFileSync(gateLogDir(home), 'utf8'), 'not a folder');
 }));
 
+// --- the stop: a gate whose static row already fails runs nothing after it ---
+// A row known in a second (the budget, a contract) was printed after the sensors, so a failure that could
+// not pass cost the wait for the lock and the whole run of the sensors before anyone read it. The order
+// changes when a failure is known, never what a commit proves: such a gate was red before, and is red now.
+
+/** Puts the AGENTS.md of `dir` over its budget: the static row a test fails by itself. */
+const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
+const BUDGET_FAILS = 'FAIL  budget  1501 estimated tokens (budget 1500)';
+const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex'];
+const namesOf = (output) => rowsOf(output).map((row) => row.split('  ')[1]);
+
+const LOCK_NOT_TAKEN = "the machine's gate lock was not taken";
+const LOCK_LEFT_TO_PARENT = "the machine's gate lock was left to the process that started this gate, which holds it (JS_HARNESS_GATE_HELD=1)";
+/** The one row of a gate that stopped before its sensors because `rows` failed. */
+const stoppedRow = (rows, lock = LOCK_NOT_TAKEN) =>
+  `FAIL  gate  no sensor ran: this gate stopped before its sensors, since ${rows.length === 1 ? `the row ${rows[0]} fails` : `the rows ${rows.join(', ')} fail`}, so no test ran and nothing here says that the tests pass; ${lock}`;
+
+/** Stand-ins for all a gate does after its static rows, each counting how it was asked: the lock, which
+ * cannot be taken, so that a gate which asks for it runs its sensors without it and does not wait; the
+ * sample of the load; the sensors; git; gentle-ai. */
+function afterStaticRows(over = {}) {
+  const asked = { lock: 0, load: 0, sensors: 0, git: [], gentleAi: 0 };
+  const deps = {
+    takeGateLock: async () => {
+      asked.lock += 1;
+      throw new Error('not to be asked');
+    },
+    sampleLoad: async () => {
+      asked.load += 1;
+      return LOADED;
+    },
+    spawn: () => {
+      asked.sensors += 1;
+      return sensorRan();
+    },
+    git: (program, args) => {
+      asked.git.push(`${program} ${args.join(' ')}`);
+      return notARepository();
+    },
+    gentleAi: () => {
+      asked.gentleAi += 1;
+      return gentleAiNotFound();
+    },
+    ...over,
+  };
+  return { asked, deps };
+}
+const NOTHING_ASKED = { lock: 0, load: 0, sensors: 0, git: [], gentleAi: 0 };
+
+test('a gate whose static row fails stops before its sensors: it asks for no lock, samples no load, runs no sensor, asks neither git nor gentle-ai, and one FAIL row named gate says so, after which no row comes', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  overBudget(dir);
+  const log = capturedLog();
+  const { asked, deps } = afterStaticRows(log.deps);
+  const { code, output, errOutput } = await runCheck(argv, {}, deps);
+  assert.equal(code, 1, output);
+  assert.deepEqual(asked, NOTHING_ASKED);
+  assert.equal(errOutput, '');
+  assert.equal(rowsOf(output)[0], BUDGET_FAILS);
+  assert.deepEqual(gateRows(output), [stoppedRow(['budget'])]);
+  // No `load`, no sensor, no `review` and no `codex-review`: the row of the stop is the last one.
+  assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'gate']);
+  assert.doesNotMatch(output, /^PASS {2}(tests|lint) /m);
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nothing of the lock was written');
+
+  // The same stand-ins are all asked once the budget passes, so the silence above is not their own; and a
+  // gate whose static rows pass is the gate it was: the same rows, in the same order, with the same exit.
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+  const passing = await runCheck(argv, {}, deps);
+  assert.equal(passing.code, 0, passing.output);
+  assert.deepEqual({ ...asked, git: asked.git.length > 0 }, { lock: 1, load: 1, sensors: 2, git: true, gentleAi: 1 });
+  assert.deepEqual(namesOf(passing.output), [...STATIC_ROWS, 'gate', 'load', 'tests', 'lint', 'review', 'codex-review']);
+  assert.match(gateRows(passing.output)[0], /^INFO {2}gate {2}the sensors ran without the machine's gate lock, /);
+}));
+
+// No row is named in the rule: whatever row failed before the sensors stops them, so a row added to the
+// static ones stops the gate by being there. The rows that only inform (`payload`) stop nothing.
+test('the gate that stops names every row that failed, whichever they are, and a red sensor alone is no stop', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  const stopped = async () => {
+    const { asked, deps } = afterStaticRows(capturedLog().deps);
+    const { code, output } = await runCheck(argv, {}, deps);
+    assert.deepEqual([code, asked], [1, NOTHING_ASKED], output);
+    assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'gate']);
+    return gateRows(output);
+  };
+  writeTask(dir, 'bad.md', BAD_CONTRACT);
+  assert.deepEqual(await stopped(), [stoppedRow(['contracts'])]);
+  overBudget(dir);
+  assert.deepEqual(await stopped(), [stoppedRow(['budget', 'contracts'])]);
+  fs.rmSync(path.join(dir, 'odd'), { recursive: true });
+  assert.deepEqual(await stopped(), [stoppedRow(['budget'])]);
+
+  // A sensor that fails is a row of its own, after which the rows that inform still come.
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+  const red = await runCheck(argv, {}, gateDeps({ spawn: () => ({ ...sensorRan(), status: 3 }), ...capturedLog().deps }));
+  assert.equal(red.code, 1);
+  assert.deepEqual([namesOf(red.output), gateRows(red.output)], [[...STATIC_ROWS, 'load', 'tests', 'review', 'codex-review'], []]);
+}));
+
+test('a gate that stops makes no folder under its home where the lock is free, waits for no gate that holds it, and leaves it to the process that started it', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  overBudget(dir);
+
+  // Free, and with the real lock: it is not taken, and the folder a lock is made in never was.
+  const spawn = countedSensors();
+  const free = await runCheck(argv, {}, gateDeps({ spawn, ...capturedLog().deps }));
+  assert.deepEqual([free.code, spawn.ran, gateRows(free.output)], [1, 0, [stoppedRow(['budget'])]]);
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the home was written to');
+
+  // Held by another gate, and no `--no-wait`: a gate that asked for the lock would wait an hour for it.
+  const other = await takeGateLock({ home, ...OTHER_GATE, beatMs: 0 });
+  try {
+    const { asked, deps } = afterStaticRows(capturedLog().deps);
+    const held = await runCheck(argv, {}, deps);
+    assert.deepEqual([held.code, asked, held.errOutput], [1, NOTHING_ASKED, '']);
+    assert.deepEqual(gateRows(held.output), [stoppedRow(['budget'])]);
+    assert.deepEqual(fs.readdirSync(gateDir(home)), ['lock'], 'it stood in no line');
+    assert.equal(readGateHolder(home).pid, 4321);
+    assert.equal(other.lost(), false);
+
+    // Held by the process that started this gate (`js-harness gate -- npm run check`): that process waited
+    // its turn before this check computed anything, so the stop saves the sensors there, not the wait.
+    const inTurn = afterStaticRows(capturedLog().deps);
+    const parent = await runCheck(argv, { JS_HARNESS_GATE_HELD: '1' }, inTurn.deps);
+    assert.deepEqual([parent.code, inTurn.asked, parent.errOutput], [1, NOTHING_ASKED, '']);
+    // One row of the lock, which does not say that the sensors ran in that turn: none did.
+    assert.deepEqual(gateRows(parent.output), [stoppedRow(['budget'], LOCK_LEFT_TO_PARENT)]);
+    assert.deepEqual(namesOf(parent.output), [...STATIC_ROWS, 'gate']);
+    assert.equal(readGateHolder(home).pid, 4321);
+  } finally {
+    other.release();
+  }
+}));
+
+test('a push and the inner check are as they were beside a failing static row: neither stops, and neither says that it did', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  overBudget(dir);
+  // The inner check runs no sensor, so it has none to stop before: its budget row fails it, and the row
+  // of the Codex debt, which reads commits and never the working tree, is still its last.
+  const inner = afterStaticRows();
+  const within = await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' }, inner.deps);
+  assert.equal(within.code, 1);
+  assert.deepEqual(namesOf(within.output), [...STATIC_ROWS, 'codex-review']);
+  assert.equal(rowsOf(within.output)[0], BUDGET_FAILS);
+  assert.deepEqual({ ...inner.asked, git: inner.asked.git.length > 0 }, { ...NOTHING_ASKED, git: true });
+
+  // A push computes no static row at all: its one row is the one it always had.
+  const pushed = afterStaticRows();
+  const push = await runCheck(['--push', ...argv], {}, pushed.deps);
+  assert.deepEqual(namesOf(push.output), ['codex-review']);
+  // A push asks git through `deps.spawn` (`checkCodexReviews`), which this stand-in counts with the sensors,
+  // so what is asserted of it is what a push never asks for: the lock, the load, gentle-ai.
+  assert.deepEqual([pushed.asked.lock, pushed.asked.load, pushed.asked.gentleAi], [0, 0, 0]);
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+}));
+
+// Decided after the declarations are read: a faulty one is named in the same run as the failing budget, and
+// where no sensor would have run there is nothing to stop, nothing to count and nothing new to say.
+test('a failing static row stops nothing where no sensor would have run: a faulty declaration, no sensor declared and a commit of documents alone end as they did, and the same commit with a code file in it stops', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  overBudget(dir);
+  const log = capturedLog();
+  const unstopped = async (harness, sensors, git) => {
+    if (typeof harness === 'string') fs.writeFileSync(path.join(dir, 'harness.json'), harness);
+    else writeJson(dir, 'harness.json', harness);
+    const { asked, deps } = afterStaticRows({ ...log.deps, ...(git && { git }) });
+    const { code, output } = await runCheck(argv, {}, deps);
+    assert.equal(code, 1, output);
+    assert.deepEqual([asked.lock, asked.load, asked.sensors], [0, 0, 0], output);
+    assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'sensors', 'review', 'codex-review'], output);
+    assert.deepEqual([gateRows(output), rowsOf(output)[0]], [[], BUDGET_FAILS]);
+    assert.match(rowsOf(output)[4], sensors);
+  };
+  await unstopped('{ nope', /^FAIL {2}sensors {2}harness\.json is not valid JSON: /);
+  await unstopped({ sensors: { tests: 'run-tests' }, documents: ['docs/*'] }, /^FAIL {2}sensors {2}harness\.json "documents" must be /);
+  await unstopped({ sensors: {} }, /^INFO {2}sensors {2}harness\.json declares no sensors, so none ran$/);
+  const documents = { sensors: { tests: 'run-tests' }, documents: ['docs/'] };
+  await unstopped(documents, /^INFO {2}sensors {2}no sensor ran \(tests\): the one staged path is a document /, stagedGit(['docs/guide.md']));
+  assert.deepEqual(log.events, []);
+
+  // With a code file staged beside the document the sensors would have run: that gate stops, having asked
+  // git what is staged and nothing after it.
+  const git = stagedGit(['docs/guide.md', 'src/app.js']);
+  const { asked, deps } = afterStaticRows({ ...log.deps, git });
+  const { code, output } = await runCheck(argv, {}, deps);
+  assert.deepEqual([code, { ...asked, git: git.asked }], [1, { ...NOTHING_ASKED, git: ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z'] }]);
+  assert.deepEqual([namesOf(output), gateRows(output)], [[...STATIC_ROWS, 'gate'], [stoppedRow(['budget'])]]);
+  assert.deepEqual(log.events.map(({ event }) => event), ['stopped']);
+}));
+
+// A start without an end reads as a gate that was killed, and a refusal as a gate that found the lock held.
+// A gate that stopped is neither: one line of its own kind, with the rows that stopped it.
+test('a gate that stops writes one line of the kind stopped in the gate log, with the rows that stopped it and no start, whether the lock is free or its parent\'s', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  overBudget(dir);
+  writeTask(dir, 'bad.md', BAD_CONTRACT);
+  for (const env of [{}, { JS_HARNESS_GATE_HELD: '1' }]) {
+    const log = capturedLog();
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, afterStaticRows(log.deps).deps);
+    assert.equal(code, 1, output);
+    assert.deepEqual(log.homes, [home]);
+    assert.deepEqual(log.events.map((event) => ({ ...event, id: '', at: '' })), [{ v: 1, event: 'stopped', id: '', at: '', cwd: path.resolve(dir), command: 'check', pid: process.pid, rows: ['budget', 'contracts'] }]);
+    assert.match(log.events[0].id, /^[0-9a-f-]{36}$/);
+    assert.ok(isIsoTime(log.events[0].at));
+    assert.doesNotMatch(output, /gate log/);
+  }
+}));
+
+test('the line of a gate that stopped honors the switches of the log, is read back from the real file as a gate that stopped, and one that cannot be written is said in the gate log row and changes nothing else', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  overBudget(dir);
+  // Switched off, or a gate with no home to write in: nothing is written, and the gate stops all the same.
+  const log = capturedLog();
+  const off = await runCheck(argv, { JS_HARNESS_GATE_LOG: 'off' }, afterStaticRows(log.deps).deps);
+  assert.deepEqual([off.code, gateRows(off.output)], [1, [stoppedRow(['budget'])]]);
+  const noHome = await checkSensors(dir, afterStaticRows(log.deps).deps, { wait: true, waitMinutes: 60, stoppedBy: ['budget'] });
+  assert.deepEqual(noHome.map((row) => [row.name, row.pass, row.info]), [['gate', false, undefined]]);
+  assert.deepEqual(log.events, []);
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  // A caller that is no gate hands no rows, and one that hands none that failed runs its sensors.
+  const spawn = countedSensors();
+  await checkSensors(dir, { spawn });
+  await checkSensors(dir, { spawn, takeGateLock: lockTakenAtOnce(), git: notARepository }, { home, wait: true, waitMinutes: 60, load: false, log: false, stoppedBy: [] });
+  assert.equal(spawn.ran, 2);
+
+  // With the writer of the real log: one line, in the folder of the log alone, read back as what it was.
+  const real = await runCheck(argv, {}, afterStaticRows().deps);
+  assert.equal(real.code, 1);
+  assert.doesNotMatch(real.output, /gate log/);
+  assert.deepEqual(fs.readdirSync(path.join(home, '.js-harness')), ['gate-log'], 'it took no lock');
+  const { events, skipped } = readGateLog(home);
+  assert.deepEqual([events.map(({ event, cwd, rows }) => [event, cwd, rows]), skipped], [[['stopped', path.resolve(dir), ['budget']]], 0]);
+  assert.deepEqual(gatesOf(events), [{ stopped: events[0] }]);
+
+  // The folder's path is taken by a file: the row says what is missing from the log, and the gate is red
+  // for its budget as it was, with the row of the stop before it.
+  fs.rmSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.js-harness'));
+  fs.writeFileSync(gateLogDir(home), 'not a folder');
+  const unwritten = await runCheck(argv, {}, afterStaticRows().deps);
+  assert.equal(unwritten.code, 1);
+  assert.deepEqual(namesOf(unwritten.output), [...STATIC_ROWS, 'gate', 'gate log']);
+  assert.match(rowsOf(unwritten.output).at(-1), /^INFO {2}gate log {2}could not be written \(E[A-Z]+: [^\n]*\), so this stop is not in it$/);
+  assert.deepEqual(gateRows(unwritten.output), [stoppedRow(['budget'])]);
+  assert.equal(fs.readFileSync(gateLogDir(home), 'utf8'), 'not a folder');
+}));
+
+// --- what the sensors leave in the working tree: the untracked paths that appeared while they ran ---
+// A test that writes into the tree it is run in leaves a file nobody asked for, and the commit that follows
+// finds it untracked with nothing to say where it came from. The gate lists the untracked paths before and
+// after its sensors and names the ones that appeared; a gate that names none is the proof that none did.
+
+const TREE_ASKED = 'git --no-optional-locks status --porcelain -z --untracked-files=all';
+
+/** A stand-in for the git a gate asks about its working tree: each of `listings` is what one `git status`
+ * answers, the entries of `--porcelain -z` or a function that answers in their place. It keeps how it was
+ * asked, and calls `during` each time; any other question is answered as outside a repository. */
+function treeGit(listings, during = () => {}) {
+  const left = [...listings];
+  const spawn = (program, args, options) => {
+    if (!args.includes('status')) return notARepository();
+    spawn.asked.push({ line: `${program} ${args.join(' ')}`, cwd: options.cwd, bound: Object.keys(options.env ?? process.env).filter((key) => /^git_(dir|index_file|work_tree|common_dir|prefix)$/i.test(key)) });
+    during();
+    const listing = left.shift();
+    return typeof listing === 'function' ? listing() : ok((listing ?? []).map((entry) => `${entry}\0`).join(''));
+  };
+  spawn.asked = [];
+  return spawn;
+}
+
+const treeRows = (output) => rowsOf(output).filter((line) => /^\w+ {2}tree {2}/.test(line));
+/** The `tree` row of a report with the lines under it, as printed. */
+function treeRow(output) {
+  const lines = output.split('\n');
+  const at = lines.findIndex((line) => /^\w+ {2}tree {2}/.test(line));
+  if (at === -1) return [];
+  const under = lines.slice(at + 1);
+  const end = under.findIndex((line) => !line.startsWith('      '));
+  return [lines[at], ...under.slice(0, end === -1 ? under.length : end).map((line) => line.trim())];
+}
+
+const CACHE = 'Microsoft/Windows/PowerShell/ModuleAnalysisCache';
+const WAS_THERE = ['?? notes.txt', ' M bin/check.mjs', 'A  bin/new.mjs'];
+
+test('a gate lists the untracked paths of its working tree before its first sensor and after its last, inside its turn, and names the ones that appeared in one INFO row named tree, in each of the three states of the lock', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
+  for (const { state, env, deps, gate, holder } of LOCK_STATES) {
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const log = capturedLog((event) => void events.push(event.event));
+    const git = treeGit([WAS_THERE, [...WAS_THERE, `?? ${CACHE}`, '?? out put.txt']], () => events.push(['tree', readGateHolder(home)?.pid]));
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, sampleLoad, git, ...deps, ...log.deps }));
+    assert.equal(code, 0, `${state}: ${output}`);
+    // Before the start of the gate is written and after its end, so the seconds of the log are the sensors'.
+    assert.deepEqual(events, [['sample', holder], ['tree', holder], 'start', 'run-tests', 'run-lint', 'end', ['tree', holder]], state);
+    assert.deepEqual(git.asked, [{ line: TREE_ASKED, cwd: dir, bound: [] }, { line: TREE_ASKED, cwd: dir, bound: [] }], state);
+    assert.deepEqual(treeRow(output), ['INFO  tree  2 untracked paths appeared in the working tree while the sensors ran (a test may have written them)', CACHE, 'out put.txt'], state);
+    assert.deepEqual(namesOf(output), [...STATIC_ROWS, ...gate, 'load', 'tests', 'lint', 'tree', 'review', 'codex-review'], state);
+  }
+}));
+
+test('the tree row names no path that was untracked before the sensors, takes the old name of a rename for no path, shows the first ten of many and a name with a control character as JSON, and fails nothing', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  const said = async (before, after, spawn = sensorRan) => {
+    const { code, output } = await runCheck(argv, {}, gateDeps({ spawn, git: treeGit([before, after]) }));
+    return { code, row: treeRow(output) };
+  };
+  const one = 'INFO  tree  1 untracked path appeared in the working tree while the sensors ran (a test may have written it)';
+  assert.deepEqual(await said(['?? notes.txt'], ['?? notes.txt', '?? left.txt']), { code: 0, row: [one, 'left.txt'] });
+  // A path that went away is no news of this row, and one that was modified or staged is not untracked.
+  assert.deepEqual(await said(['?? notes.txt', '?? gone.txt'], ['?? notes.txt', ' M bin/check.mjs', 'A  bin/new.mjs', 'D  old.txt']), { code: 0, row: [] });
+  // A rename is two entries, the second the name it had, with no status before it: `?? was.txt` is the
+  // whole of an old name here, and names no untracked path.
+  assert.deepEqual(await said([], ['R  now.txt', '?? was.txt', 'C  copy.txt', '?? source.txt', '?? left.txt']), { code: 0, row: [one, 'left.txt'] });
+  const many = Array.from({ length: 13 }, (_, at) => `tmp/${String(at + 1).padStart(2, '0')}.log`);
+  const thirteen = await said([], many.map((file) => `?? ${file}`));
+  assert.deepEqual(thirteen.row, ['INFO  tree  13 untracked paths appeared in the working tree while the sensors ran (a test may have written them)', ...many.slice(0, 10), 'and 3 more']);
+  assert.deepEqual((await said([], ['?? a\nFAIL  tests  x', '?? ñ ok.txt'])).row.slice(1), ['"a\\nFAIL  tests  x"', 'ñ ok.txt']);
+  // Beside a sensor that fails the row is there all the same, and the gate is red for the sensor alone.
+  const red = await said([], ['?? left.txt'], () => ({ ...sensorRan(), status: 3 }));
+  assert.deepEqual(red, { code: 1, row: [one, 'left.txt'] });
+}));
+
+test('no tree row, and no failure, when nothing appeared, when the folder is no git work tree, or when git could not be asked either time', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  const enoent = () => Object.assign(new Error('spawnSync git ENOENT'), { code: 'ENOENT' });
+  const fails = {
+    'no work tree': notARepository,
+    'no git': () => ({ status: null, stdout: '', stderr: '', error: enoent() }),
+    'a git that throws': () => {
+      throw enoent();
+    },
+    'no answer': () => undefined,
+    'an answer that is no text': () => ({ status: 0, stdout: null, stderr: '' }),
+  };
+  const appeared = ['?? left.txt'];
+  const cases = { 'nothing appeared': [[appeared, appeared], 2] };
+  for (const [name, fail] of Object.entries(fails)) {
+    // Not asked again after the sensors where it did not answer before them: there is nothing to compare.
+    cases[`${name}, before the sensors`] = [[fail, appeared], 1];
+    cases[`${name}, after them`] = [[[], fail], 2];
+  }
+  for (const [name, [listings, times]] of Object.entries(cases)) {
+    const spawn = countedSensors();
+    const git = treeGit(listings);
+    const { code, output } = await runCheck(argv, {}, gateDeps({ spawn, git }));
+    assert.deepEqual([code, spawn.ran, treeRows(output), git.asked.length], [0, 1, [], times], `${name}: ${output}`);
+    assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'load', 'tests', 'review', 'codex-review'], name);
+  }
+}));
+
+// A gate started by a hook inherits the variables that bind git to the hook's repository and to the index
+// of the commit. The tree is the one of the folder the gate checks, where its sensors run with none of those
+// variables: asked with them, a `check --cwd <another project>` would hold that project's files against the
+// index of the hook's repository.
+test('a gate asks git about its working tree with none of the variables that bind git to a repository, and takes none of the locks git can do without', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const git = treeGit([[], ['?? left.txt']]);
+  const { code, output } = await withEnv({ GIT_DIR: path.join(home, 'other', '.git'), GIT_INDEX_FILE: path.join(home, 'other', '.git', 'index.lock'), Git_Work_Tree: home, GIT_PREFIX: 'docs/' }, () =>
+    runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ git })));
+  assert.equal(code, 0, output);
+  assert.deepEqual(git.asked, [{ line: TREE_ASKED, cwd: dir, bound: [] }, { line: TREE_ASKED, cwd: dir, bound: [] }]);
+  assert.equal(treeRows(output).length, 1);
+}));
+
+test('nothing is asked about the working tree where no gate runs a sensor: a caller that is no gate, the inner run, a push, no sensor declared, a commit of documents alone, a gate that stopped', async () => {
+  const dir = sensorProject({ tests: 'run-tests' });
+  const none = sensorProject({});
+  const home = makeTmpDir();
+  try {
+    /** A git that answers what is staged as `staged` does, and counts the questions about the tree. */
+    const counting = (staged = notARepository) => {
+      const git = (program, args, options) => {
+        if (!args.includes('status')) return staged(program, args, options);
+        git.tree += 1;
+        return ok('?? left.txt\0');
+      };
+      git.tree = 0;
+      return git;
+    };
+    const git = counting();
+    const rows = await checkSensors(dir, { spawn: sensorRan, git });
+    assert.deepEqual(rows.map((row) => row.name), ['tests']);
+
+    const deps = { gentleAi: gentleAiNotFound, takeGateLock: lockTakenAtOnce(), spawn: sensorRan, ...capturedLog().deps };
+    const argv = ['--cwd', dir, '--home', home];
+    const silent = {
+      inner: await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' }, { ...deps, git }),
+      push: await runCheck(['--push', ...argv], {}, { ...deps, git }),
+      'no sensor': await runCheck(['--cwd', none, '--home', home], {}, { ...deps, git }),
+    };
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    const documents = counting(stagedGit(['docs/guide.md']));
+    silent['documents alone'] = await runCheck(argv, {}, { ...deps, git: documents });
+    overBudget(dir);
+    const code = counting(stagedGit(['src/app.js']));
+    silent.stopped = await runCheck(argv, {}, { ...deps, git: code });
+    for (const [what, { output }] of Object.entries(silent)) assert.deepEqual(treeRows(output), [], `${what}: ${output}`);
+    assert.deepEqual([git.tree, documents.tree, code.tree], [0, 0, 0]);
+
+    // The same stand-in is asked twice once that gate runs its sensor, so the silence above is not its own.
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const gate = await runCheck(argv, {}, { ...deps, git: code });
+    assert.deepEqual([gate.code, code.tree, treeRows(gate.output)], [0, 2, []], gate.output);
+  } finally {
+    for (const folder of [dir, none, home]) fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 // From here on, real git in real repositories: what `git diff --cached` lists is the fact the rule stands on.
 
 /** A sensor that fails: a gate that ran it is red with a `tests` row, one that ran none is green without. */
@@ -3120,5 +3559,28 @@ test('a commit of documents alone runs no sensor however it is made: plain, with
     assert.equal(fs.existsSync(marker), true, 'the sensor did not run for a commit that holds a code file');
   } finally {
     remove();
+  }
+});
+
+// The same with nothing standing in: real git lists the tree, a real sensor writes into it.
+test('a real gate in a real repository names the files its sensor left in the working tree, and neither one that was untracked before nor one the project ignores', async () => {
+  const repo = documentsRepo();
+  try {
+    const leaves = ['left-by-a-test.txt', 'deep/er/left.txt', 'scratch/ignored.txt'];
+    const script = `const fs=require('fs');for(const f of ${JSON.stringify(leaves).replace(/"/g, "'")}){fs.mkdirSync(require('path').dirname(f),{recursive:true});fs.writeFileSync(f,'')}`;
+    writeJson(repo, 'harness.json', { sensors: { tests: `"${process.execPath}" -e "${script}"` } });
+    writeFile(repo, '.gitignore', 'scratch/\n');
+    writeFile(repo, 'was-here.txt');
+    const { code, output } = await runCheck(['--cwd', repo], {});
+    assert.equal(code, 0, output);
+    for (const file of leaves) assert.equal(fs.existsSync(path.join(repo, file)), true, file);
+    assert.deepEqual(treeRow(output), ['INFO  tree  2 untracked paths appeared in the working tree while the sensors ran (a test may have written them)', 'deep/er/left.txt', 'left-by-a-test.txt']);
+    assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'load', 'tests', 'tree', 'review', 'codex-review']);
+
+    // The next gate of the same tree finds them there before its sensor, and says nothing of them.
+    const again = await runCheck(['--cwd', repo], {});
+    assert.deepEqual([again.code, treeRows(again.output)], [0, []], again.output);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
   }
 });
