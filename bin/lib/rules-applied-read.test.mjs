@@ -265,6 +265,24 @@ test('maxFiles 1 with two recent launches keeps the newer one and reports capped
   assert.equal(got.files.launches, 1);
 });
 
+test('maxFiles 1 with two recent sessions keeps the newer one and reports capped', () => {
+  const dir = project([
+    { path: 'sess-old.jsonl', text: assistant({ message: { model: 'old' } }), mtime: NOW - 2 * HOUR },
+    { path: 'sess-new.jsonl', text: assistant({ message: { model: 'new' } }), mtime: NOW - HOUR },
+  ]);
+  const got = readRecords(dir, { now: NOW, maxFiles: 1 });
+  assert.deepEqual(got.sessions.map((item) => item.file), ['sess-new.jsonl']);
+  assert.equal(got.capped, true);
+  assert.equal(got.files.sessions, 1);
+});
+
+test('a now that is not a finite time throws before anything is read, whatever the folder holds', () => {
+  const dir = project([{ path: 'sess-1.jsonl', text: assistant(), mtime: NOW - HOUR }]);
+  for (const now of [undefined, NaN, 'x']) {
+    assert.throws(() => readRecords(dir, { now }), { message: 'readRecords needs now as a time in milliseconds' });
+  }
+});
+
 test('launches come newest first, and two of the same time by path', () => {
   const dir = project([
     { path: 'a/subagents/agent-1.jsonl', text: assistant(), mtime: NOW - 3 * HOUR },

@@ -287,16 +287,16 @@ function launch(records, model, effort) {
 }
 
 /** Runs `js-harness rules applied` on `project` at NOW, with `env` (by default the Claude home is `home`), collecting its output. */
-async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }) {
+async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd = project, git = NO_GIT } = {}) {
   const out = [];
   const err = [];
   const code = await rulesMain(['applied'], {
     root: project,
-    cwd: project,
+    cwd,
     env,
     homedir: () => home,
     now: () => NOW,
-    run: NO_GIT,
+    run: git,
     stdout: (line) => out.push(line),
     stderr: (line) => err.push(line),
   });
@@ -409,6 +409,17 @@ test('applied with CLAUDE_CONFIG_DIR unset looks for the records under the home 
   });
 });
 
+test('applied with CLAUDE_CONFIG_DIR set to an empty text looks for the records under the home folder, as when unset', async () => {
+  await withHome(LIST, async (project, home) => {
+    const records = path.join(home, '.claude', 'projects', projectSlug(project));
+    launch(records, 'claude-haiku-5-5');
+    const { code, out } = await applied(project, home, { CLAUDE_CONFIG_DIR: '' });
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes(`  records: ${records} (of ${project})`), out.join('\n'));
+    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+  });
+});
+
 test('applied reads no document, so a root with no docs/ still runs and exits 0', async () => {
   await withHome(LIST, async (project, home) => {
     assert.equal(fs.existsSync(path.join(project, 'docs')), false);
@@ -416,6 +427,51 @@ test('applied reads no document, so a root with no docs/ still runs and exits 0'
     const { code, out } = await applied(project, home);
     assert.equal(code, 0, out.join('\n'));
     assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+  });
+});
+
+/** What git answers for a linked worktree: its top is `tree`, and its common git dir is the `.git` of the checkout `main`. */
+function linkedGit(tree, main) {
+  return (command, args) => {
+    if (args.join(' ') === 'rev-parse --show-toplevel') return { status: 0, stdout: `${tree}\n`, stderr: '' };
+    if (args.join(' ') === 'rev-parse --git-common-dir') return { status: 0, stdout: `${main}/.git\n`, stderr: '' };
+    return { status: 1, stdout: '', stderr: '' };
+  };
+}
+
+test('applied in a linked worktree reads the rules of the worktree and the records of the main checkout', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-linked-'));
+  try {
+    const main = path.join(base, 'main');
+    const tree = path.join(base, 'tree');
+    const home = path.join(base, 'home');
+    fs.mkdirSync(main, { recursive: true });
+    write(tree, LIST);
+    fs.mkdirSync(path.join(tree, 'sub'), { recursive: true });
+    launch(recordsOf(main, home), 'claude-haiku-5-5');
+    const { code, out, err } = await applied(tree, home, { CLAUDE_CONFIG_DIR: home }, {
+      cwd: path.join(tree, 'sub'),
+      git: linkedGit(tree, main),
+    });
+    assert.deepEqual(err, []);
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes(`  project: ${tree}`), out.join('\n'));
+    assert.ok(out.includes(`  records: ${recordsOf(main, home)} (of ${main})`), out.join('\n'));
+    assert.ok(out.includes('subagent-writer-model: claude-haiku-5-5, passed as `haiku`, since 2026-10-11'), out.join('\n'));
+    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('applied with a rules-data.mjs that is a folder writes one line to stderr, no report line, and exits 1', async () => {
+  await withHome({ 'bin/lib/rules-data.mjs/keep.txt': 'a folder, not a file\n' }, async (project, home) => {
+    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    const { code, out, err } = await applied(project, home);
+    assert.equal(code, 1, out.join('\n'));
+    assert.equal(err.length, 1, err.join('\n'));
+    assert.ok(err[0].startsWith('cannot read bin/lib/rules-data.mjs'), err.join('\n'));
+    assert.deepEqual(out, []);
   });
 });
 

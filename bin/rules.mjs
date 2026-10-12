@@ -241,7 +241,7 @@ function heldRules() {
 function appliedForm({ cwd, env, homedir, now, run }, stdout) {
   const project = projectOf(run, cwd);
   const main = mainCheckout(run, cwd);
-  const recordsDir = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects', projectSlug(main));
+  const recordsDir = path.join(env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), 'projects', projectSlug(main));
   const { rules, leftOut } = rulesInForce(readOptional(project, 'bin/lib/rules-data.mjs'));
   const at = now();
   const records = readRecords(recordsDir, { now: at, days: APPLIED_DAYS, maxFiles: APPLIED_MAX_FILES });

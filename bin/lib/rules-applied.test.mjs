@@ -242,6 +242,19 @@ test('entries with no version, a synthetic model, no time or too old are skipped
   assert.deepEqual(out.otherModels, []);
 });
 
+test('a time with no zone, a day alone or a text with a named zone is skipped as noTime, and a time with a zone is kept', () => {
+  const out = run([rule()], [
+    launch({ at: '2026-10-12T10:00:00', file: 'no-zone.jsonl' }),
+    launch({ at: '2026-10-12', file: 'day-only.jsonl' }),
+    launch({ at: 'Oct 12 2026 10:00 GMT', file: 'named-zone.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00Z', file: 'z.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00.123Z', file: 'fraction.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00+0200', file: 'offset.jsonl' }),
+  ]);
+  assert.equal(out.skipped.noTime, 3);
+  assert.equal(out.read.launches, 3);
+});
+
 test('an entry that is not an object is counted under no version and does not throw', () => {
   const out = run([rule()], [null, 5, 'x'], [undefined]);
   assert.equal(out.skipped.noVersion, 4);

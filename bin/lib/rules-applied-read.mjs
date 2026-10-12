@@ -253,9 +253,11 @@ function attempt(read) {
  * it was modified at or after `now - days` days. Gives `{ exists, launches, sessions, unreadable,
  * files, capped }`: the launches and sessions picked (at most `maxFiles` of each, the newest), the
  * picked files that gave no item with their reason, how many of each were picked, and whether any
- * recent file was left out by the cap. Never throws for a file or folder it cannot read.
+ * recent file was left out by the cap. Never throws for a file or folder it cannot read; it throws
+ * only for a `now` that is no number, which would turn the window off in silence.
  */
 export function readRecords(projectDir, { now, days = 7, maxFiles = 500 }) {
+  if (!Number.isFinite(now)) throw new Error('readRecords needs now as a time in milliseconds');
   const top = listDir(projectDir);
   if (top === null) return emptyRecords();
   const since = now - days * DAY_MS;
