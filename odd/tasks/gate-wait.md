@@ -1634,6 +1634,32 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   and inside its margin, 399,420; the day's two samples say the spend may be a fifth to a
   third more), then the merge of `main` (`6785ec7`, clean by `git merge-tree`) gated by
   the pre-commit hook. Then push, pull request, the orchestrator.
+- 2026-10-12 · **What T8 needs to become a slice, told to the orchestrator at 17:18**
+  (written while `t14c-turn.sh` waits behind the gate of `rules-held`). Three things, and
+  none is the writing:
+  1. *S1 on `main` first.* A review beside a gate is safe because a review is held to the
+     commit it read at its start, and that is `3e0b456`, one of the eight code commits of
+     S1 that are on `feat/gate-wait` alone (`git log origin/main..HEAD -- bin`: `1841b96`
+     to `f04efca`).
+  2. *M2's number 2 is not measured, for either review.* Number 1 for Codex, read against
+     a borrowed baseline: 201 busy processor-seconds in 67.1 s, and the quiet rate of the
+     morning's two quiet minutes (1.7 to 2.2 a second) puts 56 to 87 of them above it, so
+     **14 to 22 s added to a gate at most**, under the bound of 30 s; one sample, no quiet
+     minute taken just before it. Not near enough to lower a review's priority. Number 2,
+     a review that ends with an answer beside a gate, was never run. It can be paid with
+     what is owed: S1's Codex review of `f04efca` as its own command, outside the lock,
+     beside a gate of this session that is due anyway. gentle-ai has no review owed (every
+     commit of the day came out under budget), so its number 2 stays unmeasured.
+  3. *Then the texts*, about 60 lines, one writer, tests first: the message of
+     `codex-review` (`bin/codex-review.mjs:643-648` on `main`) and its two tests,
+     `docs/ROADMAP.md:58`, the shipped skill (`bin/lib/manifest.mjs:27`, `:98`), the help,
+     the comments at `bin/gate.mjs:3` and in `bin/check.mjs`. `docs/FAILURES.md:170` is
+     history and stays.
+  His word of 2026-10-11 says a failed review "is repeated in a turn of the gate lock";
+  T8 changes that sentence, and whether his yes of 12:26 covers it is the orchestrator's
+  to say: asked. What T8 buys is a review's wait for the lock (up to 24 minutes behind two
+  gates today), not suite time. The order proposed: T14's turn and pull request; S1's
+  Codex record with number 2 measured in the same step; S1's pull request; T8's texts.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
