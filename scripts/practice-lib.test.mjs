@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
-  realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs,
+  realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
 } from './practice-lib.mjs';
+import { entryComponents } from '../bin/lib/manifest.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
 
 // No test here starts a process, reads the clock or touches the disk: every fact is handed in, and the
@@ -778,4 +779,68 @@ test('parseArgs names the argument it refused', () => {
   assert.ok(parseArgs(['deploy'], 'win32').error.includes('deploy'));
   assert.ok(parseArgs(['run', '--force', '--root', WIN_ROOT], 'win32').error.includes('--force'));
   assert.ok(parseArgs(['run', '--root', WIN_ROOT, 'extra'], 'win32').error.includes('extra'));
+});
+
+// ---- the hook entries of a host file ------------------------------------------------------------------------------------
+
+// What `install` grafts on a host file, as its own declaration gives it: the list this library checks a
+// host file against must be that one, or a journey would go on passing against an install that changed.
+test('HARNESS_HOOKS is what install declares for each host: the doctor entry, then the resume entry', () => {
+  const declared = (host) => entryComponents.filter((component) => component.id.startsWith(`${host}-`)).map((component) => {
+    const entry = component.entry();
+    return { event: component.pointer.at(-1), matcher: entry.matcher, command: entry.hooks.map((hook) => hook.command).join(' && ') };
+  });
+  assert.deepEqual(HARNESS_HOOKS, [
+    { event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' },
+    { event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' },
+  ]);
+  assert.deepEqual(declared('claude'), HARNESS_HOOKS);
+  assert.deepEqual(declared('codex'), HARNESS_HOOKS);
+  assert.ok(Object.isFrozen(HARNESS_HOOKS));
+});
+
+const SEEDED = 'echo unrelated-claude-hook';
+const group = (matcher, ...commands) => ({ ...(matcher === undefined ? {} : { matcher }), hooks: commands.map((command) => ({ type: 'command', command, timeout: 5 })) });
+const hostFile = (...groups) => JSON.stringify({ hooks: { SessionStart: groups } }, null, 4);
+const seeded = group('startup|resume|clear|compact', SEEDED);
+const doctor = group('startup|resume', 'js-harness doctor --hook');
+const resume = group('compact', 'js-harness resume --hook');
+
+test('hostHooksProblem finds none in a host file that holds its seeded entry and then each entry of the harness once', () => {
+  assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume), SEEDED), null);
+  // The keys of an entry in another order, as a host or another tool may write them back.
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [{ hooks: seeded.hooks, matcher: seeded.matcher }, { hooks: doctor.hooks, matcher: doctor.matcher }, resume] } }), SEEDED), null);
+});
+
+test('hostHooksProblem says what it expected and what it found: an entry missing, written twice, with another matcher or command, or out of place', () => {
+  const expected = 'expected the seeded entry "echo unrelated-claude-hook", then "js-harness doctor --hook" (matcher startup|resume), then "js-harness resume --hook" (matcher compact); found: ';
+  const found = (...groups) => hostHooksProblem(hostFile(...groups), SEEDED);
+  // What `install` wrote before the resume hook: the doctor's entry alone.
+  assert.equal(found(seeded, doctor), `${expected}"echo unrelated-claude-hook" (matcher startup|resume|clear|compact) | "js-harness doctor --hook" (matcher startup|resume)`);
+  assert.equal(found(seeded), `${expected}"echo unrelated-claude-hook" (matcher startup|resume|clear|compact)`);
+  // A second install that wrote an entry again.
+  assert.ok(found(seeded, doctor, resume, resume).endsWith('| "js-harness resume --hook" (matcher compact) | "js-harness resume --hook" (matcher compact)'));
+  assert.ok(found(seeded, doctor, doctor, resume) !== null);
+  // The right command under the wrong matcher, and the other way round: each entry is its matcher and its command.
+  assert.ok(found(seeded, doctor, group('startup|resume', 'js-harness resume --hook')).endsWith('| "js-harness resume --hook" (matcher startup|resume)'));
+  assert.ok(found(seeded, group('compact', 'js-harness doctor --hook'), resume) !== null);
+  assert.ok(found(seeded, doctor, group('compact', 'js-harness resume')) !== null);
+  assert.ok(found(seeded, doctor, group(undefined, 'js-harness resume --hook')).endsWith('| "js-harness resume --hook" (no matcher)'));
+  assert.ok(found(seeded, doctor, group('compact', 'js-harness resume --hook', 'echo more')).endsWith('| "js-harness resume --hook && echo more" (matcher compact)'));
+  // The seeded entry is the user's: gone, changed or no longer first, the file is not what install should leave.
+  assert.ok(found(doctor, resume) !== null);
+  assert.ok(found(doctor, seeded, resume) !== null);
+  assert.ok(found(group('startup', SEEDED), doctor, resume) === null, 'the seeded entry is told by its command: its matcher is the user\'s to choose');
+  assert.ok(found(seeded, resume, doctor) !== null, 'in the order install writes them');
+  assert.equal(found(), `${expected}no entry`);
+});
+
+test('hostHooksProblem says so for a host file that is not one: no JSON, no hooks, a list that is none', () => {
+  assert.equal(hostHooksProblem('not json', SEEDED), 'the file is not JSON');
+  assert.equal(hostHooksProblem(undefined, SEEDED), 'the file is not JSON');
+  for (const text of ['null', '[]', '{}', '{"hooks":null}', '{"hooks":{}}', '{"hooks":{"SessionStart":{}}}']) {
+    assert.equal(hostHooksProblem(text, SEEDED), 'the file holds no list at hooks.SessionStart', text);
+  }
+  // An entry that is not one is shown as it is, never taken for a hook.
+  assert.ok(hostHooksProblem('{"hooks":{"SessionStart":[null,7,{"hooks":"x"}]}}', SEEDED).endsWith('found: not an entry | not an entry | no command (no matcher)'));
 });

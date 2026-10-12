@@ -954,12 +954,12 @@ with the session channel and tried first by hand:
 - No session stops, slows or proposes a cut for a percentage. Near the end of its window
   it pauses, writes its state in its feature document, and judges: little left, it
   finishes well; much left, the compaction is done there and the same task continues after
-  it. This is the context pause, his rule of 2026-10-10, in his words of that day:
-  "al 85% pausamos no detenemos y miramos si falta poco para poder terminar bien o sino para
-  compactar y continuar post-compactacion". Its design is in `odd/tasks/session-channel.md`
-  ("Context"), and the share of the window it acts at, which he changed on 2026-10-11, is
-  recorded in the orchestrator's relief file until the code holds it in one place (T5 of
-  that document).
+  it. This is the context pause, his rule of 2026-10-10. The share of the window it acts
+  at has one home, the constant `DEFAULT_CONTEXT_PAUSE_PERCENT` of `bin/lib/sessions.mjs`,
+  with the share where the host compacts beside it (`DEFAULT_CONTEXT_COMPACTION_PERCENT`):
+  a text names the rule or reads the constant and never writes the value, and a test of
+  `bin/sessions.test.mjs` fails when one does. Its design is in
+  `odd/tasks/session-channel.md` ("Context").
 - A task ends with its commit and with the feature document saying what is next, so at
   that point the files hold everything and the conversation can go.
 - Two ways to cut, to be compared: the host's compaction with a `SessionStart` hook that
