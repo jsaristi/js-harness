@@ -3859,29 +3859,37 @@ test('the hook of a merge starts the same command as the hook of a commit', () =
   assert.equal(command('pre-commit').length, 1);
 });
 
+/** `hookedRepo` with the hook of a merge installed beside the hook of a commit, and the two moves the
+ * tests of a merge make. `branch` commits a change of `file` on a branch off the trunk with no gate: only
+ * the merge is looked at. `merge` moves the trunk on first, so that the merge is no fast-forward, which
+ * makes no commit and runs no hook, and then merges the branch as git does it by itself. */
+function mergingRepo() {
+  const hooked = hookedRepo();
+  const { repo, home, env } = hooked;
+  const hooks = path.join(home, 'hooks');
+  fs.copyFileSync(path.join(hooks, 'pre-commit'), path.join(hooks, 'pre-merge-commit'));
+  fs.chmodSync(path.join(hooks, 'pre-merge-commit'), 0o755);
+  const trunk = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD');
+  const branch = (name, file) => {
+    git(repo, 'checkout', '--quiet', '-b', name, trunk);
+    writeFile(repo, file, `written on ${name}\n`);
+    git(repo, 'add', file);
+    git(repo, ...commitAs, '--no-verify', '-m', name);
+    git(repo, 'checkout', '--quiet', trunk);
+  };
+  const merge = (name) => {
+    writeFile(repo, `trunk-${name}.txt`);
+    git(repo, 'add', `trunk-${name}.txt`);
+    git(repo, ...commitAs, '--no-verify', '-m', `the trunk before ${name}`);
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'merge', '--no-edit', name], { cwd: repo, env, encoding: 'utf8' });
+    return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+  };
+  return { ...hooked, branch, merge };
+}
+
 test('a merge git commits by itself goes through the gate: one that brings documents alone runs no sensor, and one that brings a code file runs them', async () => {
-  const { repo, home, marker, env, remove } = hookedRepo();
+  const { repo, marker, branch, merge, remove } = mergingRepo();
   try {
-    const hooks = path.join(home, 'hooks');
-    fs.copyFileSync(path.join(hooks, 'pre-commit'), path.join(hooks, 'pre-merge-commit'));
-    fs.chmodSync(path.join(hooks, 'pre-merge-commit'), 0o755);
-    const trunk = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD');
-    // A branch off the trunk that changes `file`, committed with no gate: only the merge is looked at here.
-    const branch = (name, file) => {
-      git(repo, 'checkout', '--quiet', '-b', name, trunk);
-      writeFile(repo, file, `written on ${name}\n`);
-      git(repo, 'add', file);
-      git(repo, ...commitAs, '--no-verify', '-m', name);
-      git(repo, 'checkout', '--quiet', trunk);
-    };
-    // The trunk moves on as well, so that neither merge is a fast-forward, which makes no commit and runs no hook.
-    const merge = (name) => {
-      writeFile(repo, `trunk-${name}.txt`);
-      git(repo, 'add', `trunk-${name}.txt`);
-      git(repo, ...commitAs, '--no-verify', '-m', `the trunk before ${name}`);
-      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'merge', '--no-edit', name], { cwd: repo, env, encoding: 'utf8' });
-      return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
-    };
     branch('documents', 'docs/guide.md');
     branch('code', 'src/app.js');
 
@@ -3896,6 +3904,35 @@ test('a merge git commits by itself goes through the gate: one that brings docum
     assert.match(code.said, /^PASS {2}tests /m);
     assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that brings a code file');
     assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
+  } finally {
+    remove();
+  }
+});
+
+test('a merge whose gate fails is not committed: git merge exits with a failure, the trunk stays where it was and the merge is left unfinished', async () => {
+  const { repo, branch, merge, remove } = mergingRepo();
+  try {
+    // The project's one sensor now fails, on the trunk and so on every branch off it.
+    const failing = `"${process.execPath}" -e "process.exit(3)"`;
+    writeJson(repo, 'harness.json', { sensors: { tests: failing }, documents: ['docs/', 'notes.md'] });
+    git(repo, ...commitAs, '--no-verify', '-m', 'a sensor that fails', '--', 'harness.json');
+    branch('code', 'src/app.js');
+
+    const code = merge('code');
+    assert.notEqual(code.status, 0, code.said);
+    assert.match(code.said, /^FAIL {2}tests /m);
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '0', 'the merge was committed though its gate failed');
+    assert.equal(git(repo, 'log', '-1', '--format=%s'), 'the trunk before code');
+    // What git leaves is a merge to finish or to give up, with what it brings staged: nothing is lost.
+    assert.equal(git(repo, 'rev-parse', '--verify', '--quiet', 'MERGE_HEAD'), git(repo, 'rev-parse', 'code'));
+    assert.deepEqual(git(repo, 'diff', '--cached', '--name-only').split(/\r?\n/), ['src/app.js']);
+
+    // A merge that brings documents alone runs no sensor, so the failing one does not stop it.
+    git(repo, 'merge', '--abort');
+    branch('documents', 'docs/guide.md');
+    const documents = merge('documents');
+    assert.equal(documents.status, 0, documents.said);
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '1');
   } finally {
     remove();
   }
