@@ -1548,6 +1548,29 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   thing it added, kept: the look throws when a survivor outlives its kill, as the real
   sweep does. One line of a comment in `evals/isolation-probe.mjs` is too long: to wrap
   before the commit. The second writer (the three eval test files) still works.
+- 2026-10-12 · **T14 is written and its turn is asked** (`t14-turn.sh`, asked at 16:08 by `date`; it waits behind another session's gate, the
+  hook's turn and T13's).
+  The second writer (Haiku at high, 234,978 tokens, no test run) handed the deferred sweep
+  in at `trialEnv` of `evals/runner.test.mjs` and four `runSuite` calls, the `prove`
+  helper and two direct calls of `evals/task-proof.test.mjs`, and the `probe` helper and
+  `overridesFor` of `evals/isolation-probe.test.mjs`; each file ends with the look in an
+  `after` registered before its own cleanup; four tests, one an entry, that it calls the
+  run it was handed. Left on the real sweep: the direct `runProcess` tests and the
+  `killByPath` section of `evals/runner.test.mjs`, the discovery test of
+  `evals/task-proof.test.mjs`, and `evals/tasks.test.mjs` untouched. Its judgement call,
+  kept: the by-path orphan tests keep `sweep: undefined` and take the recorder for the
+  run, since their orphan's parent is gone and parentage could not find it either way.
+  Read by me: the files changed are the eight of the two surfaces, 286 lines added and 30
+  removed, every hand-in hunk, `node --check` on the eight; one over-long comment line
+  wrapped by me. Not read line by line: the four new tests and the eight of the testkit;
+  the turn runs them.
+  **The turn:** RED a (the testkit's tests without the deferred look) and RED b (the four
+  entry tests against the shipping code as it was), GREEN on the testkit's tests, then the
+  four eval files under the counting tool of `feat/gate-wait-count`, which gives the
+  tests' result and the count by file in one run (before: 501, 346, 210, 99), then the
+  commit with its gate (message `t14-msg.txt`). Exit 20: a test failed with a folder that
+  could not be removed or copied, the orchestrator's stop: bring it with its count, add no
+  retry. Exit 7: the green failed otherwise; 9: the whole gate failed.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
