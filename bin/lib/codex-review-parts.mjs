@@ -12,10 +12,10 @@
 // (`git diff <from> <head> -- <files>`) and what a finding names. A file is never cut in two: a file larger
 // than the bound is a part of its own, and whether one session can read it is for the evidence rule to say.
 
-// How many changed lines (additions plus deletions) a part holds at most. PROVISIONAL: a range of 216
-// changed lines was reviewed whole twice, with every line seen, and ranges of about a thousand were not;
-// 400 is a number between the two and nothing more. The comparison runs of T12
-// (odd/tasks/codex-review-lean.md) are what set it. `js-harness codex-review --part-lines <n>` takes another.
+// How many changed lines (additions plus deletions) a part holds at most. Measured against larger parts and
+// kept by decision: one review in larger parts cost less and did not find one defect that parts of this
+// size had found (odd/tasks/codex-review-cost.md, `## Progress`, the entry of T5 on 2026-10-09).
+// `js-harness codex-review --part-lines <n>` takes another.
 export const PART_MAX_CHANGED_LINES = 400;
 
 // How many files a part holds at most, however few lines they change. Every path of a part goes on one git

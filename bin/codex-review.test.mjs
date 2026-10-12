@@ -2650,7 +2650,7 @@ test('a run line says which model and effort its session really ran with, read f
 // --- one model: a review whose session ran on anything but what the command passed does not stand ---
 
 // What a refusal over the model or the effort ends with, after the two it names.
-const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nRerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nRerun the review in a turn of the gate lock: `js-harness gate -- js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
 
 /** A lean review of `root` that showed the whole patch, rendered `FINDINGS` and answered with three
  * findings, in a session whose own rollout file says it ran with `ran` (a `turnContext`, or none). */
@@ -2721,7 +2721,7 @@ test('a lean review whose session names no model does not stand: a review that c
     assert.equal(
       result.err,
       `Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n` +
-        'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.',
+        'Rerun the review in a turn of the gate lock: `js-harness gate -- js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.',
     );
     // Nothing of the answer, as for a session that ran on another model: nobody can say whose review it is.
     assert.equal(result.shown, '', 'what Codex rendered is not passed through');
