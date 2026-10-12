@@ -251,7 +251,10 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
   assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] -- <command>.*exit code is the command's/m);
   const refused = run(['gate', '--no-wait']);
   assert.equal(refused.status, 2);
-  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n$/);
+  // The last line of the usage says what the two flags of a wait mean, since 2026-10-11: the bound counts from
+  // the last time the lock changed hands, which "--wait <minutes>" does not say by itself.
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+.*It waits for its turn in the order the gates arrived; --wait is how many minutes the lock may go without changing hands before it gives up \(60 when not given\), and --no-wait refuses at once\./m);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-gate-home-'));
   try {
     const ran = run(['gate', '--home', home, '--', 'node', '-e', "console.log('through the gate'); process.exit(3)"]);

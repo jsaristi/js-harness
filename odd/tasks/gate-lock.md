@@ -1280,6 +1280,9 @@ machine said by a gate when it starts (2026-10-11: two gates were slow, one time
 a video and a language server no session saw); fewer git processes in the two long test
 files; the gate on GitHub. A run that needs the machine quiet, and not only its turn (an
 evals batch that compares durations), is a need the lock does not serve.
+Since 2026-10-11 the turns of the lock, given in the order the gates arrived, and what
+`--wait` bounds are `odd/tasks/gate-turn.md`; what this document says of a wait of an hour
+counted from the arrival is the lock as it was before that feature.
 Rules learnt, to keep: a commit that will be reviewed stays under about 1,200 changed
 lines; nothing untracked when a review is assessed; a Codex review wants a clean tree
 (set this document aside with `git stash`, one stash, popped by the same command); no

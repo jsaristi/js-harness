@@ -267,6 +267,110 @@ test('reap kills the pids it is given now, with their identity, and leaves what 
   assert.equal(host.spawnSync.calls[3].options.env.JS_HARNESS_KILL_TARGETS, '300@5200');
 });
 
+/** The host of a look on Windows: a probe by number finds the pids `answering()` gives at that moment, and each
+ * snapshot is the next of `snapshots`. `probes` keeps what was asked of a number. */
+function lookHost(snapshots, answering) {
+  const probes = [];
+  const kill = (pid, signal) => {
+    probes.push([pid, signal]);
+    if (!answering().includes(pid)) throw Object.assign(new Error('no such process'), { code: 'ESRCH' });
+    return true;
+  };
+  return { platform: 'win32', spawnSync: scripted(snapshots.map((snapshot) => ({ stdout: rows(...snapshot) }))), kill, probes };
+}
+
+test('a look knows a recorded process by its pid and its creation time: a number that another process took after the recorded one died is not alive, and the look says who has it', () => {
+  const agent = { pid: 200, ppid: 1, createdAt: 5100, name: 'node.exe' };
+  const grandchild = { pid: 300, ppid: 200, createdAt: 5200, name: 'node.exe' };
+  // After the kill both are dead, and Windows gave the grandchild's number to the console host of a later PowerShell.
+  const shell = { pid: 900, ppid: 1, createdAt: 9000, name: 'powershell.exe' };
+  const stranger = { pid: 300, ppid: 900, createdAt: 9050, name: 'conhost.exe' };
+  let answering = [200, 300];
+  const host = lookHost([[agent, grandchild], [agent, grandchild], [shell, stranger]], () => answering);
+  const reaper = createReaper(host);
+  reaper.pids([200, 300], { since: 5000 });
+  const before = reaper.look([200, 300]);
+  assert.deepEqual(before.map(({ pid, alive }) => [pid, alive]), [[200, true], [300, true]], 'both answer, and are the processes that were recorded');
+
+  answering = [300];
+  const [first, second] = reaper.look([200, 300]);
+  assert.deepEqual([first, second].map(({ pid, alive }) => [pid, alive]), [[200, false], [300, false]], 'the number answers, the process that was recorded does not');
+  assert.equal(first.found, null, 'nothing answered to 200, so there is nothing to say of it');
+  assert.match(before[1].found, /pid 300 is still the process that was recorded: node\.exe, created 1970-01-01T00:00:05\.200Z, parent 200 \(node\.exe\)/);
+  assert.match(second.found, /pid 300 is another process now: conhost\.exe, created 1970-01-01T00:00:09\.050Z, parent 900 \(powershell\.exe\); the process recorded was created 1970-01-01T00:00:05\.200Z/);
+  assert.ok(host.probes.length > 0 && host.probes.every(([, signal]) => signal === 0), 'a look only asks: it sends no signal');
+});
+
+test('a look asks the number first and takes a snapshot only for one that answered; a process it never recorded, or one gone before the snapshot, is not alive, and a snapshot that failed throws', () => {
+  let answering = [];
+  const host = lookHost([[proc(200, 1, 5100)], [proc(200, 1, 5100), proc(400, 1, 5300)], [proc(1, 0, 4000)]], () => answering);
+  const reaper = createReaper(host);
+  reaper.pids([200]);
+  assert.deepEqual(reaper.look([]), []);
+  assert.deepEqual(reaper.look([200, 400]), [{ pid: 200, alive: false, found: null }, { pid: 400, alive: false, found: null }]);
+  assert.equal(host.spawnSync.calls.length, 1, 'no number answered: only the snapshot that recorded 200 was taken');
+
+  answering = [400];
+  const [unrecorded] = reaper.look([400]);
+  assert.equal(unrecorded.alive, false, 'a process that runs, and that the test never recorded, is not the test\'s');
+  assert.match(unrecorded.found, /pid 400 is another process now: x\.exe.*parent 1, which is not running; no process was recorded under that number/);
+
+  answering = [200];
+  const [ended] = reaper.look([200]);
+  assert.equal(ended.alive, false);
+  assert.match(ended.found, /pid 200 answered, and the snapshot taken next lists no process with that number \(the process recorded was created 1970-01-01T00:00:05\.100Z\)/);
+
+  assert.throws(() => createReaper(lookHost([], () => [200])).look([200]), /snapshot/, '"not alive" is never read from "could not look"');
+});
+
+test('a look throws for a recorded process that answers under a row with no creation time, and only after three snapshots: its identity cannot be told, so it is neither alive nor gone', () => {
+  const agent = { pid: 200, ppid: 1, createdAt: 5100, name: 'node.exe' };
+  const unnamedTime = { pid: 200, ppid: 1, createdAt: null, name: 'node.exe' };
+  // The first snapshot is the one that learns the pid; the look then takes three, and each still has no creation time.
+  const host = lookHost([[agent], [unnamedTime], [unnamedTime], [unnamedTime]], () => [200]);
+  const reaper = createReaper(host);
+  reaper.pids([200], { since: 5000 });
+  assert.throws(() => reaper.look([200]), /pid 200 answers.*no creation time.*identity could not be told.*stayed so over 3 snapshots/);
+  assert.equal(host.spawnSync.calls.length, 4, 'one snapshot learned the pid, and the look took three before it threw');
+});
+
+test('a look that finds a recorded process under a row with no creation time takes the look again: the second snapshot names it, and it is alive', () => {
+  const agent = { pid: 200, ppid: 1, createdAt: 5100, name: 'node.exe' };
+  const unnamedTime = { pid: 200, ppid: 1, createdAt: null, name: 'node.exe' };
+  // A process in the middle of its exit: listed with an empty creation time for an instant, then as the process it was.
+  const host = lookHost([[agent], [unnamedTime], [agent]], () => [200]);
+  const reaper = createReaper(host);
+  reaper.pids([200]);
+  const [look] = reaper.look([200]);
+  assert.equal(look.alive, true);
+  assert.match(look.found, /pid 200 is still the process that was recorded: node\.exe, created 1970-01-01T00:00:05\.100Z/);
+  assert.equal(host.spawnSync.calls.length, 3, 'one snapshot learned the pid, and the look took two');
+});
+
+test('a look that finds a recorded pid under a row with no creation time, and then no longer answers to it, is not alive and found is null', () => {
+  const agent = { pid: 200, ppid: 1, createdAt: 5100, name: 'node.exe' };
+  const unnamedTime = { pid: 200, ppid: 1, createdAt: null, name: 'node.exe' };
+  // The number answers at the first look and does not at the second: the second look asks it again and finds nothing.
+  let asks = 0;
+  const host = lookHost([[agent], [unnamedTime]], () => (asks += 1) === 1 ? [200] : []);
+  const reaper = createReaper(host);
+  reaper.pids([200]);
+  assert.deepEqual(reaper.look([200]), [{ pid: 200, alive: false, found: null }]);
+  assert.equal(host.spawnSync.calls.length, 2, 'one snapshot learned the pid, and the first look took one');
+});
+
+test('on POSIX a look is the answer to the number, since no creation time is read there, and nothing is spawned', () => {
+  const never = () => assert.fail('nothing is spawned on POSIX');
+  const kill = (pid) => {
+    if (pid === 322) throw Object.assign(new Error('gone'), { code: 'ESRCH' });
+    if (pid === 323) throw Object.assign(new Error('not yours'), { code: 'EPERM' });
+  };
+  const looks = createReaper({ platform: 'linux', spawnSync: never, kill }).look([321, 322, 323]);
+  assert.deepEqual(looks.map(({ alive }) => alive), [true, false, true], 'a process this user may not signal runs all the same');
+  assert.match(looks[0].found, /pid 321 answers/);
+  assert.equal(looks[1].found, null);
+});
+
 test('on POSIX there is no creation time to read, so a learned pid is signalled by its number, and no command runs', () => {
   const never = () => assert.fail('nothing is spawned on POSIX');
   const sent = [];

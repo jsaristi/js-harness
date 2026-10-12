@@ -538,12 +538,57 @@ function duration(ms) {
 /** The bound of a wait as `--wait` takes it: `1 minute`, `2.5 minutes`. */
 const minutes = (count) => `${count} minute${count === 1 ? '' : 's'}`;
 
-/** The gate a holder of the lock is, for a message: the folder it checks, with its pid and start time
- * where its file says them. A holder of whom nothing is known (a file that could not be read, a lock
- * folder that could not be listed) is "another gate". */
-function gateOf(holder) {
-  const said = [holder.pid !== null && `pid ${holder.pid}`, holder.startedAt !== null && `started ${holder.startedAt}`].filter(Boolean);
-  return `${holder.cwd === null ? 'another gate' : `the gate of ${holder.cwd}`}${said.length ? ` (${said.join(', ')})` : ''}`;
+/** A gate for a message: the folder it checks, with its pid and `since`, a time with the word for it,
+ * where its file says them. A gate of whom nothing is known is "another gate". */
+function gateSaid(gate, since) {
+  const said = [gate?.pid != null && `pid ${gate.pid}`, since].filter(Boolean);
+  return `${gate?.cwd == null ? 'another gate' : `the gate of ${gate.cwd}`}${said.length ? ` (${said.join(', ')})` : ''}`;
+}
+
+/** The gate a holder of the lock is, for a message, with when it took the lock. A holder of whom nothing
+ * is known (a file that could not be read, a lock folder that could not be listed) is "another gate", and
+ * so is a holder a refusal did not name. */
+const gateOf = (holder) => gateSaid(holder, holder?.startedAt != null && `started ${holder.startedAt}`);
+
+/** The gate that waits ahead of this one in the line for the lock, for a message, with since when it
+ * waits. It holds nothing, and is never named with the words of a holder. */
+const waitingGateOf = (gate) => gateSaid(gate, gate?.waitingSince != null && `waiting since ${gate.waitingSince}`);
+
+/** How many gates are before this one, said at the end of a line about a wait when the gate that line
+ * names is not the only one. */
+const aheadSaid = (line) => (line?.ahead > 1 ? `; ${line.ahead} gates are ahead of this one, that one included` : '');
+
+/** What `--wait <minutes>` and `--no-wait` mean, for the usage of `check` and of `js-harness gate`, which
+ * take the two flags alike. The bound is not on the whole of a wait (`takeGateLock`). */
+export const GATE_WAIT_USAGE =
+  "       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (60 when not given); --no-wait: refuse at once instead of waiting";
+
+/** The sentence of a refusal of the lock (`takeGateLock`), for a gate that was given `waitMinutes`: which
+ * gate it was refused for, and whether that gate held the lock or waited ahead of this one for it. A wait
+ * that ran out says how long the lock had not changed hands, which is what the bound is set on, and how
+ * long the whole wait was where the two differ: behind a line that moved, a gate may have waited far
+ * longer than its bound. */
+function refusalSaid({ refused, holder, line, waitedMs, stillMs, besideOlder }, waitMinutes) {
+  if (refused === 'held') return `${gateOf(holder)} holds the machine's gate lock, and --no-wait was given`;
+  if (refused === 'ahead') {
+    return `${waitingGateOf(line?.head)} waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`;
+  }
+  const inAll = `this gate had waited ${duration(waitedMs)} in all`;
+  // Beside a gate of an older version no line is kept, and the bound was not counted from the last change of
+  // hands alone: it counts from the arrival, or from a change of hands read while the line was kept. So the
+  // words "without the lock changing hands" would be untrue here (found in review, 2026-10-11).
+  if (refused === 'timeout' && besideOlder) {
+    const who = holder ? `${gateOf(holder)} holds the machine's gate lock now` : `${waitingGateOf(line?.head)} waits ahead of this one for the machine's gate lock, which no gate holds`;
+    return `${who}; ${inAll}, and a gate of an older version of js-harness waited beside it, which keeps no line, so the bound counted from its arrival or from the last change of hands read while the line was kept (--wait gives up after ${minutes(waitMinutes)})`;
+  }
+  const bound = `(--wait gives up after ${minutes(waitMinutes)} without the lock changing hands)`;
+  // A lock that did not tell is one that never changed hands while this gate waited, as far as is known.
+  const still = Number.isFinite(stillMs) ? stillMs : waitedMs;
+  if (!holder) {
+    return `${waitingGateOf(line?.head)} waited ahead of this one and did not take the machine's gate lock, which no gate held: the lock had not changed hands for ${duration(still)}, and ${inAll} ${bound}`;
+  }
+  if (still < waitedMs) return `${gateOf(holder)} still held the machine's gate lock ${duration(still)} after it took it, and ${inAll} ${bound}`;
+  return `${gateOf(holder)} still held the machine's gate lock after ${duration(waitedMs)} ${bound}`;
 }
 
 // A lock taken at once took a few milliseconds, and the report of a gate that waited for nobody says
@@ -556,14 +601,23 @@ export const GATE_WAIT_SAID_MS = 1000;
  * says the wait, `command` what the holder's file says it runs, in the folder `cwd`.
  *
  * Whoever finds the lock held waits for it, and says on stderr, as the wait begins and for each gate it
- * then waits for, whose gate that is and for how long at most from then on, which is what is left of the
- * bound and not the whole of it: the caller is a commit running in the background, and a silent wait
- * reads as a hang.
+ * then waits for, whose gate that is and for how long at most from then on: the caller is a commit running
+ * in the background, and a silent wait reads as a hang. That is what is left of the bound, which is how
+ * long the lock may go without changing hands (`waitMinutes`, as `--wait` takes it), so with each new
+ * holder it is the whole bound again. A first version said the whole bound in every line when the bound
+ * counted from the arrival, with most of it spent by the second line (found in review, 2026-10-10); it is
+ * what is true since the bound counts from the last change of hands (2026-10-11).
+ *
+ * The lock is a line, and what is said of a gate is true of that gate. A gate that holds the lock is
+ * "waited for to finish". One that only waits ahead of this one, with the lock free, is "stood behind"
+ * and said to wait for its turn: it holds nothing, and is never named in a holder's words. A line says
+ * how many gates are ahead of this one when the gate it names is not the only one.
  *
  * Resolves to `{ lock }` once the lock is held (`takeGateLock`), for the caller to release. Resolves to
- * `{ refused, reason }` when nothing may run: the lock is held and `wait` is off (`reason` is `held`), or
- * the wait went past `waitMinutes` (`timeout`); `refused` is the sentence that says which, and names the
- * holder. Resolves to
+ * `{ refused, reason }` when nothing may run: `wait` is off and the lock is held (`reason` is `held`) or a
+ * gate waits ahead of this one for a lock nobody holds (`ahead`), or the lock went `waitMinutes` without
+ * changing hands (`timeout`); `refused` is the sentence that says which, names the gate, and says whether
+ * it holds the lock or waits for it (`refusalSaid`). Resolves to
  * `{ without }` when the lock cannot be taken at all (the home cannot be written, or a lock is there of
  * which nothing could be read for a minute, which is no gate to wait an hour for): `without` names the
  * lock and why, and the caller runs without it and says so, since the lock guards the machine's time
@@ -571,47 +625,62 @@ export const GATE_WAIT_SAID_MS = 1000;
  *
  * Every outcome also says whom this gate waited for and for how long, which is what the gate log keeps
  * (`./lib/gate-log.mjs`): `waitedMs`, and `waitedFor`, the gates the lock told of while it waited, as
- * `[{ cwd, pid, command }]`. Each is there once, by the token of its holder's file, since the lock tells of
- * a gate again when its beat stops being readable, and with all that any telling of it read: a file that
- * was busy at first names its gate once it reads. A gate of which nothing is known is there once, with
- * nothing said of it. The gate a refusal names is among them: told not to wait, a gate is told of nobody.
- * The lock says how long a wait was that ended in a lock or a refusal; one that ended in no lock at all
- * is timed here.
+ * `[{ cwd, pid, command }]`. They are the gates that held the lock, and no gate that only waited ahead of
+ * this one: such a gate is there from the moment it holds the lock, if this gate still waits then. Each is
+ * there once, by the token of its holder's file, since the lock tells of a gate again when its beat stops
+ * being readable, and with all that any telling of it read: a file that was busy at first names its gate
+ * once it reads. A holder that gave no token (a lock folder that could not be listed gives none) cannot be
+ * met again by its name, so it is there once for each thing that was read of it: a gate of which nothing
+ * is known is there once, with nothing said of it, and what was read of one such holder is never said of
+ * another. A first version kept one entry for every holder without a token, and added to it what each of
+ * them said (found in review, 2026-10-11). The gate a refusal names is among them when it held the lock:
+ * told not to wait, a gate is told of nobody. The lock says how long a wait was that ended in a lock or a
+ * refusal; one that ended in no lock at all is timed here.
+ *
+ * `session` is the id of the host's session that started the gate, or `null` where the host gives none:
+ * the lock writes it in the gate's file, where the session board reads it. `check` and `js-harness gate`
+ * pass what their environment says (`CLAUDE_CODE_SESSION_ID`).
  * `take` stands in for `takeGateLock`, so a test stands in for the lock or runs the real one on its own
  * clock. */
-export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes }, take = takeGateLock) {
+export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null }, take = takeGateLock) {
   const waitMs = waitMinutes * 60_000;
   const met = new Map();
   // One entry for each token, to which a later telling adds what the entry does not have yet: a holder's
   // file that is busy at the first look is told of by its token alone, and with its folder and command once
-  // it reads. What is known is never taken back by a look that read less.
+  // it reads. What is known is never taken back by a look that read less. A holder with no token is known
+  // by what was read of it, so nothing is ever added to its entry.
   const meet = (holder) => {
-    const known = met.get(holder.token) ?? { cwd: null, pid: null, command: null };
-    met.set(holder.token, { cwd: known.cwd ?? holder.cwd, pid: known.pid ?? holder.pid, command: known.command ?? holder.command });
+    const said = { cwd: holder.cwd ?? null, pid: holder.pid ?? null, command: holder.command ?? null };
+    const key = holder.token != null ? `token ${holder.token}` : `no token ${JSON.stringify([said.pid, said.cwd, said.command])}`;
+    const known = met.get(key) ?? { cwd: null, pid: null, command: null };
+    met.set(key, { cwd: known.cwd ?? said.cwd, pid: known.pid ?? said.pid, command: known.command ?? said.command });
   };
   const waitedFor = () => [...met.values()];
-  const onWait = (holder, leftMs = waitMs) => {
-    meet(holder);
+  const onWait = (holder, leftMs = waitMs, line) => {
     // What is left of the bound when this gate is first waited for: the whole of it, as `--wait` takes
-    // it, while under a second is spent, which is the wait's first line.
+    // it, while under a second is spent, which is the first line of a wait and the line of each new holder.
     const left = waitMs - leftMs < GATE_WAIT_SAID_MS ? minutes(waitMinutes) : duration(leftMs);
+    if (!holder) {
+      // Nobody holds the lock, and the gate ahead is to take it: a gate that waits, which is not met as a
+      // gate this one waited for until it holds the lock.
+      console.error(`${name}: waiting behind ${waitingGateOf(line?.head)}, which waits for its turn at the machine's gate lock, for ${left} at most${aheadSaid(line)}`);
+      return;
+    }
+    meet(holder);
     // A holder that already reads stale is waited for a poll or two, not for the whole bound.
     const silent = holder.stale ? '; it has been silent for over a minute, and its lock is taken over if it stays so' : '';
-    console.error(`${name}: waiting for ${gateOf(holder)} to finish, for ${left} at most${silent}`);
+    console.error(`${name}: waiting for ${gateOf(holder)} to finish, for ${left} at most${silent}${aheadSaid(line)}`);
   };
   let lock;
   const askedAt = Date.now();
   try {
-    lock = await take({ home, cwd: path.resolve(cwd), command, wait, waitMs, onWait });
+    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait });
   } catch (err) {
     return { without: `the machine's gate lock, which could not be taken (${err instanceof Error ? err.message : String(err)})`, waitedMs: Date.now() - askedAt, waitedFor: waitedFor() };
   }
   if (!lock.refused) return { lock, waitedMs: lock.waitedMs, waitedFor: waitedFor() };
   if (lock.holder) meet(lock.holder);
-  const refused = lock.refused === 'held'
-    ? `${gateOf(lock.holder)} holds the machine's gate lock, and --no-wait was given`
-    : `${gateOf(lock.holder)} still held the machine's gate lock after ${duration(lock.waitedMs)} (--wait bounds the wait at ${minutes(waitMinutes)})`;
-  return { refused, reason: lock.refused, waitedMs: lock.waitedMs, waitedFor: waitedFor() };
+  return { refused: refusalSaid(lock, waitMinutes), reason: lock.refused, waitedMs: lock.waitedMs, waitedFor: waitedFor() };
 }
 
 /** Runs `run`, the sensors of the gate that checks `cwd`, while this gate holds the machine's gate lock
@@ -619,9 +688,11 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
  * rows, with a row named `gate` for whatever the lock did that a reader must know. Taken at once, which
  * is the common case, it adds none.
  *
- * The lock is taken as `takeGateTurn` says. The time a gate waited for it is an INFO row. It counts
- * against no sensor's timeout, which starts when the sensor does. With `wait` off, or past
- * `waitMinutes`, the row is a FAIL that names the holder and `run` is not called: a gate that ran
+ * The lock is taken as `takeGateTurn` says, in the turn of this gate in the line, for the session
+ * `session` (`null` where the host names none). The time a gate waited for it is an INFO row. It counts
+ * against no sensor's timeout, which starts when the sensor does. With `wait` off and the lock held or a
+ * gate ahead in the line, or once the lock went `waitMinutes` without changing hands, the row is a FAIL
+ * that names that gate, as the holder or as a gate that waits, and `run` is not called: a gate that ran
  * nothing must not look green.
  *
  * A lock that cannot be taken at all does not turn a gate red, since the lock guards the machine's time
@@ -641,8 +712,8 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
  * gate writes in its log. A gate that is refused writes one line there through `record`, where it has
  * one (`gateRecord` of `./lib/gate-log.mjs`), and a line that could not be written is one more row.
  * `takeGateLock` is injectable, as in `takeGateTurn`. */
-async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: take = takeGateLock }, run, record) {
-  const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes }, take);
+async function underGateLock(cwd, { home, wait, waitMinutes, session }, { takeGateLock: take = takeGateLock }, run, record) {
+  const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes, session }, take);
   const { waitedMs, waitedFor } = turn;
   if (turn.without) {
     return [gateRow(`the sensors ran without ${turn.without}, so another gate may have run at the same time`), ...(await run({ lock: 'none', waitedMs, waitedFor }))];
@@ -704,7 +775,7 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * that says which sensors did not run and for which paths, and no lock is taken, there being nothing to
  * run under it. `deps.git` stands in for the `spawnSync` that asks git what is staged.
  *
- * With `lock` (`{ home, wait, waitMinutes }`, which is what a gate passes) the sensors
+ * With `lock` (`{ home, wait, waitMinutes, session }`, which is what a gate passes) the sensors
  * run under the machine's gate lock in that home, and only when there is a sensor to run: see
  * `underGateLock`, which may add a row named `gate`. With `{ held: true }` for `lock`, which is what a
  * gate passes when it was started with the mark of a held lock (`GATE_HELD_ENV`), no lock is taken: the
@@ -1087,8 +1158,10 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   ]);
 }
 
-const USAGE =
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]';
+const USAGE = [
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
+  GATE_WAIT_USAGE,
+].join('\n');
 
 // A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage
 // error, not a silently-swallowed token that later crashes `path.join` with `undefined`.
@@ -1101,10 +1174,14 @@ function requireValue(argv, i, flag) {
 }
 
 /** How `argv` says to wait for the machine's gate lock, as `{ noWait, waitMinutes }`, for `check` and for
- * `js-harness gate`, which take the same two flags: `--wait <minutes>` bounds the wait (an hour when it
- * is not given; a fraction is taken, `0.5` for thirty seconds) and `--no-wait` refuses instead of
- * waiting. Throws `CheckArgError` when `--wait` is given without a value or with one that is not a number
- * of minutes above zero, and when it comes with `--no-wait`, which says the opposite. */
+ * `js-harness gate`, which take the same two flags. `--wait <minutes>` is how long the lock may go without
+ * changing hands before the gate gives up on it (an hour when it is not given; a fraction is taken, `0.5`
+ * for thirty seconds). It is not a bound on the whole of a wait, which it was until 2026-10-11: counted
+ * from the arrival, it refused a gate behind a line that moved, and a gate with four ahead of it lost its
+ * hour and its place (`takeGateLock`). `--no-wait` refuses instead of waiting, for a holder and for a gate
+ * that waits ahead in the line alike. Throws `CheckArgError` when `--wait` is given without a value or
+ * with one that is not a number of minutes above zero, and when it comes with `--no-wait`, which says the
+ * opposite. */
 export function parseGateWait(argv) {
   const at = argv.indexOf('--wait');
   const wait = at !== -1 ? requireValue(argv, at, '--wait') : undefined;
@@ -1181,6 +1258,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // A gate that runs sensors reads the machine's load before them, unless its environment switches that
   // off (`GATE_LOAD_ENV`, for a gate a test starts as a process of its own), and leaves its record in the
   // gate log of `home`, whatever the lock did, unless its environment switches that off (`GATE_LOG_ENV`).
+  // The gate's file in the lock says which session of the host started it, where the host names one
+  // (`CLAUDE_CODE_SESSION_ID`, read from the environment this was given, as `sessions` and `notify` read it).
   //
   // A gate whose static row has failed stops before its sensors: it hands `checkSensors` the names of the
   // rows that failed so far, and where that gate would have run its sensors it runs none, takes no lock and
@@ -1189,7 +1268,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // computed. The inner check and a push are outside this branch, and as they were.
   let stopped = false;
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes };
+    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null };
     const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
     const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy });
     rows.push(...sensed);

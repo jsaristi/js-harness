@@ -22,7 +22,7 @@ const USAGE = `Usage: js-harness <command>
 
 Commands:
   check       Run the budget and test gates.
-  gate        Run a command under the machine's gate lock, one at a time with the gates of every project: js-harness gate [--wait <minutes> | --no-wait] -- <command>. For a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals); its exit code is the command's. Every gate, a commit's included, leaves when it ran and under what in a file under the home (.js-harness/gate-log); js-harness gate log [--last <n>] prints the last gates of the machine's gate log, one a line: when, seconds, result, load, whom it waited for, folder.
+  gate        Run a command under the machine's gate lock, one at a time with the gates of every project: js-harness gate [--wait <minutes> | --no-wait] -- <command>. It waits for its turn in the order the gates arrived; --wait is how many minutes the lock may go without changing hands before it gives up (60 when not given), and --no-wait refuses at once. For a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals); its exit code is the command's. Every gate, a commit's included, leaves when it ran and under what in a file under the home (.js-harness/gate-log); js-harness gate log [--last <n>] prints the last gates of the machine's gate log, one a line: when, seconds, result, load, whom it waited for, folder.
   init        Enable js-harness in this project: harness.json, AGENTS.md, the pre-commit gate.
   install     Write the skills and record a manifest under a home.
   sync        Move the project to its pinned version (inside one) or re-write the machine install (--global, or outside a git repository).
