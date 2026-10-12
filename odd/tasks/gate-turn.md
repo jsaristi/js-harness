@@ -698,6 +698,51 @@ S2 is T4 with T5. S3 is T6.
   lock (`stop-review-turn.sh`), and in that turn Codex reviews the same range only if the
   capture says approved with no finding: its plan is 3 parts, 937 lines, about 720,000
   input tokens, under 1,200 a line.
+- 2026-10-11 23:18 · A real gate that stops, in `feat/gate-stop` at `51bb685`, while the
+  gate of `rules-list` held the lock: one line added to `AGENTS.md` put it over its budget,
+  `node bin/check.mjs` ran, and the file was restored. Exit 1 in 2.3 seconds. Its rows:
+  `PASS failures`, `FAIL  budget  1519 estimated tokens (budget 1500)`, `PASS contracts`,
+  the two `payload` rows, and last `FAIL  gate  no sensor ran: this gate stopped before
+  its sensors, since the row budget fails, so no test ran and nothing here says that the
+  tests pass; the machine's gate lock was not taken`. No `load`, no `tests`, no `review`,
+  no `codex-review`. The gate log got its line: the branch's `gate log --last 2` prints
+  `10-11 23:18:01  stopped before its sensors (budget)  D:\js-harness-worktrees\gate-stop`,
+  and the reader on `main`, asked the same, prints the two gates before it and leaves
+  that line out in silence, as "JH 6" said its reader would.
+- 2026-10-11 23:16 · `main` moved to `d94a765` (pull request 67), told by the orchestrator
+  and read in `git log origin/main`. The merge commit of this branch, which had waited
+  for the lock since 22:29:55 without getting it, was stopped, the merge of `40ccb45`
+  aborted and the merge of `d94a765` made in its place, clean again; its turn was asked
+  anew with this branch's own lock. The stop's branch and T9 merge the new `main` after
+  their reviews, each with a gate. A Codex review starts at the merge-base
+  (`bin/codex-review.mjs:1192`), so the ones already asked with `--base origin/main`
+  review the same range as before `main` moved.
+- 2026-10-12 00:04 · gentle-ai on the stop's slice (`main..51bb685`): approved, and
+  acknowledged with its exact command (`stop-capture.json`, `stop-ack.json`). Its turn was
+  asked at 23:00:40 and taken at 00:02:22, an hour behind six gates. Two findings, neither
+  blocking, both right and both taken, route inline (one option, three assertions, one
+  sentence): the listing of the working tree (`untrackedPaths`) had no timeout and is
+  asked twice while the lock is held, so it is bounded at twenty seconds and a git ended
+  there counts as one that did not say; and the roadmap said the row `tree` shows what a
+  sensor leaves behind, where it compares two listings of the whole tree and cannot say
+  who wrote a path. Codex did not run in that turn: the script ran it only on an approval
+  with no finding, which this was not. A mistake of this session in that script, with no
+  cost this time: it counted the findings as `advisory_findings.length`, and that field is
+  an object with a list `findings` inside, so the count was never a number and no approval
+  could have passed it. A condition on a tool's answer is written from an answer read, not
+  from its remembered shape. Next turn there, asked at 00:06:30 (`stop-fix-turn.sh`): `main`
+  (`d94a765`) merged, red and green of the timeout's tests, the commit of the fix, whose
+  gate runs on the merged tree, and Codex on `origin/main..HEAD` only after that commit.
+- 2026-10-12 00:18 · `main` (`d94a765`) merged into this branch, `19d05a9`, and the whole
+  gate passed (`turnm-gate.log`), in a turn taken with this branch's own `gate`: asked at
+  23:17:45, taken at 00:04:24 behind five gates of older versions, ended 00:18:52. It is
+  the first real gate the line's code took and released. gentle-ai for what is not
+  reviewed yet, T3b and T3c: assessed in a detached worktree at `e1786bf`
+  (`gate-turn-review`, made for this and removed after), so that the range is the
+  slice and not the merge of `main` with it: `15f06b2..e1786bf`, medium risk, 548 lines,
+  due; started with consent granted, lineage `review-5057e024d1ac90a4`, one lens. Its
+  capture and the Codex review of T3c alone (`--base e1786bf^`, 102 lines by the gate's
+  own row) are one turn of the lock (`turn2-review-turn.sh`).
 
 ## Next
 The commit of T3c in a turn of the lock (red of its new tests against the old code, then the
