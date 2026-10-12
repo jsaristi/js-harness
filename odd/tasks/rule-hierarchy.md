@@ -1270,6 +1270,18 @@ names it, and the entry stays open until it does.
   fence from a code span and keeps a `<!--` inside a fence from opening a comment. Found on
   the way and not changed here: `js-harness progress` counts a checkbox shown in a fence
   indented under a list item as a step, for the same reason.
+- 2026-10-11, that fix is `5c246bd` (gate 18:22 to 18:49, `PASS  tests`). Codex reviewed it
+  alone (18:50 to 19:04): 236,419 input tokens for 72 changed lines, 3,284 a line where its
+  plan said 1,140. A review of a small commit costs what Codex reads around it, not what the
+  commit changes, so the plan is far under for small commits; the three runs of the slice are
+  1,217,544 input tokens for 1,699 lines, 717 a line. It found one more: with the new option a
+  marker indented past three spaces closed a fence opened at the margin, so an example inside
+  such a fence became a task and the real task after it was lost. A fence now closes by the
+  rule it opened with. Known and not built: an indented code block outside a list that holds
+  a fence marker is read as a fence when the option is on. Decided by this session, to end a
+  round that could go on: this is the last correcting commit of the slice; the push rule
+  wants a Codex record for it, and whatever that run finds is written in the pull request as
+  work to follow, not corrected in a fifth round.
 
 ## Next step
 In this order. (1) The reviews of what follows `5b754dd`:

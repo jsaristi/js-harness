@@ -467,6 +467,12 @@ test('a fence indented under a task that holds "<!--" hides no task after it', (
   assert.equal(holdsPhrase(document, 'an opening that never closes', { unchecked: true }), false);
 });
 
+test('a fence at the margin that holds a deeper marker still hides its example and no task after it', () => {
+  const document = ['```', '    ```', '- [ ] T6 an example of a task', '```', '- [ ] T5 the row prints every entry', ''].join('\n');
+  assert.equal(holdsPhrase(document, 'an example of a task', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'the row prints every entry', { unchecked: true }), true);
+});
+
 test('three backticks that open a code span in a wrapped line open no fence', () => {
   const document = ['- [ ] T4 the gate stops early, and its message is', '    ```no sensor ran``` in one line', '- [ ] T5 the row prints every entry', ''].join('\n');
   assert.equal(holdsPhrase(document, 'its message is ```no sensor ran``` in one line', { unchecked: true }), true);

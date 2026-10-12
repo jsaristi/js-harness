@@ -117,13 +117,15 @@ export function tokenize(markdown, { stripComments = false, indentedFences = fal
       ({ text: raw, inComment } = uncomment(original, inComment));
     }
     if (fence) {
-      if (isFenceClose(raw, fence, pattern)) fence = null;
+      if (isFenceClose(raw, fence, fence.pattern)) fence = null;
       tokens.push({ fence: true, line: raw });
       continue;
     }
     const opened = matchFenceOpen(raw, pattern);
     if (opened) {
-      fence = opened;
+      // A fence closes by the rule it opened with: one that opened within three spaces is closed
+      // only by a marker within three, so a deeper marker inside it is still its content.
+      fence = { ...opened, pattern: matchFenceOpen(raw, FENCE_OPEN_PATTERN) ? FENCE_OPEN_PATTERN : pattern };
       tokens.push({ fence: true, line: raw });
       continue;
     }
