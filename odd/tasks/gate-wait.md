@@ -1526,6 +1526,28 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   whether the real path stays covered); a measure planned against the 95 s of noise
   (summed child-seconds, or the same tree twice); slices of about 1,200 lines at most,
   both reviews each; its size to the orchestrator before building. Cut 2 of git: not now.
+- 2026-10-12 · **T13 is committed, `9c0c8e9`** on `feat/gate-doc-checks`
+  (`t13b-turn.log`, 15:48:56 to 16:03:12). RED 15:49:01: with the tests alone the file
+  does not load, since it imports what is not there yet (1 of 1 fails; a red by import,
+  the weakest kind). GREEN 15:49:54: 175 of 175 of `bin/check.test.mjs`. The two declared
+  sensors of documents, for real: the rules check 0.24 s, the two test files 3.25 s (227
+  of 228 pass, one skipped). The commit's gate: `PASS  tests`; its review row: medium
+  risk, 343 lines, not due (under budget), so gentle-ai runs no review of it. Codex's
+  plan, read at 16:04: 339 changed lines, about 400,000 input tokens, inside the rate
+  (406,800, with its margin 427,140). `main` merges clean into it (`git merge-tree`).
+  **In the line as `t13c-turn.sh`:** Codex on that commit, once, measured by process (M2's
+  number for Codex), then the merge of `main` as `--no-commit` and a commit the pre-commit
+  hook gates. Exit 11: the plan was over the rate or not read; 12: no record; 15: the
+  merged tree failed. Then push, pull request, and the orchestrator.
+- 2026-10-12 · **T14, the first writer handed back** (Haiku at high, 163,483 tokens, no
+  test run): the run is a parameter of the four entries (`evals/runner.mjs`,
+  `evals/task-proof.mjs`, `evals/isolation-probe.mjs`; the local name is `start`, since
+  three of those functions already hold a `run`), and `sweepLater` and `sweptLater` are in
+  `bin/lib/process-tree.testkit.mjs` with eight tests in `bin/lib/process-tree.test.mjs`.
+  Read by me, the shipping diff and the testkit function, line by line: as designed. One
+  thing it added, kept: the look throws when a survivor outlives its kill, as the real
+  sweep does. One line of a comment in `evals/isolation-probe.mjs` is too long: to wrap
+  before the commit. The second writer (the three eval test files) still works.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
