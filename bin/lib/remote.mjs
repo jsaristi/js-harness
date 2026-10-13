@@ -622,10 +622,14 @@ export function remoteId(root, platform = process.platform) {
   return `${slug}-${createHash('sha256').update(absolute).digest('hex').slice(0, 12)}`;
 }
 
+/** The folder under `home` that holds what every project keeps for its remote server (`remoteFiles`). No manifest
+ * records it: `uninstall` looks for it by this path. */
+export const remoteDir = (home) => path.join(home, '.js-harness', 'remote');
+
 /** What the project `id` keeps under `home`, all in one folder: the record of its supervisor, the server's log,
  * the lock of a start or a stop, the marker a stop leaves, and the file a scheduled task is registered from. */
 export function remoteFiles(home, id) {
-  const dir = path.join(home, '.js-harness', 'remote');
+  const dir = remoteDir(home);
   return {
     statePath: path.join(dir, `${id}.json`), logPath: path.join(dir, `${id}.log`), lockPath: path.join(dir, `${id}.lock`),
     stoppedPath: path.join(dir, `${id}.stopped`), taskXmlPath: path.join(dir, `${id}.task.xml`),

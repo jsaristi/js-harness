@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { logTail, readServerState, remoteId, remoteMain } from './remote.mjs';
 import { forgetOptionalFile, forgetScheduledTask, manifestPath, readManifest, recordOptionalFile, recordScheduledTask, sha256, uninstall } from './lib/manifest.mjs';
 import { identifyProcesses } from './lib/process-tree.mjs';
-import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml } from './lib/remote.mjs';
+import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, remoteDir, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml } from './lib/remote.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 
 const SELF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs');
@@ -1800,8 +1800,10 @@ test('uninstall removes the launcher start --at-login wrote and deletes the task
   const world = fakeWorld();
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
   const file = launcherOf(startupDir, root);
-  const result = uninstall(home, { schtasks: world.tasks.run });
+  const result = uninstall(home, { schtasks: world.tasks.run, identify: world.deps.identifyProcesses });
   assert.deepEqual(result.removed, [file]);
+  // The server this start left running is not stopped by an uninstall: its folder stays, and is said.
+  assert.deepEqual(result.remoteKept.map(({ path: kept, reason }) => [kept, reason]), [[remoteDir(home), 'in-use']]);
   assert.deepEqual({ tasksRemoved: result.tasksRemoved, tasksKept: result.tasksKept }, { tasksRemoved: [taskNameOf(root)], tasksKept: [] });
   assert.deepEqual(fs.readdirSync(startupDir), []);
   assert.equal(world.tasks.store.size, 0);
@@ -1954,8 +1956,9 @@ test('start --at-login with a value only the launcher can hold does what it did 
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
   assert.match(world.err(), /claude/);
   assert.deepEqual(world.tasks.calls, [], 'decided before anything is written: schtasks is not even asked');
-  const result = uninstall(home, { schtasks: NO_SCHTASKS });
-  assert.deepEqual({ removed: result.removed, tasksRemoved: result.tasksRemoved, tasksKept: result.tasksKept }, { removed: [launcherOf(startupDir, root)], tasksRemoved: [], tasksKept: [] });
+  // No server was started, so nothing lives by the folder the start wrote its log in: it goes with the launcher.
+  const result = uninstall(home, { schtasks: NO_SCHTASKS, identify: world.deps.identifyProcesses });
+  assert.deepEqual({ removed: result.removed, tasksRemoved: result.tasksRemoved, tasksKept: result.tasksKept, remoteKept: result.remoteKept }, { removed: [launcherOf(startupDir, root), remoteDir(home)], tasksRemoved: [], tasksKept: [], remoteKept: [] });
 });
 
 test('a task recorded by an earlier start is not left running the earlier options when the new ones cannot be carried: it is deleted and forgotten, or the start refuses', { skip: WINDOWS_ONLY }, async () => {

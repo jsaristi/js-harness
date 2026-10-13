@@ -2073,6 +2073,48 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   tokens, "the patch is correct (confidence 0.94)", no finding). Codex on this slice:
   267,578 input tokens in two reviews. Left for the branch: one merge of `main`, the push
   and the pull request.
+- 2026-10-13, written at 14:13: slice (b1) is on `main` (pull request 95, merged 05:39 as
+  `d446ad8`, read with `gh`). The slice after it, in the lead's order, is the exact undo of
+  `uninstall --global`, on branch `fix/uninstall-pointers` cut from `53568ac`, three commits,
+  each test first and each seen failing for its reason in a turn at the gate.
+  `c5d3ecb`: Codex's finding on `pointersIn` of `bin/lib/manifest.mjs`. A record whose entry
+  was written into a list the user had made (it names no container as made) still counted
+  among the pointers that let `uninstall` delete a file an earlier install created, so the
+  user's own empty list went with the file; it no longer counts (`ownsNoList`), and a
+  manifest from before the field is read as it always was, which a test holds (gate PASS;
+  gentle-ai: medium, 59 lines, not due; Codex on `53568ac..c5d3ecb`: 95,171 input tokens,
+  "correct (confidence 0.92)").
+  `724e14f`: the reader's claim that `uninstall` leaves `~/.js-harness/remote/` was true
+  (`remote stop` leaves the server's log and the marker of the stop, and no manifest records
+  the folder). It now goes whole, with a manifest and without, unless something needs it:
+  a recorded supervisor that runs (`in-use`: `uninstall` stops no process), one that cannot
+  be told (`unknown`), a scheduled task that was kept, which the marker keeps from starting
+  the server (`task-kept`), or a folder that could not be looked at, listed or removed.
+  Each is said with what to run and exits 1; the result of `uninstall` gains `remoteKept`,
+  and the processes are looked at only for a recorded supervisor (`deps.identify`). Two
+  tests of `bin/remote.test.mjs` that call `uninstall` after a start now use their fake
+  world's processes and state what becomes of the folder (gate PASS; gentle-ai: medium, 342
+  lines, not due; Codex on `c5d3ecb..724e14f`: 196,934 input tokens, "incorrect (0.96)", one
+  finding, P2: a task the user edited loses its record at the first uninstall, so a second
+  one removed the folder and the marker under a task still registered).
+  `fe3e6b1`: that finding fixed. An edited task stays recorded while the remote folder is
+  kept, its entry of `tasksKept` says `recorded: true` and its line says so; with no remote
+  folder it loses its record as before, which a test holds (gate PASS; gentle-ai: medium, 91
+  lines, not due; Codex on `724e14f..fe3e6b1`: 125,064 input tokens, "correct (0.94)").
+  Codex on this slice: 417,169 input tokens in three reviews. `main` merged in as
+  `24c9651` at 06:59 (tests PASS, `check --push` exit 0), and once more, last, before
+  the push: it moved again while this session stood still. It stood still for seven hours:
+  the call that was to write this entry (asked at 07:00:14) never returned, and the lead
+  ended the turn with the app's stop at 14:10:56 (read in both transcripts: the lead's
+  `stop_session`, its line 11264, 235 ms before this session's "User rejected tool use").
+  The app words a stop by another session as the user's refusal, and this session took it
+  for his and said so to him and to the lead before it read the two files: he had rejected
+  nothing. What held the call is not known; a call the host holds for his approval looks
+  the same from inside. A CHANGE OF BEHAVIOUR for him to know, told to the lead: on a machine whose
+  remote server runs, `uninstall --global` now keeps that folder, says to run
+  `js-harness remote stop` in the project, and exits 1; before, it exited 0 and left the
+  server and the folder without a word. Not in this slice: a start or a stop of the remote
+  that is in progress at the instant of an uninstall is not looked for (its lock file).
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -2534,7 +2576,19 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 04:48, THE NEWEST OF ALL (read this first after a compaction).
+      STATE AT 2026-10-13 14:13, THE NEWEST OF ALL (read this first after a compaction).
+      Slice (b1) is on `main` (pull request 95). The exact undo of `uninstall` (the finding
+      on `pointersIn` and the folder `~/.js-harness/remote/`) is BUILT on
+      `fix/uninstall-pointers`, reviewed, with `main` merged in; its pull request is the
+      next act if this text is on a branch and not on `main` (Progress, the entry of this
+      hour). NEXT, in the lead's order, each its own slice cut from `main`: (b2) of T17 (the
+      `question` notice with fields, the answer with its number and copy, the withdrawal,
+      the resume's half), then (c) (the texts: the orchestrator skill, the sentences for
+      `AGENTS.md`, the two declared rules, the terms an installed project never defines);
+      then the rest of the paragraph two below, in its order: the key `effortLevel`, the
+      row of the Codex CLI, the yardstick, a full orchestrator, the pause's window, the
+      lead's two asks. The paragraph below is what came before.
+      STATE AT 2026-10-13 04:48 (the state before the one above).
       Slice (b1) is BUILT on `feat/open-questions` and goes in one commit after this text
       (Progress, 2026-10-13 04:48): then its reviews, one merge of `main` (at `abe9295`
       when this was written, no file of this branch among those it moved), the push and

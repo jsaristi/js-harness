@@ -365,7 +365,12 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   const tasksNotUndone = result.tasksKept.filter((task) => task.reason !== 'edited');
   for (const task of result.tasksKept) {
     if (task.reason === 'edited') {
-      console.log(`kept scheduled task ${task.name} (modified by you): it is no longer recorded, and schtasks /Delete /TN ${task.name} /F deletes it`);
+      // Beside a folder of `js-harness remote` that is kept, its record stays (see the folder's line below).
+      console.log(
+        task.recorded
+          ? `kept scheduled task ${task.name} (modified by you): it stays recorded while the folder of js-harness remote is kept for it; schtasks /Delete /TN ${task.name} /F deletes it, and js-harness uninstall --global then removes what is left`
+          : `kept scheduled task ${task.name} (modified by you): it is no longer recorded, and schtasks /Delete /TN ${task.name} /F deletes it`,
+      );
       continue;
     }
     const verb = task.reason === 'unremovable' ? 'delete' : 'look for';
@@ -408,6 +413,23 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   for (const channel of result.channelKept) {
     console.error(`could not remove ${channel.path} (${channel.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
   }
+  // The folder `js-harness remote` writes under the home, with the logs of the servers and the markers of
+  // their stops. It is removed (said above with the rest) unless something still needs it, and each such
+  // line says what to run: a server that runs is not stopped from here, one that cannot be told is not
+  // guessed at, and the marker stays while a scheduled task that was kept could start the server without it.
+  // Whichever it is, a folder is left that nothing records, so it goes to stderr and the uninstall fails.
+  for (const remote of result.remoteKept) {
+    if (remote.reason === 'in-use') {
+      console.error(`kept ${remote.path}: the remote server of ${remote.root ?? 'a project its record does not name'} is running (supervisor pid ${remote.pid}), and uninstall stops no process; run js-harness remote stop in that project, then js-harness uninstall --global again`);
+    } else if (remote.reason === 'unknown') {
+      console.error(`kept ${remote.path}: it cannot be told whether a remote server still runs: ${remote.why}; run js-harness uninstall --global again, or remove the folder by hand once you have checked that no remote server runs`);
+    } else if (remote.reason === 'task-kept') {
+      const several = remote.tasks.length > 1;
+      console.error(`kept ${remote.path}: the scheduled task${several ? 's' : ''} ${remote.tasks.join(', ')} ${several ? 'are' : 'is'} still registered, and the marker a stop left in that folder is what keeps ${several ? 'them' : 'it'} from starting the server again; run js-harness uninstall --global again once the task${several ? 's are' : ' is'} gone`);
+    } else {
+      console.error(`could not remove ${remote.path} (${remote.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
+    }
+  }
   if (
     result.removed.length === 0 &&
     result.kept.length === 0 &&
@@ -416,10 +438,11 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     result.tasksRemoved.length === 0 &&
     result.tasksKept.length === 0 &&
     result.gateKept.length === 0 &&
-    result.channelKept.length === 0
+    result.channelKept.length === 0 &&
+    result.remoteKept.length === 0
   ) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 ? 1 : 0;
+  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 ? 1 : 0;
 }
