@@ -2467,7 +2467,8 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 In this order. (1) The rest of the second part of T16b when `bin/codex-review.mjs` is free,
 after JH 8's S1 and its cut of the command's git calls are on `main`: the review's model and
 effort, and the reader of `codex-review-margin`. The lead says when the file is this
-session's (its word of 2026-10-12, 19:40, a claim); until then no new piece of code is
+session's (its word of 2026-10-12, in the message that told of pull request 82 merged at
+19:37, a claim); until then no new piece of code is
 started and the session stays stopped at this task end, at 85 percent of its context: a
 compaction comes before that piece. (2) T1, which takes section D of the proposal. T2 and T8
 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
