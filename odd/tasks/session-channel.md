@@ -2067,6 +2067,12 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   has no later answer, and its line shows what is left of it; `questionChanges` fills each
   session the look could not read with what the board before last read of it
   (`lastReadSessions`, which `watchBaseline` now uses too) before it derives the list.
+- 2026-10-13, written at 05:21: that fix is commit `b53efd7` (its turn at the gate 05:10 to
+  05:20: gate PASS, committed 05:19; gentle-ai: medium, 87 lines, not due; Codex on
+  `c11ed18..b53efd7`, planned at about 30,000 against 315,000: one part, 135,771 input
+  tokens, "the patch is correct (confidence 0.94)", no finding). Codex on this slice:
+  267,578 input tokens in two reviews. Left for the branch: one merge of `main`, the push
+  and the pull request.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
