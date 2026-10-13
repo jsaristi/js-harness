@@ -2141,6 +2141,26 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   Where it enters the harness, a candidate for JH 7's register: a session that started
   before the plugin was switched off keeps its language server; the look before a gate
   does not count it; the gate named it for hours and nothing acted on the name.
+- 2026-10-12 · **The effort commit is written and its turn is asked; state for a resume**
+  (written at the context pause, 88%; the orchestrator's word was to go on and let the
+  app compact). Branch `feat/review-effort-medium`, worktree
+  `D:\js-harness-worktrees\review-effort-medium`, off `main` `c632756`. The change, made
+  by `effort-edit.cjs` in the scratchpad, not committed until the turn commits it:
+  `bin/codex-review.mjs` 2 lines (the value at `:174`, the example in a comment at
+  `:742`); `bin/codex-review.test.mjs` 80 lines on which the words `high` and `medium`
+  change places, so a line that meant the review's effort says `medium` and a line that
+  meant another effort says `high`, and one line left alone (a comment on the high
+  figure of a range). Literals stay literals, as the file writes them; none became the
+  constant. **The turn, `effort-turn.sh`, asked at 21:25** (log `effort-turn.log`): RED
+  by the test that pins the value against the command as it is on `main`; GREEN on the
+  command's whole test file; the commit (message `effort-msg.txt`) with the whole gate;
+  the plan's own words (`effort-plan.log`); Codex once from that checkout if the printed
+  plan is inside 315,000. **To do when it ends:** read the log; if a test of another
+  file fails in the gate for naming `high` (`bin/check.test.mjs`, `evals/review/*`),
+  read which and fix in the same branch; then push, pull request (its body says in one
+  sentence that the declared rule still says high until JH 7's commit), the plan's words
+  and the head to the orchestrator. Exit 11 means the printed plan was over the
+  allowance: nothing was spent, and it goes to him through the orchestrator.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
@@ -2188,7 +2208,7 @@ is his tap). Done and merged: T11 (pull request 75), T13 (77), T14 (79, `main`
 **not pushed, on purpose**: it adds 1,773 git processes to the wall file, so it goes to
 `main` back to back with the cut built on it.
 
-1. **The Codex review at medium effort, first, on its own branch off `main`** (his tap,
+1. **The Codex review at medium effort, first, on its own branch off `main`: written, its turn asked at 21:25, see the last entry of Progress for where it stands** (his tap,
    the orchestrator's transcript line 8962). `REVIEW_EFFORT` to `'medium'`
    (`bin/codex-review.mjs:174`), code and tests alone: RED at the pin
    (`bin/codex-review.test.mjs:1045`); of that file's 64 lines with the literal, the ones
