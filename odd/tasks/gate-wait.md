@@ -2045,6 +2045,30 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   against 399,420). From now a spend over 1.05 times the larger of 300,000 and 1,200 a
   line is said in those words. And S1 stays unpushed until the cut is built on it and
   reviewed; the two pull requests then go back to back.
+- 2026-10-12 · **A TypeScript server of this session ran beside every measure of the day,
+  and is stopped** (the orchestrator's notice of 21:10; checked by me before it was
+  touched). `node tsserver.js`, pid 58892, started at 12:48:14, under
+  `typescript-language-server` (pid 12176), under a `cmd.exe`, under the `claude.exe`
+  (pid 60100) whose command line resumes this session's transcript and whose descendant
+  my own shell is. It had taken 14,082 s of processor time since it started, near half a
+  core on average over eight hours and 2.2 s in 2 s in the samples the gate itself
+  printed before every turn of mine. Stopped at 21:12 with `Stop-Process`; the pid is
+  gone, and the language server above it ended with it. Two other `tsserver.js` are
+  left (pids 56284 and 60128, started 21:09:17): they are another session's (their
+  chain ends in `claude.exe` pid 49656), idle over a 5 s sample, reported and left.
+  **Every measure of this document taken after 12:48 on 2026-10-12 had that process
+  beside it, half a core to more than one core that the process look before a gate does
+  not count**: M1b to M1e (735.6, 830.2, 705.2, 625.0 s), the gates quoted beside them
+  (554, 605, 535, 645 s), the shares of `node` in the tables by process, and the two
+  measures of a Codex review. The comparisons between them stand, since it ran beside
+  all; the absolute seconds are high by what it took. No measure is repeated for this;
+  the next whole run without it is the cleaner reading. **What I did not do:** the
+  gate's own first lines named `node tsserver.js (pid 58892)` at the top of the load in
+  every turn since the afternoon, I read those lines each time for the turn's result, and
+  never looked at whose process it was, though the note in memory says to.
+  Where it enters the harness, a candidate for JH 7's register: a session that started
+  before the plugin was switched off keeps its language server; the look before a gate
+  does not count it; the gate named it for hours and nothing acted on the name.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
