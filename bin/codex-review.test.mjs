@@ -1,4 +1,4 @@
-import { test, before, after } from 'node:test';
+import { test as registerTest, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
@@ -18,6 +18,32 @@ import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { isValidCodexReview } from './lib/codex-reviews.mjs';
 import { gitDirs } from './lib/project.mjs';
+
+// The tests of this file run as two processes. `node --test` gives each test file one process, and this
+// file's time is git processes started one after another, which made it the longest of the suite and so the
+// length of a whole run. Nothing is moved to shorten it. Run as itself the file registers the tests above
+// the one line `secondHalfStartsHere();`, the mark; `codex-review.second.test.mjs`, which sets a flag and
+// imports this file, registers the ones below it. So a test is in exactly one half by where it stands: a new
+// test goes in the section it belongs to and nothing else is done, and one of the second half is run by name
+// by giving `node --test` that second file.
+//
+// `test` is `node:test`'s own function in the half this process runs and a counter in the other, never a
+// function around it: the runner names a test by the line that called it, and a failing test must still
+// say this file and its own line. What stands at the top level runs in both processes: the two hooks below
+// (each process makes and removes its own folders, as two test files do), the helpers and the constants;
+// none of them starts a process or holds a port. There is no `describe` here; one that crossed the mark
+// would register its tests where it began, so the mark stays between two top-level tests.
+const SECOND_HALF = globalThis[Symbol.for('js-harness.codex-review.second-half')] === true;
+let leftToTheOtherProcess = 0;
+const notInThisProcess = () => {
+  leftToTheOtherProcess += 1;
+};
+let test = SECOND_HALF ? notInThisProcess : registerTest;
+let marks = 0;
+function secondHalfStartsHere() {
+  marks += 1;
+  test = SECOND_HALF ? registerTest : notInThisProcess;
+}
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
 // temporary folder too (`run` injects it), with a fixture for a Codex login, so no test reads, links or
@@ -3235,6 +3261,9 @@ test('when the tokens are not known the summary says so plainly, with no zeros a
   assert.ok(failed.out.includes('Codex ran for 0 s; its tokens are not known for this session (its Codex home held no token count): no items.'), failed.out);
 });
 
+// Half of this file's test time is above this line, by the durations of a run of it alone (2026-10-12).
+secondHalfStartsHere();
+
 // --- a large range, in parts: several lean sessions, one after another, each over some of the files ---
 
 /** The id of the `n`-th run of one command, from 1. */
@@ -6013,4 +6042,24 @@ test('quoteWindowsArg refuses what cmd.exe would act on', () => {
 
 test('windowsCommandLine joins the command and its quoted arguments', () => {
   assert.equal(windowsCommandLine('codex', ['exec', '--base', 'a b']), 'codex exec --base "a b"');
+});
+
+// --- the two processes of this file: each registers its half, and the second has a file that starts it ---
+
+registerTest(`this process runs the ${SECOND_HALF ? 'second' : 'first'} half of the tests of codex-review.test.mjs: the mark stands once, both halves hold tests, the other half is the other process's whole, and the file that starts the second sets its flag before it imports this one`, () => {
+  // The halves as the file writes them: its top-level tests above and below the one line that is the mark.
+  const lines = fs.readFileSync(new URL(import.meta.url), 'utf8').split(/\r?\n/);
+  const markAt = lines.flatMap((line, at) => (line === 'secondHalfStartsHere();' ? [at] : []));
+  assert.deepEqual([markAt.length, marks], [1, 1], 'the mark is one line of this file, and it ran once');
+  const tests = lines.flatMap((line, at) => (line.startsWith('test(') ? [at] : []));
+  const first = tests.filter((at) => at < markAt[0]).length;
+  const second = tests.length - first;
+  assert.ok(first > 0 && second > 0, `the first half holds ${first} tests and the second ${second}`);
+  // What this process did not register is the other half, to the test: so the two processes register every
+  // test of the file between them, and none twice.
+  assert.equal(leftToTheOtherProcess, SECOND_HALF ? first : second);
+  const starter = fs.readFileSync(new URL('./codex-review.second.test.mjs', import.meta.url), 'utf8');
+  const flag = starter.indexOf("globalThis[Symbol.for('js-harness.codex-review.second-half')] = true;");
+  const load = starter.indexOf("await import('./codex-review.test.mjs');");
+  assert.ok(flag !== -1 && load > flag, 'the second file sets the flag, and imports this file after it');
 });
