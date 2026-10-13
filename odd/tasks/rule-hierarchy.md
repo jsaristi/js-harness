@@ -1562,15 +1562,24 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       cover `859a797..6a721cc` and `b0ccff1..331090b`)
     - [ ] Second part: each constant reads its declaration, one file at a time, each told to
       the orchestrator before it is touched. Done: the four bounds whose files were free
-      (commit `21b391f`). Left: the model and the effort of a Codex review, when
-      `feat/gate-wait` is on `main`; the context pause, declared when its file is free
-    - [ ] Third part: model and effort as rules, as "Model and effort as rules" designs it:
+      (commit `21b391f`); the context pause, declared as `context-pause` and read by
+      `bin/lib/sessions.mjs` (commit `ca83a3d` on `feat/rules-context-pause`; gentle-ai
+      assessed it as not due, and Codex's record covers `e90e0a4..ca83a3d`, 204,919 input
+      tokens, the patch correct). The window and the share at which the host compacts are
+      not declared, against the design's line "the context pause and the window": they are
+      figures of the host, each with one home and a flag, not rules. Left: the model and the
+      effort of a Codex review and the reader of `codex-review-margin`, in
+      `bin/codex-review.mjs`, when `feat/gate-wait` is on `main`
+    - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
       `docs/model-effort.md`, and with T13 the checking half of B3 (the orchestrator's
       settlement of 2026-10-12). Built: the fields, the guarded read and the declarations
       (commit `528bf56`, approved by gentle-ai), the command (`34c2dfc` and the commit after
-      it). Left before it is checked off: gentle-ai on the command, Codex on all of it (held
-      for him by its plan), the row of `doctor`, and the check of launches (T13 with B3)
+      it), the block that holds sessions and sub-agents to the rules with no short name, the
+      checking half of B3 (pull requests 73 and 78, each with gentle-ai's approvals and
+      Codex's records). What it leaves, named: a row of `check` or `doctor` that calls the
+      command, whose files are open in other features; the hook that refuses a launch (T13),
+      which is his to approve
   - [ ] T16c The one command that changes a rule
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
@@ -2435,19 +2444,15 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     entry here, its push and pull request.
 
 ## Next step
-In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
-through the gate, gentle-ai on what the branch adds, Codex by its plan, push and the pull
-request on `main`. That closes the checking half of B3 as a block of `rules applied`; the
-hook of C8 that refuses a launch (T13) stays his, and a row of `check` or `doctor` that calls
-the command waits for those files. (2) The third part of T16b is then checked off, with what
-it leaves named. (3) The rest of the
-second part of T16b when its files are free: the review's model and effort
-(`bin/codex-review.mjs`, after `feat/gate-wait`), the context pause
-(`bin/lib/sessions.mjs`). (4) T3e. (5) T1, which takes section D of the proposal. T2 and
-T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
+In this order. (1) The pull requests of `fix/linux-run-findings` (two corrections from the
+run on Linux) and of `feat/rules-context-pause` (the context pause as a declared rule), each
+merged by the lead. (2) The rest of the second part of T16b when `bin/codex-review.mjs` is
+free, after `feat/gate-wait`: the review's model and effort, and the reader of
+`codex-review-margin`. (3) T3e. (4) T1, which takes section D of the proposal. T2 and T8
+wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
 "What the hosts allow" that T2 rests on are confirmed with a logging hook.
-His, written here and asked once when he is back (he is away from 2026-10-12 03:38 for about
-eight hours, by the lead's notice): what a Codex work session runs at; what the harness turns
+His, written here and in the lead's queue of his decisions (he is back since about 12:00 of
+2026-10-12): what a Codex work session runs at; what the harness turns
 on by default in a project that installs it; the paid measurement of documentation.
 A working rule since 2026-10-12, by the lead's notice of his words: after a compaction this
 session's first act is one line to the lead with its title, the hour, the share of its
