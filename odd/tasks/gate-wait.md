@@ -2161,6 +2161,28 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   sentence that the declared rule still says high until JH 7's commit), the plan's words
   and the head to the orchestrator. Exit 11 means the printed plan was over the
   allowance: nothing was spent, and it goes to him through the orchestrator.
+- 2026-10-12 · **The effort commit's turn ended red at the gate: three tests of other
+  files, and the commit cannot be code alone** (`effort-turn.log`, 21:25:22 to 21:39:05,
+  exit 9; nothing committed, nothing spent on Codex; the two files are staged in
+  `D:\js-harness-worktrees\review-effort-medium`). RED as meant (the pin, 1 of 1 fails
+  against `main`'s command); GREEN on the command's own file, 237 of 237 in 270 s. The
+  gate's failures (`effort-commit.log`):
+  1. `bin/lib/rules-bindings.test.mjs:12`, "the model and the effort of a Codex review
+     are the declared ones": `REVIEW_EFFORT` must equal the declared rule's value
+     (`bin/lib/rules-data.mjs:61-65`, `"high"`). **I told the orchestrator no code binds
+     that rule: wrong.** I searched the files that are not tests; the binding is a test.
+     So the rule's data (value, source with his tap at line 8962 of the orchestrator's
+     transcript, the render of `docs/RULES.md`, whatever hash `rules check` holds) rides
+     in this commit, by JH 7's text or by JH 7's hand first.
+  2. `evals/review/compare.test.mjs:309`, "each lean configuration is pinned at the
+     effort its committed readings were measured with, whatever effort `codex-review`
+     passes by default", and `:452`, "the current configuration is retired…": not read
+     yet. By its name the first should not depend on the default, so either the test or
+     `evals/review/compare.mjs` reads the default somewhere: read both before changing
+     either, and do not change what the comparison's committed readings say.
+  **Next for this branch:** read those two tests; get the rule's hunks from JH 7 through
+  the orchestrator (asked at 21:39); then one more turn (the script is `effort-turn.sh`:
+  it expects two changed files, so its check of the count changes with the files added).
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
@@ -2208,7 +2230,7 @@ is his tap). Done and merged: T11 (pull request 75), T13 (77), T14 (79, `main`
 **not pushed, on purpose**: it adds 1,773 git processes to the wall file, so it goes to
 `main` back to back with the cut built on it.
 
-1. **The Codex review at medium effort, first, on its own branch off `main`: written, its turn asked at 21:25, see the last entry of Progress for where it stands** (his tap,
+1. **The Codex review at medium effort, first, on its own branch off `main`: written, its first turn red at the gate for three tests of other files, see the last entry of Progress for what is owed** (his tap,
    the orchestrator's transcript line 8962). `REVIEW_EFFORT` to `'medium'`
    (`bin/codex-review.mjs:174`), code and tests alone: RED at the pin
    (`bin/codex-review.test.mjs:1045`); of that file's 64 lines with the literal, the ones
