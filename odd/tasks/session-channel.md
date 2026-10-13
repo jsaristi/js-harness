@@ -2195,7 +2195,29 @@ summary.
       merged, `main` `03d6d20`, and gentle-ai's outcome for its commit `0ccf615` was
       medium, 64 lines, not due (it was written in that pull request's body, since this
       document was not touched on that branch).
-      STATE AT 2026-10-12 20:32, THE NEWEST (read this first after a compaction). Part e is
+      STATE AT 2026-10-12 20:48, THE NEWEST (read this first after a compaction; the state
+      of 20:32 below it is what came before). The two findings are FIXED in `dc7d34a`,
+      test first (both tests red for their reason, then `bin/lib/manifest.test.mjs` 114
+      pass): a record that is skipped and owns no container is left out of the pointers
+      that let `uninstall` delete a file install created, and a run that skips an entry
+      carries forward what an earlier run recorded as made for the same file and pointer.
+      Its turn (20:36 to 20:47, exit 0): gate PASS, committed 20:46; gentle-ai: medium, 70
+      lines, not due; Codex on `7857a44..dc7d34a`, planned at about 86,000, budget
+      315,000: one part, 140,239 input tokens (104,320 cached), "the patch is correct
+      (confidence 0.91)", no finding. Codex for part e: 1,235,814 input tokens. The practice
+      journey ran on `bf98aaa`, before these two fixes, and was not run again: they change
+      what happens when an entry is skipped, which the journey does not walk. The branch
+      is pushed and its pull request opened with the commit that holds this text; the
+      lead merges it and then installs the entry on his machine (his yes of 03:45). What
+      follows is in the paragraph of 20:32, from "After that, in this order", with three
+      more things of his the lead reported after it, claims until read at their lines in
+      its transcript, in this order after part e is on `main`: the installer's message
+      about a tagged version (`bin/install.mjs`, near "update": no tag exists; versions are
+      tagged from 1.0.0, which goes in the roadmap); the design of his two rules on
+      questions; a session opened from the phone starts at high effort
+      (`bin/lib/remote.mjs`); and `doctor` and the stack stop listing the official Codex
+      plugin (`bin/lib/stack.mjs`, `bin/lib/latest.mjs`).
+      STATE AT 2026-10-12 20:32. Part e is
       commit `bf98aaa` on `feat/session-compaction-install`, local, NOT PUSHED, the tree
       clean. Its first turn at the gate failed at the commit (20:00 to 20:12, nothing
       committed): this document quoted the lead's question, which names the pause's share,
