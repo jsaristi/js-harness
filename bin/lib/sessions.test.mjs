@@ -182,10 +182,10 @@ test('a foreground Bash call and other tools are not background work', () => {
 
 test('pendingCall is the last tool call that no result names, with its tool and time, for any tool, and null when every call has its result', () => {
   const pending = (...entries) => lib.sessionFacts(transcript(prompt('go', 1), ...entries)).pendingCall;
-  assert.deepEqual(pending(call('toolu_1', 'Read', { file_path: 'x' }, 2), call('toolu_2', 'Bash', { command: 'x', description: 'Run' }, 3)), { tool: 'Bash', at: at(3) });
+  assert.deepEqual(pending(call('toolu_1', 'Read', { file_path: 'x' }, 2), call('toolu_2', 'Bash', { command: 'x', description: 'Run' }, 3)), { id: 'toolu_2', tool: 'Bash', at: at(3) });
   assert.equal(pending(call('toolu_1', 'Bash', { command: 'x' }, 2), result('toolu_1', { stdout: 'a' }, 3)), null);
   assert.equal(pending(reply('done', 2)), null);
-  assert.deepEqual(pending(call('toolu_q', 'AskUserQuestion', { questions: [] }, 2)), { tool: 'AskUserQuestion', at: at(2) }, 'a question tool is a plain fact too');
+  assert.deepEqual(pending(call('toolu_q', 'AskUserQuestion', { questions: [] }, 2)), { id: 'toolu_q', tool: 'AskUserQuestion', at: at(2) }, 'a question tool is a plain fact too');
 });
 
 test('state is working when the last entry is a tool call, a tool result, or a prompt not answered yet', () => {
@@ -1366,6 +1366,41 @@ test('boardChanges says a tool call with no result once it passes the limit, and
   assert.deepEqual(changes(waiting(0), waiting(-1600)), [said('1h 00m')], 'and again at an hour');
   assert.deepEqual(changes(waiting(1500), waiting(1100), { self: A }), [], 'the watching session is not compared');
   assert.deepEqual(changes(waiting(1500, 'AskUserQuestion'), waiting(1100, 'AskUserQuestion')), [], 'a question is in Open questions, not here');
+});
+
+// The call of the agent tool is measured by its own sub-agent, found by the id of its call. The calls of one entry share
+// its time, so the file of the other agent launched in that entry is no evidence for this one.
+test('a pending agent call is measured by its own sub-agent, not by another launched in the same entry', () => {
+  const agent = (id) => ({ type: 'tool_use', id, name: 'Agent', input: { description: id, subagent_type: 'Explore', prompt: 'made up' } });
+  const launched = { type: 'assistant', ...base(2), message: { role: 'assistant', stop_reason: 'tool_use', content: [agent('toolu_done'), agent('toolu_wait')] } };
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), launched, result('toolu_done', { isAsync: true, status: 'async_launched', agentId: 'a1' }, 3)));
+  assert.deepEqual(facts.pendingCall, { id: 'toolu_wait', tool: 'Agent', at: at(2) });
+  // Read at 10:20: the pending call's sub-agent is silent since its launch at 10:02, or it wrote at 10:19 (the other one's file is the reverse).
+  const judged = (doneWrote, waitWrote) => {
+    const work = facts.work.map((item) => ({ ...item, file: { path: item.toolUseId, modifiedAt: item.toolUseId === 'toolu_done' ? doneWrote : waitWrote } }));
+    const session = { ...seen(A, 'working'), pendingCall: facts.pendingCall, work };
+    return [
+      lib.renderBoard({ ...BOARD, sessions: [session] }, { now: Date.parse(at(20)) }).filter((line) => line.includes(' call has had no result for ')),
+      changes({ sessions: [seen(A, 'working')] }, { generatedAt: at(20), sessions: [session] }),
+    ];
+  };
+  const row = '  an Agent call has had no result for 18m: the host may be holding it for approval, or it hangs';
+  const watch = 'session aaaaaaaa "title a" has an Agent call with no result for 18m: the host may be holding it for approval, or it hangs';
+  assert.deepEqual(judged(at(19), at(2)), [[row], [watch]], 'said, although the other agent wrote recently');
+  assert.deepEqual(judged(at(2), at(19)), [[], []], 'not said while its own sub-agent wrote recently');
+});
+
+// A look that cannot read a session keeps its facts, and the age of the call they hold is measured when they were read,
+// so the crossing that the unreadable look could not say is said at the next look that reads the session, once.
+test('a tool call that crosses the limit while a look cannot read its transcript is said at the next look that reads it, once', () => {
+  const said = 'session aaaaaaaa "title a" has a Bash call with no result for 15m: the host may be holding it for approval, or it hangs';
+  const readable = (generated) => boardOf({ generatedAt: before(generated), sessions: [seen(A, 'working', { pendingCall: { tool: 'Bash', at: before(2000) } })] });
+  const blind = boardOf({ generatedAt: before(1090), sessions: [{ id: A, modifiedAt: before(1), unavailable: 'EBUSY' }] });
+  // The call is 890 s old when it is read, 910 s when the look cannot read it, and 930 s at the look after.
+  const [first, back, later] = [readable(1110), readable(1070), readable(1040)];
+  assert.deepEqual(lib.boardChanges(first, blind), [], 'a look that cannot read says nothing');
+  assert.deepEqual(lib.boardChanges(lib.watchBaseline(first, blind), back), [said], 'the crossing that look could not say is said now');
+  assert.deepEqual(lib.boardChanges(back, later), [], 'not again before the age doubles');
 });
 
 test('isSelf takes the whole id of a session or its first eight characters or more', () => {
@@ -2794,8 +2829,8 @@ test('renderBoard says a tool call with no result for the limit under its row, a
   assert.deepEqual(said(seen(A, 'working')), [], 'with no call left open');
   assert.deepEqual(said(seen(A, 'waiting', { pendingCall: bash })), [], 'a session that is not working');
   assert.deepEqual(said(seen(A, 'working', { pendingCall: { tool: 'AskUserQuestion', at: before(1000) } })), [], 'a question is in Open questions');
-  const agent = { tool: 'Agent', at: before(1000) };
-  const subagent = (modifiedAt) => [{ tool: 'Agent', kind: 'Explore', id: null, description: 'Look', launchedAt: before(1000), ended: false, file: { path: 'x', modifiedAt } }];
+  const agent = { id: 'toolu_a', tool: 'Agent', at: before(1000) };
+  const subagent = (modifiedAt) => [{ tool: 'Agent', kind: 'Explore', toolUseId: 'toolu_a', id: null, description: 'Look', launchedAt: before(1000), ended: false, file: { path: 'x', modifiedAt } }];
   assert.deepEqual(said(seen(A, 'working', { pendingCall: agent, work: subagent(before(30)) })), [], 'a subagent that writes is at work');
   assert.deepEqual(said(seen(A, 'working', { pendingCall: agent, work: subagent(before(1000)) })), ['  an Agent call has had no result for 16m: the host may be holding it for approval, or it hangs'], 'a silent subagent is said past the limit');
   // A session its record says closed says so, and its call is not said as held.

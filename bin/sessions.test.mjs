@@ -405,7 +405,7 @@ test('a transcript that cannot be read is listed as unavailable with the reason,
 test('a Bash call with no result for the limit is said under its session in the text board, and carried as pendingCall in --json', withMachine(async (machine) => {
   writeAt(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('build it', 1100), call('toolu_h1', 'Bash', { command: 'npm test', description: 'Run the tests' }, 1000)), 1000);
   const { stdout } = await runSessions(machine, ['--json']);
-  assert.deepEqual(JSON.parse(stdout).sessions[0].pendingCall, { tool: 'Bash', at: before(1000).toISOString() });
+  assert.deepEqual(JSON.parse(stdout).sessions[0].pendingCall, { id: 'toolu_h1', tool: 'Bash', at: before(1000).toISOString() });
   const text = await runSessions(machine, []);
   assert.ok(text.stdout.split('\n').includes('  a Bash call has had no result for 16m: the host may be holding it for approval, or it hangs'), text.stdout);
 }));

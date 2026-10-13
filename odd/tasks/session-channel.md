@@ -2254,6 +2254,21 @@ session needs beside it to go on; the summary of a compaction is not the record.
   `STATE-before-compaction.md`: this section and "Next step" are the record, that file is
   what was true at the minute it was written.
 
+- 2026-10-13, written at 17:51: slice (b2) of T17 on branch `feat/question-notice`, cut from `ad7b37b`.
+  Its design is point 15, "Version 3 of slice (b2)" (`89836c6`) with what its reader changed
+  (`921bc03`). Part 1 is commit `6ab6958`: the fact `pendingCall`, the row line after
+  `PENDING_CALL_LIMIT_MS` and the watch line when the age crosses the limit and each time it
+  doubles; written by a bounded writer sub-agent from the design and read by this session;
+  three tests failed first, then 530 passed; one older command test changed for a true reason
+  (a watch that waits 24 days says the call its fixture still waits on). Gate PASS; gentle-ai:
+  not due; Codex on `921bc03..6ab6958`: 194,050 input tokens, "incorrect (0.99)", two
+  findings, P2: a pending agent call was matched to its sub-agent by timestamp, which two
+  calls of one entry share; and a look that could not read a transcript swallowed the
+  crossing, since the kept facts were measured at the later look. Fixed in the commit that
+  carries this entry, test first (both failed, then 533 passed): `pendingCall` carries the
+  call id and the sub-agent is found by it; a session kept across a failed read has `readAt`
+  and its earlier age is measured there. Parts 2 and 3 are not started.
+
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
 `feat/session-compaction`, cut from `main` at `78bbc80`, with documents only until the build
@@ -2665,8 +2680,15 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT THE CONTEXT PAUSE, 2026-10-13 17:27, THE NEWEST OF ALL (read this first after
-      a compaction). The design of (b2) is committed with what
+      STATE AFTER THE COMPACTION OF 2026-10-13, THE NEWEST OF ALL (read this first). Part 1
+      of (b2) is commit `6ab6958`; Codex found two defects in it and their fix, test first,
+      goes in the commit that carries this text, or is still in the tree if that commit did
+      not land (`git status` says). The Progress entry of 2026-10-13 written at 17:51 holds
+      the figures. NEXT: Codex on the fix commit, the lead told of both commits, then PART 2
+      and PART 3 as the paragraph below says, then one merge of `main`, the push and the
+      pull request.
+      STATE AT THE CONTEXT PAUSE, 2026-10-13 17:27 (the state before the one above).
+      The design of (b2) is committed with what
       its reader changed (`89836c6`, `921bc03`: point 15, "Version 3 of slice (b2)" and
       "Version 3 after its reader"). PART 1 IS BUILT and goes in the commit that carries this
       text, or is still in the tree if that commit did not land (`git status` says): a

@@ -453,7 +453,7 @@ function end(work, at, status) {
  * follow-up to a subagent is not one of them: it is work (`resumedWork`), or nothing. A resumed session
  * writes earlier entries again, so each message is listed once.
  *
- * `pendingCall` is the last tool call of the session's own chain that no tool result names, `{ tool, at }`
+ * `pendingCall` is the last tool call of the session's own chain that no tool result names, `{ id, tool, at }`
  * with the time of its entry, or `null` when every call has its result. It is a plain fact for any tool, a
  * question tool included: what the board says of a call that waits too long is `sessionLines`' rule. */
 export function sessionFacts(
@@ -642,7 +642,7 @@ export function sessionFacts(
   // The last call of the session's own chain that no result names: what it waits on, if anything. The calls
   // are in the order of the file, so the last one left open is the last one asked.
   let pendingCall = null;
-  for (const [id, launch] of calls) if (!answered.has(id)) pendingCall = { tool: launch.block.name, at: launch.entry.timestamp ?? null };
+  for (const [id, launch] of calls) if (!answered.has(id)) pendingCall = { id, tool: launch.block.name, at: launch.entry.timestamp ?? null };
   const work = [...workByCall.values()];
   const state = turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting';
   const compactsAt = measured === null ? { tokens: contextCompactionDefault, measured: false, at: null } : { tokens: measured.tokens, measured: true, at: measured.at };
@@ -2042,7 +2042,7 @@ function pendingAge(session, now, ended) {
   if (!pending || ended || session.state !== 'working' || QUESTION_TOOLS.includes(pending.tool)) return null;
   const launched = Date.parse(pending.at ?? '');
   if (Number.isNaN(launched)) return null;
-  const work = isAgent(pending.tool) ? session.work.find((item) => item.tool === 'Agent' && !item.ended && item.launchedAt === pending.at) : undefined;
+  const work = isAgent(pending.tool) ? session.work.find((item) => item.tool === 'Agent' && !item.ended && item.toolUseId === pending.id) : undefined;
   const written = Date.parse(work?.file?.modifiedAt ?? '');
   return now - (Number.isNaN(written) ? launched : Math.max(launched, written));
 }
@@ -2106,8 +2106,9 @@ function sessionChanges(before, after, self) {
     // that the earlier look could not read had no call to compare with, so it is not compared.
     if (listed?.unavailable === undefined) {
       const age = pendingAge(session, Date.parse(after.generatedAt), ended.has(session.id));
-      const sameCall = Boolean(listed?.pendingCall) && listed.pendingCall.tool === session.pendingCall?.tool && listed.pendingCall.at === session.pendingCall?.at;
-      const beforeN = sameCall ? crossingOf(pendingAge(listed, Date.parse(before.generatedAt), ended.has(session.id))) : -1;
+      const sameCall = Boolean(listed?.pendingCall) && listed.pendingCall.id === session.pendingCall?.id && listed.pendingCall.tool === session.pendingCall?.tool && listed.pendingCall.at === session.pendingCall?.at;
+      // The age the earlier look had is measured when its facts were read: a session it kept from an older board (`lastReadSessions`) is older than that board.
+      const beforeN = sameCall ? crossingOf(pendingAge(listed, Date.parse(listed.readAt ?? before.generatedAt), ended.has(session.id))) : -1;
       if (crossingOf(age) > beforeN) {
         lines.push(`${sessionLabel(session)} has ${article(session.pendingCall.tool)} ${session.pendingCall.tool} call with no result for ${durationOf(Math.round(age / 1000))}: the host may be holding it for approval, or it hangs`);
       }
@@ -2225,10 +2226,15 @@ function channelChanges(before, after, self) {
 }
 
 /** The sessions of the board `newer`, each one it could not read as the board `older` last read it, when it
- * did: what is known of a session across a look that failed on its transcript. */
+ * did: what is known of a session across a look that failed on its transcript. A session kept so has `readAt`,
+ * the time its facts were read: the `generatedAt` of the board that read them, or the one it was kept from. */
 function lastReadSessions(older, newer) {
   const read = byKey(older.sessions.filter((session) => !session.unavailable), 'id');
-  return newer.sessions.map((session) => (session.unavailable ? (read.get(session.id) ?? session) : session));
+  return newer.sessions.map((session) => {
+    if (!session.unavailable) return session;
+    const kept = read.get(session.id);
+    return kept ? { ...kept, readAt: kept.readAt ?? older.generatedAt } : session;
+  });
 }
 
 /** The questions the person closed without answering between two boards, one line each: who asked and
