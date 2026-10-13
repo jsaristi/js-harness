@@ -370,11 +370,17 @@ function appendEntryToFile(target, pointer, entry, ours) {
   return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
 }
 
-/** The pointers of every entry recorded for the file `target` in `records`: what js-harness wrote in that file. A
- * record that is skipped and owns no container wrote nothing there: the list at its pointer is the user's, and counted
- * here it would let `uninstall` delete a file install created with that list in it. */
+/** Whether a record says the list at its pointer is not one install made. A record that names no container as made
+ * (`createdContainers: 0`) says so whether its entry was written or skipped: written, it went into a list that was
+ * already there and that js-harness had not made. A record from before the field says nothing of it, and is taken
+ * as it always was: the list is ours unless the entry was skipped. */
+const ownsNoList = (record) => record.createdContainers === 0 || (record.createdContainers === undefined && record.skipped === true);
+
+/** The pointers of every entry recorded for the file `target` in `records` whose list js-harness made: what is ours
+ * in that file once the entries are out. A record that owns no list is left out: the list at its pointer is the
+ * user's, and counted here it would let `uninstall` delete a file install created with that list in it. */
 const pointersIn = (records, target) => (records ?? [])
-  .filter((record) => record.path === target && !(record.skipped === true && (record.createdContainers ?? 0) === 0))
+  .filter((record) => record.path === target && !ownsNoList(record))
   .map((record) => record.pointer);
 
 /** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a

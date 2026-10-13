@@ -1598,6 +1598,51 @@ test('a skipped entry that owns no list does not let uninstall delete the file: 
   }
 });
 
+// An entry written into a list the user made owns no list either: its record succeeded and says it made no
+// container. It still counted among the pointers that let uninstall delete a file an earlier install created,
+// and the user's own empty list went with the file (Codex's finding on `pointersIn`).
+test('an entry written into a list the user made does not let uninstall delete the file an earlier install created: the list stays', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    const first = install(home, '0.1.0');
+    const isPause = (record) => record.path === target && record.pointer.at(-1) === 'PostToolUse';
+    // The machine of an install from before the pause entry: the file it created holds no PostToolUse and its
+    // record names none. The user then writes an empty PostToolUse list of their own.
+    fs.writeFileSync(manifestPath(home), JSON.stringify({ ...first, entries: first.entries.filter((record) => !isPause(record)) }, null, 2), 'utf8');
+    const settings = readJson(target);
+    fs.writeFileSync(target, `${JSON.stringify({ ...settings, hooks: { ...settings.hooks, PostToolUse: [] } }, null, 2)}\n`, 'utf8');
+
+    const second = install(home, '0.1.0');
+    assert.deepEqual(second.entries.filter(isPause).map((record) => [record.skipped, record.createdFile, record.createdContainers]), [[false, true, 0]], 'the entry went into the user\'s list');
+    assert.equal(readJson(target).hooks.PostToolUse.length, 1);
+
+    uninstall(home);
+    assert.equal(fs.existsSync(target), true, 'the file is kept: the list in it is the user\'s');
+    assert.deepEqual(readJson(target), { hooks: { PostToolUse: [] } });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// What must hold beside it: a manifest from before `createdContainers` says nothing of who made the lists, and a
+// file its install created, left with nothing but the lists it emptied, is deleted as it always was.
+test('a manifest written before createdContainers existed still lets uninstall delete the file its install created', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    const manifest = install(home, '0.1.0');
+    assert.ok(manifest.entries.filter((record) => record.path === target).every((record) => record.createdFile === true));
+    const older = { ...manifest, entries: manifest.entries.map(({ createdContainers, ...record }) => record) };
+    fs.writeFileSync(manifestPath(home), JSON.stringify(older, null, 2), 'utf8');
+
+    uninstall(home);
+    assert.equal(fs.existsSync(target), false, 'the file install created is gone');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // A settings file that cannot be read for one run (a directory sits at its path here) skips every entry of it. The
 // record of the lists install made there must outlive that run: written as none, the next install took those lists
 // for the user's, and uninstall left them empty in a file that had none before.
