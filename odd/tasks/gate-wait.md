@@ -992,7 +992,13 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       range in one question, HEAD and the tree after a session in one, each a first try
       with today's questions behind it. Route: inline, tests first, on
       `feat/gate-wait-git-cut` off `feat/gate-wait`; both reviews; judged by the count of
-      the command's test file after (`c3-after.json`) beside the count before.
+      the command's test file after (`c3-after.json`) beside the count before. Evidence:
+      `823047e`; 7,840 to 6,628 git processes; the entries of T16 in Progress.
+- [ ] T17 · The command's test file runs as two processes (the design's point 7, decided
+      on M1f: the file is the wall alone). A mark in the file and a second file that
+      starts the half below it; nothing moved. Route: inline, tests first, on
+      `feat/gate-wait-two-halves` off the cut; Codex's review is the outside read (the
+      orchestrator: no reader for it); judged by M1g, the whole suite by file after it.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2444,6 +2450,64 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   23:38:31 to 23:49:17, exit 0): clean, 5 paths from `main`, the merge commit's whole
   gate passed, and the push check after it: "9 code commits since origin/main, all
   covered by a Codex review record". Pushed after this entry, with its pull request.
+- 2026-10-13 · **S1 is on `main`: pull request 89, merged by the orchestrator at 23:54
+  (`2a81ae7`; checked: it holds `c180bda`). The cut holds it: merge `f569dae` on
+  `feat/gate-wait-git-cut`** (`cut-final-merge-turn.log`, 00:09:43 to 00:19:39, exit
+  0: clean, 6 paths from `main`, the merge commit's whole gate passed, and the push
+  check: "1 code commit since origin/main, all covered by a Codex review record").
+  This document is written on the cut's branch from here on, since S1's is merged.
+  Pushed after this entry, with its pull request (body `cut-pr-body.md`).
+- 2026-10-13 · **M1f: the whole suite by file on the cut, and the split decided on its
+  number** (`m1f-turn.log`, the counting tool on `823047e`, 23:58 to 00:09, one run,
+  no source written, no spend; beside it m1e, the same run on `main` before S1):
+
+  | | m1e, before S1 | m1f, the cut |
+  |---|---|---|
+  | wall | 625 s | 601 s |
+  | the machine busy | 4,518 of 5,000, 90% | 4,079 of 4,810, 85% |
+  | git processes, whole suite | 12,107 | 13,016 |
+  | `bin/codex-review.test.mjs` | 624 s, 6,067 git, 237 tests | 601 s, 6,628 git, 267 tests |
+  | `evals/runner.test.mjs` | 449 s | 383 s |
+  | `bin/check-codex-reviews.test.mjs` | 310 s | 309 s |
+  | `evals/isolation-probe.test.mjs` | 297 s | 274 s |
+  | `evals/configs.test.mjs` | 276 s | 251 s |
+
+  The same five eval tests fail under the tool in both runs (its own environment).
+  **The command's test file is still the wall, alone: 601 s of 601, 218 s past the
+  next file; the work's own bound at this busy share is about 510 s.** So the design's
+  point 7 holds: the file is split. With S1's 30 tests and 1,773 starts in it, the cut
+  leaves the suite 24 s under where it was before S1.
+- 2026-10-13 · **T17: the file runs as two processes, and is not cut in two** (told to
+  the orchestrator before building, 00:10; its go, the lead's call and not his word,
+  with six asks). **Why not the design's words** (helpers in a shared module, the tests
+  moved): about 2,700 moved lines, and a Codex review counts a moved line as changed,
+  about a million input tokens at medium to review a move. **What is built** (branch
+  `feat/gate-wait-two-halves` off `823047e`, worktree
+  `D:\js-harness-worktrees\gate-wait-two-halves`, 55 lines in two files, not
+  committed): one line of `bin/codex-review.test.mjs` is the mark,
+  `secondHalfStartsHere();`, at the section boundary with 47% of the file's test time
+  above it (151 tests above, 116 below, by `half-find.cjs` on `c3-after-tests.log`);
+  run as itself the file registers what is above; `bin/codex-review.second.test.mjs`,
+  two statements, sets a flag and imports the file, and that process registers what is
+  below. **The six asks and what answers each:** (1) a test is in one half by where it
+  stands, and the head comment says where a new test goes and what the mark is; (2)
+  the guard is in the suite: each process has one test that the mark stands once and
+  ran once, both halves hold tests, what this process left out is the other half to
+  the test, and the second file sets its flag before its import; (3) the head comment
+  says what both processes run: the two hooks, which make and remove folders of their
+  own, and helpers and constants; searched, no top-level statement starts a process;
+  no `describe` in the file, and the comment says the mark stays between two
+  top-level tests; (4) **my first version failed this one and is replaced:** it put a
+  function around the runner's `test`, and the runner names a test by the line that
+  called it, so every test would have been named by the wrapper's line. Now `test` is
+  the runner's own function in the half a process runs and a counter in the other;
+  the turn reads the runner's events for one test of each half; (5) the suite's count
+  becomes 267 and two, one guard a process; (6) M1g after the commit, same tool.
+  **The turn** (`halves-turn.sh`, log `halves-turn.log`, queued at 00:16): RED without
+  the second file; each half alone, then the two together and the names beside those
+  of the file alone before (`halves-check.cjs`); the file and line the runner holds;
+  the commit with the whole gate; the plan; Codex once if the printed plan is inside
+  315,000.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
