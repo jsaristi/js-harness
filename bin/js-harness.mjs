@@ -13,8 +13,8 @@ Commands:
   sync        Move the project to its pinned version (inside one) or re-write the machine install (--global, or outside a git repository).
   uninstall   Undo the project (inside one) or the machine install (--global, or outside a git repository).
   status      Show the project's pin and this clone (inside one) or the machine's installed, manifest and latest versions (--global, or outside a git repository).
-  update      Check whether a newer release exists.
-  upgrade     Install the newer release, then sync.
+  update      Say whether a newer release exists. None is tagged before 1.0.0, so it says that and how to get the newest copy; --source <dir> reads a folder of npm pack tarballs instead.
+  upgrade     Install the newer release of --source <dir>, then sync. With no source it installs nothing and exits 1: no package registry is ever asked.
   doctor      Report the stack's tools: installed, configured, up to date.
   progress    Show roadmap and feature progress from their checkboxes.
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).

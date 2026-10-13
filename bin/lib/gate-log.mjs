@@ -159,15 +159,24 @@ const BODY = {
   sensors: listOf(isObject),
   load: shaped(LOAD),
   rows: listOf(isText),
+  code: isTreeKey,
+  by: isText,
 };
 
 /** Whether `value` has the body of an event: each field of `BODY` that is there is what it says. */
 const hasBody = shaped(BODY);
 
+/** Whether `value` is the key of a tree as a gate writes it (`treeKey` of `./gate-tree.mjs`): 64 lowercase
+ * hex characters. Asked by the reader of a line (`BODY`), by its writer (`gateRecord`) and by the one that
+ * looks for a proof (`provenBy`), so that the three cannot come apart. */
+export function isTreeKey(value) {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}
+
 /** The kinds of event this version writes and reads. `stopped` came after the other three: a version that
  * does not know it leaves its line out in silence (`readGateLog`), which is why a gate that stopped writes
  * no start for that version to show alone. */
-const KINDS = ['start', 'end', 'refused', 'stopped'];
+const KINDS = ['start', 'end', 'refused', 'stopped', 'same'];
 
 /** Whether `value` has the head of a line of this log, enough to be paired: the version, an event that is
  * a text, the id and when. The kind of the event is not asked here (`readGateLog`). */
@@ -236,17 +245,19 @@ export function readGateLog(home, { fileSystem: io = fs } = {}) {
 /** The gates of `events`, in the order they began: `{ start, end }` for a gate that ran, with no `end` for
  * one that was killed or still runs, `{ refused }` for one that was refused its turn, and `{ stopped }` for
  * one that stopped before its sensors, which is the end of no start whatever id it has. An end whose start
- * is not there, because it was rotated away, is left out. */
+ * is not there, because it was rotated away, is left out. `{ same }` is a gate that ran no sensor because
+ * another had passed the same tree: it has no start either. */
 export function gatesOf(events) {
   const gates = [];
   const began = new Map();
   for (const event of events) {
     if (event.event === 'refused') gates.push({ refused: event });
     else if (event.event === 'stopped') gates.push({ stopped: event });
+    else if (event.event === 'same') gates.push({ same: event });
     else if (event.event === 'start') {
       began.set(event.id, { start: event });
       gates.push(began.get(event.id));
-    } else if (began.has(event.id)) began.get(event.id).end = event;
+    } else if (event.event === 'end' && began.has(event.id)) began.get(event.id).end = event;
   }
   return gates;
 }
@@ -287,16 +298,38 @@ function stopSaid({ rows }) {
   return `stopped before its sensors${names.length ? ` (${names.join(', ')})` : ''}`;
 }
 
+/** The gate that proved the tree `code` (`isTreeKey`), among `events` (`readGateLog`): the last `end` line
+ * whose result is `pass` and whose `code` is that key, as `{ id, at, cwd }`, with `cwd` `null` when the
+ * start of that gate is no longer in the log. `null` when there is none, and for a `code` that is no key.
+ *
+ * Only such a line is a proof. A gate writes `code` on its end when it ran every sensor, all passed, and
+ * the tree had the same key before them and after them; no other kind of line is read here, so a gate that
+ * ran no sensor because of a proof proves nothing itself, and neither does a `gate -- <command>` turn,
+ * whose end says `exit 0`. */
+export function provenBy(events, code) {
+  if (!isTreeKey(code) || !Array.isArray(events)) return null;
+  const end = events.findLast((event) => event.event === 'end' && event.result === 'pass' && event.code === code);
+  if (end === undefined) return null;
+  const start = events.find((event) => event.event === 'start' && event.id === end.id);
+  return { id: end.id, at: end.at, cwd: start?.cwd ?? null };
+}
+
+/** That a gate ran no sensor, and which gate had passed the same tree. */
+function sameSaid({ by }) {
+  return `no sensor ran: the same tree passed in gate ${typeof by === 'string' ? by.slice(0, 8) : '(not named)'}`;
+}
+
 /** One line for each of `gates` (`gatesOf`), short enough to be read on a phone: when it began, how long it
  * took and how it ended, the lock where it was not its own, the load it started under, whom it waited for,
  * and its folder. A start that has no end says so, a refusal says why it was refused, and a gate that
  * stopped before its sensors says that and for which rows, so that it reads as none of the others: it
  * neither ran, nor was refused, nor was killed. What a gate does not have is left out of its line. */
 export function formatGates(gates) {
-  return gates.map(({ start, end, refused, stopped }) => {
-    const first = start ?? refused ?? stopped;
+  return gates.map(({ start, end, refused, stopped, same }) => {
+    const first = start ?? refused ?? stopped ?? same;
     let parts;
     if (stopped) parts = [stopSaid(stopped)];
+    else if (same) parts = [sameSaid(same)];
     else if (refused) parts = [`refused (${refused.reason})`, waitSaid(refused, true)];
     else parts = [end ? `${wholeSeconds(end.seconds)}  ${end.result}` : 'no end (killed, or still running)', LOCK_SAID[start.lock], loadSaid(start.load), waitSaid(start)];
     return [localTime(first.at), ...parts, first.cwd].filter(Boolean).join('  ');
@@ -381,10 +414,15 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
       const sampled = loadWritten(load);
       if (write('this gate', at, { event: 'start', ...said, lock, ...waited({ waitedMs, waitedFor }), ...(sampled && { load: sampled }) })) startedAt = at;
     },
-    end({ result, sensors }) {
+    end({ result, sensors, code }) {
       if (startedAt === undefined) return;
       const at = now();
-      write('the end of this gate', at, { event: 'end', seconds: seconds(at - startedAt), result, ...(sensors && { sensors }) });
+      // The key of the tree, where the gate has one to give: what makes this line a proof (`provenBy`).
+      write('the end of this gate', at, { event: 'end', seconds: seconds(at - startedAt), result, ...(sensors && { sensors }), ...(isTreeKey(code) && { code }) });
+    },
+    same({ code, by }) {
+      // Written only whole: a line of this kind with no key or no gate behind it says nothing.
+      if (isTreeKey(code) && isText(by)) write('this gate', now(), { event: 'same', ...said, code, by });
     },
     refused({ reason, waitedMs, waitedFor }) {
       write('this refusal', now(), { event: 'refused', ...said, reason, ...waited({ waitedMs, waitedFor }) });

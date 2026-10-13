@@ -342,7 +342,11 @@ export function buildCommands({
   fetch: fetchImpl = fetch,
   now,
   remoteMain: remote = remoteMain,
+  source,
 } = {}) {
+  // The folder of tarballs the menu was opened with, passed on, so that its header and its three version
+  // commands read the same release source.
+  const fromSource = source ? ['--source', source] : [];
   const argsAt = (location) => {
     const at = location?.root ?? root;
     if (!at) throw new Error('no project to act on');
@@ -357,11 +361,11 @@ export function buildCommands({
     'project-remote-status': async (location) => remote(['status', ...argsAt(location)], env),
     'project-remote-start': async (location) => remote(['start', ...argsAt(location)], env),
     'project-remote-stop': async (location) => remote(['stop', ...argsAt(location)], env),
-    status: () => statusMain(['--global', '--home', home], env, spawn),
+    status: () => statusMain(['--global', '--home', home, ...fromSource], env, spawn),
     doctor: () => doctorMain(['--home', home, '--cwd', cwd], env, { spawn, fetch: fetchImpl, now }),
     install: () => installMain(['--home', home]),
-    update: () => updateMain(['--home', home], env, spawn),
-    upgrade: () => upgradeMain(['--home', home], env, spawn),
+    update: () => updateMain(['--home', home, ...fromSource], env, spawn),
+    upgrade: () => upgradeMain(['--home', home, ...fromSource], env, spawn),
     sync: () => syncMain(['--global', '--home', home]),
     uninstall: () => uninstallMain(['--global', '--home', home]),
   };
@@ -381,10 +385,11 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   const installedVersion = currentVersion();
   const { fetch: fetchImpl = fetch, now } = io;
 
+  // No release to look for unless a folder of tarballs was named: opening the menu starts no process for it.
+  const source = get('--source') ?? env.JS_HARNESS_SOURCE;
   let updateAvailable = null;
   try {
-    const source = get('--source') ?? env.JS_HARNESS_SOURCE;
-    const latest = resolveLatest({ source, pm: get('--pm') }, env, spawn);
+    const latest = resolveLatest({ source });
     if (latest && isNewer(latest.version, installedVersion)) updateAvailable = latest.version;
   } catch {
     updateAvailable = null;
@@ -394,7 +399,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   const location = projectLocation(cwd);
   const stack = await computeStackState({ home, cwd, spawn, fetch: fetchImpl, now });
 
-  const commands = buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now });
+  const commands = buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now, source });
 
   return runTui({
     installedVersion,

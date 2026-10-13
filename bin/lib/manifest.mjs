@@ -19,8 +19,8 @@ js-harness commands:
 - \`js-harness status --global\` — installed version, manifest version, and latest available, for the machine.
 - \`js-harness install\` — write the skills and the session-start hook entries, and record a manifest under the home.
 - \`js-harness sync --global\` — re-write installed files for the running version.
-- \`js-harness update\` — check whether a newer release exists.
-- \`js-harness upgrade\` — install the newer release, then sync.
+- \`js-harness update\` — say whether a newer release exists; none is tagged before 1.0.0, so it says how to get the newest copy.
+- \`js-harness upgrade\` — install the newer release of a folder of tarballs (\`--source <dir>\`), then sync; with no source it installs nothing.
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run.
 - \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone 60 minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
