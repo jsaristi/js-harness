@@ -1328,7 +1328,7 @@ test('the board has a roster after the sessions: a row per title with its role, 
   writeAt(path.join(machine.worktree, 'odd', 'tasks', 'board.md'), BOARD_PLAN, 300);
   const deps = { run: fakeRun(machine, withPlan(machine)).run, env: { CLAUDE_CODE_SESSION_ID: SESSION_B } };
   const lines = (await runSessions(machine, [], deps)).stdout.split('\n');
-  assert.deepEqual(lines.slice(lines.indexOf('Roster'), lines.indexOf('Worktrees')), [
+  assert.deepEqual(lines.slice(lines.indexOf('Roster'), lines.indexOf('Open questions')), [
     'Roster',
     `  orchestrator  ${ORCHESTRATOR}  silent since 10m ago`,
     '    mode bypassPermissions  folder C:\\proj  branch main  transcript aaaaaaaa',
@@ -1414,7 +1414,7 @@ test('a session is a row of the roster, and holds a role, only while its last ti
   assert.deepEqual([(await runSessions(machine, ['--address', '7', '--hours', '400'])).stdout, (await runSessions(machine, ['--address', 'orchestrator', '--hours', '400'])).code], ['JH 7 · days ago', 2]);
 
   const lines = (await runSessions(machine, [])).stdout.split('\n');
-  const roster = lines.slice(lines.indexOf('Roster'), lines.indexOf('Worktrees'));
+  const roster = lines.slice(lines.indexOf('Roster'), lines.indexOf('Open questions'));
   assert.deepEqual(roster.filter((line) => line.includes('days ago')), []);
   assert.deepEqual(roster.filter((line) => line.includes('in no row')), ['  2 transcripts with no entry inside the window are in no row']);
   assert.equal(roster.filter((line) => line.startsWith('  orchestrator  ')).length, 1);
@@ -1589,7 +1589,7 @@ test('a session whose transcript carries no title is on the board under the titl
   assert.deepEqual([found.code, found.stdout, found.stderr], [0, OPENING_TITLE, '']);
   const lines = (await runSessions(machine, [])).stdout.split('\n');
   assert.match(lines.find((line) => line.startsWith('dddddddd  ')), /^dddddddd {2}waiting {2}JH 6 · desde el teléfono {2}last entry 30s ago$/);
-  const roster = lines.slice(lines.indexOf('Roster'), lines.indexOf('Worktrees'));
+  const roster = lines.slice(lines.indexOf('Roster'), lines.indexOf('Open questions'));
   assert.deepEqual(roster.slice(roster.findIndex((line) => line.startsWith('  work 6  ')), roster.findIndex((line) => line.startsWith('  work 6  ')) + 2), [
     `  work 6  ${OPENING_TITLE}  silent since 30s ago`,
     '    mode auto  folder C:\\proj  branch main  transcript dddddddd  title from the opening it read',
@@ -1931,6 +1931,26 @@ const sectionOf = (stdout, name, next) => {
   return lines.indexOf(name) === -1 ? null : lines.slice(lines.indexOf(name), lines.indexOf(next));
 };
 
+test('the board lists the questions put to the user that have no answer, read from the transcripts of its window, in the text and in --json', withMachine(async (machine) => {
+  writeRoster(machine);
+  const question = 'Pregunta 21: ¿seguimos con la lista?';
+  const questions = [{ question, header: 'Lista', multiSelect: false, options: ['Sí (Recomendado)', 'No'].map((label) => ({ label, description: 'made up' })) }];
+  const closed = { questions, answers: { [question]: '[User dismissed — do not proceed, wait for next instruction]' } };
+  // The orchestrator asked, he closed the question; a second one is still on his screen. The host copied the
+  // closed call into the work session's file, where it is the same question and not a second one.
+  fs.appendFileSync(transcriptOf(machine, SESSION_A), jsonl(call('toolu_q1', 'AskUserQuestion', { questions }, 50), result('toolu_q1', closed, 45), call('toolu_q2', 'AskUserQuestion', { questions: [{ ...questions[0], question: 'Pregunta 22: ¿y esta?' }] }, 40)));
+  fs.appendFileSync(transcriptOf(machine, SESSION_B), jsonl(call('toolu_q1', 'AskUserQuestion', { questions }, 50), result('toolu_q1', closed, 45)));
+
+  const { stdout } = await runSessions(machine, []);
+  const section = sectionOf(stdout, 'Open questions', 'Worktrees');
+  assert.equal(section.length, 5, section.join('\n'));
+  assert.match(section[1], /^ {2}\S+ ago {2}.* {2}closed by him without an answer {2}Pregunta 21: ¿seguimos con la lista\?$/);
+  assert.match(section[2], /^ {2}\S+ ago {2}.* {2}on his screen, no answer yet {2}Pregunta 22: ¿y esta\?$/);
+  assert.match(section[3], /^ {2}read in \d+ transcripts? changed in the last \d+h, each read whole$/);
+  const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(board.questions.open.map(({ id, state }) => [id, state]), [['toolu_q1', 'closed'], ['toolu_q2', 'pending']]);
+}));
+
 test('the board has a channel after the roster: the last notices of the record and the last messages between sessions, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   // The work session rang the orchestrator, and the orchestrator's transcript has the message; the answer was not seen to arrive.
@@ -1944,7 +1964,7 @@ test('the board has a channel after the roster: the last notices of the record a
 
   const record = recordOf(machine).path;
   const { stdout } = await runSessions(machine, []);
-  assert.deepEqual(sectionOf(stdout, 'Channel', 'Worktrees'), [
+  assert.deepEqual(sectionOf(stdout, 'Channel', 'Open questions'), [
     'Channel',
     `  ${record}  2 notices:`,
     `  | 50m ago  ${WORKER} to orchestrator  opened  session channel, T4b`,
@@ -1981,7 +2001,7 @@ test('a board with no record and no message between sessions has no channel sect
     return fs.readFileSync(absolute, 'utf8');
   };
   const unread = await runSessions(machine, [], { readFile: busy });
-  assert.deepEqual([unread.code, sectionOf(unread.stdout, 'Channel', 'Worktrees')], [0, ['Channel', `  ${record}  unavailable: EBUSY`, `  ${CHANNEL_NOT_KNOWN}`, '']]);
+  assert.deepEqual([unread.code, sectionOf(unread.stdout, 'Channel', 'Open questions')], [0, ['Channel', `  ${record}  unavailable: EBUSY`, `  ${CHANNEL_NOT_KNOWN}`, '']]);
 }));
 
 test('--watch returns for a notice written to the orchestrator after it began, and says it among the changes', withMachine(async (machine) => {
