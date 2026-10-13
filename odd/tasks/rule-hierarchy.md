@@ -2485,9 +2485,13 @@ candidate) and `resume-names-wrong-maker` (JH 5's candidate), and one more sight
 `chained-step-not-conditional`. (e) is not written: the roadmap names the reviewers' model
 nowhere (`rg -n -i "reviewers" docs/ROADMAP.md` prints nothing, on a file that would hold the
 word if it did), so his answer of line 9776 lives in the lead's relief file until a document
-has a place for it. (c) waits for the line of his answer, asked of the lead at 23:22. Left:
-one merge of `origin/main` as the last step, the push, the pull request. Done since the last
-entry:
+has a place for it. (c) was already on `main` when this session looked ("Release source" in
+the roadmap, and `bin/lib/version.mjs:23-26` follows it); what it lacked was his words with
+their line, 8986, read by this session and added. The branch merged `main` at `f43392d` in a
+turn of the gate (`a53e705`); `main` moved after it (pull request 89) and moves once more with
+JH 8's cut of the review command's git calls. Left: one last merge of `origin/main` after the
+lead's notice that the cut is merged, with nothing running until then; the push; the pull
+request. Done since the last entry:
 his decision that a Codex review runs at medium is on `main` (pull request 87; this session
 wrote the rule half as a patch, his tap read at line 8962). Two rules of his for every
 session, to read at lines 8423 and 8528 before they are applied: a question to him goes
