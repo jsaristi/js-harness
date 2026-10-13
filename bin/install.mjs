@@ -235,10 +235,13 @@ function reportSyncProject(result) {
     return 1;
   }
   if (result.pinMismatch) {
+    // No version is tagged before 1.0.0 (docs/ROADMAP.md, "Release source"), so a pin cannot be installed
+    // by its number: the one copy a machine can install is the default branch's.
     console.error(
       `harness.json pins js-harness ${result.pin} but ${result.version} is running; nothing was written. ` +
-        `To use the pinned version, run npm i -g github:jsaristi/js-harness#v${result.pin}; ` +
-        `or raise the pin to ${result.version} in harness.json and commit it.`,
+        `No version of js-harness is tagged yet, so ${result.pin} cannot be installed by its number. ` +
+        `If ${result.pin} is the newer one, update this machine with npm i -g github:jsaristi/js-harness and run js-harness sync again; ` +
+        `otherwise set the pin to ${result.version} in harness.json and commit it.`,
     );
     return 1;
   }

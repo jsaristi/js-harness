@@ -2195,8 +2195,42 @@ summary.
       merged, `main` `03d6d20`, and gentle-ai's outcome for its commit `0ccf615` was
       medium, 64 lines, not due (it was written in that pull request's body, since this
       document was not touched on that branch).
-      STATE AT 2026-10-12 20:48, THE NEWEST (read this first after a compaction; the state
-      of 20:32 below it is what came before). The two findings are FIXED in `dc7d34a`,
+      STATE AT 2026-10-12 20:53, THE NEWEST (read this first after a compaction; the states of
+      20:48 and 20:32 below it are what came before). Part e is ON `main`: pull request 85
+      was merged at 20:49 (`782e08b`), and the install of the pause entry on his machine
+      is the lead's. The host compacted this session after that; its one line went to the
+      lead at 20:50. Housekeeping done: the side worktree `session-channel-hook` is
+      removed (its uncommitted files are kept as a patch in this session's scratchpad,
+      on base `896261f`, which is on `main`) and the local branches
+      `wip/session-compaction-hook` and `feat/session-compaction` are deleted; neither
+      had a commit outside `origin/main`. THE WORK NOW, on branch
+      `fix/install-update-message` cut from `origin/main`: the message `sync` prints for
+      a pin that is not the running version (`bin/install.mjs`, `reportSyncProject`). It
+      told to install `github:jsaristi/js-harness#v<pin>`, and no tag exists. His answer,
+      a text typed into the lead's question 15 (the lead's transcript `65318fd5`, line
+      8986, the result of the question's call, read as JSON): "Corregir el mensaje por
+      que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera
+      version completa y utilizable que no estemos tan experimental ahi si comenzamos a
+      etiquetar versiones desde la 1.0.0". The message now says that no version is tagged
+      yet, so the pin cannot be installed by its number; that if the pin is the newer
+      one the machine is updated from the default branch (`npm i -g
+      github:jsaristi/js-harness`) and `sync` run again; and that otherwise the pin is
+      set to the running version and committed. It compares no versions: a pin may be
+      any semver and `compareSemver` reads three numbers only, so one sentence that is
+      true both ways is safer than a branch that can pick the wrong side. Test first:
+      the test of that message in `bin/install.test.mjs` failed on "no command installs
+      one by its tag", then 66 pass. The roadmap's row "Release source" says tagging
+      starts at 1.0.0. Not touched and not mine: the unchecked line of
+      `docs/sweep-2026-10-11.md` about this message (told to the lead). AFTER THIS, in
+      the lead's order: the design of his two rules on questions (the question tool; only
+      the orchestrator asks), to the lead before any code; then a session opened from
+      the phone at high effort (`bin/lib/remote.mjs`) and `doctor` and the stack without
+      the official Codex plugin's row (`bin/lib/stack.mjs`, `bin/lib/latest.mjs`); then
+      the yardstick as the longest stretch and a full orchestrator that is compacted and
+      goes on (`bin/lib/manifest.mjs`). Each of those answers of his is a claim of the
+      lead until read at its line.
+      STATE AT 2026-10-12 20:48 (the state of 20:32 below it is what came before it).
+      The two findings are FIXED in `dc7d34a`,
       test first (both tests red for their reason, then `bin/lib/manifest.test.mjs` 114
       pass): a record that is skipped and owns no container is left out of the pointers
       that let `uninstall` delete a file install created, and a run that skips an entry

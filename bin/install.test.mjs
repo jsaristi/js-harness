@@ -1131,8 +1131,11 @@ test('syncMain with a pin different from the running version writes nothing, exi
     const message = errLines.join('\n');
     assert.match(message, /9\.9\.9/);
     assert.ok(message.includes(currentVersion()));
-    assert.ok(message.includes('npm i -g github:jsaristi/js-harness#v9.9.9'));
-    assert.match(message, /raise the pin.*harness\.json/i);
+    // No version is tagged before 1.0.0: the message names no install by a tag, only what works today.
+    assert.equal(message.includes('#v'), false, 'no version is tagged, so no command installs one by its tag');
+    assert.match(message, /no version of js-harness is tagged yet/i);
+    assert.ok(message.includes('npm i -g github:jsaristi/js-harness and '), 'the newest copy is the one that can be installed');
+    assert.ok(message.includes(`set the pin to ${currentVersion()} in harness.json`));
     assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
     assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);
     assert.deepEqual(fs.readFileSync(manifestPath(home)), machineManifest); // the machine install is untouched too
