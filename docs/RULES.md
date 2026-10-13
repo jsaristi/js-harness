@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `55d36b08f413`. In force: 18 (13 of Sebastián, 5 of the project). Retired: 0.
+Hash `7963ae6d5597`. In force: 18 (13 of Sebastián, 5 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -31,9 +31,9 @@ The share of its context window at which a session pauses, writes its state and 
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
 
 ### review-effort
-The effort a Codex review runs at: high.
+The effort a Codex review runs at: medium.
 - Read by: none.
-- Since 2026-10-08. Row: reports. Source: his words of 2026-10-08, checked by a session on 2026-10-11.
+- Since 2026-10-12. Row: reports. Source: his words of 2026-10-08, 2026-10-12, checked by a session on 2026-10-12.
 
 ### review-model
 The one model a Codex review runs on: gpt-6.1-sol.
