@@ -2472,15 +2472,22 @@ lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b` and are the lead's clai
 settled" is replaced after his line 8315 ("listo entonces apliquemoslo asi"), a yes to the
 direction and not to a design; (b) his order of a switch for the Codex review, line 8758;
 (c) the rule about 1.0.0, the result of the lead's question 15; (d) F6 closes with 13 of 15
-trials, his tap at line 9799 ("Cerrar con 13"): the two not run (resolver 3 and spec-drift 3
-of the current arm at medium) and why, the suite refusing another stack
-(`evals/suite.mjs:650`) and the downgrades running on a live memory store, each verified in
-the files first; (e) gentle-ai's reviewers' model is left as it is and checked at the next
-native review, his tap at line 9780, if the roadmap names it as open; (f) the register of
-failures: a memory note of another session overwritten by this one
-(`questions-through-the-question-tool.md`, 19:57), commit, push and pull request joined by
-semicolons (19:42), and the resume hook saying "the host compacted this session by itself"
-after he typed `/compact` (the lead's claim, JH 5's candidate). Done since the last entry:
+trials; (e) gentle-ai's reviewers' model; (f) the register of failures.
+**Where that list stands after the compaction of 23:22 (the host's, read from the clock):**
+(a), (b), (d) and (f) are written on that branch. For (d) the lines the lead first gave were
+its own entries; it corrected them, and this session read his taps at 9794 ("Cerrar con 13
+(Recomendada)") and 9776 ("Dejar y comprobar (Recomendada)") with `js-harness sessions
+--quote`. The refusal of another stack is at `evals/suite.mjs:751` (the message of
+`refusalOf`, `:329`), not at `:650`; the recorded versions are in `odd/tasks/codex-parity.md`
+of its branch, line 1059; the machine now answers codex-cli 0.162.0, gentle-ai 4.1.1 and
+engram 3.4.0. (f) added `memory-note-overwritten`, `merge-review-covers-main` (JH 8's
+candidate) and `resume-names-wrong-maker` (JH 5's candidate), and one more sighting of
+`chained-step-not-conditional`. (e) is not written: the roadmap names the reviewers' model
+nowhere (`rg -n -i "reviewers" docs/ROADMAP.md` prints nothing, on a file that would hold the
+word if it did), so his answer of line 9776 lives in the lead's relief file until a document
+has a place for it. (c) waits for the line of his answer, asked of the lead at 23:22. Left:
+one merge of `origin/main` as the last step, the push, the pull request. Done since the last
+entry:
 his decision that a Codex review runs at medium is on `main` (pull request 87; this session
 wrote the rule half as a patch, his tap read at line 8962). Two rules of his for every
 session, to read at lines 8423 and 8528 before they are applied: a question to him goes
