@@ -1194,6 +1194,14 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    demand, its paste off and the tool asked; what is chosen only when a session starts (the
    TypeScript server) chosen from the project's files at `init`, with a switch in the manifest;
    `install` preparing nothing of code in a project that has none until the first appears.
+   **The Codex review is one of those functions, by his order** (line 8758, read with
+   `sessions --quote`; he sent it while the lead worked): "tambien quiero que la funcionalidad
+   de revision con Codex se pueda desactivar ya que por ejemplo si este harnes lo utiliza otra
+   persona o en otro proyecto y no tengo para pagar la el plan para la revision entonces se
+   desactiva y dejamos solo la revision del mismo claude peroque hace gentle-ai". So a project
+   can turn the Codex review off and keep gentle-ai's alone. Today the push check refuses a
+   branch whose code commits no Codex record covers, so the switch has to reach that check
+   too. Not designed, not assigned; it joins the candidate above.
    When: after JH 8's cut of the review command is on `main`; not assigned. A third sample of
    the switch, the lead's claim: his prompt of line 8250 carries no attachment of the hook,
    where the one of line 8161 had one at line 8163.
