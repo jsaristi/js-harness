@@ -155,6 +155,12 @@ export const entryComponents = [
     pointer: ['hooks', 'SessionStart'],
     entry: () => resumeHookEntry(),
   },
+  {
+    id: 'claude-pause-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'PostToolUse'],
+    entry: () => pauseHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -181,6 +187,24 @@ function resumeHookEntry() {
   };
 }
 
+/** The command of the pause hook. The `|| exit 0` is the point: a hook that exits 2 blocks its host, and an older
+ * copy of js-harness on the path answers 2 to a command or a flag it does not know (it happened to `resume` itself
+ * on 2026-10-12), so whatever the command answers, the entry exits 0. The form is one that both `sh` and `cmd.exe`
+ * read. Which shell a Windows host runs a hook's command in is not proven here: it is one of the tries the feature
+ * document lists. */
+export const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
+
+/** `resume --pause` (bin/resume.mjs) registered as a `PostToolUse` hook: after a tool call that passes the context
+ * pause it prints the notice, once for the stretch of work (odd/tasks/session-channel.md). Claude Code only: the
+ * pause is read from a Claude Code transcript, and a Codex session has none here, so there is no Codex entry. No
+ * matcher, so the entry runs after every tool, which is what the notice needs. Two seconds: a short budget, since
+ * the hook runs after every tool call. */
+function pauseHookEntry() {
+  return {
+    hooks: [{ type: 'command', command: PAUSE_HOOK_COMMAND, timeout: 2 }],
+  };
+}
+
 export function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
@@ -203,19 +227,20 @@ function deepEqual(a, b) {
   return false;
 }
 
-/** R3-003 (accepted T4 review follow-up): true when `value`, restricted to exactly our own
- * `pointer` path, has nothing else in it — at every level along the pointer that key must be the
- * *only* key present (any other key, even one with an empty-looking value like `{}` or `null`,
- * means this document is not ours alone to delete), and the value at the end of the pointer must
- * be the empty array we left behind after removing our entry. */
-function isOnlyOurPointerPath(value, pointer) {
+/** R3-003 (accepted T4 review follow-up): true when `value` holds nothing but our own `pointers`: every key
+ * must lead, along one of them, to what we wrote, and every key that ends a pointer must hold the empty array we
+ * left behind after removing our entry. Any other key, even one with an empty-looking value like `{}` or `null`,
+ * means this document is not ours alone to delete. Several pointers can share one file: the doctor's and the
+ * resume hook's both hang from `hooks.SessionStart`, and the pause hook hangs from `hooks.PostToolUse`, so a file
+ * js-harness created goes with the last of them. */
+function isOnlyOurPointerPaths(value, pointers) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const keys = Object.keys(value);
-  if (keys.length === 0) return true;
-  const [head, ...rest] = pointer;
-  if (keys.length !== 1 || keys[0] !== head) return false;
-  if (rest.length === 0) return Array.isArray(value[head]) && value[head].length === 0;
-  return isOnlyOurPointerPath(value[head], rest);
+  return Object.keys(value).every((key) => {
+    const below = pointers.filter((pointer) => pointer[0] === key).map((pointer) => pointer.slice(1));
+    if (below.length === 0) return false;
+    if (below.some((pointer) => pointer.length === 0)) return Array.isArray(value[key]) && value[key].length === 0;
+    return isOnlyOurPointerPaths(value[key], below);
+  });
 }
 
 /** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a
@@ -238,8 +263,39 @@ function serializeJson(data, { trailingNewline, useCRLF, indent }) {
   return text;
 }
 
+/** The key of a container inside `target`: the file and the keys from its root down to it. Two entries of ours in one file
+ * that share a container (`hooks` for both `SessionStart` entries) get the same key, which is how one entry finds what the
+ * other made. */
+const containerKey = (target, keys) => JSON.stringify([target, ...keys]);
+
+/** The containers js-harness made, as `containerKey`s, from what the earlier records say: each record names how many of
+ * the containers on its pointer were made by install (`createdContainers`), counted up from the array at the pointer. A
+ * later install that finds one already there still knows it is ours, so a re-install never forgets what the first one made. */
+function oursContainers(entries) {
+  const ours = new Set();
+  for (const record of entries ?? []) {
+    const made = record.createdContainers ?? 0;
+    for (let i = Math.max(0, record.pointer.length - made); i < record.pointer.length; i += 1) {
+      ours.add(containerKey(record.path, record.pointer.slice(0, i + 1)));
+    }
+  }
+  return ours;
+}
+
+/** How many containers, counted up from the array at the pointer, are ours. `ourContainers[i]` says whether the container
+ * keyed by `pointer[i]` is; the count stops at the first one that is not, since a container is only ours with the ones
+ * below it. */
+function countOurs(ourContainers) {
+  let count = 0;
+  for (let i = ourContainers.length - 1; i >= 0 && ourContainers[i]; i -= 1) count += 1;
+  return count;
+}
+
 /** Appends `entry` at `pointer` inside the JSON file at `target`, creating intermediate objects
  * and the array itself as needed. Missing file -> starts from `{}` (`createdFile: true`).
+ * `ours` is the set of containers js-harness made (`oursContainers`): every container this creates is added to it, so
+ * the next entry of the same run that finds it there records it as made too, and the result says how many of the
+ * containers on the way to `pointer` are ours (`createdContainers`).
  * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure
  * reading or writing the target (R3-002: an unreadable file, a directory sitting at the path, an
  * unwritable or missing-as-a-directory host dir, ...) all leave the file completely untouched and
@@ -248,7 +304,7 @@ function serializeJson(data, { trailingNewline, useCRLF, indent }) {
  * array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent:
  * an entry that is already there (by deep equality) is left alone and the file is not rewritten at
  * all, so a repeat install/sync never reformats a file that already has what it needs. */
-function appendEntryToFile(target, pointer, entry) {
+function appendEntryToFile(target, pointer, entry, ours) {
   let fileExisted;
   let raw;
   try {
@@ -272,27 +328,36 @@ function appendEntryToFile(target, pointer, entry) {
   const useCRLF = raw.includes('\r\n');
   const indent = fileExisted ? detectIndent(raw) : 2;
 
+  // `ourContainers[i]` says whether the container keyed by pointer[i] is ours: one this walk creates, or one an earlier
+  // record or an entry of this run made. A container that is there and not ours is the user's, and is never removed.
   let cursor = data;
-  for (const key of pointer.slice(0, -1)) {
+  const ourContainers = [];
+  for (const [i, key] of pointer.slice(0, -1).entries()) {
     const existing = cursor[key];
+    const id = containerKey(target, pointer.slice(0, i + 1));
     if (existing === undefined) {
       cursor[key] = {};
+      ours.add(id);
     } else if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) {
       return { skipped: true, createdFile: false, reason: `"${key}" is not an object` };
     }
+    ourContainers.push(ours.has(id));
     cursor = cursor[key];
   }
   const lastKey = pointer[pointer.length - 1];
+  const leafId = containerKey(target, pointer);
   const existingLeaf = cursor[lastKey];
   if (existingLeaf === undefined) {
     cursor[lastKey] = [];
+    ours.add(leafId);
   } else if (!Array.isArray(existingLeaf)) {
     return { skipped: true, createdFile: false, reason: `"${lastKey}" is not an array` };
   }
+  ourContainers.push(ours.has(leafId));
   const arr = cursor[lastKey];
 
   if (arr.some((item) => deepEqual(item, entry))) {
-    return { skipped: false, createdFile: !fileExisted };
+    return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
   }
 
   arr.push(entry);
@@ -302,16 +367,21 @@ function appendEntryToFile(target, pointer, entry) {
   } catch (err) {
     return { skipped: true, createdFile: false, reason: err.message };
   }
-  return { skipped: false, createdFile: !fileExisted };
+  return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
 }
+
+/** The pointers of every entry recorded for the file `target` in `records`: what js-harness wrote in that file. */
+const pointersIn = (records, target) => (records ?? []).filter((record) => record.path === target).map((record) => record.pointer);
 
 /** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a
  * pointer shape that does not match, or an entry that is not there (the user changed or removed
  * it) all leave the file completely untouched — reported `kept` (or nothing, for a missing file,
  * mirroring how `uninstall` already treats a missing file component). Deletes the whole file only
  * when `createdFile` is true (js-harness made it) and removing the entry leaves nothing but empty
- * containers behind. */
-function removeEntryFromFile(target, pointer, entry, createdFile) {
+ * containers behind. `createdContainers` is how many of the containers on `pointer` install made for the entry; each of
+ * them that is empty once the entry is out goes too (`removeEmptyCreatedContainers`). `pointers` is every pointer
+ * js-harness recorded in this file, which is what "ours" means for the last check (see `isOnlyOurPointerPaths`). */
+function removeEntryFromFile(target, pointer, entry, createdFile, createdContainers = 0, pointers = [pointer]) {
   if (!fs.existsSync(target)) return { status: 'absent' };
   const raw = fs.readFileSync(target, 'utf8');
 
@@ -345,14 +415,34 @@ function removeEntryFromFile(target, pointer, entry, createdFile) {
   arr.splice(idx, 1);
 
   // R3-003: only delete a file we created when nothing but empty containers along our own pointer
-  // path remains — any other key, even one with an empty-looking value, keeps the file.
-  if (createdFile && isOnlyOurPointerPath(data, pointer)) {
+  // paths remains — any other key, even one with an empty-looking value, keeps the file.
+  if (createdFile && isOnlyOurPointerPaths(data, pointers)) {
     fs.rmSync(target, { force: true });
     return { status: 'removed' };
   }
 
+  removeEmptyCreatedContainers(data, pointer, createdContainers);
   fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
   return { status: 'removed' };
+}
+
+/** Takes out the containers install made for an entry, `createdContainers` of them counted up from the array at `pointer`,
+ * each only when it is empty now: the array that held the entry, then the object above it. A container with anything
+ * left in it, the user's or another entry's, stays, and so does everything above it. */
+function removeEmptyCreatedContainers(data, pointer, createdContainers) {
+  // holders[i] is the object that holds pointer[i]: holders[0] is the file's root.
+  const holders = [data];
+  for (const key of pointer.slice(0, -1)) holders.push(holders[holders.length - 1][key]);
+  for (let i = pointer.length - 1; i >= 0 && i >= pointer.length - createdContainers; i -= 1) {
+    const container = holders[i][pointer[i]];
+    if (!isEmptyContainer(container)) return;
+    delete holders[i][pointer[i]];
+  }
+}
+
+function isEmptyContainer(value) {
+  if (Array.isArray(value)) return value.length === 0;
+  return value !== null && typeof value === 'object' && Object.keys(value).length === 0;
 }
 
 /** Installs every entry component, carrying forward `createdFile` from a previous manifest record
@@ -364,15 +454,21 @@ function removeEntryFromFile(target, pointer, entry, createdFile) {
  * created the file is a fact of the file, not of the entry: the second entry of a first install finds the
  * file the first one has just made, and recorded as not created it would be the last one `uninstall`
  * removes and would leave the file behind. So every entry of one file carries what the first one of this
- * run settled for it. */
+ * run settled for it.
+ *
+ * The same holds for the containers on the way to each pointer (`createdContainers`): the second `SessionStart` entry
+ * finds the `hooks` object and the list the first one made, and records them as made too, since they are ours. The
+ * set `ours` carries that from one entry to the next, and from the earlier records, so each entry's record says the
+ * truth and whichever of the entries is removed last takes its containers with it. */
 function installEntries(home, previousManifest) {
   const createdByTarget = new Map();
+  const ours = oursContainers(previousManifest?.entries);
   return entryComponents.map((component) => {
     const target = component.target(home);
     const pointer = component.pointer;
     const entry = component.entry();
     const previousEntry = previousManifest?.entries?.find((e) => e.path === target);
-    const result = appendEntryToFile(target, pointer, entry);
+    const result = appendEntryToFile(target, pointer, entry, ours);
     if (!createdByTarget.has(target)) createdByTarget.set(target, previousEntry ? previousEntry.createdFile : result.createdFile);
     return {
       path: target,
@@ -380,6 +476,7 @@ function installEntries(home, previousManifest) {
       entry,
       sha256: sha256(JSON.stringify(entry)),
       createdFile: createdByTarget.get(target),
+      createdContainers: result.createdContainers ?? 0,
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
     };
@@ -723,7 +820,7 @@ export function sync(home, version, deps = {}) {
         (e) => e.path === entry.path && deepEqual(e.pointer, entry.pointer) && deepEqual(e.entry, entry.entry),
       );
       if (stillDeclared) continue;
-      removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile);
+      removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile, entry.createdContainers, pointersIn(previous.entries, entry.path));
     }
   }
 
@@ -829,7 +926,7 @@ export function uninstall(home, deps = {}) {
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {
     if (entry.skipped) continue;
-    const result = removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile);
+    const result = removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile, entry.createdContainers, pointersIn(manifest.entries, entry.path));
     if (result.status === 'removed') entriesRemoved.push(entry.path);
     else if (result.status === 'kept') entriesKept.push(entry.path);
   }

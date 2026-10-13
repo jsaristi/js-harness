@@ -2178,6 +2178,35 @@ summary.
       `D:\js-harness-worktrees\session-channel-hook` and its branch
       `wip/session-compaction-hook`. The local branch `feat/session-compaction` is merged
       and can be deleted.
+      HIS ANSWER (2026-10-12 19:57 local): the entry is written for every project. It is
+      an option he tapped, not a sentence he typed: the lead put the question to him with
+      the host's question tool, at his request (its "Pregunta 1", on where the installation
+      leaves the pause's notice; its words name the pause's share, which this document
+      states nowhere but in its rule), and the answer recorded is "Para todo
+      proyecto (Recomendado)" (the lead's transcript `65318fd5`, the call at line 8480 and
+      its result at line 8488, 2026-10-13T00:57:59Z, both read here; `sessions --quote`
+      does not quote a tool's result, so the line was read as JSON). So part e goes on as
+      built. It is rebuilt on `main` at `8bfe9a7` (this document's commit rebased, the
+      patch applied clean) and is the commit that holds this text: by hand before its
+      gate, manifest 112, install 66, stack 123, doctor 53, doctor-hook 11, practice-lib
+      87, dispatcher 31, tui 75 pass, and `rules check` PASS (18 rules). Its gate, its
+      reviews and the practice journey are recorded after it, with these two things owed
+      from the afternoon: pull request 76 (`install` refuses a word it does not know) is
+      merged, `main` `03d6d20`, and gentle-ai's outcome for its commit `0ccf615` was
+      medium, 64 lines, not due (it was written in that pull request's body, since this
+      document was not touched on that branch).
+      HIS NEW RULE ON QUESTIONS (2026-10-12 19:55 local, the lead's transcript `65318fd5`,
+      lines 8423 and 8439, both read with `sessions --quote`, exit 0): "tu no tienes una
+      funcionalidad o forma de darme las preguntas que yo apriete con click las opciones y
+      la opcion de otro" and "Siempre hazme las preguntas asi por favor osea asi siempre
+      debe ser el protocolo sobre todo para que no se me pase ninguna, por favor metela al
+      harnes". By the lead's reading: a question to him goes through the host's question
+      tool, one a call, the recommended option first and marked; the fenced block is the
+      fallback; a question he dismisses stays open. Putting it in the harness is this
+      feature's, after part e, design first and to the lead: the sentence of `AGENTS.md`
+      about a decision's block (the file is at its budget, and its wording is JH 7's T8:
+      say how the two meet before writing), the orchestrator's protocol text, and a list
+      of his open questions that survives a compaction (the board is the candidate).
    Not done here, each his: installing anything on this machine; the three tries of point
    14, which open a session.
 2. After T6b, in this order: T16, design first; T7; T8, with the twelve items of the sweep,
@@ -2191,8 +2220,8 @@ machine and does not work until the installed command is brought up to `main`, w
 lead asks him.
 Waiting for him, each asked alone, once, and only when he is back and no work runs. Answered
 at 03:45: the pause's entry is installed on this machine when it is on `main`, by the lead.
-Asked at 15:25 on 2026-10-12 and open: whether `install` writes that entry for every
-project. Not asked yet: whether the
+Answered on 2026-10-12 at 19:57: `install` writes that entry for every project ("Next
+step", 1e). Not asked yet: whether the
 second block goes once the resume hook is installed; tests owed 1, 2, 3 and 6 and the three
 tries of point 14, each before it is run. The yardstick of "the last task" ("Open points",
 its first row) and whether the orchestrator is relieved or compacted (the sweep's A3 89)

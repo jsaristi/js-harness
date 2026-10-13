@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion } from './lib.mjs';
-import { HARNESS_HOOKS, hostHooksProblem } from './practice-lib.mjs';
+import { hooksOfHost, hookLabel, hostHooksProblem, uninstalledHostProblem } from './practice-lib.mjs';
 
 // The skills `install` writes for each host, one folder each under `<home>/.<host>/skills/`.
 const SKILLS = ['js-harness', 'js-harness-orchestrator'];
@@ -37,18 +37,20 @@ async function main() {
   let seededClaudeSettings = '';
   let seededCodexHooks = '';
 
-  // The command of the entry each host file is seeded with, the user's, which install must leave first.
+  // The command of the entry each host file is seeded with, the user's, which install must leave first, and the host
+  // whose file it is: what install writes there depends on the host (`hooksOfHost`).
   const seededCommands = [
-    [claudeSettingsPath, 'echo unrelated-claude-hook'],
-    [codexHooksPath, 'echo unrelated-codex-hook'],
+    [claudeSettingsPath, 'echo unrelated-claude-hook', 'claude'],
+    [codexHooksPath, 'echo unrelated-codex-hook', 'codex'],
   ];
 
   /** What is wrong with the hook entries of the two host files, or `null`: each must hold its seeded entry
-   * and then every entry `install` writes (`HARNESS_HOOKS`: the doctor's for `startup|resume`, the resume
-   * hook's for `compact`) once, by its matcher and its command (`hostHooksProblem`). */
+   * and then every entry `install` writes for its host (`hooksOfHost`: the doctor's for `startup|resume` and
+   * the resume hook's for `compact`, for both; the pause hook's for Claude Code only) once, by its event, its
+   * matcher and its command (`hostHooksProblem`). */
   function hostFilesProblem() {
-    for (const [filePath, seededCommand] of seededCommands) {
-      const problem = hostHooksProblem(fs.readFileSync(filePath, 'utf8'), seededCommand);
+    for (const [filePath, seededCommand, host] of seededCommands) {
+      const problem = hostHooksProblem(fs.readFileSync(filePath, 'utf8'), seededCommand, host);
       if (problem !== null) return `${filePath}: ${problem}`;
     }
     return null;
@@ -141,7 +143,7 @@ async function main() {
       }
     });
 
-    step(`install added its ${HARNESS_HOOKS.length} SessionStart entries to each seeded host file, after the seeded one: ${HARNESS_HOOKS.map((hook) => `${hook.matcher} -> ${hook.command}`).join('; ')}`, () => {
+    step(`install added its hook entries to each seeded host file, after the seeded one: ${seededCommands.map(([, , host]) => `${host} ${hooksOfHost(host).map(hookLabel).join(' and ')}`).join('; ')}`, () => {
       const problem = hostFilesProblem();
       assertThat(problem === null, `after install, ${problem}`);
     });
@@ -153,7 +155,7 @@ async function main() {
       assertThat(codexRaw.includes('\n\t"hooks"'), `expected tab indentation in:\n${codexRaw}`);
     });
 
-    step('a second `install --home` adds no duplicate SessionStart entries', () => {
+    step('a second `install --home` adds no duplicate hook entries', () => {
       const result = run(process.execPath, [binPath, 'install', '--home', home]);
       assertThat(result.status === 0, `install exited ${result.status}: ${result.stderr}`);
       const problem = hostFilesProblem();
@@ -210,12 +212,12 @@ async function main() {
       assertThat(manifest.version === '0.2.0', `expected manifest version 0.2.0, got ${manifest.version}`);
     });
 
-    step('the `sync` run inside upgrade also added no duplicate SessionStart entries', () => {
+    step('the `sync` run inside upgrade also added no duplicate hook entries', () => {
       const problem = hostFilesProblem();
       assertThat(problem === null, `after upgrade's sync, ${problem}`);
     });
 
-    step('`js-harness uninstall` removes what it wrote and restores both hook files byte-for-byte', () => {
+    step('`js-harness uninstall` removes what it wrote and restores both hook files byte for byte as seeded', () => {
       // --global (T3b item 6, R3-uninstall-cwd-dependent-machine-tests): this step must always
       // mean the machine install under `home`, never depend on whichever directory `npm run e2e`
       // happens to be invoked from.
@@ -230,15 +232,18 @@ async function main() {
         !fs.existsSync(path.join(home, '.codex', 'skills')),
         'expected the Codex skill dir to be removed',
       );
+      // uninstall takes back the PostToolUse list install made in Claude's file as well, so both files are the seeded bytes.
       const claudeAfter = fs.readFileSync(claudeSettingsPath, 'utf8');
+      const claudeProblem = uninstalledHostProblem(claudeAfter, seededClaudeSettings);
       assertThat(
-        claudeAfter === seededClaudeSettings,
-        `expected Claude settings.json restored byte-for-byte, got:\n${claudeAfter}`,
+        claudeProblem === null,
+        `Claude settings.json after uninstall: ${claudeProblem}`,
       );
       const codexAfter = fs.readFileSync(codexHooksPath, 'utf8');
+      const codexProblem = uninstalledHostProblem(codexAfter, seededCodexHooks);
       assertThat(
-        codexAfter === seededCodexHooks,
-        `expected Codex hooks.json restored byte-for-byte, got:\n${codexAfter}`,
+        codexProblem === null,
+        `Codex hooks.json after uninstall: ${codexProblem}`,
       );
     });
   } finally {
