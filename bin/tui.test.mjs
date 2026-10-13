@@ -219,10 +219,17 @@ test('runTui asks for confirmation before uninstalling', async () => {
 
 // --- CLI entry: tuiMain ---
 
-test('tuiMain shows an available update from the injected spawn, then quits cleanly', async () => {
+// Opening the menu asks no package manager which release is the latest: the name `js-harness` is nobody's
+// on the public registry. The injected spawn also serves the stack's probes, so what is asserted is that
+// no call carries `view`, and that an answer of a newer version is shown nowhere.
+test('tuiMain with no source asks no package manager for a release and shows no update', async () => {
   const stdin = makeFakeStdin();
   const stdout = makeFakeStdout();
-  const spawn = () => ({ status: 0, stdout: '99.0.0', stderr: '' });
+  const calls = [];
+  const spawn = (cmd, args = []) => {
+    calls.push([cmd, ...args]);
+    return { status: 0, stdout: '99.0.0', stderr: '' };
+  };
 
   const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir], {}, spawn, { stdin, stdout });
   await flush();
@@ -230,7 +237,32 @@ test('tuiMain shows an available update from the injected spawn, then quits clea
   const code = await done;
 
   assert.equal(code, 0);
-  assert.ok(stdout.chunks[0].includes('update available: 99.0.0'));
+  assert.deepEqual(calls.filter((call) => call.includes('view')), []);
+  assert.ok(!stdout.chunks.join('').includes('update available'));
+});
+
+test('tuiMain shows the update a named source folder holds, and its commands read that same folder', async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-source-'));
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  try {
+    fs.writeFileSync(path.join(source, 'js-harness-99.0.0.tgz'), '');
+    const spawn = () => ({ status: 0, stdout: '', stderr: '' });
+
+    const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir, '--source', source], {}, spawn, { stdin, stdout });
+    await flush();
+    stdin.emit('data', 'q');
+    const code = await done;
+
+    assert.equal(code, 0);
+    assert.ok(stdout.chunks[0].includes('update available: 99.0.0'));
+
+    const { result, lines } = await silently(() => buildCommands({ home: nonGitDir, source, env: {}, spawn }).update());
+    assert.equal(result, 0);
+    assert.match(lines.join('\n'), /update available: 99\.0\.0/);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+  }
 });
 
 test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', async () => {

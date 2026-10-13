@@ -10,7 +10,6 @@ import {
   pickLatestTarball,
   latestFromSource,
   splitCommand,
-  viewArgs,
   installArgs,
 } from './version.mjs';
 
@@ -69,16 +68,12 @@ test('splitCommand splits a package-manager command into argv', () => {
   assert.deepEqual(splitCommand('  node   cli.js  '), ['node', 'cli.js']);
 });
 
-test('viewArgs builds `view <pkg> version`', () => {
-  assert.deepEqual(viewArgs('js-harness'), ['view', 'js-harness', 'version']);
-});
-
 test('installArgs builds `install -g <spec>`, with an optional --prefix', () => {
-  assert.deepEqual(installArgs('js-harness@0.2.0'), ['install', '-g', 'js-harness@0.2.0']);
-  assert.deepEqual(installArgs('js-harness@0.2.0', 'C:/tmp/prefix'), [
+  assert.deepEqual(installArgs('C:/src/js-harness-0.2.0.tgz'), ['install', '-g', 'C:/src/js-harness-0.2.0.tgz']);
+  assert.deepEqual(installArgs('C:/src/js-harness-0.2.0.tgz', 'C:/tmp/prefix'), [
     'install',
     '-g',
-    'js-harness@0.2.0',
+    'C:/src/js-harness-0.2.0.tgz',
     '--prefix',
     'C:/tmp/prefix',
   ]);
