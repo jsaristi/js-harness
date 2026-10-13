@@ -2198,6 +2198,27 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   file (the rule's value, its source, the render, the hash, any rules test that pins
   high), applied there; then `effort-turn.sh` with its count of changed files and its
   `git add` brought up to the files in the tree, and its RED kept as it is.
+- 2026-10-12 · **JH 7's patch applied; the effort commit's second turn is asked** (the
+  host compacted this session between the two; read at 21:46, context at 24%). The
+  patch (`review-effort-medium.patch`, the rule's value and date in
+  `bin/lib/rules-data.mjs`, his tap at line 8962 of the orchestrator's transcript in
+  `docs/rule-sources.json`, the render and hash of `docs/RULES.md`, the one line of
+  `bin/rules.test.mjs`) applied clean; `rules check` there: exit 0, 18 rules, hash
+  `7963ae6d5597`. The tree holds seven changed files, none staged. **One thing found
+  before asking the turn:** the first turn's failed commit left the two command files
+  staged, and the script's RED step restores `main`'s command with
+  `git checkout -- <file>`, which restores from the index, so the RED would have run
+  against the changed command and not failed. Unstaged with `git reset -q` first; a
+  turn script that restores a file for its RED names the commit
+  (`git checkout HEAD -- <file>`) from now on. **The turn** (`effort-turn.sh`, asked at
+  21:46, log `effort-turn.log`): the same RED; GREEN over the command's test file and
+  the three files that failed the gate (`bin/lib/rules-bindings.test.mjs`,
+  `bin/rules.test.mjs`, `evals/review/compare.test.mjs`); the commit of the seven files
+  with the whole gate; the plan's own words; Codex once from that checkout only if the
+  printed plan is inside 315,000. **When it ends green:** push, pull request, and to the
+  orchestrator the plan's words, the head and the spend beside the allowance. Exit 11:
+  the printed plan is over the allowance, nothing was spent, and it goes to him through
+  the orchestrator.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
