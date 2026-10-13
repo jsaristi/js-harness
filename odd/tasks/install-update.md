@@ -71,7 +71,8 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   its `harness.json` was written by hand for `documents` and `documentSensors` and never by
   `init`. Whether such a file is a project with no pin or an invalid one was the design's
   question, his, answered on 2026-10-13 (question 25): a project with no pin.
-- [ ] T7 The package holds the commands and nothing else of this repository. Added on 2026-10-13
+- [x] T7 (5502d54; route: inline; done on 2026-10-13, see Progress) The package holds the commands
+  and nothing else of this repository. Added on 2026-10-13
   (`docs/ROADMAP.md`, the defects in shipped behaviour, item c; open decision 10, answered by
   him the same day: "Solo los comandos (Recomendada)" to question 24, read in the
   orchestrator's transcript at line 11146). `package.json` lists `bin/` without its test files
@@ -224,15 +225,45 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   - Codex, once, 18:21, medium effort, `2e5dda0..243794e`: "the patch is correct" (0.94), no
     finding, 135,381 input tokens (plan 87,000, allowance 300,000), recorded. The push check: 1
     code commit, covered. No sub-agent.
-  - Left open, not built: `init` on such a file answers "already initialized at unknown
+  - Not built, by his answer: `init` on such a file answers "already initialized at unknown
     version; js-harness sync moves a project to its pin" and writes nothing
-    (`bin/init.mjs:69-72`), so the pin is one line by hand; whether `init` should write it is
-    a product question, his. `uninstall` never reads the pin (`bin/lib/project.mjs`,
+    (`bin/init.mjs:69-72`), so the pin is one line by hand. Whether `init` should write it was
+    put to him by the orchestrator: "Dejarlo como hoy (Recomendada)", tapped, among "Que init
+    la escriba" and "Que init pregunte" (the orchestrator's transcript, line 12059,
+    2026-10-13T23:42:24Z, read by me). So `init` does not touch a file that exists, and
+    `status` says how to pin. `uninstall` never reads the pin (`bin/lib/project.mjs`,
     `uninstallProject`: only the manifest), so it is unchanged.
+- 2026-10-13 T7 (`5502d54`, branch `fix/package-contents` off `fix/status-no-pin` `5385db7`, which
+  is on `main` since pull request 103; written inline by the session "JH 8" on the
+  orchestrator's order, by his answer to question 24, "Solo los comandos (Recomendada)", read
+  in the orchestrator's transcript at line 11146): `package.json` lists `bin/`,
+  `!bin/**/*.test.mjs` and `!bin/**/*.testkit.mjs`, and no `AGENTS.md`. Read before: no command
+  reads the package's own `AGENTS.md` (every `AGENTS.md` path in `bin/` is built from the
+  project's folder or the home), and no file of `bin/` that is not a test imports a test file
+  or the test kit (`rg "testkit|\.test\.mjs" bin` outside the tests finds only comments and
+  the scan of `rules.mjs`).
+  - Measured with the real npm CLI 11.12.1 (`npm pack --dry-run --json`): 117 files before (59
+    test files, 1 test kit, `AGENTS.md`, `package.json`, 55 command files), 1,125,283 bytes
+    packed; 56 after (the 55 and `package.json`), 438,313 bytes.
+  - The test, `scripts/package-contents.test.mjs`: one dry run of `npm pack` through the npm CLI
+    `scripts/lib.mjs` resolves (the `npm` on this machine's path is pnpm's, which refuses to
+    pack here: "ERR_PNPM_BIN_CRLF", the bin file's first line ends with CRLF in this
+    checkout); it holds no test file, no `AGENTS.md`, every file of `bin/` that is not a test,
+    and nothing outside `bin/` but what npm packs whatever `files` says. It is skipped, with
+    the reason, where there is no npm CLI beside node.
+  - Turn of 18:41 (`pc-turn.sh`): RED with `package.json` at HEAD, 1 of 1 fails ("a test file
+    is in the package"); GREEN 1 of 1, not skipped; the commit's gate passed whole at 18:57.
+    gentle-ai: review not due (`under_budget`, medium risk, 78 lines).
+  - Codex, once, 18:58, medium effort, `5385db7..5502d54`: "the patch is correct" (0.91), no
+    finding, 74,849 input tokens (plan 27,000, allowance 300,000), recorded. The push check: 1
+    code commit, covered. No sub-agent.
+  - Seen and not built, told to the orchestrator: pnpm's own `pack` refuses this checkout on
+    Windows because `bin/js-harness.mjs` is checked out with CRLF; whether an install by pnpm
+    from the repository meets the same refusal is not measured.
 
 ## Next step
-T5 and T6 are done; T6 waits for its pull request to be merged by the orchestrator. One thing is
-open, sent to the orchestrator on 2026-10-13 at 06:27 and ordered by it at 16:57 after the
+T5, T6 and T7 are done; T7 waits for its pull request to be merged by the orchestrator. One thing
+is open, sent to the orchestrator on 2026-10-13 at 06:27 and ordered by it at 16:57 after the
 package's contents:
 - **A candidate task, not yet in Tasks:** with no `--prefix`, `upgrade --source` runs the sync
   after its install as `js-harness sync --global` through a shell (`bin/update.mjs`, the
@@ -242,6 +273,12 @@ Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it c
 "resolveLatest starts no process and answers nothing when no source is named" on purpose.
 
 ## T6: state for a resume
+
+**At 18:59 on 2026-10-13: T7 (the package's contents) is done and reviewed too (`5502d54`,
+Progress). Next, by the orchestrator's order: the sync that runs from the path after
+`upgrade --source` with no `--prefix` (the candidate task under "Next step"), then
+`odd/tasks/gate-wait.md`, "Next". The gate on GitHub is no longer this session's: the
+orchestrator gave it to a new session, "JH 10", at 18:40.**
 
 **At 18:22 on 2026-10-13: T6 is done and reviewed (`243794e`, Progress); what is left of it is
 its pull request and the notice to the orchestrator. The session was compacted by the app at
