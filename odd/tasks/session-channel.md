@@ -1103,9 +1103,11 @@ reader, and that table names this feature as their owner.
 - [ ] T17 Questions to him go through the question tool and through the orchestrator, and
   the open ones are computed (point 15; his words of 2026-10-12). Slice (a), built:
   `sessions --quote` and the stretch before a compaction read his answer to a question, and
-  refuse a question he closed. The reader's attack is done and version 2 written. Owed:
-  (b1) the number in the tool's text and "Open questions" on the board from the calls of the
-  transcripts; (b2) the `question` notice with fields, the answer with its number and copy,
+  refuse a question he closed. The reader's attack is done and version 2 written. Slice
+  (b1), built: "Open questions" on the board, computed from the question-tool calls of the
+  transcripts, each call once, and a watch that returns for a question he closes (Progress,
+  2026-10-13 04:48); the number in the tool's text is a sentence of the skill and goes with
+  (c). Owed: (b2) the `question` notice with fields, the answer with its number and copy,
   the withdrawal, the resume's half; (c) the orchestrator skill's text, the sentences for
   `AGENTS.md` and the two declared rules
 
@@ -2020,6 +2022,57 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   with the labels "a" and "a, a": before the fix it does not end. `main` moved meanwhile to
   `87cb7e2` (pull request 87, of another session: a Codex review runs at medium from a
   checkout that holds it), and this branch takes one merge of it before its push.
+- 2026-10-13, written at 04:48: T17, slice (b1) of point 15, on branch `feat/open-questions`
+  cut from `f43392d`. What slice (a) left unrecorded is in "Next step", 1e (commit `353009c`,
+  the merge `7e632ee`, pull request 88 merged as `f43392d`). Built, each step with its test
+  seen failing in a turn at the gate and passing in the same turn: `questionsOf` and the fact
+  `questions` of `sessionFacts` (each question-tool call of a transcript once, with what
+  became of it: answered, closed, unanswered, pending); `openQuestionsOf` (a call the host
+  copied into several files is one question by its id, answered in any file is answered, who
+  asked is the file that has it first, one asked again later and answered then is not open,
+  oldest first); the section "Open questions" of `renderBoard`, after the channel, and the
+  key `questions` of the board, in the text and in `--json`; `questionChanges` in
+  `boardChanges`, so a watch returns once for a question he closes and not for one that is
+  only on his screen, and `watchBaseline` computes the questions again from the last
+  readable facts of each session, so a transcript that one look could not read does not make
+  a closed question news twice. The host compacted this session by itself in the middle of
+  the slice (its boundary in the transcript: 04:34:23, trigger "auto", 469,728 tokens
+  before); it resumed from this document and the state file, and the lead had its line in
+  the same minute. Two turns ended with exit 1 and committed nothing: at 04:32 three older
+  tests of the command cut their section at "Worktrees", where "Open questions" now comes
+  first (their cut is moved); at 04:46 an assertion of the new baseline test counted every
+  line of the watch and not the question's (the code was right, the test is fixed). The
+  section's last line first said "of the last 12h": false, since the board reads whole each
+  transcript that changed in its window, so a question of days ago in a session still at
+  work is listed; it now says "read in N transcripts changed in the last 12h, each read
+  whole". Read on the real files in a turn at the gate (04:47): 558 pass over the four test
+  files; the board of this project prints "Open questions / none / read in 4 transcripts
+  changed in the last 12h, each read whole"; its `--json` holds 22 calls, all in the lead's
+  transcript, 21 answered and one closed ("Pregunta 1", line 8431), which is not listed
+  because the same question was asked again and answered (8488). Not in this slice, and
+  known: an old question he closed that was asked again in other words stays listed until
+  (b2) joins the list with the record by the question's number; `--json` now carries each
+  session's calls (the board's JSON was 489,800 bytes with them).
+- 2026-10-13, written at 05:10: that slice is commit `c11ed18` (its turn at the gate 04:50
+  to 05:07: gate PASS, committed 05:06; gentle-ai: medium, 344 lines, not due; Codex on
+  `bb84d19..c11ed18`, planned at about 120,000 against 364,140: one part, 131,807 input
+  tokens, "the patch is incorrect (confidence 0.99)", two findings, both P2 and both
+  reproduced by it). One: a call that asked several questions left the list when only its
+  first was asked again and answered, and the others went with it unanswered. Two: the
+  answer to a question he closed can be in another transcript, where it was asked again; a
+  look that could not read that transcript listed the closed question again and the watch
+  said it closed anew, because the board to compare with is only made after a look with no
+  change. Fixed in the commit after it, test first (both tests failed, then 527 pass over
+  the three test files, in one turn at 05:09): a call is open while one of its questions
+  has no later answer, and its line shows what is left of it; `questionChanges` fills each
+  session the look could not read with what the board before last read of it
+  (`lastReadSessions`, which `watchBaseline` now uses too) before it derives the list.
+- 2026-10-13, written at 05:21: that fix is commit `b53efd7` (its turn at the gate 05:10 to
+  05:20: gate PASS, committed 05:19; gentle-ai: medium, 87 lines, not due; Codex on
+  `c11ed18..b53efd7`, planned at about 30,000 against 315,000: one part, 135,771 input
+  tokens, "the patch is correct (confidence 0.94)", no finding). Codex on this slice:
+  267,578 input tokens in two reviews. Left for the branch: one merge of `main`, the push
+  and the pull request.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -2481,6 +2534,57 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
+      STATE AT 2026-10-13 04:48, THE NEWEST OF ALL (read this first after a compaction).
+      Slice (b1) is BUILT on `feat/open-questions` and goes in one commit after this text
+      (Progress, 2026-10-13 04:48): then its reviews, one merge of `main` (at `abe9295`
+      when this was written, no file of this branch among those it moved), the push and
+      the pull request. NEXT, in the lead's order, each its own slice cut from `main`:
+      the finding on `pointersIn` with the folder `~/.js-harness/remote/` that `uninstall`
+      leaves (the two tests of the first are drafted in the scratchpad,
+      `pointers-slice-tests.txt`: an entry written into a list the user made, whose record
+      succeeded with no container, must not let `uninstall` delete a file an earlier
+      install created; and a manifest from before the field still deletes the file its
+      install created); then (b2) and (c); then the rest of the paragraph below, in its
+      order. The paragraph below is what came before.
+      STATE AT THE CONTEXT PAUSE, 2026-10-13 04:22 (the state before the one above).
+      Slice (a) of point 15 is on `main`: pull request 88, merged 2026-10-12
+      23:19 (`f43392d`); its last commit `353009c` (gate PASS 23:08; gentle-ai: medium, 39
+      lines, not due; Codex on `7235b5a..353009c`: 107,806 input tokens, "the patch is
+      correct (confidence 0.98)") and the merge `7e632ee` of `main` are recorded only here
+      and in that pull request's body. THE WORK IN HAND is (b1), on branch
+      `feat/open-questions` cut from `f43392d`, NOTHING COMMITTED but this text: step A,
+      `questionsOf` and the fact `questions` of `sessionFacts` (each question a transcript
+      put to him once, with what became of it: answered, closed, unanswered, pending), is
+      applied and staged in `bin/lib/sessions.mjs`, its test seen failing and then passing
+      (520 pass); step B, `openQuestionsOf` (each call once across the files the host copies
+      it to, answered anywhere is answered, who asked is the file that has it first, a
+      question asked again and answered then is not open, oldest first), has its test in
+      `bin/lib/sessions.test.mjs` and its code as a patch in this session's scratchpad,
+      applied by a turn at the gate that was waiting when this was written: after a
+      compaction `git status` and `rg -c openQuestionsOf bin/lib/sessions.mjs` say which
+      it is. STILL TO BUILD in (b1), each rule with its test first: the board's key
+      `questions` (the command, beside `channel`) and its section "Open questions" after the
+      channel's, one line a question (how long ago, who asked, "closed by him without an
+      answer" or "on his screen, no answer yet", the question clipped) and a line that says
+      how many transcripts of how many hours were read; `questionChanges` for the watch,
+      which returns for a question newly closed and not for one that is only on his screen,
+      and `questions` carried by `watchBaseline`; the usage; T17 and a Progress entry. Then
+      ONE commit through the gate with its reviews, one merge of `main` as the last step
+      (it has moved four times since `f43392d`, no file of this branch among them), the
+      push and the pull request. AFTER (b1), in the lead's order: a finding of Codex on
+      `pointersIn` of `bin/lib/manifest.mjs` (a record that succeeded with no container
+      made still counts its pointer as the harness's, so `uninstall` could delete a file an
+      older install created when the list in it is the user's own and empty), as its own
+      slice, the failing test first, and an older manifest without the field beside it; his
+      machine is not in the case (its manifest records `createdFile` false for every
+      entry). Then (b2) and (c). Three claims of a reader, each to verify and place, none
+      before those: the pause's hook assumes a window of 500,000 and its command carries
+      no window, so on a window of 200,000 it cannot fire before the first compaction; the
+      hook's and the resume's texts name the relief file, the two blocks of a cut and
+      `notify --to orchestrator`, which an installed project's template never defines; and
+      `uninstall` leaves `~/.js-harness/remote/`. One fact for the pause itself: its notice
+      fired in this session, which was running when the entry was installed, at the pause's
+      share, after a tool call: a session already running does take the entry.
       WRITTEN AT 21:33 OF 2026-10-12, THE NEWEST OF ALL. Pull request 86 (the two
       messages) is on `main`, merged at 21:20 (`c632756`). The lead installed the pause
       entry on his machine at 21:07, after the journey (its message; read by this
