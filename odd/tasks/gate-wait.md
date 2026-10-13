@@ -980,10 +980,19 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       processes and unless he drops it. Route: inline; built, uncommitted.
 - [x] T13 · The quick checks that read documents run on a documents-only commit, if they
       are seconds; the figure to the orchestrator if they are minutes. Route: inline.
-- [ ] T14 · Road 1, first slice (Design): the eval tests take one process snapshot a file.
+- [x] T14 · Road 1, first slice (Design): the eval tests take one process snapshot a file.
       Route: delegated, two writers with disjoint files launched together (the context
       backstop: the parent was at 70% of its window); the parent reads the diffs, runs the
-      lock turn and commits.
+      lock turn and commits. Evidence: pull request 79 on `main` (`e3e6b2d`, `964aafc`).
+- [ ] T15 · A Codex review runs at medium effort (his answer, 2026-10-12): the command's
+      value, the declared rule and its source, the two pins of the comparison, one commit
+      on `feat/review-effort-medium` off `main`. Route: inline; the rule's half is JH 7's
+      patch.
+- [ ] T16 · Cut 2 of git (Design, second version): the git folder and the two ends of the
+      range in one question, HEAD and the tree after a session in one, each a first try
+      with today's questions behind it. Route: inline, tests first, on
+      `feat/gate-wait-git-cut` off `feat/gate-wait`; both reviews; judged by the count of
+      the command's test file after (`c3-after.json`) beside the count before.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2219,6 +2228,39 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   orchestrator the plan's words, the head and the spend beside the allowance. Exit 11:
   the printed plan is over the allowance, nothing was spent, and it goes to him through
   the orchestrator.
+- 2026-10-12 · **T16, the git cut, is written and its turn is queued behind the effort
+  commit's** (worktree `D:\js-harness-worktrees\gate-wait-git-cut`, branch
+  `feat/gate-wait-git-cut` off `feat/gate-wait` at `1e0d531`; four files changed, nothing
+  committed until the turn commits). **The change.** `bin/lib/project.mjs`:
+  `gitDirsAndCommits(root, revs, spawn)`, the join, `null` unless the answer is text of
+  exactly one line a directory and a rev with every rev a full commit id of one length;
+  `isFullCommitId`. `bin/codex-review.mjs`: the join asked once at the top (`asked`), the
+  base and the head taken from it or asked alone as before; `headAndTree()`, the one
+  `git status --porcelain=v2 --branch --no-ahead-behind --untracked-files=no` for both
+  holds, with the two single questions behind it and no second try in a run. The
+  merge-base is not joined (the design's point 6 asks for a proof first), nor the
+  `for-each-ref`. **The tests.** New, green on the command as it was: a review after a
+  commit when the tree cannot be read (the moved HEAD is said first); a part after a
+  commit; a part after which the tree cannot be read, with and without a commit (what
+  could not be read is said first). Rewritten to hold both forms: the read of HEAD that
+  fails after the review. Red on the command as it was: the two tests that count a
+  run's questions (`rev-parse --verify` 3 to 0, nothing asked twice), the count in
+  parts, and four new ones (the join answered badly three ways, a base that names no
+  commit, the status answered badly two ways, a git that does not know the status asked
+  once in a run of three parts). Re-aimed, as the design named them: the three that put
+  a failure into the first question for the git folder now put it into the first two.
+  In `bin/lib/project.test.mjs`: the join against `gitDirs` and `rev-parse --verify` on
+  a real repository and a linked worktree, eight revs it must refuse, and eighteen
+  answers of a stand-in git it must refuse. **Found while writing, not in the design:**
+  the design said only two of the six outcomes of the holds had a test; four had (the
+  three after the review at `:921`, `:940`, `:957`, and the part with a changed file).
+  **The turn** (`cut-turn.sh`, log `cut-turn.log`, queued at 21:57): on HEAD's command
+  the seven outcomes of the holds green and the seven counting tests red; the two test
+  files whole, green; the count after (`c3-after.json`) beside `c3-before.json`; the
+  commit (message `cut-msg.txt`) with the whole gate; the Codex plan printed, not run.
+  **After it:** the count decides the test file in two (the design's point 7);
+  gentle-ai's review of the commit, then Codex once if its printed plan is inside the
+  allowance.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
