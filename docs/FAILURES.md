@@ -817,6 +817,8 @@ names something that does not exist.
   the registry for is free (`npm view js-harness version`, 404), and the command would install
   and run whatever is published under it, with no check of its source; a task since that day
   (odd/tasks/install-update.md, T5)
+- Control: check — bin/update.test.mjs — "upgrade with no source installs nothing and runs no
+  sync, whatever a registry would answer" — since 2026-10-13
 
 ### wait-not-attributable
 A process that waits for a free machine cannot be attributed to its session from the board, and one

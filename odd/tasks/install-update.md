@@ -52,7 +52,8 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 - [x] T2 Version check and upgrade with injectable source and package manager — route: delegated writer
 - [x] T3 Zero-dependency TUI over the same commands — route: delegated writer
 - [x] T4 End-to-end proof (`npm run e2e`) — route: delegated writer
-- [ ] T5 `update` and `upgrade` stop asking the npm registry for a name nobody holds. Added on
+- [x] T5 (43934b2, route: inline; done on 2026-10-13, see Progress and "T5 design, second
+  version") `update` and `upgrade` stop asking the npm registry for a name nobody holds. Added on
   2026-10-13, a defect in shipped behaviour that had no task (`docs/ROADMAP.md`, "Next", the
   defects read on that day, item a). Read on `main` at `f98f478`: `resolveLatest` runs `<pm>
   view js-harness version` (`bin/update.mjs:34-42`, the name at `:14`) and `upgradeMain`
@@ -176,8 +177,192 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 - RDD over `b09d46f..59b18cb` (15 files, 670 lines): risk high ("the update path in `bin/update.mjs`"),
   consent granted by standing preference, four lenses → approved with no correction, acknowledged
   (lineage `review-7800d48135d84342`, authority burned).
+- 2026-10-13 T5 (43934b2, branch `fix/upgrade-source`, written inline by the session "JH 8" on the
+  orchestrator's order): with no folder of tarballs named (`--source` or `JS_HARNESS_SOURCE`),
+  `update`, `upgrade`, `status --global`, plain `status` outside a repository and the menu start no
+  process and say that no release is tagged yet; `upgrade` then exits 1 with nothing installed and
+  no sync run. `viewArgs` and the `name@version` spec are removed; `resolveLatest({ source })` is
+  the one place that answers "which release", for whoever builds the tag reader. With a source:
+  `upgrade` installs only a tarball newer than what is installed, a folder that is not there is
+  said in a line (it threw), and the menu passes its source on to its three version commands. The
+  help, the skill `install` writes, the roadmap ("Release source", item a) and the register's entry
+  `upgrade-cannot-work` (now controlled) say the same. One lock turn, 06:17 to 06:26: RED, the
+  three code files at HEAD and `node --test bin/update.test.mjs bin/tui.test.mjs
+  bin/lib/version.test.mjs` → 124 tests, 13 fail (the six new rules, the two of the menu, and five
+  older tests that now refuse to start a process); GREEN with the fix → 124 pass; `git grep
+  "js-harness@" -- bin scripts` → nothing; the commit's gate passed whole. gentle-ai: review not
+  due (`under_budget`, medium risk, 446 lines). Codex, once, 06:27 to 06:28, medium effort, two
+  parts of `35477d4..43934b2`: both passed with no finding, 213,326 input tokens (plan 179,000,
+  allowance 520,800), recorded. The design's one reader: 155,976 tokens. Not checked by anyone:
+  whether `npm install -g <tarball>` itself contacts the registry (audit, funding).
 
 ## Next step
-None — the feature is closed. `jsaristi/js-harness#1` was merged into `main` on 2026-09-26 with a
-merge commit (`8f8e268`), so every commit cited above keeps its hash. What comes next for the
-project lives only in `docs/ROADMAP.md`.
+T5 is done and waits for its pull request to be merged by the orchestrator. Two things are open,
+both sent to the orchestrator on 2026-10-13 at 06:27 and neither started:
+- **T6** waits for an answer that is his: is a `harness.json` with no version a project with no
+  pin (the recommendation: `status` answers and exits 0, `sync` says there is nothing to move to)
+  or an invalid file as today. `check` already accepts that file in this repository, so two
+  commands of the package disagree about it.
+- **A candidate task, not yet in Tasks:** with no `--prefix`, `upgrade --source` runs the sync
+  after its install as `js-harness sync --global` through a shell (`bin/update.mjs`, the
+  `syncResult` block), so it runs whatever `js-harness` is found on the path, and the check that
+  it was the upgraded copy comes after it ran.
+Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it changes the test
+"resolveLatest starts no process and answers nothing when no source is named" on purpose.
+
+## State for a resume
+
+**Superseded on 2026-10-13 at 06:29: T5 is built and committed (43934b2); "Next step" above is
+the state.** What follows is kept as it was written, for the record of how T5 was ordered.
+
+Written on 2026-10-13 at 05:58 by the session "JH 8" (it closed gate-wait's T15 to T17 the
+same night and was at 86% of its context), before any line of T5 was read or written.
+
+- **Who works on T5 and T6, and by whose order.** The orchestrator's go of 05:58 (the
+  lead's call, not his word), in this order: (1) T5 here, with T6 if it fits the same
+  slice; (2) gate-wait's T12 (built, uncommitted, worktree `gate-wait-same-tree`:
+  commit it or say why it is dropped); (3) gate-wait's road 1 slice 2. Later, not now:
+  `odd/tasks/sensors.md` T5. If the orchestrator says stop (the plan's week was at 92%
+  of his 95), stop at the next commit.
+- **Where.** Branch `fix/upgrade-source` off `main` `addf6ae`, worktree
+  `D:\js-harness-worktrees\upgrade-source`. After it: the section "T5 design" below, a draft; the next step is its one reader (read-only, a bound of tool calls), then the failing tests.
+- **What the orchestrator asked of T5** (its claims, each to be read in the code first):
+  `js-harness upgrade` asks the package registry for the name js-harness
+  (`bin/update.mjs:34-42`, `:14`), installs `js-harness@<answer>` with no check of its
+  source (`:200-209`) and then runs the `sync --global` of the copy it installed
+  (`:218-225`); the menu of bare `js-harness` offers it (`bin/tui.mjs:364`).
+  `npm view js-harness version` answers 404 today, so it only fails; the day anybody
+  registers that name the command installs and runs their package. The roadmap's
+  "Release source" (`docs/ROADMAP.md:48`) is decided and not built: git tags, and by
+  his word versions are tagged from 1.0.0 only, so no tag exists yet.
+- **The steps, in order:** a short design in this document (what `upgrade` and
+  `update` do while no tag exists; that nothing is ever installed from the public
+  registry under that name; what the menu shows); ONE reader on the design, since it
+  changes what a command installs; then the failing test first, the fix, the lock
+  turn, both reviews. **Not open:** reserving the name on the registry (an account and
+  a publish are his). A question for him goes to the orchestrator, never in the chat.
+- **How this session works** is in `odd/tasks/gate-wait.md`, "Next" (the lessons) and
+  "Resume here" (his rules on Codex and on questions, the turn scripts in the
+  scratchpad). The worktree `gate-wait-two-halves` is merged and can be removed.
+
+## T5 design (draft of 2026-10-13, not yet read by its one reader, nothing built)
+
+**Read in the code on `main` `addf6ae`, so these are no longer claims.** With no
+`--source`, `resolveLatest` starts `<pm> view js-harness version`
+(`bin/update.mjs:34-42`, the name at `:14`, the argv from `viewArgs` in
+`bin/lib/version.mjs:57`). Three commands call it: `status --global`
+(`machineStatus`, `:170`), `update` (`:186`) and `upgrade` (`:202`). `upgrade` then
+installs `js-harness@<what was printed>` (`resolveSpec`, `:45-47`; the install at
+`:208-210`) and runs `sync --global` of the copy that install put there (`:221-228`).
+The menu offers `update` and `upgrade` (`bin/tui.mjs:363-364`) and shows `status`
+(`:360`). `bin/lib/version.mjs:26` already holds the sentence for how a machine gets the
+newest copy today, `INSTALL_NEWEST` (`npm i -g github:jsaristi/js-harness`). With
+`--source <dir>` the latest is the newest `js-harness-<semver>.tgz` of a local folder
+(`latestFromSource`) and the install is that file: the tests and `npm run e2e` use it.
+
+**The rule.** No command of this package asks the public registry about the name
+`js-harness` and none installs `js-harness@<anything>` from it. The decided release
+source is git tags of this repository (`docs/ROADMAP.md`, "Release source"); until one
+exists there is no release, and the commands say so.
+
+**What each does with no `--source`, while no tag exists** (and starts no process):
+- `update`: prints that no release is tagged yet, the installed version, and
+  `INSTALL_NEWEST`; exits 0.
+- `upgrade`: prints the same and that nothing was installed; exits 1, since it did
+  not do what it was asked. It installs nothing and runs no `sync`.
+- `status --global`: its line reads `latest available: (no release is tagged yet)`.
+- The menu keeps both entries: they are commands, and each now answers in a line. To
+  hide them would need a second place that knows whether a release exists.
+
+**With `--source <dir>`: as today**, the one path that installs, from a folder the
+caller names.
+
+**Not built here: reading the tags** (`git ls-remote --tags`, then
+`github:jsaristi/js-harness#vX.Y.Z`). It is the release source's own task, due with
+the first tag, 1.0.0. Built now it would be code and a network call that can only
+answer "none". What this slice leaves for it: `resolveLatest` is the one place that
+answers "which release", and a test says that with no `--source` it starts no
+process; whoever builds the tag reader changes that test on purpose.
+
+**Removed:** `viewArgs` and the `name@version` branch of `resolveSpec`, with their
+tests, so that the registry path is gone and not only unused. `PKG_NAME` stays only if
+something else reads it.
+
+**Tests, first and red on today's code:** for each of `update`, `upgrade` and
+`status --global` with no `--source`: the injected `spawn` is never called, and the
+output and exit code are the ones above; `upgrade` with a `spawn` that would answer
+a version (the registry squatted) still installs nothing. Green before and after:
+the `--source` path of each, unchanged.
+
+**For the reader to attack:** any other place that names the registry or builds an
+install spec (`bin/install.mjs`'s pin message, `doctor`, the e2e script, the skills
+`install` writes); whether exit 1 for `upgrade` breaks a caller (the menu, e2e);
+whether `status --global` printed `(unknown)` to something that parses it.
+
+**T6 is not in this slice.** Whether a `harness.json` with no version is a project
+with no pin or an invalid one is a design question of its own; it follows T5.
+
+## T5 design, second version: what its reader changed (2026-10-13; nothing built yet)
+
+One reader (read-only, 16 tool calls, 155,976 tokens); its first two findings checked by
+me in the code (`bin/tui.mjs:8`, `:386-387`; `bin/update.mjs:50-53`). Where this differs
+from the draft above, this holds. **The next step is the failing tests, then the fix.**
+
+1. **Four callers, not three.** `tuiMain` asks for the latest release each time bare
+   `js-harness` opens (`bin/tui.mjs:384-391`), and plain `status` outside a git
+   repository reaches `machineStatus` too (`bin/update.mjs:152-160`). In the menu's
+   test the injected `spawn` also serves the stack probes (`bin/tui.mjs:395`), so that
+   test asserts that no call carries `view`, not that `spawn` is never called.
+   `bin/tui.test.mjs:222-233` expects `update available: 99.0.0` from a registry
+   answer and is rewritten.
+2. **The condition is "no source", and a source is the flag or `JS_HARNESS_SOURCE`**
+   (`bin/update.mjs:23`, `bin/tui.mjs:386`). The design says so: the variable counts
+   as the caller naming a folder. The new tests pass an empty environment. The menu's
+   `update` and `upgrade` get only `--home` today (`bin/tui.mjs:363-364`), so after
+   `js-harness --source <dir>` the header could say "update available" and Upgrade
+   "no release": the menu passes its source on to both.
+3. **Two different "no answer" stay two.** A source folder with no tarball gives
+   `null` from `latestFromSource` and keeps today's lines (`(unknown)`, "could not
+   determine…"); "no release is tagged yet" is said only when there is no source. A
+   test for the empty folder is added: none exists.
+4. **In the `--source` path:** (a) `upgrade` gets the comparison T5's own text asks
+   for: a tarball that is not newer than what is installed is not installed, "up to
+   date", exit 0 (the existing tests use 0.9.0 against 0.1.0 and stay green); (b) a
+   source folder that is not there is said in a line and exits 1, where it throws
+   today (`bin/lib/version.mjs:47`); (c) **recorded, not in this slice:** with no
+   `--prefix` the sync after the install runs `js-harness` from PATH through a shell
+   (`bin/update.mjs:225-228`) and the check that it was the upgraded binary comes
+   after it ran (`:237-245`); on Windows the shell may look in the current folder
+   first (the reader's inference, not tried). A task of its own, told to the
+   orchestrator; (d) the folder is trusted whole and the version read from the file
+   name: the caller named it, and the design says that is the trust.
+5. **The package manager's resolution keeps its tests.** `--pm` in several words,
+   `JS_HARNESS_PM` and the `npm` default are pinned only by registry-path tests
+   (`bin/update.test.mjs:51-75`); their assertions move onto the install call of
+   `upgrade --source`.
+6. **The texts are part of the slice:** the help (`bin/js-harness.mjs:17`, `:19-20`),
+   the skill `install` writes (`bin/lib/manifest.mjs:19`, `:22-23`), the comments that
+   go stale (`bin/lib/stack.mjs:540-542`, `bin/lib/version.mjs:23-25`,
+   `bin/update.mjs:2-3`, `:33`, `:44`), the sentence of `docs/ROADMAP.md:48` that says
+   `update` asks the registry, the roadmap's item a (`:1126-1134`) and the register's
+   entry `upgrade-cannot-work` (`docs/FAILURES.md:807-818`), which gets its control.
+7. **"Gone" has a search for a proof:** `rg "js-harness@" bin scripts` finds nothing
+   after the change (`bin/lib/version.test.mjs:77-81` uses it as an example spec and
+   changes to a tarball path). `PKG_NAME` stays: `upgradedBinPath` reads it.
+8. **Streams and names:** `upgrade`'s refusal goes to stderr as today's does
+   (`bin/update.mjs:204`), `update`'s line to stdout. "T5" already names another
+   feature's work in these files (`bin/update.mjs:4`), so the new tests are named by
+   what they prove.
+
+**Tests that change or go** (the registry path): `bin/update.test.mjs:51-62`,
+`:64-75`, `:77-80`, `:82-88`, `:90-110`, `:197-208`, `:210-221`, `:673-685`;
+`bin/lib/version.test.mjs:13`, `:72-74`; `bin/tui.test.mjs:222-233`. **Green untouched**
+(the `--source` path): `bin/update.test.mjs:37-49`, `:150-195`, `:223-434`;
+`bin/lib/version.test.mjs:44-62`; `scripts/e2e.mjs:176-201`.
+
+**Checked by the reader and right:** exit 1 for `upgrade` breaks no caller (it exits 1
+today on no answer; the menu drops the code, `bin/tui.mjs:293`); nothing parses
+`(unknown)`; `doctor` asks the registry only about two other packages
+(`bin/lib/latest.mjs:66-67`); the e2e and the sandbox always give a source.
+**Not checked by anyone:** whether `npm install -g <tarball>` itself contacts the
+registry (audit, funding); whether `spawn('npm')` with no shell works on Windows.
