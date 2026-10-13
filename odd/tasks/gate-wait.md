@@ -984,9 +984,9 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       Route: delegated, two writers with disjoint files launched together (the context
       backstop: the parent was at 70% of its window); the parent reads the diffs, runs the
       lock turn and commits. Evidence: pull request 79 on `main` (`e3e6b2d`, `964aafc`).
-- [ ] T15 · A Codex review runs at medium effort (his answer, 2026-10-12): the command's
+- [x] T15 · A Codex review runs at medium effort (his answer, 2026-10-12): the command's
       value, the declared rule and its source, the two pins of the comparison, one commit
-      on `feat/review-effort-medium` off `main`. Route: inline; the rule's half is JH 7's
+      on `feat/review-effort-medium` off `main`. Evidence: `cb96924`, pull request 87. Route: inline; the rule's half is JH 7's
       patch.
 - [ ] T16 · Cut 2 of git (Design, second version): the git folder and the two ends of the
       range in one question, HEAD and the tree after a session in one, each a first try
@@ -2261,6 +2261,38 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   **After it:** the count decides the test file in two (the design's point 7);
   gentle-ai's review of the commit, then Codex once if its printed plan is inside the
   allowance.
+- 2026-10-12 · **T15 done: a Codex review runs at medium effort, pull request 87**
+  (`feat/review-effort-medium`, one commit `cb96924` off `main` `c632756`, pushed at
+  22:06; the orchestrator merges). The turn (`effort-turn.log`, 21:51:09 to 22:06:08,
+  exit 0): RED 1 of 1 against `main`'s command; GREEN 309 of 309 over the command's test
+  file, the rules tests and the comparison's; the commit's whole gate passed; gentle-ai
+  "medium risk, 7 paths, 195 lines: review not due (under_budget)"; Codex from that
+  checkout, so at medium, "the patch is correct (confidence 0.96)", no finding,
+  recorded. **The first plan at medium, in its words:** "1 part, 189 changed lines in 6
+  files … about 73,000 to 170,000 input tokens in all. It rests on 34 parts this
+  machine's run log measured on gpt-6.1-sol at medium effort": the log already held 34
+  medium parts, so the estimator stood on medium alone from the first plan. **Spent:**
+  161,777 input tokens (102,144 cached) over 6 requests in 51 s, inside the allowance
+  of 315,000 and inside the plan's range; 8 commands, no `node --test`. The feature's
+  Codex total: 3,706,415 input tokens. For scale, the last review at high of a commit
+  of that size (the fix of T14, 71,000 planned) spent 174,805 over 7 requests: one
+  sample each, so no ratio is claimed.
+- 2026-10-12 · **A probe for the design's point 6, the merge-base in the join** (a
+  scratch repository under the system temp folder, `mb-probe.sh`, git 2.54.0.windows.1;
+  nothing built). `git rev-parse --git-dir --git-common-dir
+  '<head>^{commit}...<base>^{commit}'` prints the two directories, the base, the head,
+  then one line `^<id>` for each merge-base: one line, equal to `git merge-base`, on a
+  linear range and when base is HEAD; two lines on a criss-cross, the first equal to
+  what `git merge-base` prints, in both orders of the two tips (one sample: not a
+  proof of the order); no caret line and exit 0 for two histories that share nothing.
+  **So the rule, if it is built:** the joined merge-base is taken only when there is
+  exactly one caret line with a full commit id; none, or more than one, and
+  `git merge-base` is asked alone as today, which keeps today's "share no history"
+  refusal and leaves the choice among several merge-bases to git. The three places
+  that ask it (`bin/codex-review.mjs`, the plan, the review, the skip) all ask it of
+  the base as `--base` named it, before the records move the start, so the answer of
+  the top of the run is the one they need. Worth about 550 starts of the test file by
+  the design's count; decided on the count after the two joins.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
