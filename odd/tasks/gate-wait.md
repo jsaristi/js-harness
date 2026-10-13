@@ -2322,6 +2322,72 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   **Next for the cut after its commit:** merge `feat/gate-wait` (`6e0e85b`) into
   `feat/gate-wait-git-cut` in a lock turn, so that the cut sits on S1 with `main` in
   it; then its reviews.
+- 2026-10-12 · **T16 committed: `28d988e` on `feat/gate-wait-git-cut`, and the count
+  after** (`cut-turn.log`, 22:39:59 to 22:58:24, exit 0). On the command as it was: the
+  seven outcomes of the holds 7 of 7 green, the seven counting tests 7 of 7 red, the
+  project module's test file red for the missing export. With the change: the two test
+  files 412 tests, 407 pass, 5 skipped, none fails, in 296 s. The commit's whole gate
+  passed; gentle-ai "medium risk, 4 paths, 390 lines: review not due (under_budget)".
+  **The count of `bin/codex-review.test.mjs` alone, under the counting tool, before and
+  after** (`c3-before.json` of 19:06 on S1, `c3-after.json` of 22:45 on the cut):
+
+  | | before | after |
+  |---|---|---|
+  | git processes | 7,840 | 6,628 |
+  | seconds of git life | 327 | 249 |
+  | the file alone | 365 s | 274 s |
+  | tests | 260 | 267 |
+  | `rev-parse` | 2,646 | 1,301 |
+  | `status` | 828 | 848 |
+  | `diff` | 1,931 | 1,991 |
+  | `merge-base` | 549 | 559 |
+  | `for-each-ref` | 340 | 350 |
+
+  1,212 processes fewer with seven tests more; all of it is `rev-parse` (1,345 fewer),
+  and every other subcommand rose by what the seven new tests ask. That is above the
+  design's upper bound (700 to 1,100): the bound counted about 340 runs that reach the
+  records, and the join also takes the base and the head out of every run that does
+  not. `status` did not fall because a hold costs one process either way: the join
+  took the `rev-parse` of HEAD out of it. **The seconds are not to be read as the cut
+  alone:** the count before was taken while this session's own tsserver was spinning
+  (stopped at 21:12), so 365 s is high; the processes are the measure. The gates of
+  the evening say the same in the large: the merged S1's commit gate 595 s (22:30 to
+  22:39), the cut's 514 s (22:49 to 22:58), one sample each.
+  **The Codex plan printed there says "at high effort"**: the cut's branch did not
+  hold `main`'s effort commit. Not run. The cut is put on the merged S1 first.
+- 2026-10-12 · **What S1 and the cut owe before they can be pushed, read from the push
+  check** (`node bin/check.mjs --push --remote origin --head <sha>`, which reads
+  records and runs nothing). For S1: "1 of 9 code commits since origin/main have no
+  Codex review record: `6e0e85b` Merge remote-tracking branch 'origin/main'". For the
+  cut: `28d988e`. **The merge commit's review is of everything `main` brought**: its
+  plan, printed at 22:59 from this worktree, spending nothing: "b043796..0bc9ee1 …
+  at medium effort, 6 parts, 1,724 changed lines in 26 files … about 664,000 to
+  1,570,000 input tokens in all. It rests on 35 parts … at medium effort". The
+  allowance by his rule is the larger of 300,000 and 1,200 a changed line, times 1.05:
+  2,172,240. The printed plan is inside it, so it runs without a question. The earlier
+  merge of `main` into S1 (`29e3ca7`) is not in the check's list and no record names
+  it: it merged clean, and this one has a resolution of its own. Codex's meter, read at
+  23:01 with the orchestrator's script: 19% of five hours, 35% of the week, one reset
+  credit left. **Said to the orchestrator as a cost, not asked:**
+  those 1,724 lines were each reviewed on `main` in their own pull requests; what the
+  merge commit itself decided is nine lines of one test file
+  (`git show --remerge-diff 6e0e85b`: 2 added, 7 removed). A push check that asked for a review of a merge
+  commit's own resolution, and not of what its second parent brought, would spend a
+  hundredth of this; that changes what a review covers, which is his, so it is a
+  candidate for the harness and not built here.
+  **The cut is not merged with S1 again: its one commit is picked onto the merged S1**
+  (`feat/gate-wait` head), in a lock turn, with `28d988e` kept under the branch
+  `cut-kept` until the new commit's gate has passed: a second merge commit would owe a
+  third review of the same 1,724 lines. A pick does not run the commit hook, so the
+  turn picks without committing and commits with the message file, which runs the
+  whole gate.
+  **Next, two turns:** `cut-pick-turn.sh` (the pick, the two test files and the files
+  the effort commit bound, the commit, its plan at medium, Codex once if the printed
+  plan is inside 491,400, the larger of 300,000 and 1,200 times 390 lines, times
+  1.05); `s1-merge-codex-turn.sh` (the plan again, Codex once in its six parts if the
+  printed plan is inside 2,172,240). **From the moment the second is asked nothing is
+  committed in this worktree until it ends:** a review refuses its record when HEAD
+  moves.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
