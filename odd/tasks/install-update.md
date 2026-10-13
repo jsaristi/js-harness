@@ -270,3 +270,68 @@ whether `status --global` printed `(unknown)` to something that parses it.
 
 **T6 is not in this slice.** Whether a `harness.json` with no version is a project
 with no pin or an invalid one is a design question of its own; it follows T5.
+
+## T5 design, second version: what its reader changed (2026-10-13; nothing built yet)
+
+One reader (read-only, 16 tool calls, 155,976 tokens); its first two findings checked by
+me in the code (`bin/tui.mjs:8`, `:386-387`; `bin/update.mjs:50-53`). Where this differs
+from the draft above, this holds. **The next step is the failing tests, then the fix.**
+
+1. **Four callers, not three.** `tuiMain` asks for the latest release each time bare
+   `js-harness` opens (`bin/tui.mjs:384-391`), and plain `status` outside a git
+   repository reaches `machineStatus` too (`bin/update.mjs:152-160`). In the menu's
+   test the injected `spawn` also serves the stack probes (`bin/tui.mjs:395`), so that
+   test asserts that no call carries `view`, not that `spawn` is never called.
+   `bin/tui.test.mjs:222-233` expects `update available: 99.0.0` from a registry
+   answer and is rewritten.
+2. **The condition is "no source", and a source is the flag or `JS_HARNESS_SOURCE`**
+   (`bin/update.mjs:23`, `bin/tui.mjs:386`). The design says so: the variable counts
+   as the caller naming a folder. The new tests pass an empty environment. The menu's
+   `update` and `upgrade` get only `--home` today (`bin/tui.mjs:363-364`), so after
+   `js-harness --source <dir>` the header could say "update available" and Upgrade
+   "no release": the menu passes its source on to both.
+3. **Two different "no answer" stay two.** A source folder with no tarball gives
+   `null` from `latestFromSource` and keeps today's lines (`(unknown)`, "could not
+   determine…"); "no release is tagged yet" is said only when there is no source. A
+   test for the empty folder is added: none exists.
+4. **In the `--source` path:** (a) `upgrade` gets the comparison T5's own text asks
+   for: a tarball that is not newer than what is installed is not installed, "up to
+   date", exit 0 (the existing tests use 0.9.0 against 0.1.0 and stay green); (b) a
+   source folder that is not there is said in a line and exits 1, where it throws
+   today (`bin/lib/version.mjs:47`); (c) **recorded, not in this slice:** with no
+   `--prefix` the sync after the install runs `js-harness` from PATH through a shell
+   (`bin/update.mjs:225-228`) and the check that it was the upgraded binary comes
+   after it ran (`:237-245`); on Windows the shell may look in the current folder
+   first (the reader's inference, not tried). A task of its own, told to the
+   orchestrator; (d) the folder is trusted whole and the version read from the file
+   name: the caller named it, and the design says that is the trust.
+5. **The package manager's resolution keeps its tests.** `--pm` in several words,
+   `JS_HARNESS_PM` and the `npm` default are pinned only by registry-path tests
+   (`bin/update.test.mjs:51-75`); their assertions move onto the install call of
+   `upgrade --source`.
+6. **The texts are part of the slice:** the help (`bin/js-harness.mjs:17`, `:19-20`),
+   the skill `install` writes (`bin/lib/manifest.mjs:19`, `:22-23`), the comments that
+   go stale (`bin/lib/stack.mjs:540-542`, `bin/lib/version.mjs:23-25`,
+   `bin/update.mjs:2-3`, `:33`, `:44`), the sentence of `docs/ROADMAP.md:48` that says
+   `update` asks the registry, the roadmap's item a (`:1126-1134`) and the register's
+   entry `upgrade-cannot-work` (`docs/FAILURES.md:807-818`), which gets its control.
+7. **"Gone" has a search for a proof:** `rg "js-harness@" bin scripts` finds nothing
+   after the change (`bin/lib/version.test.mjs:77-81` uses it as an example spec and
+   changes to a tarball path). `PKG_NAME` stays: `upgradedBinPath` reads it.
+8. **Streams and names:** `upgrade`'s refusal goes to stderr as today's does
+   (`bin/update.mjs:204`), `update`'s line to stdout. "T5" already names another
+   feature's work in these files (`bin/update.mjs:4`), so the new tests are named by
+   what they prove.
+
+**Tests that change or go** (the registry path): `bin/update.test.mjs:51-62`,
+`:64-75`, `:77-80`, `:82-88`, `:90-110`, `:197-208`, `:210-221`, `:673-685`;
+`bin/lib/version.test.mjs:13`, `:72-74`; `bin/tui.test.mjs:222-233`. **Green untouched**
+(the `--source` path): `bin/update.test.mjs:37-49`, `:150-195`, `:223-434`;
+`bin/lib/version.test.mjs:44-62`; `scripts/e2e.mjs:176-201`.
+
+**Checked by the reader and right:** exit 1 for `upgrade` breaks no caller (it exits 1
+today on no answer; the menu drops the code, `bin/tui.mjs:293`); nothing parses
+`(unknown)`; `doctor` asks the registry only about two other packages
+(`bin/lib/latest.mjs:66-67`); the e2e and the sandbox always give a source.
+**Not checked by anyone:** whether `npm install -g <tarball>` itself contacts the
+registry (audit, funding); whether `spawn('npm')` with no shell works on Windows.
