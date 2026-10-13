@@ -240,6 +240,39 @@ export function gitDirs(root, spawn = spawnSync) {
   return { gitDir, commonGitDir };
 }
 
+const FULL_COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+/** Whether `text` is a commit id as git prints one in full: 40 hex digits, or 64 in a repository of the
+ * newer hash, and nothing else. */
+export const isFullCommitId = (text) => typeof text === 'string' && FULL_COMMIT_ID.test(text);
+
+/** Both git directories of `root`, as `gitDirs` gives them, and the commit each of `revs` names there, from
+ * one process: `git rev-parse --git-dir --git-common-dir <rev>^{commit}…`. `root` is the top of the working
+ * tree: asked below it, git writes the two directories against different folders.
+ *
+ * A first try, and `null` unless the answer can only be read one way; the caller then asks each question
+ * alone, as it did before this existed, and says what those say. The exit code proves nothing here:
+ * `rev-parse` without `--verify` exits 0 and prints back an argument it does not know, and a rev may be an
+ * option of its own (`--all`, a `--glob=`). So the answer is taken only when it is a string of exactly one
+ * line for each directory and each rev, and every rev's line is a full commit id, all of one length. A rev
+ * that names no commit, a repository with no commit, a path with a line break in it, no git on the path:
+ * each gives `null`. */
+export function gitDirsAndCommits(root, revs, spawn = spawnSync) {
+  let result;
+  try {
+    result = spawn('git', ['rev-parse', '--git-dir', '--git-common-dir', ...revs.map((rev) => `${rev}^{commit}`)], { cwd: root, encoding: 'utf8' });
+  } catch {
+    return null;
+  }
+  if (!result || result.error || result.status !== 0 || typeof result.stdout !== 'string') return null;
+  const lines = result.stdout.split('\n');
+  if (lines.pop() !== '' || lines.length !== revs.length + 2) return null;
+  const [gitDir, commonGitDir, ...commits] = lines;
+  if (gitDir.trim() === '' || commonGitDir.trim() === '') return null;
+  if (!commits.every((id) => isFullCommitId(id) && id.length === commits[0].length)) return null;
+  return { gitDir: absoluteFrom(root, gitDir.trim()), commonGitDir: absoluteFrom(root, commonGitDir.trim()), commits };
+}
+
 function revParseAbsolute(root, flag, spawn) {
   let result;
   try {

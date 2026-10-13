@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt, runSession, runSessionModel, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
+import { createHash } from 'node:crypto';
+import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, runFindings, runKept, runPart, runPrompt, runSession, runSessionModel, partKey, keptPartFor, KEPT_PART_FORMAT, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
 import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like codex-reviews.test.mjs does.
@@ -319,4 +320,152 @@ test('runPart reads the log as it is: the lines of whole ranges and of parts sid
   appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000a', session: 'lean', ...answered, outcome: 'not-inspected', part: partOf });
   appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000b', session: 'lean', ...answered });
   assert.deepEqual(readCodexReviewRuns(root).map(runPart), [null, { ...partOf, index: 1 }, partOf, null]);
+});
+
+// What a part that passed keeps, and the key that says whether a later run would send the same thing.
+const parts = {
+  base: 'a'.repeat(40), from: 'b'.repeat(40), head: 'c'.repeat(40),
+  prompt: 'Review the range.', argv: ['exec', '--model', 'gpt-5', '-c', 'model_reasoning_effort=high'],
+};
+const keptKey = 'a'.repeat(64);
+const keptLine = (over = {}) => ({
+  id: 'r1', outcome: 'reviewed', part: { index: 1, of: 3, files: 2, changedLines: 40 },
+  kept: { key: keptKey, review: { findings: [], verdict: 'correct', explanation: '', confidence: null }, rendered: 'No findings.' }, ...over,
+});
+
+test('partKey: the same inputs give the same key, a 64-character lowercase hex string', () => {
+  assert.equal(partKey(parts), partKey({ ...parts }));
+  assert.match(partKey(parts), /^[0-9a-f]{64}$/);
+});
+
+test('partKey: the key changes when any one of what was sent changes', () => {
+  const baseKey = partKey(parts);
+  const variants = {
+    base: { ...parts, base: 'd'.repeat(40) },
+    from: { ...parts, from: 'e'.repeat(40) },
+    head: { ...parts, head: 'f'.repeat(40) },
+    'prompt with one character added': { ...parts, prompt: `${parts.prompt}!` },
+    'one element of argv': { ...parts, argv: parts.argv.map((arg, i) => (i === 1 ? 'gpt-5.1' : arg)) },
+    'two elements of argv in another order': { ...parts, argv: [parts.argv[1], parts.argv[0], ...parts.argv.slice(2)] },
+    'one more element in argv': { ...parts, argv: [...parts.argv, '--json'] },
+  };
+  for (const [what, variant] of Object.entries(variants)) assert.notEqual(partKey(variant), baseKey, what);
+});
+
+test('partKey: null when a field of what was sent is missing, empty or not a string, and a key when argv is empty', () => {
+  for (const field of ['base', 'from', 'head', 'prompt']) {
+    for (const value of [undefined, '', 42, null, ['a']]) {
+      assert.equal(partKey({ ...parts, [field]: value }), null, `${field} ${JSON.stringify(value)}`);
+    }
+  }
+  for (const argv of [undefined, 'exec', {}, null, 3, [1], ['exec', null], ['exec', ['x']]]) {
+    assert.equal(partKey({ ...parts, argv }), null, `argv ${JSON.stringify(argv)}`);
+  }
+  assert.equal(partKey(), null);
+  assert.equal(partKey(null), null);
+  assert.match(partKey({ ...parts, argv: [] }), /^[0-9a-f]{64}$/);
+});
+
+test('partKey: the key is the SHA-256 of the format number and what was sent, so the format is inside it', () => {
+  const sha = (format) => createHash('sha256')
+    .update(JSON.stringify([format, parts.base, parts.from, parts.head, parts.prompt, parts.argv])).digest('hex');
+  assert.equal(partKey(parts), sha(KEPT_PART_FORMAT));
+  assert.notEqual(partKey(parts), sha(KEPT_PART_FORMAT + 1));
+});
+
+test('runKept: a valid kept gives its key, review and rendered, with the review the very same object', () => {
+  const review = { findings: [], verdict: 'correct', explanation: 'Nothing breaks.', confidence: 0.9 };
+  const kept = runKept(keptLine({ kept: { key: keptKey, review, rendered: '' } }));
+  assert.deepEqual(kept, { key: keptKey, review, rendered: '' });
+  assert.equal(kept.review, review);
+  assert.equal(kept.review.confidence, 0.9);
+});
+
+test('runKept: null for a line that keeps no answer, or keeps one that is not valid', () => {
+  const good = { key: keptKey, review: { findings: [], verdict: 'correct', explanation: '', confidence: null }, rendered: 'No findings.' };
+  const bad = [
+    { id: 'old', outcome: 'reviewed' },
+    keptLine({ kept: null }),
+    keptLine({ kept: { ...good, key: 'a'.repeat(63) } }),
+    keptLine({ kept: { ...good, key: 'a'.repeat(65) } }),
+    keptLine({ kept: { ...good, key: 'A'.repeat(64) } }),
+    keptLine({ kept: { ...good, review: 'correct' } }),
+    keptLine({ kept: { ...good, review: null } }),
+    keptLine({ kept: { ...good, review: { ...good.review, findings: {} } } }),
+    keptLine({ kept: { ...good, review: { verdict: 'correct', explanation: '', confidence: null } } }),
+    keptLine({ kept: { ...good, review: { ...good.review, verdict: 'Correct' } } }),
+    keptLine({ kept: { ...good, review: { ...good.review, verdict: 'pass' } } }),
+    keptLine({ kept: { ...good, rendered: null } }),
+    keptLine({ kept: { ...good, rendered: undefined } }),
+    undefined,
+    null,
+    'a line',
+  ];
+  for (const line of bad) assert.equal(runKept(line), null, JSON.stringify(line));
+});
+
+test('runKept: null for a kept answer that lacks a field the command reads when it shows the answer again', () => {
+  const finding = { file: 'a.txt', start: 2, end: 3, severity: 'P2', title: 'A title', body: 'A body.', confidence: 0.7 };
+  const whole = { findings: [finding], verdict: 'incorrect', explanation: 'One line is wrong.', confidence: 0.8 };
+  const kept = (review) => keptLine({ kept: { key: keptKey, review, rendered: 'One finding.' } });
+  assert.notEqual(runKept(kept(whole)), null);
+  // A finding the model gave no priority, and an answer it gave no confidence, are whole answers.
+  assert.notEqual(runKept(kept({ ...whole, confidence: null, findings: [{ ...finding, severity: null }] })), null);
+  const { explanation, ...noExplanation } = whole;
+  const { confidence, ...noConfidence } = whole;
+  const withFinding = (over) => ({ ...whole, findings: [{ ...finding, ...over }] });
+  const lacking = [
+    noExplanation,
+    { ...whole, explanation: null },
+    noConfidence,
+    { ...whole, confidence: 'high' },
+    { ...whole, findings: [null] },
+    { ...whole, findings: ['a.txt:2'] },
+    withFinding({ file: undefined }),
+    withFinding({ start: '2' }),
+    withFinding({ end: undefined }),
+    withFinding({ title: undefined }),
+    withFinding({ severity: 2 }),
+    { ...whole, findings: [finding, { ...finding, title: null }] },
+  ];
+  for (const review of lacking) assert.equal(runKept(kept(review)), null, JSON.stringify(review));
+  assert.equal(typeof explanation, 'string');
+  assert.equal(typeof confidence, 'number');
+});
+
+test('keptPartFor: of two lines that hold the same key, the later one in the list is returned', () => {
+  const older = keptLine({ id: 'older' });
+  const newer = keptLine({ id: 'newer' });
+  assert.equal(keptPartFor([older, newer], keptKey).id, 'newer');
+  assert.equal(keptPartFor([newer, older], keptKey).id, 'older');
+});
+
+test('keptPartFor: a line is not taken when it did not review, has no part, has an invalid part, or keeps another key', () => {
+  const other = { key: 'b'.repeat(64), review: { findings: [], verdict: 'correct', explanation: '', confidence: null }, rendered: '' };
+  const refused = [
+    keptLine({ outcome: 'failed' }),
+    keptLine({ part: undefined }),
+    keptLine({ part: { index: 3, of: 2, files: 1, changedLines: 1 } }),
+    keptLine({ kept: other }),
+  ];
+  for (const line of refused) assert.equal(keptPartFor([line], keptKey), null, JSON.stringify(line));
+  assert.equal(keptPartFor(refused, keptKey), null);
+});
+
+test('keptPartFor: null for an empty list, for runs that is not a list, and for a key that is not a string', () => {
+  assert.equal(keptPartFor([], keptKey), null);
+  for (const runs of [null, undefined, 'lines', { 0: keptLine() }]) assert.equal(keptPartFor(runs, keptKey), null);
+  for (const key of [null, undefined]) assert.equal(keptPartFor([keptLine()], key), null);
+});
+
+test('keptPartFor reads a list as it is: older lines and parts without kept are passed over', () => {
+  // The lines as they are written and read back: a JSON round trip, the same shape the log gives.
+  const log = [
+    { id: 'older', outcome: 'reviewed' },
+    { id: 'part-no-kept', outcome: 'reviewed', part: { index: 1, of: 3, files: 2, changedLines: 40 } },
+    keptLine({ id: 'with-key' }),
+    { id: 'part-no-kept-after', outcome: 'reviewed', part: { index: 2, of: 3, files: 2, changedLines: 40 } },
+  ];
+  const runs = JSON.parse(JSON.stringify(log));
+  assert.equal(keptPartFor(runs, keptKey).id, 'with-key');
 });
