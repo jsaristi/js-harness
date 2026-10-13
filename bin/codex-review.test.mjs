@@ -966,13 +966,35 @@ test('a read of HEAD that fails after the review leaves no record: it is not kno
     codexRan = true;
     return child;
   };
+  // However the run asks it: as the one question that answers HEAD and the tree together, or as HEAD alone.
   fake.spawn = (command, args, opts) => {
-    if (codexRan && command === 'git' && args.includes('HEAD^{commit}')) return { status: 128, stdout: '', stderr: 'fatal: bad revision HEAD^{commit}' };
+    if (codexRan && command === 'git' && (args.includes('HEAD^{commit}') || args.includes('--porcelain=v2'))) return { status: 128, stdout: '', stderr: 'fatal: bad revision HEAD^{commit}' };
     return spawn(command, args, opts);
   };
   const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
   assert.equal(result.code, 1, result.err);
   assert.match(result.err, /Could not read HEAD and the state of the tree again/);
+  assert.equal(wrote(root), false);
+});
+
+test('a commit made while Codex reviews is said as a HEAD that moved even when git cannot say what the tree is: after the review, the moved HEAD is said first', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const spawnAsync = fake.spawnAsync;
+  const spawn = fake.spawn;
+  let moved;
+  fake.spawnAsync = (command, args, opts) => {
+    const child = spawnAsync(command, args, opts);
+    git(root, 'commit', '--allow-empty', '-m', 'moved');
+    moved = git(root, 'rev-parse', 'HEAD');
+    return child;
+  };
+  // From then on no `git status` answers, in either of the forms the run may ask it in.
+  fake.spawn = (command, args, opts) =>
+    moved !== undefined && command === 'git' && args[0] === 'status' ? { status: 128, stdout: '', stderr: 'fatal: broken index' } : spawn(command, args, opts);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 1, result.err);
+  assert.ok(result.err.startsWith(`HEAD moved from ${head.slice(0, 7)} to ${moved.slice(0, 7)} while Codex was reviewing`), result.err);
   assert.equal(wrote(root), false);
 });
 
@@ -983,8 +1005,10 @@ test('the review asks git about the end of its range by the commit it resolved, 
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(asked.filter(({ args }) => args.some((arg) => arg === 'HEAD' || arg.endsWith('..HEAD'))), []);
   assert.ok(asked.some(({ args }) => args[0] === 'diff' && args.includes(head)), 'the diff is of the commit id');
-  // Resolved at the start, and again at the end, before the record is written.
-  assert.equal(timesAsked(asked, 'rev-parse', 'HEAD^{commit}'), 2);
+  // Resolved once, at the start, with the other end and the git folder; before the record is written HEAD
+  // and the tree are read again as one `git status`, whose header names the commit.
+  assert.equal(timesAsked(asked, 'rev-parse', 'HEAD^{commit}'), 1);
+  assert.equal(timesAsked(asked, 'status', '--porcelain=v2', '--branch'), 1);
 });
 
 test('an untracked file does not block the review', async () => {
@@ -3637,6 +3661,55 @@ test('a part that passed while a tracked file was not as the range is not kept, 
   assert.equal(wrote(root), true);
 });
 
+/** What a run of three parts did when its first part passed and what was asked after it refused it: the
+ * exit code, the first line of the error, how many sessions were started, whether a record was written,
+ * and the run lines as `[outcome, what the line keeps]`. */
+const afterFirstPart = (root, result, fake) => ({
+  code: result.code,
+  said: result.err.split('\n')[0],
+  sessions: fake.calls.length,
+  wrote: wrote(root),
+  lines: readCodexReviewRuns(root).map((line) => [line.outcome, reviewRuns.runKept(line)]),
+});
+
+/** What `afterFirstPart` gives for a first part that is refused for `why`. */
+const firstPartRefused = (why) => ({
+  code: 1,
+  said: `${why} after part 1 of 3 passed, so what its session read is not the committed range alone; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.`,
+  sessions: 1,
+  wrote: false,
+  lines: [['failed', null]],
+});
+
+test('a part that passed while a commit was made is not kept, and the parts after it are not started: HEAD is not where the range ends', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  let moved;
+  const fake = fakeCodexInParts({
+    stdout: partShown(root, base, head, 'a.txt'),
+    during: () => {
+      git(root, 'commit', '--allow-empty', '-m', 'moved');
+      moved = git(root, 'rev-parse', 'HEAD');
+    },
+  });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: runIds() });
+  assert.deepEqual(afterFirstPart(root, result, fake), firstPartRefused(`HEAD moved from ${head.slice(0, 7)} to ${moved.slice(0, 7)}`), result.err);
+});
+
+test('a part after which git cannot say what the tree is is not kept, whether or not HEAD moved: after a part, what could not be read is said first', async () => {
+  for (const commits of [false, true]) {
+    const { root, base, head } = makeThreeFileRepo();
+    const fake = fakeCodexInParts({
+      stdout: partShown(root, base, head, 'a.txt'),
+      during: () => commits && git(root, 'commit', '--allow-empty', '-m', 'moved'),
+    });
+    // Once the first session has started no `git status` answers, in either of the forms the run may ask it in.
+    const spawn = (command, args, opts) =>
+      fake.order.length > 0 && command === 'git' && args[0] === 'status' ? { status: 128, stdout: '', stderr: 'fatal: broken index' } : fake.spawn(command, args, opts);
+    const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, spawn, platform: process.platform, randomUUID: runIds() });
+    assert.deepEqual(afterFirstPart(root, result, fake), firstPartRefused('HEAD and the state of the tree could not be read'), `a commit made: ${commits}\n${result.err}`);
+  }
+});
+
 test('the totals of a run that keeps parts say what this run spent and what the kept parts had spent, apart', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ids = runIds();
@@ -4285,11 +4358,12 @@ test('a run log that cannot be read is one that measured nothing: the plan says 
   assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 890,000 to 1,190,000 input tokens/);
   const none = planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts: AS_TWO }));
   assert.match(none.at(-1), /^No estimate: the run log of this machine holds no part /);
-  /** `spawn`, but the first time git is asked where the common dir is, which is how the run log is found,
-   * the answer is that of `instead`. The later times, when the run writes its lines there, git answers. */
+  /** `spawn`, but the first two times git is asked where the common dir is, which is how the run log is
+   * found, the answer is that of `instead`: with the ends of the range, and then alone, since an answer the
+   * run could not read is asked for again. The later times, when the run writes its lines there, git answers. */
   const logNotFound = (spawn, instead) => {
     let asked = 0;
-    return (command, args, opts) => (command === 'git' && args.includes('--git-common-dir') && (asked += 1) === 1 ? instead() : spawn(command, args, opts));
+    return (command, args, opts) => (command === 'git' && args.includes('--git-common-dir') && (asked += 1) <= 2 ? instead() : spawn(command, args, opts));
   };
   const failures = [
     ['git cannot say where the log is', () => ({ status: 128, stdout: '', stderr: 'fatal' })],
@@ -5007,21 +5081,22 @@ test('when the records cannot be read against the range, the range is reviewed a
   appendCodexReview(root, reviewedRecord(base, one));
   const given = rangeOf(base, three);
   const cannotTell = (why) => new RegExp(`^Could not tell which commits of ${given.replace(/\./g, '\\.')} a Codex review record already covers \\(${why}\\), so the range is taken as it was given\\.$`);
-  // Each is what git answers the first time it is asked that: the later times, for the plan and the run
-  // itself, it answers as it does. The last is an answer the reader of the records throws on: the line then
+  // Each is what git answers the first time it is asked that (the first two for where the git folder is: it
+  // comes with the ends of the range, and is asked alone when that answer could not be read): the later
+  // times, for the plan and the run itself, it answers as it does. The last is an answer the reader of the records throws on: the line then
   // ends with the message of what was thrown, which is the engine's wording of a TypeError and not this
   // command's to keep, so it is held to say that reading failed and to say something after it.
   const failures = [
     ['git could not list them', (args) => (args[0] === 'log' ? { status: 128, stdout: '', stderr: 'fatal' } : null)],
     ['git could not say which of their files a review leaves out', (args) => (args[0] === 'check-attr' ? { status: 129, stdout: '', stderr: 'usage' } : null)],
-    ['reading them failed: .+', (args) => (args.includes('--git-common-dir') ? { status: 0, stdout: Buffer.from('.git\n'), stderr: '' } : null)],
+    ['reading them failed: .+', (args) => (args.includes('--git-common-dir') ? { status: 0, stdout: Buffer.from('.git\n'), stderr: '' } : null), 2],
   ];
-  for (const [why, instead] of failures) {
+  for (const [why, instead, times = 1] of failures) {
     const fake = fakeCodex(reviewed(root, base));
-    let answered = false;
+    let answered = 0;
     const spawn = (command, args, opts) => {
-      const answer = command === 'git' && !answered ? instead(args) : null;
-      answered ||= answer !== null;
+      const answer = command === 'git' && answered < times ? instead(args) : null;
+      answered += answer === null ? 0 : 1;
       return answer ?? fake.spawn(command, args, opts);
     };
     const result = await run(['--base', 'HEAD~3', '--cwd', root], { ...fake, spawn });
@@ -5289,6 +5364,10 @@ function countingGit(deps) {
 /** How many of the git processes in `asked` were given every one of `words`. */
 const timesAsked = (asked, ...words) => asked.filter(({ args }) => words.every((word) => args.includes(word))).length;
 
+/** The questions in `asked` that resolve one end of a range alone, as a run asks them: `git rev-parse
+ * --verify <rev>^{commit}`. Not the quiet ones, which ask whether a ref is there at all. */
+const endsAskedAlone = (asked) => asked.map(({ args }) => args).filter((args) => args[0] === 'rev-parse' && args[1] === '--verify' && args[2] !== '--quiet');
+
 /** The questions in `asked` that git was put more than once: the same arguments, in the same folder, with
  * the same standard input. */
 function askedTwice(asked) {
@@ -5318,10 +5397,13 @@ test('a review asks git where the git folder is once, whatever it reads and writ
   assert.equal(timesAsked(asked, '--show-toplevel'), 1);
   assert.equal(timesAsked(asked, '--show-cdup'), 0);
   assert.deepEqual(asked.filter(({ args }) => args[0] === 'check-attr').map(({ args, cwd, input }) => [args[2], cwd, input]), [[three, topOf(root), 'c.txt\0b.txt\0a.txt\0']]);
-  // The two ends of the range are resolved once each, and HEAD and the tree are asked again before the record
-  // is written, the two questions asked at the start; no other question is put to git twice.
-  assert.equal(timesAsked(asked, 'rev-parse', '--verify'), 3);
-  assert.deepEqual(askedTwice(asked).map((question) => JSON.parse(question).args), [['rev-parse', '--verify', 'HEAD^{commit}'], ['status', '--porcelain', '--untracked-files=no']]);
+  // The two ends of the range come with the git folder, in one process, and neither is asked for alone. HEAD
+  // and the tree are read again before the record is written, as one `git status` in another form than the
+  // one asked before the review, so no question is put to git twice.
+  assert.deepEqual(asked.filter(({ args }) => args.includes('--git-common-dir')).map(({ args, cwd }) => [args, path.resolve(cwd)]), [[['rev-parse', '--git-dir', '--git-common-dir', 'HEAD^{commit}', 'HEAD~3^{commit}'], topOf(root)]]);
+  assert.equal(timesAsked(asked, 'rev-parse', '--verify'), 0);
+  assert.deepEqual(asked.filter(({ args }) => args[0] === 'status').map(({ args }) => args.slice(1)), [['--porcelain', '--untracked-files=no'], ['--porcelain=v2', '--branch', '--no-ahead-behind', '--untracked-files=no']]);
+  assert.deepEqual(askedTwice(asked), []);
 });
 
 test('a range reviewed in parts, a plan and a skip each ask where the git folder is once', async () => {
@@ -5333,6 +5415,9 @@ test('a range reviewed in parts, a plan and a skip each ask where the git folder
   assert.equal(result.code, 0, result.err);
   assert.deepEqual([sessions.calls.length, readCodexReviewRuns(root).length, readCodexReviews(root).length], [2, 2, 1]);
   assert.deepEqual([timesAsked(inParts.asked, '--git-common-dir'), timesAsked(inParts.asked, '--show-cdup')], [1, 0]);
+  // Neither end of the range is asked for alone, and HEAD and the tree are one question after each part and
+  // one after the review.
+  assert.deepEqual([endsAskedAlone(inParts.asked), timesAsked(inParts.asked, 'status', '--porcelain=v2')], [[], 3]);
   // A plan reads the records and the run log; a skip reads the records and writes its own.
   const sliced = makeSlicedRepo();
   appendCodexReview(sliced.root, reviewedRecord(sliced.base, sliced.one));
@@ -5350,17 +5435,18 @@ test('an answer git did not give is not kept: the run asks where the git folder 
   const { root, base, head } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
   const { deps, asked } = countingGit(fake);
-  // The first time, for the run log the plan is estimated from, git fails.
-  let failed = false;
+  // The first two times git fails: with the ends of the range, and then alone, for the run log the plan is
+  // estimated from.
+  let failed = 0;
   const spawn = (command, args, opts) => {
-    const fails = command === 'git' && args.includes('--git-common-dir') && !failed;
-    failed ||= fails;
+    const fails = command === 'git' && args.includes('--git-common-dir') && failed < 2;
+    failed += fails ? 1 : 0;
     return fails ? { status: 128, stdout: '', stderr: 'fatal' } : deps.spawn(command, args, opts);
   };
   const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...deps, spawn });
   assert.deepEqual([result.code, result.err], [0, '']);
   // The run line asks again, and is answered; the record is written where that answer said.
-  assert.equal(timesAsked(asked, '--git-common-dir'), 1, 'one question reached git after the one that failed');
+  assert.equal(timesAsked(asked, '--git-common-dir'), 1, 'one question reached git after the two that failed');
   assert.equal(onlyRun(root).outcome, 'reviewed');
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 });
@@ -5385,6 +5471,101 @@ test('what a run learned of its repository ends with it: the next run asks again
   assert.equal(timesAsked(third.asked, '--git-common-dir'), 1);
   assert.deepEqual(readCodexReviews(other.root), [reviewedRecord(other.base, other.head)]);
   assert.equal(readCodexReviews(root).length, 2);
+});
+
+// --- two questions a run joins, and asks one by one when the joined answer cannot be read one way ---
+
+/** `deps`, but git answers every question that holds all of `words` with `instead()`; `tried` counts them.
+ * Put around `countingGit`, what it answers never reaches git and is not in `asked`. */
+function answering(deps, words, instead) {
+  const tried = { times: 0 };
+  const spawn = (command, args, opts) => {
+    if (command !== 'git' || !words.every((word) => args.includes(word))) return deps.spawn(command, args, opts);
+    tried.times += 1;
+    return instead();
+  };
+  return { deps: { ...deps, spawn }, tried };
+}
+
+// The one question for the git folder and the two ends of the range, and the one for HEAD and the tree.
+const FOLDER_AND_ENDS = ['rev-parse', '--git-common-dir', 'HEAD^{commit}'];
+const HEAD_AND_TREE = ['status', '--porcelain=v2'];
+
+test('the ends of the range and the git folder are asked for one by one when the one question for the three is not answered so that it can be read one way: the run is the one it was', async () => {
+  const answers = [
+    ['git fails', () => ({ status: 128, stdout: '', stderr: 'fatal: bad revision' })],
+    ['git cannot be started', () => {
+      throw new Error('spawn git EACCES');
+    }],
+    // What `rev-parse` does with a base it takes for an argument of its own: exit 0, and the argument back.
+    ['an argument printed back', (head) => ({ status: 0, stdout: `.git\n.git\n${head}\n--all^{commit}\n`, stderr: '' })],
+  ];
+  for (const [which, instead] of answers) {
+    const { root, base, head } = makeRepo();
+    const counted = countingGit(fakeCodex(reviewed(root, base)));
+    const { deps, tried } = answering(counted.deps, FOLDER_AND_ENDS, () => instead(head));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)], which);
+    // Tried once; then the two ends, each verified alone, and the git folder alone the first time it is needed.
+    assert.equal(tried.times, 1, which);
+    assert.deepEqual(
+      endsAskedAlone(counted.asked),
+      [['rev-parse', '--verify', 'HEAD~1^{commit}'], ['rev-parse', '--verify', 'HEAD^{commit}']],
+      which,
+    );
+    assert.equal(timesAsked(counted.asked, '--git-common-dir'), 1, which);
+  }
+});
+
+test('a base that names no commit is refused as it was: asked for with the head and the git folder, then alone, and nothing is asked after', async () => {
+  const { root } = makeRepo();
+  const { deps, asked } = countingGit(fakeCodex(''));
+  const result = await run(['--base', 'no-such-rev', '--cwd', root], deps);
+  assert.equal(result.code, 1, result.err);
+  assert.match(result.err, /^Cannot resolve --base no-such-rev to a commit in /);
+  assert.deepEqual(asked.map(({ args }) => args).filter((args) => args[0] === 'rev-parse'), [
+    ['rev-parse', '--show-toplevel'],
+    ['rev-parse', '--git-dir', '--git-common-dir', 'HEAD^{commit}', 'no-such-rev^{commit}'],
+    ['rev-parse', '--verify', 'no-such-rev^{commit}'],
+  ]);
+  assert.equal(wrote(root), false);
+});
+
+test('HEAD and the tree are read as two questions after a review when the one question for both is not answered with the commit of HEAD: the record is written as it was', async () => {
+  const answers = [
+    ['a branch with no commit', () => ({ status: 0, stdout: '# branch.oid (initial)\n# branch.head main\n', stderr: '' })],
+    ['an answer that is bytes', (head) => ({ status: 0, stdout: Buffer.from(`# branch.oid ${head}\n# branch.head main\n`), stderr: '' })],
+  ];
+  for (const [which, instead] of answers) {
+    const { root, base, head } = makeRepo();
+    const counted = countingGit(fakeCodex(reviewed(root, base)));
+    const { deps, tried } = answering(counted.deps, HEAD_AND_TREE, () => instead(head));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)], which);
+    assert.equal(tried.times, 1, which);
+    assert.deepEqual(
+      counted.asked.map(({ args }) => args).filter((args) => (args[1] === '--verify' && args[2] !== '--quiet') || args[0] === 'status'),
+      [['status', '--porcelain', '--untracked-files=no'], ['rev-parse', '--verify', 'HEAD^{commit}'], ['status', '--porcelain', '--untracked-files=no']],
+      which,
+    );
+  }
+});
+
+test('a git that does not know the one question for HEAD and the tree is asked it once in a run, however many parts the run holds, and the two questions after every part and after the review', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const fake = threePassingParts(root, base, head);
+  const counted = countingGit(fake);
+  const { deps, tried } = answering(counted.deps, HEAD_AND_TREE, () => ({ status: 129, stdout: '', stderr: 'error: unknown option `no-ahead-behind\'' }));
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...deps, platform: process.platform, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 3);
+  assert.deepEqual(readCodexReviews(root).length, 1);
+  assert.equal(tried.times, 1);
+  // Three parts and the review: four times HEAD alone, and the tree alone after the once before the review.
+  assert.equal(timesAsked(counted.asked, 'rev-parse', '--verify', 'HEAD^{commit}'), 4);
+  assert.equal(timesAsked(counted.asked, 'status', '--porcelain'), 5);
 });
 
 // --- what the comparison of the configurations varies: by injection alone, never by a flag ---

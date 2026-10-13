@@ -163,7 +163,7 @@ import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
 import { killTree } from './lib/process-tree.mjs';
-import { gitDirs } from './lib/project.mjs';
+import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
@@ -1102,14 +1102,18 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // Where the repository of this run is, for whatever would ask git that (`jsonLinesPath`, `leftOutOf`): a
   // review asked where the git folder is four times and where the top is twice, the same two answers each
   // time. The top is `root`, which git has just named, written as the answer of `git rev-parse --show-cdup`
-  // asked there is: nothing more to go up. The git folder is asked for the first time something reads or
-  // writes a file in it, so a run that ends before that never asks, and is kept from then on. An answer git
-  // did not give is not kept: the next read or write asks again, as each did before. With them goes what
+  // asked there is: nothing more to go up. The git folder comes with the two ends of the range (below); when
+  // it did not, it is asked for the first time something reads or writes a file in it, and is kept from then
+  // on. An answer git did not give is not kept: the next read or write asks again, as each did before. With them goes what
   // git says the project marks at `head` (`marks`, which `leftOutOf` fills): the files of the commits the
   // records are read against hold the files the review then reads, and were asked about twice. All of it is
   // this run's and ends with it, never the module's: the next run in this process may be of another
   // repository, or of this one with HEAD somewhere else.
-  let commonGitDir = null;
+  // The git folder and the two ends of the range are one question to git when it answers so that it can be
+  // read one way only (`gitDirsAndCommits`); when it does not, `asked` is `null` and each is asked alone
+  // below, in the order and with the refusals a run had before the three were joined.
+  const asked = gitDirsAndCommits(root, ['HEAD', args.base], spawn);
+  let commonGitDir = asked?.commonGitDir ?? null;
   const where = {
     top: path.resolve(root),
     marks: new Map(),
@@ -1121,16 +1125,40 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // Where the range of this run starts: the commit `--base` names, until the records have been read. A run
   // that starts later than it was asked to (`startingAt`) has that later commit here from then on, so that
   // its plan, its sessions, its run lines and its record are all of the one range it reviews.
-  let base = git(spawn, root, ['rev-parse', '--verify', `${args.base}^{commit}`]);
+  let base = asked ? asked.commits[1] : git(spawn, root, ['rev-parse', '--verify', `${args.base}^{commit}`]);
   if (!base) {
     error(`Cannot resolve --base ${args.base} to a commit in ${root}.`);
     return 1;
   }
-  const head = git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
+  const head = asked ? asked.commits[0] : git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
   if (!head) {
     error(`Cannot resolve HEAD to a commit in ${root}.`);
     return 1;
   }
+
+  // What HEAD and the tracked tree are now, for the two checks that hold a session and a review to the range:
+  // `headNow`, the commit, and `tree`, empty when no tracked file differs from it; each `null` when git
+  // could not say. One `git status` answers both: its second format names the commit of HEAD in a header
+  // line, and every line that is not a header is a tracked change (`--no-ahead-behind`, so that it does not
+  // walk the history against an upstream, which the two questions it stands for never did). An answer with
+  // no such header (a git that does not know the form, a failed process, a branch with no commit) is not read:
+  // the two questions are then asked alone, as before, and the one form is not tried again in this run.
+  let oneStatus = true;
+  const headAndTree = () => {
+    if (oneStatus) {
+      const answer = gitOutput(spawn, root, ['status', '--porcelain=v2', '--branch', '--no-ahead-behind', '--untracked-files=no']);
+      const lines = typeof answer === 'string' ? answer.split('\n').filter((line) => line !== '') : [];
+      const oids = lines.filter((line) => line.startsWith('# branch.oid ')).map((line) => line.slice('# branch.oid '.length));
+      if (oids.length === 1 && isFullCommitId(oids[0])) {
+        return { headNow: oids[0], tree: lines.some((line) => !line.startsWith('#')) ? 'tracked files differ' : '' };
+      }
+      oneStatus = false;
+    }
+    return {
+      headNow: git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']),
+      tree: git(spawn, root, ['status', '--porcelain', '--untracked-files=no']),
+    };
+  };
 
   /** The plan of the review of this range in `groups`, with what it leaves out, `leftOut` (`rangeGroups`),
    * on the model and at the effort the command passes, with its estimate from the run log of this
@@ -1394,8 +1422,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // keeps nothing, and is held by the check that follows the review alone.
       const notTheRange = () => {
         if (key === null) return null;
-        const headNow = git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
-        const tree = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+        const { headNow, tree } = headAndTree();
         if (headNow === null || tree === null) return 'HEAD and the state of the tree could not be read';
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
@@ -1753,8 +1780,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // tracked tree are read again here, after the review, and nothing is written unless both are as they were.
   // A skip reviewed nothing, so there is nothing to hold.
   if (args.unavailable === undefined) {
-    const headNow = git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
-    const tree = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+    const { headNow, tree } = headAndTree();
     if (headNow !== null && headNow !== head) {
       error(
         `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)} while Codex was reviewing, so what it read is not the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written. ` +
