@@ -2665,7 +2665,23 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 16:59, THE NEWEST OF ALL (read this first after a compaction).
+      STATE AT THE CONTEXT PAUSE, 2026-10-13 17:27, THE NEWEST OF ALL (read this first after
+      a compaction). The design of (b2) is committed with what
+      its reader changed (`89836c6`, `921bc03`: point 15, "Version 3 of slice (b2)" and
+      "Version 3 after its reader"). PART 1 IS BUILT and goes in the commit that carries this
+      text, or is still in the tree if that commit did not land (`git status` says): a
+      transcript's facts hold `pendingCall`, the session's row says a call with no result
+      after fifteen minutes (`PENDING_CALL_LIMIT_MS`), and a watch returns when it crosses
+      and each time its age doubles. A bounded writer sub-agent wrote it from the design and
+      this session read its code; its three tests failed first and then 530 passed, with one
+      older command test changed for a true reason (a watch that waits 24 days now says the
+      call its fixture's session still waits on). AFTER THAT COMMIT: its reviews (gentle-ai,
+      Codex), then PART 2 (the `question` notice: read "Version 3 after its reader", the six
+      bullets that start "Part 2", before writing a line; it needs the facts to keep the line
+      of each call and of its result, and the list to keep answered calls), then PART 3 (the
+      resume's half), each its own commit, then one merge of `main`, the push and the pull
+      request. The lead's order after (b2) is in the paragraph below.
+      STATE AT 2026-10-13 16:59 (the state before the one above).
       Pull request 101 (the exact undo of `uninstall`) is on `main` (`ad7b37b`, read with
       `gh`). The lead gave the go by his word (its line 11381, read with `--quote`: the plan
       is raised and its week is at 0). THE WORK IN HAND is slice (b2) of T17 on branch

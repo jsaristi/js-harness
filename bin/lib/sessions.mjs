@@ -451,7 +451,11 @@ function end(work, at, status) {
  * returned for the message, whether the call failed, and the line the call gives about the message
  * (`sentMessage`). `id` is `null` until the result is written, and when the result gives none. A
  * follow-up to a subagent is not one of them: it is work (`resumedWork`), or nothing. A resumed session
- * writes earlier entries again, so each message is listed once. */
+ * writes earlier entries again, so each message is listed once.
+ *
+ * `pendingCall` is the last tool call of the session's own chain that no tool result names, `{ tool, at }`
+ * with the time of its entry, or `null` when every call has its result. It is a plain fact for any tool, a
+ * question tool included: what the board says of a call that waits too long is `sessionLines`' rule. */
 export function sessionFacts(
   text,
   {
@@ -474,6 +478,7 @@ export function sessionFacts(
   const launchIndex = (work) => calls.get(work.toolUseId).index;
   const received = new Map(); // the message's id, or its entry's when it has none -> the message
   const sentByCall = new Map(); // tool_use id -> the message that call sent to another session
+  const answered = new Set(); // the tool_use ids that a tool result of the transcript names
   let permissionMode = null;
   let customTitle = null;
   let firstPrompt = null;
@@ -580,6 +585,7 @@ export function sessionFacts(
         else if (block.name === 'Bash' && block.input?.run_in_background === true) workByCall.set(block.id, newWork(block, entry, 'background'));
         else if (block.name === 'SendMessage' && SESSION_RECIPIENTS.has(block.input?.recipient_kind)) sentByCall.set(block.id, sentMessage(block, entry));
       }
+      if (entry.type === 'user' && block.type === 'tool_result') answered.add(block.tool_use_id);
       if (entry.type !== 'user' || block.type !== 'tool_result' || !calls.has(block.tool_use_id)) continue;
       const launch = calls.get(block.tool_use_id);
       const outcome = isObject(entry.toolUseResult) ? entry.toolUseResult : {};
@@ -633,6 +639,10 @@ export function sessionFacts(
     }
   }
 
+  // The last call of the session's own chain that no result names: what it waits on, if anything. The calls
+  // are in the order of the file, so the last one left open is the last one asked.
+  let pendingCall = null;
+  for (const [id, launch] of calls) if (!answered.has(id)) pendingCall = { tool: launch.block.name, at: launch.entry.timestamp ?? null };
   const work = [...workByCall.values()];
   const state = turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting';
   const compactsAt = measured === null ? { tokens: contextCompactionDefault, measured: false, at: null } : { tokens: measured.tokens, measured: true, at: measured.at };
@@ -662,12 +672,18 @@ export function sessionFacts(
     state,
     turnEndedAt,
     work,
+    pendingCall,
     tail: tail > 0 && lastReply !== null ? lastReply.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() !== '').slice(-tail) : [],
     skippedLines: skipped,
   };
   if (turn === null) facts.stateReason = 'the transcript holds no prompt, reply or tool entry';
   return facts;
 }
+
+/** How long a tool call may have no result before the board says so, in ms. The host ends a foreground command
+ * at ten minutes and its result arrives a few seconds later (601 to 606 s, of 9,100 Bash calls paired with their
+ * results), so a call older than the cap plus a margin is held by the host for approval, or it hangs. */
+export const PENDING_CALL_LIMIT_MS = 15 * 60 * 1000;
 
 // ---- machine facts ------------------------------------------------------------------------------------
 //
@@ -2017,6 +2033,27 @@ function isNewCompaction(was, now) {
   return was.uuid !== null && now.uuid !== null ? was.uuid !== now.uuid : was.at !== now.at;
 }
 
+/** How long the call a session waits on has had no result, in ms, when the board may say so, else `null`: the
+ * session works and has not ended (`ended`), and its last call (`pendingCall`) is not a question, whose calls are
+ * in "Open questions". A call of the agent tool is measured from the later of its launch and the last write of
+ * its subagent's file, since a subagent that writes is at work. */
+function pendingAge(session, now, ended) {
+  const pending = session.pendingCall;
+  if (!pending || ended || session.state !== 'working' || QUESTION_TOOLS.includes(pending.tool)) return null;
+  const launched = Date.parse(pending.at ?? '');
+  if (Number.isNaN(launched)) return null;
+  const work = isAgent(pending.tool) ? session.work.find((item) => item.tool === 'Agent' && !item.ended && item.launchedAt === pending.at) : undefined;
+  const written = Date.parse(work?.file?.modifiedAt ?? '');
+  return now - (Number.isNaN(written) ? launched : Math.max(launched, written));
+}
+
+/** How many times the limit fits in an age of `pendingAge`, as a power of two: -1 below the limit or when no call
+ * counts, 0 from the limit to twice it, 1 from twice to four times it, and so on. A watch says a call each time it grows. */
+const crossingOf = (age) => (age === null || age < PENDING_CALL_LIMIT_MS ? -1 : Math.floor(Math.log2(age / PENDING_CALL_LIMIT_MS)));
+
+/** `a` or `an`, before the name of a tool. */
+const article = (tool) => (/^[aeiou]/i.test(tool) ? 'an' : 'a');
+
 /** What a watch says of a compaction the session gained: who asked for it, how long ago it was (`ago`, as the
  * board says the age of an entry, from the time the board was read) and what the session held before it when
  * the transcript says. */
@@ -2064,6 +2101,16 @@ function sessionChanges(before, after, self) {
     // that judgment needs. A last task that no longer fits is said in it and wakes nobody by itself.
     if (session.atContextPause === true && was?.atContextPause !== true) {
       lines.push(`${sessionLabel(session)} reached the context pause, ${sizes.pause}: ${contextPieces(session, sizes).join(', ')}`);
+    }
+    // Once when the call it waits on crosses the limit, and again each time its age doubles (`crossingOf`). A session
+    // that the earlier look could not read had no call to compare with, so it is not compared.
+    if (listed?.unavailable === undefined) {
+      const age = pendingAge(session, Date.parse(after.generatedAt), ended.has(session.id));
+      const sameCall = Boolean(listed?.pendingCall) && listed.pendingCall.tool === session.pendingCall?.tool && listed.pendingCall.at === session.pendingCall?.at;
+      const beforeN = sameCall ? crossingOf(pendingAge(listed, Date.parse(before.generatedAt), ended.has(session.id))) : -1;
+      if (crossingOf(age) > beforeN) {
+        lines.push(`${sessionLabel(session)} has ${article(session.pendingCall.tool)} ${session.pendingCall.tool} call with no result for ${durationOf(Math.round(age / 1000))}: the host may be holding it for approval, or it hangs`);
+      }
     }
   }
   const now = new Set(after.sessions.map((session) => session.id));
@@ -2284,6 +2331,8 @@ function planChanges(before, after) {
  * - a session that appears, one that starts waiting (from any other state) or that waits again after
  *   another turn, one that reaches the context pause, one that leaves the window. The waiting of a session
  *   whose last word in the record is `closed` or `relieved` is not among them (`endedSessions`);
+ * - a tool call of a session that has had no result for the limit (`PENDING_CALL_LIMIT_MS`), said once when it
+ *   passes the limit and again each time its age doubles (`sessionChanges`, `pendingAge`);
  * - a gate that starts beside another that runs, when one of the two does not know the machine's gate
  *   lock, among the gates of the board's worktrees (`watchedGates`, `gateChanges`);
  * - a pull request that opens or is no longer open;
@@ -2366,13 +2415,17 @@ export const NOT_VISIBLE =
 function ago(iso, now) {
   const at = Date.parse(iso ?? '');
   if (Number.isNaN(at)) return 'at an unknown time';
-  const seconds = Math.max(0, Math.round((now - at) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
+  return `${durationOf(Math.max(0, Math.round((now - at) / 1000)))} ago`;
+}
+
+/** A duration of whole `seconds` in the words of `ago`, without the word: `45s`, `12m`, `2h 05m`, `3d`. */
+function durationOf(seconds) {
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h ${String(minutes % 60).padStart(2, '0')}m ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 48) return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */
@@ -2426,6 +2479,11 @@ function sessionLines(session, now, sizes, ended) {
   lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}`);
   // A line of its own: it is the one read to judge whether what is left of a task fits.
   lines.push(`  ${contextText(session, sizes)}`);
+  // A tool call that has had no result for the limit: the host may be holding it for approval, or it hangs.
+  const held = pendingAge(session, now, ended);
+  if (held !== null && held >= PENDING_CALL_LIMIT_MS) {
+    lines.push(`  ${article(session.pendingCall.tool)} ${session.pendingCall.tool} call has had no result for ${durationOf(Math.round(held / 1000))}: the host may be holding it for approval, or it hangs`);
+  }
 
   if (session.work.length > 0) {
     const open = session.work.filter((work) => !work.ended);

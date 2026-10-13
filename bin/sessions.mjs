@@ -27,6 +27,8 @@
 // no answer of his, read from the same transcripts (odd/tasks/session-channel.md, point 15): one he closed
 // without answering, one still on his screen. A call the host copied into several files is one question,
 // and one asked again and answered then is not listed. A watch returns for a question he closes.
+// A session's row says a tool call that has had no result for fifteen minutes, since the host may be holding
+// it for approval or it hangs, and a watch returns for it once and again each time its age doubles (point 15).
 // A session's row says the context it holds, the room left before the host compacts it and what its last
 // task cost (odd/tasks/session-channel.md, "Context"): what a session needs at the context pause to judge
 // whether what is left fits. A watch returns once when a session reaches the pause. The share of the window

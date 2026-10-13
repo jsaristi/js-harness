@@ -402,6 +402,14 @@ test('a transcript that cannot be read is listed as unavailable with the reason,
   assert.equal(board.sessions[1].id, SESSION_B);
 }));
 
+test('a Bash call with no result for the limit is said under its session in the text board, and carried as pendingCall in --json', withMachine(async (machine) => {
+  writeAt(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('build it', 1100), call('toolu_h1', 'Bash', { command: 'npm test', description: 'Run the tests' }, 1000)), 1000);
+  const { stdout } = await runSessions(machine, ['--json']);
+  assert.deepEqual(JSON.parse(stdout).sessions[0].pendingCall, { tool: 'Bash', at: before(1000).toISOString() });
+  const text = await runSessions(machine, []);
+  assert.ok(text.stdout.split('\n').includes('  a Bash call has had no result for 16m: the host may be holding it for approval, or it hangs'), text.stdout);
+}));
+
 // Session channel, T5: each session's context as what the judgment at the pause needs: what it holds, the
 // room left before the host compacts it and what its last task cost.
 const spoke = (tokens, seconds) => ({ ...reply('ok', seconds), message: { role: 'assistant', model: 'model-x', stop_reason: 'end_turn', usage: { input_tokens: 0, cache_read_input_tokens: tokens, cache_creation_input_tokens: 0, output_tokens: 5 }, content: [{ type: 'text', text: 'ok' }] } });
@@ -1083,7 +1091,9 @@ test('--watch takes waits up to 2,147,483 seconds', withMachine(async (machine) 
   writeSessions(machine);
   // --hours as wide as the wait: after 24 days every session would have left a window of 12 hours.
   const { code, lines, slept } = await watch(machine, ['--interval', '2147483', '--timeout', '2147483', '--hours', '1000']);
-  assert.deepEqual([code, slept, lines], [0, [2147483000], ['sessions --watch: nothing changed in 2147483s']]);
+  // After a wait of 24 days the one thing that changed is the age of the call session B still waits on: it
+  // passed the limit, so the watch says it.
+  assert.deepEqual([code, slept, lines.slice(0, 2)], [0, [2147483000], ['sessions --watch: 1 change after 2147483s', '  session bbbbbbbb "fix the review" has an Agent call with no result for 24d: the host may be holding it for approval, or it hangs']]);
 }));
 
 test('--watch --json gives the changes and the board, or the timeout alone', withMachine(async (machine) => {

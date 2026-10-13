@@ -180,6 +180,14 @@ test('a foreground Bash call and other tools are not background work', () => {
 
 // --- sessionFacts: state ---
 
+test('pendingCall is the last tool call that no result names, with its tool and time, for any tool, and null when every call has its result', () => {
+  const pending = (...entries) => lib.sessionFacts(transcript(prompt('go', 1), ...entries)).pendingCall;
+  assert.deepEqual(pending(call('toolu_1', 'Read', { file_path: 'x' }, 2), call('toolu_2', 'Bash', { command: 'x', description: 'Run' }, 3)), { tool: 'Bash', at: at(3) });
+  assert.equal(pending(call('toolu_1', 'Bash', { command: 'x' }, 2), result('toolu_1', { stdout: 'a' }, 3)), null);
+  assert.equal(pending(reply('done', 2)), null);
+  assert.deepEqual(pending(call('toolu_q', 'AskUserQuestion', { questions: [] }, 2)), { tool: 'AskUserQuestion', at: at(2) }, 'a question tool is a plain fact too');
+});
+
 test('state is working when the last entry is a tool call, a tool result, or a prompt not answered yet', () => {
   const toolCall = lib.sessionFacts(transcript(prompt('go', 1), call('toolu_1', 'Read', { file_path: 'x' }, 2)));
   const toolResult = lib.sessionFacts(transcript(prompt('go', 1), call('toolu_1', 'Read', { file_path: 'x' }, 2), result('toolu_1', {}, 3)));
@@ -1343,6 +1351,21 @@ test('boardChanges announces a session once its transcript can be read, when no 
   // One it had read before is compared with what was read, and is not announced again.
   const [known, busy] = [boardOf({ sessions: [seen(A, 'working')] }), boardOf({ sessions: [unread] })];
   assert.deepEqual(lib.boardChanges(lib.watchBaseline(known, busy), boardOf({ sessions: [seen(A, 'working')] })), []);
+});
+
+// Session channel, (b2) part 1: a watch says a tool call with no result once it passes the limit, and again each time
+// its age doubles. The call is a fact of the session, so its age is read from the boards' own clocks.
+test('boardChanges says a tool call with no result once it passes the limit, and again each time its age doubles', () => {
+  const said = (age) => `session aaaaaaaa "title a" has a Bash call with no result for ${age}: the host may be holding it for approval, or it hangs`;
+  const waiting = (generated, tool = 'Bash') => ({ generatedAt: before(generated), sessions: [seen(A, 'working', { pendingCall: { tool, at: before(2000) } })] });
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, waiting(1100)), [said('15m')], 'a call first seen past the limit is said');
+  assert.deepEqual(changes(waiting(1500), waiting(1100)), [said('15m')], 'said when it crosses the limit');
+  assert.deepEqual(changes(waiting(1100), waiting(1000)), [], 'not again at the next look');
+  assert.deepEqual(changes(waiting(1000), waiting(200)), [said('30m')], 'again when the age doubles');
+  assert.deepEqual(changes(waiting(200), waiting(0)), [], 'not between two doublings');
+  assert.deepEqual(changes(waiting(0), waiting(-1600)), [said('1h 00m')], 'and again at an hour');
+  assert.deepEqual(changes(waiting(1500), waiting(1100), { self: A }), [], 'the watching session is not compared');
+  assert.deepEqual(changes(waiting(1500, 'AskUserQuestion'), waiting(1100, 'AskUserQuestion')), [], 'a question is in Open questions, not here');
 });
 
 test('isSelf takes the whole id of a session or its first eight characters or more', () => {
@@ -2759,6 +2782,26 @@ test('renderBoard: a stopped task reads as stopped, and a session that closed or
   assert.ok(lines.includes('  work: 0 with no recorded end, 1 ended (last: Bash "Watch the board" stopped 5m ago)'));
   // A board without a roster, or without a record, prints its sessions as before.
   assert.equal(lib.renderBoard({ ...BOARD, sessions }, { now: NOW }).filter((line) => / by its own notice /.test(line)).length, 0);
+});
+
+// Session channel, (b2) part 1: a row says a tool call with no result once it passes the limit, while the session
+// works and has not closed. A question is in "Open questions", and a subagent that writes is at work.
+test('renderBoard says a tool call with no result for the limit under its row, and only while the session works and has not closed', () => {
+  const said = (session, more = {}) => lib.renderBoard({ ...BOARD, sessions: [session], ...more }, { now: NOW }).filter((line) => line.includes(' call has had no result for '));
+  const bash = { tool: 'Bash', at: before(1000) };
+  assert.deepEqual(said(seen(A, 'working', { pendingCall: bash })), ['  a Bash call has had no result for 16m: the host may be holding it for approval, or it hangs']);
+  assert.deepEqual(said(seen(A, 'working', { pendingCall: { tool: 'Bash', at: before(600) } })), [], 'below the limit');
+  assert.deepEqual(said(seen(A, 'working')), [], 'with no call left open');
+  assert.deepEqual(said(seen(A, 'waiting', { pendingCall: bash })), [], 'a session that is not working');
+  assert.deepEqual(said(seen(A, 'working', { pendingCall: { tool: 'AskUserQuestion', at: before(1000) } })), [], 'a question is in Open questions');
+  const agent = { tool: 'Agent', at: before(1000) };
+  const subagent = (modifiedAt) => [{ tool: 'Agent', kind: 'Explore', id: null, description: 'Look', launchedAt: before(1000), ended: false, file: { path: 'x', modifiedAt } }];
+  assert.deepEqual(said(seen(A, 'working', { pendingCall: agent, work: subagent(before(30)) })), [], 'a subagent that writes is at work');
+  assert.deepEqual(said(seen(A, 'working', { pendingCall: agent, work: subagent(before(1000)) })), ['  an Agent call has had no result for 16m: the host may be holding it for approval, or it hangs'], 'a silent subagent is said past the limit');
+  // A session its record says closed says so, and its call is not said as held.
+  const closing = seen(C, 'working', { title: 'JH 3 · closed', titleSource: 'custom-title', cwd: 'D:\\proj', gitBranch: 'main', skippedLines: 0, pendingCall: bash, tail: [] });
+  assert.equal(said(closing).length, 1, 'said without a record that closed it');
+  assert.deepEqual(said(closing, { roster: lib.rosterOf([closing], { record: recordOf([noticeOf(900, { id: C }, 'orchestrator', 'closed', 'delivered')]) }) }), [], 'not once the session closed');
 });
 
 // Failure 7 of 2026-10-10: a process that waited for a free machine could not be attributed from the
