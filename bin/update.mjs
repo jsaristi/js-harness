@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
-import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage } from './lib/project.mjs';
+import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
 import { INSTALL_NEWEST, latestFromSource, splitCommand, installArgs, isNewer } from './lib/version.mjs';
 
 const PKG_NAME = 'js-harness';
@@ -106,16 +106,23 @@ function parseStatusArgs(argv, env) {
 
 /** The project half of `status`: what `init` pinned, what is running, and whether this clone is set up.
  * A pin that differs from the running version is reported, not failed: `status` reads, `sync` names the
- * ways out (T4 design). */
+ * ways out (T4 design). A project with no pin (`noPin`, install-update T6) is reported too: there is no
+ * version to compare, `sync` sets nothing up until one is pinned, and the last line says how to pin. */
 function reportProjectStatus(location, version) {
+  const pinned = location.kind !== 'noPin';
   console.log(`project: ${path.normalize(location.root)}`);
-  console.log(`pinned version: ${location.pin}`);
+  console.log(`pinned version: ${pinned ? location.pin : 'none'}`);
   console.log(`running version: ${version}`);
+  const notSetUp = pinned
+    ? 'this clone: not set up; js-harness sync sets it up'
+    : 'this clone: not set up; js-harness sync sets it up once a version is pinned';
   console.log(
-    location.manifestPresent
-      ? `this clone: set up (manifest: ${path.normalize(location.manifestPath)})`
-      : 'this clone: not set up; js-harness sync sets it up',
+    location.manifestPresent ? `this clone: set up (manifest: ${path.normalize(location.manifestPath)})` : notSetUp,
   );
+  if (!pinned) {
+    console.log(`to pin this project: ${howToPinClause(version)}`);
+    return;
+  }
   console.log(
     location.pin === version
       ? 'pin and running version: match'
@@ -143,6 +150,7 @@ ${STATUS_USAGE}`);
     const location = projectLocation(opts.cwd);
     switch (location.kind) {
       case 'initialized':
+      case 'noPin':
         reportProjectStatus(location, currentVersion());
         return 0;
       case 'invalidHarnessJson':

@@ -63,7 +63,8 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   whoever registers it decides what `js-harness upgrade` installs and runs on this machine. The
   release source decided is git tags (`docs/ROADMAP.md`, Decided, "Release source") and is not
   built. The first to fix of the six. Not designed here
-- [ ] T6 `status` and `sync` work in a project whose `harness.json` holds no pin. Added on
+- [x] T6 (243794e; route: inline; done on 2026-10-13, see Progress) `status` and `sync` work in a
+  project whose `harness.json` holds no pin. Added on
   2026-10-13 (the same list, item e). Read: in this repository `js-harness status` prints
   "cannot read the pin from …harness.json: it has no string "version"" and exits 1
   (`bin/update.mjs:140-142`, `bin/lib/project.mjs:1473`; `sync` the same at `:1513`), because
@@ -195,20 +196,115 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   parts of `35477d4..43934b2`: both passed with no finding, 213,326 input tokens (plan 179,000,
   allowance 520,800), recorded. The design's one reader: 155,976 tokens. Not checked by anyone:
   whether `npm install -g <tarball>` itself contacts the registry (audit, funding).
+- 2026-10-13 T6 (`243794e`, branch `fix/status-no-pin` off `main` `3e26e72`, written inline by
+  the session "JH 8" on the orchestrator's order, by his answer to question 25, "Vale, sin
+  versión fijada", read in the orchestrator's transcript at line 11166): a `harness.json` that
+  is a JSON object with no `version` key is a project with no pin. `readPin` answers
+  `{ noPin: true }`; `projectLocation` has the kind `noPin`; `status` prints the project,
+  "pinned version: none", the running version, whether the clone is set up, and "to pin this
+  project: add "version": "<running>" to harness.json and commit it", exit 0; `syncProject`
+  returns `{ code: 1, noPin: true, harnessJsonPath, version }` and `sync` says the file pins no
+  version, so there is nothing to move the project to, with the same way to pin, and writes
+  nothing; the menu lists `noPin` with the project kinds. Still refused: a `version` that is
+  there and is not a semver string (`null` and a number included), and a file that is not a
+  JSON object, whose reason is now "it is not a JSON object".
+  - Turn of 18:06 (`t6-turn.sh`): RED with the four code files at HEAD, `node --test` of the
+    four test files → 338 tests, 8 fail (the two of `syncProject`, the one of
+    `projectLocation`, the two of `status`, the one of `syncMain`, the two of the menu); GREEN
+    with the fix → 333 pass, 0 fail; the scan for a kill by number passes; `js-harness status`
+    in this worktree, whose own `harness.json` holds no version → exit 0, "pinned version:
+    none"; the commit's gate passed whole at 18:20. gentle-ai: review not due (`under_budget`,
+    medium risk, 210 lines).
+  - Codex, once, 18:21, medium effort, `2e5dda0..243794e`: "the patch is correct" (0.94), no
+    finding, 135,381 input tokens (plan 87,000, allowance 300,000), recorded. The push check: 1
+    code commit, covered. No sub-agent.
+  - Left open, not built: `init` on such a file answers "already initialized at unknown
+    version; js-harness sync moves a project to its pin" and writes nothing
+    (`bin/init.mjs:69-72`), so the pin is one line by hand; whether `init` should write it is
+    a product question, his. `uninstall` never reads the pin (`bin/lib/project.mjs`,
+    `uninstallProject`: only the manifest), so it is unchanged.
 
 ## Next step
-T5 is done and waits for its pull request to be merged by the orchestrator. Two things are open,
-both sent to the orchestrator on 2026-10-13 at 06:27 and neither started:
-- **T6** waits for an answer that is his: is a `harness.json` with no version a project with no
-  pin (the recommendation: `status` answers and exits 0, `sync` says there is nothing to move to)
-  or an invalid file as today. `check` already accepts that file in this repository, so two
-  commands of the package disagree about it.
+T5 and T6 are done; T6 waits for its pull request to be merged by the orchestrator. One thing is
+open, sent to the orchestrator on 2026-10-13 at 06:27 and ordered by it at 16:57 after the
+package's contents:
 - **A candidate task, not yet in Tasks:** with no `--prefix`, `upgrade --source` runs the sync
   after its install as `js-harness sync --global` through a shell (`bin/update.mjs`, the
   `syncResult` block), so it runs whatever `js-harness` is found on the path, and the check that
   it was the upgraded copy comes after it ran.
 Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it changes the test
 "resolveLatest starts no process and answers nothing when no source is named" on purpose.
+
+## T6: state for a resume
+
+**At 18:22 on 2026-10-13: T6 is done and reviewed (`243794e`, Progress); what is left of it is
+its pull request and the notice to the orchestrator. The session was compacted by the app at
+17:55, after this section and the design below were committed. Next, by the orchestrator's
+order: the package's contents (his line 11146, read by me at 18:10: "Solo los comandos
+(Recomendada)" to question 24), in a branch of its own.**
+
+Written on 2026-10-13 at 17:53 by the session "JH 8", at 89% of its context, before any line
+of T6 was read in the code or written. The app compacts that session in the turn that crosses
+its limit; this is the record.
+
+- **Where.** Branch `fix/status-no-pin` off `main` `3e26e72`, worktree
+  `D:\js-harness-worktrees\status-no-pin`. Nothing but this section is written.
+- **His answer, read by me** (`js-harness sessions --quote
+  65318fd5-80e7-4bb8-92b5-06737140185b 11166`, answered by the user, tapped): "Vale, sin
+  versión fijada (Recomendada)", to "Pregunta 25: un proyecto tiene su archivo del harness
+  escrito a mano y sin versión. ¿Qué le contestan los comandos?" (the others: "Sigue siendo
+  inválido", "Se rechaza en todos lados"). So: a `harness.json` with no version is a project
+  with no pin. `status` says so and how to pin one, exit 0; `sync` says there is nothing to
+  move to and how to pin (its exit code is the design's to say; the question sent to him
+  proposed 1).
+- **What is read so far, from the task's own text, not yet in the code:** `status` prints
+  "cannot read the pin from …harness.json: it has no string "version"" and exits 1
+  (`bin/update.mjs`, the `invalidHarnessJson` case; `bin/lib/project.mjs`, about `:1473`,
+  and `sync` the same about `:1513`); this repository's own `harness.json` is such a file.
+  `check` already accepts it.
+- **The steps:** read `projectLocation` and its `invalidHarnessJson` reasons; a short design
+  here (a new kind of location, or a reason that is not an error; what `init` does with such
+  a file; what `uninstall` does); the failing tests first; one lock turn; gentle-ai as the
+  check says; Codex once when its printed plan is inside the allowance; push, pull request
+  with no AI attribution, the head to the orchestrator.
+- **After T6, the orchestrator's order of 16:57:** the package's contents (his line 11146 by
+  the orchestrator's word, not read by me: `bin/` without its test files and without this
+  repository's `AGENTS.md`, with a test that the packed list holds neither); the sync that
+  runs from the path after `upgrade --source` with no `--prefix`; then
+  `odd/tasks/gate-wait.md`, "Next". How the session works: `odd/tasks/gate-wait.md`, "Next"
+  and "Resume here"; its turn scripts are in its scratchpad (`ct-turn.sh` is the newest
+  model of a turn: red on HEAD's code, green, a rule check, then the commit;
+  `codex-turn.sh <worktree> <base> <short head> <allowance x 1.05> <name>`).
+- **On `main` from this session on 2026-10-13:** pull requests 98, 99, 100 and 102.
+
+### T6 design (read in the code on `main` `3e26e72`; nothing built)
+
+- **Where the refusal comes from.** `readPin` (`bin/lib/project.mjs:1433-1449`) returns
+  `{ invalid: 'it has no string "version"' }` for any JSON whose `version` is not a non-empty
+  string. `projectLocation` (`:1463-1475`) turns that into `kind: 'invalidHarnessJson'`, which
+  `statusMain` prints and exits 1 on (`bin/update.mjs:148-150`); `syncProject` (`:1512-1513`)
+  returns `invalidHarnessJson`, which `syncMain` prints with "nothing was written"
+  (`bin/install.mjs:224-225`). The menu treats the kind as a project (`bin/tui.mjs:61`).
+- **The rule, by his answer.** A `harness.json` that is a JSON object with no `version` key is
+  a project with no pin, not an invalid file. A `version` that is there and is not a
+  non-empty semver string stays invalid, and so does a file that is not a JSON object.
+- **`readPin`** gains a third answer, `{ noPin: true }`, for exactly that case.
+- **`projectLocation`** gains `{ kind: 'noPin', root, harnessJsonPath, manifestPath,
+  manifestPresent }`. `status` prints the project, `pinned version: (none)`, the running
+  version, whether this clone is set up, and how to pin: add `"version": "<running>"` to
+  that file; exit 0.
+- **`syncProject`** returns `{ code: 1, noPin: true, harnessJsonPath }`; `sync` says there is
+  nothing to move to, since the file pins no version, and the same way to pin; exit 1, as
+  the question put to him proposed; nothing is written.
+- **The menu** (`buildMenu`, `bin/tui.mjs:61`) lists `noPin` with the project kinds.
+- **Open, not built here:** `init` on such a file answers `alreadyInitialized` and writes
+  nothing (`bin/lib/project.mjs:830-877`, `:916`), so pinning is by hand; whether `init`
+  should offer to pin is a question of its own. `uninstall` is not read yet.
+- **Tests, first and red:** `projectLocation` and `syncProject` for an object with no
+  `version` (beside the existing invalid cases at `bin/lib/project.test.mjs:2610` and
+  `:3323`, which keep a `version` that is not a string); `status` exit 0 with its lines and
+  `sync` exit 1 with its line, in `bin/update.test.mjs` and `bin/install.test.mjs`; the
+  menu's kinds (`bin/tui.test.mjs:664`).
 
 ## State for a resume
 

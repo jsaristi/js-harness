@@ -1152,7 +1152,12 @@ those features has a session open: the lead assigns them.
   processes pins that neither the command nor what it started is left.
 - e. **`status` exits 1 in a project whose `harness.json` holds no pin**, this repository
   among them: "it has no string "version"" (`bin/update.mjs:140-142`,
-  `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6.
+  `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6. **Fixed on
+  2026-10-13** (branch `fix/status-no-pin`), by his answer to question 25 ("Vale, sin versión
+  fijada"): a `harness.json` that is an object with no `version` is a project with no pin.
+  `status` reports it and says how to pin one, exit 0; `sync` says there is nothing to move
+  the project to and how to pin, writes nothing, exit 1. A `version` that is there and is
+  not a semver string, and a file that is not a JSON object, are refused as before.
 - f. **The practice run starts no host session**, so it does not prove that a host loads what
   was installed (`scripts/practice-lib.mjs:450-461`; item 4 under "Session channel" says so).
   `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve.
