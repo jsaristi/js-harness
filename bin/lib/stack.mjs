@@ -537,9 +537,8 @@ export function hookCommandPlan(commands) {
   return plan;
 }
 
-// The fix of the hook commands check. `upgrade` is the command that installs the newer release (`update` only reports
-// whether one exists, and takes no `--global`); the upgraded copy then syncs the machine's install, which rewrites the
-// entries too.
+// The fix of the hook commands check: the newest copy, installed by hand as `INSTALL_NEWEST` says. `upgrade` is not
+// the fix yet: no release is tagged before 1.0.0, so with no folder of tarballs named it installs nothing.
 const HOOK_FIX = `the js-harness on the path is older than these entries: install the newest copy (${INSTALL_NEWEST}), then run js-harness doctor again`;
 // The first line of a tried command's standard error that a gap line shows; the rest is not the answer.
 const STDERR_LINE_MAX = 160;
