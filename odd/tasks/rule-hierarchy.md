@@ -2442,13 +2442,31 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     merged, so the two do not meet in this document.
     NEXT: push and this branch's pull request; then the context pause's Codex result, its
     entry here, its push and pull request.
+  - Pull requests 80 (the two corrections from Linux) and 81 (the context pause) are merged:
+    `main` is `3a94ae4` (19:07). Each took one merge of `main` inside its own turn of the
+    gate, in the order the lead gave, 80 then 81; the document was joined by git, no conflict.
+    T3e, branch `fix/fence-under-list-item`, written inline: commit `b6babc3` (its turn of the
+    gate 19:12:49 to 19:22:23, a fast-forward to `3a94ae4` and then the commit). `tokenize`
+    of `bin/lib/progress.mjs` keeps the text column of each list item the line is under; a
+    fence marker opens within three spaces of that column and the same measure closes it;
+    `indentedFences` still opens a deeper one. Test first: three tests failed, 35 passed.
+    gentle-ai assessed it as medium and not due. Codex reviewed `3a94ae4..b6babc3` (169,508
+    input tokens against a plan of about 190,000) and found two things of the second
+    priority, both taken and corrected test first in the commit after it (2 failed, 37 pass):
+    a fence that opens at the margin did not leave the list item, so a later fence was
+    measured from a stale column; and a thematic break written with spaces (`* * *`,
+    `- - -`) was read as a list item. Not followed, and said in the code: a paragraph's line
+    that goes on at the margin leaves its item, and a fence still open when its item ends
+    runs on until its marker. On this repository's documents `progress` reads 306 of 350 and
+    the register 65 failures with 18 not settled, before and after.
+    NEXT: the correction through the gate, Codex on that one commit, push, the pull request.
 
 ## Next step
-In this order. (1) The pull requests of `fix/linux-run-findings` (two corrections from the
-run on Linux) and of `feat/rules-context-pause` (the context pause as a declared rule), each
-merged by the lead. (2) The rest of the second part of T16b when `bin/codex-review.mjs` is
-free, after `feat/gate-wait`: the review's model and effort, and the reader of
-`codex-review-margin`. (3) T3e. (4) T1, which takes section D of the proposal. T2 and T8
+In this order. (1) The pull request of `fix/fence-under-list-item` (T3e), merged by the
+lead; T3e is checked off when it is on `main`. (2) The rest of the second part of T16b when
+`bin/codex-review.mjs` is free, after `feat/gate-wait`: the review's model and effort, and
+the reader of `codex-review-margin`. (3) T1, which takes section D of the proposal. No new
+piece is started before the lead's line (its word of 18:30, a claim). T2 and T8
 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
 "What the hosts allow" that T2 rests on are confirmed with a logging hook.
 His, written here and in the lead's queue of his decisions (he is back since about 12:00 of

@@ -6,6 +6,9 @@
 const FENCE_MARKER_PATTERN = /^\s*(`{3,}|~{3,})/;
 // A list item's marker, a bullet or a number, with the spaces before its text.
 const LIST_ITEM_PATTERN = /^(?:[-*+]|\d{1,9}[.)])( +|$)/;
+// A thematic break, trimmed: three or more of one of its characters, spaces between them allowed.
+// `* * *` and `- - -` look like a list item and are none.
+const THEMATIC_BREAK_PATTERN = /^([-*_])(?:[ \t]*\1){2,}$/;
 // A fence, and the item of a list, may sit this far in from what they are under, and no further.
 const NEAR = 3;
 const HEADING_PATTERN = /^ {0,3}(#{1,6})\s+(.*)$/;
@@ -35,8 +38,9 @@ function indentOf(line) {
 
 /** The column the text of a list item starts at, when `line` opens one: its indent, its marker and
  * the spaces after it, which count as one when they are five or more or when nothing follows, as
- * CommonMark counts them. `null` for a line that opens no item. */
+ * CommonMark counts them. `null` for a line that opens no item, a thematic break among them. */
 function itemTextColumn(line) {
+  if (THEMATIC_BREAK_PATTERN.test(line.trim())) return null;
   const indent = indentOf(line);
   const item = line.trimStart().match(LIST_ITEM_PATTERN);
   if (!item) return null;
@@ -145,6 +149,10 @@ export function tokenize(markdown, { stripComments = false, indentedFences = fal
   const items = []; // the text column of each list item the current line is under, outermost first
   /** The column a line indented `indent` is under: the innermost open item it reaches, or the margin. */
   const under = (indent) => items.findLast((column) => column <= indent) ?? 0;
+  /** Leaves every open item whose text starts further in than `indent`. */
+  const leave = (indent) => {
+    while (items.length > 0 && items.at(-1) > indent) items.pop();
+  };
   /** The fence `line` opens, with the column it is measured from; `null` when it opens none. */
   const opening = (line) => {
     const marker = matchFenceOpen(line);
@@ -167,6 +175,8 @@ export function tokenize(markdown, { stripComments = false, indentedFences = fal
     }
     const opened = opening(raw);
     if (opened) {
+      // The opener leaves the items it is not under, as any line does: a fence at the margin ends the list.
+      leave(indentOf(raw));
       fence = opened;
       tokens.push({ fence: true, line: raw });
       continue;
@@ -174,7 +184,7 @@ export function tokenize(markdown, { stripComments = false, indentedFences = fal
     if (raw.trim() !== '') {
       // The line leaves every item whose text starts further in than it does, then may open its own.
       const indent = indentOf(raw);
-      while (items.length > 0 && items.at(-1) > indent) items.pop();
+      leave(indent);
       const column = itemTextColumn(raw);
       if (column !== null && indent - (items.at(-1) ?? 0) <= NEAR) items.push(column);
     }

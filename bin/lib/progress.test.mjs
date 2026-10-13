@@ -372,6 +372,23 @@ test('a fence under a list item closes by a marker within three spaces of the it
   assert.deepEqual(fenceKinds(tooDeep), ['step', 'fence', 'fence', 'fence', 'fence', 'fence']);
 });
 
+test('a fence that opens at the margin leaves the list item, so a later fence is measured from the margin', () => {
+  // Were the item still open, the four-space marker would close the second fence and the last line be a step.
+  const md = '- [ ] a task\n```\nat the margin\n```\n  ```\n  - [ ] an example\n    ```\n- [ ] fenced still\n';
+  assert.deepEqual(fenceKinds(md), ['step', 'fence', 'fence', 'fence', 'fence', 'fence', 'fence', 'fence', 'fence']);
+  assert.deepEqual(parseSteps(md).map((step) => step.text), ['a task']);
+});
+
+test('a thematic break written with spaces opens no list item', () => {
+  for (const rule of ['* * *', '- - -', '  -  -  -  ']) {
+    const md = `${rule}\n  \`\`\`\n  - [ ] an example\n    \`\`\`\n- [ ] fenced still\n`;
+    assert.deepEqual(fenceKinds(md), ['text', 'fence', 'fence', 'fence', 'fence', 'fence'], rule);
+  }
+  // A bullet whose text is a star is still an item.
+  const item = '* a\n    ```\n    - [ ] an example\n    ```\n- [ ] the next task\n';
+  assert.deepEqual(fenceKinds(item), ['text', 'fence', 'fence', 'fence', 'step', 'text']);
+});
+
 test('a line back at the margin leaves the list item: a fence four spaces in is then text again', () => {
   const md = '- [ ] a task\nback at the margin\n    ```\n    - [ ] an example\n    ```\n';
   assert.deepEqual(fenceKinds(md), ['step', 'text', 'text', 'step', 'text', 'text']);
