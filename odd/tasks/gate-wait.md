@@ -2508,6 +2508,41 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   of the file alone before (`halves-check.cjs`); the file and line the runner holds;
   the commit with the whole gate; the plan; Codex once if the printed plan is inside
   315,000.
+- 2026-10-13 · **The cut is on `main`: pull request 90, merged by the orchestrator at
+  00:21 (`1bbe34c`; checked: it holds `672457d`).** The worktrees and local branches of
+  S1 and of the cut are removed; this document is written on
+  `feat/gate-wait-two-halves` from here on.
+- 2026-10-13 · **T17 committed and reviewed: `d7b1e68` on `feat/gate-wait-two-halves`,
+  one commit on `main` `1bbe34c`** (the uncommitted change was moved from `823047e` to
+  `main`'s head before its turn, the test file being the same on both, so the commit
+  owes no merge of the cut). **The turn's first try ended with exit 7 at 00:27 and it
+  was my check, not the change** (`halves-turn-1.log`): the names the two processes
+  ran were compared with a log taken before `main`'s effort commit, where three tests
+  are named "… at high"; its own figures stand: the first half alone 152 tests in
+  164 s, the second 117 in 145 s, the two together 269 in 180 s. **The second try**
+  (`halves-turn.log`, 00:38:37 to 01:00:57, exit 0): RED without the second file, 1 of
+  1; the file at HEAD alone 267 of 267; the two together 269 of 269; "ran now 269 (2
+  of them say which half), ran alone before 267; twice 0, lost 0, new 0"; the runner's
+  own events name one test of each half by `bin/codex-review.test.mjs` and its own
+  line (1190, 6038); the commit's whole gate passed; gentle-ai "medium risk, 2 paths,
+  55 lines: review not due (under_budget)". **Codex, at medium:** plan "1 part, 55
+  changed lines in 2 files, about 24,000 to 76,000 input tokens"; "the patch is correct
+  (confidence 0.9). The split preserves test registration across two isolated
+  processes while retaining shared helpers and per-process setup and cleanup"; no
+  finding; recorded for `1bbe34c..d7b1e68`. **Spent 90,519 input tokens** (62,208
+  cached) over 5 requests in 60 s: over the plan's range, inside the allowance of
+  315,000. The feature's Codex total: 4,854,672 input tokens.
+  **The seconds of that second try are not a measure, and it is mine again:** the
+  file at HEAD alone took 451 s there, where it took 274 s at 22:45, and the two
+  together 232 s, where they took 180 s half an hour before. This session's own
+  tsserver (pid 53660, under this session's `claude.exe` 60100 by its parent chain)
+  was spinning: 752 s of CPU at 00:13, 2,362 s at 01:01, 7 s of CPU in a 4 s sample,
+  and the gate log's load lines of 00:09 and 01:01 name `node tsserver.js` first.
+  Stopped at 01:02. The second time today; it starts when this session edits a file
+  of a new worktree. So the commit gate of 587 s says nothing of the change, and
+  **M1g is taken after the stop, with a sample of the machine before it.**
+  **Next:** `main` moved by documents (`53826d8`, pull request 91): one clean merge in
+  a lock turn; M1g; then the push and the pull request.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
