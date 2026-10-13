@@ -61,8 +61,8 @@ export const RULES = [
     "id": "review-effort",
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
-    "since": "2026-10-08",
-    "value": "high"
+    "since": "2026-10-12",
+    "value": "medium"
   },
   {
     "id": "review-model",

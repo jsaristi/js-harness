@@ -307,10 +307,11 @@ test('the matrix is data: five configurations over two ranges, nine cells, CodeG
 });
 
 test('each lean configuration is pinned at the effort its committed readings were measured with, whatever effort `codex-review` passes by default', () => {
-  // The effort a review runs at when nobody names one changed on 2026-10-08, from `medium` to `high`. A
+  // The effort a review runs at when nobody names one changed on 2026-10-08, from `medium` to `high`, and on
+  // 2026-10-12 back to `medium`. A
   // configuration that took its effort from that default would be another configuration since, under the
   // name of the one that was measured: so each names its own, and the readings in the repository say which.
-  assert.equal(REVIEW_EFFORT, 'high', 'the default is not what three of the four lean configurations were measured at');
+  assert.equal(REVIEW_EFFORT, 'medium', 'the default is what three of the four lean configurations were measured at again, and none of them reads it');
   const committed = new URL('../results/review/readings/', import.meta.url);
   const lean = CONFIGS.filter((config) => config.session === 'lean');
   assert.deepEqual(lean.map((config) => [config.name, config.effort]), [['lean', 'medium'], ['lean-own', 'medium'], ['lean-high', 'high'], ['lean-codegraph', 'medium']]);
@@ -446,7 +447,7 @@ test('--dry-run: the argv of the four lean cells is the one their readings were 
 // --- the configuration that is retired ---
 
 const RETIRED = (cell) =>
-  `Cell ${cell} cannot be run: the \`current\` configuration was retired on 2026-10-08, because a Codex review runs only on gpt-6.1-sol at high effort (odd/tasks/codex-review-cost.md) ` +
+  `Cell ${cell} cannot be run: the \`current\` configuration was retired on 2026-10-08, because a Codex review runs only on gpt-6.1-sol at medium effort (odd/tasks/codex-review-cost.md) ` +
   'and this configuration measured one on the model the user\'s own Codex configuration names. Its readings stay as the record of the comparison; nothing was started.';
 
 test('the current configuration is retired: its cells are refused before anything is made or started, with --force and as a dry run too, and its readings stay', async () => {
