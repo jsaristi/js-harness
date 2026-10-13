@@ -2716,3 +2716,45 @@ test('uninstall keeps a remote folder it cannot look at, list or remove, reports
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// Codex review of 724e14f: a task the user edited lost its record at the first uninstall, as it always did, so the
+// second one saw no task, removed the folder with the marker of the stop, and the task, still registered, could
+// start a server that was stopped on purpose.
+test('a task the user edited stays recorded while the remote folder is kept for it, so no later uninstall removes the marker under it', () => {
+  const home = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    const files = leftByRemote(home);
+    const tasks = fakeSchtasks({ [TASK.name]: { ...TASK, arguments: `${TASK.arguments} --name other` } });
+    for (const attempt of ['the first uninstall', 'the second']) {
+      const result = uninstall(home, { schtasks: tasks.run, identify: NOT_LOOKED_AT });
+      assert.deepEqual(result.tasksKept, [{ name: TASK.name, reason: 'edited', recorded: true }], attempt);
+      assert.deepEqual(result.remoteKept, [{ path: remoteDir(home), reason: 'task-kept', tasks: [TASK.name] }], attempt);
+      assert.equal(fs.existsSync(files.stoppedPath), true, attempt);
+      assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [TASK] }, attempt);
+    }
+    assert.deepEqual(tasks.mutations(), [], 'and the task is theirs: nothing was asked of schtasks but to look');
+
+    // Once the task is gone, by their hand, the record goes and the folder with it.
+    tasks.store.delete(TASK.name);
+    const last = uninstall(home, { schtasks: tasks.run, identify: NOT_LOOKED_AT });
+    assert.deepEqual([last.tasksKept, last.remoteKept, last.removed], [[], [], [remoteDir(home)]]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'and then nothing is left');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// What holds beside it: with no remote folder to keep, an edited task is the user's and loses its record, as before.
+test('a task the user edited still loses its record when there is no remote folder to keep for it', () => {
+  const home = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    const tasks = fakeSchtasks({ [TASK.name]: { ...TASK, arguments: '--headless calc.exe' } });
+    const result = uninstall(home, { schtasks: tasks.run, identify: NOT_LOOKED_AT });
+    assert.deepEqual([result.tasksKept, result.remoteKept], [[{ name: TASK.name, reason: 'edited' }], []]);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

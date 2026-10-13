@@ -895,7 +895,10 @@ export function sync(home, version, deps = {}) {
  * loses its record. `deps.schtasks` (default `runSchtasks`, which refuses in a test) is the seam, and it is run
  * only for a manifest that records a task.
  *
- * A task kept as `edited` is the user's now, and its record goes with the rest. One kept as `unknown` or
+ * A task kept as `edited` is the user's now, and its record goes with the rest, except while the folder of
+ * `js-harness remote` is kept: the marker of a stop in it keeps that task from starting the server, so the task
+ * stays recorded, its entry of `tasksKept` has `recorded: true`, and an uninstall run again still knows it and
+ * leaves the marker; once the task is gone its record and the folder go. One kept as `unknown` or
  * `unremovable` is not: it is still registered, or may be, and it fires every five minutes and starts the server
  * again. So its record stays, alone, in a manifest with a `null` version (which reads as not installed, as the one
  * `recordScheduledTask` creates), and `uninstall`, or `remote stop --at-login`, can be run again. An optional file
@@ -959,12 +962,14 @@ export function uninstall(home, deps = {}) {
 
   const tasksRemoved = [];
   const tasksKept = [];
-  const stillRecorded = [];
+  const keptRecords = [];
   for (const task of manifest.tasks ?? []) {
     const result = removeScheduledTask(task, deps.schtasks ?? runSchtasks);
     if (result.status === 'removed') tasksRemoved.push(task.name);
-    else if (result.status === 'kept') tasksKept.push({ name: task.name, reason: result.reason, ...(result.why ? { why: result.why } : {}) });
-    if (result.status === 'kept' && result.reason !== 'edited') stillRecorded.push(task);
+    else if (result.status === 'kept') {
+      tasksKept.push({ name: task.name, reason: result.reason, ...(result.why ? { why: result.why } : {}) });
+      keptRecords.push(task);
+    }
   }
 
   fs.rmSync(cachePath(home), { force: true });
@@ -973,6 +978,12 @@ export function uninstall(home, deps = {}) {
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
   removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed);
+  // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
+  // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
+  // task to leave the marker under it. It then stays recorded, and its entry says so (`recorded`).
+  const guarded = remote.kept.length > 0;
+  const stillRecorded = keptRecords.filter((task, i) => tasksKept[i].reason !== 'edited' || guarded);
+  if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   if (stillRecorded.length > 0) {
     writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
   } else {

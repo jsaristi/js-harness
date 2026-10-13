@@ -365,7 +365,12 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   const tasksNotUndone = result.tasksKept.filter((task) => task.reason !== 'edited');
   for (const task of result.tasksKept) {
     if (task.reason === 'edited') {
-      console.log(`kept scheduled task ${task.name} (modified by you): it is no longer recorded, and schtasks /Delete /TN ${task.name} /F deletes it`);
+      // Beside a folder of `js-harness remote` that is kept, its record stays (see the folder's line below).
+      console.log(
+        task.recorded
+          ? `kept scheduled task ${task.name} (modified by you): it stays recorded while the folder of js-harness remote is kept for it; schtasks /Delete /TN ${task.name} /F deletes it, and js-harness uninstall --global then removes what is left`
+          : `kept scheduled task ${task.name} (modified by you): it is no longer recorded, and schtasks /Delete /TN ${task.name} /F deletes it`,
+      );
       continue;
     }
     const verb = task.reason === 'unremovable' ? 'delete' : 'look for';

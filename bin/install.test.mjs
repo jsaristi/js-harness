@@ -1409,3 +1409,26 @@ test('uninstallMain says why it kept the remote folder and what to run, and fail
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// Codex review of 724e14f: the line of an edited task said "no longer recorded". Beside a remote folder that is
+// kept for it the record stays, so that the next uninstall still knows the task and leaves the marker under it.
+test('uninstallMain says a task the user edited stays recorded while the remote folder is kept for it, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    leaveRemote(home);
+    const tasks = fakeSchtasks({ [TASK.name]: { ...TASK, arguments: '--headless calc.exe' } });
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { identify: () => [], schtasks: tasks.run }));
+    assert.equal(code, 1);
+    assert.deepEqual(outLines, [
+      `kept scheduled task ${TASK.name} (modified by you): it stays recorded while the folder of js-harness remote is kept for it; schtasks /Delete /TN ${TASK.name} /F deletes it, and js-harness uninstall --global then removes what is left`,
+    ]);
+    assert.deepEqual(errLines, [
+      `kept ${remoteDir(home)}: the scheduled task ${TASK.name} is still registered, and the marker a stop left in that folder is what keeps it from starting the server again; run js-harness uninstall --global again once the task is gone`,
+    ]);
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
+    assert.deepEqual(tasks.deleted, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
