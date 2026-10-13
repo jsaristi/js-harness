@@ -1177,6 +1177,24 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    design with its two reviews before it reaches him. The lead's reading, not his words: a
    switch for each function, kept in the project's `harness.json` and recorded in the manifest
    so that `uninstall` undoes it, a kind of project being a preset of switches.
+   **His order for the product, four minutes later** (same transcript, line 8250, read with
+   `sessions --quote`): "Entonces hagamos el harnes para que funcione con codigo y sin codigo o
+   que al principio sea investigacion y cuando vayamos a hacer codigo sea inteligente y sepa
+   cuando este investigativo o analisis y cuando ya llegue la hora de codigo y asi a la inversa
+   cuando se vuelva a analisis e inveastigacion desactivar osea que sea a demanda, que te
+   parece?" So: the harness serves a project with code and one without, and what serves only
+   code is on demand, in both directions. It ends in a question, so the how is not settled.
+   What the lead answered him, the lead's reading and not a design: no watcher of the
+   conversation that flips a mode, since the hook was such a guesser (33 of 55 prompts, the
+   evidence above); each function pays only when the work calls for it, as three already do
+   (a commit of documents alone runs the sensors of documents, pull request 77; a Codex record
+   is asked only of code commits; gentle-ai's review goes by its assessment); the code map on
+   demand, its paste off and the tool asked; what is chosen only when a session starts (the
+   TypeScript server) chosen from the project's files at `init`, with a switch in the manifest;
+   `install` preparing nothing of code in a project that has none until the first appears.
+   When: after JH 8's cut of the review command is on `main`; not assigned. A third sample of
+   the switch, the lead's claim: his prompt of line 8250 carries no attachment of the hook,
+   where the one of line 8161 had one at line 8163.
 5. Whether the Codex review stays at `high` at what it costs (the number is in "Codex review
    cost result").
 6. What the harness turns on by default in a project from the sub-agent models result
