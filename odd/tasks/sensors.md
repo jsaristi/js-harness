@@ -189,3 +189,34 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
 
 ## Next
 F4 is closed. What remains are the follow-ups above; each is its own slice when it earns one.
+
+## State for a resume
+
+Written on 2026-10-13 at 16:58 by the session "JH 8", at 77% of its context, before any line
+of T5 was read in the code or written. If this session is compacted, this is the record.
+
+- **By whose order.** The orchestrator's go of 16:57, on his word (the orchestrator's
+  transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 11381, typed by him, read by me
+  with `js-harness sessions --quote`: "Listo ya tenemos la suscripcion de 20x y ademas
+  tenemos el uso reestablecido"). Work goes on with no pause; sub-agents are allowed again
+  where a design or a high-risk change calls for a reader.
+- **The order, five things:** (1) T5 here: branch `fix/contract-timeout-tree` off `main`
+  `ad7b37b`, worktree `D:\js-harness-worktrees\contract-timeout`; (2)
+  `odd/tasks/install-update.md` T6 by his answer (line 11166, tapped, read by me: "Vale, sin
+  versión fijada (Recomendada)": a `harness.json` with no version is a project with no pin;
+  `status` says so and how to pin one, exit 0; `sync` says there is nothing to move to and
+  how to pin); (3) the package's contents (his line 11146 by the orchestrator's word, NOT yet
+  read by me: "Solo los comandos (Recomendada)": `bin/` without its test files and without
+  this repository's `AGENTS.md`, with a test that the packed list holds neither); (4) the
+  sync that runs from the path after `upgrade --source` with no `--prefix`
+  (`bin/update.mjs`, the `syncResult` block), as a task with its test; (5)
+  `odd/tasks/gate-wait.md`, "Next": the merge-base in the join, the reviews of
+  `feat/gate-wait-count`, T8 as half, T10 the close. Later: the gate on GitHub (his option
+  C). The README is another session's.
+- **Done before this, all on `main`:** install-update T5 (pull request 98), gate-wait T12
+  (99) and T18 (100).
+- **How this session works** is in `odd/tasks/gate-wait.md`, "Next" (the lessons) and
+  "Resume here" (his rules on Codex and on questions). The turn scripts worth reusing are in
+  its scratchpad: `codex-turn.sh <worktree> <base> <short head> <allowance x 1.05> <name>`,
+  `clean-merge-turn.sh <worktree>`, and `t5-turn.sh` as the model of a turn that shows
+  red on HEAD's code, green with the fix, and only then commits.
