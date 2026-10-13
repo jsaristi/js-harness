@@ -369,6 +369,15 @@ A test run or a count started while a gate, or a batch that measures durations, 
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
   yet)
 
+### hold-read-after-build
+A session was told to hold before building, and built: the message waited behind its own turn
+while it acted on another session's answer.
+- Class: unseen-state
+- Seen: 2026-10-13 — relief file, line 544 — the lead's hold on two pieces of JH 7 was written at
+  00:41 and queued; JH 7 read it at 00:52, after JH 8's "start now" and with both pieces
+  written (odd/tasks/rule-hierarchy.md, Progress of that day). Nothing was spent on Codex or
+  pushed; one sub-agent and the session's own turns were. His answer later lifted the hold
+
 ### host-restart-unseen
 The app restarts a session's process: the session goes on in a new transcript, its background work
 has no owner, and the board keeps showing rows and work that nobody holds.

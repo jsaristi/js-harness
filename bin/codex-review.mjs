@@ -152,6 +152,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
 import { baseLeftOut, MARKS_UNREAD, notReviews, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
@@ -164,14 +165,17 @@ import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-us
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
+import { ruleValue } from './lib/rules.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
 // (odd/tasks/codex-review-cost.md): the one model a review runs on, at `high`, in place of the `medium` he
 // had fixed for the lean session on 2026-10-06. The command names them to Codex itself, and the session
 // ignores the user's Codex config, which could name others. They are up here because the usage names them.
-export const REVIEW_MODEL = 'gpt-6.1-sol';
-export const REVIEW_EFFORT = 'medium';
+// Each is the declared rule's (`review-model` and `review-effort` in ./lib/rules-data.mjs), where his later
+// change of the effort is written with its date; the figures above are of the day they were first set.
+export const REVIEW_MODEL = ruleValue('review-model');
+export const REVIEW_EFFORT = ruleValue('review-effort');
 
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. A review keeps one thing there, the Codex
@@ -193,7 +197,7 @@ const USAGE =
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
-  `--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
+  `--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given.';
 
@@ -1205,7 +1209,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     return left.start;
   };
 
-  // `--plan`: the plan, and nothing else. It needs the range and how its files group, which is git alone:
+  // `--plan`: the plan, what it comes to against the allowance of a review where this project declares one
+  // (./lib/codex-review-allowance.mjs), and nothing else. It needs the range and how its files group, which
+  // is git alone:
   // no Codex is looked for, no home is made or asked for, and nothing is logged or recorded. The tree may
   // hold uncommitted changes, which stop a review: a plan is of the committed range and claims nothing.
   // It never refuses a range for its size either, since saying the size is what it is for.
@@ -1224,6 +1230,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
+    // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.
+    const allowance = allowanceLine(reviewAllowance(plan, readProjectRules(root)));
+    if (allowance !== null) log(allowance);
     const needs = needsFlagLine(plan);
     if (needs !== null) log(needs);
     return 0;
