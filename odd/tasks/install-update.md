@@ -194,7 +194,7 @@ same night and was at 86% of its context), before any line of T5 was read or wri
   `odd/tasks/sensors.md` T5. If the orchestrator says stop (the plan's week was at 92%
   of his 95), stop at the next commit.
 - **Where.** Branch `fix/upgrade-source` off `main` `addf6ae`, worktree
-  `D:\js-harness-worktrees\upgrade-source`. Nothing but this section is written.
+  `D:\js-harness-worktrees\upgrade-source`. After it: the section "T5 design" below, a draft; the next step is its one reader (read-only, a bound of tool calls), then the failing tests.
 - **What the orchestrator asked of T5** (its claims, each to be read in the code first):
   `js-harness upgrade` asks the package registry for the name js-harness
   (`bin/update.mjs:34-42`, `:14`), installs `js-harness@<answer>` with no check of its
@@ -213,3 +213,60 @@ same night and was at 86% of its context), before any line of T5 was read or wri
 - **How this session works** is in `odd/tasks/gate-wait.md`, "Next" (the lessons) and
   "Resume here" (his rules on Codex and on questions, the turn scripts in the
   scratchpad). The worktree `gate-wait-two-halves` is merged and can be removed.
+
+## T5 design (draft of 2026-10-13, not yet read by its one reader, nothing built)
+
+**Read in the code on `main` `addf6ae`, so these are no longer claims.** With no
+`--source`, `resolveLatest` starts `<pm> view js-harness version`
+(`bin/update.mjs:34-42`, the name at `:14`, the argv from `viewArgs` in
+`bin/lib/version.mjs:57`). Three commands call it: `status --global`
+(`machineStatus`, `:170`), `update` (`:186`) and `upgrade` (`:202`). `upgrade` then
+installs `js-harness@<what was printed>` (`resolveSpec`, `:45-47`; the install at
+`:208-210`) and runs `sync --global` of the copy that install put there (`:221-228`).
+The menu offers `update` and `upgrade` (`bin/tui.mjs:363-364`) and shows `status`
+(`:360`). `bin/lib/version.mjs:26` already holds the sentence for how a machine gets the
+newest copy today, `INSTALL_NEWEST` (`npm i -g github:jsaristi/js-harness`). With
+`--source <dir>` the latest is the newest `js-harness-<semver>.tgz` of a local folder
+(`latestFromSource`) and the install is that file: the tests and `npm run e2e` use it.
+
+**The rule.** No command of this package asks the public registry about the name
+`js-harness` and none installs `js-harness@<anything>` from it. The decided release
+source is git tags of this repository (`docs/ROADMAP.md`, "Release source"); until one
+exists there is no release, and the commands say so.
+
+**What each does with no `--source`, while no tag exists** (and starts no process):
+- `update`: prints that no release is tagged yet, the installed version, and
+  `INSTALL_NEWEST`; exits 0.
+- `upgrade`: prints the same and that nothing was installed; exits 1, since it did
+  not do what it was asked. It installs nothing and runs no `sync`.
+- `status --global`: its line reads `latest available: (no release is tagged yet)`.
+- The menu keeps both entries: they are commands, and each now answers in a line. To
+  hide them would need a second place that knows whether a release exists.
+
+**With `--source <dir>`: as today**, the one path that installs, from a folder the
+caller names.
+
+**Not built here: reading the tags** (`git ls-remote --tags`, then
+`github:jsaristi/js-harness#vX.Y.Z`). It is the release source's own task, due with
+the first tag, 1.0.0. Built now it would be code and a network call that can only
+answer "none". What this slice leaves for it: `resolveLatest` is the one place that
+answers "which release", and a test says that with no `--source` it starts no
+process; whoever builds the tag reader changes that test on purpose.
+
+**Removed:** `viewArgs` and the `name@version` branch of `resolveSpec`, with their
+tests, so that the registry path is gone and not only unused. `PKG_NAME` stays only if
+something else reads it.
+
+**Tests, first and red on today's code:** for each of `update`, `upgrade` and
+`status --global` with no `--source`: the injected `spawn` is never called, and the
+output and exit code are the ones above; `upgrade` with a `spawn` that would answer
+a version (the registry squatted) still installs nothing. Green before and after:
+the `--source` path of each, unchanged.
+
+**For the reader to attack:** any other place that names the registry or builds an
+install spec (`bin/install.mjs`'s pin message, `doctor`, the e2e script, the skills
+`install` writes); whether exit 1 for `upgrade` breaks a caller (the menu, e2e);
+whether `status --global` printed `(unknown)` to something that parses it.
+
+**T6 is not in this slice.** Whether a `harness.json` with no version is a project
+with no pin or an invalid one is a design question of its own; it follows T5.
