@@ -30,7 +30,8 @@
 // (`DEFAULT_CONTEXT_PAUSE_PERCENT`, `DEFAULT_CONTEXT_COMPACTION_PERCENT`): no text here writes either.
 // `--opening <title>` prints the opening stored for a session, and `--quote <transcript> <line>` the
 // entry at a line of a transcript only when the user sent it: the check a session runs before it takes
-// words another session carried as his.
+// words another session carried as his. What he sent is what he typed, and what he answered to a question
+// the session asked with the host's question tool, tapped or typed.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -60,6 +61,9 @@ const USAGE = [
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
   '         or no such line, saying which; 2 when it cannot look. It warns when the entry is only pasted content.',
   '         a message the user sent while the session worked (the host queues it) is his too, and is said so',
+  '         his answer to a question the session asked with the host\'s question tool is his too: it prints',
+  '         the question, the options shown and whether he tapped one or typed his own; the result of any',
+  '         other tool is not, and a question he did not answer is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
 ].join('\n');
 
@@ -607,6 +611,17 @@ export async function sessionsMain(
     if (!quote.person) {
       stderr(`js-harness sessions: not the user's words: line ${line} of ${file} is ${quote.what}`);
       return 1;
+    }
+    // His answer to a question the session asked: the question and the options go with it, since a label
+    // alone says nothing to whoever reads it later, and so does whether he tapped an option or typed his own.
+    if (quote.answered) {
+      stdout(`${file}, line ${line}, ${quote.at ?? 'no time recorded'}, answered by the user to a question the session asked (${quote.answered.tool}):`);
+      for (const { question, options, answer, how } of quote.answered.answers) {
+        stdout(`question: ${question}`);
+        stdout(`options shown: ${options.join(' | ')}`);
+        stdout(`answer (${how}): ${answer}`);
+      }
+      return 0;
     }
     const images = quote.images === 0 ? '' : `, with ${quote.images} image${quote.images === 1 ? '' : 's'}`;
     // A message he sent while the session worked is his too, and is said as that: the host wrote it as a

@@ -840,6 +840,78 @@ boundary; `node --test bin/install.test.mjs` with the entry written, guarded and
 practice journey with a step that feeds the pause command a made-up transcript past the pause
 in an installed project.
 
+### 15. Questions to him (T17; design of 2026-10-12 with the lead's additions; one reader owed on pieces 1, 2 and 4 before their code)
+His words, each read with `sessions --quote` in the lead's transcript `65318fd5`: line 8423,
+"tu no tienes una funcionalidad o forma de darme las preguntas que yo apriete con click las
+opciones y la opcion de otro"; line 8439, "Siempre hazme las preguntas asi por favor osea asi
+siempre debe ser el protocolo sobre todo para que no se me pase ninguna, por favor metela al
+harnes"; line 8528, "Otra es que siempre necesito que las preguntas en las haga el
+orquestador, no la sesion para poder centralizar todo en una sola parte."
+
+The problem behind them. A question in prose is lost in a long reply and across several
+chats; nothing lists the ones still open; and the list an orchestrator holds in its head dies
+at a compaction. So: every question goes through the host's question tool, one a call, the
+recommended option first and marked; one session asks them all; and what is open is computed
+from files.
+
+What existed (`main` at `782e08b`). The channel's notices have the kinds opened, waiting,
+closed, note, answer and relieved (`bin/lib/channel.mjs`, `NOTICE_KINDS`), `answer` with
+`--transcript` and `--line`, which `notify` stores and does not read. The board prints the
+last five lines of the relief file and no list of questions (`RELIEF_LINES`). A line that is
+the result of a tool call was refused as "not the user's words", so an answer he tapped
+could not be quoted: tonight's were read with a script.
+
+Four pieces.
+1. A question is a notice. A new kind, `question`: a work session's to the orchestrator, or
+   the orchestrator's own, written before it is asked. One line: the situation in everyday
+   words, the options with the recommended one first, what waits on it. The record numbers
+   it, and that number is the one he sees ("Pregunta 15"): one numbering. `answer` names the
+   number with the transcript and the line; `notify` reads that line with piece 3 and
+   refuses to record an answer that is not his, and it copies into the record what the line
+   holds (the question's text, every option as it was shown, what he answered, tapped or
+   typed), since a label alone reads as nothing a week later and a transcript does not live
+   for ever.
+2. The board computes "Open questions", oldest first, with who waits on each, from two
+   sources: every `question` of the record with no `answer`, whatever its age; and every
+   call of a question tool in a transcript of the board's window whose result is not an
+   answer by piece 3 (he closed it, or it is still on his screen). The second is what lists
+   a question asked before this code existed or by a session that recorded nothing; one
+   whose transcript is outside the window is not listed, and the seventeen of 2026-10-12
+   are in the lead's relief file with their answers. The orchestrator's resume after a
+   compaction prints the same list. Nothing is left to memory: a question he dismissed has
+   no answer, so it stays listed.
+3. `sessions --quote` reads the result of a question-tool call as his answer (built, slice
+   a). It is a guard, since what it accepts is taken as his word: the result is the entry's
+   only block and pairs, by the call's id, with a call in the same transcript of a tool
+   named in `QUESTION_TOOLS` (`bin/lib/sessions.mjs`: a list, so a host that names its tool
+   otherwise is one more name and no code); neither is of a side chain; the entry carries
+   no mark of the host or of another sender; the host did not mark the result an error; and
+   `toolUseResult.answers` holds a text for every question the call asked and for no other.
+   Every other result is refused in words: a tool call, a side chain, a question he did not
+   answer, answers that are not for what was asked, a call that holds no question. The
+   quote prints the question, the options shown and the answer, said as tapped or typed. The
+   stretch before a compaction counts such an answer among his words (`compactionStretch`),
+   so the resume names its line. Read from the files: the 30 results of such calls in this
+   project's 57 transcripts are all answers (`toolUseResult` of `questions` and `answers`,
+   the answer keyed by the question's text); none is a dismissal, so what the host writes
+   for one is not known, and the guard takes the one shape that is an answer.
+4. The texts. The orchestrator skill (`bin/lib/manifest.mjs`, `orchestratorSkillContent`):
+   the orchestrator asks every question of the project, one a call, with the host's question
+   tool, the fenced block only where the host has none; it records the question before
+   asking and the answer after, and carries the answer to the session that waits. A work
+   session asks him nothing while an orchestrator is open: it sends the question and goes on
+   with what does not depend on it; with no orchestrator, or when it cannot reach one, it
+   asks with the tool itself and records it. The two blocks of a cut stay in the session's
+   own chat: they are no question. Three lines of that text change with it ("never answer
+   for the user", "the user says it there in their own words", "a session starts waiting on
+   them"). The sentence of `AGENTS.md` about a decision's block is replaced, not added to,
+   and the two rules are declared in `bin/lib/rules-data.mjs`: this session gives the
+   sentences, the session that owns the rules' wording places them.
+
+Slices: (a) piece 3; then one reader, read-only, attacks pieces 1, 2 and 4; (b) pieces 1 and
+2; (c) the skill text. One test owed with them, his to allow: a question he closes without
+answering, read afterwards, to learn what the host writes for it.
+
 ## Failures this feature owns
 From the list of 2026-10-10 in `odd/tasks/rule-hierarchy.md` ("Failures of 2026-10-10"): 3, 4,
 5, 6, 14, 17 and 18. Each closes only when its proof there exists and passes. 7 and 8 were left
@@ -964,6 +1036,12 @@ reader, and that table names this feature as their owner.
   such a rule would live is a choice of its own (the project has no `.claude/settings.json`;
   an installed project is another question; on Codex only `disabled_tools` of a server), and
   a setting of his machine is his alone
+- [ ] T17 Questions to him go through the question tool and through the orchestrator, and
+  the open ones are computed (point 15; his words of 2026-10-12). Slice (a), built:
+  `sessions --quote` and the stretch before a compaction read his answer to a question.
+  Owed: one reader on pieces 1, 2 and 4; (b) the `question` notice, the answer that copies
+  what he was shown, "Open questions" on the board and in the orchestrator's resume; (c) the
+  orchestrator skill's text; the sentences for `AGENTS.md` and the two declared rules
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -1829,6 +1907,20 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   machine until pull request 74 is merged, then removed: the refs under
   `refs/review-base/` (the old merge, the old documents, the dry runs, the base that did
   not work) and the worktree `D:\js-harness-worktrees\session-channel-merge`.
+- 2026-10-12, written at 21:26: T17, slice (a) of point 15, on branch
+  `feat/quote-question-answer` cut from `origin/main` (`782e08b`). `quoteOf` pairs the
+  result of a tool call with its call by id and gives his answer when the call is of a tool
+  of `QUESTION_TOOLS` and the result holds an answer for every question asked
+  (`answerOf`); `sessions --quote` prints the question, the options shown and the answer as
+  tapped or typed; `compactionStretch` counts such an answer among his words. Test first:
+  three tests of `bin/lib/sessions.test.mjs` failed (the answer, the nineteen refusals each
+  named, the stretch), then 251 pass; the command's test failed with the library changed and
+  the command not, then passed, and the usage's after it; 583 pass over the five test files
+  the change touches. Read on the real files: line 8871 of the lead's transcript prints
+  "answer (tapped): Que el harness la abra en alto (Recomendado)" with its question and its
+  three options, exit 0; line 8986 prints "answer (typed)" with his sentence. This branch
+  does not touch "Next step": pull request 86 rewrites its newest state, and a second edit
+  there would conflict.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -2290,6 +2382,22 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
+      WRITTEN AT 21:33 OF 2026-10-12, THE NEWEST OF ALL. Pull request 86 (the two
+      messages) is on `main`, merged at 21:20 (`c632756`). The lead installed the pause
+      entry on his machine at 21:07, after the journey (its message; read by this
+      session: one match of the pause command in his settings, and the copy on the path
+      is pnpm's folder whose lock names `782e08b`); whether a session already running
+      took the entry is not established. Slice (a) of point 15 is written on branch
+      `feat/quote-question-answer`, cut from `c632756`: Progress, its last entry, and
+      T17. AFTER ITS PULL REQUEST: one reader, read-only, attacks pieces 1, 2 and 4 of
+      point 15 before their code; then (b) and (c); then, in this order, the key
+      `effortLevel` written by the harness for a project and recorded for undo, the row
+      of the Codex CLI in place of the plugin's, the yardstick as the longest stretch
+      and a full orchestrator that is compacted and goes on. Two asks of the lead, after
+      all of that: what a session pays for the pause entry through pnpm's shim (it
+      measured 613 ms for one run by hand) and whether `install` should record a direct
+      call of node; and pnpm leaving an empty lock folder and an exit 1 at each update
+      of the copy, which the harness's words about updating should say.
       STATE AT 2026-10-12 20:48 (the state of 20:32 below it is what came before it).
       The two findings are FIXED in `dc7d34a`,
       test first (both tests red for their reason, then `bin/lib/manifest.test.mjs` 114

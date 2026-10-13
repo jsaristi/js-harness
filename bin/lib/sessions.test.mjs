@@ -2889,6 +2889,86 @@ test('quoteOf says when the person\'s entry is only pasted content: nothing type
   assert.equal(lib.quoteOf(transcript(prompt(pasted('Sos JH 5.'), 1)), 1).text, pasted('Sos JH 5.'));
 });
 
+// An answer to a question asked with the host's question tool. The shapes are the 30 results of such calls in
+// this project's 57 transcripts (2026-10-12): a `user` entry with one `tool_result` block and a top-level
+// `toolUseResult` of `questions` and `answers`, the answer keyed by the question's text; no origin, no
+// `isMeta`. None of the 30 is a question he dismissed, so what a dismissal looks like is not known: the guard
+// takes the one shape that is an answer and refuses every other.
+const QUESTION = 'Pregunta 10: una sesión abierta desde el teléfono, ¿cómo llega a esfuerzo alto?';
+const OPTIONS = ['Que el harness la abra en alto (Recomendado)', 'Subir el ajuste general a alto', 'Dejar como está'];
+const asking = (question = QUESTION, more = {}) => ({ question, header: 'Teléfono', multiSelect: false, options: OPTIONS.map((label) => ({ label, description: 'made up' })), ...more });
+const asked = (id, minute, questions = [asking()], name = 'AskUserQuestion') => call(id, name, { questions }, minute);
+const answered = (id, minute, answers, block = {}) => result(id, { questions: [asking()], answers }, minute, block);
+
+test('quoteOf gives his answer to a question the session asked with the host\'s question tool: tapped or typed, with the question and the options shown', () => {
+  const typed = 'Corregir el mensaje por que todavia no tenemos produccion';
+  const text = transcript(asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: OPTIONS[0] }), asked('toolu_q2', 3), answered('toolu_q2', 4, { [QUESTION]: typed }));
+  assert.deepEqual(lib.quoteOf(text, 2), {
+    person: true,
+    at: at(2),
+    text: OPTIONS[0],
+    images: 0,
+    pastedOnly: false,
+    queued: false,
+    answered: { tool: 'AskUserQuestion', answers: [{ question: QUESTION, options: OPTIONS, answer: OPTIONS[0], how: 'tapped' }] },
+  });
+  const other = lib.quoteOf(text, 4);
+  assert.deepEqual([other.person, other.text, other.answered.answers[0].how], [true, typed, 'typed']);
+  // Two questions in one call: an answer each, in the order they were asked; a question that takes several
+  // options is tapped when every part of its answer is one of them.
+  const second = 'Pregunta 11: ¿y la otra?';
+  const both = transcript(
+    asked('toolu_q3', 1, [asking(), asking(second, { multiSelect: true })]),
+    answered('toolu_q3', 2, { [second]: `${OPTIONS[2]}, ${OPTIONS[0]}`, [QUESTION]: 'algo mío' }),
+  );
+  const pair = lib.quoteOf(both, 2);
+  assert.deepEqual(pair.answered.answers.map(({ question, how }) => [question, how]), [[QUESTION, 'typed'], [second, 'tapped']]);
+  assert.equal(pair.text, `algo mío\n${OPTIONS[2]}, ${OPTIONS[0]}`);
+  // The tools that ask are a list, not a word in the code: a host that names its tool otherwise is a line of it.
+  assert.deepEqual(lib.QUESTION_TOOLS, ['AskUserQuestion']);
+});
+
+test('quoteOf refuses the result of a tool call that is no answer of his, and says which it is', () => {
+  const good = { [QUESTION]: OPTIONS[0] };
+  const refusal = (...entries) => {
+    const text = transcript(...entries);
+    return lib.quoteOf(text, entries.length);
+  };
+  const cases = [
+    // No call of that id in the transcript: nothing says a question was asked.
+    ['the result of a tool call', [answered('toolu_q1', 1, good)]],
+    // Another tool, whatever its result is shaped like; a server's tool that only ends in the name.
+    ['the result of a tool call', [asked('toolu_q1', 1, [asking()], 'Bash'), answered('toolu_q1', 2, good)]],
+    ['the result of a tool call', [asked('toolu_q1', 1, [asking()], 'mcp__made_up__AskUserQuestion'), answered('toolu_q1', 2, good)]],
+    // The call of another question: the id is what pairs them.
+    ['the result of a tool call', [asked('toolu_other', 1), answered('toolu_q1', 2, good)]],
+    // Two results in one entry: which of them the line means is not said.
+    ['the result of a tool call', [asked('toolu_q1', 1), { ...answered('toolu_q1', 2, good), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_q1', content: 'ok' }, { type: 'tool_result', tool_use_id: 'toolu_x', content: 'ok' }] } }]],
+    // A question he did not answer: the host marked the result an error, or it holds no answers.
+    ['the result of a question the person did not answer', [asked('toolu_q1', 1), answered('toolu_q1', 2, good, { is_error: true })]],
+    ['the result of a question the person did not answer', [asked('toolu_q1', 1), result('toolu_q1', 'User dismissed the question', 2)]],
+    ['the result of a question the person did not answer', [asked('toolu_q1', 1), result('toolu_q1', { questions: [asking()] }, 2)]],
+    ['the result of a question the person did not answer', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: '   ' })]],
+    ['the result of a question the person did not answer', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: ['a list'] })]],
+    // Answers that are not for what was asked: one question of the call has none, or one is for another question.
+    ['the result of a question the person did not answer', [asked('toolu_q1', 1, [asking(), asking('Pregunta 11: ¿y la otra?')]), answered('toolu_q1', 2, good)]],
+    ['the result of a question whose answers are not for what was asked', [asked('toolu_q1', 1), answered('toolu_q1', 2, { ...good, 'Otra pregunta': 'sí' })]],
+    // A call that asks nothing a person could answer.
+    ['the result of a question whose call holds no question', [asked('toolu_q1', 1, []), answered('toolu_q1', 2, good)]],
+    ['the result of a question whose call holds no question', [asked('toolu_q1', 1, [{ header: 'x' }]), answered('toolu_q1', 2, good)]],
+    // A side chain asks nobody: its call, or its result.
+    ['an entry of a side chain', [{ ...asked('toolu_q1', 1), isSidechain: true }, answered('toolu_q1', 2, good)]],
+    ['an entry of a side chain', [asked('toolu_q1', 1), { ...answered('toolu_q1', 2, good), isSidechain: true }]],
+    // What the host marks as its own, or as another's, is not his whatever it holds.
+    ['the result of a tool call', [asked('toolu_q1', 1), { ...answered('toolu_q1', 2, good), isMeta: true }]],
+    ['the result of a tool call', [asked('toolu_q1', 1), { ...answered('toolu_q1', 2, good), isCompactSummary: true }]],
+    ['the result of a tool call', [asked('toolu_q1', 1), { ...answered('toolu_q1', 2, good), origin: { kind: 'peer', name: 'JH 1 · made up' } }]],
+  ];
+  for (const [what, entries] of cases) assert.deepEqual(refusal(...entries), { person: false, what }, `${what}: ${JSON.stringify(entries.at(-1)).slice(0, 160)}`);
+  // The call is found wherever it is in the file: a transcript re-writes old entries, so its order is no proof.
+  assert.equal(lib.quoteOf(transcript(answered('toolu_q1', 1, good), asked('toolu_q1', 2)), 1).person, true);
+});
+
 // --- `compactionStretch` and `replyOf`: what a transcript holds of the stretch before a compaction ---
 //
 // The stretch is the work a session did between two compactions, or before the first one. `compactionStretch`
@@ -2988,6 +3068,22 @@ test('the person\'s words of the stretch are his prompts and his queued messages
   // Each line of `person` is what `quoteOf` gives for that line: the same words, so the two cannot part.
   assert.deepEqual(facts.person.map(({ line }) => lib.quoteOf(text, line).text), ['typed', 'made up while it worked']);
   assert.ok(facts.person.every(({ line }) => lib.quoteOf(text, line).person === true));
+});
+
+test('an answer he gave to a question is among the person\'s words of the stretch; a question he did not answer is not', () => {
+  const text = transcript(
+    prompt('typed', 1),
+    asked('toolu_q1', 2),
+    answered('toolu_q1', 3, { [QUESTION]: OPTIONS[1] }),
+    asked('toolu_q2', 4),
+    answered('toolu_q2', 5, { [QUESTION]: OPTIONS[0] }, { is_error: true }),
+    asked('toolu_q3', 6, [asking()], 'Bash'),
+    answered('toolu_q3', 7, { [QUESTION]: OPTIONS[0] }),
+    reply('answer', 8),
+  );
+  const facts = lib.compactionStretch(text);
+  assert.deepEqual(facts.person, [{ line: 1, at: at(1) }, { line: 3, at: at(3) }]);
+  assert.deepEqual(facts.person.map(({ line }) => lib.quoteOf(text, line).text), ['typed', OPTIONS[1]]);
 });
 
 test('an entry with no time of its own takes the time of the counted entry before it', () => {
