@@ -2586,7 +2586,41 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
-**Where this session stands, later on 2026-10-13: stopped by the lead's call, at a task end.**
+**State for a resume, written on 2026-10-13 at about 83 percent of this session's context,
+before a compaction and before any of the work below is started.** The stop below is over:
+he raised the plan and its week is back at 0 percent ("Listo ya tenemos la suscripcion de 20x
+y ademas tenemos el uso reestablecido", the lead's transcript
+`65318fd5-80e7-4bb8-92b5-06737140185b`, line 11381, read with `js-harness sessions --quote`),
+so sub-agents are allowed again where a design needs readers. Pull request 97 is merged;
+`main` is `ad7b37b` (pull requests 97 to 101, the lead's claim for what they moved: no command
+asks a registry any more, a gate whose tree a gate already passed runs no sensor, `uninstall`
+undoes exactly). The lead's order for this session, in this order, on the branch
+`docs/readme` (worktree `D:/js-harness-worktrees/rules-review-readers`, cut from `ad7b37b`):
+1. **The README**, this session's. His answer, read: "Una página y cada comando" (line 10979,
+   tapped, to what the README holds). One page: what the harness is, how to install it, how
+   to remove it leaving nothing; then each command with an example taken from a real run. With
+   it a test or a check that holds the README's list of commands to the dispatcher's
+   (`bin/js-harness.mjs`), so that it cannot go stale silently: that test is written first.
+   Load the skill `cognitive-doc-design` before writing it. It is code and a document: gate,
+   gentle-ai, Codex by the rule.
+2. **The roadmap**: open decisions 9 and 10 closed with their lines, both read: 9 by line
+   10979; 10 by line 11146, "Solo los comandos (Recomendada)" (JH 8 builds it). Also read, for
+   the task `install-update.md` T6: line 11166, "Vale, sin versión fijada (Recomendada)", to
+   what the commands answer where a project's file is hand-written with no version (JH 8
+   builds it). And the register entries of that morning, each a claim of the lead to read in
+   its relief file first: the app words a stop by another session as the user's refusal
+   (relief line 565); the question tool holds the asker (560); a flake of the end hook of
+   `evals/codex-isolation-probe.test.mjs` (561); messages between sessions held three hours
+   (550).
+3. **The design of an installed project's own rules** (T16f and item d of the proposal), with
+   two readers, sent to the lead before a task exists: one of the four items with no design
+   that his line 10519 puts inside the first version.
+4. **The rest of T16b's second part**, after telling JH 5 and JH 8 the lines in `bin/check.mjs`,
+   `bin/lib/manifest.mjs` and `bin/contract.mjs`.
+T1's paid measurement stays his: its cost figure goes to the lead when it is reached. T2 and
+T8 are his and are asked by the lead.
+
+**Where this session stood earlier on 2026-10-13: stopped by the lead's call, at a task end.**
 Pull requests 91, 93, 94 and 96 are merged; the last piece is the documents branch
 `docs/shipped-defects`: the six defects in shipped behaviour that had no task, each read in
 the code on `main` at `f98f478` and all true, written in the roadmap ("Next") with a task in
