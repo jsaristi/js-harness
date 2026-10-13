@@ -2227,8 +2227,69 @@ summary.
       the phone at high effort (`bin/lib/remote.mjs`) and `doctor` and the stack without
       the official Codex plugin's row (`bin/lib/stack.mjs`, `bin/lib/latest.mjs`); then
       the yardstick as the longest stretch and a full orchestrator that is compacted and
-      goes on (`bin/lib/manifest.mjs`). Each of those answers of his is a claim of the
-      lead until read at its line.
+      goes on (`bin/lib/manifest.mjs`). Those answers of his are READ at their lines now
+      (the lead's transcript `65318fd5`, each the result of a question's call, read as
+      JSON): 8938, typed, the official Codex plugin is removed and our integration kept;
+      8871, tapped, "Que el harness la abra en alto (Recomendado)" for a session opened
+      from the phone; 8812, tapped, "El tramo más grande (Recomendado)" for the yardstick;
+      8824, tapped, "Resumir y seguir (Recomendado)" for an orchestrator that fills.
+      WRITTEN AT 21:08 OF 2026-10-12, what happened after the lines above. (1) The
+      message is commit `d736634` (its turn at the gate 20:54 to 21:05, exit 0;
+      gentle-ai: medium, 54 lines, not due; Codex on `782e08b..d736634`, planned at about
+      71,000: one part, 58,415 input tokens, "the patch is correct (confidence 0.97)").
+      A second commit follows it on the same branch: both that message and the fix line
+      of `doctor`'s row `hook-commands` (`bin/lib/stack.mjs`, `HOOK_FIX`, which sent the
+      reader to `js-harness upgrade`, a command that asks a registry the package is not
+      on) now say the same words, kept once in `bin/lib/version.mjs` (`INSTALL_NEWEST`):
+      npm's command for the default branch, "or the same with the package manager that
+      installed it". The reason is on his machine: the copy on the path is pnpm's, so
+      npm's command would put a second copy elsewhere and leave the old one on the
+      path. Test first: six tests of `bin/install.test.mjs`, `bin/lib/stack.test.mjs` and
+      `bin/doctor.test.mjs` failed on the old words, then 293 pass. (2) The practice
+      journey was walked once on `main` at the lead's request, from a detached tree at
+      `782e08b`, removed after: "candidate HEAD 782e08b (clean): 11 of 11 steps passed;
+      real home: unchanged" (21:05 to 21:06, through the gate's line). The lead installs
+      the pause entry on his machine after that line; what it needs for it went to it
+      in ten lines (the copy on the path is updated with pnpm first, then `js-harness
+      install`; the proof is one match of the pause command in his settings and the
+      row `hook-commands` reading `ok`; the exact undo is `uninstall --global` with the
+      new copy; whether a session already running picks the entry up is not established,
+      it is the host's behaviour). (3) THE DESIGN OF HIS TWO RULES ON QUESTIONS went to
+      the lead and GOES (its messages, claims of the lead). The four pieces: 1, a question
+      is a notice of a new kind `question`, a work session's or the orchestrator's own,
+      numbered by the record, and `answer` names that number; 2, the board computes
+      "Open questions", every question with no answer whatever its age, and the
+      orchestrator's resume prints the same list; 3, `sessions --quote` and `notify
+      --kind answer` read the result of a question-tool call as his answer; 4, the texts
+      (the orchestrator skill in `bin/lib/manifest.mjs`; the sentence of `AGENTS.md` and
+      the two declared rules are placed by the session that owns the rules' wording).
+      The lead's additions: piece 3 is a guard, so the result must pair with a call of
+      the host's question tool in the same transcript by the call's id, the tool's name
+      is data and not a literal, a dismissal is no answer, the quote says tapped or
+      typed, and its tests name each refusal; the orchestrator's own questions are
+      recorded the same way before they are asked, and the design says how a question
+      asked before this code existed is listed, or that it is not; the answer notice
+      carries the label he tapped and the question's text and all its options as shown.
+      A work session that cannot reach an orchestrator asks him itself with the tool and
+      records it; one numbering, the record's. Slices: (a) piece 3, which may start;
+      then ONE reader (read-only, no test run) attacks the design of pieces 1, 2 and 4
+      before their code; (b) pieces 1 and 2; (c) the skill text. What the answer's
+      entry looks like, read in the lead's transcript: a `user` entry with a
+      `tool_result` block, a top-level `toolUseResult` of `questions` and `answers`, and
+      `sourceToolAssistantUUID`, the `uuid` of the assistant entry whose `tool_use` block
+      asked. (4) A SESSION OPENED FROM THE PHONE: the host's command that opens it takes
+      no effort (`claude remote-control --help` on 2.1.296, its 59 lines read). The
+      lead took the way of a default: the key `effortLevel` at `high` in the project's
+      `.claude/settings.local.json`, which it wrote by hand in `D:\js-harness` as a
+      stopgap; mine, last in the order: the harness writes that key for a project and
+      records it for undo, and the design says whether `init` or `install` does. (5) THE
+      OFFICIAL CODEX PLUGIN: nothing of the repository goes red when it is uninstalled
+      (`check` runs no `doctor`, the tests make their own homes); until the slice lands
+      `doctor` lists the row `codex-plugin` as missing with the commands to install it.
+      That row is also the only check that the Codex CLI is there and signed in, which
+      `codex-review` needs: the slice replaces it with a row for the CLI, it does not
+      delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
+      (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
       STATE AT 2026-10-12 20:48 (the state of 20:32 below it is what came before it).
       The two findings are FIXED in `dc7d34a`,
       test first (both tests red for their reason, then `bin/lib/manifest.test.mjs` 114

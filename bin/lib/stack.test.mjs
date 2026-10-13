@@ -1663,7 +1663,7 @@ test('hookCommandPlan plans a command named twice, with and without its guard, o
   ]);
 });
 
-const HOOK_FIX = 'the js-harness on the path is older than these entries: upgrade it (js-harness upgrade), then run js-harness doctor again';
+const HOOK_FIX = 'the js-harness on the path is older than these entries: install the newest copy (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it), then run js-harness doctor again';
 
 function findCheck(id) {
   const check = checks.find((c) => c.id === id);
@@ -1769,7 +1769,7 @@ test('an entry that install skipped was never written, so its command is not run
   }
 });
 
-test('a tried command that does not exit 0 makes the check stale: each command says what it answered, and the fix line says to upgrade', () => {
+test('a tried command that does not exit 0 makes the check stale: each command says what it answered, and the fix line says to install the newest copy', () => {
   const home = makeTmpHome();
   try {
     seedHookEntries(home, ['js-harness resume --hook', 'js-harness resume --pause || exit 0', 'js-harness doctor --hook']);
