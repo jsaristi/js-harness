@@ -2464,7 +2464,39 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     NEXT: the correction through the gate, Codex on that one commit, push, the pull request.
 
 ## Next step
-In this order. (1) The rest of the second part of T16b when `bin/codex-review.mjs` is free,
+**State for a resume, written on 2026-10-12 at 91 percent of this session's context, before a
+compaction.** Owed, documents only, on the branch `docs/owed-documents` (worktree
+`code-map-switch`), each fact read by this session before it is written; the lines are of the
+lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b` and are the lead's claims until read:
+(a) `docs/ROADMAP.md`, open decision 4: the sentence "It ends in a question, so the how is not
+settled" is replaced after his line 8315 ("listo entonces apliquemoslo asi"), a yes to the
+direction and not to a design; (b) his order of a switch for the Codex review, line 8758;
+(c) the rule about 1.0.0, the result of the lead's question 15; (d) F6 closes with 13 of 15
+trials; (e) gentle-ai's reviewers' model; (f) the register of failures.
+**Where that list stands after the compaction of 23:22 (the host's, read from the clock):**
+(a), (b), (d) and (f) are written on that branch. For (d) the lines the lead first gave were
+its own entries; it corrected them, and this session read his taps at 9794 ("Cerrar con 13
+(Recomendada)") and 9776 ("Dejar y comprobar (Recomendada)") with `js-harness sessions
+--quote`. The refusal of another stack is at `evals/suite.mjs:751` (the message of
+`refusalOf`, `:329`), not at `:650`; the recorded versions are in `odd/tasks/codex-parity.md`
+of its branch, line 1059; the machine now answers codex-cli 0.162.0, gentle-ai 4.1.1 and
+engram 3.4.0. (f) added `memory-note-overwritten`, `merge-review-covers-main` (JH 8's
+candidate) and `resume-names-wrong-maker` (JH 5's candidate), and one more sighting of
+`chained-step-not-conditional`. (e) is not written: the roadmap names the reviewers' model
+nowhere (`rg -n -i "reviewers" docs/ROADMAP.md` prints nothing, on a file that would hold the
+word if it did), so his answer of line 9776 lives in the lead's relief file until a document
+has a place for it. (c) was already on `main` when this session looked ("Release source" in
+the roadmap, and `bin/lib/version.mjs:23-26` follows it); what it lacked was his words with
+their line, 8986, read by this session and added. The branch merged `main` at `f43392d` in a
+turn of the gate (`a53e705`); `main` moved after it (pull request 89) and moves once more with
+JH 8's cut of the review command's git calls. Left: one last merge of `origin/main` after the
+lead's notice that the cut is merged, with nothing running until then; the push; the pull
+request. Done since the last entry:
+his decision that a Codex review runs at medium is on `main` (pull request 87; this session
+wrote the rule half as a patch, his tap read at line 8962). Two rules of his for every
+session, to read at lines 8423 and 8528 before they are applied: a question to him goes
+through the question tool, and it is the orchestrator that asks, not a work session.
+Then, in this order. (1) The rest of the second part of T16b when `bin/codex-review.mjs` is free,
 after JH 8's S1 and its cut of the command's git calls are on `main`: the review's model and
 effort, and the reader of `codex-review-margin`. The lead says when the file is this
 session's (its word of 2026-10-12, in the message that told of pull request 82 merged at
