@@ -1445,10 +1445,17 @@ const isToolResult = (block) => block.type === 'tool_result';
  * its tool otherwise is one more name here and no other change. Only a tool of this list asks the person: the
  * result of any other is written by that tool, and a server's tool can give its result any shape it likes. */
 export const QUESTION_TOOLS = ['AskUserQuestion'];
+/** The word a numbered question's text starts with, as the person sees it. It is data, like the tools' names:
+ * a project that asks in another language is one more value here and no other change. */
+export const QUESTION_WORD = 'Pregunta';
+/** How the text of question `number` of the channel's record starts when a session asks it with the tool:
+ * `notify` prints it for the asker, and a call joins that question only when a text it asked starts with
+ * exactly this. The number alone is no key: sessions numbered questions by hand before the record did. */
+export const questionPrefix = (number) => `${QUESTION_WORD} ${number}: `;
 /** No call to pair a result with: what an entry read by itself has. */
 const NO_CALLS = new Map();
 
-/** The calls of a question tool among `entries`, by the call's id: `{ tool, questions, sidechain }`, the
+/** The calls of a question tool among `entries`, by the call's id: `{ tool, questions, sidechain, at }`, the
  * questions as the call's input has them, unread. */
 function questionCallsOf(entries) {
   const calls = new Map();
@@ -1456,7 +1463,7 @@ function questionCallsOf(entries) {
     if (entry.type !== 'assistant') continue;
     for (const block of blocksOf(entry)) {
       if (block.type !== 'tool_use' || typeof block.id !== 'string' || !QUESTION_TOOLS.includes(block.name)) continue;
-      calls.set(block.id, { tool: block.name, questions: block.input?.questions, sidechain: entry.isSidechain === true });
+      calls.set(block.id, { tool: block.name, questions: block.input?.questions, sidechain: entry.isSidechain === true, at: entry.timestamp ?? null });
     }
   }
   return calls;
@@ -1552,7 +1559,7 @@ function answerOf(entry, calls) {
     const answer = given[question.question];
     return { question: question.question, options, answer, how: howAnswered(answer, options, question.multiSelect === true) };
   });
-  return { what: null, at: entry.timestamp ?? null, tool: call.tool, answers };
+  return { what: null, at: entry.timestamp ?? null, tool: call.tool, askedAt: call.at ?? null, answers };
 }
 
 /** The questions a transcript's `entries` put to the person with a question tool, one a call in the order the
@@ -1685,7 +1692,8 @@ function queuedMessageOf(entry) {
  * a task's end `task-notification`, and writes no origin on what it puts in itself.
  *
  * One more entry is his: the answer he gave to a question the session asked with the host's question tool
- * (`answerOf`, which says what makes it one). It comes back with `answered: { tool, answers }`, each answer
+ * (`answerOf`, which says what makes it one). It comes back with `answered: { tool, askedAt, answers }`,
+ * `askedAt` being when the call was asked (`null` when its entry holds no time), each answer
  * with its question, the options shown and whether he tapped one or typed his own; `text` is the answers,
  * one a line. */
 export function quoteOf(text, line) {
@@ -1722,7 +1730,7 @@ function quoteEntry(entry, calls = NO_CALLS) {
     const answer = answerOf(entry, calls);
     if (answer.what !== null) return { person: false, what: answer.what };
     const said = answer.answers.map(({ answer: given }) => given).join('\n');
-    return { person: true, at: answer.at, text: said, images: 0, pastedOnly: false, queued: false, answered: { tool: answer.tool, answers: answer.answers } };
+    return { person: true, at: answer.at, text: said, images: 0, pastedOnly: false, queued: false, answered: { tool: answer.tool, askedAt: answer.askedAt, answers: answer.answers } };
   }
   const queued = entry.type === 'attachment' ? queuedMessageOf(entry) : null;
   const what = queued ? queued.what : notThePersons(entry);
@@ -1989,6 +1997,40 @@ export function isSelf(id, self) {
  * and what was written with it keeps that start when no transcript could be read to complete it. */
 export function sameSession(one, other) {
   return typeof one === 'string' && typeof other === 'string' && (isSelf(one, other) || isSelf(other, one));
+}
+
+/** Whether `transcript` names a file: a path does, and anything else is a session id or the start of one. */
+export const namesAFile = (transcript) => /[\\/]/.test(transcript) || transcript.endsWith('.jsonl');
+
+/** The transcript that `transcript` names among those of the sessions folder `projectDir`: `{ file }`, or
+ * `{ not }` with why there is none to give. `transcript` is a file (`namesAFile`, resolved from `cwd`) or a
+ * session id, whole or its first eight characters or more.
+ *
+ * Only a transcript directly in the project's sessions folder is one, as the board reads them. This is
+ * the check behind every word taken as the person's: a session can write a file anywhere with a line marked
+ * as a person's, and a subagent's transcript, in a folder of this one, holds what its parent session wrote
+ * to it. What it does not stop: a file written into the folder itself, which is the host's to keep.
+ *
+ * `not` is `outside` (with the `file`: it is elsewhere, or no `.jsonl`), `short` (an id of under eight
+ * characters), `unlisted` (with the `code`: the folder could not be listed, `ENOENT` when it is not there),
+ * `none` (no transcript starts with the id) or `several` (with the `count`). Whether the file can be read
+ * is the caller's to find out. */
+export function transcriptNamed(projectDir, transcript, { cwd, readdir }) {
+  if (namesAFile(transcript)) {
+    const file = path.resolve(cwd, transcript);
+    const inside = path.relative(projectDir, file);
+    return inside === '' || /[\\/]/.test(inside) || path.isAbsolute(inside) || !inside.endsWith('.jsonl') ? { not: 'outside', file } : { file };
+  }
+  if (transcript.length < 8) return { not: 'short' };
+  let names;
+  try {
+    names = readdir(projectDir);
+  } catch (err) {
+    return { not: 'unlisted', code: err.code ?? err.message };
+  }
+  const ids = names.filter((name) => name.endsWith('.jsonl')).map((name) => name.slice(0, -'.jsonl'.length)).filter((id) => isSelf(id, transcript));
+  if (ids.length === 0) return { not: 'none' };
+  return ids.length > 1 ? { not: 'several', count: ids.length } : { file: path.join(projectDir, `${ids[0]}.jsonl`) };
 }
 
 /** How a board says context sizes: `of(tokens)` is `342k tokens (68%)`, and `pause` is the board's pause

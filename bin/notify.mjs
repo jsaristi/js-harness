@@ -10,17 +10,19 @@
 // `sessions --address` and is asked of that command itself, so the sender can ring it; the notice is
 // recorded whether or not there is an address, and a recorded notice is exit 0. A notice is a claim of
 // the session that wrote it, never the user's word.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
-import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingTextOf, openingTitleOf, placeOf, readNotices, recordPath, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
-import { mainCheckout, projectSlug, roleOfTitle, titleRead } from './lib/sessions.mjs';
+import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
+import { mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
-  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] "<one line>"',
+  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] "<one line>"',
+  '       js-harness notify --to orchestrator --kind question   (the fields of the question as JSON on standard input)',
   '       js-harness notify --relief "<one line>"',
   '       js-harness notify --opening "<title>"   (the opening\'s text on standard input)',
   '                         [--self <session id>] [--cwd <path>] [--home <path>] [--claude-home <path>]',
@@ -31,6 +33,13 @@ const USAGE = [
   `    Kinds: ${NOTICE_KINDS.join(', ')}. An answer carries the user's words and says where they`,
   '    are read, with --transcript and --line; no other kind takes them. The text is one line of',
   `    ${NOTICE_TEXT_MAX} characters at most.`,
+  '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
+  '    keys text, options and waits, for example:',
+  '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
+  '    The record numbers it, and the number is printed: he is asked with its text headed by',
+  '    "Pregunta <n>: ". An answer or a withdrawal names its question with --question <n>. A verified answer',
+  '    is one read at its line of the transcript, and its copy is kept with it; with no transcript to read,',
+  '    the answer is recorded unverified, and that is said.',
   `  --relief appends one line, of ${RELIEF_LINE_MAX} characters at most, to the orchestrator's relief file, with the`,
   '    local date and time of the clock.',
   `  --opening stores the opening of the session with that title (one line, ${OPENING_TITLE_MAX} characters at most):`,
@@ -63,7 +72,7 @@ function requireValue(argv, i, flag) {
 function parseArgs(argv) {
   const parsed = {};
   // A Map, not an object: `constructor` and `__proto__` are keys of every object literal.
-  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
+  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--question', 'question'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
   const texts = [];
   // `--relief` or `--opening` when a lone `--` follows it: its value is the text after that `--`.
   let fromText;
@@ -102,7 +111,7 @@ function parseArgs(argv) {
   if (texts.length > 1) throw new NotifyArgError('the text is one argument: put it between quotes');
 
   const places = { self: parsed.self, cwd: parsed.cwd, home: parsed.home, claudeHome: parsed.claudeHome };
-  const ofANotice = ['to', 'kind', 'transcript', 'line'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
+  const ofANotice = ['to', 'kind', 'transcript', 'line', 'question'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
   for (const [flag, other] of [['relief', 'opening'], ['opening', 'relief']]) {
     if (parsed[flag] === undefined) continue;
     const extra = [...ofANotice, ...(parsed[other] !== undefined ? [`--${other}`] : []), ...(texts.length > 0 ? ['a text'] : [])];
@@ -110,13 +119,43 @@ function parseArgs(argv) {
     return { ...places, [flag]: parsed[flag] };
   }
   if (parsed.to === undefined || parsed.kind === undefined) throw new NotifyArgError('a notice takes --to and --kind');
-  if (texts.length === 0) throw new NotifyArgError('a notice takes its text: one line, between quotes');
+  // A question's text is its fields on standard input, which `notifyMain` reads: no text may come with it.
+  if (parsed.kind === 'question' && texts.length > 0) throw new NotifyArgError('a question takes its fields from standard input, not from the command line');
+  if (parsed.kind !== 'question' && texts.length === 0) throw new NotifyArgError('a notice takes its text: one line, between quotes');
   let line;
   if (parsed.line !== undefined) {
     if (!/^\d+$/.test(parsed.line)) throw new NotifyArgError('--line takes the number of a line of the transcript, from 1');
     line = Number(parsed.line);
   }
-  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line } };
+  let question;
+  if (parsed.question !== undefined) {
+    if (!/^\d+$/.test(parsed.question) || Number(parsed.question) < 1) throw new NotifyArgError('--question takes the number of a question, from 1');
+    question = Number(parsed.question);
+  }
+  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line, question } };
+}
+
+/** The copy an answer to question `number` keeps, read from the transcript's `text` at `line`: `{ copy }`, or
+ * `{ refused }` in words when that line is not his answer to it. A typed answer counts when it was sent after the
+ * question was recorded (`asked`, its notice). A question-tool answer counts when its call was asked after that
+ * and holds a question that starts with the question's prefix: one call may ask several questions. */
+function copyOfAnswer(text, { line, file, number, asked }) {
+  const quote = quoteOf(text, line);
+  if (!quote.person) return { refused: `line ${line} of ${file} is ${quote.what}: not his answer` };
+  const recordedAt = Date.parse(asked.at);
+  if (quote.answered === undefined) {
+    if (quote.pastedOnly) return { refused: `line ${line} of ${file} holds only pasted text: not his words typed in the chat` };
+    if (quote.at === null) return { refused: `line ${line} of ${file} has no time, so it cannot be told to come after question ${number}` };
+    if (!(Date.parse(quote.at) > recordedAt)) return { refused: `line ${line} of ${file} was sent before question ${number} was recorded` };
+    return { copy: { tool: null, answers: [{ question: asked.text, options: [], answer: quote.text, how: 'typed in the chat' }] } };
+  }
+  const { answered } = quote;
+  if (answered.askedAt === null) return { refused: `the call that line ${line} answers has no time, so it cannot be told to answer question ${number}` };
+  if (!(Date.parse(answered.askedAt) > recordedAt)) return { refused: `the call that line ${line} answers was asked at ${answered.askedAt}, before question ${number} was recorded at ${asked.at}: it answers another question` };
+  const prefix = questionPrefix(number);
+  const answers = answered.answers.filter((one) => typeof one.question === 'string' && one.question.startsWith(prefix));
+  if (answers.length === 0) return { refused: `no question of that call starts with ${JSON.stringify(prefix)}: it answers another question` };
+  return { copy: { tool: answered.tool, answers } };
 }
 
 /** The text of an opening, from what standard input gave: bytes read as UTF-8, or a string as it is. Bytes
@@ -156,15 +195,37 @@ export async function notifyMain(
     stdinIsTTY = tty.isatty(0),
     // `sessions`, asked for the address of a role exactly as a session would ask it.
     sessions = sessionsMain,
+    // The id of a question: the record is searched for it after the append, which has no lock to say where
+    // the line went. A random one, unless a test fixes it.
+    newId = () => crypto.randomUUID(),
   } = {},
 ) {
   let parsed;
   let draft;
+  // What an answer's copy could not be read as: why the answer is recorded unverified, or `null` when it is verified.
+  let unverified = null;
   try {
     parsed = parseArgs(argv);
-    // Everything the caller gave is checked before anything is run or written.
-    if (parsed.notice) draft = newNotice({ at: null, from: null, ...parsed.notice });
-    else if (parsed.relief !== undefined) draft = reliefLineOf(parsed.relief);
+    // Everything the caller gave is checked before anything is run or written. An answer to a question is
+    // checked again once its transcript is read, below.
+    if (parsed.notice?.kind === 'question') {
+      if (stdinIsTTY) throw new NotifyArgError('--kind question reads the question\'s fields from standard input, and standard input is a terminal: pipe them in');
+      let input;
+      try {
+        input = readStdin();
+      } catch (err) {
+        // Windows answers the read of a standard input that is closed or empty with EOF as an error.
+        if (err.code !== 'EOF') {
+          stderr(`js-harness notify: could not read the question from standard input (${err.code ?? err.message})`);
+          return 1;
+        }
+        input = '';
+      }
+      draft = newNotice({ at: null, from: null, ...parsed.notice, ...questionFieldsOf(decoded(input)), id: newId() });
+    } else if (parsed.notice) {
+      const verifiedLater = parsed.notice.kind === 'answer' && parsed.notice.question !== undefined;
+      draft = newNotice({ at: null, from: null, ...parsed.notice, ...(verifiedLater ? { verified: false, copy: null } : {}) });
+    } else if (parsed.relief !== undefined) draft = reliefLineOf(parsed.relief);
     else {
       const title = openingTitleOf(parsed.opening);
       if (stdinIsTTY) throw new NotifyArgError('--opening reads the opening\'s text from standard input, and standard input is a terminal: pipe the text in');
@@ -210,7 +271,8 @@ export async function notifyMain(
 
   // Who sends, from the transcript the host's id names: read where the board reads the sessions.
   const claudeHome = path.resolve(defaultCwd, parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
-  const from = senderOf({ self: parsed.self ?? null, env, projectDir: path.join(claudeHome, 'projects', slug), readdir, readFile });
+  const projectDir = path.join(claudeHome, 'projects', slug);
+  const from = senderOf({ self: parsed.self ?? null, env, projectDir, readdir, readFile });
   // A session opened from the phone has no title in its transcript: its title is the one of the opening
   // it read, which `sessions --opening` wrote in the record. A title in the transcript wins.
   // A record that cannot be read gives no title and stops nothing: the notice is written without one,
@@ -243,6 +305,59 @@ export async function notifyMain(
     return 0;
   }
 
+  // An answer or a withdrawal to a question: the record must hold that question and leave it open, and an
+  // answer's words are read from its transcript before anything is written. Nothing here writes.
+  if (parsed.notice?.question !== undefined) {
+    const notRecorded = (why) => {
+      stderr(`js-harness notify: not recorded: ${why}`);
+      return 1;
+    };
+    const number = parsed.notice.question;
+    const record = readNotices(home, slug, { readFile });
+    if (record.unavailable !== undefined) return notRecorded(`the channel's record ${record.path} could not be read (${record.unavailable})`);
+    const questions = recordedQuestions(record);
+    const theQuestion = questions.find((one) => one.number === number);
+    if (theQuestion === undefined) return notRecorded(`the record holds no question ${number} (it holds ${plural(questions.length, 'question')})`);
+    // An answer no transcript confirmed is the sender's claim: it shuts out a withdrawal and another claim, and
+    // lets in his answer read at its line, which `recordedQuestions` then gives as what closed the question.
+    const claimed = theQuestion.closed !== null && theQuestion.closed.by === 'answer' && theQuestion.closed.notice.verified === false;
+    const closedSaid = () => {
+      const { by, notice: closing } = theQuestion.closed;
+      if (by === 'withdrawn') return `question ${number} is closed: withdrawn: ${closing.text}`;
+      return `question ${number} is closed: answered at ${closing.transcript}:${closing.line}${claimed ? ', unverified: only an answer read at its line replaces it' : ''}`;
+    };
+    if (theQuestion.closed !== null && !(claimed && parsed.notice.kind === 'answer')) return notRecorded(closedSaid());
+    if (parsed.notice.kind === 'answer') {
+      const found = transcriptNamed(projectDir, parsed.notice.transcript, { cwd, readdir });
+      let copy = null;
+      if (found.not === 'outside') return notRecorded(`${parsed.notice.transcript} is not a transcript of this project: a file outside its sessions folder is none`);
+      if (found.not === 'several') return notRecorded(`${plural(found.count, 'transcript')} start with ${parsed.notice.transcript}: give more of the session id`);
+      if (found.not === 'short') return notRecorded(`${parsed.notice.transcript} is too short to name a session: a session id takes its first eight characters or more`);
+      if (found.not === 'none') unverified = `no transcript starts with ${parsed.notice.transcript}`;
+      else if (found.not === 'unlisted') unverified = `the sessions folder ${projectDir} could not be read (${found.code})`;
+      else {
+        let text;
+        try {
+          text = readFile(found.file);
+        } catch (failed) {
+          unverified = `the transcript ${found.file} could not be read (${failed.code ?? failed.message})`;
+        }
+        if (text !== undefined) {
+          const read = copyOfAnswer(text, { line: parsed.notice.line, file: found.file, number, asked: theQuestion.notice });
+          if (read.refused !== undefined) return notRecorded(read.refused);
+          copy = read.copy;
+        }
+      }
+      if (claimed && copy === null) return notRecorded(closedSaid());
+      try {
+        draft = newNotice({ at: null, from: null, ...parsed.notice, verified: copy !== null, copy });
+      } catch (failed) {
+        if (!(failed instanceof ChannelInputError)) throw failed;
+        return notRecorded(failed.message);
+      }
+    }
+  }
+
   // The notice, with what was read here in the place of what the draft left empty: same keys, same order.
   const notice = { ...draft, at, from, cwd, ...placeOf(run, cwd) };
   let file;
@@ -253,8 +368,41 @@ export async function notifyMain(
     return 1;
   }
   const role = roleWords(notice.to);
-  stdout(`js-harness notify: recorded ${notice.kind} for ${role} at ${at} from ${senderWords(from)} in ${file}`);
+  // The number a question has in the record: it is read back by the id the question was given.
+  let questionNumber = null;
+  let numberNotKnown = null;
+  if (notice.kind === 'question') {
+    const back = readNotices(home, slug, { readFile });
+    const found = back.unavailable === undefined ? back.questions.find((one) => one.notice.id === notice.id) : undefined;
+    if (found !== undefined) questionNumber = found.number;
+    else numberNotKnown = back.unavailable !== undefined ? `the channel's record ${back.path} could not be read back (${back.unavailable})` : 'the question is not in the record';
+  }
+  const what = notice.kind === 'question' ? (questionNumber === null ? 'question (number not known)' : `question ${questionNumber}`)
+    : notice.kind === 'answer' && notice.question !== undefined ? `answer to question ${notice.question}`
+      : notice.kind === 'withdrawn' ? `withdrawn question ${notice.question}`
+        : notice.kind;
+  stdout(`js-harness notify: recorded ${what} for ${role} at ${at} from ${senderWords(from)} in ${file}`);
+  if (notice.copy) {
+    for (const one of notice.copy.answers) stdout(`his answer, ${one.how}: ${one.answer.length > SHOWN ? `${one.answer.slice(0, SHOWN)}…` : one.answer}`);
+  }
+  if (questionNumber !== null) stdout(`prefix: ${JSON.stringify(questionPrefix(questionNumber))}`);
   senderNotKnown();
+  if (unverified !== null) stderr(`js-harness notify: the answer to question ${notice.question} is recorded UNVERIFIED: ${unverified}: it is the sender's claim until the line is read`);
+  if (numberNotKnown !== null) stderr(`js-harness notify: the number of the question is not known: ${numberNotKnown}: its number is read with js-harness sessions`);
+
+  // What the sender does with a question once its number is known: ring the one orchestrator, or, when the
+  // sender is that orchestrator or there is none to ring, ask him itself. The line says which, and is the
+  // last thing printed. `address` is the one title the address is, or `null` when there is no single one.
+  // The orchestrator is known by its own title, since `sessions --address` does not count the session that
+  // asks. Whoever asks him is told when: the question tool holds the session that calls it until he answers,
+  // so it is called only in the reply to a message he has just written.
+  const followUp = (address) => {
+    if (questionNumber === null) return;
+    const ask = JSON.stringify(questionPrefix(questionNumber));
+    if (roleOfTitle(from.title)?.role === 'orchestrator') stdout(`you hold that role: ask him with the question tool only in the reply to a message he has just written, the text headed by ${ask}; until then the question waits as this notice`);
+    else if (address === null) stdout(`no orchestrator to show it: ask him yourself with the question tool, only in the reply to a message he has just written, the text headed by ${ask}, then record his answer: js-harness notify --to orchestrator --kind answer --question ${questionNumber} --transcript <session id> --line <n> "<his answer in one line>"`);
+    else stdout(`question ${questionNumber} is recorded for ${address} to show to him: ring it with the number, and go on with what does not wait on it`);
+  };
 
   // The address of the role, so the sender can ring it: the answer of `sessions --address`, asked of the
   // command itself with the folder, the Claude home and the sender this one was given. Only its exit 0 is
@@ -269,15 +417,18 @@ export async function notifyMain(
     code = await sessions(asked, { cwd: defaultCwd, stdout: (line) => out.push(line), stderr: (line) => err.push(line), env: { ...env, JS_HARNESS_HOME: home }, now, homedir, run, readFile, readdir });
   } catch (failure) {
     stdout(`address of ${role}: not known: sessions --address could not be asked (${failure.message})`);
+    followUp(null);
     return 0;
   }
-  if (code === 0 && out.length === 1) {
-    stdout(`address of ${role}: ${out[0]}`);
+  const address = code === 0 && out.length === 1 ? out[0] : null;
+  if (address !== null) {
+    stdout(`address of ${role}: ${address}`);
     // What it says beside a title (the title is also the asker's own, a transcript it could not read).
     for (const line of err) stderr(line);
-    return 0;
+  } else {
+    const said = [...out.map((title) => JSON.stringify(title)), ...err.map((line) => line.replace(/^js-harness sessions: /, '').replace(/\s*\n\s*/g, ' '))];
+    stdout(`address of ${role}: no single one now (sessions --address exit ${code}): ${said.join('; ')}`);
   }
-  const said = [...out.map((title) => JSON.stringify(title)), ...err.map((line) => line.replace(/^js-harness sessions: /, '').replace(/\s*\n\s*/g, ' '))];
-  stdout(`address of ${role}: no single one now (sessions --address exit ${code}): ${said.join('; ')}`);
+  followUp(address);
   return 0;
 }

@@ -2980,6 +2980,35 @@ const answered = (id, minute, answers, block = {}) => result(id, { questions: [a
 // What the host wrote when he closed a question without answering, as the transcript has it.
 const DISMISSED = '[User dismissed — do not proceed, wait for next instruction]';
 
+test('questionPrefix is how the text of a numbered question starts: the word, the number, a colon and one space', () => {
+  assert.equal(lib.questionPrefix(7), `${lib.QUESTION_WORD} 7: `);
+  assert.equal(lib.questionPrefix(12), 'Pregunta 12: ');
+});
+
+test('transcriptNamed gives the one transcript of the sessions folder that a file or an id names, and says why when there is none', () => {
+  const dir = nodePath.resolve('made-up', 'projects', 'D--made-up');
+  const listed = ['aaaaaaaa-1111.jsonl', 'aaaaaaaa-2222.jsonl', 'bbbbbbbb-3333.jsonl', 'bbbbbbbb-3333', 'notes.txt'];
+  const named = (transcript, readdir = () => listed) => lib.transcriptNamed(dir, transcript, { cwd: dir, readdir });
+  // A file: only one directly in the folder, with the transcripts' ending; the folder is not listed for it.
+  const unread = () => assert.fail('a file is not looked up in the folder');
+  assert.deepEqual(named('bbbbbbbb-3333.jsonl', unread), { file: nodePath.join(dir, 'bbbbbbbb-3333.jsonl') });
+  assert.deepEqual(named(nodePath.join(dir, 'gone.jsonl'), unread), { file: nodePath.join(dir, 'gone.jsonl') });
+  for (const outside of [nodePath.join('bbbbbbbb-3333', 'subagents', 'agent-1.jsonl'), nodePath.join('..', 'other.jsonl'), nodePath.join(dir, 'notes.txt')]) {
+    assert.deepEqual(named(outside, unread), { not: 'outside', file: nodePath.resolve(dir, outside) });
+  }
+  // An id: whole or its start, eight characters or more, naming exactly one transcript.
+  assert.deepEqual(named('bbbbbbbb-3333'), { file: nodePath.join(dir, 'bbbbbbbb-3333.jsonl') });
+  assert.deepEqual(named('bbbbbbbb'), { file: nodePath.join(dir, 'bbbbbbbb-3333.jsonl') });
+  assert.deepEqual(named('aaaaaaaa'), { not: 'several', count: 2 });
+  assert.deepEqual(named('cccccccc'), { not: 'none' });
+  assert.deepEqual(named('bbbbbbb'), { not: 'short' });
+  const refuses = (code) => () => {
+    throw Object.assign(new Error('refused'), { code });
+  };
+  assert.deepEqual(named('bbbbbbbb', refuses('ENOENT')), { not: 'unlisted', code: 'ENOENT' });
+  assert.deepEqual(named('bbbbbbbb', refuses('EACCES')), { not: 'unlisted', code: 'EACCES' });
+});
+
 test('quoteOf gives his answer to a question the session asked with the host\'s question tool: tapped or typed, with the question and the options shown', () => {
   const typed = 'Corregir el mensaje por que todavia no tenemos produccion';
   const text = transcript(asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: OPTIONS[0] }), asked('toolu_q2', 3), answered('toolu_q2', 4, { [QUESTION]: typed }));
@@ -2990,9 +3019,12 @@ test('quoteOf gives his answer to a question the session asked with the host\'s 
     images: 0,
     pastedOnly: false,
     queued: false,
-    answered: { tool: 'AskUserQuestion', answers: [{ question: QUESTION, options: OPTIONS, answer: OPTIONS[0], how: 'tapped' }] },
+    // `askedAt` is when the call was asked: what tells an answer to a question recorded before it from one
+    // to a call older than the record's question of the same number.
+    answered: { tool: 'AskUserQuestion', askedAt: at(1), answers: [{ question: QUESTION, options: OPTIONS, answer: OPTIONS[0], how: 'tapped' }] },
   });
   const other = lib.quoteOf(text, 4);
+  assert.equal(other.answered.askedAt, at(3));
   assert.deepEqual([other.person, other.text, other.answered.answers[0].how], [true, typed, 'typed']);
   // Two questions in one call: an answer each, in the order they were asked; a question that takes several
   // options is tapped when every part of its answer is one of them.

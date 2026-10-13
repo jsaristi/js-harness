@@ -2268,6 +2268,39 @@ session needs beside it to go on; the summary of a compaction is not the record.
   carries this entry, test first (both failed, then 533 passed): `pendingCall` carries the
   call id and the sub-agent is found by it; a session kept across a failed read has `readAt`
   and its earlier age is measured there. Parts 2 and 3 are not started.
+- 2026-10-13, written at 18:24: the fix above is commit `567f81f` (gate PASS; gentle-ai: not due;
+  Codex on `6ab6958..567f81f`: 181,048 input tokens, "correct (0.93)", no finding). The host
+  compacted this session by itself between the two commits; nothing was lost, the fix was in the
+  tree and its state in this document. PART 2 is built as two commits. The first is the commit
+  that carries this entry: the record and `notify`. As built, where the design left it open:
+  - the fields of a question are JSON on standard input, `{ text, options: [{ label,
+    description }], waits }`, each one line and capped (`QUESTION_TEXT_MAX` and its neighbours in
+    `bin/lib/channel.mjs`); an empty list of options is a question with nothing to tap;
+  - the number is the ordinal among the lines with this schema and the kind `question`, valid or
+    not, so a broken question line still takes its number; `readNotices` gives `questions`, and
+    `recordedQuestions` says what closed each;
+  - `notify` prints the number, `prefix: "Pregunta N: "` and one line by who can show it: one
+    orchestrator, ring it and go on; the orchestrator itself (known by its own title, since
+    `sessions --address` does not count the session that asks) and a session with none to ring
+    are told to call the question tool only in the reply to a message he has just written;
+  - `answer --question N` is refused (exit 1, nothing written) for a line that is not his, a
+    typed line sent before the question was recorded, a call asked before it, or a call none of
+    whose texts starts with the prefix; what the line holds is copied (`answerCopyOf`, capped);
+  - an answer whose transcript cannot be read is recorded with `verified: false` and said on
+    standard error. Added after reading the writer's code, and not in the design: such a claim
+    shuts out a second claim and a withdrawal, and gives way to an answer read at its line, or
+    an unverifiable sentence would close his question for ever;
+  - `transcriptNamed` (`bin/lib/sessions.mjs`) is the one rule for which file is a transcript of
+    the project, moved out of `sessions --quote`; `quoteOf` gives `askedAt`, when the answered
+    call was asked.
+  Three bounded writers (Haiku, high effort) wrote it on disjoint files from briefs this session
+  wrote, and this session read every line of code: two changes after reading (the claim that
+  gives way; the orchestrator known by its title, which the writer had tied to an address the
+  command never gives it). Test first: 48 tests failed without the code (44 new, 4 that compare a
+  whole record and gained `questions`), then 740 passed and 1 failed (the usage had no line for
+  `--kind question`: added), then the two files again, 173 passed. The second commit is the
+  board's half (`openQuestionsOf` with the record, the rows `Pregunta N`, the watch for a
+  question answered and not carried): written and read, set aside until this one lands.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
@@ -2680,7 +2713,19 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AFTER THE COMPACTION OF 2026-10-13, THE NEWEST OF ALL (read this first). Part 1
+      STATE AT 2026-10-13 18:24, THE NEWEST OF ALL (read this first). Part 1 and its fix are
+      `6ab6958` and `567f81f`. PART 2 is two commits: the record and `notify` go in the commit
+      that carries this text (or are in the tree if it did not land: `git status` says); the
+      board's half is written and read and waits as files outside the tree (this session's
+      scratchpad, folder `p2-w3`; if that folder is gone, write it again from point 15 and
+      the Progress entry of 18:24: `questionRecordOf`, `openQuestionsOf` with `record`, the
+      rows `Pregunta N` under "Open questions", two more lines of `questionChanges`, the line
+      of each call and of its answer kept by `parseTranscript` in a weak map). THEN PART 3,
+      the resume's half: it joins the record's questions with the session's own numbered
+      calls in every state, the answered ones included, so an orchestrator compacted after
+      his tap does not ask again. Then one merge of `main`, `check --push`, the push and the
+      pull request. The lead's order after (b2) is two paragraphs below.
+      STATE AFTER THE COMPACTION OF 2026-10-13 (the state before the one above). Part 1
       of (b2) is commit `6ab6958`; Codex found two defects in it and their fix, test first,
       goes in the commit that carries this text, or is still in the tree if that commit did
       not land (`git status` says). The Progress entry of 2026-10-13 written at 17:51 holds
