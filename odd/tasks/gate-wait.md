@@ -1928,6 +1928,32 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   (two joins) takes back about 1,400 of those 1,773**: it pays for most of S1 and gains
   nothing over today. To end below today's wall the cut needs more of what S1 added:
   the 340 `for-each-ref` (one a run, to read) and the 292 `diff`.
+- 2026-10-12 · **Three words of his that reach this feature, each read by me in the
+  orchestrator's transcript `65318fd5`.** (1) Line 8423 (type user) and the queued entry
+  at 8439: a question to him goes through the question tool, options he taps and "Otro".
+  (2) Line 8528, a queued entry of human origin: "siempre necesito que las preguntas en
+  las haga el orquestador, no la sesion": a question of this session goes to the
+  orchestrator by message, never to him in this chat; the two blocks of a cut stay here.
+  (3) Line 8962, the tool's result for "¿en qué esfuerzo corre la revisión de Codex?":
+  **"Bajar a medio"**. The Codex review goes to medium.
+  **What that touches, answered to the orchestrator:** one value,
+  `bin/codex-review.mjs:174` (`REVIEW_EFFORT = 'high'`), which the usage text, the flags,
+  the plan and the session's check all read; the pin at `bin/codex-review.test.mjs:1045`
+  and, of that file's 64 lines with the literal, the ones that mean "the review's
+  effort" (a guess: 20 to 40). The declared rule (`bin/lib/rules-data.mjs:61-65`,
+  `docs/rule-sources.json:78-92`) is bound to no code, so it is JH 7's to move, or mine
+  with its exact text. **Order on `main`: this commit first, on a branch off `main`, then
+  S1, then the cut**; S1's new tests with the literal are moved to the constant in the
+  merge S1 owes. The plan: its estimate rests on parts measured at the review's own
+  effort when there are five (`bin/lib/codex-review-plan.mjs:53`), else on all, mostly
+  high, about four times what a medium review costs; the first plan after the change
+  says which, and the 1,230 a line is a figure of high.
+  **Also from the orchestrator:** the declared rule speaks of what a review may cost, and
+  by that wording three of this feature's reviews spent more than their allowance though
+  their plans were inside it (513,922 against 361,620; 857,405 against 491,400; 535,338
+  against 399,420). From now a spend over 1.05 times the larger of 300,000 and 1,200 a
+  line is said in those words. And S1 stays unpushed until the cut is built on it and
+  reviewed; the two pull requests then go back to back.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
