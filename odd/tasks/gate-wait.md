@@ -1000,6 +1000,10 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       starts the half below it; nothing moved. Route: inline, tests first, on
       `feat/gate-wait-two-halves` off the cut; Codex's review is the outside read (the
       orchestrator: no reader for it); judged by M1g, the whole suite by file after it.
+- [x] T18 · Road 1, second slice, its first row: the tests of a task's file rules
+      (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
+      Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
+      before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2544,6 +2548,30 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   **M1g is taken after the stop, with a sample of the machine before it.**
   **Next:** `main` moved by documents (`53826d8`, pull request 91): one clean merge in
   a lock turn; M1g; then the push and the pull request.
+- 2026-10-13 · **Road 1, second slice, first row: `85566a8` on `test/eval-fewer-starts`**
+  (07:20 to 07:31; written above M1g's entry so that it does not meet T12's record, which
+  its own branch appends at the end). Thirteen tests of `evals/task-proof.test.mjs` prove
+  a rule that reads files only (`checkFiles`, `readProof`): they end in `only` or `some`
+  on the rule and read nothing a run produced, and each `proveTask` started five
+  processes. They now take their runs from `answered`, a run answered in the test's
+  process by what the workspace holds, through the `runProcess` parameter `proveTask`
+  has had since the first slice; nothing that ships changes. One new test ties the
+  stand-in to the real runs: for the valid task both give the same results, read
+  against one constant (`VALID_RUNS`). The tests of what a run does stay on real
+  processes, the borderline ones of the reading of 2026-10-12 included.
+  - **The count, one turn, the same tool, the file alone** (`s2-turn.sh`,
+    `count-git.mjs --json`): other starts 176 before, **85 after (91 fewer)**; processes
+    reported 223 and 132; git 5 and 5. Run plainly the new file: 36 of 36, 17.9 s. A
+    change of tests has no red step: the count and the green file are its proof. The
+    commit's gate passed whole. No timing of the suite was taken: on this machine a
+    saved start is load, and no file is the wall any more (M1g).
+  - gentle-ai: not due (`under_budget`, 70 lines). Codex once, medium, 07:30:
+    correct (0.92), 137,509 input tokens (plan 30,000, allowance 300,000).
+  - **Not built, and why:** the second row of the slice as it was sized, the sweeps
+    that find nothing and the version probes of the suites of `evals/runner.test.mjs`
+    that do not stub them (21 starts by the reading). It is six places, each a suite
+    whose trial is real for another reason, for a fifth of what this row gave; it
+    wants its own look, with slice 3 or alone.
 - 2026-10-13 · **M1g: with the file as two processes the whole suite takes 533 s, where
   it took 601 s; T17 done** (`m1g-turn.log`, the counting tool on `afcadea`, 01:10 to
   01:19, one run, after this session's tsserver was stopped; beside it M1f on the cut):
@@ -2633,9 +2661,9 @@ antivirus spends on each (his).
 1. **Pull request of T17** (`feat/gate-wait-two-halves`): open, the orchestrator
    merges. If `main` moves under it, merge `main` once more with
    `clean-merge-turn.sh <worktree>` in a lock turn.
-2. **Road 1, slice 2** (Design, "Roads to a shorter wait"): fewer starts in the eval
-   tests, sized 110 to 150 starts and 130 to 180 lines; slice 3 needs its own design.
-   Tests first, both reviews.
+2. **Road 1, slice 2**: its first row is done (T18, Progress of 2026-10-13: 91 fewer
+   starts in `evals/task-proof.test.mjs`). Its second row (21 starts in
+   `evals/runner.test.mjs`, by the reading) is not built; slice 3 needs its own design.
 3. **The merge-base in the join** (Progress, 2026-10-12, "A probe for the design's
    point 6"): about 550 git starts of the command's tests; the rule is written there
    (taken only when there is exactly one caret line). It changes
