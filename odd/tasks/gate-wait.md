@@ -1909,6 +1909,25 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   work; **read in S1's code, not counted: S1 adds two git processes a hold
   (`bin/codex-review.mjs:1397-1398`, `:1756-1757`), about 500 to 900 starts in the file
   that is the wall, so the cut is built on S1 and its count before is taken there.**
+- 2026-10-12 · **The count before the git cut, on S1 with `main` in it: S1 adds 1,773 git
+  processes to the file that is the wall** (`c3-before-turn.log`, 19:06:38 to 19:12:44;
+  `c3-before.json`; the file alone under the counting tool, 260 of 260 tests pass).
+  `bin/codex-review.test.mjs` on the tree before S1 (the count of 12:26): 6,067 git
+  processes, 288 s of life, the file 323 s, 237 tests. On `feat/gate-wait` now: **7,840,
+  327 s of life, the file 365 s, 260 tests.** By subcommand, what S1 added: `rev-parse`
+  +539, `status` +398, `for-each-ref` +340 (new: `bin/lib/codex-review-coverage.mjs:353`,
+  whether the remote has a branch, for the note on a base no record covers), `diff` +292,
+  `merge-base` +47, `rev-list` +47, `log` +40, `check-attr` +39. My reading of the code
+  put it at 500 to 900: wrong by half, and now counted. About 800 of them are the hold
+  (the head and the tree read again after a review, 398 times), the rest the note on the
+  base, the kept parts and 23 new tests.
+  **What it means for the wall.** Alone the file went from 323 to 365 s; inside a whole
+  run it takes about twice its time alone (624 s for 323), so about 700 s the day S1 is
+  on `main`, where the suite takes 625 s today. S1's own merged tree passed its gate in
+  645 s with no counting tool, against 535 to 605 s for `main`'s. **The cut as designed
+  (two joins) takes back about 1,400 of those 1,773**: it pays for most of S1 and gains
+  nothing over today. To end below today's wall the cut needs more of what S1 added:
+  the 340 `for-each-ref` (one a run, to read) and the 292 `diff`.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
