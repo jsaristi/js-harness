@@ -27,18 +27,26 @@ const write = (file, content) => {
 };
 
 const FAKE_NONCE = '0123456789abcdef0123456789abcdef';
-const LOGIN = '{"auth_mode":"chatgpt","tokens":{"id_token":"SENTINEL-DUMMY-LOGIN"}}\n';
 const HOUR = 3_600_000;
+const base64url = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+/** The text of a made-up login whose access token, in the shape of a JWT (`header.payload.signature`), expires
+ * `hoursLeft` hours from now. The sentinel is in every token of it: no output of a run may hold it. */
+const loginExpiringIn = (hoursLeft) => {
+  const accessToken = `${base64url({ alg: 'none' })}.${base64url({ sub: 'SENTINEL-DUMMY-LOGIN', exp: Math.floor((Date.now() + hoursLeft * HOUR) / 1000) })}.SENTINEL-DUMMY-LOGIN-SIGNATURE`;
+  return `${JSON.stringify({ auth_mode: 'chatgpt', tokens: { id_token: 'SENTINEL-DUMMY-LOGIN', access_token: accessToken } })}\n`;
+};
+/** What no output may hold of the login text `login`: the sentinel, and each part of its access token. */
+const loginSecrets = (login) => ['SENTINEL-DUMMY-LOGIN', ...JSON.parse(login).tokens.access_token.split('.')];
 const SANDBOX_NAME = /js-harness-codex-iso-/;
 
 // ---- a fake machine --------------------------------------------------------------------------------
 // No test runs the real Codex or reads the machine's own `~/.codex`, `~/.engram` or `~/.gentle-ai`: the
 // "real" home below is built in the scratch directory and every path the probe watches is handed to it.
 
-/** A home holding every tree the probe watches, with a login written `loginAgeHours` ago; the folders
- * LOCALAPPDATA, APPDATA and TEMP would be; a work root that does not exist yet; and the file the fake agent
- * appends a line to each time it runs. */
-function fakeMachine({ loginAgeHours = 1 } = {}) {
+/** A home holding every tree the probe watches, with a login written `loginAgeHours` ago whose access token
+ * has `loginHoursLeft` hours left (or whose text is `login`); the folders LOCALAPPDATA, APPDATA and TEMP would
+ * be; a work root that does not exist yet; and the file the fake agent appends a line to each time it runs. */
+function fakeMachine({ loginAgeHours = 1, loginHoursLeft = 48, login = loginExpiringIn(loginHoursLeft) } = {}) {
   const base = tmp('machine');
   const realHome = path.join(base, 'person');
   const localAppData = path.join(realHome, 'AppData', 'Local');
@@ -46,7 +54,7 @@ function fakeMachine({ loginAgeHours = 1 } = {}) {
   const tempDir = path.join(base, 'temp');
   const codex = path.join(realHome, '.codex');
   const authFile = path.join(codex, 'auth.json');
-  write(authFile, LOGIN);
+  write(authFile, login);
   const written = new Date(Date.now() - loginAgeHours * HOUR);
   fs.utimesSync(authFile, written, written);
   write(path.join(codex, 'config.toml'), ['model = "some-model"', '', '[mcp_servers.engram]', 'command = "engram"', ''].join('\n'));
@@ -67,7 +75,7 @@ function fakeMachine({ loginAgeHours = 1 } = {}) {
   write(path.join(localAppData, 'engram', 'bin', 'engram.exe'), 'a binary');
   write(path.join(appData, 'Codex', 'Preferences'), '{}');
   write(path.join(tempDir, 'claude', 'scratch.txt'), 'scratch');
-  return { realHome, localAppData, appData, tempDir, authFile, workRoot: path.join(base, 'work'), countFile: path.join(base, 'runs.txt'), seenDir: path.join(base, 'seen') };
+  return { realHome, localAppData, appData, tempDir, authFile, login, workRoot: path.join(base, 'work'), countFile: path.join(base, 'runs.txt'), seenDir: path.join(base, 'seen') };
 }
 
 /** `assertWorkRoot` as the probe runs it, searching only the scratch directory for project memory: the
@@ -299,7 +307,8 @@ test('an engram process that outlives a trial is the trial\'s only on evidence: 
 // ---- the probe end to end, against the fake agent --------------------------------------------------
 
 test('the command runs one trial per arm, minimal first, proves each wrote inside its sandbox and nothing reached the real home, and exits 0', async () => {
-  const machine = fakeMachine();
+  // A login file last written eight days ago: its date decides nothing, the hours its token has left do.
+  const machine = fakeMachine({ loginAgeHours: 192 });
   const before = await bytesOf(machine.realHome);
   const out = tmp('out');
   const reportFile = path.join(out, 'nested', 'report.json');
@@ -317,8 +326,11 @@ test('the command runs one trial per arm, minimal first, proves each wrote insid
   assert.deepEqual(report.skipped, []);
   assert.equal(report.codexVersion, '9.9.9 (Fake Agent)', 'what `--version` of the same command printed');
   assert.deepEqual(report.config, { model: 'gpt-6.1-sol', effort: 'medium' });
-  assert.equal(report.login.maxAgeHours, 186);
-  assert.ok(report.login.ageHours > 0.9 && report.login.ageHours < 1.1, `${report.login.ageHours}`);
+  assert.deepEqual(Object.keys(report.login), ['hoursLeft', 'minHoursLeft', 'ageHours']);
+  assert.equal(report.login.minHoursLeft, 12);
+  assert.ok(report.login.hoursLeft > 47.5 && report.login.hoursLeft <= 48, `${report.login.hoursLeft}`);
+  assert.ok(report.login.ageHours >= 192 && report.login.ageHours < 192.5, `${report.login.ageHours}`);
+  assert.ok(io.out.stdout.includes(`; the login's access token had ${report.login.hoursLeft} h left (minimum 12 h)`), 'the summary says what the login had left');
   assert.equal(report.control.ms, 5);
   assert.deepEqual(report.hashing.map((pass) => pass.label), ['before', 'control', 'after:minimal', 'after:current']);
   assert.ok(report.hashing.every((pass) => Number.isInteger(pass.ms) && pass.files > 0), 'how long each pass over the real trees took');
@@ -392,7 +404,10 @@ test('the command runs one trial per arm, minimal first, proves each wrote insid
 
   assert.match(io.out.stdout, /codex isolation probe: PASS/);
   assert.ok(io.out.stdout.includes(reportFile));
-  for (const output of [text, io.out.stdout, io.out.stderr]) assert.ok(!output.includes(FAKE_NONCE) && !output.includes('SENTINEL-DUMMY-LOGIN'));
+  for (const output of [text, io.out.stdout, io.out.stderr]) {
+    assert.ok(!output.includes(FAKE_NONCE));
+    for (const secret of loginSecrets(machine.login)) assert.ok(!output.includes(secret), 'nothing of the login is in an output but its dates');
+  }
   assert.doesNotMatch(io.out.stderr, SANDBOX_NAME, 'progress lines never name the sandbox');
 });
 
@@ -419,7 +434,7 @@ test('what a real model, or another session, may do is a warning, never a failur
   assert.deepEqual({ applies: arm.engram.applies, exercised: arm.engram.exercised, memSave: arm.engram.memSave }, { applies: true, exercised: false, memSave: false });
   assert.equal(arm.loginCopy, 'changed');
   assert.equal(arm.realLogin, 'unchanged');
-  assert.equal(fs.readFileSync(machine.authFile, 'utf8'), LOGIN);
+  assert.equal(fs.readFileSync(machine.authFile, 'utf8'), machine.login);
   assert.equal(arm.agent.answered, false);
   assert.equal(arm.agent.finalMessage, `${PROBE_WORD} <nonce> <thread id>`, 'the answer is kept, scrubbed');
   assert.equal(arm.warnings.length, 4, arm.warnings.join('\n'));
@@ -585,7 +600,7 @@ test('a prepare that fails after the login was copied leaves no login behind, no
   const kept = path.join(machine.workRoot, arm.sandboxToken);
   assert.ok(fs.existsSync(path.join(kept, 'home', '.codex')), 'the sandbox is kept, as asked');
   assert.ok(!fs.existsSync(path.join(kept, 'home', '.codex', 'auth.json')), 'without the credential');
-  assert.equal(fs.readFileSync(machine.authFile, 'utf8'), LOGIN, 'and the real one is where it was');
+  assert.equal(fs.readFileSync(machine.authFile, 'utf8'), machine.login, 'and the real one is where it was');
 });
 
 test('an engram process list that cannot be read leaves "nothing of the trial is left" unproven, which fails the arm', async () => {
@@ -728,21 +743,35 @@ test('a report or a raw directory that cannot be written refuses the run before 
   await assert.rejects(probe(machine, { reportFile: 'report.json' }), /the report file must be an absolute path, got "report\.json"/);
 });
 
-test('a login old enough to be refreshed inside a trial refuses the run before anything is created, probed or spent', async () => {
-  const machine = fakeMachine({ loginAgeHours: 187 });
+test('a login whose access token is near its expiry, or has no expiry to read, refuses the run before anything is created, probed or spent', async () => {
   let probed = false;
   const readVersion = () => {
     probed = true;
     return '0.0.0';
   };
-  await assert.rejects(probe(machine, { readVersion }), /was last written 187\.0 hours ago, over the 186 hours allowed.*Use the real Codex once/);
-  assert.equal(probed, false);
-  assert.ok(!fs.existsSync(machine.workRoot));
-  assert.deepEqual(runsOf(machine), []);
-  // The limit is the caller's: the command passes it on, and says why the run did not start.
+  const logInAgain = /run `codex logout`, then `codex login`, then run again/i;
+  for (const [label, machine, pattern] of [
+    // The token counts whole seconds, so five hours from "now" reads as a hair under five.
+    ['near its expiry', fakeMachine({ loginHoursLeft: 5 }), /expires at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.000Z, in (5\.0|4\.9) hours: a run starts only while it has at least 12 hours left/],
+    ['expired', fakeMachine({ loginHoursLeft: -3 }), /expired at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.000Z, 3\.0 hours ago/],
+    ['no access token', fakeMachine({ login: '{"auth_mode":"chatgpt","tokens":{"id_token":"SENTINEL-DUMMY-LOGIN"}}\n' }), /holds no access token.*so when it expires cannot be told/],
+  ]) {
+    await assert.rejects(probe(machine, { readVersion }), (err) => {
+      assert.match(err.message, pattern, label);
+      assert.match(err.message, logInAgain, `${label}: what to do`);
+      const secrets = label === 'no access token' ? ['SENTINEL-DUMMY-LOGIN'] : loginSecrets(machine.login);
+      for (const secret of secrets) assert.ok(!err.message.includes(secret), `${label}: nothing of the login is said but its dates`);
+      return true;
+    });
+    assert.equal(probed, false, label);
+    assert.ok(!fs.existsSync(machine.workRoot), label);
+    assert.deepEqual(runsOf(machine), [], label);
+    assert.equal(fs.readFileSync(machine.authFile, 'utf8'), machine.login, `${label}: the login is only read`);
+  }
+  // The minimum is the caller's: the command passes it on, and says why the run did not start.
   const io = capture();
-  assert.equal(await main(['--codex', process.execPath, '--max-login-age-hours', '100'], { ...io, overrides: overridesFor(fakeMachine({ loginAgeHours: 150 }), { readVersion }) }), 2);
-  assert.match(io.out.stderr, /the Codex isolation probe could not run: .*over the 100 hours allowed/);
+  assert.equal(await main(['--codex', process.execPath, '--min-login-hours-left', '100'], { ...io, overrides: overridesFor(fakeMachine({ loginHoursLeft: 48 }), { readVersion }) }), 2);
+  assert.match(io.out.stderr, /the Codex isolation probe could not run: .*at least 100 hours left/);
   assert.equal(probed, false);
 });
 
@@ -786,7 +815,7 @@ test('the command rejects bad arguments with exit 2, a message and the usage, an
     [['--codex', path.join(path.parse(process.execPath).root, 'pnpm', 'codex.cmd')], /--codex .* is a shim/],
     [['--codex', process.execPath, '--arm', 'weird'], /--arm must be/],
     [['--codex', process.execPath, '--control-ms', 'abc'], /non-negative integer/],
-    [['--codex', process.execPath, '--max-login-age-hours', '0'], /positive/],
+    [['--codex', process.execPath, '--min-login-hours-left', '0'], /--min-login-hours-left needs a positive integer/],
     [['--codex', process.execPath, '--effort', 'hi"gh'], /--effort/],
     [['--codex', process.execPath, '--raw-dir', 'raw'], /--raw-dir must be an absolute path/],
     [['--codex', process.execPath, '--timeout-ms'], /needs a value/],

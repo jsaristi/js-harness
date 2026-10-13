@@ -84,7 +84,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
-| F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third on the branch `feat/codex-parity`, paused by Sebastián on 2026-10-06 and closed by him on 13 of its 15 trials on 2026-10-12; its result is still to be written and merged (see Next) |
+| F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián on 2026-10-06, closed by him on 13 of its 15 trials on 2026-10-12, and brought to `main` on 2026-10-13 from a branch cut from it (see "F6 result") |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
 
 ## Checklist
@@ -173,8 +173,8 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 
 ### F6 Codex parity
-- [ ] The eval tasks run on Codex
-- [ ] Differences measured and written down
+- [x] The eval tasks run on Codex
+- [x] Differences measured and written down
 
 ### F7 Future-model protocol
 - [ ] Written procedure: measure payload, run evals, strip one component at a time
@@ -206,6 +206,51 @@ each, and takes longer on every task. The predecessor's score-only rule separate
 spec-drift at medium, by 0.01. Read plainly: on tasks like these the stack's context and
 workflow add cost without adding score; what it may buy (recall across sessions, review, larger
 work) these tasks do not measure.
+
+## F6 result
+
+The same five tasks on the Codex CLI, at `medium`, the one effort the Codex matrix holds since
+he cut it on 2026-10-05: 15 trials of `minimal` and 13 of `current`, recorded on 2026-10-05
+and 06 on `gpt-6.1-sol` with codex-cli 0.160.0, gentle-ai 4.0.0 and engram 3.1.0. Two trials
+of `current` were never run, the third of resolver and of spec-drift: the usage cap stopped
+them, he paused the run on 2026-10-06 and closed F6 on 13 on 2026-10-12 (Next, item 1, with
+his line), so those two cells are means of 2 and the matrix is 28 of 30. Each value is the
+mean of its cell, Claude Code / Codex, from `node evals/report.mjs --codex-results-dir
+evals/results/codex`; the data is `evals/results/codex/`, and Claude Code's rows are F5's.
+
+| Task | Config | Trials | Score | Tokens | Cost, Codex's estimated | Wall time |
+|---|---|---|---|---|---|---|
+| format-v2 | minimal | 3 / 3 | 0.99 / 1.00 | 1.09M / 393.7k | $1.38 / $0.25 | 4m55s / 5m12s |
+| format-v2 | current | 3 / 3 | 0.99 / 0.50 | 3.43M / 750.3k | $2.50 / $0.21 | 7m24s / 8m02s |
+| house-rules | minimal | 3 / 3 | 0.98 / 1.00 | 312.7k / 202.8k | $0.40 / $0.12 | 1m17s / 2m10s |
+| house-rules | current | 3 / 3 | 0.98 / 0.84 | 1.04M / 948.3k | $1.01 / $0.26 | 2m20s / 7m39s |
+| lost-updates | minimal | 3 / 3 | 1.00 / 1.00 | 341.6k / 220.8k | $0.52 / $0.18 | 2m19s / 3m22s |
+| lost-updates | current | 3 / 3 | 1.00 / 0.95 | 967.6k / 891.4k | $1.03 / $0.25 | 2m55s / 9m56s |
+| resolver | minimal | 3 / 3 | 1.00 / 1.00 | 194.6k / 232.0k | $0.41 / $0.16 | 1m40s / 3m26s |
+| resolver | current | 3 / 2 | 1.00 / 1.00 | 824.1k / 1.06M | $1.01 / $0.27 | 2m52s / 10m31s |
+| spec-drift | minimal | 3 / 3 | 0.99 / 1.00 | 384.7k / 226.1k | $0.54 / $0.17 | 1m44s / 3m17s |
+| spec-drift | current | 3 / 2 | 1.00 / 1.00 | 1.15M / 1.17M | $1.21 / $0.29 | 3m01s / 13m57s |
+
+What it says, and what it does not. On Codex the minimal config scored 1.00 on all 15 trials.
+The current stack did not add score on any task and lowered it on three: format-v2 to 0.50,
+house-rules to 0.84, lost-updates to 0.95. The 0.50 is two sessions of three that ended at
+0.26, before writing anything, on a question the stack has the agent ask with nobody there to
+answer (the delivery strategy; `odd/tasks/codex-parity.md`, Progress, 2026-10-05 and 06). The
+current stack also sent about 1.9 to 5.2 times the tokens of the minimal one and took 1.5 to
+4.2 times as long. Its estimated cost moves less, from under the minimal one on format-v2,
+where two sessions ended early, to 2.2 times it.
+
+Between the hosts, with the limits of the measurement: a Codex trial's cost is an estimate,
+its tokens at the list price of its model, since Codex reports tokens and no cost; its wall
+time includes a download of about 60 MB at the start of each trial that a Claude Code trial
+does not have; the two hosts ran on different days, on stacks one engram version apart; and
+three trials a cell is a small sample. Within those limits: on the minimal config the two
+hosts score alike, and Codex's estimated cost is 0.2 to 0.4 times Claude Code's list cost; on
+the current config Claude Code keeps its score and Codex does not.
+
+Read plainly, it is F5's finding again and sharper on the second host: on tasks like these
+the stack's context and workflow add cost without adding score, and on Codex, run with no
+person to answer, a question the workflow asks can end the session.
 
 ## Codex review result
 
@@ -1090,9 +1135,9 @@ reasons, is under [Session channel](#session-channel). Also open:
    codex-cli 0.160.0, gentle-ai 4.0.0 and engram 3.1.0 (`odd/tasks/codex-parity.md:1059`
    there); and this machine answers codex-cli 0.162.0, gentle-ai 4.1.1 and engram 3.4.0 (each
    `--version`, 2026-10-12). Putting the recorded versions back would have meant downgrading
-   programs over the memory store in use, which is what the question named. What is left of F6
-   is to write the result on 13 trials, saying so, in that branch's document and here, and to
-   merge slice 3; nothing more of it is paid for. Sebastián approved its plan and a staged
+   programs over the memory store in use, which is what the question named. Its result is
+   written on those 13 ("F6 result") and its content is on `main` since 2026-10-13; nothing
+   more of it is paid for, and no task of it is open. Sebastián approved its plan and a staged
    spend on 2026-10-03: 2 smoke trials, then 15, then his go-ahead for the other 45.
    Remote sessions, which he put before it that day, closed on 2026-10-04
    (`odd/tasks/remote-control.md`). The branch was brought up to `main` on 2026-10-04, so it
@@ -1103,9 +1148,14 @@ reasons, is under [Session channel](#session-channel). Also open:
    and reviewed, and merged on 2026-10-05 (#34): `node evals/suite.mjs --agent codex`
    runs the matrix, and `node evals/report.mjs --codex-results-dir evals/results/codex` sets the
    two hosts side by side, with a Codex trial's cost estimated at the list price of its model.
-   Slice 3 is on that branch, neither merged nor pushed: the 15 trials of T6 ran and T7 stays
-   at 13 of its 15; its state is that branch's `odd/tasks/codex-parity.md`, "Next step", which
-   does not hold his closing answer yet.
+   Slice 3 reached `main` on 2026-10-13 as three commits of a branch cut from it,
+   `feat/codex-parity-close`: the login fix applied again on today's suite, the two results
+   files and the isolation proof byte for byte, and the documents; a merge of the old branch,
+   506 commits behind, would have been a code commit whose review covers everything `main`
+   brought (`odd/tasks/codex-parity.md`, Progress, 2026-10-13). Still his, and the one thing
+   left: what is kept of the raw trial output that lives only on this machine (`evals/runs/`
+   in the old worktree, and `D:\js-harness-worktrees\codex-parity-t3-raw`); until he says,
+   the old branch and its worktree stay as they are.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.
 3. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
