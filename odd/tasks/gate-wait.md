@@ -2293,6 +2293,35 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   the base as `--base` named it, before the records move the start, so the answer of
   the top of the run is the one they need. Worth about 550 starts of the test file by
   the design's count; decided on the count after the two joins.
+- 2026-10-12 · **Pull request 87 is on `main` (`87cb7e2`), and S1 holds it: merge
+  `6e0e85b` on `feat/gate-wait`** (the orchestrator merged at 22:07 by its notice;
+  checked by me: `cb96924` is an ancestor of `origin/main` and `REVIEW_EFFORT` there is
+  `'medium'`; the effort branch's worktree and local branch are removed). The merge
+  turn (`s1-merge-turn.sh`, log `s1-merge-turn.log`, 22:22:38 to 22:39:55, exit 0):
+  one conflict, as a trial merge without a worktree had said
+  (`git merge-tree --write-tree`), in `bin/codex-review.test.mjs`, resolved by
+  `s1-merge-resolve.cjs`: S1's lines of the plan header's test with the effort `main`
+  names, and S1's own test of a run at another effort now passes `high`, the other
+  one. **Not 23 tests of S1 to move, as I had said: one line.** S1 added one line that
+  names an effort (`git diff f0b538f feat/gate-wait -- bin/codex-review.test.mjs`
+  searched for the two words); the rest of S1's tests reach the effort through helpers
+  `main` had already moved. The ten test files the two sides touch: 716 of 716 in
+  443 s; the merge commit's whole gate passed; gentle-ai "medium risk, 30 paths, 2064
+  lines: review not due (under_budget)". Not pushed.
+- 2026-10-12 · **T16's first turn ended red at its green step, on a test of mine; fixed
+  and queued again** (`cut-turn-1.log`, 22:06:19 to 22:12:06, exit 6; nothing
+  committed, no count). On the command as it was: the seven outcomes of the holds
+  green, 7 of 7, and the seven counting tests red, 7 of 7, and the project module's
+  test file red for the missing export: the proof's first half holds. With the change:
+  412 tests, 406 pass, 5 skipped, 1 fails: "a review asks git where the git folder is
+  once…", where my new assertion compared the folder the join ran in as git writes it
+  (`C:/…`) with the top as the system writes it (`C:\…`). The command is right: the
+  join runs in `root`, the string git answered the first question with, as the two
+  single questions did. The assertion now resolves the folder before comparing. The
+  second turn is `cut-turn.log`, queued at 22:13 behind the merge turn.
+  **Next for the cut after its commit:** merge `feat/gate-wait` (`6e0e85b`) into
+  `feat/gate-wait-git-cut` in a lock turn, so that the cut sits on S1 with `main` in
+  it; then its reviews.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
