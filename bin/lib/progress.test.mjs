@@ -317,11 +317,18 @@ test('tokenize keeps HTML comments unless stripComments is set, so progress coun
   assert.deepEqual(tokenize(md, { stripComments: true }).filter((t) => t.step).map((t) => t.step.text), ['shown']);
 });
 
-test('tokenize takes a fence indented past three spaces only with indentedFences, so progress counts are unchanged', () => {
-  const md = '- [ ] a task\n    ```\n    - [ ] an example\n    <!-- never closed\n    ```\n- [ ] the next task\n';
+test('tokenize takes a fence indented past three spaces of what it is under only with indentedFences', () => {
   const kinds = (tokens) => tokens.map((t) => (t.fence ? 'fence' : t.step ? 'step' : 'text'));
-  assert.equal(parseSteps(md).length, 3);
-  assert.deepEqual(kinds(tokenize(md)), ['step', 'text', 'step', 'text', 'text', 'step', 'text']);
+  // Under no list item, four spaces is past three: text without the option, a fence with it.
+  const loose = 'a paragraph\n\n    ```\n    - [ ] an example\n    ```\n- [ ] the next task\n';
+  assert.equal(parseSteps(loose).length, 2);
+  assert.deepEqual(kinds(tokenize(loose)), ['text', 'text', 'text', 'step', 'text', 'step', 'text']);
+  assert.deepEqual(kinds(tokenize(loose, { indentedFences: true })), ['text', 'text', 'fence', 'fence', 'fence', 'step', 'text']);
+  // Under a list item whose text starts at column 2, eight spaces is past three of it.
+  const deep = '- [ ] a task\n        ```\n        - [ ] an example\n        ```\n- [ ] the next task\n';
+  assert.equal(parseSteps(deep).length, 3);
+  assert.deepEqual(kinds(tokenize(deep, { indentedFences: true })), ['step', 'fence', 'fence', 'fence', 'step', 'text']);
+  const md = '- [ ] a task\n    ```\n    - [ ] an example\n    <!-- never closed\n    ```\n- [ ] the next task\n';
   assert.deepEqual(kinds(tokenize(md, { indentedFences: true })), ['step', 'fence', 'fence', 'fence', 'fence', 'step', 'text']);
   // The comment the fence holds opens nothing, and the code span below opens no fence.
   assert.deepEqual(kinds(tokenize(md, { indentedFences: true, stripComments: true })), ['step', 'fence', 'fence', 'fence', 'fence', 'step', 'text']);
@@ -337,4 +344,38 @@ test('with indentedFences a fence still closes by the rule it opened with: a dee
   // A fence that opened deeper is closed by its marker at any depth, the margin included.
   const deeper = '- [ ] a task\n    ```\n    - [ ] an example\n```\n- [ ] the next task\n';
   assert.deepEqual(kinds(deeper), ['step', 'fence', 'fence', 'fence', 'step', 'text']);
+});
+
+// A fence is measured from the list item it is under, as CommonMark does, not from the margin.
+const fenceKinds = (md, options) => tokenize(md, options).map((t) => (t.fence ? 'fence' : t.step ? 'step' : 'text'));
+
+test('a fence under a list item is a fence without the option, so a checkbox it shows is no step', () => {
+  const md = '- [ ] a task\n    ```\n    - [ ] an example\n    ```\n- [ ] the next task\n';
+  assert.deepEqual(fenceKinds(md), ['step', 'fence', 'fence', 'fence', 'step', 'text']);
+  assert.deepEqual(parseSteps(md).map((step) => step.text), ['a task', 'the next task']);
+  assert.equal(parseFeature(`# F\n${md}`, 'f').total, 2);
+  // Under a numbered item and under an item of an item, the text's column is further in.
+  const numbered = '10. a numbered line\n    ```\n    - [ ] an example\n    ```\n- [ ] the next task\n';
+  assert.deepEqual(fenceKinds(numbered), ['text', 'fence', 'fence', 'fence', 'step', 'text']);
+  const nested = '- a list\n  - [ ] a task\n       ```\n       - [ ] an example\n       ```\n- [ ] the next task\n';
+  assert.deepEqual(fenceKinds(nested), ['text', 'step', 'fence', 'fence', 'fence', 'step', 'text']);
+});
+
+test('a fence under a list item closes by a marker within three spaces of the item, deeper than three of the margin too', () => {
+  // Codex's case: opened at two spaces, closed at four, under an item whose text starts at column 2.
+  const md = '- [ ] a task\n  ```\n  - [ ] an example\n    ```\n- [ ] the next task\n';
+  for (const options of [{}, { indentedFences: true }]) {
+    assert.deepEqual(fenceKinds(md, options), ['step', 'fence', 'fence', 'fence', 'step', 'text'], JSON.stringify(options));
+  }
+  // Past three spaces of the item, the marker is content of the fence, which runs on.
+  const tooDeep = '- [ ] a task\n  ```\n  - [ ] an example\n      ```\n- [ ] fenced still\n';
+  assert.deepEqual(fenceKinds(tooDeep), ['step', 'fence', 'fence', 'fence', 'fence', 'fence']);
+});
+
+test('a line back at the margin leaves the list item: a fence four spaces in is then text again', () => {
+  const md = '- [ ] a task\nback at the margin\n    ```\n    - [ ] an example\n    ```\n';
+  assert.deepEqual(fenceKinds(md), ['step', 'text', 'text', 'step', 'text', 'text']);
+  // A blank line does not leave it.
+  const blank = '- [ ] a task\n\n    ```\n    - [ ] an example\n    ```\n';
+  assert.deepEqual(fenceKinds(blank), ['step', 'text', 'fence', 'fence', 'fence', 'text']);
 });
