@@ -662,6 +662,7 @@ const NOT_INITIALIZED = { kind: 'notInitialized', root: '/repo' };
 const INITIALIZED = { kind: 'initialized', root: '/repo', pin: '0.1.0', manifestPresent: true };
 const STALE = { kind: 'staleManifest', root: '/repo', manifestPath: '/repo/.git/js-harness/manifest.json' };
 const INVALID = { kind: 'invalidHarnessJson', root: '/repo', harnessJsonPath: '/repo/harness.json', reason: 'x' };
+const NO_PIN = { kind: 'noPin', root: '/repo', harnessJsonPath: '/repo/harness.json', manifestPresent: false };
 
 /** A menu as one comparable list: headers as `[label]`, items by id. */
 const ids = (menu) => menu.map((entry) => (entry.header ? `[${entry.label}]` : entry.id));
@@ -698,7 +699,7 @@ test('buildMenu offers Init, then the machine section, in a repository that is n
 });
 
 test('buildMenu offers the remote server after the project items in every git repository, and never outside one', () => {
-  for (const location of [NOT_INITIALIZED, INITIALIZED, STALE, INVALID]) {
+  for (const location of [NOT_INITIALIZED, INITIALIZED, STALE, INVALID, NO_PIN]) {
     const menu = buildMenu(location);
     const machine = menu.findIndex((entry) => entry.header && entry.label === 'machine');
     assert.deepEqual(ids(menu).slice(machine - 3, machine), REMOTE_MENU, `${location.kind}: the last three items of the project section`);
@@ -714,8 +715,8 @@ test('buildMenu offers the remote server after the project items in every git re
   assert.equal(everyLabel.some((label) => /login/i.test(label)), false, 'the login launcher is not offered here');
 });
 
-test('buildMenu offers Sync, Status and Uninstall in an initialized project, stale and invalid ones included', () => {
-  for (const location of [INITIALIZED, STALE, INVALID]) {
+test('buildMenu offers Sync, Status and Uninstall in an initialized project, stale, invalid and unpinned ones included', () => {
+  for (const location of [INITIALIZED, STALE, INVALID, NO_PIN]) {
     const menu = buildMenu(location);
     assert.deepEqual(ids(menu), [...PROJECT_MENU, '[machine]', ...MENU_ITEMS], location.kind);
     assert.deepEqual(

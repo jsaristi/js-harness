@@ -14,6 +14,7 @@ import {
   cleanupClause,
   staleManifestMessage,
   invalidHarnessJsonMessage,
+  howToPinClause,
 } from './lib/project.mjs';
 import { INSTALL_NEWEST } from './lib/version.mjs';
 
@@ -223,6 +224,13 @@ function reportSyncProject(result) {
   }
   if (result.invalidHarnessJson) {
     console.error(`${invalidHarnessJsonMessage(result.harnessJsonPath, result.reason)}; nothing was written`);
+    return 1;
+  }
+  if (result.noPin) {
+    console.error(
+      `${result.harnessJsonPath} pins no version, so there is nothing to move this project to; nothing was written. ` +
+        `To pin it, ${howToPinClause(result.version)}, then run js-harness sync again.`,
+    );
     return 1;
   }
   if (result.staleManifest) {

@@ -744,6 +744,48 @@ test('status exits 1 with the sync message when harness.json has no usable pin',
   }
 });
 
+// install-update T6: a harness.json written by hand, with no version, is a project with no pin.
+test('status exits 0 in a project whose harness.json holds no version: no pin, how to pin one, nothing written', async () => {
+  const root = makeProject();
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{ "sameTree": "skip" }\n', 'utf8');
+    const before = snapshotTree(root);
+
+    const { code, out, err } = await runStatus(['--cwd', root, '--home', home], {}, noPackageManager);
+
+    assert.equal(code, 0);
+    assert.equal(err, '');
+    assert.ok(out.includes(path.basename(root)));
+    assert.match(out, /^pinned version: none$/m);
+    assert.ok(out.includes(`running version: ${currentVersion()}`));
+    assert.match(out, /^this clone: not set up; js-harness sync sets it up once a version is pinned$/m);
+    assert.ok(out.includes(`add "version": "${currentVersion()}" to harness.json and commit it`), out);
+    assert.doesNotMatch(out, /undefined|pin and running version:/);
+    assert.deepEqual(snapshotTree(root), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('status in a project with no pin says so in a clone that is set up too', async () => {
+  const root = makeProject({ manifest: true });
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{}\n', 'utf8');
+
+    const { code, out } = await runStatus(['--cwd', root, '--home', home], {}, noPackageManager);
+
+    assert.equal(code, 0);
+    assert.match(out, /^pinned version: none$/m);
+    assert.match(out, /^this clone: set up \(manifest: /m);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('status exits 1 with the sync message for a stale manifest (harness.json gone)', async () => {
   const root = makeProject({ manifest: true });
   const home = makeTmpDir('js-harness-status-home-');
