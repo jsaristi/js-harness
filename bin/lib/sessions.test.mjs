@@ -2889,16 +2889,18 @@ test('quoteOf says when the person\'s entry is only pasted content: nothing type
   assert.equal(lib.quoteOf(transcript(prompt(pasted('Sos JH 5.'), 1)), 1).text, pasted('Sos JH 5.'));
 });
 
-// An answer to a question asked with the host's question tool. The shapes are the 30 results of such calls in
-// this project's 57 transcripts (2026-10-12): a `user` entry with one `tool_result` block and a top-level
-// `toolUseResult` of `questions` and `answers`, the answer keyed by the question's text; no origin, no
-// `isMeta`. None of the 30 is a question he dismissed, so what a dismissal looks like is not known: the guard
-// takes the one shape that is an answer and refuses every other.
+// An answer to a question asked with the host's question tool. The shapes are the results of such calls in
+// this project's 57 transcripts (2026-10-12; 53 lines hold answers): a `user` entry with one `tool_result`
+// block and a top-level `toolUseResult` of `questions` and `answers`, the answer keyed by the question's text;
+// no origin, no `isMeta`. A question he closed has the same shape, with the host's own words in the place of
+// the answer and no error mark (4 of the 53 lines): the guard knows those words and refuses them.
 const QUESTION = 'Pregunta 10: una sesión abierta desde el teléfono, ¿cómo llega a esfuerzo alto?';
 const OPTIONS = ['Que el harness la abra en alto (Recomendado)', 'Subir el ajuste general a alto', 'Dejar como está'];
 const asking = (question = QUESTION, more = {}) => ({ question, header: 'Teléfono', multiSelect: false, options: OPTIONS.map((label) => ({ label, description: 'made up' })), ...more });
 const asked = (id, minute, questions = [asking()], name = 'AskUserQuestion') => call(id, name, { questions }, minute);
 const answered = (id, minute, answers, block = {}) => result(id, { questions: [asking()], answers }, minute, block);
+// What the host wrote when he closed a question without answering, as the transcript has it.
+const DISMISSED = '[User dismissed — do not proceed, wait for next instruction]';
 
 test('quoteOf gives his answer to a question the session asked with the host\'s question tool: tapped or typed, with the question and the options shown', () => {
   const typed = 'Corregir el mensaje por que todavia no tenemos produccion';
@@ -2924,8 +2926,18 @@ test('quoteOf gives his answer to a question the session asked with the host\'s 
   const pair = lib.quoteOf(both, 2);
   assert.deepEqual(pair.answered.answers.map(({ question, how }) => [question, how]), [[QUESTION, 'typed'], [second, 'tapped']]);
   assert.equal(pair.text, `algo mío\n${OPTIONS[2]}, ${OPTIONS[0]}`);
-  // The tools that ask are a list, not a word in the code: a host that names its tool otherwise is a line of it.
+  // A label may hold the separator the host joins several with: the answer is tapped when it is labels joined,
+  // whichever way they split, and typed when a part of it is no label.
+  const colours = ['Rojo, azul', 'Verde', 'Rojo'];
+  const several = (answer) => {
+    const question = { question: QUESTION, multiSelect: true, options: colours.map((label) => ({ label })) };
+    return lib.quoteOf(transcript(asked('toolu_q4', 1, [question]), answered('toolu_q4', 2, { [QUESTION]: answer })), 2).answered.answers[0].how;
+  };
+  assert.deepEqual(['Rojo, azul, Verde', 'Verde, Rojo, azul', 'Rojo, Verde', 'Rojo, azul', 'Rojo, amarillo', 'Verde, '].map(several), ['tapped', 'tapped', 'tapped', 'tapped', 'typed', 'typed']);
+  // The tools that ask, and what a host writes for a closed question, are lists and not words in the code: a
+  // host that names its tool otherwise, or closes a question in other words, is one more line of them.
   assert.deepEqual(lib.QUESTION_TOOLS, ['AskUserQuestion']);
+  assert.deepEqual(lib.QUESTION_DISMISSED, ['[User dismissed']);
 });
 
 test('quoteOf refuses the result of a tool call that is no answer of his, and says which it is', () => {
@@ -2950,6 +2962,10 @@ test('quoteOf refuses the result of a tool call that is no answer of his, and sa
     ['the result of a question the person did not answer', [asked('toolu_q1', 1), result('toolu_q1', { questions: [asking()] }, 2)]],
     ['the result of a question the person did not answer', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: '   ' })]],
     ['the result of a question the person did not answer', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: ['a list'] })]],
+    // A question he closed: the host writes its own words in the place of the answer, in a result it does not
+    // mark an error (line 8431 of a transcript of this project, 2026-10-12). One closed question closes the call.
+    ['the result of a question the person closed without answering', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: DISMISSED })]],
+    ['the result of a question the person closed without answering', [asked('toolu_q1', 1, [asking(), asking('Pregunta 11: ¿y la otra?')]), answered('toolu_q1', 2, { ...good, 'Pregunta 11: ¿y la otra?': DISMISSED })]],
     // Answers that are not for what was asked: one question of the call has none, or one is for another question.
     ['the result of a question the person did not answer', [asked('toolu_q1', 1, [asking(), asking('Pregunta 11: ¿y la otra?')]), answered('toolu_q1', 2, good)]],
     ['the result of a question whose answers are not for what was asked', [asked('toolu_q1', 1), answered('toolu_q1', 2, { ...good, 'Otra pregunta': 'sí' })]],
@@ -3079,7 +3095,9 @@ test('an answer he gave to a question is among the person\'s words of the stretc
     answered('toolu_q2', 5, { [QUESTION]: OPTIONS[0] }, { is_error: true }),
     asked('toolu_q3', 6, [asking()], 'Bash'),
     answered('toolu_q3', 7, { [QUESTION]: OPTIONS[0] }),
-    reply('answer', 8),
+    asked('toolu_q4', 8),
+    answered('toolu_q4', 9, { [QUESTION]: DISMISSED }),
+    reply('answer', 10),
   );
   const facts = lib.compactionStretch(text);
   assert.deepEqual(facts.person, [{ line: 1, at: at(1) }, { line: 3, at: at(3) }]);

@@ -215,7 +215,7 @@ test('the usage says what --opening and --quote take, what each prints and what 
   const usage = err.join('\n');
   assert.match(usage, /--opening \[--\] "<title>"\|"<code> <role>"[\s\S]*prints the opening stored for that session[\s\S]*records in the channel which session read it[\s\S]*exit 0 for one,\s+1 for none,\s+2 for several or when it cannot tell/);
   assert.match(usage, /--quote <transcript file or session id> <line>[\s\S]*only when the user sent it, with its time[\s\S]*exit 1[\s\S]*another session's message, a task notification, a meta or assistant entry,\s+or no such line[\s\S]*2 when it cannot look/);
-  assert.match(usage, /his answer to a question the session asked with the host's question tool is his too[\s\S]*the question, the options shown and whether he tapped one or typed his own[\s\S]*a question he did not answer is exit 1/);
+  assert.match(usage, /his answer to a question the session asked with the host's question tool is his too[\s\S]*the question, the options shown and whether he tapped one or typed his own[\s\S]*a question he closed without answering is exit 1/);
 });
 
 // --- where the sessions are ---
@@ -1878,7 +1878,7 @@ test('--quote prints his answer to a question the session asked, with the questi
     call('toolu_q2', 'AskUserQuestion', { questions }, 80),
     result('toolu_q2', { questions, answers: { [question]: 'ninguna: hacelo de otra forma' } }, 70),
     call('toolu_q3', 'AskUserQuestion', { questions }, 60),
-    result('toolu_q3', 'made up: he closed the question', 50),
+    result('toolu_q3', { questions, answers: { [question]: '[User dismissed — do not proceed, wait for next instruction]' } }, 50),
     call('toolu_b1', 'Bash', { command: 'x' }, 40),
     result('toolu_b1', { questions, answers: { [question]: options[0] } }, 30),
   ];
@@ -1896,9 +1896,10 @@ test('--quote prints his answer to a question the session asked, with the questi
   ]);
   const typed = await runSessions(machine, ['--quote', 'aaaaaaaa', '5']);
   assert.deepEqual([typed.code, typed.stdout.split('\n').at(-1)], [0, 'answer (typed): ninguna: hacelo de otra forma']);
-  // A question he closed, and the result of another tool shaped like an answer: neither is his word.
+  // A question he closed, which the host writes as an answer of its own words, and the result of another tool
+  // shaped like an answer: neither is his word.
   const closed = await runSessions(machine, ['--quote', 'aaaaaaaa', '7']);
-  assert.deepEqual([closed.code, closed.stdout, closed.stderr], [1, '', `js-harness sessions: not the user's words: line 7 of ${file} is the result of a question the person did not answer`]);
+  assert.deepEqual([closed.code, closed.stdout, closed.stderr], [1, '', `js-harness sessions: not the user's words: line 7 of ${file} is the result of a question the person closed without answering`]);
   const tool = await runSessions(machine, ['--quote', 'aaaaaaaa', '9']);
   assert.deepEqual([tool.code, tool.stdout, tool.stderr], [1, '', `js-harness sessions: not the user's words: line 9 of ${file} is the result of a tool call`]);
 }));

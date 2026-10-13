@@ -1461,11 +1461,26 @@ function questionCallsNaming(text, id) {
   return questionCallsOf(entries);
 }
 
+/** What the hosts write in the place of an answer when the person closes a question without answering it: how
+ * that text begins. Claude Code writes "[User dismissed — do not proceed, wait for next instruction]", in a
+ * result it does not mark an error (four lines of this project's transcripts, 2026-10-12). It is data, like the
+ * tools' names: another host, or another version of this one, may say it otherwise. */
+export const QUESTION_DISMISSED = ['[User dismissed'];
+
+const SEVERAL = ', ';
+
+/** Whether `answer` is labels of `options` joined with the separator the host joins several with. A label may
+ * hold that separator, so the answer is not split on it: it is matched whole labels at a time, whichever way
+ * it divides. */
+function isLabelsJoined(answer, options) {
+  return options.some((label) => label !== '' && (answer === label || (answer.startsWith(label + SEVERAL) && isLabelsJoined(answer.slice(label.length + SEVERAL.length), options))));
+}
+
 /** How the person gave an answer: `tapped` when it is one of the options the question showed, or, for a question
- * that takes several, when every part of it is one; `typed` otherwise, which is his own text. */
+ * that takes several, when it is options joined; `typed` otherwise, which is his own text. */
 function howAnswered(answer, options, several) {
   if (options.includes(answer)) return 'tapped';
-  return several && answer.split(', ').every((part) => options.includes(part)) ? 'tapped' : 'typed';
+  return several && isLabelsJoined(answer, options) ? 'tapped' : 'typed';
 }
 
 /** What an entry that holds the result of a tool call is: the person's answer to a question the session asked
@@ -1476,9 +1491,9 @@ function howAnswered(answer, options, several) {
  * It is a guard, since what it accepts is taken as his word. The result must be the entry's only block and pair,
  * by the call's id, with a call in `calls` (`questionCallsOf`: a call of a tool of `QUESTION_TOOLS`, in the same
  * transcript); neither may be of a side chain; the entry may carry no mark of the host or of another sender;
- * the host must not have marked the result an error; and `toolUseResult.answers` must hold a text for every
- * question the call asked and for no other. A question he dismissed has no such answers, whatever the host
- * writes for it (no transcript of this project held one when this was written), so it is refused with the rest. */
+ * the host must not have marked the result an error; `toolUseResult.answers` must hold a text for every
+ * question the call asked and for no other; and none of those texts may be what the host writes for a question
+ * he closed (`QUESTION_DISMISSED`), which has the shape of an answer and is none. */
 function answerOf(entry, calls) {
   const blocks = blocksOf(entry);
   const call = blocks.length === 1 && isToolResult(blocks[0]) ? calls.get(blocks[0].tool_use_id) : undefined;
@@ -1493,6 +1508,9 @@ function answerOf(entry, calls) {
   if (blocks[0].is_error === true || given === null) return unanswered;
   if (Object.keys(given).some((question) => !asked.includes(question))) return { what: 'the result of a question whose answers are not for what was asked' };
   if (!asked.every((question) => typeof given[question] === 'string' && given[question].trim() !== '')) return unanswered;
+  // The host's own words in the place of an answer: he closed the question. One closed question closes the call.
+  const closed = (answer) => QUESTION_DISMISSED.some((mark) => answer.trimStart().startsWith(mark));
+  if (asked.some((question) => closed(given[question]))) return { what: 'the result of a question the person closed without answering' };
   const answers = questions.map((question) => {
     const options = (Array.isArray(question.options) ? question.options : []).map((option) => option?.label).filter((label) => typeof label === 'string');
     const answer = given[question.question];

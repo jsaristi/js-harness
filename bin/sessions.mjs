@@ -63,7 +63,7 @@ const USAGE = [
   '         a message the user sent while the session worked (the host queues it) is his too, and is said so',
   '         his answer to a question the session asked with the host\'s question tool is his too: it prints',
   '         the question, the options shown and whether he tapped one or typed his own; the result of any',
-  '         other tool is not, and a question he did not answer is exit 1',
+  '         other tool is not, and a question he closed without answering is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
 ].join('\n');
 
