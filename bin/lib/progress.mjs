@@ -2,29 +2,59 @@
 // No fs here: every function takes markdown text and returns data, so `bin/progress.test.mjs` and
 // this file's own tests can use inline fixture strings instead of touching disk.
 
-const FENCE_OPEN_PATTERN = /^ {0,3}(`{3,}|~{3,})/;
-// The same marker at any depth: a fence under a list item is indented with the item's text.
-const INDENTED_FENCE_OPEN_PATTERN = /^\s*(`{3,}|~{3,})/;
+// A fence marker at any depth. How deep one may be is measured from what it is under (`tokenize`).
+const FENCE_MARKER_PATTERN = /^\s*(`{3,}|~{3,})/;
+// A list item's marker, a bullet or a number, with the spaces before its text.
+const LIST_ITEM_PATTERN = /^(?:[-*+]|\d{1,9}[.)])( +|$)/;
+// A thematic break, trimmed: three or more of one of its characters, spaces between them allowed.
+// `* * *` and `- - -` look like a list item and are none.
+const THEMATIC_BREAK_PATTERN = /^([-*_])(?:[ \t]*\1){2,}$/;
+// A fence, and the item of a list, may sit this far in from what they are under, and no further.
+const NEAR = 3;
 const HEADING_PATTERN = /^ {0,3}(#{1,6})\s+(.*)$/;
 const STEP_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s*(.*)$/;
 
 /** A line's fence marker, whether or not it is valid as an *opener*: its character (`` ` `` or
  * `~`) and length (3+), plus whatever follows it (the info string, for an opener; must be
- * whitespace-only, for a closer). Used by both `matchFenceOpen` and `isFenceClose` below.
- * `pattern` says how far a marker may be indented. */
-function matchFenceMarker(line, pattern) {
-  const m = line.match(pattern);
+ * whitespace-only, for a closer). Used by both `matchFenceOpen` and `isFenceClose` below. It
+ * says nothing of how deep the marker is: its callers measure that. */
+function matchFenceMarker(line) {
+  const m = line.match(FENCE_MARKER_PATTERN);
   if (!m) return null;
   const marker = m[1];
   return { char: marker[0], length: marker.length, rest: line.slice(m[0].length) };
+}
+
+/** The column a line's text starts at: its leading spaces, a tab taken to the next stop of four. */
+function indentOf(line) {
+  let column = 0;
+  for (const char of line) {
+    if (char === ' ') column += 1;
+    else if (char === '\t') column += 4 - (column % 4);
+    else break;
+  }
+  return column;
+}
+
+/** The column the text of a list item starts at, when `line` opens one: its indent, its marker and
+ * the spaces after it, which count as one when they are five or more or when nothing follows, as
+ * CommonMark counts them. `null` for a line that opens no item, a thematic break among them. */
+function itemTextColumn(line) {
+  if (THEMATIC_BREAK_PATTERN.test(line.trim())) return null;
+  const indent = indentOf(line);
+  const item = line.trimStart().match(LIST_ITEM_PATTERN);
+  if (!item) return null;
+  const spaces = item[1].length;
+  const rest = line.trimStart().slice(item[0].length);
+  return indent + item[0].length - spaces + (spaces > 4 || rest.trim() === '' ? 1 : spaces);
 }
 
 /** A line that opens a fence. Per CommonMark, a backtick fence's info string must not itself
  * contain a backtick (R3-backtick-info-string) — otherwise inline code like `` ```inline``` text ``
  * would be misread as opening a code block instead of being read as ordinary text. A tilde fence's
  * info string has no such restriction, since a tilde fence can safely contain backticks inside it. */
-function matchFenceOpen(line, pattern) {
-  const marker = matchFenceMarker(line, pattern);
+function matchFenceOpen(line) {
+  const marker = matchFenceMarker(line);
   if (!marker) return null;
   if (marker.char === '`' && marker.rest.includes('`')) return null;
   return marker;
@@ -34,12 +64,14 @@ function matchFenceOpen(line, pattern) {
  * as the opener, *at least as long*, and followed by nothing but whitespace — R3-fence-mismatch
  * (Codex P2). A shorter marker, a different character (` ``` ` never closes `~~~`, and vice versa),
  * or trailing text after the marker is just more fenced content, not a closer. (The backtick/info
- * -string restriction above does not apply here: a closer's `rest` must already be blank.) */
-function isFenceClose(line, fence, pattern) {
-  const marker = matchFenceMarker(line, pattern);
-  return (
-    marker !== null && marker.char === fence.char && marker.length >= fence.length && marker.rest.trim() === ''
-  );
+ * -string restriction above does not apply here: a closer's `rest` must already be blank.) The
+ * closer is measured as the opener was: within three spaces of the column the fence is under
+ * (`fence.under`), so a deeper marker is still content. A fence that opened deeper than that, which
+ * only `indentedFences` allows, is closed by its marker at any depth (`fence.under` is `null`). */
+function isFenceClose(line, fence) {
+  const marker = matchFenceMarker(line);
+  if (marker === null || marker.char !== fence.char || marker.length < fence.length || marker.rest.trim() !== '') return false;
+  return fence.under === null || indentOf(line) <= fence.under + NEAR;
 }
 
 /** Index of the first backtick run of exactly `length` backticks in `line` at or after `from`, or -1. */
@@ -99,35 +131,62 @@ function uncomment(line, open) {
  * keeps its `line`, so `bin/lib/contract.mjs` can rebuild a section's body from them. With
  * `stripComments`, HTML comments (also multi-line ones) are removed from every line outside a
  * fence before it is classified, so a commented-out heading or list item is never read; a `<!--`
- * inside a fence is fenced content, and a fence marker inside a comment is not a fence. With
- * `indentedFences`, a fence marker counts at any indentation, not only up to three spaces: a fence
- * under a list item is indented with the item, and without this its lines are read as text and a
- * checkbox it shows as a step. */
+ * inside a fence is fenced content, and a fence marker inside a comment is not a fence.
+ *
+ * A fence is measured from what it is under, as CommonMark measures it: its marker may sit up to
+ * three spaces in from the margin or, under a list item, from the column that item's text starts
+ * at. So a fence indented with the text of a list item is a fence, and a checkbox it shows is no
+ * step. A line is under an item while it is indented at least to that column; a line that is not
+ * blank and starts before it leaves the item. Two things are not followed: a paragraph's line that
+ * goes on at the margin (a lazy continuation) leaves its item here, and a fence still open when
+ * its item ends runs on until its marker. With `indentedFences`, a marker deeper than three spaces
+ * of what it is under opens a fence too, where CommonMark reads indented code. */
 export function tokenize(markdown, { stripComments = false, indentedFences = false } = {}) {
-  const pattern = indentedFences ? INDENTED_FENCE_OPEN_PATTERN : FENCE_OPEN_PATTERN;
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const tokens = [];
-  let fence = null; // { char, length } of the currently open fence, or null outside any fence
+  let fence = null; // { char, length, under } of the currently open fence, or null outside any fence
   let inComment = false;
+  const items = []; // the text column of each list item the current line is under, outermost first
+  /** The column a line indented `indent` is under: the innermost open item it reaches, or the margin. */
+  const under = (indent) => items.findLast((column) => column <= indent) ?? 0;
+  /** Leaves every open item whose text starts further in than `indent`. */
+  const leave = (indent) => {
+    while (items.length > 0 && items.at(-1) > indent) items.pop();
+  };
+  /** The fence `line` opens, with the column it is measured from; `null` when it opens none. */
+  const opening = (line) => {
+    const marker = matchFenceOpen(line);
+    if (!marker) return null;
+    const column = under(indentOf(line));
+    const near = indentOf(line) - column <= NEAR;
+    return near || indentedFences ? { char: marker.char, length: marker.length, under: near ? column : null } : null;
+  };
   for (const original of lines) {
     let raw = original;
     // A line that opens a fence is fenced content from its marker on, so it is not uncommented: a
     // `<!--` after the marker must not leave a comment open once the fence closes.
-    if (!fence && stripComments && (inComment || !matchFenceOpen(original, pattern))) {
+    if (!fence && stripComments && (inComment || !opening(original))) {
       ({ text: raw, inComment } = uncomment(original, inComment));
     }
     if (fence) {
-      if (isFenceClose(raw, fence, fence.pattern)) fence = null;
+      if (isFenceClose(raw, fence)) fence = null;
       tokens.push({ fence: true, line: raw });
       continue;
     }
-    const opened = matchFenceOpen(raw, pattern);
+    const opened = opening(raw);
     if (opened) {
-      // A fence closes by the rule it opened with: one that opened within three spaces is closed
-      // only by a marker within three, so a deeper marker inside it is still its content.
-      fence = { ...opened, pattern: matchFenceOpen(raw, FENCE_OPEN_PATTERN) ? FENCE_OPEN_PATTERN : pattern };
+      // The opener leaves the items it is not under, as any line does: a fence at the margin ends the list.
+      leave(indentOf(raw));
+      fence = opened;
       tokens.push({ fence: true, line: raw });
       continue;
+    }
+    if (raw.trim() !== '') {
+      // The line leaves every item whose text starts further in than it does, then may open its own.
+      const indent = indentOf(raw);
+      leave(indent);
+      const column = itemTextColumn(raw);
+      if (column !== null && indent - (items.at(-1) ?? 0) <= NEAR) items.push(column);
     }
     const heading = raw.match(HEADING_PATTERN);
     if (heading) {
