@@ -1065,7 +1065,12 @@ switch of the Codex review among them, open decision 4) are all inside it. Which
 which items those are is so far a list made by the lead's readers, sub-agents' claims that
 were not verified for this paragraph (the lead's relief file, lines 543 to 546); each enters
 this map as a task when it has been read in the code. Tagging still starts with that version
-(Decided, "Release source").
+(Decided, "Release source"). And nothing is frozen on the way to it: asked what is done with
+the ideas and improvements that appear meanwhile (his own enter and the rest is noted, the one
+recommended; everything keeps entering as today; everything is noted, his too), he tapped
+"Todo sigue entrando como hoy" (the same transcript, line 10609, 2026-10-13T09:25Z, read the
+same way). So an improvement that appears becomes a task of the first version, not a note for
+after it.
 
 Being built, each in a session of its own: the session channel
 (`odd/tasks/session-channel.md`), the gate log (`odd/tasks/gate-log.md`) and the rule hierarchy

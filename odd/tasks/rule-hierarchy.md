@@ -1157,6 +1157,13 @@ nine advisories, each with its line):
   the real cost twice (`bin/lib/codex-review-plan.mjs:19-21`). So the line settles nothing: it
   says where each figure stands, and "inside by the estimate, over by the higher figure" is a
   case of its own. Which figure decides is his, and goes to him through the lead.
+  **He had already answered it** (the lead's notice, then read by this session): asked how the
+  rule for what a Codex review may spend stands, he tapped "Dejarla como está" (the lead's
+  transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8668, 2026-10-13T01:05Z, read with
+  `js-harness sessions --quote`), and the option he left was the strict rule on the high end
+  of the estimate (the lead's relief file, line 486, a claim about its own question). So the
+  estimate decides, as the line's verdict does, and the sentence about the higher figure is
+  information. The question was withdrawn and not put to him again.
 - The verdict is on the figures the plan prints, which are sums of parts each rounded to two
   figures: the line says nothing the plan above it does not show.
 - "Inside" is a fact about this plan and never a permission: a second run after a review fell
@@ -2564,13 +2571,20 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     04:21: "the patch is correct (confidence 0.91)", no finding, 239,219 input tokens (188,672
     cached) against a plan of about 140,000 to 500,000 and an allowance of 432,000; recorded.
     The plan's own line had said: estimate inside, higher figure over.
+  - `main` merged at `c6b7976` in a turn of the gate (`e66936f`, 04:23 to 04:31, commit exit
+    0; git merged `bin/codex-review.test.mjs` by itself, both sides having changed it in
+    places apart). His answer of line 10609 is in the roadmap beside the one of 10519.
+  - Given to this session by the lead on 2026-10-13, after this pull request: the branch
+    `feat/codex-parity` (F6), which had no owner. First a read only, and the answer to what
+    closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
 **State on 2026-10-13, which replaces the two blocks of 2026-10-12 below (kept as the record
 of that day; pull request 91 merged what they list).** On `feat/rules-review-readers`: the
-two pieces are committed (`f2896a6`) and reviewed by both tools with nothing found; left are
-one merge of `origin/main` in a turn of the gate, the push, the pull request, its head to
-the lead. Then: the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
+two pieces are committed (`f2896a6`) and reviewed by both tools with nothing found, and the
+branch holds `main` at `c6b7976`; left are the push, the pull request and its head to the
+lead. Then: the read of `feat/codex-parity` for the lead (F6: what closing it on 13 trials
+takes; no commit there before the answer); the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
 split that file in two (the lead's claim; read both files first); the defects in shipped
 behaviour with no task, of the lead's readers' list (relief file, lines 543 to 546), each read
 in the code before it becomes a register entry or a task; and T1. T2 and T8 are
