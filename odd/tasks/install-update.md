@@ -210,6 +210,42 @@ both sent to the orchestrator on 2026-10-13 at 06:27 and neither started:
 Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it changes the test
 "resolveLatest starts no process and answers nothing when no source is named" on purpose.
 
+## T6: state for a resume
+
+Written on 2026-10-13 at 17:53 by the session "JH 8", at 89% of its context, before any line
+of T6 was read in the code or written. The app compacts that session in the turn that crosses
+its limit; this is the record.
+
+- **Where.** Branch `fix/status-no-pin` off `main` `3e26e72`, worktree
+  `D:\js-harness-worktrees\status-no-pin`. Nothing but this section is written.
+- **His answer, read by me** (`js-harness sessions --quote
+  65318fd5-80e7-4bb8-92b5-06737140185b 11166`, answered by the user, tapped): "Vale, sin
+  versión fijada (Recomendada)", to "Pregunta 25: un proyecto tiene su archivo del harness
+  escrito a mano y sin versión. ¿Qué le contestan los comandos?" (the others: "Sigue siendo
+  inválido", "Se rechaza en todos lados"). So: a `harness.json` with no version is a project
+  with no pin. `status` says so and how to pin one, exit 0; `sync` says there is nothing to
+  move to and how to pin (its exit code is the design's to say; the question sent to him
+  proposed 1).
+- **What is read so far, from the task's own text, not yet in the code:** `status` prints
+  "cannot read the pin from …harness.json: it has no string "version"" and exits 1
+  (`bin/update.mjs`, the `invalidHarnessJson` case; `bin/lib/project.mjs`, about `:1473`,
+  and `sync` the same about `:1513`); this repository's own `harness.json` is such a file.
+  `check` already accepts it.
+- **The steps:** read `projectLocation` and its `invalidHarnessJson` reasons; a short design
+  here (a new kind of location, or a reason that is not an error; what `init` does with such
+  a file; what `uninstall` does); the failing tests first; one lock turn; gentle-ai as the
+  check says; Codex once when its printed plan is inside the allowance; push, pull request
+  with no AI attribution, the head to the orchestrator.
+- **After T6, the orchestrator's order of 16:57:** the package's contents (his line 11146 by
+  the orchestrator's word, not read by me: `bin/` without its test files and without this
+  repository's `AGENTS.md`, with a test that the packed list holds neither); the sync that
+  runs from the path after `upgrade --source` with no `--prefix`; then
+  `odd/tasks/gate-wait.md`, "Next". How the session works: `odd/tasks/gate-wait.md`, "Next"
+  and "Resume here"; its turn scripts are in its scratchpad (`ct-turn.sh` is the newest
+  model of a turn: red on HEAD's code, green, a rule check, then the commit;
+  `codex-turn.sh <worktree> <base> <short head> <allowance x 1.05> <name>`).
+- **On `main` from this session on 2026-10-13:** pull requests 98, 99, 100 and 102.
+
 ## State for a resume
 
 **Superseded on 2026-10-13 at 06:29: T5 is built and committed (43934b2); "Next step" above is
