@@ -10,6 +10,7 @@ import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
+import { remoteDir, remoteFiles } from './lib/remote.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
 // project.mjs's `gitTopLevel`/`resolveGitPath`) — isolate it from the host's global/system git
@@ -1330,5 +1331,81 @@ test('syncMain never prints the bytes of a malformed harness.json (terminal esca
     assert.doesNotMatch([...outLines, ...errLines].join('\n'), /\u001b|\u0007/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The folder `js-harness remote` writes under the home is recorded by no manifest either. It is removed and said
+// with the rest, or it is kept and the line says why and what to run: uninstall stops no process.
+const SUPERVISOR = { pid: 4242, startedAt: 1700000000000, root: 'C:\\proj', name: 'proj' };
+
+function leaveRemote(home, state = null) {
+  const files = remoteFiles(home, 'proj-0123456789ab');
+  fs.mkdirSync(remoteDir(home), { recursive: true });
+  fs.writeFileSync(files.logPath, 'made up\n');
+  fs.writeFileSync(files.stoppedPath, 'stopped on purpose\n');
+  if (state !== null) fs.writeFileSync(files.statePath, `${JSON.stringify(state, null, 2)}\n`);
+  return files;
+}
+
+test('uninstallMain removes the folder js-harness remote left, with or without an install, and says so', async () => {
+  const home = makeTmpHome();
+  try {
+    const identify = () => [];
+    await captureConsole(() => installMain(['--home', home]));
+    leaveRemote(home);
+    const installed = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { identify }));
+    assert.deepEqual([installed.code, installed.errLines], [0, []]);
+    assert.ok(installed.outLines.includes(`removed ${remoteDir(home)}`), installed.outLines.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    leaveRemote(home, SUPERVISOR);
+    const bare = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { identify }));
+    assert.deepEqual([bare.code, bare.outLines, bare.errLines], [0, [`removed ${remoteDir(home)}`], []]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says why it kept the remote folder and what to run, and fails: a server that runs, one it cannot tell, a task it kept, a folder it could not remove', async () => {
+  const home = makeTmpHome();
+  try {
+    const dir = remoteDir(home);
+    const run = (deps) => captureConsole(() => uninstallMain(['--global', '--home', home], {}, deps));
+
+    const files = leaveRemote(home, SUPERVISOR);
+    const running = await run({ identify: () => [{ pid: SUPERVISOR.pid, createdAt: SUPERVISOR.startedAt }] });
+    assert.deepEqual([running.code, running.outLines], [1, []], 'a server left running is not a finished uninstall, and no "nothing installed"');
+    assert.deepEqual(running.errLines, [
+      `kept ${dir}: the remote server of C:\\proj is running (supervisor pid 4242), and uninstall stops no process; run js-harness remote stop in that project, then js-harness uninstall --global again`,
+    ]);
+    assert.equal(fs.existsSync(files.statePath), true);
+
+    const unknown = await run({ identify: () => { throw new Error('made up'); } });
+    assert.equal(unknown.code, 1);
+    assert.deepEqual(unknown.errLines, [
+      `kept ${dir}: it cannot be told whether a remote server still runs: the processes could not be listed (made up), so the supervisor recorded as pid 4242 may still be running; run js-harness uninstall --global again, or remove the folder by hand once you have checked that no remote server runs`,
+    ]);
+
+    const removeFile = (target, options) => {
+      if (target === dir) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+    const locked = await run({ identify: () => [], removeFile });
+    assert.equal(locked.code, 1);
+    assert.deepEqual(locked.errLines, [`could not remove ${dir} (EBUSY): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+
+    // Beside a task that was kept, the folder is kept for it and said after the task's own line.
+    recordScheduledTask(home, TASK);
+    const tasks = fakeSchtasks({ [TASK.name]: TASK }, { list: 1 });
+    const beside = await run({ identify: () => [], schtasks: tasks.run });
+    assert.equal(beside.code, 1);
+    assert.equal(beside.errLines.length, 2, beside.errLines.join('\n'));
+    assert.equal(
+      beside.errLines[1],
+      `kept ${dir}: the scheduled task ${TASK.name} is still registered, and the marker a stop left in that folder is what keeps it from starting the server again; run js-harness uninstall --global again once the task is gone`,
+    );
+    assert.equal(fs.existsSync(files.stoppedPath), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });

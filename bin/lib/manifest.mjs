@@ -8,6 +8,7 @@ import { cachePath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
+import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 
 function skillContent(version) {
   return `---
@@ -872,6 +873,15 @@ export function sync(home, version, deps = {}) {
  * and `channelKept` says why it was left, as `[{ path, reason: 'unremovable', code }]`
  * (`removeChannelFolder`). The orchestrator's relief file is not part of it and stays.
  *
+ * The folder of `js-harness remote` is one more that nothing records: `remote stop` removes the record of its
+ * supervisor and leaves the server's log and the marker of the stop. It is looked for with a manifest and
+ * without and removed whole, named in `removed`, unless something still needs it, and `remoteKept` then says
+ * why it was left (`removeRemoteFolder`): `in-use` with the `pid` and `root` of a supervisor that runs, since
+ * `uninstall` stops no process; `unknown` with `why` for one it cannot tell; `task-kept` with the names of the
+ * scheduled tasks kept above, which the marker in that folder keeps from starting the server; `unremovable`
+ * with the error's `code`. `deps.identify` (default `lookUpProcesses` of `remote.mjs`) is the seam that looks
+ * at the processes, and it is asked only for a supervisor a state file records.
+ *
  * `keptOptional` says why each optional file in `kept` is there, as `{ path, reason }`: `edited` (its bytes are
  * no longer what was recorded), or `unreadable` or `unremovable` with the `code` of the error that stopped it.
  * The last two are not the user's doing, and the manifest that named the file is gone when this returns, so
@@ -894,6 +904,7 @@ export function uninstall(home, deps = {}) {
   const removeFile = deps.removeFile ?? fs.rmSync;
   const statFile = deps.statFile ?? fs.statSync;
   const listDir = deps.listDir ?? fs.readdirSync;
+  const identify = deps.identify ?? lookUpProcesses;
   const manifest = readManifest(home);
   if (!manifest) {
     // No install to undo, and still a home `check` may have run under: the gate lock's folder is no
@@ -902,8 +913,9 @@ export function uninstall(home, deps = {}) {
     const gate = removeGateFolder(home, removeFile, statFile);
     const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
     const channel = removeChannelFolder(home, removeFile, statFile);
+    const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept: [] });
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
-    return { removed: [...gate.removed, ...log.removed, ...channel.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept };
+    return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
   }
 
   const removed = [];
@@ -959,7 +971,8 @@ export function uninstall(home, deps = {}) {
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const channel = removeChannelFolder(home, removeFile, statFile);
-  removed.push(...gate.removed, ...log.removed, ...channel.removed);
+  const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
+  removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed);
   if (stillRecorded.length > 0) {
     writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
   } else {
@@ -967,7 +980,7 @@ export function uninstall(home, deps = {}) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
@@ -1069,6 +1082,51 @@ function removeChannelFolder(home, removeFile, statFile) {
     removeFile(dir, { recursive: true, force: true });
   } catch (err) {
     return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  return { removed: [dir], kept: [] };
+}
+
+/** Removes the folder `js-harness remote` writes under `home` (`remoteDir` of `remote.mjs`) with what is left in
+ * it, the logs of the servers and the markers of their stops, as `{ removed, kept }`, like `removeChannelFolder`:
+ * `removed` holds its path when it was there and is gone, `kept` says why it was left, and both are empty when
+ * there was no such folder.
+ *
+ * Nothing records that folder: `remote start` writes it for a project, with a machine install or without one,
+ * and `remote stop` leaves the log and its marker in it. Unlike the channel's, something may live by it:
+ *
+ * - a supervisor a state file records (`<id>.json`) that still runs keeps the folder, as `in-use` with its `pid`
+ *   and `root`: it writes its log there, and this stops no process. One that cannot be told (`locate` of
+ *   `remote.mjs`: a state file that is no record, a process whose creation time cannot be read, a listing that
+ *   failed) keeps it as `unknown` with `why`. A record whose supervisor is gone keeps nothing;
+ * - a scheduled task `uninstall` kept, for whatever reason, is still registered or may be, and the marker of
+ *   a stop in this folder is what keeps it from starting the server: the folder stays, as `task-kept` with the
+ *   tasks' names, when nothing above kept it.
+ *
+ * A start or a stop that is in progress at this instant is not looked for: it finds its files gone and says so.
+ * A folder that could not be looked at, listed or removed is kept with reason `unremovable` and the error's
+ * `code`. `identify` is asked only for a supervisor that is recorded. */
+function removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept }) {
+  const dir = remoteDir(home);
+  const unremovable = (err) => ({ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' });
+  let records;
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
+    records = listDir(dir).filter((name) => name.endsWith('.json')).map((name) => readState(path.join(dir, name)));
+  } catch (err) {
+    return { removed: [], kept: [unremovable(err)] };
+  }
+  const kept = [];
+  for (const state of records) {
+    const { found, why } = locate(state, identify);
+    if (found === 'running') kept.push({ path: dir, reason: 'in-use', pid: state.pid, root: state.root ?? null });
+    else if (found === 'unknown') kept.push({ path: dir, reason: 'unknown', why });
+  }
+  if (kept.length === 0 && tasksKept.length > 0) kept.push({ path: dir, reason: 'task-kept', tasks: tasksKept.map((task) => task.name) });
+  if (kept.length > 0) return { removed: [], kept };
+  try {
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], kept: [unremovable(err)] };
   }
   return { removed: [dir], kept: [] };
 }
