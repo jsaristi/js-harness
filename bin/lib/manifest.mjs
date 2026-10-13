@@ -370,8 +370,12 @@ function appendEntryToFile(target, pointer, entry, ours) {
   return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
 }
 
-/** The pointers of every entry recorded for the file `target` in `records`: what js-harness wrote in that file. */
-const pointersIn = (records, target) => (records ?? []).filter((record) => record.path === target).map((record) => record.pointer);
+/** The pointers of every entry recorded for the file `target` in `records`: what js-harness wrote in that file. A
+ * record that is skipped and owns no container wrote nothing there: the list at its pointer is the user's, and counted
+ * here it would let `uninstall` delete a file install created with that list in it. */
+const pointersIn = (records, target) => (records ?? [])
+  .filter((record) => record.path === target && !(record.skipped === true && (record.createdContainers ?? 0) === 0))
+  .map((record) => record.pointer);
 
 /** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a
  * pointer shape that does not match, or an entry that is not there (the user changed or removed
@@ -470,13 +474,17 @@ function installEntries(home, previousManifest) {
     const previousEntry = previousManifest?.entries?.find((e) => e.path === target);
     const result = appendEntryToFile(target, pointer, entry, ours);
     if (!createdByTarget.has(target)) createdByTarget.set(target, previousEntry ? previousEntry.createdFile : result.createdFile);
+    // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and
+    // pointer still holds. Written as none, the next install would take those containers for the user's, and
+    // `uninstall` would leave them empty behind it.
+    const earlier = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer));
     return {
       path: target,
       pointer,
       entry,
       sha256: sha256(JSON.stringify(entry)),
       createdFile: createdByTarget.get(target),
-      createdContainers: result.createdContainers ?? 0,
+      createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
     };

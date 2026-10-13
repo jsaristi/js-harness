@@ -1574,6 +1574,62 @@ test('a manifest written before createdContainers existed is uninstalled as befo
   }
 });
 
+// An entry whose write was skipped wrote nothing and owns nothing: the list at its pointer is the user's. It once
+// counted among the pointers that let uninstall delete a file install created, and the user's list went with the file.
+test('a skipped entry that owns no list does not let uninstall delete the file: the list at its pointer is the user\'s and stays', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    const manifest = install(home, '0.1.0');
+    const isPause = (record) => record.path === target && record.pointer.at(-1) === 'PostToolUse';
+    assert.equal(manifest.entries.filter(isPause).length, 1);
+    // The machine of an install whose pause entry could not be written: the record says skipped and owns nothing, and
+    // the file holds a PostToolUse list the user wrote, with no entry of ours in it.
+    const failed = { ...manifest, entries: manifest.entries.map((record) => (isPause(record) ? { ...record, skipped: true, reason: 'made up', createdContainers: 0 } : record)) };
+    fs.writeFileSync(manifestPath(home), JSON.stringify(failed, null, 2), 'utf8');
+    const settings = readJson(target);
+    fs.writeFileSync(target, `${JSON.stringify({ ...settings, hooks: { ...settings.hooks, PostToolUse: [] } }, null, 2)}\n`, 'utf8');
+
+    uninstall(home);
+    assert.equal(fs.existsSync(target), true, 'the file is kept: something in it is not ours');
+    assert.deepEqual(readJson(target), { hooks: { PostToolUse: [] } });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// A settings file that cannot be read for one run (a directory sits at its path here) skips every entry of it. The
+// record of the lists install made there must outlive that run: written as none, the next install took those lists
+// for the user's, and uninstall left them empty in a file that had none before.
+test('an install that cannot read a host file keeps the record of the lists it made there, and uninstall still undoes them exactly', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const before = `${JSON.stringify({ theme: 'dark' }, null, 2)}\n`;
+    fs.writeFileSync(target, before, 'utf8');
+    const first = install(home, '0.1.0');
+    const ofTarget = (manifest) => manifest.entries.filter((record) => record.path === target).map((record) => [record.pointer.join('.'), record.createdContainers]);
+    const made = ofTarget(first);
+    assert.ok(made.length > 0 && made.every(([, count]) => count > 0), 'the first install made the lists');
+
+    const aside = `${target}.aside`;
+    fs.renameSync(target, aside);
+    fs.mkdirSync(target);
+    const second = install(home, '0.1.0');
+    assert.ok(second.entries.filter((record) => record.path === target).every((record) => record.skipped === true), 'every entry of the file is skipped');
+    assert.deepEqual(ofTarget(second), made, 'the lists it made are still recorded as made');
+    fs.rmdirSync(target);
+    fs.renameSync(aside, target);
+
+    install(home, '0.1.0');
+    uninstall(home);
+    assert.equal(fs.readFileSync(target, 'utf8'), before);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // The skill is what agents read to decide which command to run. Plain `status`/`sync`/`uninstall` act by
 // location (on the project inside an initialized repository), so the machine forms must say `--global`.
 test('the installed skill names the --global forms for the machine and the project-scope behavior of the plain ones', () => {
