@@ -1183,7 +1183,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    cuando este investigativo o analisis y cuando ya llegue la hora de codigo y asi a la inversa
    cuando se vuelva a analisis e inveastigacion desactivar osea que sea a demanda, que te
    parece?" So: the harness serves a project with code and one without, and what serves only
-   code is on demand, in both directions. It ends in a question, so the how is not settled.
+   code is on demand, in both directions. It ended in a question, and he answered the lead's reply to it at 19:42 (line 8315, read
+   with `sessions --quote`): "listo entonces apliquemoslo asi". That is a yes to the direction
+   below and to its when; it is not a yes to a design, which is still owed with its two reviews.
    What the lead answered him, the lead's reading and not a design: no watcher of the
    conversation that flips a mode, since the hook was such a guesser (33 of 55 prompts, the
    evidence above); each function pays only when the work calls for it, as three already do
