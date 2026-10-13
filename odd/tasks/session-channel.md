@@ -2301,6 +2301,25 @@ session needs beside it to go on; the summary of a compaction is not the record.
   `--kind question`: added), then the two files again, 173 passed. The second commit is the
   board's half (`openQuestionsOf` with the record, the rows `Pregunta N`, the watch for a
   question answered and not carried): written and read, set aside until this one lands.
+- 2026-10-13, written at 18:59: the first commit of part 2 is `fc7fee2` (gate PASS; gentle-ai:
+  not due, medium, 1,254 changed lines; Codex on `567f81f..fc7fee2` in five parts: 999,502 input
+  tokens against a plan of 435,000 and a cap by the rate of 1,580,040, all five "correct", 0.85
+  to 0.98, no finding). The second is the commit that carries this entry, the board's half. As
+  built: `parseTranscript` keeps the line of each entry in a weak map and `questionsOf` gives
+  `line` and `answeredLine`; the board keeps the record's questions as plain data
+  (`questionRecordOf`, the key `questions.record`); `openQuestionsOf` with it gives `recorded`,
+  one item a question no notice closed, joined by `callOfNumber` (asked after the notice, the
+  exact prefix, the newest wins) with the states `not-shown`, `pending`, `closed`, `unanswered`
+  and `answered-not-carried` (with the session and the line of the answer); an answer in the
+  asker's own transcript leaves the question out; a joined call is not listed again; the rows
+  `Pregunta N` come first under "Open questions"; a watch says once a question that turns
+  answered and not carried, or closed by him. Test first: 8 failed without the code, then 748
+  passed and 1 failed for a defect of slice (b1) that this test found: the calls with no time
+  were listed first, not last, since the sort compared by the locale's rules, which put `~`
+  before the digits; they are compared as text now, and the two files passed again, 477. The
+  gate was held fifteen minutes by another session's turn before the first run.
+  PART 3 is written on copies outside the tree by a fourth bounded writer and read by this
+  session: `recordQuestionsIn` and the block of questions the resume prints.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
@@ -2713,7 +2732,15 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 18:24, THE NEWEST OF ALL (read this first). Part 1 and its fix are
+      STATE AT 2026-10-13 18:59, THE NEWEST OF ALL (read this first). Part 2 is two commits:
+      `fc7fee2` (the record and `notify`, reviewed) and the commit that carries this text (the
+      board's half; in the tree if it did not land: `git status` says). PART 3, the resume's
+      half, is written and read and waits as copies in this session's scratchpad (folder
+      `p3/bin`: `resume.mjs`, `resume.test.mjs`, `lib/sessions.mjs`, `lib/sessions.test.mjs`);
+      a test is still owed there for a transcript the hook could not read. If the folder is
+      gone, write it again from the Progress entries of 18:24 and 18:59 and the paragraph
+      below. After it: one merge of `main`, `check --push`, the push, the pull request.
+      STATE AT 2026-10-13 18:24 (the state before the one above). Part 1 and its fix are
       `6ab6958` and `567f81f`. PART 2 is two commits: the record and `notify` go in the commit
       that carries this text (or are in the tree if it did not land: `git status` says); the
       board's half is written and read and waits as files outside the tree (this session's

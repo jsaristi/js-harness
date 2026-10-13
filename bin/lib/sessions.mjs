@@ -55,6 +55,10 @@ const NOTIFICATION_PATTERN = /<task-notification>([\s\S]*?)<\/task-notification>
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+// The line of each entry `parseTranscript` read, from 1 (empty and broken lines count). A question names the line
+// of its call and of its answer, so the board can say where he answered. A weak map: no entry is changed by it.
+const LINE_OF = new WeakMap();
+
 /** A transcript's entries, one JSON object per line. A line that does not parse, or that parses to
  * something other than an object (`null`, a number, a string, a list), is skipped and counted, never
  * fatal: a session appends to its transcript while the board reads it, so the last line may be half
@@ -62,7 +66,7 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 export function parseTranscript(text) {
   const entries = [];
   let skipped = 0;
-  for (const line of text.split('\n')) {
+  for (const [index, line] of text.split('\n').entries()) {
     if (line.trim() === '') continue;
     let entry;
     try {
@@ -71,8 +75,10 @@ export function parseTranscript(text) {
       skipped += 1;
       continue;
     }
-    if (isObject(entry)) entries.push(entry);
-    else skipped += 1;
+    if (isObject(entry)) {
+      entries.push(entry);
+      LINE_OF.set(entry, index + 1);
+    } else skipped += 1;
   }
   return { entries, skipped };
 }
@@ -1563,11 +1569,12 @@ function answerOf(entry, calls) {
 }
 
 /** The questions a transcript's `entries` put to the person with a question tool, one a call in the order the
- * file first has them: `{ id, at, asked, state }`, with the call's id and time and the texts it asked. `state`
- * is what became of it, by `answerOf` on the call's result: `answered` (then `answeredAt` too), `closed` (he
- * closed it without answering), `unanswered` (a result that is no answer of his: the host marked an error, or
- * it holds none) or `pending` (no result in the file: it is on his screen, or the session stopped there). A
- * call of a side chain asks nobody and is left out; a call the host wrote again is the same question. */
+ * file first has them: `{ id, at, asked, state, line }`, with the call's id and time, the texts it asked and the
+ * line the call is at (`null` for an entry `parseTranscript` did not read). `state` is what became of it, by
+ * `answerOf` on the call's result: `answered` (then `answeredAt` and `answeredLine`, the line of the result too),
+ * `closed` (he closed it without answering), `unanswered` (a result that is no answer of his: the host marked an
+ * error, or it holds none) or `pending` (no result in the file: it is on his screen, or the session stopped
+ * there). A call of a side chain asks nobody and is left out; a call the host wrote again is the same question. */
 export function questionsOf(entries) {
   const calls = questionCallsOf(entries);
   const found = new Map();
@@ -1577,7 +1584,7 @@ export function questionsOf(entries) {
       if (block.type !== 'tool_use' || !calls.has(block.id) || found.has(block.id)) continue;
       const questions = Array.isArray(block.input?.questions) ? block.input.questions : [];
       const asked = questions.map((question) => (isObject(question) && typeof question.question === 'string' ? question.question : '')).filter((question) => question !== '');
-      found.set(block.id, { id: block.id, at: entry.timestamp ?? null, asked, state: 'pending' });
+      found.set(block.id, { id: block.id, at: entry.timestamp ?? null, asked, state: 'pending', line: LINE_OF.get(entry) ?? null });
     }
   }
   for (const entry of entries) {
@@ -1587,7 +1594,10 @@ export function questionsOf(entries) {
       if (question === undefined || question.state === 'answered') continue;
       const { what } = answerOf(entry, calls);
       question.state = what === null ? 'answered' : what === QUESTION_CLOSED ? 'closed' : 'unanswered';
-      if (what === null) question.answeredAt = entry.timestamp ?? null;
+      if (what === null) {
+        question.answeredAt = entry.timestamp ?? null;
+        question.answeredLine = LINE_OF.get(entry) ?? null;
+      }
     }
   }
   return [...found.values()];
@@ -1595,6 +1605,22 @@ export function questionsOf(entries) {
 
 // What became of a call that several files hold: the most that any of them knows.
 const QUESTION_STATE_RANK = { pending: 0, unanswered: 1, closed: 2, answered: 3 };
+
+/** The call a question of the record is joined to: the newest of `calls` asked after its notice was written (`at`)
+ * whose text starts with the prefix of `number`, or `null`. A call with no time joins nothing, since its order is
+ * not known. The number alone is no key: sessions numbered questions by hand before the record did. */
+function callOfNumber(calls, number, at) {
+  const prefix = questionPrefix(number);
+  const written = Date.parse(at ?? '');
+  let joined = null;
+  for (const call of calls) {
+    const when = Date.parse(call.at ?? '');
+    if (Number.isNaN(when) || Number.isNaN(written) || when <= written) continue;
+    if (!call.asked.some((text) => text.startsWith(prefix))) continue;
+    if (joined === null || when > Date.parse(joined.at)) joined = call;
+  }
+  return joined;
+}
 
 /** The questions put to the person that have no answer of his, over the transcripts a board read: `{ open,
  * transcripts, hours }`. `sessions` are the board's, each with the `questions` of its transcript
@@ -1607,8 +1633,16 @@ const QUESTION_STATE_RANK = { pending: 0, unanswered: 1, closed: 2, answered: 3 
  * gives it without `answered`, and the asker's `{ id, title }`. `hours` is the board's window, for whoever
  * prints the list to say what it covers: the transcripts that changed in it, each read whole, so a
  * question of days ago in a session still at work is listed too. Nothing here is remembered by a session:
- * it is all read. */
-export function openQuestionsOf(sessions, { hours = null } = {}) {
+ * it is all read.
+ *
+ * With `record` (`questionRecordOf`: the questions of the channel's record), it also gives `record` and
+ * `recorded`: one item for each question of the record that no notice closed, in the order of the numbers,
+ * `{ number, at, asker, question, waits, state, call }`. A call asked for it after its notice was written and
+ * with its prefix is the question's call (`callOfNumber`); `state` is `not-shown` when there is none, the call's
+ * own state otherwise, or `answered-not-carried` when the answer is in a transcript other than the asker's, with
+ * `answered: { session, line, at }` of that answer. An answer in the asker's own transcript closed the question
+ * already, so it is left out. A call joined to a question of the record, open or closed, is left out of `open`. */
+export function openQuestionsOf(sessions, { hours = null, record } = {}) {
   const read = sessions.filter((session) => Array.isArray(session.questions));
   const sooner = (one, other) => one !== null && other !== null && one < other;
   const calls = new Map();
@@ -1616,21 +1650,53 @@ export function openQuestionsOf(sessions, { hours = null } = {}) {
     for (const question of session.questions) {
       const seen = calls.get(question.id);
       const state = seen !== undefined && QUESTION_STATE_RANK[seen.state] > QUESTION_STATE_RANK[question.state] ? seen.state : question.state;
-      if (seen === undefined || sooner(question.at, seen.at)) calls.set(question.id, { id: question.id, at: question.at, asked: question.asked, state, asker: { id: session.id, title: session.title ?? null } });
-      else seen.state = state;
+      // Every transcript that holds the answer, in the order of the sessions, so the asker's own is found among them.
+      const answeredIn = [...(seen?.answeredIn ?? []), ...(question.state === 'answered' ? [{ session: session.id, line: question.answeredLine ?? null, at: question.answeredAt ?? null }] : [])];
+      if (seen === undefined || sooner(question.at, seen.at)) calls.set(question.id, { id: question.id, at: question.at, asked: question.asked, state, answeredIn, asker: { id: session.id, title: session.title ?? null } });
+      else Object.assign(seen, { state, answeredIn });
     }
   }
   const all = [...calls.values()];
   // A question asked again later and answered then has his answer, one question at a time: a call that asked
   // two is open while either has none, and what it lists is what is left of it.
   const answeredLater = (call, text) => all.some((other) => other.state === 'answered' && other.asked.includes(text) && sooner(call.at, other.at));
+  const joined = new Set(record === undefined ? [] : record.map((question) => callOfNumber(all, question.number, question.at)).filter((call) => call !== null).map((call) => call.id));
   const open = all
-    .filter((call) => call.state !== 'answered')
+    .filter((call) => call.state !== 'answered' && !joined.has(call.id))
     .map((call) => ({ ...call, left: call.asked.filter((text) => !answeredLater(call, text)) }))
     .filter((call) => call.asked.length === 0 || call.left.length > 0)
-    .sort((one, other) => (one.at ?? '~').localeCompare(other.at ?? '~'))
+    // Oldest first, a call with no time last. The times are compared as text, character by character: a
+    // comparison by the locale's rules puts `~` before the digits, which listed a timeless call first.
+    .sort((one, other) => ((one.at ?? '~') < (other.at ?? '~') ? -1 : (one.at ?? '~') > (other.at ?? '~') ? 1 : 0))
     .map(({ id, at, left, state, asker }) => ({ id, at, question: left[0] ?? '', more: Math.max(left.length - 1, 0), state, asker }));
-  return { open, transcripts: read.length, hours };
+  if (record === undefined) return { open, transcripts: read.length, hours };
+  const recorded = [];
+  for (const question of record.filter((item) => !item.closed).sort((one, other) => one.number - other.number)) {
+    const call = callOfNumber(all, question.number, question.at);
+    const answeredIn = call?.answeredIn ?? [];
+    if (answeredIn.some((holder) => sameSession(holder.session, question.from.id))) continue;
+    const state = call === null ? 'not-shown' : call.state === 'answered' ? 'answered-not-carried' : call.state;
+    const item = { number: question.number, at: question.at, asker: { ...question.from }, question: question.text, waits: question.waits, state, call: call?.id ?? null };
+    if (state === 'answered-not-carried') item.answered = { session: answeredIn[0].session, line: answeredIn[0].line, at: answeredIn[0].at };
+    recorded.push(item);
+  }
+  return { open, transcripts: read.length, hours, record, recorded };
+}
+
+/** The questions of the channel's record that a board keeps, from what `recordedQuestions` gives (`[{ number, notice,
+ * closed }]`): each one's number, when its notice was written, who asked it (`from`, each field `null` when the
+ * notice names none), its text and what waits on it, and whether a notice of the record has closed it. It is plain
+ * data, so a board in `--json` carries it. */
+export function questionRecordOf(recorded) {
+  const word = (value) => (typeof value === 'string' ? value : null);
+  return recorded.map(({ number, notice, closed }) => ({
+    number,
+    at: notice.at,
+    from: { id: word(notice.from?.id), title: word(notice.from?.title) },
+    text: notice.text,
+    waits: notice.waits,
+    closed: closed !== null,
+  }));
 }
 
 /** What an entry is when it is not what the person sent, in words: `null` for one that is. The result of a tool
@@ -2287,17 +2353,29 @@ function lastReadSessions(older, newer) {
  * compare with keeps them (`watchBaseline`), so they are not news at the look after. Nor does such a look
  * see an answer that transcript holds, to a question another one closed: the list of `after` is made again
  * with the facts `before` last read of each session `after` could not read, or the closed question would
- * be said as closed anew with nothing changed. */
+ * be said as closed anew with nothing changed.
+ *
+ * A recorded question (`recorded`) says two more things, each once, when its state is new since the board before
+ * and it is one that needs him: answered and not carried to its asker, or closed by him without an answer. One
+ * still on his screen, or not shown yet, says nothing: the channel's own notice says that it was recorded. */
 function questionChanges(before, after) {
   if (!before.questions || !after.questions) return [];
   const closed = (question) => question.state === 'closed';
   const known = new Set(before.questions.open.filter(closed).map((question) => question.id));
   const sessions = lastReadSessions(before, after);
   const filled = sessions.some((session, i) => session !== after.sessions[i]);
-  const open = filled ? openQuestionsOf(sessions, { hours: after.questions.hours }).open : after.questions.open;
-  return open
+  const view = filled ? openQuestionsOf(sessions, { hours: after.questions.hours, record: after.questions.record }) : after.questions;
+  const lines = view.open
     .filter((question) => closed(question) && !known.has(question.id))
     .map((question) => `question ${QUESTION_STATE_WORDS.closed}, asked by ${senderWords(question.asker, { quoted: true })}: ${questionWords(question)}`);
+  if (!before.questions.recorded || !view.recorded) return lines;
+  const was = new Map(before.questions.recorded.map((question) => [question.number, question.state]));
+  for (const question of view.recorded) {
+    if (was.get(question.number) === question.state) continue;
+    if (question.state === 'answered-not-carried') lines.push(`question ${question.number} answered at ${question.answered.session.slice(0, 8)}:${question.answered.line}: not carried to ${senderWords(question.asker)} yet`);
+    else if (question.state === 'closed') lines.push(`question ${question.number} closed by him without an answer: ${clipped(question.question)}`);
+  }
+  return lines;
 }
 
 const pendingText = (plan) => (plan.pending.length > 0 ? plan.pending.join(', ') : 'nothing');
@@ -2393,7 +2471,8 @@ function planChanges(before, after) {
  *   notice reaches the orchestrator with no message: from a session of another permission class, whose
  *   message the app would hold, and from a host that has no messages between sessions;
  * - a question the person closed without answering (`questionChanges`): it is still open, and whoever
- *   keeps the list of his questions puts it to him again.
+ *   keeps the list of his questions puts it to him again; and a recorded question answered and not carried to
+ *   its asker, or closed by him without an answer, once when it gets that state.
  *
  * Everything else is left out on purpose, because it changes all the time and decides nothing: a session
  * that starts working, the age of a last entry or of a background file, the tail of a reply, a context
@@ -2435,7 +2514,7 @@ export function watchBaseline(older, newer) {
     sessions: lastRead,
     // The open questions follow from the transcripts: those of a session this look could not read are the
     // ones of its last readable facts, or a question closed before would be news again at the look after.
-    ...(newer.questions && { questions: openQuestionsOf(lastRead, { hours: newer.questions.hours }) }),
+    ...(newer.questions && { questions: openQuestionsOf(lastRead, { hours: newer.questions.hours, record: newer.questions.record }) }),
     // Which gates are compared depends on the worktrees (`watchedGates`): a look that could not list them
     // compared none, so its gates are not yet what the next look is compared with.
     gates: newer.worktrees.available ? kept(newer.gates, older.gates) : older.gates,
@@ -2802,21 +2881,31 @@ const QUESTION_STATE_WORDS = { closed: 'closed by him without an answer', pendin
  * width, and how many more the same call asked. */
 const questionWords = ({ question, more }) => `${clipped(question)}${more > 0 ? ` (and ${more} more in the same call)` : ''}`;
 
-/** The `Open questions` section (`openQuestionsOf`): a line a question put to the person that has no answer of
- * his, oldest first, with how long ago it was asked, who asked, what became of it and the first text asked;
- * then what was read, since an empty list from one transcript is not one from fifty. No section for a board
- * that holds no such key. */
+/** A recorded question's state in words: a question that is not shown yet, or one answered and not carried yet, says
+ * where the answer is; the others are said as a line of the transcripts says them. */
+function recordedStateWords({ state, answered }) {
+  if (state === 'not-shown') return 'recorded, not shown to him yet';
+  if (state === 'answered-not-carried') return `answered at ${answered.session.slice(0, 8)}:${answered.line}, not carried yet`;
+  return QUESTION_STATE_WORDS[state];
+}
+
+/** The `Open questions` section (`openQuestionsOf`): first the questions the channel's record holds that no notice
+ * has closed (`Pregunta <n>`, when the notice was written, who asked, what became of it and the text), then a line
+ * for each question put to the person that has no answer of his, oldest first, with how long ago it was asked, who
+ * asked, what became of it and the first text asked; then what was read, since an empty list from one transcript
+ * is not one from fifty. `none` only when neither list has a row. No section for a board that holds no such key. */
 function openQuestionLines(questions, now) {
   if (!questions) return [];
   const asker = ({ id, title }) => title ?? `transcript ${String(id).slice(0, 8)}`;
+  const recorded = (questions.recorded ?? []).map((question) => `  ${QUESTION_WORD} ${question.number}  ${ago(question.at, now)}  ${senderWords(question.asker)}  ${recordedStateWords(question)}  ${clipped(question.question)}`);
   const rows = questions.open.map((question) => `  ${question.at === null ? 'time not recorded' : ago(question.at, now)}  ${asker(question.asker)}  ${QUESTION_STATE_WORDS[question.state]}  ${questionWords(question)}`);
   const read = `  read in ${questions.transcripts} transcript${questions.transcripts === 1 ? '' : 's'} changed in the last ${questions.hours}h, each read whole`;
-  return ['Open questions', ...(rows.length > 0 ? rows : ['  none']), read, ''];
+  return ['Open questions', ...(recorded.length + rows.length > 0 ? [...recorded, ...rows] : ['  none']), read, ''];
 }
 
 /** The board as lines of text: the sessions (in the order given, most recent first), the roster of
  * those sessions by role when the board has one, the channel when it has something to show, the
- * questions put to the person that have no answer when the board has that list, then worktrees, the
+ * questions the record holds and the questions put to the person that have no answer when the board has that list, then worktrees, the
  * gates that run and wait, open pull requests and the orchestrator's relief file, and a last line that
  * says what the board cannot see. */
 

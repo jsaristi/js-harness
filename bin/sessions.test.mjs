@@ -1961,6 +1961,23 @@ test('the board lists the questions put to the user that have no answer, read fr
   assert.deepEqual(board.questions.open.map(({ id, state }) => [id, state]), [['toolu_q1', 'closed'], ['toolu_q2', 'pending']]);
 }));
 
+test('a question the record holds that was never asked shows as recorded, not shown to him yet, in the text and in --json', withMachine(async (machine) => {
+  writeRoster(machine);
+  const text = 'Should the board show it?';
+  // Written as `notify --kind question` writes it: to the orchestrator, with its fields and the number it is given by the record.
+  appendNotice(machine.userHome, machine.slug, newNotice({
+    at: before(120).toISOString(), from: sender(SESSION_B, WORKER, 'auto'), to: 'orchestrator', kind: 'question', text,
+    id: 'made-up-question-1', options: [{ label: 'Sí (Recomendado)', description: 'made up' }, { label: 'No', description: 'made up' }], waits: 'the board',
+  }));
+
+  const { code, stdout, stderr } = await runSessions(machine, []);
+  assert.equal(code, 0, stderr);
+  assert.deepEqual(sectionOf(stdout, 'Open questions', 'Worktrees').slice(0, 2), ['Open questions', `  Pregunta 1  2m ago  ${WORKER}  recorded, not shown to him yet  ${text}`]);
+  const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(board.questions.record, [{ number: 1, at: before(120).toISOString(), from: { id: SESSION_B, title: WORKER }, text, waits: 'the board', closed: false }]);
+  assert.deepEqual(board.questions.recorded.map(({ number, state, call, question }) => [number, state, call, question]), [[1, 'not-shown', null, text]]);
+}));
+
 test('the board has a channel after the roster: the last notices of the record and the last messages between sessions, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   // The work session rang the orchestrator, and the orchestrator's transcript has the message; the answer was not seen to arrive.

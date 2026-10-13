@@ -27,6 +27,9 @@
 // no answer of his, read from the same transcripts (odd/tasks/session-channel.md, point 15): one he closed
 // without answering, one still on his screen. A call the host copied into several files is one question,
 // and one asked again and answered then is not listed. A watch returns for a question he closes.
+// The list also joins the questions the channel's record holds (`notify --kind question`), by the number at
+// the head of their text: recorded and not shown to him yet, on his screen, closed by him, or answered in a
+// transcript and not carried to the asker yet. A question answered in the asker's own transcript is closed.
 // A session's row says a tool call that has had no result for fifteen minutes, since the host may be holding
 // it for approval or it hangs, and a watch returns for it once and again each time its age doubles (point 15).
 // A session's row says the context it holds, the room left before the host compacts it and what its last
@@ -44,8 +47,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
-import { appendReading, findOpenings, newReading, readNotices, recordPath, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -487,8 +490,9 @@ export async function sessionsMain(
       // first, the transcripts hold the second, and this command writes neither.
       channel: channelOf(record, sessions),
       // The questions put to the user that have no answer of his, read from the same transcripts: nothing
-      // a session remembers is in this list.
-      questions: openQuestionsOf(sessions, { hours: parsed.hours }),
+      // a session remembers is in this list. The questions the channel's record holds join it by their number,
+      // when the record was read; one that could not be read gives the list of the transcripts alone.
+      questions: openQuestionsOf(sessions, { hours: parsed.hours, ...(record.unavailable === undefined && { record: questionRecordOf(recordedQuestions(record)) }) }),
       worktrees,
       gates,
       gateLock,
