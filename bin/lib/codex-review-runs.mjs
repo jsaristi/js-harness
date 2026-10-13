@@ -59,9 +59,20 @@
 // those of the part; its `base`, `from` and `head` are the whole range's. The line of a review of a whole
 // range has NO `part` field, as no line had before parts existed, so a reader takes a missing `part` as a
 // whole range (`runPart`). The review record of a range reviewed in parts names the lines of its parts.
+//
+// A part that passed is kept. The line of a part whose attempt stood also holds `kept`: a `key`, the hash of
+// what its session was sent (`partKey`), the answer as data (`review`) and the review as Codex rendered it
+// (`rendered`). A later run of the same range that would send the same thing takes the part from the newest
+// such line instead of asking again (`keptPartFor`). A line without `kept`, which is every line written before
+// this and every attempt that did not pass, is never reused (`runKept`). The schema stayed `v1` here too.
+import { createHash } from 'node:crypto';
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 
 export const CODEX_REVIEW_RUN_SCHEMA = 'js-harness.codex-review-run/v1';
+
+/** The number of the shape of what is kept of a part, and of what its key is made from. It goes into the key,
+ * so a change to either makes every older kept part unusable instead of misread. */
+export const KEPT_PART_FORMAT = 1;
 
 const FILE = 'codex-review-runs.jsonl';
 
@@ -110,6 +121,57 @@ export function runPart(run) {
   const { index, of, files, changedLines } = part;
   const valid = isCount(of, 1) && isCount(index, 1) && index <= of && isCount(files, 1) && isCount(changedLines, 0);
   return valid ? { index, of, files, changedLines } : null;
+}
+
+/** The key of what a part's session was sent: the SHA-256, as 64 lowercase hex characters, of the format
+ * number and the commits of the range (`base`, where the review starts `from`, `head`), the exact text of the
+ * prompt and the arguments Codex was started with, which carry the model and the effort. A part is reused
+ * only by a run that would send the very same thing. `null` when any of it is missing or not what it should
+ * be, which is a part that is never reused. */
+export function partKey(what) {
+  const { base, from, head, prompt, argv } = what ?? {};
+  const argvStrings = Array.isArray(argv) && argv.every((arg) => typeof arg === 'string');
+  if (!isName(base) || !isName(from) || !isName(head) || !isName(prompt) || !argvStrings) return null;
+  const sent = JSON.stringify([KEPT_PART_FORMAT, base, from, head, prompt, argv]);
+  return createHash('sha256').update(sent).digest('hex');
+}
+
+const KEPT_KEY = /^[0-9a-f]{64}$/;
+const isScore = (value) => value === null || Number.isFinite(value);
+// A finding as the command prints and orders it (`findingLine`, `byPlace`) and counts it (`findingCounts`).
+const isKeptFinding = (finding) => finding !== null && typeof finding === 'object'
+  && typeof finding.file === 'string' && Number.isInteger(finding.start) && Number.isInteger(finding.end)
+  && typeof finding.title === 'string' && (finding.severity === null || typeof finding.severity === 'string');
+// Every field the command reads of a kept answer when it shows it again: a line of the run log that was
+// damaged or written by hand, and lacks one, would throw there, after every part had passed, and the review
+// would end with no record. Such a line keeps nothing, and its part is asked again.
+const isKeptReview = (review) => review !== null && typeof review === 'object'
+  && Array.isArray(review.findings) && review.findings.every(isKeptFinding)
+  && (review.verdict === 'correct' || review.verdict === 'incorrect')
+  && typeof review.explanation === 'string' && isScore(review.confidence);
+
+/** What a part's line keeps of its answer, `{ key, review, rendered }`, or `null` when it keeps none: every
+ * line written before a part was kept, every line of an attempt that did not pass, and a line whose `kept` is
+ * not one. A line with none is asked again, never read as a part that found nothing. `review` is the object
+ * as it was stored, with every field it has. */
+export function runKept(run) {
+  const kept = run?.kept;
+  if (kept === null || typeof kept !== 'object') return null;
+  const valid = typeof kept.key === 'string' && KEPT_KEY.test(kept.key)
+    && isKeptReview(kept.review) && typeof kept.rendered === 'string';
+  return valid ? { key: kept.key, review: kept.review, rendered: kept.rendered } : null;
+}
+
+/** The line a run of the same range can take a kept part from: the NEWEST line of `runs` (oldest first) whose
+ * attempt reviewed a part and whose kept key is `key`, or `null` when there is none. A line without `kept` is
+ * never taken, and neither is a line of a whole range or of an attempt that did not pass. */
+export function keptPartFor(runs, key) {
+  if (!Array.isArray(runs) || typeof key !== 'string') return null;
+  for (let i = runs.length - 1; i >= 0; i -= 1) {
+    const run = runs[i];
+    if (run?.outcome === 'reviewed' && runPart(run) !== null && runKept(run)?.key === key) return run;
+  }
+  return null;
 }
 
 /** `<git common dir>/js-harness/codex-review-runs.jsonl` for the repository at `root`, or `null` when
