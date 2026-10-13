@@ -1133,9 +1133,14 @@ const modelAndEffort = (argv) => ({
   efforts: argv.filter((token, at) => argv[at - 1] === '-c' && token.startsWith('model_reasoning_effort=')),
 });
 
-test('the model and the effort of a review are named in one place: gpt-6.1-sol at medium', () => {
-  assert.equal(REVIEW_MODEL, 'gpt-6.1-sol');
-  assert.equal(REVIEW_EFFORT, 'medium');
+// Neither value is stated here: a test that named them would be a second place to change when he changes
+// one, and `./lib/rules-bindings.test.mjs` already holds each constant to its declaration.
+test('the model and the effort of a review are written once, each in its declared rule, and the command reads them', () => {
+  const command = fs.readFileSync(new URL('./codex-review.mjs', import.meta.url), 'utf8');
+  assert.equal(command.match(/^export const REVIEW_MODEL = ruleValue\('review-model'\);/gm)?.length, 1, 'REVIEW_MODEL is defined once, read from its rule');
+  assert.equal(command.match(/^export const REVIEW_EFFORT = ruleValue\('review-effort'\);/gm)?.length, 1, 'REVIEW_EFFORT is defined once, read from its rule');
+  assert.ok(typeof REVIEW_MODEL === 'string' && REVIEW_MODEL !== '');
+  assert.ok(typeof REVIEW_EFFORT === 'string' && REVIEW_EFFORT !== '');
 });
 
 test('codexArgs: there is one argv, the lean one, and no session to choose: the platform comes right after the base', () => {
@@ -1325,7 +1330,7 @@ test('the usage names no session: its flags are those of a review, and its secon
   // What a person has to know of the cost before starting: how to see it, and that a large run is not started by itself.
   // And what a review reads, with how a project says what it does not; and that it reviews nothing twice.
   assert.deepEqual(more, [
-    '--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    '--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     STARTS_WHERE_RECORDS_END,
   ]);
@@ -5638,7 +5643,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       'the review runs on gpt-6.1-sol at medium effort, which the command fixes.',
-    '--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    '--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     STARTS_WHERE_RECORDS_END,
   ]);

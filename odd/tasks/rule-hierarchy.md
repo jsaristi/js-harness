@@ -1110,6 +1110,70 @@ before T16c; the kinds of work that are not rules, each with its reason; what co
 said under "Not guaranteed" and in the list's head; the hash of an installed copy; T13 and B4;
 who is told what; and that this is a third part with a task of its own.
 
+### The plan against its allowance (T16b, second part: the reader of the margin)
+Three rules of his bound what a Codex review may cost without asking him: `codex-review-floor`
+(300,000 input tokens a review), `codex-review-rate` (1,200 a changed line) and
+`codex-review-margin` (5 percent). Until now nothing read them: each session took the plan's
+figure and did the sum by hand, and the sum was done differently by different sessions. This
+piece makes `codex-review --plan` do it and say the result.
+
+- **What it says.** One more line after the plan's own, only for `--plan`: the allowance, how
+  it was reached, and whether the estimate is inside it. Four cases, each a sentence of its own:
+  inside; over the allowance by no more than the margin, which counts as inside; over it by
+  more, so the spend is to be approved before the review runs; and no estimate, so the plan
+  cannot say and nothing stands in for one.
+- **Which figure.** The plan gives a range. The verdict follows the first figure, the estimate,
+  because the accepted reading of the margin says "the estimate is the input tokens
+  `codex-review --plan` gives" and the plan itself calls its higher figure "no ceiling". When
+  the higher figure passes what counts as inside while the estimate does not, the line says so
+  as a fact and the verdict does not change. Whether the higher figure should decide is not
+  settled here: it would ask him more often, which is his to choose.
+- **Which lines.** The changed lines the plan holds: those of the files the review reads, the
+  files left out not counted. It is the smaller of the two counts a session could take, so it
+  never gives a larger allowance than his rule does, and the line names the count it used.
+- **The sum.** `allowance = max(floor, rate × changed lines)`; inside when
+  `estimate × 100 <= allowance × (100 + margin)`, in whole numbers, so that exactly 5 percent
+  over is inside and one token more is not.
+- **Where the rules are in force.** The three are of this repository only, so each is read with
+  `ruleHere` against the text of `bin/lib/rules-data.mjs` of the project the command runs in.
+  In a project that installs the harness, or with a copy of the harness whose list is not the
+  project's, there is no line at all: a number that is not that project's rule is not printed
+  as one.
+- **What it does not do.** The exit code of `--plan` stays 0 and a run is not refused for its
+  cost: a refusal with a flag to pass it would be a new behavior of the command, recorded here
+  as a candidate and not built. The line is not printed by a run, only by `--plan`. A plan with
+  no part has no line.
+- **Where it lives.** `bin/lib/codex-review-allowance.mjs`, new and this session's alone
+  (`reviewAllowance(plan, projectData)` gives the data or `null`, `allowanceLine` says it), with
+  its test beside it; the test of the command runs the real `codex-review --plan` in a
+  temporary repository with and without the rules file. In `bin/codex-review.mjs`, one import
+  and the lines that print it in the `--plan` branch, told to JH 8 before they are written.
+
+**What the reader changed** (a sub-agent that did not write the design, 2026-10-13; no blocker,
+nine advisories, each with its line):
+- *Which figure* was settled by the design in the direction that asks him less, on a reading
+  that says only "the input tokens `--plan` gives" (`docs/rule-sources.json:29`), while the
+  plan calls the whole range its estimate and its first figure came out about 2.2 times under
+  the real cost twice (`bin/lib/codex-review-plan.mjs:19-21`). So the line settles nothing: it
+  says where each figure stands, and "inside by the estimate, over by the higher figure" is a
+  case of its own. Which figure decides is his, and goes to him through the lead.
+- The verdict is on the figures the plan prints, which are sums of parts each rounded to two
+  figures: the line says nothing the plan above it does not show.
+- "Inside" is a fact about this plan and never a permission: a second run after a review fell
+  is his whatever its plan (the margin's reading), and the line cannot know that. The sentence
+  for "over" says the command refuses nothing for cost.
+- The line says it is of this plan: `--part-lines` regroups the parts and moves the estimate
+  while the allowance stays (`bin/codex-review.mjs:1223`).
+- Silence is kept only for a project that does not declare the rules. A copy of the harness
+  whose list is not the project's, a rule that was retired, and a rules file that cannot be
+  read each get one sentence with no number, and the exit stays 0. The rules file is read from
+  the working tree, as `rules applied` reads it.
+- The line goes after the plan's own lines and before the line that says a run would need
+  `--max-parts`; the comment "the plan, and nothing else" of the `--plan` branch is rewritten.
+- Left as designed, with the reader's agreement: `--max-parts`, a range partly covered by a
+  record, `everyFile` and a single large part. Not taken: a word about an estimate that rests
+  on runs at another effort, because the plan's own line, printed just above, says it.
+
 ### What ran, against the rules with no short name (T16b, third part: the checking half of B3)
 Designed on 2026-10-12 and read by one reader that did not write it, whose changes are the last
 paragraph. Built on `feat/rules-held`, stacked on `feat/rules-rewire`. It adds one block to
@@ -2462,8 +2526,43 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     runs on until its marker. On this repository's documents `progress` reads 306 of 350 and
     the register 65 failures with 18 not settled, before and after.
     NEXT: the correction through the gate, Codex on that one commit, push, the pull request.
+- 2026-10-13, T16b, the rest of the second part, on `feat/rules-review-readers` (worktree
+  `D:/js-harness-worktrees/rules-review-readers`, cut from `53826d8`, which holds pull request
+  91 with the documents owed). Route: inline, no writer: two small pieces in files that are
+  free, and the plan of the week at 90 percent. JH 8 said the command's lines were free
+  before anything was written (its message of that night, a claim) and was told each line.
+  - Piece 1: `REVIEW_MODEL` and `REVIEW_EFFORT` read `review-model` and `review-effort`
+    (`bin/codex-review.mjs`). RED first: the command's own test now asks that each constant
+    is defined once, from its rule, and failed on "REVIEW_MODEL is defined once, read from its
+    rule"; green after the change. `docs/RULES.md` rendered: both rules are read by the
+    command.
+  - Piece 2: the reader of the margin, designed above ("The plan against its allowance") and
+    read by a sub-agent that did not write it before any code (no blocker, nine advisories,
+    all answered there). `bin/lib/codex-review-allowance.mjs` and its test, 14 tests, written
+    first and seen failing on the missing module; the command prints the line in its `--plan`
+    branch and its usage says so. On this repository: `codex-review --plan --again --base
+    HEAD~3` ends "Allowance of this plan: 1,881,600 input tokens, the larger of 300,000 a
+    review and 1,200 a changed line, for the 1,568 changed lines it reads. Its estimate, about
+    517,000, is inside it." The three rules are now read by that file (`docs/RULES.md`).
+  - Not done, and owed before the second part closes: `bin/codex-review.test.mjs` still states
+    the model in 67 places and the effort in 58 (`rg -c`), mostly whole lines of expected
+    output, so "no test of it states the value as a literal" does not hold for that file. It
+    is a mechanical change of a file JH 8 has a branch on; it waits for that branch.
+  - His, sent to the lead: which figure of the plan is held to the allowance, the estimate or
+    the higher one. The line says both and decides nothing.
 
 ## Next step
+**State on 2026-10-13, which replaces the two blocks of 2026-10-12 below (kept as the record
+of that day; pull request 91 merged what they list).** On `feat/rules-review-readers`: the
+commit of the two pieces through the gate, gentle-ai's assessment from `53826d8`, Codex with
+`--base 53826d8` when its plan is inside the allowance the plan now prints, the push, the pull
+request, its head to the lead. Then, each when its file is free: the literals of
+`bin/codex-review.test.mjs` (after JH 8's `feat/gate-wait-two-halves`), and T1. T2 and T8 are
+his and go to the lead by message; a question to him is asked by the lead, with the question
+tool, never in this session's chat (his lines 8423 and 8528, the lead's claim, not read here).
+The worktree `code-map-switch` and its branches `docs/on-demand` and `docs/owed-documents`
+are to be removed now that pull request 91 is merged.
+
 **State for a resume, written on 2026-10-12 at 91 percent of this session's context, before a
 compaction.** Owed, documents only, on the branch `docs/owed-documents` (worktree
 `code-map-switch`), each fact read by this session before it is written; the lines are of the

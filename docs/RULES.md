@@ -10,19 +10,19 @@ Hash `7963ae6d5597`. In force: 18 (13 of Sebastián, 5 of the project). Retired:
 ### codex-review-floor
 The most input tokens a Codex review may cost however small its commit: 300,000 input tokens a review.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/codex-review-allowance.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### codex-review-margin
 How far over its allowance the plan of a Codex review may read and still count as inside it: 5 percent of the allowance.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/codex-review-allowance.mjs`.
 - Since 2026-10-12. Row: reports. Source: his words of 2026-10-12, checked by a session on 2026-10-12.
 
 ### codex-review-rate
 The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor: 1,200 input tokens a changed line.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/codex-review-allowance.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### context-pause
@@ -32,12 +32,12 @@ The share of its context window at which a session pauses, writes its state and 
 
 ### review-effort
 The effort a Codex review runs at: medium.
-- Read by: none.
+- Read by: `bin/codex-review.mjs`.
 - Since 2026-10-12. Row: reports. Source: his words of 2026-10-08, 2026-10-12, checked by a session on 2026-10-12.
 
 ### review-model
 The one model a Codex review runs on: gpt-6.1-sol.
-- Read by: none.
+- Read by: `bin/codex-review.mjs`.
 - Since 2026-10-08. Row: reports. Source: his words of 2026-10-06, 2026-10-08, checked by a session on 2026-10-11.
 
 ### reviewed-commit-lines
