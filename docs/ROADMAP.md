@@ -1117,6 +1117,41 @@ recommended; everything keeps entering as today; everything is noted, his too), 
 same way). So an improvement that appears becomes a task of the first version, not a note for
 after it.
 
+**Defects in shipped behaviour that had no task, read in the code on 2026-10-13** (`main` at
+`f98f478`). They came as claims of the lead's readers and of the session-channel session;
+each was read by the rule-hierarchy session before it was written here, and all six are true.
+Each has its task in the document of the feature it belongs to, none is designed, and none of
+those features has a session open: the lead assigns them.
+
+- a. **`upgrade` asks the npm registry for a name nobody holds**, the first to fix.
+  `js-harness upgrade` runs `<pm> view js-harness version`, installs `js-harness@<that>` with
+  no check of its source and no comparison to what is installed, and then runs the `sync` of
+  the copy it installed (`bin/update.mjs:34-42`, `:200-225`); the menu of `js-harness` with no
+  argument offers it too (`bin/tui.mjs:364`). `npm view js-harness version` answers 404, so
+  the name is free, and whoever registers it decides what that command installs and runs on
+  his machine. Today the command only fails ("could not determine the latest version to upgrade to"). The
+  release source decided is git tags and is not built ("Release source").
+  `odd/tasks/install-update.md`, T5.
+- b. **There is no README** (`fd -i -d 2 readme .` prints nothing, in a tree where it would
+  find one). What it holds is his: open decision 9.
+- c. **The package ships this repository's `AGENTS.md` and its tests.** `package.json:9-12`
+  lists `bin/` and `AGENTS.md`; nothing under `bin/` reads the package's own `AGENTS.md`, which
+  is this project's working agreement with him and not an installed project's; and `bin/`
+  holds 58 test files, with no `.npmignore`. What ships is his: open decision 10.
+- d. **A timed-out command of `contract run` leaves its processes running**
+  (`bin/contract.mjs:228-235`: a shell with a timeout, and only the shell is killed).
+  `odd/tasks/sensors.md`, T5.
+- e. **`status` exits 1 in a project whose `harness.json` holds no pin**, this repository
+  among them: "it has no string "version"" (`bin/update.mjs:140-142`,
+  `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6.
+- f. **The practice run starts no host session**, so it does not prove that a host loads what
+  was installed (`scripts/practice-lib.mjs:450-461`; item 4 under "Session channel" says so).
+  `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve.
+- g. Already placed by the session-channel session in its own document, and only named here:
+  the pause hook assumes a window of 500,000; the hook's text uses terms an installed project
+  is never given; `uninstall` leaves `~/.js-harness/remote/`; and `pointersIn` of
+  `bin/lib/manifest.mjs` (`odd/tasks/session-channel.md:2542-2585`).
+
 Being built, each in a session of its own: the session channel
 (`odd/tasks/session-channel.md`), the gate log (`odd/tasks/gate-log.md`) and the rule hierarchy
 (`odd/tasks/rule-hierarchy.md`, current on the branch `feat/failures-register`). What is done
@@ -1295,6 +1330,12 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    the account's minutes ("Session channel", the order, item 2).
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks
    (`odd/tasks/codex-review-lean.md`, "Proposal for the Codex plugin").
+9. What the README holds (Next, the defects read on 2026-10-13, item b). Options: what the
+   harness is and how to install and remove it, in one page; that and each command with an
+   example; or none until the first version, with the roadmap as the only description.
+10. What the package ships (the same list, item c). Options: `bin/` without its tests and no
+    `AGENTS.md`, since an installed project gets its own from `init`; `bin/` whole and no
+    `AGENTS.md`; or as today.
 
 Closed: the F5 spend ceiling (none; see Decided, Eval spend). F6's missing trials: closed
 without them, on 13 of 15, by his answer of 2026-10-12 (Next, item 1, with its line).

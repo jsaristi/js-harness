@@ -813,6 +813,10 @@ names something that does not exist.
   (`404 Not Found`)
 - Seen: 2026-10-10 — relief file, line 57 — on a mismatch the harness suggests installing from a tag
   `v0.1.0` and the repository has no tag; also odd/tasks/practice-project.md:194
+- Seen: 2026-10-13 — bin/update.mjs:200-225 — read again for the first version: the name it asks
+  the registry for is free (`npm view js-harness version`, 404), and the command would install
+  and run whatever is published under it, with no check of its source; a task since that day
+  (odd/tasks/install-update.md, T5)
 
 ### wait-not-attributable
 A process that waits for a free machine cannot be attributed to its session from the board, and one
