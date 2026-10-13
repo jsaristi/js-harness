@@ -220,7 +220,7 @@ test('rules prints one line per rule, with its value and unit, then the count li
     assert.deepEqual(out.slice(0, -1).map((line) => line.split('  ')[0]), RULES.map((rule) => rule.id));
     assert.ok(out.includes('control-phrase-min  12 characters  project'));
     assert.ok(out.includes('gate-wait  60 minutes  project'));
-    assert.ok(out.includes('review-effort  high  sebastian'));
+    assert.ok(out.includes('review-effort  medium  sebastian'));
     assert.equal(out.at(-1), COUNT_LINE);
   });
 });

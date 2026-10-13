@@ -16,8 +16,8 @@ import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf } from '../bin/lib/sessions.mjs';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
-  contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem,
+  contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
+  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem,
 } from './practice-lib.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
@@ -83,7 +83,7 @@ function hostSeeds(home) {
   const seed = (file, name, indent) => {
     const command = `echo unrelated-${name}-hook`;
     const entry = { matcher: 'startup|resume|clear|compact', hooks: [{ type: 'command', command, timeout: 5 }] };
-    return { path: file, command, content: `${JSON.stringify({ hooks: { SessionStart: [entry] } }, null, indent)}\n` };
+    return { path: file, host: name, command, content: `${JSON.stringify({ hooks: { SessionStart: [entry] } }, null, indent)}\n` };
   };
   return [
     seed(path.join(home, '.claude', 'settings.json'), 'claude', 4),
@@ -271,13 +271,14 @@ const STEPS = {
     for (const time of ['first', 'second']) expectOk(harness(ctx, 'install', '--home', home), `the ${time} js-harness install`);
     const { manifest, skills } = installedFiles(home);
     for (const file of [manifest, ...skills]) assertThat(fs.existsSync(file), `js-harness install left no ${file}`);
-    // Each host file: the seeded entry, then each entry of the harness once, by its matcher and its command.
+    // Each host file: the seeded entry, then each entry the harness gives that host once, by its event, matcher and command.
+    const ours = [];
     for (const seed of hostSeeds(home)) {
-      const problem = hostHooksProblem(readIfThere(seed.path)?.toString('utf8'), seed.command);
+      const problem = hostHooksProblem(readIfThere(seed.path)?.toString('utf8'), seed.command, seed.host);
       assertThat(problem === null, `${seed.path} after two installs: ${problem}`);
+      ours.push(`${seed.host} ${hooksOfHost(seed.host).map(hookLabel).join(' and ')}`);
     }
-    const ours = HARNESS_HOOKS.map((hook) => `"${hook.command}" (${hook.event}, matcher ${hook.matcher})`).join(' and ');
-    return `the manifest and ${skills.length} skills are in ${home}; each host file holds its seeded entry and then, once each, ${ours}`;
+    return `the manifest and ${skills.length} skills are in ${home}; each host file holds its seeded entry and then, once each, ${ours.join('; ')}`;
   },
 
   'project-adopt': (ctx) => {
@@ -384,12 +385,13 @@ const STEPS = {
     expectOk(harness(ctx, 'uninstall', '--global', '--home', home), 'js-harness uninstall --global');
     for (const file of [manifest, ...skills, gateLog]) assertThat(!fs.existsSync(file), `${file} is still there after js-harness uninstall --global`);
     for (const seed of hostSeeds(home)) {
-      assertThat(readIfThere(seed.path)?.equals(Buffer.from(seed.content)) === true, `${seed.path} is not byte for byte what setup seeded`);
+      const problem = uninstalledHostProblem(readIfThere(seed.path)?.toString('utf8'), seed.content);
+      assertThat(problem === null, `${seed.path} after js-harness uninstall --global: ${problem}`);
     }
     // Installed again, so the folder is left ready: the hook of the project and a later look both find it.
     expectOk(harness(ctx, 'install', '--home', home), 'js-harness install, again');
     assertThat(fs.existsSync(manifest), `the second js-harness install left no ${manifest}`);
-    return `uninstall --global left no manifest, no skill and no gate log in ${home}, and both host files byte for byte as seeded; installed again`;
+    return `uninstall --global left no manifest, no skill and no gate log in ${home}, and both host files byte for byte as setup seeded them; installed again`;
   },
 
   'pause-hook': (ctx) => {

@@ -45,7 +45,7 @@ First request of a one-word prompt, estimated tokens:
 | Stack | gentle-ai 4 (ODD, RDD review, test-first by default), engram 3 (the binary, and its Claude plugin since `gentle-ai sync` installs it: hooks and one skill, no second MCP server), codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` on every turn — Claude Code reads it natively; the skills `install` writes for each host (`js-harness`, `js-harness-orchestrator`) load on demand |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
-| Release source | Decided and not built: git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. No release is tagged, `update` asks the registry (`<pm> view js-harness version`, `bin/lib/version.mjs`), and a machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
+| Release source | Decided and not built: git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. `update` asks the registry (`<pm> view js-harness version`, `bin/lib/version.mjs`), and a machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`) |
@@ -1157,6 +1157,44 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    for prompts with no code intent — ~1.2k tokens per prompt on average, kept in the history
    (evidence in `odd/tasks/f2-context-diet.md`, T3). It is codegraph's config, so js-harness
    only reports it.
+   **Answered for this repository on 2026-10-12: off.** His words, to the lead's question
+   whether the add-on at each prompt goes off here or stays (the lead's transcript
+   `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8161, read with `sessions --quote`): "listo
+   apaguemos en este el mapa del codigo para este como para cuando el harnes funcione para
+   cuando no hay que meter codigo ya que gentle-ai no solo sirve para programar sino tambien
+   para investigacion, entonces hay que dar la opcion de deshabilitarlo y habilitarlo
+   dependiendo del caso y creoq ue asi con otras funcionalidades que tenemos, cierto?"
+   How it is off: `CODEGRAPH_NO_PROMPT_HOOK=1` under `env` in the untracked
+   `.claude/settings.local.json` of his machine, written by the lead by hand. It is in no
+   manifest; deleting the key undoes it. The map itself stays installed and can still be asked.
+   Evidence so far, two samples and no proof: one prompt in the lead's session arrived with no
+   output of the hook (the lead's claim); and in a session that was already running, JH 7, the
+   prompt of 19:35 still carried the hook's output and the next one, after 19:37, did not.
+   **A product direction in the same words, not designed:** the harness offers turning the
+   code map, and other functions that only serve programming, off and on by the kind of
+   project, since gentle-ai also serves research, where no code is written. It widens "js-harness
+   only reports it" above and joins decision 6. A candidate feature, not assigned, owed a
+   design with its two reviews before it reaches him. The lead's reading, not his words: a
+   switch for each function, kept in the project's `harness.json` and recorded in the manifest
+   so that `uninstall` undoes it, a kind of project being a preset of switches.
+   **His order for the product, four minutes later** (same transcript, line 8250, read with
+   `sessions --quote`): "Entonces hagamos el harnes para que funcione con codigo y sin codigo o
+   que al principio sea investigacion y cuando vayamos a hacer codigo sea inteligente y sepa
+   cuando este investigativo o analisis y cuando ya llegue la hora de codigo y asi a la inversa
+   cuando se vuelva a analisis e inveastigacion desactivar osea que sea a demanda, que te
+   parece?" So: the harness serves a project with code and one without, and what serves only
+   code is on demand, in both directions. It ends in a question, so the how is not settled.
+   What the lead answered him, the lead's reading and not a design: no watcher of the
+   conversation that flips a mode, since the hook was such a guesser (33 of 55 prompts, the
+   evidence above); each function pays only when the work calls for it, as three already do
+   (a commit of documents alone runs the sensors of documents, pull request 77; a Codex record
+   is asked only of code commits; gentle-ai's review goes by its assessment); the code map on
+   demand, its paste off and the tool asked; what is chosen only when a session starts (the
+   TypeScript server) chosen from the project's files at `init`, with a switch in the manifest;
+   `install` preparing nothing of code in a project that has none until the first appears.
+   When: after JH 8's cut of the review command is on `main`; not assigned. A third sample of
+   the switch, the lead's claim: his prompt of line 8250 carries no attachment of the hook,
+   where the one of line 8161 had one at line 8163.
 5. Whether the Codex review stays at `high` at what it costs (the number is in "Codex review
    cost result").
 6. What the harness turns on by default in a project from the sub-agent models result

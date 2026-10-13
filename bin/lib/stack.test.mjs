@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { tools, checks, resolveProjectRoot, probeTool, probeStack } from './stack.mjs';
+import { tools, checks, resolveProjectRoot, probeTool, probeStack, hookCommandPlan } from './stack.mjs';
 import { recordOptionalFile } from './manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './remote.mjs';
 
@@ -1335,7 +1335,7 @@ function accountState(seed, platform = 'win32') {
 }
 
 test('checks carries the Claude account check and then the remote server one, apart from the tools', () => {
-  assert.deepEqual(checks.map((check) => check.id), ['claude-account', 'remote-server']);
+  assert.deepEqual(checks.map((check) => check.id), ['claude-account', 'remote-server', 'hook-commands']);
   assert.equal(tools.some((tool) => ['claude-account', 'remote-server'].includes(tool.id)), false);
 });
 
@@ -1642,4 +1642,250 @@ test('remote-server: one server down is the gap whatever the others are, and one
   const down = mixed((home) => seedLauncher(home, OTHER_PROJ));
   assert.equal(down.claude, 'down');
   assert.deepEqual(down.fix, { claude: 'js-harness remote start --cwd "D:\\my work\\other proj" --name proj' }, 'only the server known to be down has a command');
+});
+
+// --- the hook commands check: the copy on the path answers every command the recorded hook entries run ---
+
+test('hookCommandPlan tries a js-harness resume command with its guard taken off', () => {
+  assert.deepEqual(hookCommandPlan(['js-harness resume --pause || exit 0', 'js-harness resume --hook']), [
+    { command: 'js-harness resume --pause', tried: true },
+    { command: 'js-harness resume --hook', tried: true },
+  ]);
+});
+
+test('hookCommandPlan lists any other command as not tried, the session-start report among them', () => {
+  assert.deepEqual(hookCommandPlan(['js-harness doctor --hook']), [{ command: 'js-harness doctor --hook', tried: false }]);
+});
+
+test('hookCommandPlan plans a command named twice, with and without its guard, once', () => {
+  assert.deepEqual(hookCommandPlan(['js-harness resume --pause || exit 0', 'js-harness resume --pause']), [
+    { command: 'js-harness resume --pause', tried: true },
+  ]);
+});
+
+const HOOK_FIX = 'the js-harness on the path is older than these entries: install the newest copy (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it), then run js-harness doctor again';
+
+function findCheck(id) {
+  const check = checks.find((c) => c.id === id);
+  assert.ok(check, `expected a check record for ${id}`);
+  return check;
+}
+
+/** Writes the manifest `install` leaves under `home`: one entry per hook command, its command at `entry.hooks[0]` as
+ * install grafts it, and `skipped` for each index install could not write. */
+function seedHookEntries(home, commands, { skipped = [] } = {}) {
+  writeJson(path.join(home, '.js-harness', 'manifest.json'), {
+    version: '0.1.0',
+    files: [],
+    entries: commands.map((command, i) => ({
+      path: path.join(home, '.claude', 'settings.json'),
+      pointer: ['hooks', 'SessionStart'],
+      entry: { hooks: [{ type: 'command', command }] },
+      sha256: 'not read here',
+      createdFile: false,
+      skipped: skipped.includes(i),
+    })),
+  });
+}
+
+/** A runner for the check: records each call as `{ file, argv, options }` and answers it with `answer(file, argv)`. */
+function recordingRunner(answer) {
+  const calls = [];
+  const spawn = (file, argv, options) => {
+    calls.push({ file, argv, options });
+    return answer(file, argv);
+  };
+  return { spawn, calls };
+}
+
+/** Answers each call by the command it runs (`js-harness resume --pause`); a command not named answers as missing. */
+function answering(byCommand) {
+  return (file, argv) =>
+    byCommand[[file, ...argv].join(' ')] ?? { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
+}
+
+/** The calls that run a `js-harness resume` command, as a command line. */
+function resumeCalls(calls) {
+  return calls.map((c) => [c.file, ...c.argv].join(' ')).filter((line) => line.startsWith('js-harness resume'));
+}
+
+/** The check's row, probed as `doctor` probes it. On `linux` a command is run as a file and its arguments. */
+function hookRow(home, spawn, platform = 'linux') {
+  return probeTool(findCheck('hook-commands'), { home, project: home, spawn, platform });
+}
+
+const ANSWER_0 = { status: 0, stdout: '', stderr: '' };
+
+test('the hook commands check runs only in the interactive report, so the session-start report and the TUI start no copy', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --hook']);
+    const { spawn, calls } = recordingRunner(() => ANSWER_0);
+    assert.equal(probeStack({ home, project: home, spawn }).some((row) => row.id === 'hook-commands'), false);
+    assert.deepEqual(resumeCalls(calls), []);
+    assert.equal(probeStack({ home, project: home, spawn, interactive: true }).at(-1).id, 'hook-commands');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the hook commands check has nothing to try without a manifest: n/a, no gap, and no copy started', () => {
+  const home = makeTmpHome();
+  try {
+    const { spawn, calls } = recordingRunner(() => ANSWER_0);
+    const row = hookRow(home, spawn);
+    assert.equal(row.claude, 'n/a');
+    assert.deepEqual(row.fix, {});
+    assert.deepEqual(resumeCalls(calls), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the hook commands check is ok when every tried command exits 0, runs each once, and never runs the session-start report', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --hook', 'js-harness resume --pause || exit 0', 'js-harness doctor --hook', 'js-harness resume --hook']);
+    const { spawn, calls } = recordingRunner(() => ANSWER_0);
+    const row = hookRow(home, spawn);
+    assert.equal(row.claude, 'ok');
+    assert.deepEqual(row.fix, {});
+    assert.deepEqual(resumeCalls(calls), ['js-harness resume --hook', 'js-harness resume --pause']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an entry that install skipped was never written, so its command is not run', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --hook'], { skipped: [0] });
+    const { spawn, calls } = recordingRunner(() => ANSWER_0);
+    const row = hookRow(home, spawn);
+    assert.equal(row.claude, 'n/a');
+    assert.deepEqual(resumeCalls(calls), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a tried command that does not exit 0 makes the check stale: each command says what it answered, and the fix line says to install the newest copy', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --hook', 'js-harness resume --pause || exit 0', 'js-harness doctor --hook']);
+    const { spawn } = recordingRunner(
+      answering({
+        'js-harness resume --hook': ANSWER_0,
+        'js-harness resume --pause': { status: 2, stdout: '', stderr: 'Unknown command: resume\nUsage: js-harness\n' },
+      }),
+    );
+    const row = hookRow(home, spawn);
+    assert.equal(row.claude, 'stale');
+    assert.deepEqual(row.fix, {
+      claude: [
+        HOOK_FIX,
+        'js-harness resume --hook: answered',
+        'js-harness resume --pause: exit 2; stderr: Unknown command: resume',
+        'js-harness doctor --hook: not tried',
+      ],
+    });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a tried command that cannot be started is a gap that says so', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --pause || exit 0']);
+    const { spawn } = recordingRunner(answering({}));
+    const row = hookRow(home, spawn);
+    assert.equal(row.claude, 'stale');
+    assert.deepEqual(row.fix, { claude: [HOOK_FIX, 'js-harness resume --pause: could not be started'] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a tried command that times out is a gap that says so', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --pause || exit 0']);
+    const { spawn } = recordingRunner(() => ({ status: null, signal: 'SIGTERM', stdout: '', stderr: '' }));
+    const row = hookRow(home, spawn);
+    assert.equal(row.claude, 'stale');
+    assert.deepEqual(row.fix, { claude: [HOOK_FIX, 'js-harness resume --pause: timed out after 5 seconds'] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a runner that throws leaves the check unknown, with no fix and nothing thrown out of the report', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --hook']);
+    const { spawn } = recordingRunner(() => {
+      throw new Error('spawn exploded');
+    });
+    const row = hookRow(home, spawn);
+    assert.equal(row.claude, 'unknown');
+    assert.deepEqual(row.fix, {});
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a manifest that does not parse leaves the check unknown, and no copy is started', () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'manifest.json'), 'not json', 'utf8');
+    const { spawn, calls } = recordingRunner(() => ANSWER_0);
+    assert.equal(hookRow(home, spawn).claude, 'unknown');
+    assert.deepEqual(resumeCalls(calls), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the runner gets empty standard input, five seconds, and a JS_HARNESS_HOME of its own under the temp folder, never the real home', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --hook']);
+    const { spawn, calls } = recordingRunner(() => ANSWER_0);
+    hookRow(home, spawn);
+    const [{ options }] = calls;
+    assert.equal(options.input, '');
+    assert.equal(options.timeout, 5000);
+    const probeHome = path.resolve(options.env.JS_HARNESS_HOME);
+    assert.ok(probeHome.startsWith(path.resolve(os.tmpdir()) + path.sep), 'a folder under the system temp folder');
+    assert.notEqual(probeHome, path.resolve(os.homedir()));
+    assert.notEqual(probeHome, path.resolve(home));
+    assert.equal(fs.existsSync(probeHome), false, 'a folder that does not exist');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('on Windows a tried command runs through a shell as one line, as the other probes run a .cmd shim', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --pause || exit 0']);
+    const { spawn, calls } = recordingRunner(() => ANSWER_0);
+    hookRow(home, spawn, 'win32');
+    assert.deepEqual(calls.map((c) => [c.file, c.argv, c.options.shell]), [['js-harness resume --pause', [], true]]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the first line of standard error is cut to 160 characters', () => {
+  const home = makeTmpHome();
+  try {
+    seedHookEntries(home, ['js-harness resume --pause || exit 0']);
+    const { spawn } = recordingRunner(answering({ 'js-harness resume --pause': { status: 2, stdout: '', stderr: `${'x'.repeat(200)}\nsecond line` } }));
+    assert.deepEqual(hookRow(home, spawn).fix, { claude: [HOOK_FIX, `js-harness resume --pause: exit 2; stderr: ${'x'.repeat(160)}`] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

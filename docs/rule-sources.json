@@ -50,6 +50,23 @@
       "by": "session"
     }
   },
+  "context-pause": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Por otro lado ejemos entonces la regla del 88% y la compactacion al queda en el 93% con eso le deja 5%.",
+        "date": "2026-10-11",
+        "session": "7d2ae675-4bf2-4657-aff5-cde2477a4bee",
+        "line": 1745
+      }
+    ],
+    "reading": "The 88 percent is the share of a session's context window at which it pauses: it writes its state in its feature document and judges whether what is left fits before the host compacts, which he puts at 93 percent, a figure of the host and not a rule (bin/lib/sessions.mjs holds it and a transcript's own measure wins over it). The rule had been 85, then 90 for an hour; this line settles it. It is not marked as of this repository only: the board the harness ships already pauses at this share by default, and its flag replaces it; what the harness turns on by default in a project that installs it stays his to decide, and this declaration changes nothing there.",
+    "accepted": "Not put to him as a reading: it is this session's, and his to correct.",
+    "checked": {
+      "date": "2026-10-12",
+      "by": "session"
+    }
+  },
   "control-phrase-min": {
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"
@@ -66,12 +83,18 @@
         "date": "2026-10-08",
         "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
         "line": 4208
+      },
+      {
+        "quote": "Bajar a medio",
+        "date": "2026-10-12",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 8962
       }
     ],
-    "reading": "A Codex review runs at high effort and at no other. On 2026-10-06 he had said medium (session 71ccf3e5-a96a-45d7-b9dc-6c5314571b00, line 1116); this is the later word.",
-    "accepted": "Not put to him as a reading: his words name the effort.",
+    "reading": "A Codex review runs at medium effort. His latest word is a tapped option, not a typed sentence: the orchestrator asked him through the question tool \"Pregunta 14: ¿en qué esfuerzo corre la revisión de Codex?\" with the options \"Seguir en alto (Recomendado)\", \"Bajar a medio\" and \"Medir de nuevo antes de decidir\", and the entry at that line is the tool's result holding his answer, read by this session. Earlier words, kept as history: high and no other on 2026-10-08 (the first quote), and medium on 2026-10-06 (session 71ccf3e5-a96a-45d7-b9dc-6c5314571b00, line 1116).",
+    "accepted": "Not put to him as a reading: the option he tapped names the effort.",
     "checked": {
-      "date": "2026-10-11",
+      "date": "2026-10-12",
       "by": "session"
     }
   },

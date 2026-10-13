@@ -1516,7 +1516,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - [x] T3d `docs/FAILURES.md` seeded from the records, not only with the eighteen: every
     failure the relief file and the feature documents tell, each control in place found by the
     command in the file it names
-  - [ ] T3e The tokenizer measures a fence from the list item it is under, not from the margin
+  - [x] T3e (commits `b6babc3` and `2b4e3ee`, pull request 82, on `main` at `bf982b1`;
+    Codex's records cover both, and gentle-ai assessed the range as not due)
+    The tokenizer measures a fence from the list item it is under, not from the margin
     (found by Codex in `21686a5`, second priority): today a fence under an item that opens
     within three spaces and closes deeper is left open, and with the option off a checkbox
     shown in a fence indented past three spaces is counted as a step by `js-harness progress`
@@ -1562,15 +1564,24 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       cover `859a797..6a721cc` and `b0ccff1..331090b`)
     - [ ] Second part: each constant reads its declaration, one file at a time, each told to
       the orchestrator before it is touched. Done: the four bounds whose files were free
-      (commit `21b391f`). Left: the model and the effort of a Codex review, when
-      `feat/gate-wait` is on `main`; the context pause, declared when its file is free
-    - [ ] Third part: model and effort as rules, as "Model and effort as rules" designs it:
+      (commit `21b391f`); the context pause, declared as `context-pause` and read by
+      `bin/lib/sessions.mjs` (commit `ca83a3d` on `feat/rules-context-pause`; gentle-ai
+      assessed it as not due, and Codex's record covers `e90e0a4..ca83a3d`, 204,919 input
+      tokens, the patch correct). The window and the share at which the host compacts are
+      not declared, against the design's line "the context pause and the window": they are
+      figures of the host, each with one home and a flag, not rules. Left: the model and the
+      effort of a Codex review and the reader of `codex-review-margin`, in
+      `bin/codex-review.mjs`, when `feat/gate-wait` is on `main`
+    - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
       `docs/model-effort.md`, and with T13 the checking half of B3 (the orchestrator's
       settlement of 2026-10-12). Built: the fields, the guarded read and the declarations
       (commit `528bf56`, approved by gentle-ai), the command (`34c2dfc` and the commit after
-      it). Left before it is checked off: gentle-ai on the command, Codex on all of it (held
-      for him by its plan), the row of `doctor`, and the check of launches (T13 with B3)
+      it), the block that holds sessions and sub-agents to the rules with no short name, the
+      checking half of B3 (pull requests 73 and 78, each with gentle-ai's approvals and
+      Codex's records). What it leaves, named: a row of `check` or `doctor` that calls the
+      command, whose files are open in other features; the hook that refuses a launch (T13),
+      which is his to approve
   - [ ] T16c The one command that changes a rule
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
@@ -2433,21 +2444,37 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     merged, so the two do not meet in this document.
     NEXT: push and this branch's pull request; then the context pause's Codex result, its
     entry here, its push and pull request.
+  - Pull requests 80 (the two corrections from Linux) and 81 (the context pause) are merged:
+    `main` is `3a94ae4` (19:07). Each took one merge of `main` inside its own turn of the
+    gate, in the order the lead gave, 80 then 81; the document was joined by git, no conflict.
+    T3e, branch `fix/fence-under-list-item`, written inline: commit `b6babc3` (its turn of the
+    gate 19:12:49 to 19:22:23, a fast-forward to `3a94ae4` and then the commit). `tokenize`
+    of `bin/lib/progress.mjs` keeps the text column of each list item the line is under; a
+    fence marker opens within three spaces of that column and the same measure closes it;
+    `indentedFences` still opens a deeper one. Test first: three tests failed, 35 passed.
+    gentle-ai assessed it as medium and not due. Codex reviewed `3a94ae4..b6babc3` (169,508
+    input tokens against a plan of about 190,000) and found two things of the second
+    priority, both taken and corrected test first in the commit after it (2 failed, 37 pass):
+    a fence that opens at the margin did not leave the list item, so a later fence was
+    measured from a stale column; and a thematic break written with spaces (`* * *`,
+    `- - -`) was read as a list item. Not followed, and said in the code: a paragraph's line
+    that goes on at the margin leaves its item, and a fence still open when its item ends
+    runs on until its marker. On this repository's documents `progress` reads 306 of 350 and
+    the register 65 failures with 18 not settled, before and after.
+    NEXT: the correction through the gate, Codex on that one commit, push, the pull request.
 
 ## Next step
-In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
-through the gate, gentle-ai on what the branch adds, Codex by its plan, push and the pull
-request on `main`. That closes the checking half of B3 as a block of `rules applied`; the
-hook of C8 that refuses a launch (T13) stays his, and a row of `check` or `doctor` that calls
-the command waits for those files. (2) The third part of T16b is then checked off, with what
-it leaves named. (3) The rest of the
-second part of T16b when its files are free: the review's model and effort
-(`bin/codex-review.mjs`, after `feat/gate-wait`), the context pause
-(`bin/lib/sessions.mjs`). (4) T3e. (5) T1, which takes section D of the proposal. T2 and
-T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
+In this order. (1) The rest of the second part of T16b when `bin/codex-review.mjs` is free,
+after JH 8's S1 and its cut of the command's git calls are on `main`: the review's model and
+effort, and the reader of `codex-review-margin`. The lead says when the file is this
+session's (its word of 2026-10-12, in the message that told of pull request 82 merged at
+19:37, a claim); until then no new piece of code is
+started and the session stays stopped at this task end, at 85 percent of its context: a
+compaction comes before that piece. (2) T1, which takes section D of the proposal. T2 and T8
+wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
 "What the hosts allow" that T2 rests on are confirmed with a logging hook.
-His, written here and asked once when he is back (he is away from 2026-10-12 03:38 for about
-eight hours, by the lead's notice): what a Codex work session runs at; what the harness turns
+His, written here and in the lead's queue of his decisions (he is back since about 12:00 of
+2026-10-12): what a Codex work session runs at; what the harness turns
 on by default in a project that installs it; the paid measurement of documentation.
 A working rule since 2026-10-12, by the lead's notice of his words: after a compaction this
 session's first act is one line to the lead with its title, the hour, the share of its

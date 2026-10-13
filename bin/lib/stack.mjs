@@ -3,17 +3,20 @@
 // odd/tasks/stack-doctor.md — so every row here carries `upToDate: 'unknown'` for it to fill.
 // The Codex plugin row (`codex-plugin`, T6) keeps the column meanings: `claude` is the plugin
 // enabled, `codex` is "the Codex side is ready", i.e. logged in. `checks` holds what doctor reports
-// that is not a tool: the Claude account check, whose `claude` cell is `ok`, `mismatch` or `unknown`, and
-// the remote server check, whose `claude` cell is `ok`, `down`, `unknown` or `n/a`.
+// that is not a tool: the Claude account check, whose `claude` cell is `ok`, `mismatch` or `unknown`, the
+// remote server check, whose `claude` cell is `ok`, `down`, `unknown` or `n/a`, and the hook commands check, whose
+// `claude` cell is `ok`, `stale`, `unknown` or `n/a`.
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readManifest } from './manifest.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
+import { INSTALL_NEWEST } from './version.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -26,16 +29,23 @@ const PROBE_TIMEOUT_MS = 5000;
  * reason). Through a shell the command goes as one line with no args array: Node 24 warns (DEP0190)
  * on stderr otherwise, and the probe args are fixed literals. `env`, when given, is merged over
  * `process.env`; without it the child inherits the environment untouched. */
-function spawnProbe(command, args, { spawn = spawnSync, platform = process.platform, env } = {}) {
+function spawnProbe(command, args, deps) {
+  try {
+    return spawnProbeOrThrow(command, args, deps) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** `spawnProbe` without the catch: a throw from `spawn` reaches the caller. `input`, when given, is the child's standard
+ * input. The hook commands check needs both: its empty input, and a runner that throws read as `unknown`, not as missing. */
+function spawnProbeOrThrow(command, args, { spawn = spawnSync, platform = process.platform, env, input } = {}) {
   const shell = platform === 'win32';
   const [file, argv] = shell ? [[command, ...args].join(' '), []] : [command, args];
   const options = { encoding: 'utf8', shell, timeout: PROBE_TIMEOUT_MS };
   if (env) options.env = { ...process.env, ...env };
-  try {
-    return spawn(file, argv, options) ?? null;
-  } catch {
-    return null;
-  }
+  if (input !== undefined) options.input = input;
+  return spawn(file, argv, options);
 }
 
 /** Node kills a timed-out spawnSync child with a signal (status becomes null); it may also carry
@@ -505,12 +515,103 @@ function remoteServerFix(down = []) {
   return { claude: commands.length === 1 ? commands[0] : commands };
 }
 
+// The hook commands the check tries start with this. `js-harness resume` with empty standard input finds no hook input,
+// so it writes nothing and ends at once, which is what makes it safe to run from a check.
+const TRIED_PREFIX = 'js-harness resume ';
+// The guard `pauseHookEntry` adds: it turns any exit into 0 for the host, so the check takes it off, or a copy that
+// answers 2 would pass for answered.
+const HOOK_GUARD = ' || exit 0';
+
+/** The recorded hook commands the check runs, each once and in the order first recorded, with the guard taken off and
+ * whether the check tries it. Only a `js-harness resume ` command is tried. Any other is listed as not tried:
+ * `js-harness doctor --hook` is the session-start report itself, and running it would count as a report made. */
+export function hookCommandPlan(commands) {
+  const seen = new Set();
+  const plan = [];
+  for (const recorded of commands) {
+    const command = recorded.endsWith(HOOK_GUARD) ? recorded.slice(0, -HOOK_GUARD.length) : recorded;
+    if (seen.has(command)) continue;
+    seen.add(command);
+    plan.push({ command, tried: command.startsWith(TRIED_PREFIX) });
+  }
+  return plan;
+}
+
+// The fix of the hook commands check. `upgrade` is the command that installs the newer release (`update` only reports
+// whether one exists, and takes no `--global`); the upgraded copy then syncs the machine's install, which rewrites the
+// entries too.
+const HOOK_FIX = `the js-harness on the path is older than these entries: install the newest copy (${INSTALL_NEWEST}), then run js-harness doctor again`;
+// The first line of a tried command's standard error that a gap line shows; the rest is not the answer.
+const STDERR_LINE_MAX = 160;
+
+/** The commands the recorded hook entries of `home`'s manifest install: each entry install wrote (not one it skipped),
+ * its hooks' commands in the order recorded. Throws when the manifest cannot be read, and the check reads that as
+ * `unknown`. */
+function recordedHookCommands(home) {
+  const entries = readManifest(home)?.entries ?? [];
+  return entries
+    .filter((entry) => !entry?.skipped)
+    .flatMap((entry) => (Array.isArray(entry?.entry?.hooks) ? entry.entry.hooks : []))
+    .map((hook) => hook?.command)
+    .filter((command) => typeof command === 'string');
+}
+
+/** Runs one tried command as its hook would run it, minus the guard. Standard input is empty, so `resume` finds no hook
+ * input and writes nothing. `JS_HARNESS_HOME` names a folder under the system's temp folder that is never created: a copy
+ * that would write a state writes it there, where nothing reads it, and never under the real home. The time limit is
+ * the probes' own, and a throw from `spawn` is left to the caller. */
+function runHookCommand(command, deps) {
+  const [binary, ...args] = command.split(' ');
+  const probeHome = path.join(os.tmpdir(), `js-harness-doctor-${randomUUID()}`);
+  return spawnProbeOrThrow(binary, args, { ...deps, input: '', env: { JS_HARNESS_HOME: probeHome } });
+}
+
+/** One command's outcome as the check says it: answered when it exits 0; otherwise why not: it could not be started,
+ * it timed out, or its exit code, with the first non-blank line of its standard error. */
+function describeHookCommand(command, result) {
+  if (!result) return { answered: false, line: `${command}: could not be started` };
+  // A timed-out child may carry an ETIMEDOUT error too, so the timeout is told before the error.
+  if (probeTimedOut(result)) return { answered: false, line: `${command}: timed out after ${PROBE_TIMEOUT_MS / 1000} seconds` };
+  if (result.error) return { answered: false, line: `${command}: could not be started` };
+  if (result.status === 0) return { answered: true, line: `${command}: answered` };
+  const text = String(result.stderr ?? '').split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  const stderr = text ? `; stderr: ${text.slice(0, STDERR_LINE_MAX)}` : '';
+  return { answered: false, line: `${command}: exit ${result.status ?? 'without a code'}${stderr}` };
+}
+
+/** The hook commands check: every command the recorded hook entries run that `js-harness resume` answers with exit 0,
+ * the copy on the path being the one every entry runs. `stale` is the gap: a tried command that does not answer, with a
+ * line per command for the fix (`lines`, internal like `down`). `n/a` when nothing is tried (no manifest, or none
+ * recorded). `unknown` when anything throws, which is also what a manifest that does not parse gives. */
+function hookCommandsState(deps) {
+  try {
+    const plan = hookCommandPlan(recordedHookCommands(deps.home));
+    if (!plan.some(({ tried }) => tried)) return { claude: 'n/a', codex: 'n/a', lines: [] };
+    const lines = [];
+    let gap = false;
+    for (const { command, tried } of plan) {
+      if (!tried) {
+        lines.push(`${command}: not tried`);
+        continue;
+      }
+      const { answered, line } = describeHookCommand(command, runHookCommand(command, deps));
+      lines.push(line);
+      if (!answered) gap = true;
+    }
+    return { claude: gap ? 'stale' : 'ok', codex: 'n/a', lines };
+  } catch {
+    return { claude: 'unknown', codex: 'n/a', lines: [] };
+  }
+}
+
 /** Checks that are not tools, in the tools' own shape so `probeTool` and every reader of a doctor row take
  * them as they are: nothing to install (`installed` is `n/a`, with no version, so nothing to be up to date
  * with either) and one cell that carries the state. They are kept apart from `tools`, which other modules
  * read as the list of tools. The account check's gap is `mismatch`; its fix is the human's to run, since
  * nothing here signs in or out. The remote server check's gap is `down`, in the `claude` cell too (the server is
- * Claude Code's; Codex has none); its fix is there only while a server is down, since it names that server. */
+ * Claude Code's; Codex has none); its fix is there only while a server is down, since it names that server. The hook
+ * commands check's gap is `stale` in the `claude` cell: a tried command of a recorded hook entry does not exit 0 with the
+ * copy on the path. It runs processes, so it is `interactiveOnly`. */
 export const checks = [
   {
     id: 'claude-account',
@@ -525,6 +626,14 @@ export const checks = [
     configured: (deps) => remoteServerState(deps),
     project: () => 'n/a',
     fix: (_deps, configured) => remoteServerFix(configured?.down),
+  },
+  {
+    id: 'hook-commands',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: hookCommandsState,
+    project: () => 'n/a',
+    fix: (_deps, configured) => (configured?.claude === 'stale' ? { claude: [HOOK_FIX, ...configured.lines] } : {}),
+    interactiveOnly: true,
   },
 ];
 
@@ -557,7 +666,10 @@ export function probeTool(tool, deps) {
   };
 }
 
-/** Every tool's row, in `tools` order, then every check's, in `checks` order. */
+/** Every tool's row, in `tools` order, then every check's, in `checks` order. A check marked `interactiveOnly` starts
+ * processes of its own, so it is left out unless `deps.interactive` is set: only `doctor`'s own report sets it, and the
+ * session-start report (`doctor --hook`) and the TUI's stack block keep their cost. */
 export function probeStack(deps) {
-  return [...tools, ...checks].map((tool) => probeTool(tool, deps));
+  const selected = checks.filter((check) => deps.interactive || !check.interactiveOnly);
+  return [...tools, ...selected].map((tool) => probeTool(tool, deps));
 }

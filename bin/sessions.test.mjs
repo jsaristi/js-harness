@@ -560,11 +560,11 @@ test('no text of this feature writes a share the context rule left behind, and t
   for (const [name, text] of contextTexts()) assert.deepEqual(sharesWritten(text, SHARES_LEFT), [], name);
 });
 
-test('the pause and the compaction are written once each, in their constants: no other text of this feature states either share', () => {
+test('the pause is written once, in its declared rule, and the compaction once, in its constant: no other text of this feature states either share', () => {
   const library = fs.readFileSync(path.join(REPO, 'bin/lib/sessions.mjs'), 'utf8');
-  for (const name of ['DEFAULT_CONTEXT_PAUSE_PERCENT', 'DEFAULT_CONTEXT_COMPACTION_PERCENT']) {
-    assert.equal(library.match(new RegExp(`^export const ${name} = \\d+;`, 'gm'))?.length, 1, `${name} is defined once, as a number`);
-  }
+  const pauseFromItsRule = /^export const DEFAULT_CONTEXT_PAUSE_PERCENT = ruleValue\('context-pause', 'percent of the context window'\);/gm;
+  assert.equal(library.match(pauseFromItsRule)?.length, 1, 'DEFAULT_CONTEXT_PAUSE_PERCENT is defined once, read from its rule');
+  assert.equal(library.match(/^export const DEFAULT_CONTEXT_COMPACTION_PERCENT = \d+;/gm)?.length, 1, 'DEFAULT_CONTEXT_COMPACTION_PERCENT is defined once, as a number');
   for (const [name, text] of contextTexts()) assert.deepEqual(sharesWritten(text, [DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_COMPACTION_PERCENT]), [], name);
 });
 

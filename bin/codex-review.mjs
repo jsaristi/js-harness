@@ -171,7 +171,7 @@ import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 // had fixed for the lean session on 2026-10-06. The command names them to Codex itself, and the session
 // ignores the user's Codex config, which could name others. They are up here because the usage names them.
 export const REVIEW_MODEL = 'gpt-6.1-sol';
-export const REVIEW_EFFORT = 'high';
+export const REVIEW_EFFORT = 'medium';
 
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. A review keeps one thing there, the Codex
@@ -743,7 +743,7 @@ const byPlace = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.start 
 // that answer stay in the run line, which is a measurement and no review.
 const NOT_STANDING = 'Codex answered, but this attempt does not stand, so what it answered is not shown as a review; the run log keeps its counts.';
 
-/** A model and an effort as a person reads them, `gpt-6.1-sol at high effort`; one that is `null`, which a
+/** A model and an effort as a person reads them, `gpt-6.1-sol at medium effort`; one that is `null`, which a
  * rollout file may leave a session's, is said to be one the file does not name. */
 const modelAt = (model, effort) => `${model ?? 'a model its rollout file does not name'} at ${effort === null ? 'an effort its rollout file does not name' : `${effort} effort`}`;
 
