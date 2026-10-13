@@ -246,6 +246,35 @@ its limit; this is the record.
   `codex-turn.sh <worktree> <base> <short head> <allowance x 1.05> <name>`).
 - **On `main` from this session on 2026-10-13:** pull requests 98, 99, 100 and 102.
 
+### T6 design (read in the code on `main` `3e26e72`; nothing built)
+
+- **Where the refusal comes from.** `readPin` (`bin/lib/project.mjs:1433-1449`) returns
+  `{ invalid: 'it has no string "version"' }` for any JSON whose `version` is not a non-empty
+  string. `projectLocation` (`:1463-1475`) turns that into `kind: 'invalidHarnessJson'`, which
+  `statusMain` prints and exits 1 on (`bin/update.mjs:148-150`); `syncProject` (`:1512-1513`)
+  returns `invalidHarnessJson`, which `syncMain` prints with "nothing was written"
+  (`bin/install.mjs:224-225`). The menu treats the kind as a project (`bin/tui.mjs:61`).
+- **The rule, by his answer.** A `harness.json` that is a JSON object with no `version` key is
+  a project with no pin, not an invalid file. A `version` that is there and is not a
+  non-empty semver string stays invalid, and so does a file that is not a JSON object.
+- **`readPin`** gains a third answer, `{ noPin: true }`, for exactly that case.
+- **`projectLocation`** gains `{ kind: 'noPin', root, harnessJsonPath, manifestPath,
+  manifestPresent }`. `status` prints the project, `pinned version: (none)`, the running
+  version, whether this clone is set up, and how to pin: add `"version": "<running>"` to
+  that file; exit 0.
+- **`syncProject`** returns `{ code: 1, noPin: true, harnessJsonPath }`; `sync` says there is
+  nothing to move to, since the file pins no version, and the same way to pin; exit 1, as
+  the question put to him proposed; nothing is written.
+- **The menu** (`buildMenu`, `bin/tui.mjs:61`) lists `noPin` with the project kinds.
+- **Open, not built here:** `init` on such a file answers `alreadyInitialized` and writes
+  nothing (`bin/lib/project.mjs:830-877`, `:916`), so pinning is by hand; whether `init`
+  should offer to pin is a question of its own. `uninstall` is not read yet.
+- **Tests, first and red:** `projectLocation` and `syncProject` for an object with no
+  `version` (beside the existing invalid cases at `bin/lib/project.test.mjs:2610` and
+  `:3323`, which keep a `version` that is not a string); `status` exit 0 with its lines and
+  `sync` exit 1 with its line, in `bin/update.test.mjs` and `bin/install.test.mjs`; the
+  menu's kinds (`bin/tui.test.mjs:664`).
+
 ## State for a resume
 
 **Superseded on 2026-10-13 at 06:29: T5 is built and committed (43934b2); "Next step" above is
