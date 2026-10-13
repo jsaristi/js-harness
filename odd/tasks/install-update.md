@@ -69,7 +69,13 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   "cannot read the pin from …harness.json: it has no string "version"" and exits 1
   (`bin/update.mjs:140-142`, `bin/lib/project.mjs:1473`; `sync` the same at `:1513`), because
   its `harness.json` was written by hand for `documents` and `documentSensors` and never by
-  `init`. Whether such a file is a project with no pin or an invalid one is the design
+  `init`. Whether such a file is a project with no pin or an invalid one was the design's
+  question, his, answered on 2026-10-13 (question 25): a project with no pin.
+- [ ] T7 The package holds the commands and nothing else of this repository. Added on 2026-10-13
+  (`docs/ROADMAP.md`, the defects in shipped behaviour, item c; open decision 10, answered by
+  him the same day: "Solo los comandos (Recomendada)" to question 24, read in the
+  orchestrator's transcript at line 11146). `package.json` lists `bin/` without its test files
+  and no `AGENTS.md`; a test reads npm's own list and pins it. Route: inline.
 
 ## Progress
 - 2026-09-26: document created. Measured: `npm` on PATH is `exec pnpm "$@"` (pnpm 12.6.0); the real
