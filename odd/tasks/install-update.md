@@ -181,3 +181,35 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 None — the feature is closed. `jsaristi/js-harness#1` was merged into `main` on 2026-09-26 with a
 merge commit (`8f8e268`), so every commit cited above keeps its hash. What comes next for the
 project lives only in `docs/ROADMAP.md`.
+
+## State for a resume
+
+Written on 2026-10-13 at 05:58 by the session "JH 8" (it closed gate-wait's T15 to T17 the
+same night and was at 86% of its context), before any line of T5 was read or written.
+
+- **Who works on T5 and T6, and by whose order.** The orchestrator's go of 05:58 (the
+  lead's call, not his word), in this order: (1) T5 here, with T6 if it fits the same
+  slice; (2) gate-wait's T12 (built, uncommitted, worktree `gate-wait-same-tree`:
+  commit it or say why it is dropped); (3) gate-wait's road 1 slice 2. Later, not now:
+  `odd/tasks/sensors.md` T5. If the orchestrator says stop (the plan's week was at 92%
+  of his 95), stop at the next commit.
+- **Where.** Branch `fix/upgrade-source` off `main` `addf6ae`, worktree
+  `D:\js-harness-worktrees\upgrade-source`. Nothing but this section is written.
+- **What the orchestrator asked of T5** (its claims, each to be read in the code first):
+  `js-harness upgrade` asks the package registry for the name js-harness
+  (`bin/update.mjs:34-42`, `:14`), installs `js-harness@<answer>` with no check of its
+  source (`:200-209`) and then runs the `sync --global` of the copy it installed
+  (`:218-225`); the menu of bare `js-harness` offers it (`bin/tui.mjs:364`).
+  `npm view js-harness version` answers 404 today, so it only fails; the day anybody
+  registers that name the command installs and runs their package. The roadmap's
+  "Release source" (`docs/ROADMAP.md:48`) is decided and not built: git tags, and by
+  his word versions are tagged from 1.0.0 only, so no tag exists yet.
+- **The steps, in order:** a short design in this document (what `upgrade` and
+  `update` do while no tag exists; that nothing is ever installed from the public
+  registry under that name; what the menu shows); ONE reader on the design, since it
+  changes what a command installs; then the failing test first, the fix, the lock
+  turn, both reviews. **Not open:** reserving the name on the registry (an account and
+  a publish are his). A question for him goes to the orchestrator, never in the chat.
+- **How this session works** is in `odd/tasks/gate-wait.md`, "Next" (the lessons) and
+  "Resume here" (his rules on Codex and on questions, the turn scripts in the
+  scratchpad). The worktree `gate-wait-two-halves` is merged and can be removed.
