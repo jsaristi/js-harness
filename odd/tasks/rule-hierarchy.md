@@ -2597,10 +2597,16 @@ are the push, the pull request and its head to the lead; pull request 94 merged 
 script changed the 125 places where `bin/codex-review.test.mjs` stated the model or the
 effort into reads of `REVIEW_MODEL` and `REVIEW_EFFORT` (two lines by hand: a string that
 holds backticks, and a comment); a test in `bin/lib/rules-bindings.test.mjs`, written first
-and seen failing on "gpt-6.1-sol is written in 67 lines", holds the file there. Left on it:
-the commit through the gate, which runs the file in its two processes, Codex if the push
-check asks a record for a commit of tests, the push, the pull request. No sub-agent on this
-piece (the lead: the plan's week at 92 of his 95 percent). Before it was: the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
+and seen failing on "gpt-6.1-sol is written in 67 lines", holds the file there. It is
+commit `c561834`: the gate passed in its turn (05:20 to 05:29, the file run whole in its two
+processes); gentle-ai, medium risk, review not due; the push check counts a commit of tests
+as code and refused the push until Codex's record, so Codex ran with `--base 53568ac`, "the
+patch is correct (confidence 0.93)", no finding, 187,810 input tokens (128,384 cached)
+against an allowance of 300,000, recorded. Left on it: the push, the pull request, its head
+to the lead. No sub-agent on this piece (the lead: the plan's week at 92 of his 95 percent).
+Codex since this session's compaction: three reviews, 715,741 input tokens, each inside its
+allowance (239,219 of 432,000; 288,712 of 620,400; 187,810 of 300,000). Before it was: the
+literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
 split that file in two (the lead's claim; read both files first); the defects in shipped
 behaviour with no task, of the lead's readers' list (relief file, lines 543 to 546), each read
 in the code before it becomes a register entry or a task; and T1. T2 and T8 are
