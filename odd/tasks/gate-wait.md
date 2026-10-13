@@ -2183,6 +2183,21 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   **Next for this branch:** read those two tests; get the rule's hunks from JH 7 through
   the orchestrator (asked at 21:39); then one more turn (the script is `effort-turn.sh`:
   it expects two changed files, so its check of the count changes with the files added).
+- 2026-10-12 · **The two tests of the comparison, read and moved; the rule's half comes
+  as a patch from JH 7** (the orchestrator's routing, after 21:39). Both bind the
+  default's word, not the comparison: `evals/review/compare.test.mjs:313` pins
+  `REVIEW_EFFORT` to `'high'` to say that no lean configuration takes its effort from
+  the default (each names its own, and the committed readings are checked against that,
+  untouched); `:464` expects the sentence that retires the `current` configuration,
+  which `evals/review/compare.mjs` builds from the constant. Changed in the worktree,
+  not staged: the pin and its comment now say `medium`, and the expected sentence says
+  "at medium effort". The list of configurations and their efforts, and every committed
+  reading, are as they were. **State of `D:\js-harness-worktrees\review-effort-medium`:**
+  `bin/codex-review.mjs` and `bin/codex-review.test.mjs` staged,
+  `evals/review/compare.test.mjs` changed. **Owed before the next turn:** JH 7's patch
+  file (the rule's value, its source, the render, the hash, any rules test that pins
+  high), applied there; then `effort-turn.sh` with its count of changed files and its
+  `git add` brought up to the files in the tree, and its RED kept as it is.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
