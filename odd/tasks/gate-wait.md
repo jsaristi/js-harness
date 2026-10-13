@@ -988,7 +988,7 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       value, the declared rule and its source, the two pins of the comparison, one commit
       on `feat/review-effort-medium` off `main`. Evidence: `cb96924`, pull request 87. Route: inline; the rule's half is JH 7's
       patch.
-- [ ] T16 · Cut 2 of git (Design, second version): the git folder and the two ends of the
+- [x] T16 · Cut 2 of git (Design, second version): the git folder and the two ends of the
       range in one question, HEAD and the tree after a session in one, each a first try
       with today's questions behind it. Route: inline, tests first, on
       `feat/gate-wait-git-cut` off `feat/gate-wait`; both reviews; judged by the count of
@@ -2420,6 +2420,30 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   orchestrator as his, for the register and a design with two readers.
   **The cut's pick turn** (`cut-pick-turn.sh`, log `cut-pick-turn.log`) started at
   23:22:58 on `28d988e`, onto `a779acd`.
+- 2026-10-12 · **The cut is on the merged S1 and reviewed: `823047e` on
+  `feat/gate-wait-git-cut`** (`cut-pick-turn.log`, 23:22:58 to 23:38:26, exit 0; onto
+  `a779acd`; the old commit `28d988e` and its branch `cut-kept` are gone). The pick
+  applied clean; the two test files and the three the effort commit bound: 484 tests,
+  479 pass, 5 skipped, none fails, in 358 s; the commit's whole gate passed (507 s);
+  gentle-ai "medium risk, 4 paths, 390 lines: review not due (under_budget)". **Codex,
+  at medium:** plan "1 part, 390 changed lines in 4 files, about 150,000 to 540,000
+  input tokens, rests on 41 parts at medium"; verdict "the patch is correct
+  (confidence 0.87). The combined Git queries preserve the existing range and
+  tracked-tree checks, with fallback queries when combined output cannot be
+  validated"; no finding; recorded for `a779acd..823047e`. **Spent 130,472 input
+  tokens** (83,200 cached) over 5 requests in 55 s: under its plan, inside the
+  allowance of 491,400. 4 commands, no `node --test`. The feature's Codex total:
+  4,764,153 input tokens.
+- 2026-10-12 · **Queued behind it:** the clean merge of `main` (`f43392d`) into S1
+  (`clean-merge-turn.sh`, log `s1-final-merge-turn.log`), after which S1 is pushed and
+  its pull request opened (body `s1-pr-body.md`); and M1f, the whole suite by file
+  under the counting tool on the cut (`m1f-turn.sh`), which answers the design's point
+  7: whether `bin/codex-review.test.mjs` still leads the suite. The cut merges `main`
+  once, after S1 is on it.
+- 2026-10-12 · **S1 holds `main` `f43392d`: merge `adc54b8`** (`s1-final-merge-turn.log`,
+  23:38:31 to 23:49:17, exit 0): clean, 5 paths from `main`, the merge commit's whole
+  gate passed, and the push check after it: "9 code commits since origin/main, all
+  covered by a Codex review record". Pushed after this entry, with its pull request.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
