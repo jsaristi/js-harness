@@ -1640,9 +1640,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       assessed it as not due, and Codex's record covers `e90e0a4..ca83a3d`, 204,919 input
       tokens, the patch correct). The window and the share at which the host compacts are
       not declared, against the design's line "the context pause and the window": they are
-      figures of the host, each with one home and a flag, not rules. Left: the model and the
-      effort of a Codex review and the reader of `codex-review-margin`, in
-      `bin/codex-review.mjs`, when `feat/gate-wait` is on `main`
+      figures of the host, each with one home and a flag, not rules. The model and the effort
+      of a Codex review read their rules and `codex-review --plan` reads the three rules of
+      the allowance (commit `f2896a6`, pull request 93; gentle-ai not due, Codex's record
+      covers `53826d8..f2896a6`, no finding). The command's test file states neither value
+      any more (branch `test/review-literals`). Left: the files of the design's list not
+      reached yet, `bin/check.mjs`, `bin/lib/manifest.mjs` and `bin/contract.mjs` with the four
+      values whose constant is not exported, and the queue of values the second reader found
+      ("What T16b builds", item 2); and two test files that still state the review's model as
+      a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
+      `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free
     - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
       `docs/model-effort.md`, and with T13 the checking half of B3 (the orchestrator's
@@ -2585,7 +2592,15 @@ two pieces are committed (`f2896a6`) and reviewed by both tools with nothing fou
 branch holds `main` at `c6b7976`; pull request 93 merged them (`abe9295`). After it, by the
 lead's call, this session closed F6 from a branch cut from `main`, `feat/codex-parity-close`
 (three commits; its record is `odd/tasks/codex-parity.md`, Progress, 2026-10-13): left there
-are the push, the pull request and its head to the lead. Then: the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
+are the push, the pull request and its head to the lead; pull request 94 merged it
+(`53568ac`) and F6 is closed on `main`. On `test/review-literals`, cut from that commit: a
+script changed the 125 places where `bin/codex-review.test.mjs` stated the model or the
+effort into reads of `REVIEW_MODEL` and `REVIEW_EFFORT` (two lines by hand: a string that
+holds backticks, and a comment); a test in `bin/lib/rules-bindings.test.mjs`, written first
+and seen failing on "gpt-6.1-sol is written in 67 lines", holds the file there. Left on it:
+the commit through the gate, which runs the file in its two processes, Codex if the push
+check asks a record for a commit of tests, the push, the pull request. No sub-agent on this
+piece (the lead: the plan's week at 92 of his 95 percent). Before it was: the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
 split that file in two (the lead's claim; read both files first); the defects in shipped
 behaviour with no task, of the lead's readers' list (relief file, lines 543 to 546), each read
 in the code before it becomes a register entry or a task; and T1. T2 and T8 are
