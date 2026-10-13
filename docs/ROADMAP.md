@@ -1146,7 +1146,10 @@ those features has a session open: the lead assigns them.
   holds 58 test files, with no `.npmignore`. What ships is his: open decision 10.
 - d. **A timed-out command of `contract run` leaves its processes running**
   (`bin/contract.mjs:228-235`: a shell with a timeout, and only the shell is killed).
-  `odd/tasks/sensors.md`, T5.
+  `odd/tasks/sensors.md`, T5. **Fixed on 2026-10-13** (branch `fix/contract-timeout-tree`): a
+  done-when command runs through the sensor runner (`runSensor`), which stops the whole tree
+  at the timeout and whatever the command left holding its output; a test with real
+  processes pins that neither the command nor what it started is left.
 - e. **`status` exits 1 in a project whose `harness.json` holds no pin**, this repository
   among them: "it has no string "version"" (`bin/update.mjs:140-142`,
   `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6.
