@@ -2053,6 +2053,20 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   known: an old question he closed that was asked again in other words stays listed until
   (b2) joins the list with the record by the question's number; `--json` now carries each
   session's calls (the board's JSON was 489,800 bytes with them).
+- 2026-10-13, written at 05:10: that slice is commit `c11ed18` (its turn at the gate 04:50
+  to 05:07: gate PASS, committed 05:06; gentle-ai: medium, 344 lines, not due; Codex on
+  `bb84d19..c11ed18`, planned at about 120,000 against 364,140: one part, 131,807 input
+  tokens, "the patch is incorrect (confidence 0.99)", two findings, both P2 and both
+  reproduced by it). One: a call that asked several questions left the list when only its
+  first was asked again and answered, and the others went with it unanswered. Two: the
+  answer to a question he closed can be in another transcript, where it was asked again; a
+  look that could not read that transcript listed the closed question again and the watch
+  said it closed anew, because the board to compare with is only made after a look with no
+  change. Fixed in the commit after it, test first (both tests failed, then 527 pass over
+  the three test files, in one turn at 05:09): a call is open while one of its questions
+  has no later answer, and its line shows what is left of it; `questionChanges` fills each
+  session the look could not read with what the board before last read of it
+  (`lastReadSessions`, which `watchBaseline` now uses too) before it derives the list.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

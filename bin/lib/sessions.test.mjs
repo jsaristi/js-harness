@@ -3043,6 +3043,24 @@ test('openQuestionsOf lists the questions put to him that have no answer, each c
   assert.deepEqual(lib.openQuestionsOf([], {}), { open: [], transcripts: 0, hours: null });
 });
 
+// Codex review of c11ed18, finding 1: a call that asked two questions left the list when only the first
+// was asked again and answered, and the second went with it though nobody answered it.
+test('openQuestionsOf keeps a call open while one of its questions has no answer: asked again and answered counts a question at a time', () => {
+  const put = (id, minute, state, asked) => ({ id, at: at(minute), asked, state });
+  const [first, second, third] = ['Pregunta 1: ¿a?', 'Pregunta 2: ¿b?', 'Pregunta 3: ¿c?'];
+  const open = (...later) => lib.openQuestionsOf([{ id: 'a', title: 'JH ORQ · proj', questions: [put('toolu_1', 1, 'closed', [first, second, third]), ...later] }], { hours: 12 }).open;
+  const left = (question, more) => [{ id: 'toolu_1', at: at(1), question, more, state: 'closed', asker: { id: 'a', title: 'JH ORQ · proj' } }];
+  assert.deepEqual(open(), left(first, 2));
+  // The first asked again and answered: the two others are still his to answer, and the line says them.
+  assert.deepEqual(open(put('toolu_2', 2, 'answered', [first])), left(second, 1));
+  assert.deepEqual(open(put('toolu_2', 2, 'answered', [first, 'Pregunta 4: ¿d?']), put('toolu_3', 3, 'answered', [third])), left(second, 0));
+  // Every one of them answered later, in one call or in several: nothing of the call is open.
+  assert.deepEqual(open(put('toolu_2', 2, 'answered', [second, first]), put('toolu_3', 3, 'answered', [third])), []);
+  // An answer from before the call, or a later call with no answer, answers none of it.
+  assert.deepEqual(open(put('toolu_0', 0, 'answered', [first, second, third])), left(first, 2));
+  assert.deepEqual(open(put('toolu_2', 2, 'closed', [first, second, third])).map(({ id, more }) => [id, more]), [['toolu_1', 2], ['toolu_2', 2]]);
+});
+
 test('renderBoard prints the open questions after the channel: how long ago, who asked, what became of each, and what was read', () => {
   const minutesAgo = (minutes) => new Date(NOW - minutes * 60000).toISOString();
   const open = [
@@ -3109,6 +3127,26 @@ test('watchBaseline keeps the questions of a session whose transcript one look c
   // Without it the same question would be news at the look after.
   assert.equal(lib.boardChanges(failed, boardWith([holder])).filter((line) => line.startsWith('question closed')).length, 1);
   assert.equal('questions' in lib.watchBaseline(boardOf(), boardOf()), false, 'a board without the list gains none');
+});
+
+// Codex review of c11ed18, finding 2: the answer to a closed question can be in another transcript (the
+// question asked again there). A look that could not read that transcript listed the closed one again, and
+// the watch returned for it though nothing had changed: the baseline is only made after a look with no change.
+test('boardChanges: a look that cannot read the transcript holding the answer does not say the question closed anew', () => {
+  const asker = { ...seen(A, 'waiting'), questions: [{ id: 'toolu_1', at: at(1), asked: ['Pregunta 1: ¿a?'], state: 'closed' }] };
+  const answerer = { ...seen(B, 'waiting'), questions: [{ id: 'toolu_2', at: at(2), asked: ['Pregunta 1: ¿a?'], state: 'answered', answeredAt: at(3) }] };
+  const boardWith = (sessions) => boardOf({ sessions, questions: lib.openQuestionsOf(sessions, { hours: 12 }) });
+  const read = boardWith([asker, answerer]);
+  const failed = boardWith([asker, { id: B, unavailable: 'EBUSY' }]);
+  assert.deepEqual(read.questions.open, []);
+  assert.equal(failed.questions.open.length, 1, 'the look that failed lists it: it cannot see the answer');
+  const closedAnew = (before, after) => lib.boardChanges(before, after).filter((line) => line.startsWith('question closed'));
+  assert.deepEqual(closedAnew(read, failed), []);
+  // A question he does close during such a look is still said: the transcript that holds it was read.
+  const other = { ...asker, questions: [...asker.questions, { id: 'toolu_3', at: at(4), asked: ['Pregunta 2: ¿b?'], state: 'closed' }] };
+  assert.deepEqual(closedAnew(read, boardWith([other, { id: B, unavailable: 'EBUSY' }])), ['question closed by him without an answer, asked by "title a": Pregunta 2: ¿b?']);
+  // And with nothing known of the unread transcript from before, the list of the look is what there is.
+  assert.equal(closedAnew(boardWith([{ id: B, unavailable: 'EBUSY' }]), failed).length, 1);
 });
 
 // --- `compactionStretch` and `replyOf`: what a transcript holds of the stretch before a compaction ---
