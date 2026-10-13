@@ -2993,6 +2993,124 @@ test('quoteOf refuses the result of a tool call that is no answer of his, and sa
   assert.equal(lib.quoteOf(transcript(answered('toolu_q1', 1, good), asked('toolu_q1', 2)), 1).person, true);
 });
 
+test('sessionFacts lists each question the transcript put to the person once, with what became of it', () => {
+  const second = 'Pregunta 11: ¿y la otra?';
+  const entries = [
+    prompt('typed', 1),
+    asked('toolu_q1', 2),
+    answered('toolu_q1', 3, { [QUESTION]: OPTIONS[1] }),
+    asked('toolu_q2', 4, [asking(second)]),
+    result('toolu_q2', { questions: [asking(second)], answers: { [second]: DISMISSED } }, 5),
+    asked('toolu_q3', 6),
+    answered('toolu_q3', 7, { [QUESTION]: OPTIONS[0] }, { is_error: true }),
+    asked('toolu_q4', 8, [asking(), asking(second)]),
+    // Not questions to him: another tool, and a side chain's call.
+    asked('toolu_b1', 9, [asking()], 'Bash'),
+    { ...asked('toolu_q5', 10), isSidechain: true },
+    // The host writes old entries again: a call and its answer a second time are the same question.
+    asked('toolu_q1', 2),
+    answered('toolu_q1', 3, { [QUESTION]: OPTIONS[1] }),
+  ];
+  assert.deepEqual(lib.sessionFacts(transcript(...entries)).questions, [
+    { id: 'toolu_q1', at: at(2), asked: [QUESTION], state: 'answered', answeredAt: at(3) },
+    { id: 'toolu_q2', at: at(4), asked: [second], state: 'closed' },
+    { id: 'toolu_q3', at: at(6), asked: [QUESTION], state: 'unanswered' },
+    { id: 'toolu_q4', at: at(8), asked: [QUESTION, second], state: 'pending' },
+  ]);
+  assert.deepEqual(lib.sessionFacts(transcript(prompt('typed', 1))).questions, []);
+});
+
+test('openQuestionsOf lists the questions put to him that have no answer, each call once across the transcripts, oldest first', () => {
+  const put = (id, minute, state, asked = [QUESTION]) => ({ id, at: at(minute), asked, state });
+  const sessions = [
+    // A question asked again later and answered then is no longer open, whatever became of the first call.
+    { id: 'a', title: 'JH ORQ · proj', questions: [put('toolu_1', 5, 'closed'), put('toolu_2', 9, 'pending', ['Pregunta 2: ¿b?', 'Pregunta 3: ¿c?']), put('toolu_3', 2, 'answered'), put('toolu_6', 1, 'closed', ['Pregunta 6: ¿f?']), put('toolu_7', 8, 'answered', ['Pregunta 6: ¿f?'])] },
+    // The host copies calls from one session's file to another's: the same id is the same question.
+    { id: 'b', title: 'JH 5 · made up', questions: [put('toolu_1', 5, 'closed'), put('toolu_4', 3, 'pending'), put('toolu_4b', 4, 'unanswered', ['Pregunta 4: ¿d?'])] },
+    // Answered in any file is answered; who asked is the file that has the call first.
+    { id: 'c', title: null, questions: [put('toolu_4', 3, 'answered'), put('toolu_2', 7, 'pending', ['Pregunta 2: ¿b?', 'Pregunta 3: ¿c?'])] },
+    { id: 'd', unavailable: 'EBUSY' },
+  ];
+  assert.deepEqual(lib.openQuestionsOf(sessions, { hours: 12 }), {
+    open: [
+      { id: 'toolu_4b', at: at(4), question: 'Pregunta 4: ¿d?', more: 0, state: 'unanswered', asker: { id: 'b', title: 'JH 5 · made up' } },
+      { id: 'toolu_1', at: at(5), question: QUESTION, more: 0, state: 'closed', asker: { id: 'a', title: 'JH ORQ · proj' } },
+      { id: 'toolu_2', at: at(7), question: 'Pregunta 2: ¿b?', more: 1, state: 'pending', asker: { id: 'c', title: null } },
+    ],
+    transcripts: 3,
+    hours: 12,
+  });
+  assert.deepEqual(lib.openQuestionsOf([], {}), { open: [], transcripts: 0, hours: null });
+});
+
+test('renderBoard prints the open questions after the channel: how long ago, who asked, what became of each, and what was read', () => {
+  const minutesAgo = (minutes) => new Date(NOW - minutes * 60000).toISOString();
+  const open = [
+    { id: 'toolu_1', at: minutesAgo(10), question: 'Pregunta 1: ¿a?', more: 0, state: 'closed', asker: { id: 'aaaaaaaa-1111', title: 'JH ORQ · proj' } },
+    { id: 'toolu_2', at: minutesAgo(5), question: 'Pregunta 2: ¿b?', more: 1, state: 'pending', asker: { id: 'cccccccc-3333', title: null } },
+    { id: 'toolu_3', at: null, question: 'Pregunta 3: ¿c?', more: 0, state: 'unanswered', asker: { id: 'bbbbbbbb-2222', title: 'JH 5 · made up' } },
+  ];
+  const section = (questions) => {
+    const lines = lib.renderBoard({ ...BOARD, ...(questions && { questions }) }, { now: NOW });
+    const from = lines.indexOf('Open questions');
+    return from < 0 ? null : lines.slice(from, lines.indexOf('', from) + 1);
+  };
+  assert.deepEqual(section({ open, transcripts: 3, hours: 12 }), [
+    'Open questions',
+    '  10m ago  JH ORQ · proj  closed by him without an answer  Pregunta 1: ¿a?',
+    '  5m ago  transcript cccccccc  on his screen, no answer yet  Pregunta 2: ¿b? (and 1 more in the same call)',
+    '  time not recorded  JH 5 · made up  no answer in its result  Pregunta 3: ¿c?',
+    '  read in 3 transcripts changed in the last 12h, each read whole',
+    '',
+  ]);
+  // Nothing open is said too, with what was read: an empty list from one transcript is not one from fifty.
+  assert.deepEqual(section({ open: [], transcripts: 1, hours: 12 }), ['Open questions', '  none', '  read in 1 transcript changed in the last 12h, each read whole', '']);
+  // A board that holds no such key (an older one a watch keeps) prints no section; and the section comes
+  // before the worktrees.
+  assert.equal(section(undefined), null);
+  const lines = lib.renderBoard({ ...BOARD, questions: { open, transcripts: 3, hours: 12 } }, { now: NOW });
+  assert.ok(lines.indexOf('Open questions') < lines.indexOf('Worktrees'));
+});
+
+const openOf = (...open) => ({ questions: { open, transcripts: 2, hours: 12 } });
+const openCall = (n, state, more = {}) => ({ id: `toolu_${n}`, at: at(n), question: `Pregunta ${n}: ¿a?`, more: 0, state, asker: { id: B, title: 'JH 2 · the board' }, ...more });
+
+test('boardChanges: a question he closed without answering since the last look is said once, and one that is only on his screen is not', () => {
+  const closed = 'question closed by him without an answer, asked by "JH 2 · the board": Pregunta 1: ¿a?';
+  // From his screen to closed, and one asked and closed between two looks.
+  assert.deepEqual(changes(openOf(openCall(1, 'pending')), openOf(openCall(1, 'closed'))), [closed]);
+  assert.deepEqual(changes(openOf(), openOf(openCall(1, 'closed'))), [closed]);
+  // Who asked with no title is named by its transcript, and the other questions of the call are counted.
+  assert.deepEqual(changes(openOf(), openOf(openCall(1, 'closed', { more: 2, asker: { id: C, title: null } }))), [
+    'question closed by him without an answer, asked by session cccccccc: Pregunta 1: ¿a? (and 2 more in the same call)',
+  ]);
+  // A long question is cut: the transcript has it whole.
+  const long = changes(openOf(), openOf(openCall(1, 'closed', { question: 'x'.repeat(500) })))[0];
+  assert.equal(long, `question closed by him without an answer, asked by "JH 2 · the board": ${'x'.repeat(159)}…`);
+  // Already closed at the last look, put on his screen, left with no answer in its result, answered or
+  // out of the window (it leaves the list): none of them is a question to put to him again now.
+  assert.deepEqual(changes(openOf(openCall(1, 'closed')), openOf(openCall(1, 'closed'))), []);
+  assert.deepEqual(changes(openOf(), openOf(openCall(1, 'pending'), openCall(2, 'unanswered'))), []);
+  assert.deepEqual(changes(openOf(openCall(1, 'pending'), openCall(2, 'closed')), openOf()), []);
+  // A board with no such list on either side (an older one a watch keeps) is not compared.
+  assert.deepEqual(changes({}, openOf(openCall(1, 'closed'))), []);
+  assert.deepEqual(changes(openOf(openCall(1, 'closed')), {}), []);
+});
+
+test('watchBaseline keeps the questions of a session whose transcript one look could not read, so a question closed before it is not said again', () => {
+  const holder = { ...seen(B, 'waiting'), questions: [{ id: 'toolu_1', at: at(1), asked: ['Pregunta 1: ¿a?'], state: 'closed' }] };
+  const boardWith = (sessions) => boardOf({ sessions, questions: lib.openQuestionsOf(sessions, { hours: 12 }) });
+  const older = boardWith([holder]);
+  const failed = boardWith([{ id: B, unavailable: 'EBUSY' }]);
+  assert.deepEqual(failed.questions.open, [], 'the look that could not read the transcript lists nothing');
+  const kept = lib.watchBaseline(older, failed);
+  assert.deepEqual(kept.questions, older.questions);
+  assert.deepEqual(lib.boardChanges(kept, boardWith([holder])), []);
+  // Without it the same question would be news at the look after.
+  assert.equal(lib.boardChanges(failed, boardWith([holder])).filter((line) => line.startsWith('question closed')).length, 1);
+  assert.equal('questions' in lib.watchBaseline(boardOf(), boardOf()), false, 'a board without the list gains none');
+});
+
 // --- `compactionStretch` and `replyOf`: what a transcript holds of the stretch before a compaction ---
 //
 // The stretch is the work a session did between two compactions, or before the first one. `compactionStretch`

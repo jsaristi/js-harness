@@ -655,6 +655,7 @@ export function sessionFacts(
     atContextPause: context === null ? null : context.tokens >= contextPause,
     contextCompaction: compactsAt,
     lastCompaction,
+    questions: questionsOf(entries),
     contextRoom: room,
     lastTask,
     lastTaskFits: room === null || lastTask.unavailable !== undefined ? null : lastTask.tokens <= room,
@@ -1468,6 +1469,8 @@ function questionCallsNaming(text, id) {
 export const QUESTION_DISMISSED = ['[User dismissed'];
 
 const SEVERAL = ', ';
+/** What a result is said to be when the person closed the question: `questionsOf` tells it from the other refusals. */
+const QUESTION_CLOSED = 'the result of a question the person closed without answering';
 
 /** Whether `answer` is labels of `options` joined with the separator the host joins several with. A label may
  * hold that separator, so the answer is not split on it: it is matched whole labels at a time, whichever way
@@ -1527,13 +1530,79 @@ function answerOf(entry, calls) {
   if (!asked.every((question) => typeof given[question] === 'string' && given[question].trim() !== '')) return unanswered;
   // The host's own words in the place of an answer: he closed the question. One closed question closes the call.
   const closed = (answer) => QUESTION_DISMISSED.some((mark) => answer.trimStart().startsWith(mark));
-  if (asked.some((question) => closed(given[question]))) return { what: 'the result of a question the person closed without answering' };
+  if (asked.some((question) => closed(given[question]))) return { what: QUESTION_CLOSED };
   const answers = questions.map((question) => {
     const options = (Array.isArray(question.options) ? question.options : []).map((option) => option?.label).filter((label) => typeof label === 'string');
     const answer = given[question.question];
     return { question: question.question, options, answer, how: howAnswered(answer, options, question.multiSelect === true) };
   });
   return { what: null, at: entry.timestamp ?? null, tool: call.tool, answers };
+}
+
+/** The questions a transcript's `entries` put to the person with a question tool, one a call in the order the
+ * file first has them: `{ id, at, asked, state }`, with the call's id and time and the texts it asked. `state`
+ * is what became of it, by `answerOf` on the call's result: `answered` (then `answeredAt` too), `closed` (he
+ * closed it without answering), `unanswered` (a result that is no answer of his: the host marked an error, or
+ * it holds none) or `pending` (no result in the file: it is on his screen, or the session stopped there). A
+ * call of a side chain asks nobody and is left out; a call the host wrote again is the same question. */
+export function questionsOf(entries) {
+  const calls = questionCallsOf(entries);
+  const found = new Map();
+  for (const entry of entries) {
+    if (entry.type !== 'assistant' || entry.isSidechain) continue;
+    for (const block of blocksOf(entry)) {
+      if (block.type !== 'tool_use' || !calls.has(block.id) || found.has(block.id)) continue;
+      const questions = Array.isArray(block.input?.questions) ? block.input.questions : [];
+      const asked = questions.map((question) => (isObject(question) && typeof question.question === 'string' ? question.question : '')).filter((question) => question !== '');
+      found.set(block.id, { id: block.id, at: entry.timestamp ?? null, asked, state: 'pending' });
+    }
+  }
+  for (const entry of entries) {
+    if (entry.type !== 'user') continue;
+    for (const block of blocksOf(entry)) {
+      const question = isToolResult(block) ? found.get(block.tool_use_id) : undefined;
+      if (question === undefined || question.state === 'answered') continue;
+      const { what } = answerOf(entry, calls);
+      question.state = what === null ? 'answered' : what === QUESTION_CLOSED ? 'closed' : 'unanswered';
+      if (what === null) question.answeredAt = entry.timestamp ?? null;
+    }
+  }
+  return [...found.values()];
+}
+
+// What became of a call that several files hold: the most that any of them knows.
+const QUESTION_STATE_RANK = { pending: 0, unanswered: 1, closed: 2, answered: 3 };
+
+/** The questions put to the person that have no answer of his, over the transcripts a board read: `{ open,
+ * transcripts, hours }`. `sessions` are the board's, each with the `questions` of its transcript
+ * (`questionsOf`); one that could not be read has none and is not counted in `transcripts`. The host copies
+ * calls from one session's file to another's, so a call is one question whatever the number of files that
+ * hold it: answered in any of them is answered, and who asked is the file that has it first. A question
+ * asked again later and answered then is not open either. `open` is oldest first, each `{ id, at, question,
+ * more, state, asker }`: the first text asked and how many more the call asked, `state` as `questionsOf`
+ * gives it without `answered`, and the asker's `{ id, title }`. `hours` is the board's window, for whoever
+ * prints the list to say what it covers: the transcripts that changed in it, each read whole, so a
+ * question of days ago in a session still at work is listed too. Nothing here is remembered by a session:
+ * it is all read. */
+export function openQuestionsOf(sessions, { hours = null } = {}) {
+  const read = sessions.filter((session) => Array.isArray(session.questions));
+  const sooner = (one, other) => one !== null && other !== null && one < other;
+  const calls = new Map();
+  for (const session of read) {
+    for (const question of session.questions) {
+      const seen = calls.get(question.id);
+      const state = seen !== undefined && QUESTION_STATE_RANK[seen.state] > QUESTION_STATE_RANK[question.state] ? seen.state : question.state;
+      if (seen === undefined || sooner(question.at, seen.at)) calls.set(question.id, { id: question.id, at: question.at, asked: question.asked, state, asker: { id: session.id, title: session.title ?? null } });
+      else seen.state = state;
+    }
+  }
+  const all = [...calls.values()];
+  const askedAgain = (call) => call.asked.length > 0 && all.some((other) => other.state === 'answered' && other.asked[0] === call.asked[0] && sooner(call.at, other.at));
+  const open = all
+    .filter((call) => call.state !== 'answered' && !askedAgain(call))
+    .sort((one, other) => (one.at ?? '~').localeCompare(other.at ?? '~'))
+    .map(({ id, at, asked, state, asker }) => ({ id, at, question: asked[0] ?? '', more: Math.max(asked.length - 1, 0), state, asker }));
+  return { open, transcripts: read.length, hours };
 }
 
 /** What an entry is when it is not what the person sent, in words: `null` for one that is. The result of a tool
@@ -2103,6 +2172,21 @@ function channelChanges(before, after, self) {
   return lines;
 }
 
+/** The questions the person closed without answering between two boards, one line each: who asked and
+ * the text. A closed question is the one change of the list that calls for a decision, since it has to be
+ * put to him again; one that is on his screen waits for him, and one he answers leaves the list. A
+ * question already closed at the board before is not said again, and a board with no such list (an older
+ * one) is not compared. A look that could not read a transcript lists none of its questions: the board to
+ * compare with keeps them (`watchBaseline`), so they are not news at the look after. */
+function questionChanges(before, after) {
+  if (!before.questions || !after.questions) return [];
+  const closed = (question) => question.state === 'closed';
+  const known = new Set(before.questions.open.filter(closed).map((question) => question.id));
+  return after.questions.open
+    .filter((question) => closed(question) && !known.has(question.id))
+    .map((question) => `question ${QUESTION_STATE_WORDS.closed}, asked by ${senderWords(question.asker, { quoted: true })}: ${questionWords(question)}`);
+}
+
 const pendingText = (plan) => (plan.pending.length > 0 ? plan.pending.join(', ') : 'nothing');
 const START_LENGTH = 100;
 
@@ -2192,7 +2276,9 @@ function planChanges(before, after) {
  *   a change taken back;
  * - a notice for the orchestrator that the channel's record gained (`channelChanges`). This is how a
  *   notice reaches the orchestrator with no message: from a session of another permission class, whose
- *   message the app would hold, and from a host that has no messages between sessions.
+ *   message the app would hold, and from a host that has no messages between sessions;
+ * - a question the person closed without answering (`questionChanges`): it is still open, and whoever
+ *   keeps the list of his questions puts it to him again.
  *
  * Everything else is left out on purpose, because it changes all the time and decides nothing: a session
  * that starts working, the age of a last entry or of a background file, the tail of a reply, a context
@@ -2205,7 +2291,14 @@ function planChanges(before, after) {
  * `self` names the session that is watching, which is never compared: it works for as long as it watches.
  * A fact that could not be read on either side is not compared, so a failed listing is never a change. */
 export function boardChanges(before, after, { self } = {}) {
-  return [...sessionChanges(before, after, self), ...gateChanges(before, after), ...pullRequestChanges(before, after), ...planChanges(before, after), ...channelChanges(before, after, self)];
+  return [
+    ...sessionChanges(before, after, self),
+    ...gateChanges(before, after),
+    ...pullRequestChanges(before, after),
+    ...planChanges(before, after),
+    ...channelChanges(before, after, self),
+    ...questionChanges(before, after),
+  ];
 }
 
 /** The board the next look is compared with: `newer`, with whatever it could not read taken from `older`.
@@ -2222,9 +2315,13 @@ export function watchBaseline(older, newer) {
     const old = byKey(previous.items.filter((plan) => !plan.unavailable), 'path');
     return { ...tree.plans, items: tree.plans.items.map((plan) => (plan.unavailable ? (old.get(plan.path) ?? plan) : plan)) };
   };
+  const lastRead = newer.sessions.map((session) => (session.unavailable ? (sessions.get(session.id) ?? session) : session));
   return {
     ...newer,
-    sessions: newer.sessions.map((session) => (session.unavailable ? (sessions.get(session.id) ?? session) : session)),
+    sessions: lastRead,
+    // The open questions follow from the transcripts: those of a session this look could not read are the
+    // ones of its last readable facts, or a question closed before would be news again at the look after.
+    ...(newer.questions && { questions: openQuestionsOf(lastRead, { hours: newer.questions.hours }) }),
     // Which gates are compared depends on the worktrees (`watchedGates`): a look that could not list them
     // compared none, so its gates are not yet what the next look is compared with.
     gates: newer.worktrees.available ? kept(newer.gates, older.gates) : older.gates,
@@ -2576,10 +2673,30 @@ function gateLines(board, now) {
   return ['Gates', ...lines, ''];
 }
 
+const QUESTION_STATE_WORDS = { closed: 'closed by him without an answer', pending: 'on his screen, no answer yet', unanswered: 'no answer in its result' };
+
+/** The text of an open question as a line carries it: the first one its call asked, cut to a line's
+ * width, and how many more the same call asked. */
+const questionWords = ({ question, more }) => `${clipped(question)}${more > 0 ? ` (and ${more} more in the same call)` : ''}`;
+
+/** The `Open questions` section (`openQuestionsOf`): a line a question put to the person that has no answer of
+ * his, oldest first, with how long ago it was asked, who asked, what became of it and the first text asked;
+ * then what was read, since an empty list from one transcript is not one from fifty. No section for a board
+ * that holds no such key. */
+function openQuestionLines(questions, now) {
+  if (!questions) return [];
+  const asker = ({ id, title }) => title ?? `transcript ${String(id).slice(0, 8)}`;
+  const rows = questions.open.map((question) => `  ${question.at === null ? 'time not recorded' : ago(question.at, now)}  ${asker(question.asker)}  ${QUESTION_STATE_WORDS[question.state]}  ${questionWords(question)}`);
+  const read = `  read in ${questions.transcripts} transcript${questions.transcripts === 1 ? '' : 's'} changed in the last ${questions.hours}h, each read whole`;
+  return ['Open questions', ...(rows.length > 0 ? rows : ['  none']), read, ''];
+}
+
 /** The board as lines of text: the sessions (in the order given, most recent first), the roster of
- * those sessions by role when the board has one, the channel when it has something to show, then
- * worktrees, the gates that run and wait, open pull requests and the orchestrator's relief file, and a
- * last line that says what the board cannot see. */
+ * those sessions by role when the board has one, the channel when it has something to show, the
+ * questions put to the person that have no answer when the board has that list, then worktrees, the
+ * gates that run and wait, open pull requests and the orchestrator's relief file, and a last line that
+ * says what the board cannot see. */
+
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
   const sizes = contextSizes(board);
@@ -2589,6 +2706,7 @@ export function renderBoard(board, { now }) {
   lines.push(
     ...(board.roster ? rosterLines(board.roster, now) : []),
     ...channelLines(board.channel, now),
+    ...openQuestionLines(board.questions, now),
     ...sectionLines('Worktrees', board.worktrees, 'none', (tree) => {
       const upstream = tree.aheadOfUpstream === 'no upstream' ? 'no upstream' : counted(tree.aheadOfUpstream, 'not pushed');
       const line = `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;

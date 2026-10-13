@@ -1103,9 +1103,11 @@ reader, and that table names this feature as their owner.
 - [ ] T17 Questions to him go through the question tool and through the orchestrator, and
   the open ones are computed (point 15; his words of 2026-10-12). Slice (a), built:
   `sessions --quote` and the stretch before a compaction read his answer to a question, and
-  refuse a question he closed. The reader's attack is done and version 2 written. Owed:
-  (b1) the number in the tool's text and "Open questions" on the board from the calls of the
-  transcripts; (b2) the `question` notice with fields, the answer with its number and copy,
+  refuse a question he closed. The reader's attack is done and version 2 written. Slice
+  (b1), built: "Open questions" on the board, computed from the question-tool calls of the
+  transcripts, each call once, and a watch that returns for a question he closes (Progress,
+  2026-10-13 04:48); the number in the tool's text is a sentence of the skill and goes with
+  (c). Owed: (b2) the `question` notice with fields, the answer with its number and copy,
   the withdrawal, the resume's half; (c) the orchestrator skill's text, the sentences for
   `AGENTS.md` and the two declared rules
 
@@ -2020,6 +2022,37 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   with the labels "a" and "a, a": before the fix it does not end. `main` moved meanwhile to
   `87cb7e2` (pull request 87, of another session: a Codex review runs at medium from a
   checkout that holds it), and this branch takes one merge of it before its push.
+- 2026-10-13, written at 04:48: T17, slice (b1) of point 15, on branch `feat/open-questions`
+  cut from `f43392d`. What slice (a) left unrecorded is in "Next step", 1e (commit `353009c`,
+  the merge `7e632ee`, pull request 88 merged as `f43392d`). Built, each step with its test
+  seen failing in a turn at the gate and passing in the same turn: `questionsOf` and the fact
+  `questions` of `sessionFacts` (each question-tool call of a transcript once, with what
+  became of it: answered, closed, unanswered, pending); `openQuestionsOf` (a call the host
+  copied into several files is one question by its id, answered in any file is answered, who
+  asked is the file that has it first, one asked again later and answered then is not open,
+  oldest first); the section "Open questions" of `renderBoard`, after the channel, and the
+  key `questions` of the board, in the text and in `--json`; `questionChanges` in
+  `boardChanges`, so a watch returns once for a question he closes and not for one that is
+  only on his screen, and `watchBaseline` computes the questions again from the last
+  readable facts of each session, so a transcript that one look could not read does not make
+  a closed question news twice. The host compacted this session by itself in the middle of
+  the slice (its boundary in the transcript: 04:34:23, trigger "auto", 469,728 tokens
+  before); it resumed from this document and the state file, and the lead had its line in
+  the same minute. Two turns ended with exit 1 and committed nothing: at 04:32 three older
+  tests of the command cut their section at "Worktrees", where "Open questions" now comes
+  first (their cut is moved); at 04:46 an assertion of the new baseline test counted every
+  line of the watch and not the question's (the code was right, the test is fixed). The
+  section's last line first said "of the last 12h": false, since the board reads whole each
+  transcript that changed in its window, so a question of days ago in a session still at
+  work is listed; it now says "read in N transcripts changed in the last 12h, each read
+  whole". Read on the real files in a turn at the gate (04:47): 558 pass over the four test
+  files; the board of this project prints "Open questions / none / read in 4 transcripts
+  changed in the last 12h, each read whole"; its `--json` holds 22 calls, all in the lead's
+  transcript, 21 answered and one closed ("Pregunta 1", line 8431), which is not listed
+  because the same question was asked again and answered (8488). Not in this slice, and
+  known: an old question he closed that was asked again in other words stays listed until
+  (b2) joins the list with the record by the question's number; `--json` now carries each
+  session's calls (the board's JSON was 489,800 bytes with them).
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -2481,8 +2514,20 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT THE CONTEXT PAUSE, 2026-10-13 04:22, THE NEWEST OF ALL (read this first after a
-      compaction). Slice (a) of point 15 is on `main`: pull request 88, merged 2026-10-12
+      STATE AT 2026-10-13 04:48, THE NEWEST OF ALL (read this first after a compaction).
+      Slice (b1) is BUILT on `feat/open-questions` and goes in one commit after this text
+      (Progress, 2026-10-13 04:48): then its reviews, one merge of `main` (at `abe9295`
+      when this was written, no file of this branch among those it moved), the push and
+      the pull request. NEXT, in the lead's order, each its own slice cut from `main`:
+      the finding on `pointersIn` with the folder `~/.js-harness/remote/` that `uninstall`
+      leaves (the two tests of the first are drafted in the scratchpad,
+      `pointers-slice-tests.txt`: an entry written into a list the user made, whose record
+      succeeded with no container, must not let `uninstall` delete a file an earlier
+      install created; and a manifest from before the field still deletes the file its
+      install created); then (b2) and (c); then the rest of the paragraph below, in its
+      order. The paragraph below is what came before.
+      STATE AT THE CONTEXT PAUSE, 2026-10-13 04:22 (the state before the one above).
+      Slice (a) of point 15 is on `main`: pull request 88, merged 2026-10-12
       23:19 (`f43392d`); its last commit `353009c` (gate PASS 23:08; gentle-ai: medium, 39
       lines, not due; Codex on `7235b5a..353009c`: 107,806 input tokens, "the patch is
       correct (confidence 0.98)") and the merge `7e632ee` of `main` are recorded only here
