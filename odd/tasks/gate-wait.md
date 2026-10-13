@@ -691,7 +691,7 @@ its tests: about 120. The four test files: thirteen places, through one helper i
 three. About 250 to 350 changed lines, one slice, one pull request, both reviews. Not
 high risk by the list: a parameter is added and nothing that exists changes.
 
-### Cut 2 of git: the review command asks git less (first version, before its reader)
+### Cut 2 of git: the review command asks git less (second version, after its reader)
 
 **Why.** After road 1's first slice the run ends when `bin/codex-review.test.mjs` ends
 (M1e: 624 s of 625). Its time is 6,067 git processes in one chain, and 4,618 of them are
@@ -781,6 +781,78 @@ says, records and refuses what it does today. Nothing to configure, nothing to u
 is the command whose records the pre-push check trusts. Both reviews, and the reader's
 attack asks, for each case the single questions cover, what the join does with it: the
 question the first slice of road 1 was not asked.
+
+**The second version: what the reader's attack changed** (2026-10-12; one reader, Opus
+at high effort, read-only, 28 tool calls, 144,861 tokens; a first reader asked at 18:45
+stalled within three minutes and gave nothing. Three of its findings checked by me on
+this git before they were written here). Where this differs from the text above, this
+holds.
+
+1. **What "cleanly" means, exactly.** The exit code fences nothing: `rev-parse` without
+   `--verify` exits 0 and prints back an argument it does not know (`--all^{commit}`
+   gives exit 0 and the line `--all^{commit}`; `--since=x` gives a `--max-age=` line;
+   a `--glob=` gives three lines). The text above says such a base exits 128: wrong, that
+   was with `--end-of-options` in the command. So: the base is the last argument; the
+   answer is a string (not a buffer, not a number) and nothing threw; it has exactly
+   four lines; lines 3 and 4 each match a full commit id, 40 or 64 hex digits, both of
+   one length. Anything else goes to the single questions. Across about 55 spellings of
+   a base the reader tried (a name that is both a branch and a tag, an annotated tag, an
+   abbreviated id, a file named `HEAD`), every answer that passed that test was the
+   commit `--verify` gives.
+2. **The hold asks `git status --porcelain=v2 --branch --no-ahead-behind
+   --untracked-files=no`.** Without `--no-ahead-behind` the second format walks the
+   history against the upstream on every hold, which the two single questions never did
+   and an installed project far from its upstream would pay. A hold whose join failed
+   once in a run is not tried again in that run: on a git that refuses the form each
+   hold would otherwise cost three processes. Checked equal to today's meaning: a
+   rename, an intent-to-add and a staged add each give a line that is not a header where
+   the first format is non-empty; `status.showStash` adds a header line `# stash`, which
+   is why only lines that do not start with `#` count; an unborn branch says
+   `# branch.oid (initial)`, which is no commit id and goes to the single questions.
+3. **Tests that exist and change, named** (`bin/codex-review.test.mjs` on
+   `feat/gate-wait`): `:4292`, `:5017` and `:5356` put a failure into the first git
+   process whose arguments hold `--git-common-dir`; after the cut that process is the
+   join at the top of the run, so their failure would be swallowed by the fallback and
+   two of their answers (a number, a buffer) would throw in `git()` at
+   `bin/codex-review.mjs:295`. They are aimed again at the single question the fallback
+   asks. `:970` fails every git call that holds `HEAD^{commit}` after Codex ran and
+   expects "Could not read HEAD and the state of the tree again": with the hold as one
+   `status` it would pass by accident; it is rewritten to fail the joined status and
+   then the single question. `:5314`, `:5335`, `:5344` count how often the git folder
+   is asked: read and kept true.
+4. **The order of the tests.** First, green on today's code: the six outcomes of the two
+   holds (written, HEAD moved, tracked files changed, could not be read; after a part
+   and after the review), of which only two have a test today (`:3626`, `:935`), and
+   HEAD moved with a failed status for each hold, since the two holds order their
+   checks differently (`:1399` unreadable first, `:1758` moved first) and the join must
+   keep each order. Then, red: the tests that count the processes of a run. The first
+   version called all of them red: only the counts are.
+5. **What it gives is an upper bound.** The git folder is asked only by a run that
+   reaches the records, so a run that is refused early asks two questions today and
+   would ask one, and a base that fails asks one today and two after (the join, then
+   the single question). About 340 runs of the test file reach the records, by the
+   count of `for-each-ref`, not 500. So the two joins give about 700 to 1,100 starts
+   there, not 1,400.
+6. **The merge-base joins the first question; the `for-each-ref` stays.** `git rev-parse
+   --git-dir --git-common-dir '<base>^{commit}...HEAD^{commit}'` prints the head, the
+   base and then `^<merge-base>`, equal to `git merge-base`, and no caret line when the
+   two share no history (the reader's run; several merge-bases not tried). That is one
+   process more out of every run that goes on to a review or a plan, about 550 in that
+   file, and it has to be proven before it is built: a base with several merge-bases,
+   and today's refusal "share no history". The `for-each-ref` as a trailing
+   `--remotes=` would make the answer unbounded and change meaning for a remote whose
+   name has a glob character: left.
+7. **The test file in two is the cleaner gain and is taken first if the count allows.**
+   It touches no refusal and no shipping code. What is not known is whether the gate
+   has the cores: the work's bound was 565 s at full use before S1. It is decided on a
+   number: after the joins are built, the file's count and its seconds alone say whether
+   it still leads the suite; if it does, it is split, with its helpers in a module both
+   halves load.
+
+Not checked by the reader, and so not claimed: a submodule, a path with a line break,
+unmerged lines of the status, any git older than this machine's 2.54 (the second format
+and `--no-ahead-behind` are old, by memory 2.11 and 2.17; the fallback is what covers a
+git that has neither), whether the second format refreshes the index differently.
 
 ## What the readers changed
 The first version is `335ce6f`. Two read-only readers, 2026-10-12; their reports are in this
@@ -2128,17 +2200,20 @@ is his tap). Done and merged: T11 (pull request 75), T13 (77), T14 (79, `main`
    (which parts the estimate rests on). A plan the command prints over the rate is not
    run on anyone's reading of what medium costs: the rule on spend is his, so it goes to
    him through the orchestrator's question.
-2. **The git cut, built on S1** (Design, "Cut 2 of git"; first version, its reader's
-   attack was asked at 18:45 and had not come back at 20:31: read its answer, or ask one
-   again, before anything is built; the attack asks, for each case the single questions
-   cover, what the join does with it). The count before is taken (`c3-before.json`:
-   7,840 git processes, the file 365 s alone). To weigh in the second version: the cut
-   as designed takes back about 1,400 of the 1,773 S1 added, so it needs more to end
-   under today's wall: the 340 `for-each-ref` (`bin/lib/codex-review-coverage.mjs:353`),
-   the 292 `diff`; and, the orchestrator's point, the test file in two (no shipping code
-   changes; worth up to about 100 s once S1 is in; the cost is its helpers in a shared
-   module): say in the design whether it joins the cut. Then built test first, both
-   reviews, the count after as the proof.
+2. **The git cut, built on S1** (Design, "Cut 2 of git", second version: its reader's
+   attack is in and the design's last part, "what the reader's attack changed", holds
+   where it differs). On a branch off `feat/gate-wait`. In this order: the tests of the
+   six outcomes of the two holds, green on today's code; then the tests that count the
+   processes of a run, red; then the two joins (the first with the exact test of a clean
+   answer, the hold with `--no-ahead-behind` and no second try in a run); the three
+   tests that fail the git folder's question and the one at `:970` aimed again. The
+   merge-base inside the first join only after its two cases are proven (several
+   merge-bases; "share no history"). The count before is taken (`c3-before.json`: 7,840
+   git processes, the file 365 s alone); the joins give about 700 to 1,100 starts, an
+   upper bound, against the 1,773 S1 added. **After they are built, the file's count and
+   its seconds alone decide whether the test file is split in two** (no shipping code;
+   its helpers in a module both halves load). Then both reviews, and the count after as
+   the proof.
 3. **S1 and the cut to `main` back to back**: S1 merges the then-current `main` in a
    lock turn (its 23 new tests moved to the constant there), push, pull request; the
    cut's pull request on top of it; the orchestrator merges one after the other. JH 7
@@ -2192,5 +2267,5 @@ is his tap). Done and merged: T11 (pull request 75), T13 (77), T14 (79, `main`
   535,338 and 174,805 for T14 and its correction, 297,743 for S1's last commit);
   sub-agents 2,389,643 tokens before 12:45, about 572,000 from then to 14:50, then
   285,336 (the eval reading), 261,389 (the first slice's design attack), 163,483 and
-  234,978 (the two writers of T14), and the reader of the git cut's design, asked at
-  18:45 and not yet counted.
+  234,978 (the two writers of T14), and 144,861 (the reader of the git cut's design; a first one
+  stalled and spent nothing that is known).
