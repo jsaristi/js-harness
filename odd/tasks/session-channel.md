@@ -968,6 +968,46 @@ above: "no, not as designed"). The lead took it whole. What it changed, each wit
   reasons to write to him (none is "a session sent a question"), and the first line of the
   work session's part.
 
+Version 3 of slice (b2), 2026-10-13, written before it is built and before its reader. What the
+night between version 2 and this one showed, each read in a file: the question tool HOLDS the
+session that calls it until he answers (the lead sat seven hours inside one call, its relief
+file, line 560; three sessions idled three hours on another, line 548), and a call the host
+holds, for his approval or for no reason anyone could read, looks like work from outside (this
+session, 2026-10-13 07:00:14 to 14:10:56: one Bash call with no result, and the app listed it as
+running the whole time). The lead's order for the slice names both. So (b2) is three parts,
+each its own commit, the cheapest protection first:
+1. A call that waits is seen. A transcript's facts gain the call that has no result yet: the
+   last tool call of the session's own chain (no side chain) whose id no later result names,
+   with the tool's name and when it was asked. The session's row on the board says it once it
+   is older than the longest a foreground command may run on this host (ten minutes, one
+   constant): "a Bash call has had no result for 7h 10m: the host may be holding it for his
+   approval, or it hangs". A question-tool call is not said there: it is in "Open questions"
+   as on his screen. A call of the agent tool is said as a sub-agent at work while its side
+   chain writes, and as waiting once that is silent too for the same ten minutes. A watch
+   returns once when a session's call crosses the limit, as it does once for the pause. Not
+   read: whether the host is asking for approval; no file of the host that this code reads
+   says it, and the line says "may".
+2. The `question` notice, as version 2 has it (fields `text`, `options`, `waits`; the number
+   is the ordinal of the question's line, read back and printed), with what lets the asker go
+   on: `notify --kind question` answers with the number and one line that says the question
+   is recorded, that the orchestrator shows it to him, and to go on with what does not wait on
+   it. Nothing in it calls the question tool. The board's list joins the record and the calls
+   by the number at the head of the call's text, with four states told apart: recorded and
+   not shown to him yet (with its age, so one that waits for hours is seen); on his screen;
+   closed by him; answered at file:line and not carried yet. `answer --question N` reads the
+   line with `quoteOf` where the transcript can be read and refuses one that is not his,
+   copies what the line holds, and is marked unverified where no transcript can be read;
+   `withdrawn --question N "why"` closes one without his answer. A watch returns for a
+   `question` written to the orchestrator, as for any notice to it, and for one that turns
+   answered and not carried.
+3. The resume's half: after a compaction the hook prints the record's open questions and the
+   unanswered question calls of the session's own transcript, and names `js-harness sessions`
+   for the rest.
+For slice (c), from the same night: the orchestrator calls the question tool only in the reply
+to a message he has just written, never in a turn another session or a watch began, because
+the call holds the orchestrator for as long as he is away; between his messages a question
+lives as its notice, and the reply to his next message shows the oldest one not yet shown.
+
 Slices, version 2, the smallest that loses nothing first: (a) piece 3, built; (b1) the number
 in the tool's text and "Open questions" on the board, computed from the question-tool calls
 of the window's transcripts, counted once by id, with the three states and the coverage line:
@@ -2576,7 +2616,24 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 14:13, THE NEWEST OF ALL (read this first after a compaction).
+      STATE AT 2026-10-13 17:02, THE NEWEST OF ALL (read this first after a compaction).
+      Pull request 101 (the exact undo of `uninstall`) is on `main` (`ad7b37b`, read with
+      `gh`). The lead gave the go by his word (its line 11381, read with `--quote`: the plan
+      is raised and its week is at 0). THE WORK IN HAND is slice (b2) of T17 on branch
+      `feat/question-notice`, cut from `ad7b37b`: its design is point 15, "Version 3 of slice
+      (b2)", three parts, each its own commit, test first: (1) a call with no result shows
+      on the board and wakes a watch; (2) the `question` notice with its number, the join
+      with the calls, `answer --question`, `withdrawn`; (3) the resume's half. A reader
+      attacks that design before part 2 is built; part 1 is small and may be built while it
+      reads. THE LEAD'S ORDER after (b2): (c) the texts, with the terms an installed project
+      never defines and the sentence that the question tool is called only in the reply to a
+      message he has just written; the row of the Codex CLI in place of the plugin's in
+      `doctor` (he ordered the plugin removed: the lead's relief file, line 500); the pause's
+      window (the default of 500,000) as a task; what a session pays for the pause entry.
+      The lead is told before `bin/update.mjs`, `bin/check.mjs` or `package.json` is taken
+      (JH 8 works there). Sub-agents are allowed again where a design needs a reader. The
+      paragraph below is what came before.
+      STATE AT 2026-10-13 14:13 (the state before the one above).
       Slice (b1) is on `main` (pull request 95). The exact undo of `uninstall` (the finding
       on `pointersIn` and the folder `~/.js-harness/remote/`) is BUILT on
       `fix/uninstall-pointers`, reviewed, with `main` merged in; its pull request is the
