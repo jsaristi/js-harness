@@ -1516,7 +1516,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - [x] T3d `docs/FAILURES.md` seeded from the records, not only with the eighteen: every
     failure the relief file and the feature documents tell, each control in place found by the
     command in the file it names
-  - [ ] T3e The tokenizer measures a fence from the list item it is under, not from the margin
+  - [x] T3e (commits `b6babc3` and `2b4e3ee`, pull request 82, on `main` at `bf982b1`;
+    Codex's records cover both, and gentle-ai assessed the range as not due)
+    The tokenizer measures a fence from the list item it is under, not from the margin
     (found by Codex in `21686a5`, second priority): today a fence under an item that opens
     within three spaces and closes deeper is left open, and with the option off a checkbox
     shown in a fence indented past three spaces is counted as a step by `js-harness progress`
@@ -2462,11 +2464,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     NEXT: the correction through the gate, Codex on that one commit, push, the pull request.
 
 ## Next step
-In this order. (1) The pull request of `fix/fence-under-list-item` (T3e), merged by the
-lead; T3e is checked off when it is on `main`. (2) The rest of the second part of T16b when
-`bin/codex-review.mjs` is free, after `feat/gate-wait`: the review's model and effort, and
-the reader of `codex-review-margin`. (3) T1, which takes section D of the proposal. No new
-piece is started before the lead's line (its word of 18:30, a claim). T2 and T8
+In this order. (1) The rest of the second part of T16b when `bin/codex-review.mjs` is free,
+after JH 8's S1 and its cut of the command's git calls are on `main`: the review's model and
+effort, and the reader of `codex-review-margin`. The lead says when the file is this
+session's (its word of 2026-10-12, 19:40, a claim); until then no new piece of code is
+started and the session stays stopped at this task end, at 85 percent of its context: a
+compaction comes before that piece. (2) T1, which takes section D of the proposal. T2 and T8
 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
 "What the hosts allow" that T2 rests on are confirmed with a logging hook.
 His, written here and in the lead's queue of his decisions (he is back since about 12:00 of
