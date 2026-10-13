@@ -23,6 +23,10 @@
 // The channel is the record `notify` writes under the harness home (bin/lib/channel.mjs): the board
 // prints its last notices and the last messages between sessions, gives a session opened from the phone
 // the title of the opening it read, and a watch returns for a notice written to the orchestrator.
+// "Open questions" are the questions a session put to the user with the host's question tool that have
+// no answer of his, read from the same transcripts (odd/tasks/session-channel.md, point 15): one he closed
+// without answering, one still on his screen. A call the host copied into several files is one question,
+// and one asked again and answered then is not listed. A watch returns for a question he closes.
 // A session's row says the context it holds, the room left before the host compacts it and what its last
 // task cost (odd/tasks/session-channel.md, "Context"): what a session needs at the context pause to judge
 // whether what is left fits. A watch returns once when a session reaches the pause. The share of the window
@@ -39,7 +43,7 @@ import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, hasTitle, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, hasTitle, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -480,6 +484,9 @@ export async function sessionsMain(
       // The record's last notices and the last messages between these sessions: `notify` writes the
       // first, the transcripts hold the second, and this command writes neither.
       channel: channelOf(record, sessions),
+      // The questions put to the user that have no answer of his, read from the same transcripts: nothing
+      // a session remembers is in this list.
+      questions: openQuestionsOf(sessions, { hours: parsed.hours }),
       worktrees,
       gates,
       gateLock,

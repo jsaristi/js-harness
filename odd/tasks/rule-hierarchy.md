@@ -1640,9 +1640,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       assessed it as not due, and Codex's record covers `e90e0a4..ca83a3d`, 204,919 input
       tokens, the patch correct). The window and the share at which the host compacts are
       not declared, against the design's line "the context pause and the window": they are
-      figures of the host, each with one home and a flag, not rules. Left: the model and the
-      effort of a Codex review and the reader of `codex-review-margin`, in
-      `bin/codex-review.mjs`, when `feat/gate-wait` is on `main`
+      figures of the host, each with one home and a flag, not rules. The model and the effort
+      of a Codex review read their rules and `codex-review --plan` reads the three rules of
+      the allowance (commit `f2896a6`, pull request 93; gentle-ai not due, Codex's record
+      covers `53826d8..f2896a6`, no finding). The command's test file states neither value
+      any more (branch `test/review-literals`). Left: the files of the design's list not
+      reached yet, `bin/check.mjs`, `bin/lib/manifest.mjs` and `bin/contract.mjs` with the four
+      values whose constant is not exported, and the queue of values the second reader found
+      ("What T16b builds", item 2); and two test files that still state the review's model as
+      a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
+      `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free
     - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
       `docs/model-effort.md`, and with T13 the checking half of B3 (the orchestrator's
@@ -2579,13 +2586,40 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**Where this session stands, later on 2026-10-13: stopped by the lead's call, at a task end.**
+Pull requests 91, 93, 94 and 96 are merged; the last piece is the documents branch
+`docs/shipped-defects`: the six defects in shipped behaviour that had no task, each read in
+the code on `main` at `f98f478` and all true, written in the roadmap ("Next") with a task in
+the feature document each belongs to (`install-update.md` T5 and T6, `sensors.md` T5,
+`practice-project.md` T5) and two open decisions of his (9, the README; 10, what the package
+ships). Left on it: the push, the pull request, its head to the lead. After it this session
+starts nothing: what it holds next waits for the lead's word, because the plan's week is at
+92 of his 95 percent. In order: the rest of T16b's second part (`bin/check.mjs`,
+`bin/lib/manifest.mjs`, `bin/contract.mjs`, files the session-channel session is editing);
+T1, whose paid measurement is his and waits for the week to reset; T2 and T8, his, asked by
+the lead. The block below is the record of earlier that day.
+
 **State on 2026-10-13, which replaces the two blocks of 2026-10-12 below (kept as the record
 of that day; pull request 91 merged what they list).** On `feat/rules-review-readers`: the
 two pieces are committed (`f2896a6`) and reviewed by both tools with nothing found, and the
 branch holds `main` at `c6b7976`; pull request 93 merged them (`abe9295`). After it, by the
 lead's call, this session closed F6 from a branch cut from `main`, `feat/codex-parity-close`
 (three commits; its record is `odd/tasks/codex-parity.md`, Progress, 2026-10-13): left there
-are the push, the pull request and its head to the lead. Then: the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
+are the push, the pull request and its head to the lead; pull request 94 merged it
+(`53568ac`) and F6 is closed on `main`. On `test/review-literals`, cut from that commit: a
+script changed the 125 places where `bin/codex-review.test.mjs` stated the model or the
+effort into reads of `REVIEW_MODEL` and `REVIEW_EFFORT` (two lines by hand: a string that
+holds backticks, and a comment); a test in `bin/lib/rules-bindings.test.mjs`, written first
+and seen failing on "gpt-6.1-sol is written in 67 lines", holds the file there. It is
+commit `c561834`: the gate passed in its turn (05:20 to 05:29, the file run whole in its two
+processes); gentle-ai, medium risk, review not due; the push check counts a commit of tests
+as code and refused the push until Codex's record, so Codex ran with `--base 53568ac`, "the
+patch is correct (confidence 0.93)", no finding, 187,810 input tokens (128,384 cached)
+against an allowance of 300,000, recorded. Left on it: the push, the pull request, its head
+to the lead. No sub-agent on this piece (the lead: the plan's week at 92 of his 95 percent).
+Codex since this session's compaction: three reviews, 715,741 input tokens, each inside its
+allowance (239,219 of 432,000; 288,712 of 620,400; 187,810 of 300,000). Before it was: the
+literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
 split that file in two (the lead's claim; read both files first); the defects in shipped
 behaviour with no task, of the lead's readers' list (relief file, lines 543 to 546), each read
 in the code before it becomes a register entry or a task; and T1. T2 and T8 are
