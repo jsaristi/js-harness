@@ -1008,6 +1008,55 @@ to a message he has just written, never in a turn another session or a watch beg
 the call holds the orchestrator for as long as he is away; between his messages a question
 lives as its notice, and the reply to his next message shows the oldest one not yet shown.
 
+Version 3 after its reader (one reader, read-only, 43 tool uses over the code and the 57
+transcripts; its verdict: "build with changes"; "the number join in part 2 is wrong as written
+and would mis-file his answers on the first question recorded"). Taken whole. What changes:
+- Part 1, the limit. Of 9,100 Bash calls paired with their results, twelve came back 601 to
+  606 seconds after the call (a command at the host's cap) and a watch looks every 30 s, so a
+  flat ten minutes fires on normal work: the limit is the cap plus a margin, fifteen minutes,
+  one constant. Only Bash, the agent tool and the question tool ever waited over ten minutes.
+- Part 1, "once". A watch's first look is its baseline, so a call that crosses the limit
+  between two watches is never said by either: the watch says it when it crosses and again
+  each time its age doubles. The row says it only while the session's state is working and
+  not after its `closed` notice. A held session's file does not change, so after the board's
+  window it leaves the board: the row is the only place it shows, which is one more reason to
+  wake early.
+- Part 1, sub-agents. A main transcript holds no side-chain entry (none of the 57 files; the
+  sub-agents write under `<session>/subagents/`), so "no side chain" filters nothing and the
+  silence of a sub-agent cannot come from the transcript's facts. It exists already: a
+  foreground call of the agent tool is open work with its file's last write. That line gets
+  the same limit, and the new fact is only the call's tool name and the wake.
+- Part 2, the join. The number is no unique key: the record holds no question yet, so its
+  ordinals start at 1, and the transcripts hold calls numbered by hand from "Pregunta 1" to
+  "Pregunta 25". A call joins question N only when it was asked after the notice was written
+  and its text starts with the exact prefix `notify` printed for N; `answer --question N`
+  refuses a line whose call fails either test, since `quoteOf` proves the line is his and not
+  what it answers. The prefix's word is data, as the tools' names are.
+- Part 2, the number. The append has no lock, so a count taken after it can be another
+  writer's: the notice carries an id of its own and is found by it, and the ordinal counts
+  the lines by a test that never changes (the schema and the kind, nothing a later version
+  may read otherwise).
+- Part 2, the reply of `notify`. "The orchestrator shows it" is false with no orchestrator
+  open or one that watches through an older copy, which skips a kind it does not know and
+  wakes for nothing. The reply follows the address `notify` already resolves: one
+  orchestrator, and it says to ring that title with the number; none or several, and it says
+  to ask him itself with the tool, the text headed by the prefix.
+- Part 2, a question the asker put to him itself (the orchestrator's, the common case): the
+  answer comes back into the asker's own turn, so it is closed by construction when the
+  answered call is in the asker's transcript, and no watch returns for it. "Answered and not
+  carried" is only for a question one session recorded and another asked. For that the facts
+  must keep the line of each call and of its result, and the list the answered calls and the
+  file that holds the answer: slice (b1) keeps neither.
+- Part 2, the fields arrive on standard input as UTF-8, as an opening does, not through the
+  shell; the copy of a typed answer is capped, since the append relies on one small write.
+  The state `unanswered` of slice (b1) stays; of several calls for one number, the newest wins.
+- Part 3 repeated version 2's failure: printing the unanswered calls only, an orchestrator
+  compacted after his tap would see N open and no call, and ask again. The resume joins the
+  record with its own numbered calls in every state; a work session's prints its own
+  questions, with the ones answered since. Known and not solved here: a session the host
+  continued into a new file has its calls in the old one, which the resume does not read; an
+  answered call whose transcript leaves the board's window reads as not shown yet.
+
 Slices, version 2, the smallest that loses nothing first: (a) piece 3, built; (b1) the number
 in the tool's text and "Open questions" on the board, computed from the question-tool calls
 of the window's transcripts, counted once by id, with the three states and the coverage line:
@@ -2616,7 +2665,7 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 17:02, THE NEWEST OF ALL (read this first after a compaction).
+      STATE AT 2026-10-13 16:59, THE NEWEST OF ALL (read this first after a compaction).
       Pull request 101 (the exact undo of `uninstall`) is on `main` (`ad7b37b`, read with
       `gh`). The lead gave the go by his word (its line 11381, read with `--quote`: the plan
       is raised and its week is at 0). THE WORK IN HAND is slice (b2) of T17 on branch
