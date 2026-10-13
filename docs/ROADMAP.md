@@ -84,7 +84,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
-| F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián since 2026-10-06, on the branch `feat/codex-parity`, whose `odd/tasks/codex-parity.md` holds its state (see Next) |
+| F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third on the branch `feat/codex-parity`, paused by Sebastián on 2026-10-06 and closed by him on 13 of its 15 trials on 2026-10-12; its result is still to be written and merged (see Next) |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
 
 ## Checklist
@@ -1059,11 +1059,22 @@ Being built, each in a session of its own: the session channel
 of each is read in its document, under "Next step"; the order they come from, with its
 reasons, is under [Session channel](#session-channel). Also open:
 
-1. F6 Codex parity, paused by Sebastián since 2026-10-06 (`odd/tasks/codex-parity.md`, branch
-   `feat/codex-parity`, in the linked worktree `D:\js-harness-worktrees\codex-parity`): it
-   waits for his choice between running the trials of T7 still missing and closing it
-   without them (the count is below). Sebastián approved its plan and a staged spend on
-   2026-10-03: 2 smoke trials, then 15, then his go-ahead for the other 45.
+1. F6 Codex parity, paused by Sebastián on 2026-10-06 and closed by him on 13 of the 15
+   trials of T7 on 2026-10-12 (`odd/tasks/codex-parity.md`, branch `feat/codex-parity`, in the
+   linked worktree `D:\js-harness-worktrees\codex-parity`). Asked by the lead whether to close
+   with 13, run 15 new ones, or go back and run the two, he tapped "Cerrar con 13
+   (Recomendada)" (the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 9794,
+   2026-10-13T03:33Z, read with `js-harness sessions --quote`). The two not run are resolver
+   #3 and spec-drift #3 of `current` at `medium`. They could not join the same run as things
+   stand: the suite refuses to continue a results file recorded on another stack
+   (`evals/suite.mjs:751`, the message of `refusalOf`, `:329`); that branch's document records
+   codex-cli 0.160.0, gentle-ai 4.0.0 and engram 3.1.0 (`odd/tasks/codex-parity.md:1059`
+   there); and this machine answers codex-cli 0.162.0, gentle-ai 4.1.1 and engram 3.4.0 (each
+   `--version`, 2026-10-12). Putting the recorded versions back would have meant downgrading
+   programs over the memory store in use, which is what the question named. What is left of F6
+   is to write the result on 13 trials, saying so, in that branch's document and here, and to
+   merge slice 3; nothing more of it is paid for. Sebastián approved its plan and a staged
+   spend on 2026-10-03: 2 smoke trials, then 15, then his go-ahead for the other 45.
    Remote sessions, which he put before it that day, closed on 2026-10-04
    (`odd/tasks/remote-control.md`). The branch was brought up to `main` on 2026-10-04, so it
    holds the gate fix (`a3a1eb1`) without which a commit from a linked worktree can turn this
@@ -1073,8 +1084,9 @@ reasons, is under [Session channel](#session-channel). Also open:
    and reviewed, and merged on 2026-10-05 (#34): `node evals/suite.mjs --agent codex`
    runs the matrix, and `node evals/report.mjs --codex-results-dir evals/results/codex` sets the
    two hosts side by side, with a Codex trial's cost estimated at the list price of its model.
-   Slice 3 is on that branch, neither merged nor pushed: the 15 trials of T6 ran and T7 is
-   paused at 13 of its 15; its state is that branch's `odd/tasks/codex-parity.md`, "Next step".
+   Slice 3 is on that branch, neither merged nor pushed: the 15 trials of T6 ran and T7 stays
+   at 13 of its 15; its state is that branch's `odd/tasks/codex-parity.md`, "Next step", which
+   does not hold his closing answer yet.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.
 3. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
@@ -1214,9 +1226,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    the account's minutes ("Session channel", the order, item 2).
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks
    (`odd/tasks/codex-review-lean.md`, "Proposal for the Codex plugin").
-9. F6: the trials of T7 still missing, or closed without them (Next, item 1, with the count).
 
-Closed: the F5 spend ceiling (none; see Decided, Eval spend).
+Closed: the F5 spend ceiling (none; see Decided, Eval spend). F6's missing trials: closed
+without them, on 13 of 15, by his answer of 2026-10-12 (Next, item 1, with its line).
 
 ## Risks
 
