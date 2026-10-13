@@ -1053,6 +1053,20 @@ hierarchy above, not by this feature.
 
 ## Next
 
+**What the first version holds, by his answer of 2026-10-13.** Asked what enters the first
+version, the 1.0.0, he had four options: what is already installed, well finished (the one
+recommended); that and everything for several sessions; everything he asked for, with no date;
+or a trial in his other project first. He tapped "Todo lo que pedí, sin fecha" (the lead's
+transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 10519, 2026-10-13T09:18Z, read with
+`js-harness sessions --quote`). So nothing he ordered is cut to reach it, and it has no date:
+the open tasks of this map (`js-harness progress`), the defects in shipped behaviour that have
+no task yet, and what he ordered that has no design yet (the functions on demand and the
+switch of the Codex review among them, open decision 4) are all inside it. Which defects and
+which items those are is so far a list made by the lead's readers, sub-agents' claims that
+were not verified for this paragraph (the lead's relief file, lines 543 to 546); each enters
+this map as a task when it has been read in the code. Tagging still starts with that version
+(Decided, "Release source").
+
 Being built, each in a session of its own: the session channel
 (`odd/tasks/session-channel.md`), the gate log (`odd/tasks/gate-log.md`) and the rule hierarchy
 (`odd/tasks/rule-hierarchy.md`, current on the branch `feat/failures-register`). What is done

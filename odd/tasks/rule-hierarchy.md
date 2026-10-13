@@ -2550,14 +2550,30 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     is a mechanical change of a file JH 8 has a branch on; it waits for that branch.
   - His, sent to the lead: which figure of the plan is held to the allowance, the estimate or
     the higher one. The line says both and decides nothing.
+  - A hold that came late. The lead held both pieces at 00:41 until his answer on what a
+    first version holds; its message waited behind this session's turn and was read at 00:52
+    (`date`), with the pieces written. This session stopped there, let the one commit pass
+    its gate so that the work was not left uncommitted (`f2896a6`, turn 01:01 to 01:10, commit
+    exit 0), and ran no Codex, push or pull request. In the register as
+    `hold-read-after-build`.
+  - The hold was lifted by his answer: "Todo lo que pedí, sin fecha" to what enters the first
+    version (the lead's transcript, line 10519, read with `sessions --quote`); it is in the
+    roadmap at the head of "Next".
+  - Reviews of `f2896a6`. gentle-ai: medium risk, review not due, under budget (the hook's
+    assessment at the commit). Codex with `--base 53826d8`, in a turn of the gate, 04:20 to
+    04:21: "the patch is correct (confidence 0.91)", no finding, 239,219 input tokens (188,672
+    cached) against a plan of about 140,000 to 500,000 and an allowance of 432,000; recorded.
+    The plan's own line had said: estimate inside, higher figure over.
 
 ## Next step
 **State on 2026-10-13, which replaces the two blocks of 2026-10-12 below (kept as the record
 of that day; pull request 91 merged what they list).** On `feat/rules-review-readers`: the
-commit of the two pieces through the gate, gentle-ai's assessment from `53826d8`, Codex with
-`--base 53826d8` when its plan is inside the allowance the plan now prints, the push, the pull
-request, its head to the lead. Then, each when its file is free: the literals of
-`bin/codex-review.test.mjs` (after JH 8's `feat/gate-wait-two-halves`), and T1. T2 and T8 are
+two pieces are committed (`f2896a6`) and reviewed by both tools with nothing found; left are
+one merge of `origin/main` in a turn of the gate, the push, the pull request, its head to
+the lead. Then: the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
+split that file in two (the lead's claim; read both files first); the defects in shipped
+behaviour with no task, of the lead's readers' list (relief file, lines 543 to 546), each read
+in the code before it becomes a register entry or a task; and T1. T2 and T8 are
 his and go to the lead by message; a question to him is asked by the lead, with the question
 tool, never in this session's chat (his lines 8423 and 8528, the lead's claim, not read here).
 The worktree `code-map-switch` and its branches `docs/on-demand` and `docs/owed-documents`
