@@ -52,7 +52,8 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 - [x] T2 Version check and upgrade with injectable source and package manager — route: delegated writer
 - [x] T3 Zero-dependency TUI over the same commands — route: delegated writer
 - [x] T4 End-to-end proof (`npm run e2e`) — route: delegated writer
-- [ ] T5 `update` and `upgrade` stop asking the npm registry for a name nobody holds. Added on
+- [x] T5 (43934b2, route: inline; done on 2026-10-13, see Progress and "T5 design, second
+  version") `update` and `upgrade` stop asking the npm registry for a name nobody holds. Added on
   2026-10-13, a defect in shipped behaviour that had no task (`docs/ROADMAP.md`, "Next", the
   defects read on that day, item a). Read on `main` at `f98f478`: `resolveLatest` runs `<pm>
   view js-harness version` (`bin/update.mjs:34-42`, the name at `:14`) and `upgradeMain`
@@ -176,13 +177,43 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 - RDD over `b09d46f..59b18cb` (15 files, 670 lines): risk high ("the update path in `bin/update.mjs`"),
   consent granted by standing preference, four lenses → approved with no correction, acknowledged
   (lineage `review-7800d48135d84342`, authority burned).
+- 2026-10-13 T5 (43934b2, branch `fix/upgrade-source`, written inline by the session "JH 8" on the
+  orchestrator's order): with no folder of tarballs named (`--source` or `JS_HARNESS_SOURCE`),
+  `update`, `upgrade`, `status --global`, plain `status` outside a repository and the menu start no
+  process and say that no release is tagged yet; `upgrade` then exits 1 with nothing installed and
+  no sync run. `viewArgs` and the `name@version` spec are removed; `resolveLatest({ source })` is
+  the one place that answers "which release", for whoever builds the tag reader. With a source:
+  `upgrade` installs only a tarball newer than what is installed, a folder that is not there is
+  said in a line (it threw), and the menu passes its source on to its three version commands. The
+  help, the skill `install` writes, the roadmap ("Release source", item a) and the register's entry
+  `upgrade-cannot-work` (now controlled) say the same. One lock turn, 06:17 to 06:26: RED, the
+  three code files at HEAD and `node --test bin/update.test.mjs bin/tui.test.mjs
+  bin/lib/version.test.mjs` → 124 tests, 13 fail (the six new rules, the two of the menu, and five
+  older tests that now refuse to start a process); GREEN with the fix → 124 pass; `git grep
+  "js-harness@" -- bin scripts` → nothing; the commit's gate passed whole. gentle-ai: review not
+  due (`under_budget`, medium risk, 446 lines). Codex, once, 06:27 to 06:28, medium effort, two
+  parts of `35477d4..43934b2`: both passed with no finding, 213,326 input tokens (plan 179,000,
+  allowance 520,800), recorded. The design's one reader: 155,976 tokens. Not checked by anyone:
+  whether `npm install -g <tarball>` itself contacts the registry (audit, funding).
 
 ## Next step
-None — the feature is closed. `jsaristi/js-harness#1` was merged into `main` on 2026-09-26 with a
-merge commit (`8f8e268`), so every commit cited above keeps its hash. What comes next for the
-project lives only in `docs/ROADMAP.md`.
+T5 is done and waits for its pull request to be merged by the orchestrator. Two things are open,
+both sent to the orchestrator on 2026-10-13 at 06:27 and neither started:
+- **T6** waits for an answer that is his: is a `harness.json` with no version a project with no
+  pin (the recommendation: `status` answers and exits 0, `sync` says there is nothing to move to)
+  or an invalid file as today. `check` already accepts that file in this repository, so two
+  commands of the package disagree about it.
+- **A candidate task, not yet in Tasks:** with no `--prefix`, `upgrade --source` runs the sync
+  after its install as `js-harness sync --global` through a shell (`bin/update.mjs`, the
+  `syncResult` block), so it runs whatever `js-harness` is found on the path, and the check that
+  it was the upgraded copy comes after it ran.
+Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it changes the test
+"resolveLatest starts no process and answers nothing when no source is named" on purpose.
 
 ## State for a resume
+
+**Superseded on 2026-10-13 at 06:29: T5 is built and committed (43934b2); "Next step" above is
+the state.** What follows is kept as it was written, for the record of how T5 was ordered.
 
 Written on 2026-10-13 at 05:58 by the session "JH 8" (it closed gate-wait's T15 to T17 the
 same night and was at 86% of its context), before any line of T5 was read or written.
