@@ -2603,6 +2603,18 @@ undoes exactly). The lead's order for this session, in this order, on the branch
    (`bin/js-harness.mjs`), so that it cannot go stale silently: that test is written first.
    Load the skill `cognitive-doc-design` before writing it. It is code and a document: gate,
    gentle-ai, Codex by the rule.
+   **Started, and where it stopped:** the test is written and not committed,
+   `bin/readme.test.mjs` in the worktree (four tests: the dispatcher's list read from
+   `js-harness --help`; one `### js-harness <name>` section for each command under
+   `## Commands`, in the same order and no other; a fenced example in each; `## Install`, then
+   `## Remove`, then `## Commands`). Seen RED: 1 passes and 3 fail on "ENOENT … README.md".
+   The dispatcher lists 19 commands (`bin/js-harness.mjs:9-27`): check, gate, init, install,
+   sync, uninstall, status, update, upgrade, doctor, progress, contract, failures, rules,
+   codex-review, remote, sessions, notify, resume. Next: write `README.md` at the root, each
+   example from a run made for it (read a command's flags in its source before running it:
+   `install`, `init`, `sync`, `uninstall`, `upgrade`, `remote start` and `notify` write, so
+   their examples come from the practice folder or a temporary home, never from his); then
+   the test green, the commit through the gate, the reviews.
 2. **The roadmap**: open decisions 9 and 10 closed with their lines, both read: 9 by line
    10979; 10 by line 11146, "Solo los comandos (Recomendada)" (JH 8 builds it). Also read, for
    the task `install-update.md` T6: line 11166, "Vale, sin versión fijada (Recomendada)", to
