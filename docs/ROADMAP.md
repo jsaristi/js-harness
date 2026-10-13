@@ -1157,6 +1157,26 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    for prompts with no code intent — ~1.2k tokens per prompt on average, kept in the history
    (evidence in `odd/tasks/f2-context-diet.md`, T3). It is codegraph's config, so js-harness
    only reports it.
+   **Answered for this repository on 2026-10-12: off.** His words, to the lead's question
+   whether the add-on at each prompt goes off here or stays (the lead's transcript
+   `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8161, read with `sessions --quote`): "listo
+   apaguemos en este el mapa del codigo para este como para cuando el harnes funcione para
+   cuando no hay que meter codigo ya que gentle-ai no solo sirve para programar sino tambien
+   para investigacion, entonces hay que dar la opcion de deshabilitarlo y habilitarlo
+   dependiendo del caso y creoq ue asi con otras funcionalidades que tenemos, cierto?"
+   How it is off: `CODEGRAPH_NO_PROMPT_HOOK=1` under `env` in the untracked
+   `.claude/settings.local.json` of his machine, written by the lead by hand. It is in no
+   manifest; deleting the key undoes it. The map itself stays installed and can still be asked.
+   Evidence so far, two samples and no proof: one prompt in the lead's session arrived with no
+   output of the hook (the lead's claim); and in a session that was already running, JH 7, the
+   prompt of 19:35 still carried the hook's output and the next one, after 19:37, did not.
+   **A product direction in the same words, not designed:** the harness offers turning the
+   code map, and other functions that only serve programming, off and on by the kind of
+   project, since gentle-ai also serves research, where no code is written. It widens "js-harness
+   only reports it" above and joins decision 6. A candidate feature, not assigned, owed a
+   design with its two reviews before it reaches him. The lead's reading, not his words: a
+   switch for each function, kept in the project's `harness.json` and recorded in the manifest
+   so that `uninstall` undoes it, a kind of project being a preset of switches.
 5. Whether the Codex review stays at `high` at what it costs (the number is in "Codex review
    cost result").
 6. What the harness turns on by default in a project from the sub-agent models result
