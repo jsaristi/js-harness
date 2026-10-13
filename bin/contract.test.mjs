@@ -346,15 +346,11 @@ test('a command that times out is a FAIL row saying so, the next command still r
   assert.match((await runWithFake(md, { first: timedOut })).stdout, /\(timed out after 30 min\)/);
 });
 
-/** Whether a process with this pid is gone; polled up to 5 s so the OS has time to reap it. */
-async function goneWithin(pid, ms = 5000) {
+/** Waits until `holds()` is true, asking every 100 ms for up to `ms`; whether it came true. */
+async function until(holds, ms = 5000) {
   const deadline = Date.now() + ms;
   for (;;) {
-    try {
-      process.kill(pid, 0);
-    } catch (err) {
-      return err.code === 'ESRCH';
-    }
+    if (holds()) return true;
     if (Date.now() >= deadline) return false;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -366,8 +362,14 @@ async function goneWithin(pid, ms = 5000) {
 test('run stops a command at its timeout with its whole process tree: nothing it started is left running', async () => {
   const dir = makeTmpDir();
   const pidFile = (name) => path.join(dir, `${name}.pid`);
-  const pidOf = (name) => (fs.existsSync(pidFile(name)) ? Number(fs.readFileSync(pidFile(name), 'utf8')) : null);
-  const started = Date.now();
+  // `null` until the file holds a whole number: it exists, empty, for an instant before it is written.
+  const pidOf = (name) => {
+    const text = fs.existsSync(pidFile(name)) ? fs.readFileSync(pidFile(name), 'utf8') : '';
+    return /^[1-9]\d*$/.test(text) ? Number(text) : null;
+  };
+  const reaper = createReaper();
+  const since = Date.now();
+  let running;
   try {
     writeFile(path.join(dir, 'c.md'), contractWith('- `node hang.js` exits 0'));
     // The grandchild writes its pid and sleeps; the command writes its own, waits for that file, then sleeps too.
@@ -380,19 +382,23 @@ test('run stops a command at its timeout with its whole process tree: nothing it
       `while (!fs.existsSync(${JSON.stringify(pidFile('grandchild'))})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);`,
       'setTimeout(() => {}, 120000);',
     ].join('\n'));
-    const { code, stdout } = await run(['run', 'c.md', '--cwd', dir, '--timeout', '0.05']);
-    assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
+    running = run(['run', 'c.md', '--cwd', dir, '--timeout', '0.1']);
+    // Recorded while both are alive, with when each was created: once they are stopped, Windows may give
+    // either number to another process, and neither the look below nor the teardown may take that one for ours.
+    assert.ok(await until(() => pidOf('command') !== null && pidOf('grandchild') !== null), 'the command and its child started before the timeout');
+    const pids = reaper.pids([pidOf('command'), pidOf('grandchild')], { since });
+    const { code, stdout } = await running;
+    assert.ok(Date.now() - since < 60000, `took ${Date.now() - since} ms`);
     assert.equal(code, 1);
-    assert.match(stdout, /^FAIL {2}node hang\.js {2}\(timed out after 0\.05 min\)$/m);
+    assert.match(stdout, /^FAIL {2}node hang\.js {2}\(timed out after 0\.1 min\)$/m);
     assert.equal(stdout.split('\n').at(-1), 'not met');
-    for (const name of ['command', 'grandchild']) {
-      assert.notEqual(pidOf(name), null, `the ${name} never started`);
-      assert.ok(await goneWithin(pidOf(name)), `the ${name} (${pidOf(name)}) is still running`);
-    }
+    const left = () => reaper.look(pids).filter(({ alive }) => alive);
+    assert.ok(await until(() => left().length === 0), `still running after the run answered: ${left().map(({ found }) => found).join('; ')}`);
   } finally {
-    // Whatever a failing run left: this test must not be the one that leaves a process behind. Through the
-    // shared teardown, which stops a number only while it is still the process this test started.
-    createReaper().reap(['command', 'grandchild'].map(pidOf).filter((pid) => pid !== null), { since: started });
+    // Whatever a failing run left: this test must not be the one that leaves a process behind. The run is
+    // waited for first, and what was recorded is stopped by the shared teardown, by identity.
+    await running?.catch(() => {});
+    reaper.sweep();
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
