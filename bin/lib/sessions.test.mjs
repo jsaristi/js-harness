@@ -2934,6 +2934,14 @@ test('quoteOf gives his answer to a question the session asked with the host\'s 
     return lib.quoteOf(transcript(asked('toolu_q4', 1, [question]), answered('toolu_q4', 2, { [QUESTION]: answer })), 2).answered.answers[0].how;
   };
   assert.deepEqual(['Rojo, azul, Verde', 'Verde, Rojo, azul', 'Rojo, Verde', 'Rojo, azul', 'Rojo, amarillo', 'Verde, '].map(several), ['tapped', 'tapped', 'tapped', 'tapped', 'typed', 'typed']);
+  // Labels that are joins of each other divide an answer in a number of ways that doubles with its length:
+  // each place a label may begin is looked at once, so a long answer that is no join is told at once too. The
+  // hook that reads the stretch before a compaction has seconds, and the labels are what a session wrote.
+  const doubling = { question: QUESTION, multiSelect: true, options: ['a', 'a, a'].map((label) => ({ label })) };
+  const long = `${'a, '.repeat(60)}b`;
+  const began = Date.now();
+  const told = lib.quoteOf(transcript(asked('toolu_q5', 1, [doubling]), answered('toolu_q5', 2, { [QUESTION]: long })), 2).answered.answers[0].how;
+  assert.deepEqual([told, Date.now() - began < 2000], ['typed', true]);
   // The tools that ask, and what a host writes for a closed question, are lists and not words in the code: a
   // host that names its tool otherwise, or closes a question in other words, is one more line of them.
   assert.deepEqual(lib.QUESTION_TOOLS, ['AskUserQuestion']);

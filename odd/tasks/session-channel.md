@@ -2010,6 +2010,16 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   tests carry the host's words as the transcript has them, and the count that found them is
   a script that reads the text of each answer (53 results with answers, 4 of them the
   mark). The proof: `js-harness sessions --quote 65318fd5 8431` exits 1 and says so.
+- 2026-10-12, written at 22:25: that fix is commit `7235b5a` (its turn at the gate 22:06 to
+  22:22; gentle-ai: medium, 195 lines, not due; Codex on `7073eb0..7235b5a`, planned at
+  about 88,000: one part, 183,626 input tokens, one finding, P2: the matcher of several
+  labels walked every way an answer divides, and labels that are joins of each other make
+  that number double with the answer's length, in the quote and in the hook that reads the
+  stretch). Fixed in the commit after it: each place of the answer where a label may begin
+  is looked at once. Its test, written first, is an answer of sixty parts that is no join,
+  with the labels "a" and "a, a": before the fix it does not end. `main` moved meanwhile to
+  `87cb7e2` (pull request 87, of another session: a Codex review runs at medium from a
+  checkout that holds it), and this branch takes one merge of it before its push.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

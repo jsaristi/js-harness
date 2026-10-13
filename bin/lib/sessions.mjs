@@ -1471,9 +1471,26 @@ const SEVERAL = ', ';
 
 /** Whether `answer` is labels of `options` joined with the separator the host joins several with. A label may
  * hold that separator, so the answer is not split on it: it is matched whole labels at a time, whichever way
- * it divides. */
+ * it divides. Each place of the answer where a label may begin is looked at once: labels that are joins of
+ * each other divide an answer in more ways than could be walked, and the labels are what a session wrote. */
 function isLabelsJoined(answer, options) {
-  return options.some((label) => label !== '' && (answer === label || (answer.startsWith(label + SEVERAL) && isLabelsJoined(answer.slice(label.length + SEVERAL.length), options))));
+  const labels = options.filter((label) => label !== '');
+  const begun = new Set([0]);
+  const toLook = [0];
+  while (toLook.length > 0) {
+    const from = toLook.pop();
+    for (const label of labels) {
+      if (!answer.startsWith(label, from)) continue;
+      const end = from + label.length;
+      if (end === answer.length) return true;
+      const next = end + SEVERAL.length;
+      if (answer.startsWith(SEVERAL, end) && !begun.has(next)) {
+        begun.add(next);
+        toLook.push(next);
+      }
+    }
+  }
+  return false;
 }
 
 /** How the person gave an answer: `tapped` when it is one of the options the question showed, or, for a question
