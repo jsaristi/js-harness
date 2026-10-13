@@ -2195,6 +2195,48 @@ summary.
       merged, `main` `03d6d20`, and gentle-ai's outcome for its commit `0ccf615` was
       medium, 64 lines, not due (it was written in that pull request's body, since this
       document was not touched on that branch).
+      STATE AT 2026-10-12 20:32, THE NEWEST (read this first after a compaction). Part e is
+      commit `bf98aaa` on `feat/session-compaction-install`, local, NOT PUSHED, the tree
+      clean. Its first turn at the gate failed at the commit (20:00 to 20:12, nothing
+      committed): this document quoted the lead's question, which names the pause's share,
+      and a test of `bin/sessions.test.mjs` allows that number in its rule alone. The
+      mistake is this session's, in its parts: a document text went to the gate with
+      `rules check` and the contract check run by hand and not the tests that read the
+      documents, a hole the lead had named at 13:10; fixed by rewording the sentence;
+      what stops it: before a commit that holds a feature document, `node --test
+      bin/sessions.test.mjs bin/rules.test.mjs` by hand; in the harness it is what JH 8
+      put on `main` for commits of documents alone (pull request 77); the proof is the
+      second turn. That turn (20:13 to 20:29, exit 0): gate PASS, committed 20:23;
+      gentle-ai: medium, 1,253 lines, not due (under_budget); Codex on `46a7794..bf98aaa`,
+      planned at about 1,520,000 input tokens, budget 1,533,420: 4 parts, 1,095,575 input
+      tokens (785,280 cached), recorded; the practice journey on `bf98aaa`: 11 of 11, the
+      real home unchanged. Three parts correct and TWO FINDINGS, each P2, in
+      `bin/lib/manifest.mjs`, NOT FIXED YET, the next work of this branch, test first, in
+      one commit through the gate with its own Codex review (their whole text is in the
+      scratchpad, `codex-findings-part-e.txt`): (1) line 374: an entry whose write was
+      skipped (a settings file that could not be written) still enters the list of
+      pointers that lets `uninstall` delete a file install created, so a list the user
+      added there can be deleted with it: a skipped entry that owns nothing must not count;
+      (2) line 479: when a settings file cannot be read during a reinstall or a sync, the
+      record of how many lists install created for an entry is replaced by zero, and after
+      that `uninstall` leaves those lists empty instead of removing them: the earlier
+      record for the same file and pointer must be carried forward. Then: the push, its
+      pull request, the head to the lead, who installs the entry on his machine once it is
+      on `main`. After that, in this order: the side worktree and its branch removed; five
+      lines to the lead on what was seen today of sessions that came back from a
+      compaction with no resume prompt, for the question of the second block of a cut;
+      the design, to the lead before any code, of his rules on questions (below), with
+      two more answers of his that the lead reports and this session has not read at
+      their lines yet: the yardstick of "the last task" becomes the longest stretch of work
+      since the last summary, and the orchestrator that fills is compacted and goes on,
+      replaced only when damaged.
+      A SECOND RULE OF HIS ON QUESTIONS (the lead's transcript `65318fd5`, line 8528, read
+      with `sessions --quote`, exit 0): "Otra es que siempre necesito que las preguntas en
+      las haga el orquestador, no la sesion para poder centralizar todo en una sola parte."
+      So a work session asks him nothing in its own chat: a question goes to the lead by
+      message, with the situation in everyday words, the options, the recommendation and
+      what waits on it, and the lead asks him and carries the answer back with its line.
+      The two blocks of a cut stay in the session's own chat.
       HIS NEW RULE ON QUESTIONS (2026-10-12 19:55 local, the lead's transcript `65318fd5`,
       lines 8423 and 8439, both read with `sessions --quote`, exit 0): "tu no tienes una
       funcionalidad o forma de darme las preguntas que yo apriete con click las opciones y
