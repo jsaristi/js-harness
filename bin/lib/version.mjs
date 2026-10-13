@@ -20,6 +20,11 @@ export function isNewer(candidate, current) {
   return compareSemver(candidate, current) > 0;
 }
 
+/** How a machine gets the newest copy today, in words for a message: from the default branch, since no
+ * version is tagged or published before 1.0.0 (docs/ROADMAP.md, "Release source"), so `upgrade` finds
+ * nothing. It names npm and says the rest: a copy that pnpm installed is not the one npm would replace. */
+export const INSTALL_NEWEST = 'npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it';
+
 /** Extracts the version out of a `js-harness-<semver>.tgz` (an `npm pack` output name), or null. */
 export function parseTarballVersion(filename) {
   const m = TARBALL_RE.exec(filename);

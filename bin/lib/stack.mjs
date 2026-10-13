@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { readManifest } from './manifest.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
+import { INSTALL_NEWEST } from './version.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -539,8 +540,7 @@ export function hookCommandPlan(commands) {
 // The fix of the hook commands check. `upgrade` is the command that installs the newer release (`update` only reports
 // whether one exists, and takes no `--global`); the upgraded copy then syncs the machine's install, which rewrites the
 // entries too.
-const HOOK_FIX =
-  'the js-harness on the path is older than these entries: upgrade it (js-harness upgrade), then run js-harness doctor again';
+const HOOK_FIX = `the js-harness on the path is older than these entries: install the newest copy (${INSTALL_NEWEST}), then run js-harness doctor again`;
 // The first line of a tried command's standard error that a gap line shows; the rest is not the answer.
 const STDERR_LINE_MAX = 160;
 

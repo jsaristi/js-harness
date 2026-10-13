@@ -15,6 +15,7 @@ import {
   staleManifestMessage,
   invalidHarnessJsonMessage,
 } from './lib/project.mjs';
+import { INSTALL_NEWEST } from './lib/version.mjs';
 
 const INSTALL_USAGE = 'Usage: js-harness install [--home <path>]';
 const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global]';
@@ -235,10 +236,13 @@ function reportSyncProject(result) {
     return 1;
   }
   if (result.pinMismatch) {
+    // No version is tagged before 1.0.0 (docs/ROADMAP.md, "Release source"), so a pin cannot be installed
+    // by its number: the one copy a machine can install is the default branch's.
     console.error(
       `harness.json pins js-harness ${result.pin} but ${result.version} is running; nothing was written. ` +
-        `To use the pinned version, run npm i -g github:jsaristi/js-harness#v${result.pin}; ` +
-        `or raise the pin to ${result.version} in harness.json and commit it.`,
+        `No version of js-harness is tagged yet, so ${result.pin} cannot be installed by its number. ` +
+        `If ${result.pin} is the newer one, install the newest copy on this machine (${INSTALL_NEWEST}) and run js-harness sync again; ` +
+        `otherwise set the pin to ${result.version} in harness.json and commit it.`,
     );
     return 1;
   }
