@@ -239,7 +239,7 @@ export function ownsFolder(markerText) {
 // ---- the real home, before and after ---------------------------------------------------------------------------------
 
 // What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): two skills
-// for each of two hosts, and two entries in a file of each host (`HARNESS_HOOKS` below).
+// for each of two hosts, two entries in a file of each host, and the pause entry in Claude Code's (`HARNESS_HOOKS` below).
 const SKILLS = ['js-harness', 'js-harness-orchestrator'];
 const HOSTS = ['.claude', '.codex'];
 // The arrays of the manifest whose records name a file by `path`: what `install` wrote, the files it grafted
@@ -311,14 +311,31 @@ export function compareSnapshots(before, after) {
 
 // ---- the hook entries of a host file ---------------------------------------------------------------------------------
 
-/** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the
- * event it hangs from, its matcher and its command: the doctor's at the start of a session, and the resume
- * hook's after a compaction. The test holds this list to what `bin/lib/manifest.mjs` declares
- * (`entryComponents`), so a journey cannot go on passing against an install that changed. */
+/** The command of the pause hook, as `bin/lib/manifest.mjs` spells it (`PAUSE_HOOK_COMMAND`): a test holds the two
+ * spellings together, as the gate log's folder is held. */
+const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
+
+/** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
+ * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
+ * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
+ * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from. The test holds
+ * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
+ * an install that changed. */
 export const HARNESS_HOOKS = Object.freeze([
-  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' }),
-  Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' }),
+  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
+
+/** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
+export function hooksOfHost(host) {
+  return HARNESS_HOOKS.filter((hook) => hook.hosts.includes(host));
+}
+
+/** A hook as the messages of this library name it: its command, its event and its matcher, or that it has none. */
+export function hookLabel(hook) {
+  return `"${hook.command}" (${hook.event}, ${hook.matcher === undefined ? 'no matcher' : `matcher ${hook.matcher}`})`;
+}
 
 /** The commands of the hook entry `entry` as one string (`a && b` for more than one), or `null` when it has
  * none or is no entry. */
@@ -327,14 +344,23 @@ function entryCommand(entry) {
   return commands.length === 0 ? null : commands.join(' && ');
 }
 
+/** One entry of a hooks list as the messages of this library name it: its command, its matcher or that it has none. */
+function entryShown(entry) {
+  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return 'not an entry';
+  const command = entryCommand(entry);
+  return `${command === null ? 'no command' : `"${command}"`} (${typeof entry.matcher === 'string' ? `matcher ${entry.matcher}` : 'no matcher'})`;
+}
+
 /** What is wrong with the hook entries of a host file after `install`, or `null` when nothing is. `text` is
- * the content of the file (`.claude/settings.json`, `.codex/hooks.json`) and `seededCommand` the command of
- * the one entry that was there before, the user's. Nothing is wrong when `hooks.SessionStart` holds that
- * entry first and untouched in what it runs, and then each entry of `HARNESS_HOOKS` once, in order, with
- * its matcher and its command: an entry missing, one written twice by a second install, and the right
- * command under another matcher are each a problem. The message says what was expected and every entry
- * found, so a failed step shows the file without opening it. */
-export function hostHooksProblem(text, seededCommand) {
+ * the content of the file (`.claude/settings.json`, `.codex/hooks.json`), `seededCommand` the command of the
+ * one entry that was there before, the user's, and `host` (`claude` or `codex`) the host whose file it is, which
+ * decides what `install` wrote there. Nothing is wrong when `hooks.SessionStart` holds that entry first and
+ * untouched in what it runs, and then each of the host's `SessionStart` entries of `HARNESS_HOOKS` once, in
+ * order, with its matcher and its command: an entry missing, one written twice by a second install, and the right
+ * command under another matcher are each a problem. `hooks.PostToolUse` is checked after that, by
+ * `postToolUseProblem`. The message says what was expected and every entry found, so a failed step shows the
+ * file without opening it. */
+export function hostHooksProblem(text, seededCommand, host) {
   let data;
   try {
     data = JSON.parse(text);
@@ -343,19 +369,64 @@ export function hostHooksProblem(text, seededCommand) {
   }
   const entries = data?.hooks?.SessionStart;
   if (!Array.isArray(entries)) return 'the file holds no list at hooks.SessionStart';
-  const ours = HARNESS_HOOKS.filter((hook) => hook.event === 'SessionStart');
+  const ours = hooksOfHost(host).filter((hook) => hook.event === 'SessionStart');
   const asExpected =
     entries.length === ours.length + 1 &&
     entryCommand(entries[0]) === seededCommand &&
     ours.every((hook, index) => entryCommand(entries[index + 1]) === hook.command && entries[index + 1].matcher === hook.matcher);
+  if (!asExpected) {
+    const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
+    return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(entryShown).join(' | ')}`;
+  }
+  return postToolUseProblem(data, host);
+}
+
+/** What is wrong with `hooks.PostToolUse` of a host file, or `null` when nothing is. Claude Code holds the pause
+ * entry once, with no matcher, at the end of the list: `install` appends it, so a user's own entry before it stays
+ * first and untouched. Codex holds no entry of the harness there, so one found in its file is a problem. */
+function postToolUseProblem(data, host) {
+  const list = data?.hooks?.PostToolUse;
+  const ours = hooksOfHost(host).filter((hook) => hook.event === 'PostToolUse');
+  if (!Array.isArray(list)) return ours.length === 0 ? null : 'the file holds no list at hooks.PostToolUse';
+  const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === 'PostToolUse').map((hook) => hook.command);
+  const harnessFound = list.filter((entry) => harnessCommands.includes(entryCommand(entry)));
+  const found = list.length === 0 ? 'no entry' : list.map(entryShown).join(' | ');
+  if (ours.length === 0) return harnessFound.length === 0 ? null : `expected no entry of the harness in hooks.PostToolUse of ${host}; found: ${found}`;
+  const tail = list.slice(-ours.length);
+  const asExpected =
+    harnessFound.length === ours.length &&
+    ours.every((hook, index) => entryCommand(tail[index]) === hook.command && tail[index]?.matcher === hook.matcher);
   if (asExpected) return null;
-  const shown = (entry) => {
-    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return 'not an entry';
-    const command = entryCommand(entry);
-    return `${command === null ? 'no command' : `"${command}"`} (${typeof entry.matcher === 'string' ? `matcher ${entry.matcher}` : 'no matcher'})`;
-  };
-  const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
-  return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(shown).join(' | ')}`;
+  const expected = ours.map((hook) => `"${hook.command}" (${hook.matcher === undefined ? 'no matcher' : `matcher ${hook.matcher}`})`).join(', then ');
+  return `expected ${expected} once, at the end of hooks.PostToolUse; found: ${found}`;
+}
+
+/** What is wrong with a host file after `uninstall`, or `null` when it is the file as `setup` seeded it (`seededText`, the
+ * content the journey wrote), byte for byte. `install` takes back every list it made when `uninstall` removes its entry
+ * (`createdContainers` in the manifest), so nothing but the seeded bytes is right. An empty `hooks.SessionStart` or
+ * `hooks.PostToolUse` list that the seeded file does not have is named, since it is the leftover this check exists to catch. */
+export function uninstalledHostProblem(text, seededText) {
+  if (typeof text !== 'string') return 'the file is not there';
+  if (text === seededText) return null;
+  const leftover = leftoverList(text, seededText);
+  if (leftover !== null) {
+    return `hooks.${leftover} is left as an empty list, which install made and uninstall must remove; found:\n${text}`;
+  }
+  return `expected the file as setup seeded it, byte for byte; found:\n${text}`;
+}
+
+/** The name of an empty `hooks` list of the harness (`SessionStart` or `PostToolUse`) that `text` holds and the seeded file
+ * does not, or `null`. A text that is not JSON has none. */
+function leftoverList(text, seededText) {
+  let data;
+  let seeded;
+  try {
+    data = JSON.parse(text);
+    seeded = JSON.parse(seededText);
+  } catch {
+    return null;
+  }
+  return ['SessionStart', 'PostToolUse'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
 }
 
 // ---- the gate log of the practice home -------------------------------------------------------------------------------

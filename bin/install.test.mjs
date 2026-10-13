@@ -86,6 +86,22 @@ test('installMain writes the manifest under --home and exits 0', async () => {
   }
 });
 
+test('installMain then uninstallMain give a Claude settings file with no hooks key its bytes back, indent and all', async () => {
+  const home = makeTmpHome();
+  try {
+    const settings = path.join(home, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, `${JSON.stringify({ theme: 'dark' }, null, 4)}\n`, 'utf8');
+    const seeded = fs.readFileSync(settings, 'utf8');
+
+    assert.equal(await installMain(['--home', home]), 0);
+    assert.equal(await uninstallMain(['--global', '--home', home]), 0);
+    assert.equal(fs.readFileSync(settings, 'utf8'), seeded, 'the empty PostToolUse and SessionStart lists install made are taken back too');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('syncMain updates the manifest under --home and exits 0', async () => {
   const home = makeTmpHome();
   try {
@@ -273,7 +289,7 @@ test('installMain and syncMain keep the record of an optional file, and the file
   }
 });
 
-// Session channel, T6: two entries go into each host file, so a line names the hook it registered.
+// Session channel, T6: the entries go into the host files (the pause hook's too, in Claude Code's), so a line names the hook it registered.
 test('installMain says which hook each entry it registers is, and uninstallMain takes every one back with the files it made', async () => {
   const home = makeTmpHome();
   try {
@@ -286,10 +302,11 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
       `registered hook entry in ${hooks}: js-harness doctor --hook (SessionStart, matcher startup|resume)`,
       `registered hook entry in ${settings}: js-harness resume --hook (SessionStart, matcher compact)`,
       `registered hook entry in ${hooks}: js-harness resume --hook (SessionStart, matcher compact)`,
+      `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUse)`,
     ]);
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
-    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
+    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
     assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

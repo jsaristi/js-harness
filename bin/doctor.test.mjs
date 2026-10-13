@@ -141,13 +141,13 @@ test('doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account', 'remote-server'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account', 'remote-server', 'hook-commands'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead.
-      assert.equal(row.upToDate, ['context7', 'claude-account', 'remote-server'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'claude-account', 'remote-server', 'hook-commands'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -444,9 +444,10 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
 
     assert.equal(code, 0);
     const lines = output.split('\n').filter(Boolean);
-    assert.equal(lines.at(-2), accountLine('ok'), output);
-    assert.equal(lines.at(-1), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
-    assert.equal(lines.length, 9, 'the header, the six tools and the two checks');
+    assert.equal(lines.at(-3), accountLine('ok'), output);
+    assert.equal(lines.at(-2), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.equal(lines.at(-1), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
+    assert.equal(lines.length, 10, 'the header, the six tools and the three checks');
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -551,6 +552,8 @@ test('the account check has no latest version: it is never looked up, and never 
 
 const remoteLine = (state) =>
   'remote-server'.padEnd(16) + 'n/a'.padEnd(10) + state.padEnd(10) + 'n/a'.padEnd(10) + 'n/a'.padEnd(10) + 'n/a';
+const hookLine = (state) =>
+  'hook-commands'.padEnd(16) + 'n/a'.padEnd(10) + state.padEnd(10) + 'n/a'.padEnd(10) + 'n/a'.padEnd(10) + 'n/a';
 const SUPERVISOR = { pid: 4242, startedAt: 1_759_700_000_000 };
 /** Project folders are only named: the check reads the launcher and the state file, never the project. */
 const PROJ = 'D:\\work\\proj';
@@ -587,7 +590,7 @@ test('doctorMain reports a recorded launcher whose server is down as a gap whose
     assert.match(text.output, /\nFix:\n  remote-server \(claude\): js-harness remote start --cwd D:\\work\\proj --name proj\n$/, 'the only gap of this home');
 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
-    assert.deepEqual(JSON.parse(json.output).at(-1), {
+    assert.deepEqual(JSON.parse(json.output).find((r) => r.id === 'remote-server'), {
       id: 'remote-server',
       version: null,
       installed: 'n/a',
@@ -811,6 +814,53 @@ test('doctorMain --json carries a multi-step fix as an array, in the row fix map
     assert.deepEqual(row.fix.installed, steps);
     assert.deepEqual(row.gaps.find((g) => g.dimension === 'installed').fix, steps);
     assert.equal(typeof JSON.parse(output).find((r) => r.id === 'codegraph').fix.installed, 'string');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- the hook commands check: the copy on the path answers the recorded `js-harness resume` hook commands ---
+
+const HOOK_GAP_FIX = 'the js-harness on the path is older than these entries: upgrade it (js-harness upgrade), then run js-harness doctor again';
+
+test('doctorMain reports a recorded hook command that the copy on the path does not answer, in the table, under Fix and in --json', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeJson(path.join(home, '.js-harness', 'manifest.json'), {
+      version: '0.1.0',
+      files: [],
+      entries: [
+        {
+          path: path.join(home, '.claude', 'settings.json'),
+          pointer: ['hooks', 'PostToolUse'],
+          entry: { hooks: [{ type: 'command', command: 'js-harness resume --pause || exit 0' }] },
+          createdFile: false,
+          skipped: false,
+        },
+      ],
+    });
+    const base = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    // The copy on the path is one that predates `resume`: it answers 2 to the command, as it did on 2026-10-12.
+    const spawn = (cmd, args, opts) =>
+      [cmd, ...args].join(' ') === 'js-harness resume --pause'
+        ? { status: 2, stdout: '', stderr: 'Unknown command: resume\n' }
+        : base(cmd, args, opts);
+    const gap = ['the js-harness on the path is older than these entries', 'js-harness resume --pause: exit 2; stderr: Unknown command: resume'];
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.equal(text.code, 0);
+    assert.match(text.output, /hook-commands\s+n\/a\s+stale\s+n\/a\s+n\/a/);
+    assert.match(text.output, /\n  hook-commands \(claude\):\n    the js-harness on the path is older than these entries: upgrade it/);
+    assert.match(text.output, /\n    js-harness resume --pause: exit 2; stderr: Unknown command: resume\n/);
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    const row = JSON.parse(json.output).find((r) => r.id === 'hook-commands');
+    assert.equal(row.claude, 'stale');
+    assert.deepEqual(row.fix, { claude: [HOOK_GAP_FIX, gap[1]] });
+    assert.deepEqual(row.gaps, [{ dimension: 'claude', state: 'stale', fix: [HOOK_GAP_FIX, gap[1]] }]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

@@ -373,3 +373,45 @@ test('doctor --hook exits 0 with empty stdout and stderr even on unusable argume
   assert.equal(stdout, '');
   assert.equal(stderr, '');
 });
+
+test('doctor --hook starts no copy of js-harness for the hook commands its manifest records, the session-start report keeping its cost', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.js-harness', 'manifest.json'), {
+      version: '0.1.0',
+      files: [],
+      entries: [
+        {
+          path: path.join(home, '.claude', 'settings.json'),
+          pointer: ['hooks', 'SessionStart'],
+          entry: { hooks: [{ type: 'command', command: 'js-harness resume --hook' }] },
+          createdFile: false,
+          skipped: false,
+        },
+        {
+          path: path.join(home, '.claude', 'settings.json'),
+          pointer: ['hooks', 'PostToolUse'],
+          entry: { hooks: [{ type: 'command', command: 'js-harness resume --pause || exit 0' }] },
+          createdFile: false,
+          skipped: false,
+        },
+      ],
+    });
+    const missing = fakeSpawnMissing();
+    const ran = [];
+    const spawn = (cmd, args, opts) => {
+      ran.push([cmd, ...args].join(' '));
+      return missing(cmd, args, opts);
+    };
+    await runHook(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: failFetch });
+    assert.deepEqual(
+      ran.filter((line) => line.includes('resume')),
+      [],
+      'no recorded js-harness resume command is run by the session-start report',
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});

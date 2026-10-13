@@ -149,15 +149,16 @@ async function resolveNetworkVersions(rows, { home, offline, fetch: fetchImpl, n
 /** Builds one full report: local probes plus `upToDate`, resolving latest versions per
  * `resolveLatestVersions`'s caching/offline rules above. Shared by the interactive report, the
  * hook, and (T5, `offline: true`) the TUI's stack block, so all three ever compute `upToDate` the
- * same way. */
-export async function buildReport({ home, cwd, offline }, deps) {
+ * same way. `interactive` is set only by the interactive report: it lets `probeStack` run the checks
+ * that start processes (see `interactiveOnly` in stack.mjs). */
+export async function buildReport({ home, cwd, offline, interactive }, deps) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
   const fetchImpl = deps.fetch ?? fetch;
   const now = deps.now;
   const project = resolveProjectRoot(cwd, spawn);
 
-  const localRows = probeStack({ home, project, spawn, platform });
+  const localRows = probeStack({ home, project, spawn, platform, interactive });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
   return localRows.map((row) => {
     const latest = latestVersions[row.id];
@@ -179,7 +180,7 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const { home, cwd, json, offline } = parsed;
-  const rows = await buildReport({ home, cwd, offline }, deps);
+  const rows = await buildReport({ home, cwd, offline, interactive: true }, deps);
 
   if (json) {
     console.log(JSON.stringify(rows.map((row) => ({ ...row, gaps: rowGaps(row) })), null, 2));

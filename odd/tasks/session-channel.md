@@ -2143,6 +2143,134 @@ summary.
    e. The entry for `install` and the row of `doctor` that runs each entry's command: built
       and tested, and held from `main` until he answers whether `install` writes it for
       every project.
+      STATE AT 2026-10-12 16:20 (read this first after a compaction). Pull request 74 is
+      merged: `main` is `e60cbda` (`gh pr view 74`: MERGED 15:28). The slice's commits
+      and the lead's checks are in Progress, 14:08 to 15:22. Part e is the branch
+      `feat/session-compaction-install`, cut from `e60cbda`, local, with this document's
+      commit alone on it: its code is 13 files STAGED AND NOT COMMITTED in this worktree (the
+      12 of the patch and `bin/js-harness.test.mjs`, whose list of `doctor`'s rows lacked
+      `hook-commands`: 30 pass, 1 fail, found by hand before any gate, fixed, 31 pass), and
+      saved as `part-e-on-main.patch` in the scratchpad. By hand its test files pass
+      (manifest 112, install 64, stack 123, doctor 53, doctor-hook 11, practice-lib 87, tui
+      75, digest 11). NOTHING OF IT IS COMMITTED OR SPENT until he answers the question
+      asked of him at 15:25 in this session's chat and still open: whether `install` writes
+      the pause notice's entry for every project that installs the harness (recommended:
+      yes, the global entry as built, since an entry kept in a project's own settings is
+      not loaded by a session opened in another folder that works in a worktree; a "no"
+      makes it opt-in and changes the entry and its tests). With his answer, written here
+      with its transcript line: one turn at the gate with `turn-commit-journey.sh` (the
+      commit with `commit-msg-install.txt`, gentle-ai, the Codex plan and the run only
+      inside 1.05 times 1,200 a changed line, about 1,533,420 for the 1,217 lines, then
+      the practice journey), the push and its own pull request; the lead installs the
+      entry on his machine once it is on `main` (his yes of 03:45) and has how to prove it
+      (this session's line of 15:33: the entry in the settings file and the manifest,
+      `js-harness doctor`'s row `hook-commands`, and the journey's step `pause-hook`; what
+      none proves is that the app hands `additionalContext` to the model, a try of point
+      14 that is his to allow).
+      Beside it, done while that answer was open: `install` refuses a word it does not
+      know (`install --help` had installed under the real home at 03:25). Branch
+      `fix/install-unknown-flag`, worktree `D:\js-harness-worktrees\install-flags`, commit
+      `0ccf615`, pull request 76, open and clean: test first (exit 0 where 2 was expected),
+      `parseInstallArgs` in `bin/install.mjs`, install's tests 65 pass; gate PASS 16:16;
+      gentle-ai: 64 lines, not due; Codex `e60cbda..0ccf615`: 178,214 input tokens,
+      correct, no finding. The lead merges it; that worktree is removed after.
+      Still on this machine and to remove once part e is committed: the side worktree
+      `D:\js-harness-worktrees\session-channel-hook` and its branch
+      `wip/session-compaction-hook`. The local branch `feat/session-compaction` is merged
+      and can be deleted.
+      HIS ANSWER (2026-10-12 19:57 local): the entry is written for every project. It is
+      an option he tapped, not a sentence he typed: the lead put the question to him with
+      the host's question tool, at his request (its "Pregunta 1", on where the installation
+      leaves the pause's notice; its words name the pause's share, which this document
+      states nowhere but in its rule), and the answer recorded is "Para todo
+      proyecto (Recomendado)" (the lead's transcript `65318fd5`, the call at line 8480 and
+      its result at line 8488, 2026-10-13T00:57:59Z, both read here; `sessions --quote`
+      does not quote a tool's result, so the line was read as JSON). So part e goes on as
+      built. It is rebuilt on `main` at `8bfe9a7` (this document's commit rebased, the
+      patch applied clean) and is the commit that holds this text: by hand before its
+      gate, manifest 112, install 66, stack 123, doctor 53, doctor-hook 11, practice-lib
+      87, dispatcher 31, tui 75 pass, and `rules check` PASS (18 rules). Its gate, its
+      reviews and the practice journey are recorded after it, with these two things owed
+      from the afternoon: pull request 76 (`install` refuses a word it does not know) is
+      merged, `main` `03d6d20`, and gentle-ai's outcome for its commit `0ccf615` was
+      medium, 64 lines, not due (it was written in that pull request's body, since this
+      document was not touched on that branch).
+      STATE AT 2026-10-12 20:48, THE NEWEST (read this first after a compaction; the state
+      of 20:32 below it is what came before). The two findings are FIXED in `dc7d34a`,
+      test first (both tests red for their reason, then `bin/lib/manifest.test.mjs` 114
+      pass): a record that is skipped and owns no container is left out of the pointers
+      that let `uninstall` delete a file install created, and a run that skips an entry
+      carries forward what an earlier run recorded as made for the same file and pointer.
+      Its turn (20:36 to 20:47, exit 0): gate PASS, committed 20:46; gentle-ai: medium, 70
+      lines, not due; Codex on `7857a44..dc7d34a`, planned at about 86,000, budget
+      315,000: one part, 140,239 input tokens (104,320 cached), "the patch is correct
+      (confidence 0.91)", no finding. Codex for part e: 1,235,814 input tokens. The practice
+      journey ran on `bf98aaa`, before these two fixes, and was not run again: they change
+      what happens when an entry is skipped, which the journey does not walk. The branch
+      is pushed and its pull request opened with the commit that holds this text; the
+      lead merges it and then installs the entry on his machine (his yes of 03:45). What
+      follows is in the paragraph of 20:32, from "After that, in this order", with three
+      more things of his the lead reported after it, claims until read at their lines in
+      its transcript, in this order after part e is on `main`: the installer's message
+      about a tagged version (`bin/install.mjs`, near "update": no tag exists; versions are
+      tagged from 1.0.0, which goes in the roadmap); the design of his two rules on
+      questions; a session opened from the phone starts at high effort
+      (`bin/lib/remote.mjs`); and `doctor` and the stack stop listing the official Codex
+      plugin (`bin/lib/stack.mjs`, `bin/lib/latest.mjs`).
+      STATE AT 2026-10-12 20:32. Part e is
+      commit `bf98aaa` on `feat/session-compaction-install`, local, NOT PUSHED, the tree
+      clean. Its first turn at the gate failed at the commit (20:00 to 20:12, nothing
+      committed): this document quoted the lead's question, which names the pause's share,
+      and a test of `bin/sessions.test.mjs` allows that number in its rule alone. The
+      mistake is this session's, in its parts: a document text went to the gate with
+      `rules check` and the contract check run by hand and not the tests that read the
+      documents, a hole the lead had named at 13:10; fixed by rewording the sentence;
+      what stops it: before a commit that holds a feature document, `node --test
+      bin/sessions.test.mjs bin/rules.test.mjs` by hand; in the harness it is what JH 8
+      put on `main` for commits of documents alone (pull request 77); the proof is the
+      second turn. That turn (20:13 to 20:29, exit 0): gate PASS, committed 20:23;
+      gentle-ai: medium, 1,253 lines, not due (under_budget); Codex on `46a7794..bf98aaa`,
+      planned at about 1,520,000 input tokens, budget 1,533,420: 4 parts, 1,095,575 input
+      tokens (785,280 cached), recorded; the practice journey on `bf98aaa`: 11 of 11, the
+      real home unchanged. Three parts correct and TWO FINDINGS, each P2, in
+      `bin/lib/manifest.mjs`, NOT FIXED YET, the next work of this branch, test first, in
+      one commit through the gate with its own Codex review (their whole text is in the
+      scratchpad, `codex-findings-part-e.txt`): (1) line 374: an entry whose write was
+      skipped (a settings file that could not be written) still enters the list of
+      pointers that lets `uninstall` delete a file install created, so a list the user
+      added there can be deleted with it: a skipped entry that owns nothing must not count;
+      (2) line 479: when a settings file cannot be read during a reinstall or a sync, the
+      record of how many lists install created for an entry is replaced by zero, and after
+      that `uninstall` leaves those lists empty instead of removing them: the earlier
+      record for the same file and pointer must be carried forward. Then: the push, its
+      pull request, the head to the lead, who installs the entry on his machine once it is
+      on `main`. After that, in this order: the side worktree and its branch removed; five
+      lines to the lead on what was seen today of sessions that came back from a
+      compaction with no resume prompt, for the question of the second block of a cut;
+      the design, to the lead before any code, of his rules on questions (below), with
+      two more answers of his that the lead reports and this session has not read at
+      their lines yet: the yardstick of "the last task" becomes the longest stretch of work
+      since the last summary, and the orchestrator that fills is compacted and goes on,
+      replaced only when damaged.
+      A SECOND RULE OF HIS ON QUESTIONS (the lead's transcript `65318fd5`, line 8528, read
+      with `sessions --quote`, exit 0): "Otra es que siempre necesito que las preguntas en
+      las haga el orquestador, no la sesion para poder centralizar todo en una sola parte."
+      So a work session asks him nothing in its own chat: a question goes to the lead by
+      message, with the situation in everyday words, the options, the recommendation and
+      what waits on it, and the lead asks him and carries the answer back with its line.
+      The two blocks of a cut stay in the session's own chat.
+      HIS NEW RULE ON QUESTIONS (2026-10-12 19:55 local, the lead's transcript `65318fd5`,
+      lines 8423 and 8439, both read with `sessions --quote`, exit 0): "tu no tienes una
+      funcionalidad o forma de darme las preguntas que yo apriete con click las opciones y
+      la opcion de otro" and "Siempre hazme las preguntas asi por favor osea asi siempre
+      debe ser el protocolo sobre todo para que no se me pase ninguna, por favor metela al
+      harnes". By the lead's reading: a question to him goes through the host's question
+      tool, one a call, the recommended option first and marked; the fenced block is the
+      fallback; a question he dismisses stays open. Putting it in the harness is this
+      feature's, after part e, design first and to the lead: the sentence of `AGENTS.md`
+      about a decision's block (the file is at its budget, and its wording is JH 7's T8:
+      say how the two meet before writing), the orchestrator's protocol text, and a list
+      of his open questions that survives a compaction (the board is the candidate).
    Not done here, each his: installing anything on this machine; the three tries of point
    14, which open a session.
 2. After T6b, in this order: T16, design first; T7; T8, with the twelve items of the sweep,
@@ -2156,7 +2284,8 @@ machine and does not work until the installed command is brought up to `main`, w
 lead asks him.
 Waiting for him, each asked alone, once, and only when he is back and no work runs. Answered
 at 03:45: the pause's entry is installed on this machine when it is on `main`, by the lead.
-Not asked yet: whether `install` writes that entry for every project; whether the
+Answered on 2026-10-12 at 19:57: `install` writes that entry for every project ("Next
+step", 1e). Not asked yet: whether the
 second block goes once the resume hook is installed; tests owed 1, 2, 3 and 6 and the three
 tries of point 14, each before it is run. The yardstick of "the last task" ("Open points",
 its first row) and whether the orchestrator is relieved or compacted (the sweep's A3 89)
