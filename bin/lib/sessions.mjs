@@ -1421,11 +1421,127 @@ export function channelOf(record, sessions, { count = CHANNEL_LINES } = {}) {
 // A paste as the host writes it into the person's entry: the same id opens and closes it.
 const PASTED_CONTENT = /<pasted_content id="([^"]*)">[\s\S]*?<\/pasted_content id="\1">/g;
 
-/** What an entry is when it is not what the person sent, in words: `null` for one that is. */
+const TOOL_RESULT = 'the result of a tool call';
+const isToolResult = (block) => block.type === 'tool_result';
+
+/** The names the hosts give the tool a session asks the person a question with. It is data: a host that names
+ * its tool otherwise is one more name here and no other change. Only a tool of this list asks the person: the
+ * result of any other is written by that tool, and a server's tool can give its result any shape it likes. */
+export const QUESTION_TOOLS = ['AskUserQuestion'];
+/** No call to pair a result with: what an entry read by itself has. */
+const NO_CALLS = new Map();
+
+/** The calls of a question tool among `entries`, by the call's id: `{ tool, questions, sidechain }`, the
+ * questions as the call's input has them, unread. */
+function questionCallsOf(entries) {
+  const calls = new Map();
+  for (const entry of entries) {
+    if (entry.type !== 'assistant') continue;
+    for (const block of blocksOf(entry)) {
+      if (block.type !== 'tool_use' || typeof block.id !== 'string' || !QUESTION_TOOLS.includes(block.name)) continue;
+      calls.set(block.id, { tool: block.name, questions: block.input?.questions, sidechain: entry.isSidechain === true });
+    }
+  }
+  return calls;
+}
+
+/** The question calls of a transcript's `text` that the id `id` can pair with: only the lines that name the id
+ * are parsed, so one line is quoted without reading a whole transcript as entries. */
+function questionCallsNaming(text, id) {
+  const entries = [];
+  for (const written of text.split('\n')) {
+    if (!written.includes(id)) continue;
+    try {
+      const entry = JSON.parse(written);
+      if (isObject(entry)) entries.push(entry);
+    } catch {
+      // A line that does not parse holds no call.
+    }
+  }
+  return questionCallsOf(entries);
+}
+
+/** What the hosts write in the place of an answer when the person closes a question without answering it: how
+ * that text begins. Claude Code writes "[User dismissed — do not proceed, wait for next instruction]", in a
+ * result it does not mark an error (four lines of this project's transcripts, 2026-10-12). It is data, like the
+ * tools' names: another host, or another version of this one, may say it otherwise. */
+export const QUESTION_DISMISSED = ['[User dismissed'];
+
+const SEVERAL = ', ';
+
+/** Whether `answer` is labels of `options` joined with the separator the host joins several with. A label may
+ * hold that separator, so the answer is not split on it: it is matched whole labels at a time, whichever way
+ * it divides. Each place of the answer where a label may begin is looked at once: labels that are joins of
+ * each other divide an answer in more ways than could be walked, and the labels are what a session wrote. */
+function isLabelsJoined(answer, options) {
+  const labels = options.filter((label) => label !== '');
+  const begun = new Set([0]);
+  const toLook = [0];
+  while (toLook.length > 0) {
+    const from = toLook.pop();
+    for (const label of labels) {
+      if (!answer.startsWith(label, from)) continue;
+      const end = from + label.length;
+      if (end === answer.length) return true;
+      const next = end + SEVERAL.length;
+      if (answer.startsWith(SEVERAL, end) && !begun.has(next)) {
+        begun.add(next);
+        toLook.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+/** How the person gave an answer: `tapped` when it is one of the options the question showed, or, for a question
+ * that takes several, when it is options joined; `typed` otherwise, which is his own text. */
+function howAnswered(answer, options, several) {
+  if (options.includes(answer)) return 'tapped';
+  return several && isLabelsJoined(answer, options) ? 'tapped' : 'typed';
+}
+
+/** What an entry that holds the result of a tool call is: the person's answer to a question the session asked
+ * with the host's question tool, `{ what: null, at, tool, answers }`, each answer `{ question, options, answer,
+ * how }` in the order the questions were asked, with the options as they were shown; or `{ what }`, in words,
+ * for every other result.
+ *
+ * It is a guard, since what it accepts is taken as his word. The result must be the entry's only block and pair,
+ * by the call's id, with a call in `calls` (`questionCallsOf`: a call of a tool of `QUESTION_TOOLS`, in the same
+ * transcript); neither may be of a side chain; the entry may carry no mark of the host or of another sender;
+ * the host must not have marked the result an error; `toolUseResult.answers` must hold a text for every
+ * question the call asked and for no other; and none of those texts may be what the host writes for a question
+ * he closed (`QUESTION_DISMISSED`), which has the shape of an answer and is none. */
+function answerOf(entry, calls) {
+  const blocks = blocksOf(entry);
+  const call = blocks.length === 1 && isToolResult(blocks[0]) ? calls.get(blocks[0].tool_use_id) : undefined;
+  if (call === undefined) return { what: TOOL_RESULT };
+  if (call.sidechain || entry.isSidechain) return { what: 'an entry of a side chain' };
+  if (entry.isMeta || entry.isCompactSummary || entry.origin !== undefined) return { what: TOOL_RESULT };
+  const questions = Array.isArray(call.questions) ? call.questions : [];
+  const asked = questions.map((question) => (isObject(question) && typeof question.question === 'string' ? question.question : ''));
+  if (asked.length === 0 || asked.some((question) => question.trim() === '')) return { what: 'the result of a question whose call holds no question' };
+  const given = isObject(entry.toolUseResult) && isObject(entry.toolUseResult.answers) ? entry.toolUseResult.answers : null;
+  const unanswered = { what: 'the result of a question the person did not answer' };
+  if (blocks[0].is_error === true || given === null) return unanswered;
+  if (Object.keys(given).some((question) => !asked.includes(question))) return { what: 'the result of a question whose answers are not for what was asked' };
+  if (!asked.every((question) => typeof given[question] === 'string' && given[question].trim() !== '')) return unanswered;
+  // The host's own words in the place of an answer: he closed the question. One closed question closes the call.
+  const closed = (answer) => QUESTION_DISMISSED.some((mark) => answer.trimStart().startsWith(mark));
+  if (asked.some((question) => closed(given[question]))) return { what: 'the result of a question the person closed without answering' };
+  const answers = questions.map((question) => {
+    const options = (Array.isArray(question.options) ? question.options : []).map((option) => option?.label).filter((label) => typeof label === 'string');
+    const answer = given[question.question];
+    return { question: question.question, options, answer, how: howAnswered(answer, options, question.multiSelect === true) };
+  });
+  return { what: null, at: entry.timestamp ?? null, tool: call.tool, answers };
+}
+
+/** What an entry is when it is not what the person sent, in words: `null` for one that is. The result of a tool
+ * call is never his here: `quoteEntry` asks `answerOf` first, which knows the one result that is. */
 function notThePersons(entry) {
   if (entry.type === 'assistant') return 'an assistant entry';
   if (entry.type !== 'user') return `an entry of type ${JSON.stringify(entry.type ?? null)}`;
-  if (blocksOf(entry).some((block) => block.type === 'tool_result')) return 'the result of a tool call';
+  if (blocksOf(entry).some(isToolResult)) return TOOL_RESULT;
   if (entry.isCompactSummary) return 'a compaction summary';
   if (entry.isSidechain) return 'an entry of a side chain';
   if (isPeerMessage(entry)) return peerInWords(peerMessageOf(entry));
@@ -1476,10 +1592,17 @@ function queuedMessageOf(entry) {
  * It is what `sessions --quote` answers with, and what a session checks before it takes words carried
  * by another session as the user's: a user entry whose `origin.kind` is `human`, or a queued message of
  * that origin marked as his turn, and no other. The host marks a message from another session `peer`,
- * a task's end `task-notification`, and writes no origin on what it puts in itself. */
+ * a task's end `task-notification`, and writes no origin on what it puts in itself.
+ *
+ * One more entry is his: the answer he gave to a question the session asked with the host's question tool
+ * (`answerOf`, which says what makes it one). It comes back with `answered: { tool, answers }`, each answer
+ * with its question, the options shown and whether he tapped one or typed his own; `text` is the answers,
+ * one a line. */
 export function quoteOf(text, line) {
   const found = entryAt(text, line);
-  return found.what === undefined ? quoteEntry(found.entry) : { person: false, what: found.what };
+  if (found.what !== undefined) return { person: false, what: found.what };
+  const id = blocksOf(found.entry).find(isToolResult)?.tool_use_id;
+  return quoteEntry(found.entry, typeof id === 'string' && id !== '' ? questionCallsNaming(text, id) : NO_CALLS);
 }
 
 /** The entry at line `line` (from 1) of a transcript's `text`, as `{ entry }`, or `{ what }` in words when there
@@ -1504,7 +1627,13 @@ function entryAt(text, line) {
 
 /** What `quoteOf` gives for one parsed entry: the person's words, or `{ person: false, what }`. The stretch before
  * a compaction asks the same question of each entry (`compactionStretch`), so whose words an entry is has one rule. */
-function quoteEntry(entry) {
+function quoteEntry(entry, calls = NO_CALLS) {
+  if (entry.type === 'user' && blocksOf(entry).some(isToolResult)) {
+    const answer = answerOf(entry, calls);
+    if (answer.what !== null) return { person: false, what: answer.what };
+    const said = answer.answers.map(({ answer: given }) => given).join('\n');
+    return { person: true, at: answer.at, text: said, images: 0, pastedOnly: false, queued: false, answered: { tool: answer.tool, answers: answer.answers } };
+  }
   const queued = entry.type === 'attachment' ? queuedMessageOf(entry) : null;
   const what = queued ? queued.what : notThePersons(entry);
   if (what !== null) return { person: false, what };
@@ -1666,13 +1795,15 @@ export function compactionStretch(text) {
     }
   }
   const inStretch = counted.filter(({ entry, at }) => !entry.isSidechain && within(at, stretch));
+  // His answer to a question is his word too, and pairs with its call wherever the call is in the file.
+  const calls = questionCallsOf(counted.map(({ entry }) => entry));
   const replies = inStretch.filter(({ entry }) => isOwnReply(entry) && blocksOf(entry).some(isText)).sort(oldestFirst);
   const lastReply = replies.at(-1);
   return {
     boundaries,
     current,
     stretch: { ...stretch, inThisFile: inStretch.some(({ entry }) => isOwnReply(entry)) },
-    person: inStretch.filter(({ entry }) => quoteEntry(entry).person).map(({ line, at }) => ({ line, at })),
+    person: inStretch.filter(({ entry }) => quoteEntry(entry, calls).person).map(({ line, at }) => ({ line, at })),
     sessions: inStretch.flatMap(({ line, entry, at }) => {
       const message = peerMessageOf(entry);
       return message?.from === 'session' ? [{ line, at, name: message.name }] : [];
