@@ -2388,6 +2388,38 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   printed plan is inside 2,172,240). **From the moment the second is asked nothing is
   committed in this worktree until it ends:** a review refuses its record when HEAD
   moves.
+- 2026-10-12 · **The review S1's merge commit owed is recorded; one finding, in what
+  `main` brought and not in S1** (`s1-merge-codex-turn.log`, turn end 23:22:53, exit
+  0; `b043796..a779acd` in 6 parts at medium). The push check after it: "9 code commits
+  since origin/main, all covered by a Codex review record". **Spent 927,266 input
+  tokens** (683,136 cached) over 35 requests in 306 s, against a printed plan of
+  664,000 and an allowance of 2,172,240: inside the allowance, 40% over the plan's low
+  figure, inside its range (to 1,570,000). By part: 156,475, 211,488, 74,251, 255,624,
+  126,535, 102,893. 34 commands, 4 of them `node --test`, inside the lock turn. The
+  feature's Codex total: 4,633,681 input tokens.
+  **The finding** (part 2 of 6, "the patch is incorrect", confidence 0.98, P2,
+  `bin/lib/manifest.mjs:376-378`, last changed on `main` by `dc7d34a` and `bf98aaa`,
+  the install work of pull request 85): a settings file an older installation made, to
+  which the user later added an empty `hooks.PostToolUse` list; the upgrade appends the
+  pause hook there and records that it made no container, and the filter that decides
+  whether the file is deleted on uninstall takes the pointer of every record that
+  succeeded, so the user's list is taken for the harness's and the file is deleted.
+  Codex says it reproduced it in memory. **Not checked by me and not fixed in S1:** it
+  is not S1's change and the file is another session's; sent whole to the orchestrator
+  at 23:22 as a claim for the owner of that code. It bears on the exact-undo rule of
+  `AGENTS.md`. **Seen in passing:** the record is written though one part's verdict is
+  "incorrect": a part passes on the evidence that it read its lines, not on its
+  verdict; the finding is in the output and nowhere a check reads.
+- 2026-10-12 · **`main` moved again (`f43392d`, pull request 88, another session's;
+  the orchestrator's notice at 23:19, a claim): no file of this feature in it, and a
+  trial merge with `feat/gate-wait` is clean by its reading.** Its order: S1 and the
+  cut each hold `origin/main` before it can merge them, so `f43392d` is merged last
+  and once, after the cut is on the merged S1 and both reviews are done; a clean merge
+  is gated by the merge hook and not counted by the push check. The candidate "a push
+  check that asks for a review of a merge's own resolution only" is recorded by the
+  orchestrator as his, for the register and a design with two readers.
+  **The cut's pick turn** (`cut-pick-turn.sh`, log `cut-pick-turn.log`) started at
+  23:22:58 on `28d988e`, onto `a779acd`.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
