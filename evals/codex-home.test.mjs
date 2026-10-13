@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  CODEX_TEMPLATE_KIND, DEFAULT_MAX_LOGIN_AGE_HOURS, DESKTOP_APP, LOGIN_REFRESH_AFTER_HOURS, assertLogin, assertLoginFresh, buildCodexTemplate, codexHomeOf, copyLogin,
+  CODEX_TEMPLATE_KIND, DEFAULT_MIN_LOGIN_HOURS_LEFT, DESKTOP_APP, assertLogin, assertLoginFresh, buildCodexTemplate, codexHomeOf, copyLogin,
   removeCodexTemplate, removeLogin, seedCodexHome, seedFromCodexTemplate, withEngramEnv, withoutDesktopApp,
 } from './codex-home.mjs';
 import { buildTemplate, removeTemplate, seedHome } from './home.mjs';
@@ -633,74 +633,170 @@ test('the real home is never taken for a trial home: its login is neither overwr
   assert.equal(fs.readFileSync(authFile, 'utf8'), LOGIN);
 });
 
-// ---- the age of the login ----------------------------------------------------------------------------
+// ---- the hours a login has left ----------------------------------------------------------------------
 
 const HOUR = 3_600_000;
-/** A fake home whose login was last written `hours` before `now`. */
-function loginWrittenHoursAgo(hours, now) {
+// A clock on the second: a JWT counts whole seconds, so every "hours left" below is exact.
+const NOW = Date.UTC(2026, 9, 5, 12);
+// Made up for these tests, and never to be seen again: in a message, in what is returned, anywhere.
+const SIGNATURE = 'SENTINEL-ACCESS-TOKEN-SIGNATURE';
+const CLAIM = 'SENTINEL-OTHER-CLAIM';
+const REFRESH = 'SENTINEL-REFRESH-TOKEN';
+const base64url = (text) => Buffer.from(text).toString('base64url');
+const JWT_HEADER = base64url(JSON.stringify({ alg: 'none', typ: 'JWT' }));
+/** A made-up access token in the shape of a JWT, `header.payload.signature`, whose payload is the JSON text
+ * `payload` (a string, so that a payload no `JSON.stringify` would write can be spelled too). */
+const fakeJwt = (payload) => `${JWT_HEADER}.${base64url(payload)}.${SIGNATURE}`;
+/** The JSON text of the payload of a token that expires `hoursLeft` after `NOW`, among other claims. */
+const claimsExpiringIn = (hoursLeft) => JSON.stringify({ sub: CLAIM, iat: 1, exp: (NOW + hoursLeft * HOUR) / 1000 });
+/** The text of a login file that holds `accessToken`, beside the tokens a real one holds. */
+const loginHolding = (accessToken) => `${JSON.stringify({ auth_mode: 'chatgpt', tokens: { id_token: 'SENTINEL-DUMMY-LOGIN', access_token: accessToken, refresh_token: REFRESH } })}\n`;
+/** A fake home whose login file is `content`, last written `ageHours` before `NOW`; returns the file. */
+function loginFile(content, { ageHours = 1 } = {}) {
   const authFile = path.join(makeRealHome(), '.codex', 'auth.json');
-  const written = new Date(now - hours * HOUR);
+  fs.writeFileSync(authFile, content);
+  const written = new Date(NOW - ageHours * HOUR);
   fs.utimesSync(authFile, written, written);
   return authFile;
 }
+/** A fake home whose login's access token expires `hoursLeft` after `NOW`. */
+const loginExpiringIn = (hoursLeft, options) => loginFile(loginHolding(fakeJwt(claimsExpiringIn(hoursLeft))), options);
 
-test('the limits say what is assumed of Codex: a refresh at eight days, and a margin of six hours before it', () => {
-  assert.equal(LOGIN_REFRESH_AFTER_HOURS, 192);
-  assert.equal(DEFAULT_MAX_LOGIN_AGE_HOURS, 186);
+// Every login whose expiry cannot be read: what the file holds, and what the refusal says of it.
+const UNREADABLE_LOGINS = [
+  ['not JSON', `not json at all ${SIGNATURE}`, /is not JSON/],
+  ['JSON that is no object', JSON.stringify(SIGNATURE), /holds no access token/],
+  ['null', 'null', /holds no access token/],
+  ['an API key and no tokens', JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: SIGNATURE }), /holds no access token/],
+  ['tokens with no access token', JSON.stringify({ tokens: { id_token: 'SENTINEL-DUMMY-LOGIN', refresh_token: REFRESH } }), /holds no access token/],
+  ['an access token that is not text', JSON.stringify({ tokens: { access_token: { exp: 9_999_999_999, sub: CLAIM } } }), /holds no access token/],
+  ['an empty access token', loginHolding(''), /holds no access token/],
+  ['a token of two parts', loginHolding(`${base64url(claimsExpiringIn(48))}.${SIGNATURE}`), /is not a JWT/],
+  ['a token of four parts', loginHolding(`${fakeJwt(claimsExpiringIn(48))}.${SIGNATURE}`), /is not a JWT/],
+  ['a payload that is not base64url JSON', loginHolding(`${JWT_HEADER}.${SIGNATURE}.${SIGNATURE}`), /payload is not a JSON object/],
+  ['an empty payload', loginHolding(`${JWT_HEADER}..${SIGNATURE}`), /payload is not a JSON object/],
+  ['a payload that is a list', loginHolding(fakeJwt(JSON.stringify([CLAIM]))), /payload is not a JSON object/],
+  ['a payload that is text', loginHolding(fakeJwt(JSON.stringify(CLAIM))), /payload is not a JSON object/],
+  ['a payload that is null', loginHolding(fakeJwt('null')), /payload is not a JSON object/],
+  ['no exp', loginHolding(fakeJwt(JSON.stringify({ sub: CLAIM }))), /expiry \(`exp`\) is not a date/],
+  ['an exp that is text', loginHolding(fakeJwt(JSON.stringify({ sub: CLAIM, exp: '9999999999' }))), /expiry \(`exp`\) is not a date/],
+  ['an exp of zero', loginHolding(fakeJwt('{"exp":0}')), /expiry \(`exp`\) is not a date/],
+  ['a negative exp', loginHolding(fakeJwt('{"exp":-1790000000}')), /expiry \(`exp`\) is not a date/],
+  ['an exp no number holds', loginHolding(fakeJwt('{"exp":1e999}')), /expiry \(`exp`\) is not a date/],
+  ['an exp past the last date', loginHolding(fakeJwt('{"exp":9e15}')), /expiry \(`exp`\) is not a date/],
+];
+
+/** Everything of the login file text `content` that must never be repeated: each string it holds as JSON, and
+ * each dot-separated part of one (the three parts of a token), or the whole text when it is not JSON. Eight
+ * characters and up, so that a word like `chatgpt` is not taken for a secret. */
+function secretsOf(content) {
+  const found = [SIGNATURE, CLAIM, REFRESH, 'SENTINEL-DUMMY-LOGIN'];
+  const walk = (value) => {
+    if (typeof value === 'string') found.push(value, ...value.split('.'));
+    else if (value !== null && typeof value === 'object') Object.values(value).forEach(walk);
+  };
+  try {
+    walk(JSON.parse(content));
+  } catch {
+    found.push(content);
+  }
+  return [...new Set(found)].filter((text) => text.length >= 8);
+}
+const assertNoSecret = (text, content, label) => {
+  for (const secret of secretsOf(content)) assert.ok(!text.includes(secret), `${label}: it repeats ${secret.length} characters of the login`);
+};
+
+test('the least a login must have left is twelve hours', () => {
+  assert.equal(DEFAULT_MIN_LOGIN_HOURS_LEFT, 12);
 });
 
-test('assertLoginFresh passes a login younger than the limit and returns its age, from the date of the file alone', () => {
-  const now = Date.now();
-  const authFile = loginWrittenHoursAgo(100, now);
-  // Not a JSON object any more: an age read from the content would throw or come out as something else.
-  fs.writeFileSync(authFile, 'not json at all');
-  fs.utimesSync(authFile, new Date(now - 100 * HOUR), new Date(now - 100 * HOUR));
-  const { ageHours } = assertLoginFresh(authFile, { now });
-  assert.ok(Math.abs(ageHours - 100) < 0.01, `${ageHours}`);
-  assert.equal(fs.readFileSync(authFile, 'utf8'), 'not json at all', 'and the file is as it was');
-  assert.doesNotThrow(() => assertLoginFresh(loginWrittenHoursAgo(185.9, now), { now }), 'just under the default limit');
+test('assertLoginFresh passes a login whose access token has the hours left, whatever the date of the file, and returns the expiry, the hours left and the age', () => {
+  // What was observed on 2026-10-05: a file last written 192 hours before, whose token had two days left.
+  const authFile = loginExpiringIn(48, { ageHours: 192 });
+  const content = fs.readFileSync(authFile, 'utf8');
+  const result = assertLoginFresh(authFile, { now: NOW });
+  assert.deepEqual(Object.keys(result).sort(), ['ageHours', 'expiresAt', 'hoursLeft']);
+  assert.equal(result.hoursLeft, 48);
+  assert.equal(result.expiresAt, '2026-10-07T12:00:00.000Z');
+  assert.ok(Math.abs(result.ageHours - 192) < 0.01, `${result.ageHours}`);
+  assert.equal(fs.readFileSync(authFile, 'utf8'), content, 'the file is only read');
+  assert.equal(fs.statSync(authFile).mtimeMs, NOW - 192 * HOUR, 'and keeps its date');
+  assert.doesNotThrow(() => assertLoginFresh(loginExpiringIn(12), { now: NOW }), 'at least the minimum: exactly twelve hours is enough');
+  // The date of the file decides nothing: one dated ahead of the clock is a login like any other, of age zero.
+  const ahead = assertLoginFresh(loginExpiringIn(240, { ageHours: -2 }), { now: NOW });
+  assert.deepEqual(ahead, { hoursLeft: 240, expiresAt: '2026-10-15T12:00:00.000Z', ageHours: 0 });
 });
 
-test('a login past the limit is refused with its age, why a refresh inside a copy is the risk, and what to do', () => {
-  const now = Date.now();
-  const authFile = loginWrittenHoursAgo(187, now);
-  assert.throws(() => assertLoginFresh(authFile, { now }), (err) => {
-    assert.match(err.message, /187\.0 hours ago/, 'the age found');
-    assert.match(err.message, /186 hours/, 'the limit');
-    assert.match(err.message, /refreshes a ChatGPT login in place/);
-    assert.match(err.message, /copy may leave the real login invalid/);
-    assert.match(err.message, /Use the real Codex once.*then run again/);
+test('a login with under the hours left, or one that expired, is refused with when it expires, what is left, the minimum and what to do', () => {
+  const authFile = loginExpiringIn(8);
+  assert.throws(() => assertLoginFresh(authFile, { now: NOW }), (err) => {
+    assert.ok(err.message.includes(authFile), 'which file');
+    assert.match(err.message, /expires at 2026-10-05T20:00:00\.000Z, in 8\.0 hours/, 'when, and how long that is');
+    assert.match(err.message, /at least 12 hours left/, 'the minimum');
+    assert.match(err.message, /copy may leave the real login invalid/, 'why');
+    assert.match(err.message, /Run `codex logout`, then `codex login`, then run again/);
     return true;
   });
-  assert.doesNotThrow(() => assertLoginFresh(authFile, { now, maxAgeHours: 190 }), 'the limit is the caller\'s to move');
-  assert.throws(() => assertLoginFresh(authFile, { now, maxAgeHours: 24 }), /over the 24 hours allowed/);
-});
-
-test('an age that cannot be trusted is refused with what was found: a login dated in the future, a clock that is not a time', () => {
-  const now = Date.now();
-  const ahead = loginWrittenHoursAgo(-2, now);
-  assert.throws(() => assertLoginFresh(ahead, { now }), (err) => {
-    assert.match(err.message, /is dated 2\.0 hours in the future/, 'how far ahead');
-    assert.ok(err.message.includes(new Date(now + 2 * HOUR).toISOString()) && err.message.includes(new Date(now).toISOString()), 'the two dates');
-    assert.match(err.message, /its age cannot be told/);
+  assert.doesNotThrow(() => assertLoginFresh(authFile, { now: NOW, minHoursLeft: 8 }), 'the minimum is the caller\'s to move');
+  assert.throws(() => assertLoginFresh(authFile, { now: NOW, minHoursLeft: 24 }), /in 8\.0 hours.*at least 24 hours left/);
+  // What is left is never rounded up to the minimum it is under.
+  assert.throws(() => assertLoginFresh(loginExpiringIn(12), { now: NOW + 60_000 }), /in 11\.9 hours.*at least 12 hours left/);
+  assert.throws(() => assertLoginFresh(loginExpiringIn(-3), { now: NOW }), (err) => {
+    assert.match(err.message, /expired at 2026-10-05T09:00:00\.000Z, 3\.0 hours ago/);
+    assert.match(err.message, /at least 12 hours left/);
+    assert.match(err.message, /Run `codex logout`, then `codex login`, then run again/);
     return true;
   });
-  // However high the limit: the age is not known to be under it.
-  assert.throws(() => assertLoginFresh(ahead, { now, maxAgeHours: 10_000 }), /in the future/);
-  assert.throws(() => assertLoginFresh(loginWrittenHoursAgo(-1 / 60, now), { now }), /is dated 60 seconds in the future/, 'a minute ahead is ahead');
-  // A file written this very second can read a hair ahead of a clock that counts whole milliseconds, or of a
-  // file system that keeps coarser dates: that is now, and its age is zero.
-  assert.deepEqual(assertLoginFresh(loginWrittenHoursAgo(-1 / 3600, now), { now }), { ageHours: 0 });
-  const authFile = loginWrittenHoursAgo(1, now);
-  for (const [bad, shown] of [[Number.NaN, 'NaN'], [Number.POSITIVE_INFINITY, 'Infinity'], [Number.NEGATIVE_INFINITY, '-Infinity'], [String(now), `"${now}"`], [null, 'null']]) {
-    assert.throws(() => assertLoginFresh(authFile, { now: bad }), (err) => err.message === `the time the age of the Codex login is measured from must be a finite number of milliseconds, got ${shown}`, shown);
+  assert.throws(() => assertLoginFresh(loginExpiringIn(0), { now: NOW, minHoursLeft: 0.001 }), /expired at 2026-10-05T12:00:00\.000Z, 0\.0 hours ago/, 'a token that expires this instant has expired');
+});
+
+test('a login whose expiry cannot be read is refused, whatever its date, and told to log in again', () => {
+  for (const [label, content, pattern] of UNREADABLE_LOGINS) {
+    const authFile = loginFile(content);
+    assert.throws(() => assertLoginFresh(authFile, { now: NOW }), (err) => {
+      assert.ok(err.message.includes(authFile), `${label}: which file`);
+      assert.match(err.message, pattern, label);
+      assert.match(err.message, /cannot be told.*run `codex logout`, then `codex login`, then run again/, `${label}: what to do`);
+      return true;
+    }, label);
+    assert.equal(fs.readFileSync(authFile, 'utf8'), content, `${label}: the file is only read`);
   }
 });
 
-test('assertLoginFresh needs a login that is there and a limit that is a positive number', () => {
-  const realHome = makeRealHome();
-  const authFile = path.join(realHome, '.codex', 'auth.json');
-  for (const maxAgeHours of [0, -1, Number.NaN, '186']) assert.throws(() => assertLoginFresh(authFile, { maxAgeHours }), /positive number of hours/, String(maxAgeHours));
+test('nothing of a login is repeated but its dates: no refusal and no result holds a token, a part of one, another claim or the text of the file', () => {
+  const refused = (label, content, options) => {
+    const authFile = loginFile(content);
+    let message = null;
+    try {
+      assertLoginFresh(authFile, { now: NOW, ...options });
+    } catch (err) {
+      message = `${err.message}\n${err.stack}\n${JSON.stringify(err, Object.getOwnPropertyNames(err))}`;
+    }
+    assert.notEqual(message, null, `${label}: it was not refused`);
+    assertNoSecret(message, content, label);
+  };
+  for (const [label, content] of UNREADABLE_LOGINS) refused(label, content);
+  refused('too few hours left', loginHolding(fakeJwt(claimsExpiringIn(8))));
+  refused('expired', loginHolding(fakeJwt(claimsExpiringIn(-3))));
+  refused('a minimum that is no number', loginHolding(fakeJwt(claimsExpiringIn(48))), { minHoursLeft: 'twelve' });
+  refused('a clock that is no time', loginHolding(fakeJwt(claimsExpiringIn(48))), { now: Number.NaN });
+  // The helper does find what is there, or the loop above would prove nothing.
+  const content = loginHolding(fakeJwt(claimsExpiringIn(48)));
+  const [, payload] = JSON.parse(content).tokens.access_token.split('.');
+  assert.ok(secretsOf(content).includes(payload) && secretsOf(content).includes(JSON.parse(content).tokens.access_token));
+  assert.throws(() => assertNoSecret(`found ${payload} here`, content, 'a leak'), /it repeats \d+ characters of the login/);
+  assertNoSecret(JSON.stringify(assertLoginFresh(loginFile(content), { now: NOW })), content, 'what is returned');
+});
+
+test('assertLoginFresh needs a login that is there, a minimum that is a positive number and a clock that is a time', () => {
+  const authFile = loginExpiringIn(48);
+  for (const [bad, shown] of [[0, '0'], [-1, '-1'], [Number.NaN, 'NaN'], [Number.POSITIVE_INFINITY, 'Infinity'], ['12', '"12"'], [null, 'null']]) {
+    assert.throws(() => assertLoginFresh(authFile, { now: NOW, minHoursLeft: bad }), (err) => err.message === `the hours a Codex login must have left must be a positive number, got ${shown}`, shown);
+  }
+  // A clock that is not a finite number is refused: every comparison with the NaN it makes is false.
+  for (const [bad, shown] of [[Number.NaN, 'NaN'], [Number.POSITIVE_INFINITY, 'Infinity'], [Number.NEGATIVE_INFINITY, '-Infinity'], [String(NOW), `"${NOW}"`], [null, 'null']]) {
+    assert.throws(() => assertLoginFresh(authFile, { now: bad }), (err) => err.message === `the time the hours a Codex login has left are measured from must be a finite number of milliseconds, got ${shown}`, shown);
+  }
   fs.rmSync(authFile);
   assert.throws(() => assertLoginFresh(authFile), /no Codex login at .*run `codex login`/);
 });

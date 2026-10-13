@@ -31,7 +31,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tools } from '../bin/lib/stack.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
-import { DEFAULT_MAX_LOGIN_AGE_HOURS, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
+import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
 import { SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, minimalConfig, subagentConfig, subagentPin } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
@@ -116,8 +116,9 @@ export const USAGE = [
   '',
   `The login token is read from the ${TOKEN_VARIABLE} environment variable (create it with \`claude setup-token\`).`,
   `With --agent codex the model is ${CODEX_EVAL_MODEL} and no token is read: the login is the real ~/.codex/auth.json, copied into`,
-  `each trial's own home and never opened. A run refuses one last written over ${DEFAULT_MAX_LOGIN_AGE_HOURS} hours ago, because Codex would refresh it`,
-  'inside a trial: use the real Codex once, so that it refreshes its own login, then run again.',
+  'each trial\'s own home. Of that file only the expiry of its access token is read, and nothing else of it is printed.',
+  `A run starts only while that token has at least ${DEFAULT_MIN_LOGIN_HOURS_LEFT} hours left, because Codex may refresh a login that nears`,
+  'its expiry inside a trial: otherwise run `codex logout`, then `codex login`, then run again.',
   'Running the same command again continues the run: a recorded trial is never repeated.',
 ].join('\n');
 
@@ -560,9 +561,10 @@ const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksD
  *
  * A Codex run (`--agent codex`) is the same run with what is Codex's in place of what is Claude Code's. Its results
  * and raw logs go to a `codex` directory inside `resultsDir` and `runsDir`, and its document names its agent. It
- * reads no token: its login is the real `<home>/.codex/auth.json`, which every trial copies into its own home and
- * nothing here opens. In place of the token check, and at the same point (before the work root, the stack and the
- * template, so it costs nothing), the login must be there and young enough (`assertLoginFresh`, by the `now` clock):
+ * reads no token: its login is the real `<home>/.codex/auth.json`, which every trial copies into its own home. In
+ * place of the token check, and at the same point (before the work root, the stack and the template, so it costs
+ * nothing), the login must be there and its access token must have enough hours left (`assertLoginFresh`, by the
+ * `now` clock; it reads that token's expiry and nothing else of the file, and the hours left are printed):
  * a refusal exits 2 like the Codex probe's, with the message that says what to do and without the usage, since the
  * command line was right. Its stack is `readCodexStack`'s (`deps.readCodexStack`), read in a throwaway home of the
  * work root, and its template is the Codex one, which never holds the login. A Codex version that cannot be read
@@ -647,10 +649,10 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
   // The login of a Codex trial: the real file, which each trial copies into its own home (`codex-configs.mjs`).
   const authFile = codex ? path.join(codexHomeOf(realHome), 'auth.json') : null;
   if (codex) {
-    // Before anything is read, built or run: a login Codex would refresh inside a trial must cost nothing to find.
+    // Before anything is built or run: a login too near its expiry for a run must cost nothing to find.
     try {
-      const { ageHours } = assertLoginFresh(authFile, { now: now().getTime() });
-      warn(`Codex login: last written ${ageHours.toFixed(1)} hours ago (a run refuses one over ${DEFAULT_MAX_LOGIN_AGE_HOURS})\n`);
+      const { hoursLeft, expiresAt } = assertLoginFresh(authFile, { now: now().getTime() });
+      warn(`Codex login: its access token has ${hoursLeft.toFixed(1)} hours left, until ${expiresAt} (a run needs at least ${DEFAULT_MIN_LOGIN_HOURS_LEFT})\n`);
     } catch (err) {
       warn(`${err.message}\nNo trial was started and nothing was created.\n`);
       return 2;
