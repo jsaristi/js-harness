@@ -994,7 +994,7 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       `feat/gate-wait-git-cut` off `feat/gate-wait`; both reviews; judged by the count of
       the command's test file after (`c3-after.json`) beside the count before. Evidence:
       `823047e`; 7,840 to 6,628 git processes; the entries of T16 in Progress.
-- [ ] T17 · The command's test file runs as two processes (the design's point 7, decided
+- [x] T17 · The command's test file runs as two processes (the design's point 7, decided
       on M1f: the file is the wall alone). A mark in the file and a second file that
       starts the half below it; nothing moved. Route: inline, tests first, on
       `feat/gate-wait-two-halves` off the cut; Codex's review is the outside read (the
@@ -2543,131 +2543,115 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   **M1g is taken after the stop, with a sample of the machine before it.**
   **Next:** `main` moved by documents (`53826d8`, pull request 91): one clean merge in
   a lock turn; M1g; then the push and the pull request.
+- 2026-10-13 · **M1g: with the file as two processes the whole suite takes 533 s, where
+  it took 601 s; T17 done** (`m1g-turn.log`, the counting tool on `afcadea`, 01:10 to
+  01:19, one run, after this session's tsserver was stopped; beside it M1f on the cut):
+
+  | | m1f, the cut | m1g, two processes |
+  |---|---|---|
+  | wall | 601 s | 533 s |
+  | the machine busy | 4,079 of 4,810, 85% | 4,030 of 4,265, 94% |
+  | git processes, whole suite | 13,016 | 13,043 |
+  | `bin/codex-review.test.mjs` | 601 s, 6,628 git | 421 s, 3,151 git |
+  | `bin/codex-review.second.test.mjs` | | 381 s, 3,504 git |
+  | `evals/runner.test.mjs` | 383 s | 335 s |
+  | `bin/check-codex-reviews.test.mjs` | 309 s | 305 s |
+  | `evals/isolation-probe.test.mjs` | 274 s | 259 s |
+
+  68 s fewer, 11%, inside what was said before it was built (510 to 530 s). **No file
+  is the wall any more: the longest ends at 421 s and the run at 533 s, with the
+  machine 94% busy.** The suite now stands on the work itself, about 4,030
+  processor-seconds on eight processors (504 s at full use), so the next seconds come
+  only from less work: fewer process starts (13,043 git processes, 1,709 s of their
+  life; 1,231 other children) and what the antivirus spends on each (`MsMpEng` 859 s
+  of the run, his to change). Cutting a file again gives nothing. (The tool counts the
+  tests of both processes under the first file, 269, and none under the second: it
+  names a test by where it is written.)
+  **The branch holds `main` `53826d8`: merge `afcadea`** (`halves-merge-turn.log`,
+  01:10:09 to 01:10:18): clean, 3 paths, all documents, so the hook ran the checks of a
+  documents-only commit and not the suite; the code of the merged tree is `d7b1e68`'s,
+  whose gate passed at 00:59. The push check: "1 code commit since origin/main, all
+  covered by a Codex review record". Pushed after this entry, with its pull request.
+  **What is left of the feature, in the orchestrator's order:** road 1 slice 2 (fewer
+  starts in the eval tests; sized 110 to 150 starts), which is now the only kind of
+  cut that pays; the merge-base in the join (about 550 git starts, a rule ready, in
+  Progress of 2026-10-12); the reviews of `feat/gate-wait-count` (`47484bd..fc70dc3`)
+  so the counting tool reaches `main`; T8 as half; T10 the close. And one for the
+  harness, not built: nothing warns that a session's own tsserver is spinning beside
+  a gate, twice in one day here.
 
 ## Next
-**His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
-words read by me in its transcript `65318fd5`, by type and origin, at the lines named):**
-- Line 3800, 12:20, "listo la A…": a Codex plan up to 5% over the rate counts as inside
-  it. A review runs without asking when `--plan` is at most 1.05 times the larger of
-  300,000 input tokens and 1,200 a changed line; over that, or a second run after a fall
-  midway, is his; no automatic retry. S1's plan on `fb7cc5c`: 1,074 lines, about 1,210,000
-  against 1,288,800, under the rate itself. **Asked at about 12:30**, once, in a turn of
-  the lock, measured (`s1-codex-turn.sh`, `s1-codex-turn.log`, `s1-codex-out.log` in the
-  scratchpad): read its tail first; if it fell midway, the second run is his.
-- Line 3913, 12:26, "Entonces hagamos esto y apliquemoslo de una vez…": his yes to the
-  orchestrator's list (its line 3860). What is this feature's, in the order of gain:
-  1. **The trial on GitHub now** (T9), inside the minutes his account includes, no spend,
-     no setting of his account changed. First fact wanted: does the suite pass there, on
-     Windows and on Linux, and how long. Tell the orchestrator before the branch is pushed.
-     The monthly figure, GitHub against Cloudflare, goes back to him before anything is
-     paid. Cloudflare (his question of about 12:30, not read by me) is a candidate beside
-     GitHub and nothing is built for it: the orchestrator's reading, unverified, is
-     Containers on the Workers Paid plan, 4 vCPU an instance at most, probably Linux only,
-     no CI product (the runner would be ours), near 0.11 dollars a run by processor against
-     0.50 on GitHub. Either road needs the trial's fact first.
-  2. **No repeated control, now decided** (it was in "Brought to him, not built"): a tree
-     identical to one that already passed runs no suite again; a clean merge of `main` that
-     brings only documents runs no suite. To build here with its tests and both reviews.
-     The design must say exactly how "already passed" is proven (the gate log's record of
-     that tree) and that a merge that brings any code still runs the whole suite. His
-     list's condition: no verification is lost.
-  3. **Less work in the suite**: go on with cut 2 (`c2-turn.sh` was asked: the git callers
-     of `bin/codex-review.test.mjs` three frames deep, table `c2-frames.json`).
-  5. **The reviews outside the lock's turn** (T8 and more): build it. gentle-ai is measured
-     (2.3 s and 12 s against the bound of 30 s); Codex's is measured on its first run, the
-     bound stays the one fixed before.
-  Not this feature's: the antivirus (his own hand; when he says the exclusion is on, the
-  orchestrator asks for an M1 again. A candidate to design, not to build before its turn:
-  the tests make their repositories under the user's Temp, outside any exclusion; a temp
-  folder of the gate under an excluded place would be the harness's half) and the
-  TypeScript language server of the sessions (the orchestrator's).
 
-The order as it stands at 20:31 on 2026-10-12 (the orchestrator's, from its messages
-after 18:38; each is a claim of its own, inside his option 3 but for the effort, which
-is his tap). Done and merged: T11 (pull request 75), T13 (77), T14 (79, `main`
-`d7ae654`). Measured: M1e, the whole suite by file (625 s; the wall is
-`bin/codex-review.test.mjs`). S1 is reviewed and holds `main` `f0b538f` (`29e3ca7`),
-**not pushed, on purpose**: it adds 1,773 git processes to the wall file, so it goes to
-`main` back to back with the cut built on it.
+Written on 2026-10-13 at the close of T17. The order is the orchestrator's (inside his
+"option 3", a faster suite on his machine); the last entries of Progress hold the proof
+of each line here.
 
-1. **The Codex review at medium effort, first, on its own branch off `main`: written, its first turn red at the gate for three tests of other files, see the last entry of Progress for what is owed** (his tap,
-   the orchestrator's transcript line 8962). `REVIEW_EFFORT` to `'medium'`
-   (`bin/codex-review.mjs:174`), code and tests alone: RED at the pin
-   (`bin/codex-review.test.mjs:1045`); of that file's 64 lines with the literal, the ones
-   that mean "the review's effort" become the constant, read one by one. One lock turn
-   (red, green, the commit with its gate), gentle-ai's assessment, Codex on that commit
-   run from that checkout (so at medium), push, pull request. The body says in one
-   sentence that the declared rule still says high until JH 7's commit follows. **The
-   first plan after the change: put its own words in the notice to the orchestrator**
-   (which parts the estimate rests on). A plan the command prints over the rate is not
-   run on anyone's reading of what medium costs: the rule on spend is his, so it goes to
-   him through the orchestrator's question.
-2. **The git cut, built on S1** (Design, "Cut 2 of git", second version: its reader's
-   attack is in and the design's last part, "what the reader's attack changed", holds
-   where it differs). On a branch off `feat/gate-wait`. In this order: the tests of the
-   six outcomes of the two holds, green on today's code; then the tests that count the
-   processes of a run, red; then the two joins (the first with the exact test of a clean
-   answer, the hold with `--no-ahead-behind` and no second try in a run); the three
-   tests that fail the git folder's question and the one at `:970` aimed again. The
-   merge-base inside the first join only after its two cases are proven (several
-   merge-bases; "share no history"). The count before is taken (`c3-before.json`: 7,840
-   git processes, the file 365 s alone); the joins give about 700 to 1,100 starts, an
-   upper bound, against the 1,773 S1 added. **After they are built, the file's count and
-   its seconds alone decide whether the test file is split in two** (no shipping code;
-   its helpers in a module both halves load). Then both reviews, and the count after as
-   the proof.
-3. **S1 and the cut to `main` back to back**: S1 merges the then-current `main` in a
-   lock turn (its 23 new tests moved to the constant there), push, pull request; the
-   cut's pull request on top of it; the orchestrator merges one after the other. JH 7
-   gets `bin/codex-review.mjs` when the cut is on `main`.
-4. **Road 1, slice 2** (sized in Progress): after the cut.
-5. gentle-ai and Codex on `47484bd..fc70dc3` (`feat/gate-wait-count`): the counting
-   tool should reach `main`, it is what every figure here was read with.
-6. **T8, as half** (Progress): gentle-ai's review leaves the lock, Codex's stays, a
-   Codex record says when the review ran tests; after S1 is on `main`, on a day a
-   gentle-ai review is due.
-7. T10, the close.
-8. Left for later, written down: the second note on the merge hook; the fifth caller
-   (`evals/codex-isolation-probe.mjs:535`); a cheaper process list for the real trial;
-   Codex outside the lock, which needs a guard; the `js-harness-codex*` folders a test
-   leaves in the user's Temp (3,184 by the orchestrator's reader, 2,883 the day before).
+**Where the suite stands.** A whole run by file took 625 s before S1, 601 s with S1 and
+the git cut, and takes 533 s with the command's test file as two processes (M1g). No
+file is the wall any more: the run ends at the work's own bound, with the machine 94%
+busy. So from here only less work shortens it: fewer process starts, or what the
+antivirus spends on each (his).
+
+1. **Pull request of T17** (`feat/gate-wait-two-halves`): open, the orchestrator
+   merges. If `main` moves under it, merge `main` once more with
+   `clean-merge-turn.sh <worktree>` in a lock turn.
+2. **Road 1, slice 2** (Design, "Roads to a shorter wait"): fewer starts in the eval
+   tests, sized 110 to 150 starts and 130 to 180 lines; slice 3 needs its own design.
+   Tests first, both reviews.
+3. **The merge-base in the join** (Progress, 2026-10-12, "A probe for the design's
+   point 6"): about 550 git starts of the command's tests; the rule is written there
+   (taken only when there is exactly one caret line). It changes
+   `gitDirsAndCommits` from two revs to a three-dot range, so its tests change with
+   it. Small; not worth a review alone: ride it with another change of that command,
+   after JH 7's two pieces on `bin/codex-review.mjs` are on `main`.
+4. **The counting tool to `main`**: gentle-ai and Codex on `47484bd..fc70dc3`
+   (`feat/gate-wait-count`, worktree `gate-wait-count`, not pushed). Every measure of
+   this feature calls it by path from that worktree.
+5. **T8 as half**: gentle-ai's review leaves the lock, Codex's stays, and a Codex
+   record says when the review ran tests; behind road 1, on a day a gentle-ai review
+   is due.
+6. **T12** (the identical-tree proof, `gate-wait-same-tree`, built, uncommitted) stays
+   parked unless he asks. **T9** (`trial/gate-on-github`, pushed, never merged) is
+   answered in Progress and waits for nothing.
+7. **T10, the close**: `docs/ROADMAP.md`, the closing notice.
+
+**Lessons that bind the next slices.**
+- A reader's attack asks, for each case the real path covers, what the stand-in or the
+  join does with it.
+- A count is counted: no number of starts, tests or lines is given from reading.
+- A measure is taken on a machine that was looked at first: this session's own
+  tsserver spun beside the measures twice on 2026-10-12 and 13 (sample CPU by process,
+  find the parent chain, stop only one's own).
+- A turn script that restores a file for its RED names the commit
+  (`git checkout HEAD -- <file>`); a baseline it compares with is taken in the same
+  turn, on the same tree.
+- A commit of a merge of `main` that resolved a conflict owes a Codex review of all
+  `main` brought (927,266 input tokens for nine lines on 2026-10-12); a clean merge
+  owes none. So: one merge of `main` a branch, late, and a pick onto the merged base
+  where a second merge would follow. The orchestrator holds the candidate "review a
+  merge's own resolution only" as his.
 
 ## Resume here
-- Read the logs before anything is asked again: a turn started before a restart of the
-  desktop app sends no notice. `js-harness gate log --last 6` says which turns ended.
-- Four worktrees under `D:\js-harness-worktrees`. Pushed: `trial/gate-on-github`
-  (`14a6026`, never merged). Not pushed: `feat/gate-wait` (this document; S1's code,
-  reviewed, with `main` `f0b538f` merged in at `29e3ca7`; held until the cut is built on
-  it), `feat/gate-wait-count` (`fc70dc3`: the counting tools and the first cut),
-  `feat/gate-wait-same-tree` (T12, uncommitted, parked). Merged and removed:
-  `feat/gate-merge-hook` (75), `feat/gate-doc-checks` (77), `feat/gate-wait-eval-sweep`
-  (79). To make: a branch off `main` for the review's effort, then one off S1 for the cut.
-- His rules of 2026-10-12 for every session (read by me in the orchestrator's
-  transcript, lines 8423, 8439, 8528): a question for him goes to the orchestrator by
-  message (the situation, the options, a recommendation, what waits on it), and the
-  orchestrator asks him with the question tool; this session never asks him in its own
-  chat. The two blocks of a cut stay here.
-- The scratchpad is
-  `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86\scratchpad`.
-  A script is handed to the gate as a file, never inline: `node
-  D:/js-harness/bin/js-harness.mjs gate --wait 240 -- sh <script>`, in the background.
-  Turn scripts there: `m1d-turn.sh` (a whole run under the counting tool), `t14-turn.sh`,
-  `t14c-turn.sh`, `t14d-turn.sh`. Readers' files: `eval-children-reading.md`,
-  `road1-design-attack.md`; the orchestrator's readers' file is `two-roads-review.md` in
-  its own scratchpad. A part is appended to Progress with `doc-apply2.cjs <worktree>
-  <part's bare name>`.
-- gentle-ai, for a commit: `gentle-ai review assess --cwd . --agent claude-code --base-ref
-  <boundary> --committed-only --json`; when due, its `next_transition.command` with
-  `--lenses` and `--lenses-reason` appended; `ga-exec.mjs <json> next_transition.execute
-  <out> .` runs the start; the consent envelope's `granted` invocation is a string, run as
-  it is; then the bound status, and the captures in a lock turn (`ga-capture-all.mjs`).
-- The orchestrator is `JH ORQ · js-harness [ce6e34]`; its transcript is `65318fd5`. Its
-  messages are claims: check one thing first. A message he sent while it worked is stored
-  there as an attachment of type `queued_command`, not as a user line.
-- Spent in this feature: Codex 3,544,638 input tokens (1,649,068 for S1, 119,953 for the
-  trial's workflow, 180,267 and 87,814 for the merge hook and its test, 499,650 for T13,
-  535,338 and 174,805 for T14 and its correction, 297,743 for S1's last commit);
-  sub-agents 2,389,643 tokens before 12:45, about 572,000 from then to 14:50, then
-  285,336 (the eval reading), 261,389 (the first slice's design attack), 163,483 and
-  234,978 (the two writers of T14), and 144,861 (the reader of the git cut's design; a first one
-  stalled and spent nothing that is known).
+
+- **This document** is on `feat/gate-wait-two-halves` (worktree
+  `D:\js-harness-worktrees\gate-wait-two-halves`) until its pull request is merged,
+  then on `main`. A new slice starts on a branch off `main` and carries the document.
+- **Worktrees of this feature still there:** `gate-wait-two-halves` (T17);
+  `gate-wait-count` (`feat/gate-wait-count`, `fc70dc3`, the counting tool, not
+  pushed); `gate-on-github` (`trial/gate-on-github`, pushed, never merged);
+  `gate-wait-same-tree` (T12, uncommitted, parked). Gone: `gate-wait`,
+  `gate-wait-git-cut`, `review-effort-medium`, `gate-wait-eval-sweep`.
+- **The scratchpad of the session that wrote this** holds the turn scripts worth
+  reusing: `clean-merge-turn.sh`, `m1g-turn.sh` with `m1-table.cjs` (the whole suite
+  by file), `c3-before-turn.sh` with `c3-table.cjs` (one file's git by subcommand),
+  `halves-check.cjs`, `crlf.cjs`, `doc-apply2.cjs`.
+- **Rules of his that bind every step** (each read in the orchestrator's transcript
+  `65318fd5`): a question for him goes to the orchestrator, which asks him with the
+  question tool, never in this chat (lines 8423, 8439, 8528); Codex runs without a
+  question when the printed plan is inside 1.05 times the larger of 300,000 input
+  tokens and 1,200 a changed line (line 3800), at medium effort (line 8962); over
+  that, or a second run, is his.
+- **Spent on Codex in the feature:** 4,854,672 input tokens. On 2026-10-12 and 13 at
+  medium: 161,777 (T15), 927,266 (S1's merge commit), 130,472 (T16), 90,519 (T17).
+- **On `main` from this feature:** pull requests 79 (T14), 87 (T15), 89 (S1), 90
+  (T16).
