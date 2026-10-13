@@ -2582,9 +2582,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 **State on 2026-10-13, which replaces the two blocks of 2026-10-12 below (kept as the record
 of that day; pull request 91 merged what they list).** On `feat/rules-review-readers`: the
 two pieces are committed (`f2896a6`) and reviewed by both tools with nothing found, and the
-branch holds `main` at `c6b7976`; left are the push, the pull request and its head to the
-lead. Then: the read of `feat/codex-parity` for the lead (F6: what closing it on 13 trials
-takes; no commit there before the answer); the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
+branch holds `main` at `c6b7976`; pull request 93 merged them (`abe9295`). After it, by the
+lead's call, this session closed F6 from a branch cut from `main`, `feat/codex-parity-close`
+(three commits; its record is `odd/tasks/codex-parity.md`, Progress, 2026-10-13): left there
+are the push, the pull request and its head to the lead. Then: the literals of `bin/codex-review.test.mjs`, free since JH 8's pull request 92
 split that file in two (the lead's claim; read both files first); the defects in shipped
 behaviour with no task, of the lead's readers' list (relief file, lines 543 to 546), each read
 in the code before it becomes a register entry or a task; and T1. T2 and T8 are

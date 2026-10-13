@@ -20,11 +20,13 @@ answer, and F7's protocol needs both hosts measured the same way.
 - `node --test "evals/**/*.test.mjs"` exits 0
 - `node evals/report.mjs --require-complete --min-discriminating 3` exits 0, so F5's gate still
   holds with the Codex runs recorded
-- `node evals/report.mjs --results-dir evals/results/codex --require-complete` exits 0, so the
-  Codex matrix is complete
-- `docs/ROADMAP.md` records the F6 result (per task and effort: both hosts' score, tokens,
-  estimated list cost and wall time) and `node bin/js-harness.mjs progress` shows F6's two steps
-  checked
+- `node evals/report.mjs --results-dir evals/results/codex` exits 0, so the Codex runs are
+  read whole. The matrix is closed at 28 of its 30 trials by Sebastián's answer of 2026-10-12
+  (Tasks, T7): `--require-complete` on it exits 1 for the two cells of 2 trials, as it should,
+  and was this condition until that answer
+- `docs/ROADMAP.md` records the F6 result (per task, at `medium`, the one effort the Codex
+  matrix holds since the cut of 2026-10-05: both hosts' score, tokens, estimated list cost and
+  wall time) and `node bin/js-harness.mjs progress` shows F6's two steps checked
 
 ## In scope / Out of scope
 - In: `evals/` (runner, configs, home, suite, report, the isolation proof, fixtures, the Codex
@@ -45,6 +47,16 @@ answer, and F7's protocol needs both hosts measured the same way.
   is never logged or committed, and the real login is checked to still work after the smoke
   trials — because Codex refreshes that file in place, and a refresh inside a copy may leave the
   real one invalid (unverified; `learn.chatgpt.com/docs/auth/ci-cd-auth`).
+- A run starts only while the login's access token has at least 12 hours left (Sebastián,
+  2026-10-05, replacing the limit of 186 h on the file's date) — because the date measured the
+  wrong thing: the real Codex used the login past 192 h and never rewrote it, and its token
+  lasts ten days (Progress, 2026-10-05, slice C). Twelve hours is a chosen number: over three
+  times the 220 minutes F5's 60 trials took, the room for what is not known, how long before the
+  expiry Codex refreshes.
+- Nothing of the stack is updated between T6's first trial and T7's last — because the suite
+  refuses to resume a run on another Codex, gentle-ai or engram, and a matrix on two stacks
+  would not be one measurement. Codex went from 0.159.1 to 0.160.0 and engram from 3.0.0 to
+  3.1.0 on 2026-10-05, before any trial of the matrix.
 - The isolation proof is a hash of the real trees before and after a real trial, not a fake API —
   because through a loopback custom provider Codex sent no tools and no base instructions
   (`docs/origin.md:58`), so a fake-API trial would not be the session that is measured.
@@ -52,8 +64,16 @@ answer, and F7's protocol needs both hosts measured the same way.
   because `checkRuns` refuses runs whose model or stack differ (`evals/report.mjs:220-246`).
 - The Claude path keeps its behavior: its existing tests pass unchanged — because F5's recorded
   numbers must stay reproducible by the same code.
-- Model `gpt-6.1-sol` at `medium` and `high`, three trials per cell, both configs: the matrix of
-  F5. Permissions are `--dangerously-bypass-approvals-and-sandbox`, the equivalent of the
+- Model `gpt-6.1-sol` at `medium`, three trials per cell, both configs: 30 trials, half the
+  matrix of F5. Sebastián cut `high` on 2026-10-05, after the usage cap stopped T7 at its
+  fourth trial ("Recortá la matriz: ... terminá solo los 12 trials de current en medium y dejá
+  high afuera") — because the 42 trials then left needed four more cap windows by a rough estimate (about 23M
+  input tokens against the 6M of this feature's that the first window held), with
+  his own Codex capped while each was spent, and `medium` alone holds the comparison of the
+  two configs, 15 trials against 15. What the cut gives up: Codex has no `high` cell beside
+  Claude's, and whether the word `medium` reaches the model stays unshown, since only a `high`
+  cell beside it would show it. `--require-complete` asks three trials of every cell that has
+  any, so the report's gate holds on `medium` alone. Permissions are `--dangerously-bypass-approvals-and-sandbox`, the equivalent of the
   `bypassPermissions` the Claude arm ran under, inside the throwaway home and workspace.
 - Codex reports tokens and no dollars, so a trial's cost is an estimate: its tokens at the
   published list price of the model, recorded with source and date and labelled estimated —
@@ -109,6 +129,11 @@ possible with the commits as they are. Sebastián chose one pull request with th
 `--force-with-lease` (in fact a fast-forward, since the remote branch held only merged
 history). The commit that records this is pushed to the same pull request.
 
+Sebastián had #34 merged on 2026-10-05 (`9c9ed8e`, 1,743 changed lines with `48406cf`). The
+branch was then restarted from `main` at that merge, keeping its name, so slice C's commits
+start there and its review boundary is `9c9ed8e`. The remote `feat/codex-parity` points at the
+merged history until slice C is pushed.
+
 ## Tasks
 ### Slice A — the agent seam
 - [x] T1 The runner reads an agent's output through a parser the config carries: Claude's is
@@ -154,9 +179,24 @@ history). The commit that records this is pushed to the same pull request.
   `2ac64bb`, reviewed (Progress, 2026-10-05)
 
 ### Slice C — runs and result
-- [ ] T6 Headroom run: 15 trials (`minimal`, `medium`), then the checkpoint with Sebastián
-- [ ] T7 The other 45 trials, after his go-ahead
-- [ ] T8 The F6 result in `docs/ROADMAP.md`, F6's steps checked
+- [x] T6p The login check reads the access token's expiry instead of the file's date: the suite
+  and the probe refuse a login with under 12 hours left, or one whose expiry cannot be read, and
+  say nothing of the token but its dates (route: delegated writer, strict TDD — trigger: 2+
+  non-trivial files) — `ef0e71f`, reviewed (Progress, 2026-10-05)
+- [x] T3b The isolation probe again, on codex-cli 0.160.0, with the probe as it is: two smoke
+  trials, Sebastián's go-ahead of 2026-10-05; the result added to
+  `evals/proofs/codex-isolation.md` (route: run by the parent) — both arms PASS on 2026-10-05
+- [x] T6 Headroom run: 15 trials (`minimal`, `medium`), then the checkpoint with Sebastián —
+  15 of 15 at score 1.00, `evals/results/codex/headroom.json`; the checkpoint was put to him on
+  2026-10-05 and T7 waits on his answer
+- [x] T7 The other trials, after his go-ahead: 45 as planned, cut to the 15 of `current` at
+  `medium` on 2026-10-05 (Constraints). 13 are recorded; Sebastián paused the last
+  two on 2026-10-06 (Progress) and closed the task on those 13 on 2026-10-12: asked whether
+  to close with 13, run 15 new ones, or go back and run the two, he tapped "Cerrar con 13
+  (Recomendada)" (the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 9794).
+  Resolver #3 and spec-drift #3 were never run
+- [x] T8 The F6 result in `docs/ROADMAP.md`, F6's steps checked — "F6 result" there, written
+  on 15 trials of `minimal` and 13 of `current`, saying so (2026-10-13)
 
 ## Evidence from the exploration (2026-10-03, `main` at `535ef09`, codex-cli 0.159.1)
 - Agent-agnostic already: the tasks and graders (no `CLAUDE.md`, `AGENTS.md`, `.claude` or
@@ -537,8 +577,461 @@ history). The commit that records this is pushed to the same pull request.
   - `check --push`: 3 code commits since `origin/main`, all covered by a Codex review record.
   - Not run: the full `node --test "evals/**/*.test.mjs"` on its own; every gate ran `npm run
     test`, which holds those files, and passed.
+- 2026-10-05, slice C opened in a new session, and stopped before any trial by two findings.
+  - The stack moved at about 20:20Z, before any trial of the matrix: `@openai/codex` 0.159.1 to
+    0.160.0 (the global pnpm package, read from its `package.json`), engram 3.0.0 to 3.1.0, and
+    the global `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md` were rewritten. gentle-ai stays
+    4.0.0 and the engram plugin 0.1.5 on both hosts.
+  - Checked for collisions with the harness, none found: `js-harness doctor` reports every row
+    `ok` on both hosts (only codegraph 1.6.0 is outdated); the gate's budget row reads this
+    repository's `AGENTS.md` alone and its payload row decides nothing (`bin/check.mjs:15-27`,
+    `:53`); `buildCodexTemplate` against the real home accepts the `config.toml` Codex rewrote
+    at 21:49Z, 631 files and 47.4 MB (634 and 49.7 on 2026-10-04), with no login in it; F5's
+    results are untouched.
+  - What it changes for F6: F5 measured Claude with engram 3.0.0 and the Codex matrix will run
+    with 3.1.0, which the result must say (`minimal` loads no engram, so T6 is not affected);
+    the 25,515 estimated tokens per turn cited for Codex (Why) predate the new `AGENTS.md` and
+    are measured again before T7; T3's proof is of 0.159.1, so Sebastián had the probe run
+    again on 0.160.0 before T6 (T3b), with the probe as it is: the follow-up about engram
+    processes waits, since the first run saw no new engram process at all.
+  - The login was never refreshed. Its file kept its date of 2026-09-27 21:45:10Z through an
+    interactive session at 191.9 h, another at 192.05 h, `codex login status` and a plain
+    `codex login`; Codex's own log holds no token refresh in those hours (`logs_2.sqlite`,
+    rows since 20:00Z whose text or target names a refresh: only the model list). Read from
+    the file, dates only: the access token was issued on 2026-09-27 21:45:10Z and expires on
+    2026-10-07 21:45:10Z. So a login's file date says nothing about when Codex will refresh
+    it, and the limit of 186 h refused a login with two days left.
+  - Decided (Sebastián, 2026-10-05), between a real new login (`codex logout`, `codex login`)
+    and a change of rule: the rule changes (T6p, Constraints). Still unverified: how long
+    before the expiry Codex refreshes, and whether a refresh inside a copy leaves the real
+    login invalid. If a trial did refresh its copy, he would log in again, which is the
+    alternative he was offered.
+  - T6p written and verified (route: delegated writer, strict TDD; trigger: 2+ non-trivial
+    files), 354 added and 163 removed over six files of `evals/`, 241 of the added lines in
+    tests. `assertLoginFresh(authFile, { minHoursLeft, now })` reads `exp` from the access
+    token and returns `{ hoursLeft, expiresAt, ageHours }`; the file's date decides nothing
+    any more, so the refusal of a future-dated file is gone. It fails closed on a file that
+    is not JSON, has no access token, or whose token yields no expiry, an API-key login
+    included, and every refusal says to log out and in again. The `JSON.parse` error is
+    dropped on purpose, since its message quotes its input; a test checks the message, stack
+    and properties of every refusal against every part of the fixture's token. The suite
+    gains no flag; the probe's `--max-login-age-hours` is now `--min-login-hours-left` and
+    its report's `login` is `{ hoursLeft, minHoursLeft, ageHours }`.
+  - Observed, one file at a time. RED first: `codex-home.test.mjs` 5 of 38 failed on the old
+    rule's own message ("was last written 192.0 hours ago, over the 186 hours allowed"),
+    `suite.test.mjs` 1 of 69, `codex-isolation-probe.test.mjs` 3 of 37. Then
+    `codex-home.test.mjs` 38/38 (rerun by the parent), `suite.test.mjs` 69/69,
+    `codex-isolation-probe.test.mjs` 37/37, `codex-configs.test.mjs` 19/19,
+    `runner.test.mjs` 153 pass and 1 skipped, `contract check` on this document exits 0. 37
+    assertion lines were removed, all of the old rule, its messages or its flag. On the real
+    login the new check answers 47.4 hours left, until 2026-10-07T21:45:10Z.
+  - Left as it is: the probe's report note still says `auth.json` is never opened
+    (`evals/codex-isolation-probe.mjs:715`), which is true of its snapshot scan and no longer
+    of the run; and a report of the old `login` shape would print `undefined` in the summary,
+    which nothing here does.
+- 2026-10-05, T6p closed as `ef0e71f` (gate green, `core.bare` `false` in the main checkout
+  afterwards, the worktree clean). The gate's payload row now reads 25,698 estimated tokens per
+  turn for Codex (21,855 of them the global `AGENTS.md`), against the 25,515 of Why.
+  - gentle-ai over `9c9ed8e..ef0e71f`: `medium`, review due (`slice_budget_reached`, 635
+    lines); consent granted under the pre-grant; one lens, `review-reliability`; approved with
+    no finding and acknowledged (`review-1a35ad4f1b3c314e`, authority burned). It read the
+    eight patches and ran nothing.
+  - Codex: `js-harness codex-review --base 9c9ed8e`, recorded as `reviewed`
+    (`9c9ed8e..ef0e71f`): "No actionable regressions were identified. The expiry-based login
+    check is consistently integrated into the suite and isolation probe, with tests covering
+    boundaries, malformed credentials, and secret-safe errors. Tests were inspected but not
+    executed." It was the first `codex exec` on 0.160.0 and left the real login as it was.
+- 2026-10-05, T3b: the probe on codex-cli 0.160.0, 22:40:30Z to 22:47:35Z, PASS in both arms,
+  two smoke trials spent. The record is the second-run section of
+  `evals/proofs/codex-isolation.md`; the JSON report and the raw output are in
+  `D:\js-harness-worktrees\codex-parity-t3-raw\0.160.0`.
+  - The login's file was 192.9 h old and its token had 47.1 h left. Both trial copies stayed
+    byte-identical and the real file kept its date and size, so a session past the eighth day
+    does not refresh the login: what the rule of T6p rests on, now seen in a trial.
+  - 0.160.0 printed the same events and items as 0.159.1 on this task, and the current arm made
+    the same three engram calls. Its input was 105,282 tokens against 142,308 on 0.159.1; one
+    session per version does not say why.
+  - The machine was not quiet: four Codex processes of Sebastián's and another Claude Code
+    session on another project wrote into the real `~/.codex`, `~/.claude` and `~/.engram`
+    during the run. The leak scan found nothing of the trials in any of it.
+- 2026-10-05, T6: 15 trials of `minimal` at `medium` on `gpt-6.1-sol`, codex-cli 0.160.0,
+  22:48:04Z to 23:41:44Z (53m40s), `node evals/suite.mjs --agent codex --codex <codex.exe>
+  --configs minimal --efforts medium --repeats 3 --tasks all --name headroom`, exit 0. The
+  recorded stack is `codex-cli 0.160.0`, gentle-ai 4.0.0, engram 3.1.0.
+  - Every trial scored 1.00, none failed and none hit a cap. Per task, means of three trials,
+    Codex beside Claude's same cell of F5 (`node evals/report.mjs --codex-results-dir
+    evals/results/codex`):
+
+    | task | score Claude / Codex | tokens Claude / Codex | cost Claude / est. Codex | wall Claude / Codex |
+    |---|---|---|---|---|
+    | format-v2 | 0.99 / 1.00 | 1.09M / 393.7k | $1.38 / $0.25 | 4m55s / 5m12s |
+    | house-rules | 0.98 / 1.00 | 312.7k / 202.8k | $0.40 / $0.12 | 1m17s / 2m10s |
+    | lost-updates | 1.00 / 1.00 | 341.6k / 220.8k | $0.52 / $0.18 | 2m19s / 3m22s |
+    | resolver | 1.00 / 1.00 | 194.6k / 232.0k | $0.41 / $0.16 | 1m40s / 3m26s |
+    | spec-drift | 0.99 / 1.00 | 384.7k / 226.1k | $0.54 / $0.17 | 1m44s / 3m17s |
+
+  - The run's total: 3,694,964 input tokens, 3,214,720 of them cached and none a cache write,
+    and 131,196 output tokens, 9,542 of them reasoning; about $2.6 at list price, estimated,
+    against $9.75 of list cost for the same 15 trials on Claude (the sum of the column above,
+    times three). The two hosts ran two models at two price lists, and a Codex trial's wall
+    time holds its setup download, so the columns sit side by side and decide nothing.
+  - The headroom screen drops all five tasks (mean 1.00, kept under 0.8): on this model the
+    minimal arm leaves no room above it. So T7 cannot show the stack raising a score; it can
+    show it lowering one, and what it costs in tokens, list price and time. That is what F5
+    showed for Claude too, where the two arms tied on score and the answer was the cost.
+  - Settled: `reasoning_output_tokens` is no longer 0, 116 to 1,272 per trial, so the model
+    reasons on a real task. That the word `medium` is what arrived is still not shown: only a
+    `high` cell beside it would. Every trial was one turn; a cap or login failure is unseen.
+  - The real login kept its date through the 15 trials, at about 194 h.
+- 2026-10-05, T6 and T3b recorded as `5f772ed` (gate green, `core.bare` `false`, the worktree
+  clean and nothing untracked left by the gate).
+  - gentle-ai over `ef0e71f..5f772ed`: `medium`, review due (`slice_budget_reached`, 645 lines,
+    the result file read as a configuration change); consent granted under the pre-grant; one
+    lens, `review-reliability`; approved and acknowledged (`review-4ce2996e69c7e7f1`, authority
+    burned). One advisory SUGGESTION, fixed in the commit that records this: the roadmap gave
+    $0.12 to $0.25 "per trial" where those are the lowest and highest task means, and no
+    per-trial cost is recorded (`costUsd` is `null` in every Codex trial).
+  - Codex: `js-harness codex-review --base ef0e71f`, recorded as `reviewed`
+    (`ef0e71f..5f772ed`): "The diff adds evaluation results and updates supporting
+    documentation without changing executable code. No actionable regressions were identified;
+    tests were not run."
+  - `check --push`: 2 code commits since `origin/main`, both covered by a Codex review record.
+- 2026-10-05 (2026-10-06T00:24Z), T7 started on Sebastián's go-ahead ("corré T7: los otros 45
+  trials, sin actualizar nada del stack"). Two runs, one after the other in one chain, named as
+  F5's: `headroom-current` (`--configs current --efforts medium`, 15 trials), then, only if it
+  exits 0, `ab-high` (`--configs minimal,current --efforts high`, 30 trials).
+  - Read before the first trial: codex-cli 0.160.0, gentle-ai 4.0.0, engram 3.1.0, as in T6;
+    the login's token had 45.3 h left; no gate running; the worktree clean at `bade46b`; the
+    machine never sleeps (standby 0). The Codex payload is still 25,698 estimated tokens per
+    turn from files (global `AGENTS.md` 21,855, model instructions 2,346, this repository's
+    `AGENTS.md` 1,497), measured with `measurePayload`, so the `current` arm runs under the
+    figure the gate reported at T6p.
+  - engram refused every write of this session after its compaction ("Claude host session
+    registration could not be confirmed", the hook before `mem_save`, `mem_session_summary`
+    and `mem_session_start`), so the mirror of this document is pending, and it was already
+    cut at 50,000 bytes of the 60,784 the document had at `bade46b`.
+- 2026-10-05 (2026-10-06T00:51Z), T7 stopped by the subscription's usage cap, 27 minutes in:
+  3 of the 45 trials are recorded (`evals/results/codex/headroom-current.json`), the fourth hit
+  the cap mid-turn and is not recorded, and `ab-high` did not start, since the chain runs it
+  only after an exit 0. Exit 1, `the suite stopped: cap`.
+  - The cap's wording, unseen until now: an `error` event and then `turn.failed`, both with
+    "You've hit your usage limit. Upgrade to Pro (...), visit
+    https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 10:00
+    PM." (a typographic apostrophe in the original). The suite read it as `cap`, stopped
+    before the next trial and recorded nothing for the one it cut, as designed. 10:00 PM is
+    read as local time, 03:00Z.
+  - What the window held before it closed: the two probe sessions, T6's 15 trials (3.69M input
+    tokens), two Codex reviews, and these three trials and part of a fourth (2.07M input
+    tokens recorded), and whatever Sebastián's own Codex sessions of that afternoon used,
+    which is not measured. The size of the cap is not published and when its window opened
+    is not known, so this is a floor and no more: about 6M input tokens of this feature's,
+    most of them cached, went into it.
+  - The three trials, one each, so no mean and no verdict:
+
+    | task | score (`current`, `medium`) | passed | input tokens (cached) | output | wall | `minimal` mean of T6 |
+    |---|---|---|---|---|---|---|
+    | format-v2 | 0.26 | 12 of 47 | 414,680 (368,640) | 1,821 | 2m50s | 1.00, 393.7k, 5m12s |
+    | house-rules | 0.74 | 35 of 47 | 812,805 (757,632) | 3,903 | 6m52s | 1.00, 202.8k, 2m10s |
+    | lost-updates | 0.84 | 36 of 43 | 842,087 (776,960) | 4,810 | 8m08s | 1.00, 220.8k, 3m22s |
+
+  - Why two of them scored low is in their last message (`evals/runs/codex/headroom-current/`,
+    not committed): the session ended on a question nobody was there to answer. format-v2
+    stopped before writing anything, asking for the delivery strategy ("Should I use
+    stacked-to-main ... or feature-branch-chain"), which the global `AGENTS.md` has the agent
+    ask once a change is forecast above about 400 lines. lost-updates committed the store fix
+    and stopped on gentle-ai's review consent ("Reply with 1 or 2"), with "Queue fixes remain
+    pending". house-rules finished ("All 23 tests pass", a commit, "Native review deferred:
+    under budget") and still passed 35 of 47; which checks it missed was not read.
+  - So on these three trials the installed stack lowered the score of a one-shot `codex exec`
+    session, by ending the turn on its own blocking prompts, and cost four times the tokens
+    of `minimal` in the two sessions that did the work (format-v2, which stopped before writing
+    anything, used about as many as `minimal`: 414.7k against 393.7k). It is the stack as installed that is measured (Out of scope: changing
+    it to make a config win), and a headless session is not how Sebastián works with it, which
+    the result must say. F5's Claude arms tied on score; whether Claude's `current` sessions
+    met the same prompts and went on was not checked.
+  - Each `current` session called engram 8 to 17 times (`mem_save`, `mem_judge`,
+    `mem_session_summary` among them) and started 1 to 6 `collab_tool_call` items. A search
+    of the real engram store for the words of house-rules' saved memory, across every project,
+    found nothing, so those writes stayed in the trials' own stores, as T3 proved.
+  - Two sessions logged `apply_patch verification failed: invalid patch: multiple operations
+    target` one file on stderr and went on.
+  - The remaining 42 trials (12 of `current` at `medium`, 30 at `high`) are with Sebastián:
+    at these token counts they need several cap windows, and his own Codex is capped while
+    each one is spent.
+- 2026-10-05, the partial run recorded as `cdb6330` (gate green, `core.bare` `false`, the
+  worktree clean). gentle-ai over `5f772ed..cdb6330`: `medium`, 236 lines, review not due
+  (`under_budget`), so the range stays pending in the slice and the boundary stays `5f772ed`.
+- 2026-10-05, Sebastián cut the matrix: T7 ends with the 12 trials of `current` at `medium`
+  still missing, and `high` is left out on both configs (Constraints, with his words and what
+  the cut gives up). `ab-high` never ran, so no result file is dropped. Asked which cells the
+  report's gate wants before the cut was written: `node evals/report.mjs --results-dir
+  evals/results/codex --require-complete` exits 1 today and names the five cells of `current`
+  at `medium` and no other, so it needs no `high` cell.
+  - The 12 trials start after 03:00Z on 2026-10-06 (10:00 PM local, the hour the cap message
+    names), with the command of the first run and its name, `headroom-current`, which skips
+    the 3 recorded. If the cap stops them again, the same command continues after the next
+    hour it names.
+- 2026-10-05, the cut recorded as `6201cc0` (gate green, `core.bare` `false`, the worktree
+  clean; gentle-ai read that commit as `passive`, and the range `5f772ed..6201cc0` as
+  `medium`, 276 lines, `under_budget`).
+- 2026-10-06T03:03Z to 04:05Z, the second cap window: 5 more trials recorded, 8 of 15, and the
+  cap stopped the sixth.
+  - The run that waited for the cap started on its own at 03:03:00Z. Sebastián stopped it from
+    the app three minutes in, asking for it to be launched at once, and it was started again at
+    03:07:28Z. The trial that was cut (resolver #1) was not recorded and ran again whole. A
+    stopped suite does not clean after itself: the trial's engram server was still listening
+    on the trial's port (57882; the real one, on 7437, was not touched), its parent gone, and
+    the work root held the trial's home, which holds the copy of the login, its workspace and
+    the home template. The server was ended and the three directories removed by hand before
+    the next start.
+  - The cap came back at 04:05:58Z, 58 minutes and five trials later, mid-turn in resolver #2:
+    "... or try again at Oct 6th, 2026 3:03 AM." That is five hours after 22:03 local, the
+    minute this window's first session started, so the cap reads as a five-hour window that
+    opens with the first use; one observation. This window held 5.37M input tokens of
+    recorded trials (5.07M cached), the three minutes of the trial that was stopped and part
+    of a sixth, so about five `current` trials fit in one.
+  - The eight trials of `current` at `medium` so far (`passed` is hidden tests):
+
+    | trial | score | passed | input tokens (cached) | output (reasoning) |
+    |---|---|---|---|---|
+    | format-v2 #1 | 0.26 | 12 of 47 | 414,680 (368,640) | 1,821 (171) |
+    | house-rules #1 | 0.74 | 35 of 47 | 812,805 (757,632) | 3,903 (94) |
+    | lost-updates #1 | 0.84 | 36 of 43 | 842,087 (776,960) | 4,810 (497) |
+    | resolver #1 | 1.00 | 45 of 45 | 1,063,333 (999,936) | 5,065 (301) |
+    | spec-drift #1 | 1.00 | 51 of 51 | 1,194,128 (1,130,368) | 5,603 (474) |
+    | format-v2 #2 | 1.00 | 47 of 47 | 1,453,552 (1,387,008) | 6,894 (1,207) |
+    | house-rules #2 | 0.81 | 38 of 47 | 913,793 (859,008) | 4,629 (131) |
+    | lost-updates #2 | 1.00 | 43 of 43 | 746,254 (690,560) | 3,691 (106) |
+
+    Together 7,440,632 input tokens, 6,970,112 of them cached, and 36,416 output tokens. Wall
+    time ran from 2m50s (format-v2 #1, which stopped on its question) to 18m08s (format-v2
+    #2), against 2 to 5 minutes for `minimal`.
+  - A session that ends on a question does not always lose points: format-v2 #2 did the whole
+    change, left it uncommitted and closed asking for a size exception ("May I keep it as one
+    work unit ... rather than split"), and passed 47 of 47, since the grader reads the
+    workspace. format-v2 #1 asked before writing. house-rules finished both times with no
+    question and still missed 9 and 12 of 47 hidden tests; which ones was not read.
+  - Seven trials are left: resolver #2 and #3, spec-drift #2 and #3, and the third of
+    format-v2, house-rules and lost-updates. The same command waits for 08:05Z (3:05 AM
+    local), two minutes after the hour the message names; at about five trials a window, the
+    last two need the window after that one.
+- 2026-10-06, the second window recorded as `a9147a1` (gate green, `core.bare` `false`, the
+  worktree clean).
+  - gentle-ai over `5f772ed..a9147a1` (`cdb6330`, `6201cc0`, `a9147a1`): `medium`, review due
+    (`slice_budget_reached`, 483 lines, the result file read as a configuration change);
+    consent granted under the pre-grant; one lens, `review-reliability`; approved and
+    acknowledged (`review-787349eb14ee47d2`, authority burned). Two advisory findings, both
+    fixed in the commit that records this: the roadmap still described the first window, three
+    trials and twelve missing, beside a result file of eight (WARNING), and "two to four times
+    the tokens" counted format-v2 #1, which used about as many as `minimal` (SUGGESTION).
+  - Codex has not reviewed that range: its review draws on the cap the trials are waiting
+    for. It runs once the 15 trials are recorded, over the whole range since `5f772ed`.
+- 2026-10-06, the review's fixes recorded as `8b3ce67` (gate green, `core.bare` `false`, the
+  worktree clean; `passive`, no review due).
+- 2026-10-06T08:05Z to 09:09Z, the third cap window: 5 more trials recorded, 13 of 15, and the
+  cap stopped the sixth again, resolver #3, mid-turn.
+  - The run started on its own at 08:05:01Z, nothing stopped it, and the work root was empty
+    afterwards with no engram process of a trial left. The cap came back at 09:09:30Z: "...
+    or try again at 8:05 AM." Five hours after this window's first session, as in the second
+    window, so two observations now say the window is five hours from the first use and
+    holds about five `current` trials: 4.74M input tokens recorded here (4.45M cached) and
+    part of a sixth.
+  - The five trials:
+
+    | trial | score | passed | input tokens (cached) | output (reasoning) | wall |
+    |---|---|---|---|---|---|
+    | resolver #2 | 1.00 | 45 of 45 | 1,052,509 (992,256) | 5,135 (349) | 12m58s |
+    | spec-drift #2 | 1.00 | 51 of 51 | 1,142,219 (1,081,344) | 5,375 (294) | 15m05s |
+    | format-v2 #3 | 0.26 | 12 of 47 | 372,682 (327,808) | 1,390 (128) | 3m08s |
+    | house-rules #3 | 0.98 | 46 of 47 | 1,103,828 (1,030,912) | 5,927 (697) | 10m17s |
+    | lost-updates #3 | 1.00 | 43 of 43 | 1,071,832 (1,014,272) | 5,470 (673) | 15m49s |
+
+    The 13 trials together: 12,183,702 input tokens, 11,416,704 of them cached, and 59,713
+    output tokens.
+  - Three cells have their three trials: format-v2 0.26, 1.00, 0.26 (mean 0.51), house-rules
+    0.74, 0.81, 0.98 (mean 0.84), lost-updates 0.84, 1.00, 1.00 (mean 0.95). `minimal` scored
+    1.00 on all nine of its trials of those tasks.
+  - format-v2 #3 is format-v2 #1 again: the session forecast 600 to 900 changed lines, asked
+    "Which chain strategy should I use?" and ended with "No source files have changed yet",
+    12 of 47, the score of the untouched fixture twice over. So two of the three format-v2
+    sessions under the installed stack did no work, and the one that did scored 1.00.
+    house-rules #3 finished, committed and closed on gentle-ai's review consent (risk high,
+    "shell scripting in `completions/tk.bash`"), at 46 of 47.
+  - Two trials are left, resolver #3 and spec-drift #3. The same command waits for 13:07Z
+    (8:07 AM local).
+- 2026-10-06, the third window recorded as `8917dc3` (gate green, `core.bare` `false`, the
+  worktree clean). gentle-ai over `a9147a1..8917dc3`: `medium`, 237 lines, review not due
+  (`under_budget`).
+- 2026-10-06, 11:15Z: the run that waited for 13:07Z is gone. The Claude Code session that
+  held it ended and a new one took over, and a background command does not outlive its
+  session. Nothing ran, 13 trials are recorded, the work root is empty and the stack is
+  unchanged. So a run that waits hours for the cap is only as safe as the session that holds
+  it.
+- 2026-10-06, Sebastián asked why Codex runs out so fast and what the trials send. Read from
+  the recorded trials and their raw logs (`evals/runs/codex/`, items counted per session):
+  - What is sent is `evals/codex-configs.mjs:80-81`: `codex exec --json --ephemeral
+    --skip-git-repo-check -m gpt-6.1-sol -c model_reasoning_effort="medium"
+    --dangerously-bypass-approvals-and-sandbox -C <workspace>`, the prompt on stdin, one trial
+    at a time, and `--dangerously-bypass-hook-trust` more in `current`. The two arms differ in
+    their `CODEX_HOME` and in nothing else: `minimal` holds the login alone, `current` a copy
+    of his real `~/.codex` without the desktop app's pieces, so his `config.toml` (its plugins
+    and MCP servers, `engram` and `codegraph` among them, less the desktop app's), his hooks,
+    the global `AGENTS.md` and engram's instructions. His config asks for `high` effort; the
+    trial's `-c` puts `medium` over it.
+  - Per trial, means of the 15 of `minimal` and the 13 of `current`:
+
+    | | `minimal` | `current` |
+    |---|---|---|
+    | items in the session | 14.8 | 33.9 |
+    | of them shell commands | 8.0 | 8.9 |
+    | of them MCP calls | 0 | 16.0 (206 of the 208 to engram, 2 to codegraph) |
+    | of them `collab_tool_call` (sub-agents) | 0 | 4.2 |
+    | input tokens | 246,331 | 937,208 |
+    | of them not cached | 32,016 | 59,000 |
+    | output tokens | 8,746 | 4,593 |
+    | input tokens per item | 16,644 | 27,627 |
+
+  - So `current` reads 3.8 times the input tokens of `minimal` for the same task, and the
+    table says where from: the session takes 2.3 times the steps, with the same shell work
+    (8.9 commands against 8.0) and 20 steps more that are the stack's own, memory calls and
+    sub-agents; and each step carries a context 1.7 times as large, since every request sends
+    the whole conversation again with the 25,698 tokens of instructions from files and the
+    tools' definitions in it. It writes less: 4,593 output tokens against 8,746. "Input tokens
+    per item" is a rough divisor: a sub-agent's own requests are in the tokens and not in the
+    items.
+  - On the cap: the first window held T6's 15 `minimal` trials and more, and the next two held
+    five `current` trials each, about 5M input tokens a window with 94% of them cached. Whether
+    the cap counts a cached token as a whole one is not known. The cap message offers an
+    upgrade to Pro, which reads as a plan below it; the plan was not read from the login.
+  - The 208 MCP calls of the 13 `current` trials, by tool: `engram.mem_judge` 102 (7.8 a
+    session), `mem_save` 39 (3.0), `mem_search` 14, `mem_current_project`, `mem_review` and
+    `mem_get_observation` 13 each, `mem_session_summary` 12, `codegraph.codegraph_explore` 2.
+    So half of them are conflict judgments, 2.6 for every memory saved, in a store that was
+    empty when the session began: the session judges what it has just written against what it
+    wrote minutes before. At 27,627 input tokens a step that is roughly a quarter of a trial's
+    input, an estimate from counts and not a measurement.
+  - He then asked how to spend less for the same work. Answered, nothing changed: the one
+    measured answer is the `minimal` home itself, 26% of the tokens at a higher score on these
+    five one-shot tasks, so a lean Codex home for self-contained tasks; trimming the stack
+    (engram's judgments, the 21,855 tokens of the global `AGENTS.md`) is not measured and
+    hangs on others, gentle-ai #4036 among them. Either is outside F6, which measures what is
+    installed; it would be a feature of its own after this one.
+- 2026-10-06, he asked for the reviews by Codex to be excellent and complete without the
+  spend, "at the beginning we were not spending that". Investigated read-only, no model
+  called; what was found, for the feature that would follow F6:
+  - No review since 2026-09-30 has a token count. `js-harness codex-review` drops the usage of
+    `turn.completed` and every item that is not a shell command (`bin/codex-review.mjs:324`),
+    and `--ephemeral` leaves no thread in `~/.codex/logs_2.sqlite` or `state_5.sqlite`.
+  - The one `codex exec review` of this repository with full usage (2026-09-30T00:37Z, a run
+    that was not ephemeral, cli 0.159.1, `gpt-6.1-sol` at `high`, before gentle-ai 4): 107 s,
+    7 requests, 297,479 input tokens (240,640 cached), 2,396 output, 6 shell calls, no MCP
+    call; its first request was 17,942 tokens and its `AGENTS.md` message about 8.5k.
+  - The reviews through the Claude plugin, 37 threads from 2026-09-27 to 09-30, ran a median
+    of 206 s, 20 requests and 777,511 tokens summed over requests (35 of them on `gpt-6-sol`
+    at `xhigh`). The reviews of 2026-10-04 and 10-05 took a median of about 92 s, and their
+    nine saved logs show 3 to 10 shell commands. So the logs do not say a review costs more
+    than it did; they say nothing measured it.
+  - What did grow is the fixed part of every request: Codex's payload from files went from
+    10,510 to 25,515 estimated tokens on 2026-10-01, when gentle-ai 4 gave Codex the whole
+    orchestrator (`odd/tasks/stack-v4.md:75-80`), and is 25,698 now.
+  - That block does more than cost: three saved reviews show it steering the reviewer.
+    `t2r-codex-review.log:6`: "Review is blocked, not evidence that the patch contains a
+    defect. The diff exceeds the repository's mandatory delegation budget, sub-agent tools
+    are unavailable"; the same in `codex-parity-codex-review-t1.log` and `codex-t5.out`. It
+    is the likely cause of the follow-up above, that Codex could not review a range over
+    about a thousand lines.
+  - Launches of the review command found in the Claude transcripts against records written:
+    22 against 8 on 2026-10-04 and 18 against 10 on 10-05. A search over command text, so a
+    proxy, but it reads as about one unrecorded run for each recorded one.
+  - What the installed CLI offers, read from `codex exec review --help` and Codex's source
+    documentation: `--ignore-user-config` (no `config.toml`, so no MCP servers, plugins or
+    engram instructions; the login stays), `-c mcp_servers.<name>.enabled=false`, a
+    `review_model` key, and no documented way to skip the global `AGENTS.md`, which is read
+    from the Codex home on every start.
+  - What drained the cap on 2026-10-05 and 10-06 was this feature's trials, about 16M input
+    tokens in 28 trials, not the two reviews of those days.
+- 2026-10-06, the investigation recorded as `9855226` (gate green, `core.bare` `false`, the
+  worktree clean; `passive`).
+- 2026-10-06, Sebastián paused T7: "Cancelemos los trials por ahora y tratemos de hacer la
+  integracion nosotros". The last two trials, resolver #3 and spec-drift #3, do not run, so
+  nothing more of this feature draws on the cap for now. 13 of the 15 of `current` at
+  `medium` stay recorded; `node evals/report.mjs --results-dir evals/results/codex
+  --require-complete` stays red on those two cells, so the contract of this feature is not
+  met and F6 is open, not closed. What he wants next is the review by Codex done by an
+  integration of our own that loads only what a review needs.
+  - The plugin he named, checked: `codex@openai-codex` is 1.0.6 here (installed 2026-08-15),
+    and upstream `openai/codex-plugin-cc` has its last commit and release on 2026-07-08, 524
+    open issues, not archived (`gh api repos/openai/codex-plugin-cc`); its prompting skill
+    is written for GPT-5.4. The reviews of this repository already go around it, through
+    `codex exec review`, since 2026-09-29 (`odd/tasks/codex-exec-review.md`). What still
+    rests on it: a row of `doctor`, `codex:rescue`, and a SessionStart hook.
+  - What a review session loads today that is about reviewing, read section by section: of
+    the 87,563 bytes of the global `~/.codex/AGENTS.md`, none. Delegation rules are 21% of
+    it, implementation routing 20%, the orchestration of gentle-ai's own review 27%, the
+    engram protocol 9% (and again in `model_instructions_file`), sub-agent paths 8%, persona,
+    language and skill loading 9%, CodeGraph 4%, remote authorization 2%. The rubric a review runs on is Codex's own: `codex review`
+    sets its `REVIEW_PROMPT` (`prompts/templates/review/rubric.md`: priorities P0 to P3,
+    "output all findings that the original author would fix") as the base instructions of
+    every review, whatever the home holds (`codex-rs/core/src/tasks/review.rs`, read through
+    the source documentation, not from the installed binary).
+- 2026-10-06, the pause recorded as `f6a81ce` (gate green, `core.bare` `false`, the worktree
+  clean; `passive`).
+- 2026-10-06, Sebastián decided the effort of the review for that next feature: "Hagamos la
+  Revision con el Modelo Sol 6.1 en Medium mejor". So the review by Codex runs on
+  `gpt-6.1-sol` at `medium`, set by the review command itself (`-m` and `-c
+  model_reasoning_effort="medium"`), where today it takes `high` from his `config.toml`.
+  Nothing is changed here: `bin/` is out of this feature's scope, and the change belongs to
+  the next one.
+  - Said to him with the decision: effort is not where a review's tokens are. In the one
+    measured review, at `high`, reasoning was 703 of 2,396 output tokens against 297,479 of
+    input, so the saving of `medium` is whatever requests it spares, which is not measured;
+    the context sent with each request is the larger part. The comparison that feature runs
+    before switching can hold one review at `high` beside `medium` on the same range, so the
+    choice rests on a measurement.
+- 2026-10-13, F6 closed, by the session of the rule hierarchy (JH 7), to which the lead gave
+  this branch when it had no owner. Route: inline.
+  - His decision: T7 closes on 13 of 15 (Tasks, T7, with its line). The two trials could not
+    have joined the same run as things stood: the suite refuses to continue a results file
+    recorded on another stack (`evals/suite.mjs`, `refusalOf`), the file records codex-cli
+    0.160.0, gentle-ai 4.0.0 and engram 3.1.0, and on 2026-10-12 this machine answered
+    codex-cli 0.162.0, gentle-ai 4.1.1 and engram 3.4.0 (each `--version`). A note of
+    2026-10-09, left uncommitted in the old worktree, had already read engram at 3.3.0 and
+    named the choice: close on 13, or put engram 3.1.0 back for that one run.
+  - How it reached `main`. The branch `feat/codex-parity` was 13 commits ahead of a base 506
+    commits behind `main`, and a merge of the two conflicts in the roadmap and in the suite
+    and its test. A merge would have been a code commit whose review covers everything `main`
+    brought. So the same content went onto a branch cut from `main` at `abe9295`,
+    `feat/codex-parity-close`, as three commits (the lead's call, 2026-10-13): `1f70a24`, the
+    login fix of `ef0e71f` applied again (its six code files came across whole but for two
+    import lines; the three test files failed on the old sources and pass on the new: 38, 37
+    and 79); `d3f3698`, the two results files and the isolation proof, each the same blob as
+    at `847f5b2`; and this commit, the documents. This document is the old branch's at
+    `847f5b2` with the entries of today.
+  - Reviews of `1f70a24`: gentle-ai, medium risk, review not due, under budget. Codex with
+    `--base abe9295`, in two parts, "the patch is correct" (confidence 0.87 and 0.91), no
+    finding, 288,712 input tokens (184,320 cached) against an allowance of 620,400; recorded.
+    The results files are marked `-codex-review` (`.gitattributes`) and are in no review.
+  - The contract: its condition that the Codex matrix be complete could never exit 0 after
+    his decision, so it now asks that the Codex runs be read whole and says the matrix is
+    closed at 28 of 30. Read on this tree: F5's gate exits 0; the Codex report exits 0;
+    `--require-complete` on the Codex runs exits 1, naming "resolver medium current: 2 of 3
+    trials" and "spec-drift medium current: 2 of 3 trials".
+  - Not touched: the branch `feat/codex-parity`, its worktree with three lines not committed,
+    `evals/runs/` there (2.5 MB of raw trial output, ignored by git) and
+    `D:/js-harness-worktrees/codex-parity-t3-raw` (232 KB). What is kept of the raw output is
+    his, and the lead carries it to him once this is on `main`.
 
 ## Follow-ups
+- A gate left an untracked file in this worktree once: during the pre-commit gate of `48406cf`
+  (2026-10-05, 14:29 local) `Microsoft/Windows/PowerShell/ModuleAnalysisCache` appeared at the
+  root, 14,987 bytes, and that gate's review row read "gentle-ai could not assess the pending
+  change", since an untracked file makes the assessment unassessable. It was removed by hand;
+  the five earlier gates of that day left nothing. PowerShell keeps that cache under
+  `%LOCALAPPDATA%`, so a relative path means some process of the gate ran PowerShell with that
+  variable unset and the repository as its working directory. Which one is not traced:
+  `bin/lib/process-tree.mjs:190` spawns PowerShell with a merged environment, and the sandbox
+  environments of `evals/` move `LOCALAPPDATA`. Until it is, `git status --short` is read after
+  every gate and before any review assessment.
 - The comment above `giveBackWorkRoot` promises more than the code does (`evals/suite.mjs:606-609`,
   gentle-ai SUGGESTION on T4r): it is given back on three exits, and the exits between the
   resume check and the first trial were not traced one by one. With the next change to
@@ -548,8 +1041,9 @@ history). The commit that records this is pushed to the same pull request.
   (T4). Both readers here return; make it one stop if a third reader is written.
 - A Claude run named `codex` would keep its raw logs in `evals/runs/codex/`, beside the Codex
   runs' directories (T4). Not refused; no recorded run has that name.
-- The login's age is checked once per run, before the first trial. A run longer than the margin
-  the check leaves is not guarded: T6 and T7 are started with a login refreshed that day.
+- The login is checked once per run, before the first trial. A run longer than the 12 hours
+  the check leaves is not guarded. The token that is there on 2026-10-05 expires on 2026-10-07
+  at 21:45Z, so T7 either starts before 09:45Z that day or after a new login.
 - The config scan refuses a single-line value that holds a triple quote inside a string or a
   comment (Codex P2 on T2r, `evals/codex-home.mjs:218`). Make the delimiter check respect string
   and comment context when a real config trips it; until then the build stops and names the line.
@@ -561,13 +1055,25 @@ history). The commit that records this is pushed to the same pull request.
   and 59 MB more of the engram marketplace in the current arm. That time is inside a Codex
   trial's wall time and has no counterpart in a Claude trial, so T5's wall-time comparison must
   say so, or T4 must measure it apart.
-- The real login reached the age limit of 186 h on 2026-10-05 at about 15:45Z. T6 runs after the
-  real Codex has refreshed its own login, never with a copy that could be refreshed inside a
-  trial. What refreshes it is not known: the `codex exec review` of 2026-10-05, 188 h after the
-  file's date, worked and left the date as it was. Before T6: find what does (the interactive
-  CLI, the desktop app, or `codex login`), which is Sebastián's step since it is his login, and
-  check the date afterwards; or, if nothing refreshes a login that still works, decide with him
-  whether the age limit measures the right thing.
+- What makes Codex refresh a login, and how long before the expiry, is still not known: nothing
+  did in the ten hours around its eighth day (Progress, 2026-10-05, slice C). The first refresh
+  seen on this machine settles it; until then the 12 hours of T6p are a guess with room.
+- Codex at `high` is not measured (cut on 2026-10-05). If the effort axis is ever wanted, it is
+  `--configs minimal,current --efforts high --name ab-high`, 30 trials, on one stack with the
+  `medium` runs or as a matrix of its own.
+- A suite that is stopped from outside leaves the trial's home in the work root, with the copy
+  of the login in it, and the trial's engram server running (Progress, 2026-10-06T03:03Z). The
+  cap and an error end a trial cleanly; a kill does not. Until the suite removes what an
+  earlier run left, a stopped run is cleaned by hand before the next start: the engram server
+  that listens on a port other than 7437 and whose parent is gone, and every directory in
+  `js-harness-evals-work`.
+- A run that meets the cap stops the chain it is in, and nothing starts it again when the cap
+  lifts: it is resumed by hand. The cap message names the hour it lifts ("try again at 10:00
+  PM"), which the suite prints and does not parse.
+- engram refused this session's writes after a compaction ("Claude host session registration
+  could not be confirmed"), and its mirror of this document is cut at 50,000 bytes. The file
+  in the repository is whole; the mirror needs the document split or only its live sections
+  saved.
 
 - The probe ties a new engram process to a trial by its command line or its port, so one the
   trial started that takes both from its environment and does not listen (a stdio server) is
@@ -584,9 +1090,12 @@ history). The commit that records this is pushed to the same pull request.
   belongs.
 
 ## Next step
-Slice A is merged (#33). Slice B is pull request #34, open against `main`; its merge is
-Sebastián's. After it the branch is restarted from `main` again, as after #33. Slice C opens
-with T6, the first spend since the smoke trials: 15 trials of
-`minimal` at `medium`. T6 is blocked until the real login is refreshed: its date is 2026-09-27
-and the suite refuses a login older than 186 h (Follow-ups); the review boundary for slice C is
-the commit that records this.
+F6 is closed: slices A and B merged on 2026-10-05 (#33, #34), and slice C on 13 of the 15
+trials of `current` by Sebastián's decision of 2026-10-12, its result written in the roadmap
+("F6 result"). No task is open and nothing runs. What is left is not a task of this feature:
+his word on what is kept of the raw trial output that lives only on this machine (Progress,
+2026-10-13), after which the old branch `feat/codex-parity` and its worktree can go.
+
+What he asked for next is a feature of its own, in its own session and branch from `main`:
+the review by Codex through an integration of this repository that loads only what a review
+needs, measured before and after. Its evidence is in Progress, 2026-10-06.
