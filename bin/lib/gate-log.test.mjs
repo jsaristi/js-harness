@@ -14,6 +14,8 @@ import {
   gateLogSwitchedOff,
   gateRecord,
   gatesOf,
+  isTreeKey,
+  provenBy,
   readGateLog,
 } from './gate-log.mjs';
 
@@ -649,4 +651,79 @@ test('gateRecord with the writer of this module writes a real file, with an id o
   assert.notEqual(gates[0].start.id, gates[1].start.id);
   assert.match(gates[0].start.id, /^[0-9a-f-]{36}$/);
   assert.equal(new Date(gates[0].start.at).toISOString(), gates[0].start.at);
+}));
+
+// --- the key of a tree: on the end of a gate that proved it, and in the line of a gate that ran no sensor ---
+
+const KEY = 'c'.repeat(64);
+const same = (id, more = {}) => ({ v: 1, event: 'same', id, at: AT, cwd: 'C:\\work\\two', command: 'check', pid: 101, code: KEY, by: 'g1', ...more });
+
+test('provenBy: the proof of a tree is the last end that passed and holds its key, with the folder of its start where the log still has it', () => {
+  const events = [start('g1'), end('g1', { code: KEY }), start('g2', { cwd: 'C:\\work\\two' }), end('g2', { code: KEY, at: '2026-10-11T08:00:00.000Z' }), end('g3', { code: KEY, at: '2026-10-11T09:00:00.000Z' })];
+  assert.deepEqual(provenBy(events.slice(0, 4), KEY), { id: 'g2', at: '2026-10-11T08:00:00.000Z', cwd: 'C:\\work\\two' });
+  // The start of the last one was rotated away: the proof stands, and names no folder.
+  assert.deepEqual(provenBy(events, KEY), { id: 'g3', at: '2026-10-11T09:00:00.000Z', cwd: null });
+});
+
+test('provenBy: nothing but a passed end with that very key is a proof', () => {
+  const other = 'd'.repeat(64);
+  const none = [
+    [],
+    [start('g1'), end('g1')],
+    [start('g1'), end('g1', { code: other })],
+    [start('g1'), end('g1', { code: KEY, result: 'fail' })],
+    [start('g1'), end('g1', { code: KEY, result: 'timeout' })],
+    [start('g1'), end('g1', { code: KEY, result: 'exit 0' })],
+    [same('g2')],
+    [start('g1', { code: KEY })],
+    [stopped('g1', { code: KEY })],
+  ];
+  for (const events of none) assert.equal(provenBy(events, KEY), null, JSON.stringify(events));
+  const proof = [start('g1'), end('g1', { code: KEY })];
+  for (const key of [undefined, null, '', 'c'.repeat(63), 'C'.repeat(64), 7]) assert.equal(provenBy(proof, key), null, String(key));
+  assert.equal(provenBy(undefined, KEY), null);
+  assert.equal(isTreeKey(KEY), true);
+});
+
+test('gateRecord writes the key of the tree on the end of a gate that gives one, and nothing where what it is given is no key', () => {
+  const written = [];
+  const record = () => gateRecord({ home: 'h', cwd: 'C:\\work\\one', command: 'check', append: (home, event) => { written.push(event); return { ok: true }; }, now: () => Date.parse(AT), id: () => 'g1' });
+  const ended = (code) => {
+    written.length = 0;
+    const gate = record();
+    gate.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+    gate.end({ result: 'pass', sensors: [], code });
+    return written.at(-1);
+  };
+  assert.equal(ended(KEY).code, KEY);
+  for (const code of [undefined, null, '', 'not a key', 12]) assert.equal('code' in ended(code), false, String(code));
+});
+
+test('gateRecord writes a gate that ran no sensor as one line of the kind same, with the key and the gate that proved it, and nothing when either is missing', withHome(async (home) => {
+  const gate = gateRecord({ home, cwd: 'C:\\work\\two', command: 'check', pid: 101, id: () => 'g2' });
+  gate.same({ code: KEY });
+  gate.same({ by: 'g1' });
+  gate.same({ code: 'no key', by: 'g1' });
+  assert.deepEqual(readGateLog(home).events, []);
+  gate.same({ code: KEY, by: 'g1' });
+  const { events, skipped } = readGateLog(home);
+  assert.equal(skipped, 0);
+  assert.deepEqual(events.map(({ event, id, cwd, code, by }) => ({ event, id, cwd, code, by })), [{ event: 'same', id: 'g2', cwd: 'C:\\work\\two', code: KEY, by: 'g1' }]);
+  assert.equal(gate.failure(), undefined);
+}));
+
+test('a gate that ran no sensor is a gate of its own in the list, and its line says so and names the gate that proved its tree', () => {
+  const gates = gatesOf([start('g1'), end('g1', { code: KEY }), same('g2', { by: '0123456789abcdef' })]);
+  assert.deepEqual(gates.map((gate) => Object.keys(gate)), [['start', 'end'], ['same']]);
+  const [, line] = formatGates(gates);
+  assert.match(line, /^\d\d-\d\d \d\d:\d\d:\d\d {2}no sensor ran: the same tree passed in gate 01234567 {2}C:\\work\\two$/);
+  // An end is the end of its start alone: a line of the new kind that shares an id ends nothing.
+  assert.deepEqual(gatesOf([start('g1'), same('g1')]).map((gate) => Object.keys(gate)), [['start'], ['same']]);
+});
+
+test('a line whose key is not one is no event: an end with it is left out and counted, as any other fault of a body is', withHome(async (home) => {
+  for (const event of [start('g1'), end('g1', { code: 'short' }), same('g2', { code: 5 }), same('g3', { by: null }), same('g4')]) appendGateEvent(home, event);
+  const { events, skipped } = readGateLog(home);
+  assert.deepEqual(events.map(({ event, id }) => [event, id]), [['start', 'g1'], ['same', 'g4']]);
+  assert.equal(skipped, 3);
 }));

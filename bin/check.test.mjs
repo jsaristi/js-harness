@@ -5,10 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
-import { gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { treeKey } from './lib/gate-tree.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -4055,6 +4056,233 @@ test('a commit of documents alone runs no sensor however it is made: plain, with
     assert.equal(code.status, 0, code.said);
     assert.match(code.said, /^PASS {2}tests /m);
     assert.equal(fs.existsSync(marker), true, 'the sensor did not run for a commit that holds a code file');
+  } finally {
+    remove();
+  }
+});
+
+// --- a tree a gate already passed is not run again, where the project declares it (`"sameTree": "skip"`) ---
+
+/** A repository whose project declares that a tree a gate passed is not run again, committed whole, with a
+ * home for its gates. `gate()` is a gate of it with a stand-in for its one sensor, which `sensorRuns()`
+ * counts and `sensor.answer` answers for; real git is asked about the tree. */
+function sameTreeRepo(declared = { sameTree: 'skip' }) {
+  const repo = documentsRepo();
+  const home = makeTmpDir();
+  writeJson(repo, 'harness.json', { sensors: { tests: 'run-tests' }, ...declared });
+  git(repo, 'add', '-A');
+  git(repo, ...commitAs, '-m', 'what the project declares');
+  let ran = 0;
+  const sensor = { answer: sensorRan, during: undefined };
+  const spawn = () => {
+    ran += 1;
+    sensor.during?.();
+    return sensor.answer();
+  };
+  const gate = (env = {}, deps = {}) => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off', ...env }, { gentleAi: gentleAiNotFound, spawn, ...deps });
+  const remove = () => {
+    for (const dir of [repo, home]) fs.rmSync(dir, { recursive: true, force: true });
+  };
+  return { repo, home, gate, sensor, sensorRuns: () => ran, events: () => readGateLog(home).events, remove };
+}
+
+const NO_SENSOR_SAME_TREE = /^INFO {2}sensors {2}no sensor ran \(tests\): this tree is the one gate [0-9a-f]{8} passed on \d{4}-\d\d-\d\d \d\d:\d\d in .+, file for file \(harness\.json "sameTree"\)$/;
+const TREE_KEY = /^[0-9a-f]{64}$/;
+
+test('a gate of the very tree another gate passed runs no sensor, names that gate and leaves a line of its own; a changed file is a gate that runs them again', async () => {
+  const { repo, gate, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    const first = await gate();
+    assert.equal(first.code, 0, first.output);
+    assert.match(first.output, /^PASS {2}tests /m);
+    assert.equal(sensorRuns(), 1);
+    const [start, end] = events();
+    assert.deepEqual([start.event, end.event, end.result], ['start', 'end', 'pass']);
+    assert.match(end.code, TREE_KEY);
+
+    const second = await gate();
+    assert.equal(second.code, 0, second.output);
+    assert.equal(sensorRuns(), 1, 'the sensor ran again on a tree that had passed');
+    assert.match(sensorsRow(second.output)[0], NO_SENSOR_SAME_TREE);
+    assert.ok(sensorsRow(second.output)[0].includes(`gate ${end.id.slice(0, 8)} passed`), second.output);
+    assert.doesNotMatch(second.output, /^\w+ {2}(tests|gate|load) /m);
+    const same = events().at(-1);
+    assert.deepEqual({ event: same.event, code: same.code, by: same.by, cwd: same.cwd }, { event: 'same', code: end.code, by: end.id, cwd: path.resolve(repo) });
+    // The rows around the sensors are those of any gate.
+    assert.deepEqual(namesOf(second.output), [...STATIC_ROWS, 'sensors', 'review', 'codex-review']);
+
+    // A code file changed and committed is another tree: every sensor runs, and that tree is proven in its turn.
+    writeFile(repo, 'src/app.js', 'three\n');
+    git(repo, ...commitAs, '-a', '-m', 'code');
+    assert.equal((await gate()).code, 0);
+    assert.equal(sensorRuns(), 2);
+    assert.notEqual(events().at(-1).code, end.code);
+    // And so is a document: the sensors may read it, so it is in the key.
+    writeFile(repo, 'docs/guide.md', 'three\n');
+    git(repo, ...commitAs, '-a', '-m', 'a document');
+    assert.equal((await gate()).code, 0);
+    assert.equal(sensorRuns(), 3);
+    // A gate that ran no sensor proves nothing itself: three ends hold a key, and three alone.
+    assert.equal(events().filter((event) => event.event === 'end' && TREE_KEY.test(event.code ?? '')).length, 3);
+  } finally {
+    remove();
+  }
+});
+
+test('a folder that is not the index has no key: with an untracked file, an unstaged change or a file git is told not to look at, every gate runs its sensors and proves nothing', async () => {
+  const dirty = [
+    (repo) => writeFile(repo, 'scratch.txt'),
+    (repo) => writeFile(repo, 'src/app.js', 'edited and not staged\n'),
+    (repo) => {
+      git(repo, 'update-index', '--skip-worktree', 'src/app.js');
+      writeFile(repo, 'src/app.js', 'edited where git does not look\n');
+    },
+    (repo) => {
+      git(repo, 'update-index', '--assume-unchanged', 'src/app.js');
+      writeFile(repo, 'src/app.js', 'edited where git assumes nothing changed\n');
+    },
+  ];
+  for (const [at, make] of dirty.entries()) {
+    const { repo, gate, sensorRuns, events, remove } = sameTreeRepo();
+    try {
+      make(repo);
+      for (const run of [1, 2]) {
+        const { code, output } = await gate();
+        assert.equal(code, 0, output);
+        assert.equal(sensorRuns(), run, `case ${at}, gate ${run}`);
+      }
+      assert.deepEqual(events().map((event) => [event.event, 'code' in event]), [['start', false], ['end', false], ['start', false], ['end', false]], `case ${at}`);
+    } finally {
+      remove();
+    }
+  }
+});
+
+test('a gate proves no tree when a sensor failed, or when a tracked file changed while the sensors ran', async () => {
+  const failing = sameTreeRepo();
+  try {
+    failing.sensor.answer = () => ({ status: 1, signal: null, stdout: '', stderr: 'no' });
+    assert.equal((await failing.gate()).code, 1);
+    assert.equal((await failing.gate()).code, 1);
+    assert.equal(failing.sensorRuns(), 2, 'a tree that failed was not run again');
+    assert.deepEqual(failing.events().map((event) => [event.event, event.result, 'code' in event]), [['start', undefined, false], ['end', 'fail', false], ['start', undefined, false], ['end', 'fail', false]]);
+  } finally {
+    failing.remove();
+  }
+  const moving = sameTreeRepo();
+  try {
+    // The sensor passes, and leaves a tracked file other than it was.
+    moving.sensor.during = () => writeFile(moving.repo, 'src/app.js', 'written by a test\n');
+    assert.equal((await moving.gate()).code, 0);
+    assert.equal('code' in moving.events().at(-1), false, 'the end of a gate whose tree moved holds a key');
+    moving.sensor.during = undefined;
+    git(moving.repo, 'checkout', '--', 'src/app.js');
+    assert.equal((await moving.gate()).code, 0);
+    assert.equal(moving.sensorRuns(), 2, 'a tree no gate had proven was not run');
+  } finally {
+    moving.remove();
+  }
+});
+
+test('a project that does not declare the rule runs its sensors at every gate and writes no key, and so does a gate whose log is switched off', async () => {
+  const silent = sameTreeRepo({});
+  try {
+    assert.equal((await silent.gate()).code, 0);
+    assert.equal((await silent.gate()).code, 0);
+    assert.equal(silent.sensorRuns(), 2);
+    assert.equal(silent.events().some((event) => 'code' in event || event.event === 'same'), false);
+  } finally {
+    silent.remove();
+  }
+  const { gate, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    assert.equal((await gate()).code, 0);
+    // The proof is there, and a gate that reads no log does not take it.
+    for (const run of [2, 3]) {
+      assert.equal((await gate({ JS_HARNESS_GATE_LOG: 'off' })).code, 0);
+      assert.equal(sensorRuns(), run);
+    }
+    assert.equal(events().length, 2);
+  } finally {
+    remove();
+  }
+});
+
+test('a "sameTree" that is not "skip" is a fault of the declaration: the gate fails in its sensors row and runs nothing', async () => {
+  for (const value of [true, false, 'on', 'Skip', '', null, 1, ['skip']]) {
+    const { gate, sensorRuns, events, remove } = sameTreeRepo({ sameTree: value });
+    try {
+      const { code, output } = await gate();
+      assert.equal(code, 1, output);
+      assert.ok(sensorsRow(output)[0].startsWith(`FAIL  sensors  harness.json "sameTree" must be "skip", the one value it takes; it is ${JSON.stringify(value)}`), output);
+      assert.equal(sensorRuns(), 0);
+      assert.deepEqual(events(), []);
+    } finally {
+      remove();
+    }
+  }
+  assert.deepEqual(discoverSameTree(makeTmpDir()), { skip: false });
+});
+
+test('a gate that waited for the lock looks for its proof once more: the gate it waited for was of the same tree, so it runs no sensor', async () => {
+  const { repo, home, gate, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    const asGit = (args) => {
+      const result = spawnSync('git', args, { cwd: repo, env: gitEnv(), encoding: 'utf8' });
+      return result.status === 0 ? result.stdout : null;
+    };
+    const key = treeKey(asGit, { sensors: [{ name: 'tests', command: 'run-tests' }] });
+    assert.match(key, TREE_KEY);
+    // The lock is handed over after a wait, in which another gate of this tree ran its sensors and passed.
+    const at = new Date().toISOString();
+    const take = async () => {
+      appendGateEvent(home, { v: 1, event: 'start', id: 'abcdef0123456789', at, cwd: 'C:\\work\\other', command: 'check', pid: 7, lock: 'own', waitedSeconds: 0, waitedFor: [] });
+      appendGateEvent(home, { v: 1, event: 'end', id: 'abcdef0123456789', at, seconds: 3, result: 'pass', sensors: [], code: key });
+      return { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 5000 };
+    };
+    const { code, output } = await gate({}, { takeGateLock: take });
+    assert.equal(code, 0, output);
+    assert.equal(sensorRuns(), 0, 'the sensor ran on a tree the gate before it had passed');
+    assert.match(sensorsRow(output)[0], NO_SENSOR_SAME_TREE);
+    assert.ok(sensorsRow(output)[0].includes('gate abcdef01 passed'), output);
+    assert.deepEqual(events().map((event) => event.event), ['start', 'end', 'same']);
+  } finally {
+    remove();
+  }
+});
+
+// With the real hook: `git commit <path>` hands it an index of its own, and the folder is then not that index.
+test('through the real hook: a commit of one named path beside another staged file proves no tree, the commit of a clean folder does, and the same tree committed again runs no sensor', async () => {
+  const { repo, home, marker, commit, remove } = hookedRepo();
+  try {
+    writeJson(repo, 'harness.json', { ...JSON.parse(fs.readFileSync(path.join(repo, 'harness.json'), 'utf8')), sameTree: 'skip' });
+    for (const file of ['src/app.js', 'src/other.js']) writeFile(repo, file, 'three\n');
+    git(repo, 'add', '-A');
+    const ends = () => readGateLog(home).events.filter((event) => event.event === 'end');
+    const ranSensor = () => {
+      const ran = fs.existsSync(marker);
+      fs.rmSync(marker, { force: true });
+      return ran;
+    };
+
+    // The commit holds harness.json alone; the folder holds two more staged files the commit does not.
+    const one = commit(repo, 'harness.json');
+    assert.equal(one.status, 0, one.said);
+    assert.equal(ranSensor(), true);
+    assert.deepEqual(ends().map((event) => [event.result, 'code' in event]), [['pass', false]]);
+
+    // The rest is committed, and nothing is left unstaged or untracked: this gate proves its tree.
+    const two = commit(repo);
+    assert.equal(two.status, 0, two.said);
+    assert.equal(ranSensor(), true);
+    assert.match(ends().at(-1).code, TREE_KEY);
+
+    // The same tree again, as an amend of the message alone.
+    const again = commit(repo, '--amend');
+    assert.equal(again.status, 0, again.said);
+    assert.equal(ranSensor(), false, 'a sensor ran for a tree the gate before had passed');
+    assert.match(sensorsRow(again.said)[0], NO_SENSOR_SAME_TREE);
+    assert.equal(readGateLog(home).events.at(-1).event, 'same');
   } finally {
     remove();
   }
