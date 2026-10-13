@@ -2464,7 +2464,28 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     NEXT: the correction through the gate, Codex on that one commit, push, the pull request.
 
 ## Next step
-In this order. (1) The rest of the second part of T16b when `bin/codex-review.mjs` is free,
+**State for a resume, written on 2026-10-12 at 91 percent of this session's context, before a
+compaction.** Owed, documents only, on the branch `docs/owed-documents` (worktree
+`code-map-switch`), each fact read by this session before it is written; the lines are of the
+lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b` and are the lead's claims until read:
+(a) `docs/ROADMAP.md`, open decision 4: the sentence "It ends in a question, so the how is not
+settled" is replaced after his line 8315 ("listo entonces apliquemoslo asi"), a yes to the
+direction and not to a design; (b) his order of a switch for the Codex review, line 8758;
+(c) the rule about 1.0.0, the result of the lead's question 15; (d) F6 closes with 13 of 15
+trials, his tap at line 9799 ("Cerrar con 13"): the two not run (resolver 3 and spec-drift 3
+of the current arm at medium) and why, the suite refusing another stack
+(`evals/suite.mjs:650`) and the downgrades running on a live memory store, each verified in
+the files first; (e) gentle-ai's reviewers' model is left as it is and checked at the next
+native review, his tap at line 9780, if the roadmap names it as open; (f) the register of
+failures: a memory note of another session overwritten by this one
+(`questions-through-the-question-tool.md`, 19:57), commit, push and pull request joined by
+semicolons (19:42), and the resume hook saying "the host compacted this session by itself"
+after he typed `/compact` (the lead's claim, JH 5's candidate). Done since the last entry:
+his decision that a Codex review runs at medium is on `main` (pull request 87; this session
+wrote the rule half as a patch, his tap read at line 8962). Two rules of his for every
+session, to read at lines 8423 and 8528 before they are applied: a question to him goes
+through the question tool, and it is the orchestrator that asks, not a work session.
+Then, in this order. (1) The rest of the second part of T16b when `bin/codex-review.mjs` is free,
 after JH 8's S1 and its cut of the command's git calls are on `main`: the review's model and
 effort, and the reader of `codex-review-margin`. The lead says when the file is this
 session's (its word of 2026-10-12, in the message that told of pull request 82 merged at
