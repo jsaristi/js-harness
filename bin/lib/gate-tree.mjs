@@ -6,8 +6,9 @@
 // folder is that index, and every doubt is no key: a gate with none runs its sensors as it always did.
 //
 // What the key does not hold, so that nobody reads more into a gate that ran no sensor: a file git ignores,
-// a file changed and changed back while the sensors ran, and the machine outside what `RUNTIME` names
-// (another git, another PATH).
+// a file changed and changed back while the sensors ran, the machine outside what `RUNTIME` names (another
+// git, another PATH), and what a filter of the repository's own (`clean`, `working-tree-encoding`) folds
+// into one object: the key is of the objects and of how git says each is written, not of the bytes read.
 
 import { createHash } from 'node:crypto';
 
@@ -38,6 +39,13 @@ const differs = (entry) => entry.length < 4 || entry[1] !== ' ' || entry.startsW
  * entry, one to be removed or killed. */
 const unseen = (line) => line[0] !== 'H';
 
+/** Whether a line of the listing is a file whose line ends are mixed in the folder (`w/mixed`). The listing
+ * says how such a file is written and not which of its lines end how: under `core.autocrlf` two files with
+ * CRLF and LF at other lines are one object in the index, one clean status and one line here, and a sensor
+ * that reads bytes can answer them differently. Every other way of writing a file is the object's bytes
+ * with one rule applied to all of its line ends, or the bytes themselves. */
+const mixedOnDisk = (line) => /(^|\s)w\/mixed(\s|$)/.test(line.split('\t')[1] ?? '');
+
 /** The key of the tree of the repository `git` answers for, as 64 lowercase hex characters, or `null` when
  * there is none.
  *
@@ -51,7 +59,8 @@ const unseen = (line) => line[0] !== 'H';
  *
  * `null`, which is "run the sensors", for every one of: git that does not answer; a folder that is not the
  * index (an unstaged change, an untracked file, an unmerged path); an entry git would report unchanged
- * whatever its file holds; an index with nothing in it. Two processes of git. */
+ * whatever its file holds; a file whose line ends are mixed in the folder; an index with nothing in it. Two
+ * processes of git. */
 export function treeKey(git, { sensors, runtime = RUNTIME } = {}) {
   if (typeof git !== 'function' || !Array.isArray(sensors) || sensors.length === 0) return null;
   const status = git(STATUS);
@@ -59,7 +68,7 @@ export function treeKey(git, { sensors, runtime = RUNTIME } = {}) {
   const listing = git(LISTING);
   if (typeof listing !== 'string') return null;
   const lines = listing.split('\0').filter(Boolean);
-  if (lines.length === 0 || lines.some(unseen)) return null;
+  if (lines.length === 0 || lines.some(unseen) || lines.some(mixedOnDisk)) return null;
   const hashed = JSON.stringify([
     TREE_KEY_FORMAT,
     lines,

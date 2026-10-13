@@ -1,9 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { RUNTIME, TREE_KEY_FORMAT, treeKey } from './gate-tree.mjs';
 
-// The key of the tree a gate guards. Git is a stand-in here: what real git answers in a real repository,
-// under the index a hook is handed, is tested through the gate in check.test.mjs.
+// The key of the tree a gate guards. Git is a stand-in here but for one test, of what only real git can say
+// (mixed line ends); what it answers under the index a hook is handed is tested through the gate in
+// check.test.mjs.
 
 const SENSORS = [{ name: 'tests', command: 'npm run test' }];
 const entry = (path, { tag = 'H', id = 'a'.repeat(40), eol = 'i/lf    w/crlf  attr/' } = {}) => `${tag} 100644 ${id} 0\t${eol}\t${path}`;
@@ -46,6 +51,50 @@ test('treeKey: no key where the folder is not the index: an unstaged change, an 
 test('treeKey: no key where an entry is one git reports unchanged whatever its file holds, or is not a plain entry', () => {
   for (const tag of ['S', 'h', 's', 'M', 'R', 'C', 'K']) {
     assert.equal(treeKey(gitOf({ listing: [entry('a.js'), entry('b.js', { tag })] }), { sensors: SENSORS }), null, tag);
+  }
+});
+
+test('treeKey: no key where a file has mixed line ends in the folder, wherever the listing says so and only there', () => {
+  for (const eol of ['i/lf    w/mixed attr/', 'i/mixed w/mixed attr/text=auto', 'i/lf    w/mixed attr/text eol=crlf']) {
+    assert.equal(treeKey(gitOf({ listing: [entry('a.js'), entry('b.js', { eol })] }), { sensors: SENSORS }), null, eol);
+  }
+  // A path is not the way a file is written, and neither is what the index holds.
+  assert.match(treeKey(gitOf({ listing: [entry('w/mixed'), entry('b.js', { eol: 'i/mixed w/crlf  attr/' })] }), { sensors: SENSORS }), /^[0-9a-f]{64}$/);
+});
+
+// Why: under `core.autocrlf` two files with CRLF and LF at other lines are one object, one clean status and
+// one line of the listing, so a key of them would be one key for two files a sensor can tell apart.
+test('treeKey with real git: two arrangements of mixed line ends are one listing and a clean folder, and neither has a key', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tree-mixed-'));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  const git = (args) => {
+    const result = spawnSync('git', ['-c', 'core.autocrlf=true', '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: repo, encoding: 'utf8', env });
+    return result.status === 0 ? result.stdout : null;
+  };
+  try {
+    git(['init', '-q']);
+    fs.writeFileSync(path.join(repo, 'plain.txt'), 'one\r\ntwo\r\n');
+    fs.writeFileSync(path.join(repo, 'mixed.txt'), 'one\r\ntwo\n');
+    git(['add', '.']);
+    assert.notEqual(git(['commit', '-q', '-m', 'two files']), null);
+    const first = git(['ls-files', '--eol']);
+    assert.match(first, /w\/mixed\s.*mixed\.txt/);
+    assert.equal(treeKey(git, { sensors: SENSORS }), null);
+
+    fs.writeFileSync(path.join(repo, 'mixed.txt'), 'one\ntwo\r\n');
+    assert.equal(git(['status', '--porcelain']), '');
+    assert.equal(git(['ls-files', '--eol']), first);
+    assert.equal(treeKey(git, { sensors: SENSORS }), null);
+
+    // With that file written one way throughout, and staged, the folder has a key again. Staged, since git
+    // calls a file of another size changed without reading it: only a rearrangement of the same size,
+    // as the one above, is a clean folder.
+    fs.writeFileSync(path.join(repo, 'mixed.txt'), 'one\r\ntwo\r\n');
+    git(['add', 'mixed.txt']);
+    assert.equal(git(['status', '--porcelain']), '');
+    assert.match(treeKey(git, { sensors: SENSORS }), /^[0-9a-f]{64}$/);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
   }
 });
 
