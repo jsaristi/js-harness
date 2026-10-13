@@ -52,6 +52,22 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 - [x] T2 Version check and upgrade with injectable source and package manager — route: delegated writer
 - [x] T3 Zero-dependency TUI over the same commands — route: delegated writer
 - [x] T4 End-to-end proof (`npm run e2e`) — route: delegated writer
+- [ ] T5 `update` and `upgrade` stop asking the npm registry for a name nobody holds. Added on
+  2026-10-13, a defect in shipped behaviour that had no task (`docs/ROADMAP.md`, "Next", the
+  defects read on that day, item a). Read on `main` at `f98f478`: `resolveLatest` runs `<pm>
+  view js-harness version` (`bin/update.mjs:34-42`, the name at `:14`) and `upgradeMain`
+  installs `js-harness@<what that printed>` with no comparison to what is installed and no
+  check of where it comes from (`:200-209`), then runs the `sync --global` of the copy it just
+  installed (`:218-225`). `npm view js-harness version` answers 404 today, so the name is free:
+  whoever registers it decides what `js-harness upgrade` installs and runs on this machine. The
+  release source decided is git tags (`docs/ROADMAP.md`, Decided, "Release source") and is not
+  built. The first to fix of the six. Not designed here
+- [ ] T6 `status` and `sync` work in a project whose `harness.json` holds no pin. Added on
+  2026-10-13 (the same list, item e). Read: in this repository `js-harness status` prints
+  "cannot read the pin from …harness.json: it has no string "version"" and exits 1
+  (`bin/update.mjs:140-142`, `bin/lib/project.mjs:1473`; `sync` the same at `:1513`), because
+  its `harness.json` was written by hand for `documents` and `documentSensors` and never by
+  `init`. Whether such a file is a project with no pin or an invalid one is the design
 
 ## Progress
 - 2026-09-26: document created. Measured: `npm` on PATH is `exec pnpm "$@"` (pnpm 12.6.0); the real

@@ -2586,6 +2586,19 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**Where this session stands, later on 2026-10-13: stopped by the lead's call, at a task end.**
+Pull requests 91, 93, 94 and 96 are merged; the last piece is the documents branch
+`docs/shipped-defects`: the six defects in shipped behaviour that had no task, each read in
+the code on `main` at `f98f478` and all true, written in the roadmap ("Next") with a task in
+the feature document each belongs to (`install-update.md` T5 and T6, `sensors.md` T5,
+`practice-project.md` T5) and two open decisions of his (9, the README; 10, what the package
+ships). Left on it: the push, the pull request, its head to the lead. After it this session
+starts nothing: what it holds next waits for the lead's word, because the plan's week is at
+92 of his 95 percent. In order: the rest of T16b's second part (`bin/check.mjs`,
+`bin/lib/manifest.mjs`, `bin/contract.mjs`, files the session-channel session is editing);
+T1, whose paid measurement is his and waits for the week to reset; T2 and T8, his, asked by
+the lead. The block below is the record of earlier that day.
+
 **State on 2026-10-13, which replaces the two blocks of 2026-10-12 below (kept as the record
 of that day; pull request 91 merged what they list).** On `feat/rules-review-readers`: the
 two pieces are committed (`f2896a6`) and reviewed by both tools with nothing found, and the

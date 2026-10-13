@@ -79,6 +79,13 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
 - [x] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
   (route: delegated writer)
 - [x] T4 Roadmap and `AGENTS.md` updated; F4 closed after review and merge (route: inline)
+- [ ] T5 A done-when command of `contract run` that times out leaves no process behind. Added
+  on 2026-10-13, a defect in shipped behaviour that had no task (`docs/ROADMAP.md`, "Next",
+  the defects read on that day, item d); it was one of the follow-ups below. Read on `main` at
+  `f98f478`: `runCommand` starts each command with `spawnSync`, `shell: true` and a `timeout`
+  (`bin/contract.mjs:228-235`), so at the timeout Node kills the shell and what the shell
+  started goes on running. The sensor runner already stops a whole tree (`runSensor`); the
+  follow-up's own words are that it could serve both. Not designed here
 
 ## Progress
 - 2026-09-30: branch `feat/sensors` from `main` at 9e7def8; contract written (e66a77b).
