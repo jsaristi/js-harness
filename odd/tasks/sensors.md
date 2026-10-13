@@ -79,7 +79,8 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
 - [x] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
   (route: delegated writer)
 - [x] T4 Roadmap and `AGENTS.md` updated; F4 closed after review and merge (route: inline)
-- [ ] T5 A done-when command of `contract run` that times out leaves no process behind. Added
+- [x] T5 (501e67d, and 5411099 after Codex's finding; route: inline; done on 2026-10-13, see
+  Progress) A done-when command of `contract run` that times out leaves no process behind. Added
   on 2026-10-13, a defect in shipped behaviour that had no task (`docs/ROADMAP.md`, "Next",
   the defects read on that day, item d); it was one of the follow-ups below. Read on `main` at
   `f98f478`: `runCommand` starts each command with `spawnSync`, `shell: true` and a `timeout`
@@ -166,6 +167,29 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   `jsaristi/js-harness#18` as 6197263 (2026-09-30, on Sebastián's go-ahead; 699 changed lines,
   `size:exception` asked in the PR, as #17 did with 582).
 - T4 closed on `docs/close-f4`: the roadmap marks F4 done and points Next at F5.
+- 2026-10-13 T5 (`501e67d`, `5411099`, branch `fix/contract-timeout-tree` off `main` `ad7b37b`,
+  written inline by the session "JH 8" on the orchestrator's order): `contract run` runs each
+  done-when command through `runSensor`, so at the timeout the whole process tree is stopped,
+  and after the shell exits whatever the command left holding its output. `runSensor` is
+  imported when a command runs (`startInTree`), since `check.mjs` imports `contract.mjs`. A new
+  parameter of `contractMain`, `start`, is the tests' stand-in for a command; `spawn` stays
+  git's. A kill that could not be done is a line under the row.
+  - Turn of 17:01 (`ct-turn.sh`): RED on HEAD's code, 1 of 37 fails, "the command … is still
+    running"; GREEN 37 of 37. **Its commit was refused by the gate:** the new test's teardown
+    called `process.kill` with a number, which `bin/lib/process-tree.test.mjs` forbids in
+    every test (Windows gives a number again). The teardown went through
+    `process-tree.testkit.mjs`; second turn 17:15 to 17:26, the rule checked before the
+    commit, the gate whole: `501e67d`. gentle-ai: not due (`under_budget`).
+  - Codex, once, 17:27, medium: "the patch is incorrect" (0.93), one P2,
+    `bin/contract.test.mjs:395`: the teardown learned who each number was only in `finally`,
+    after the run had stopped both, when either could be another program's. 181,463 input
+    tokens (plan 36,000, allowance 300,000). **True.** Correction `5411099`: the test starts
+    the run, records both processes with the teardown while they are alive, and asserts
+    with its `look`, which calls a number alive only when it is the process recorded; the
+    timeout is six seconds. Turn 17:39 to 17:50: with the code before the fix the test still
+    fails ("is still the process that was recorded"), 37 of 37 with it, the gate whole. Codex
+    on the correction alone, 17:51: correct (0.88), 120,805 (plan 24,000, allowance 300,000).
+    The push check: 2 code commits, both covered.
 
 ## Follow-ups
 - The review row's two gentle-ai calls each get a 20 s timeout, so a hung gentle-ai can add ~40 s
@@ -174,8 +198,8 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   a stable code for it, match that instead, or pin the phrase in a test against real output.
 - The review row spawns `gentle-ai` without a shell, so on Windows a `.cmd` or `.ps1` shim would
   read as "not found"; gentle-ai installs as a Go binary today, so this is latent.
-- `contract run` uses `spawnSync` with a timeout too, so a timed-out done-when command leaves its
-  grandchildren running the same way; `runSensor` could serve both.
+- Done on 2026-10-13 (T5): `contract run` used `spawnSync` with a timeout too, so a timed-out
+  done-when command left its grandchildren running the same way; `runSensor` serves both now.
 - The sensor runner's POSIX path (process-group kill, signal forwarding) has no test on a POSIX
   machine yet.
 - On Windows, a survivor whose own parent exited before the shell is not a direct child of the
@@ -191,6 +215,10 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
 F4 is closed. What remains are the follow-ups above; each is its own slice when it earns one.
 
 ## State for a resume
+
+**At 17:51 on 2026-10-13: T5, the first of the five things below, is done and reviewed (Progress);
+what is left of it is its pull request and the notice to the orchestrator. Then (2) to (5), none
+started. The session was at 89% of its context.**
 
 Written on 2026-10-13 at 16:58 by the session "JH 8", at 77% of its context, before any line
 of T5 was read in the code or written. If this session is compacted, this is the record.
