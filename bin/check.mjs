@@ -16,7 +16,8 @@ import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
-import { gateLogSwitchedOff, gateRecord } from './lib/gate-log.mjs';
+import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
+import { treeKey } from './lib/gate-tree.mjs';
 
 export { estimateTokens };
 
@@ -265,6 +266,20 @@ function sameFolder(one, other) {
  * With no commit yet git compares the index with nothing, and lists all that is staged.
  * `spawn` stands in for `spawnSync`. */
 function stagedDocuments(cwd, documents, spawn = spawnSync) {
+  const git = hookGit(cwd, spawn);
+  if (git === null) return null;
+  const listed = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z']);
+  const paths = listed?.split('\0').filter(Boolean) ?? [];
+  const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
+  return paths.length > 0 && paths.every(isDocument) ? paths : null;
+}
+
+/** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
+ * not answer; or `null` itself when the environment is not to be trusted as the binding of the repository
+ * of `cwd`, or `cwd` is not its top (the test `stagedDocuments` tells). The one place that test is made,
+ * for every question a gate asks of the index it was handed: what is staged, and which tree it guards
+ * (`treeKey`). `spawn` stands in for `spawnSync`. */
+function hookGit(cwd, spawn = spawnSync) {
   const git = (args, env) => {
     try {
       const result = spawn('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...(env && { env }) });
@@ -287,10 +302,42 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
     const index = process.env.GIT_INDEX_FILE;
     if (index !== undefined && !sameFolder(path.dirname(path.resolve(cwd, index)), own)) return null;
   }
-  const listed = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z']);
-  const paths = listed?.split('\0').filter(Boolean) ?? [];
-  const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
-  return paths.length > 0 && paths.every(isDocument) ? paths : null;
+  return (args) => git(args);
+}
+
+const SAME_TREE_SHAPE = 'harness.json "sameTree" must be "skip", the one value it takes';
+
+/** Whether the project declares that a tree a gate already passed is not run again: `harness.json`
+ * `"sameTree": "skip"`, as `{ skip }`. Declared, never assumed: the key of a tree holds no file git
+ * ignores, so in a project whose sensors read one (its `node_modules`) the same key can stand for two
+ * answers, and a project that says nothing runs its sensors at every gate as it always did. Any other
+ * value is an `error`, never read as off or as on. */
+export function discoverSameTree(cwd) {
+  const { declared, error } = readHarness(cwd);
+  if (error) return { skip: false, error };
+  if (!declared || !('sameTree' in declared)) return { skip: false };
+  if (declared.sameTree === 'skip') return { skip: true };
+  return { skip: false, error: `${SAME_TREE_SHAPE}; it is ${JSON.stringify(declared.sameTree)}` };
+}
+
+/** `iso` as a row says it: the local day and time, to the minute. */
+function rowTime(iso) {
+  const at = new Date(iso);
+  const two = (number) => String(number).padStart(2, '0');
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}`;
+}
+
+/** The one row of a gate that ran no sensor because another gate ran them on the same tree and all
+ * passed: which `sensors` did not run, and the gate that is the proof (`provenBy`), by the id of its
+ * lines in the gate log, when it ended and, where the log still says it, in which folder. */
+function sameTreeRow(sensors, proof) {
+  const where = proof.cwd ? ` in ${proof.cwd}` : '';
+  return {
+    name: 'sensors',
+    pass: true,
+    info: true,
+    detail: `no sensor ran (${sensors.map((sensor) => sensor.name).join(', ')}): this tree is the one gate ${proof.id.slice(0, 8)} passed on ${rowTime(proof.at)}${where}, file for file (harness.json "sameTree")`,
+  };
 }
 
 // How many paths a row that lists paths of the repository names (the staged documents of a gate that ran
@@ -886,6 +933,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // where there is no sensor for it to skip.
   const declared = discoverDocuments(cwd);
   if (declared.error) return [{ name: 'sensors', pass: false, detail: declared.error }];
+  const sameTree = discoverSameTree(cwd);
+  if (sameTree.error) return [{ name: 'sensors', pass: false, detail: sameTree.error }];
   const quick = discoverDocumentSensors(cwd, declared.documents);
   if (quick.error) return [{ name: 'sensors', pass: false, detail: quick.error }];
   // Git is asked only by a project that declares documents, and has a sensor their commit would not run
@@ -910,9 +959,32 @@ export async function checkSensors(cwd, deps = {}, lock) {
     record?.stopped({ rows: lock.stoppedBy });
     return [stoppedRow(lock.stoppedBy, lock.held === true), ...gateLogRows(record)];
   }
+  // The key of the tree this gate guards (`treeKey`), where the project declares that a tree is not run
+  // twice and this gate keeps a record: the proof is a line of the gate log, so a gate that neither reads
+  // nor writes that log has no key. `null` in every doubt, which is a gate that runs its sensors.
+  const keyNow = () => (sameTree.skip && record ? treeKey(hookGit(cwd, deps.git), { sensors }) : null);
+  // The rows of a gate that runs no sensor because the gate log holds the proof of `key`, after its own
+  // line is written; `null` when there is no key or no proof.
+  const proven = (key) => {
+    const proof = key === null ? null : provenBy(readGateLog(lock.home).events, key);
+    if (proof === null) return null;
+    record.same({ code: key, by: proof.id });
+    return [sameTreeRow(sensors, proof), ...gateLogRows(record)];
+  };
+  // Asked here, before the lock: a gate with its proof waits for nobody.
+  let key = keyNow();
+  const already = proven(key);
+  if (already) return already;
   // `turn` is how a gate came to its sensors: the state of the lock, and whom it waited for. A caller that
   // is no gate has none.
   const run = async (turn) => {
+    // A gate that waited asks again: the folder may have changed in the wait, and the gate it waited for
+    // may have been of this very tree.
+    if (turn?.waitedMs > 0) {
+      key = keyNow();
+      const meanwhile = proven(key);
+      if (meanwhile) return meanwhile;
+    }
     const rows = [];
     // With the lock in hand, its own or the one of the process that started it.
     const gateHeld = turn !== undefined && turn.lock !== 'none';
@@ -932,12 +1004,18 @@ export async function checkSensors(cwd, deps = {}, lock) {
     record?.start({ ...turn, load });
     const ran = [];
     let result = 'error';
+    // The key this gate proves: the one it had before its sensors, when all of them passed and the tree
+    // has that key still. A file that changed while they ran is a suite of no one tree, and proves none.
+    // Asked before the end is written, which holds it, so its two git processes are in the seconds the
+    // log says the sensors took: a fraction of one.
+    let code;
     try {
       for (const sensor of sensors) ran.push(await checkSensor(cwd, sensor, { ...deps, gateHeld }));
       result = sensorsResult(ran);
+      if (result === 'pass' && key !== null && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
-      record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut }) => ({ name, seconds, pass, timedOut })) });
+      record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut }) => ({ name, seconds, pass, timedOut })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);

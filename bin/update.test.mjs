@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { install, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { staleManifestMessage } from './lib/project.mjs';
 import { currentVersion } from './install.mjs';
-import { resolveLatest, resolveSpec, statusMain, updateMain, upgradeMain } from './update.mjs';
+import { resolveLatest, statusMain, updateMain, upgradeMain } from './update.mjs';
 
 // T5: `status` now reads the project the current folder belongs to, and these tests run real `git`,
 // so they must not pick up the host's git config (see project.test.mjs, T2e item 8).
@@ -30,10 +30,6 @@ function makeTmpDir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-function fakeSpawnOk(stdout = '') {
-  return () => ({ status: 0, stdout, stderr: '' });
-}
-
 test('resolveLatest reads a --source directory without spawning anything', () => {
   const dir = makeTmpDir('js-harness-src-');
   try {
@@ -48,64 +44,202 @@ test('resolveLatest reads a --source directory without spawning anything', () =>
   }
 });
 
-test('resolveLatest asks the injected package manager and parses its stdout', () => {
-  const calls = [];
-  const spawn = (cmd, args, opts) => {
-    calls.push({ cmd, args, opts });
-    return { status: 0, stdout: '9.9.9\n', stderr: '' };
-  };
-  const result = resolveLatest({ source: undefined, pm: 'node cli.js' }, {}, spawn);
-  assert.equal(result.version, '9.9.9');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].cmd, 'node');
-  assert.deepEqual(calls[0].args, ['cli.js', 'view', 'js-harness', 'version']);
-});
-
-test('resolveLatest falls back to JS_HARNESS_PM, then to npm', () => {
+/** A package manager that answers anything it is asked: a version to `view`, success to an install. It
+ * stands for the public registry the day somebody registers the name, and records what it was asked. */
+function squattedRegistry() {
   const calls = [];
   const spawn = (cmd, args) => {
     calls.push({ cmd, args });
-    return { status: 0, stdout: '1.0.0', stderr: '' };
+    return { status: 0, stdout: '99.0.0\n', stderr: '' };
   };
-  resolveLatest({ source: undefined, pm: undefined }, { JS_HARNESS_PM: 'my-pm' }, spawn);
-  assert.equal(calls[0].cmd, 'my-pm');
+  return { calls, spawn };
+}
 
-  resolveLatest({ source: undefined, pm: undefined }, {}, spawn);
-  assert.equal(calls[1].cmd, 'npm');
+/** Runs one of the three commands and returns its exit code with everything it printed. */
+async function runCommand(main, argv, env = {}, spawn = noProcess) {
+  const out = [];
+  const err = [];
+  const original = { log: console.log, error: console.error };
+  console.log = (line) => out.push(String(line));
+  console.error = (line) => err.push(String(line));
+  try {
+    const code = await main(argv, env, spawn);
+    return { code, out: out.join('\n'), err: err.join('\n') };
+  } finally {
+    Object.assign(console, original);
+  }
+}
+
+function noProcess() {
+  throw new Error('no process may be started here');
+}
+
+/** A source folder that holds one tarball of `version`. */
+function makeSource(version) {
+  const dir = makeTmpDir('js-harness-src-');
+  fs.writeFileSync(path.join(dir, `js-harness-${version}.tgz`), '');
+  return dir;
+}
+
+const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+test('resolveLatest starts no process and answers nothing when no source is named', () => {
+  assert.equal(resolveLatest({ source: undefined, pm: 'node cli.js' }, { JS_HARNESS_PM: 'my-pm' }, noProcess), null);
 });
 
-test('resolveLatest returns null when the package manager exits non-zero', () => {
-  const spawn = () => ({ status: 1, stdout: '', stderr: 'not found' });
-  assert.equal(resolveLatest({ source: undefined, pm: 'npm' }, {}, spawn), null);
+test('resolveLatest answers nothing for a source folder that holds no tarball', () => {
+  const dir = makeTmpDir('js-harness-src-empty-');
+  try {
+    assert.equal(resolveLatest({ source: dir }), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
-test('resolveSpec uses the tarball path for --source, else name@version', () => {
-  assert.equal(
-    resolveSpec({ source: '/tmp/x', latest: { version: '0.2.0', file: '/tmp/x/js-harness-0.2.0.tgz' } }),
-    '/tmp/x/js-harness-0.2.0.tgz',
-  );
-  assert.equal(resolveSpec({ source: undefined, latest: { version: '0.2.0', file: null } }), 'js-harness@0.2.0');
-});
-
-test('statusMain reports the manifest version and an available update', async () => {
+test('status --global with no source says no release is tagged yet and asks no package manager', async () => {
   const home = makeTmpDir('js-harness-status-home2-');
+  const registry = squattedRegistry();
   try {
     install(home, currentVersion());
-    const lines = [];
-    const original = console.log;
-    console.log = (line) => lines.push(String(line));
-    try {
-      await statusMain(['--global', '--home', home], {}, fakeSpawnOk('9.9.9'));
-    } finally {
-      console.log = original;
-    }
-    const text = lines.join('\n');
-    assert.match(text, new RegExp(`installed package version: ${currentVersion()}`));
-    assert.match(text, new RegExp(`manifest version: ${currentVersion()}`));
-    assert.match(text, /latest available: 9\.9\.9/);
-    assert.match(text, /update available: 9\.9\.9/);
+    const { code, out } = await runCommand(statusMain, ['--global', '--home', home], {}, registry.spawn);
+
+    assert.equal(code, 0);
+    assert.match(out, new RegExp(`installed package version: ${escaped(currentVersion())}`));
+    assert.match(out, new RegExp(`manifest version: ${escaped(currentVersion())}`));
+    assert.match(out, /latest available: \(no release is tagged yet\)/);
+    assert.doesNotMatch(out, /update available/);
+    assert.deepEqual(registry.calls, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('update with no source says no release is tagged yet, how to get the newest copy, and asks no package manager', async () => {
+  const registry = squattedRegistry();
+  const { code, out, err } = await runCommand(updateMain, [], {}, registry.spawn);
+
+  assert.equal(code, 0);
+  assert.match(out, /no release of js-harness is tagged yet/);
+  assert.match(out, /npm i -g github:jsaristi\/js-harness/);
+  assert.match(out, new RegExp(`installed: ${escaped(currentVersion())}`));
+  assert.doesNotMatch(out, /update available/);
+  assert.equal(err, '');
+  assert.deepEqual(registry.calls, []);
+});
+
+// The defect this pins: `upgrade` asked the public registry for the name `js-harness`, which nobody holds,
+// installed that name at the version it was answered, and ran the `sync` of what it had installed.
+test('upgrade with no source installs nothing and runs no sync, whatever a registry would answer', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-nosource-');
+  const registry = squattedRegistry();
+  try {
+    const { code, out, err } = await runCommand(upgradeMain, ['--home', home, '--pm', 'node cli.js'], {}, registry.spawn);
+
+    assert.equal(code, 1);
+    assert.match(err, /nothing was installed/);
+    assert.match(err, /no release of js-harness is tagged yet/);
+    assert.match(err, /npm i -g github:jsaristi\/js-harness/);
+    assert.equal(out, '');
+    assert.deepEqual(registry.calls, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('JS_HARNESS_SOURCE names a source as --source does', async () => {
+  const source = makeSource('99.0.0');
+  try {
+    const { code, out } = await runCommand(updateMain, [], { JS_HARNESS_SOURCE: source });
+    assert.equal(code, 0);
+    assert.match(out, /update available: 99\.0\.0/);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('a source folder with no tarball is not known, which is not the same as no release', async () => {
+  const home = makeTmpDir('js-harness-status-home-empty-src-');
+  const source = makeTmpDir('js-harness-src-empty-');
+  try {
+    const status = await runCommand(statusMain, ['--global', '--home', home, '--source', source]);
+    assert.equal(status.code, 0);
+    assert.match(status.out, /latest available: \(unknown\)/);
+
+    const update = await runCommand(updateMain, ['--source', source]);
+    assert.equal(update.code, 0);
+    assert.match(update.out, /could not determine the latest version/);
+    assert.doesNotMatch(update.out, /tagged/);
+
+    const upgrade = await runCommand(upgradeMain, ['--source', source, '--home', home]);
+    assert.equal(upgrade.code, 1);
+    assert.match(upgrade.err, /could not determine the latest version to upgrade to/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('a source folder that is not there is said in a line: update and upgrade exit 1, status goes on', async () => {
+  const home = makeTmpDir('js-harness-status-home-missing-src-');
+  const missing = path.join(home, 'no-such-folder');
+  try {
+    const status = await runCommand(statusMain, ['--global', '--home', home, '--source', missing]);
+    assert.equal(status.code, 0);
+    assert.match(status.out, /latest available: \(unknown: cannot read the source folder .*no-such-folder: ENOENT\)/);
+
+    for (const main of [updateMain, upgradeMain]) {
+      const { code, out, err } = await runCommand(main, ['--source', missing, '--home', home]);
+      assert.equal(code, 1, main.name);
+      assert.match(err, /cannot read the source folder .*no-such-folder: ENOENT/, main.name);
+      assert.equal(out, '', main.name);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('upgrade installs with --pm split in words, else JS_HARNESS_PM, else npm', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-pm-');
+  const source = makeSource('99.0.0');
+  const tarball = path.join(source, 'js-harness-99.0.0.tgz');
+  const calls = [];
+  // The install fails, so each run stops at its first process: the one this test reads.
+  const spawn = (cmd, args) => {
+    calls.push({ cmd, args });
+    return { status: 3, stdout: '', stderr: '' };
+  };
+  try {
+    const flag = await runCommand(upgradeMain, ['--source', source, '--home', home, '--pm', 'node cli.js'], { JS_HARNESS_PM: 'my-pm' }, spawn);
+    const variable = await runCommand(upgradeMain, ['--source', source, '--home', home], { JS_HARNESS_PM: 'my-pm' }, spawn);
+    const neither = await runCommand(upgradeMain, ['--source', source, '--home', home], {}, spawn);
+
+    assert.deepEqual(calls, [
+      { cmd: 'node', args: ['cli.js', 'install', '-g', tarball] },
+      { cmd: 'my-pm', args: ['install', '-g', tarball] },
+      { cmd: 'npm', args: ['install', '-g', tarball] },
+    ]);
+    for (const run of [flag, variable, neither]) {
+      assert.equal(run.code, 3);
+      assert.match(run.err, /upgrade failed: \S+ exited 3/);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('upgrade installs nothing when the source holds no release newer than the installed one', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-same-');
+  const source = makeSource(currentVersion());
+  try {
+    const { code, out, err } = await runCommand(upgradeMain, ['--source', source, '--home', home]);
+
+    assert.equal(code, 0);
+    assert.match(out, new RegExp(`up to date: ${escaped(currentVersion())}`));
+    assert.equal(err, '');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
   }
 });
 
@@ -116,7 +250,7 @@ test('statusMain reports no manifest when nothing is installed', async () => {
     const original = console.log;
     console.log = (line) => lines.push(String(line));
     try {
-      await statusMain(['--global', '--home', home], {}, fakeSpawnOk(currentVersion()));
+      await statusMain(['--global', '--home', home], {}, noProcess);
     } finally {
       console.log = original;
     }
@@ -136,7 +270,7 @@ test('statusMain reports not installed for a manifest that only records an optio
     const original = console.log;
     console.log = (line) => lines.push(String(line));
     try {
-      await statusMain(['--global', '--home', home], {}, fakeSpawnOk(currentVersion()));
+      await statusMain(['--global', '--home', home], {}, noProcess);
     } finally {
       console.log = original;
     }
@@ -181,7 +315,7 @@ test('statusMain and upgradeMain say not installed for a manifest that only reco
     recordScheduledTask(home, { name: 'js-harness-remote-x', command: 'conhost.exe', arguments: '--headless node remote.mjs start --watchdog' });
     console.log = (line) => lines.push(String(line));
     console.error = (line) => lines.push(String(line));
-    await statusMain(['--global', '--home', home], {}, fakeSpawnOk(currentVersion()));
+    await statusMain(['--global', '--home', home], {}, noProcess);
     const code = await upgradeMain(['--source', source, '--home', home], {}, () => ({ status: 0, stdout: '', stderr: '' }));
     assert.equal(code, 1);
     assert.match(lines.join('\n'), /manifest version: \(not installed\)/);
@@ -194,30 +328,26 @@ test('statusMain and upgradeMain say not installed for a manifest that only reco
   }
 });
 
-test('updateMain reports up to date when no newer version exists', async () => {
-  const lines = [];
-  const original = console.log;
-  console.log = (line) => lines.push(String(line));
+test('updateMain reports up to date when the source holds no newer version', async () => {
+  const source = makeSource(currentVersion());
   try {
-    const code = await updateMain([], {}, fakeSpawnOk(currentVersion()));
+    const { code, out } = await runCommand(updateMain, ['--source', source]);
     assert.equal(code, 0);
+    assert.match(out, /up to date/);
   } finally {
-    console.log = original;
+    fs.rmSync(source, { recursive: true, force: true });
   }
-  assert.match(lines.join('\n'), /up to date/);
 });
 
-test('updateMain reports an available update and still exits 0', async () => {
-  const lines = [];
-  const original = console.log;
-  console.log = (line) => lines.push(String(line));
+test('updateMain reports an update the source holds and still exits 0', async () => {
+  const source = makeSource('99.0.0');
   try {
-    const code = await updateMain([], {}, fakeSpawnOk('99.0.0'));
+    const { code, out } = await runCommand(updateMain, ['--source', source]);
     assert.equal(code, 0);
+    assert.match(out, /update available: 99\.0\.0/);
   } finally {
-    console.log = original;
+    fs.rmSync(source, { recursive: true, force: true });
   }
-  assert.match(lines.join('\n'), /update available: 99\.0\.0/);
 });
 
 test('upgradeMain installs the resolved spec and syncs the newly installed binary (win32 layout)', async () => {
@@ -461,7 +591,7 @@ const noPackageManager = () => {
 };
 
 /** Runs `statusMain` and returns its exit code with everything it printed. */
-async function runStatus(argv, env = {}, spawn = fakeSpawnOk(currentVersion())) {
+async function runStatus(argv, env = {}, spawn = noProcess) {
   const out = [];
   const err = [];
   const originalLog = console.log;
@@ -674,9 +804,10 @@ test('status with an explicit --cwd that is not a project exits 1 instead of fal
 test('status with no --cwd, outside any git repository, is the machine status', async () => {
   const dir = makeTmpDir('js-harness-status-nongit-');
   const home = makeTmpDir('js-harness-status-home-');
+  const source = makeSource('9.9.9');
   try {
     install(home, currentVersion());
-    const { code, out } = await inDir(dir, () => runStatus(['--home', home], {}, fakeSpawnOk('9.9.9')));
+    const { code, out } = await inDir(dir, () => runStatus(['--home', home, '--source', source]));
 
     assert.equal(code, 0);
     assert.match(out, new RegExp(`installed package version: ${currentVersion().replaceAll('.', '\\.')}`));
@@ -685,6 +816,7 @@ test('status with no --cwd, outside any git repository, is the machine status', 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
   }
 });
 
@@ -707,7 +839,7 @@ test('status --global is the machine status even inside an initialized project',
   const home = makeTmpDir('js-harness-status-home-');
   try {
     install(home, currentVersion());
-    const { code, out } = await inDir(root, () => runStatus(['--global', '--home', home], {}, fakeSpawnOk('9.9.9')));
+    const { code, out } = await inDir(root, () => runStatus(['--global', '--home', home], {}, noProcess));
 
     assert.equal(code, 0);
     assert.match(out, /installed package version: /);
@@ -745,7 +877,7 @@ test('updateMain and upgradeMain keep ignoring flags they do not know (parsing u
   const original = console.log;
   console.log = () => {};
   try {
-    assert.equal(await updateMain(['--bogus', '--cwd'], {}, fakeSpawnOk(currentVersion())), 0);
+    assert.equal(await updateMain(['--bogus', '--cwd'], {}, noProcess), 0);
   } finally {
     console.log = original;
   }

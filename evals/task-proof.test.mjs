@@ -99,11 +99,29 @@ function writeTask(files) {
 }
 
 /** Proves a task built from `files`, and checks what holds for every problem: it names the task. */
-async function prove(files, { workRoot = tmp('work') } = {}) {
-  const result = await proveTask(writeTask(files), { workRoot, runProcess: later.runProcess });
+async function prove(files, { workRoot = tmp('work'), runProcess = later.runProcess } = {}) {
+  const result = await proveTask(writeTask(files), { workRoot, runProcess });
   for (const problem of result.problems) assert.match(problem, /^task quote: /);
   return result;
 }
+
+/** The run of a grader or of a visible suite, answered in this process as the valid task's real ones answer
+ * it: by what the workspace holds (no `calc.mjs`, the stub, or `a * b` in it), as `scripted` reads it. No
+ * process is started. What ties it to the real runs is the test below that reads the same results from it
+ * as from real processes. */
+const answered = async ({ args, cwd }) => {
+  const tap = (tests, pass) => ({ stdout: `# tests ${tests}\n# pass ${pass}\n# fail ${tests - pass}\n`, stderr: '', exitCode: pass === tests ? 0 : 1, timedOut: false });
+  if (args.includes('tests/**/*.spec.mjs')) return tap(2, 2);
+  const calc = path.join(cwd, 'calc.mjs');
+  if (!fs.existsSync(calc)) return tap(3, 0);
+  return tap(3, fs.readFileSync(calc, 'utf8').includes('a * b') ? 3 : 2);
+};
+
+/** `prove` for the test of a rule that reads files only (the shape of the task directory, `task.json`'s
+ * proof): such a test needs the five runs clean and asserts nothing a run produced, so its runs are
+ * `answered`. A test of what a run does, or of a rule that reads one, goes through `prove` and real
+ * processes. */
+const proveFiles = (files) => prove(files, { runProcess: answered });
 
 const only = (result, pattern) => {
   assert.equal(result.problems.length, 1, `expected exactly one problem, got:\n${result.problems.join('\n')}`);
@@ -113,16 +131,27 @@ const some = (result, pattern) => assert.ok(result.problems.some((problem) => pa
 
 // ---- the valid task ------------------------------------------------------------------------------------
 
+const VALID_RUNS = {
+  fixture: { score: 2 / 3, passed: 2, total: 3, error: null },
+  reference: { score: 1, passed: 3, total: 3, error: null },
+  empty: { score: 0, passed: 0, total: 3, error: null },
+  visible: { fixture: { passed: 2, total: 2, failed: 0, error: null }, reference: { passed: 2, total: 2, failed: 0, error: null } },
+};
+const runsOf = ({ fixture, reference, empty, visible }) => ({ fixture, reference, empty, visible });
+
 test('a valid task has no problems and the three scores the rules ask for', async () => {
   const workRoot = tmp('work');
   const result = await prove(validFiles(), { workRoot });
   assert.deepEqual(result.problems, []);
   assert.equal(result.id, 'quote');
-  assert.deepEqual(result.fixture, { score: 2 / 3, passed: 2, total: 3, error: null });
-  assert.deepEqual(result.reference, { score: 1, passed: 3, total: 3, error: null });
-  assert.deepEqual(result.empty, { score: 0, passed: 0, total: 3, error: null });
-  assert.deepEqual(result.visible, { fixture: { passed: 2, total: 2, failed: 0, error: null }, reference: { passed: 2, total: 2, failed: 0, error: null } });
+  assert.deepEqual(runsOf(result), VALID_RUNS);
   assert.deepEqual(fs.readdirSync(workRoot), [], 'every workspace is removed');
+});
+
+test('the answered runs give the valid task the very results its real graders and visible suite give', async () => {
+  const result = await proveFiles(validFiles());
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual(runsOf(result), VALID_RUNS);
 });
 
 test('proveTask makes its five runs through the run it is given, and starts no process of its own', async () => {
@@ -162,27 +191,27 @@ test('a task the runner cannot load is reported with the loader\'s message, and 
 // ---- rule b: the reference exists ----------------------------------------------------------------------
 
 test('a missing reference directory is a problem', async () => {
-  const result = await prove({ ...validFiles(), 'reference/calc.mjs': null });
+  const result = await proveFiles({ ...validFiles(), 'reference/calc.mjs': null });
   only(result, /reference\/ is missing/);
   assert.equal(result.reference, null, 'there is nothing to apply, so no reference run');
 });
 
 test('a reference that is not a directory is a problem', async () => {
-  const result = await prove({ ...validFiles(), 'reference/calc.mjs': null, reference: 'not a directory' });
+  const result = await proveFiles({ ...validFiles(), 'reference/calc.mjs': null, reference: 'not a directory' });
   only(result, /reference is not a directory/);
 });
 
 test('a reference directory with no file is a problem', async () => {
   const dir = writeTask({ ...validFiles(), 'reference/calc.mjs': null });
   fs.mkdirSync(path.join(dir, 'reference'));
-  const result = await proveTask(dir, { workRoot: tmp('work'), runProcess: later.runProcess });
+  const result = await proveTask(dir, { workRoot: tmp('work'), runProcess: answered });
   some(result, /reference\/ holds no file/);
 });
 
 // ---- rule c: no file of the reference is a copy of the fixture's ---------------------------------------
 
 test('a reference file byte-identical to the fixture\'s is reported by its path', async () => {
-  const result = await prove({ ...validFiles(), 'reference/package.json': PACKAGE_JSON });
+  const result = await proveFiles({ ...validFiles(), 'reference/package.json': PACKAGE_JSON });
   only(result, /byte-identical to the fixture's: package\.json/);
 });
 
@@ -278,8 +307,7 @@ test('runs that disagree on the number of hidden tests are reported', async () =
 
 test('a task.json without a proof, or with a malformed one, is reported', async () => {
   const proofs = [null, 'nope', { total: '3', fixturePassed: 2 }, { total: 3 }, { total: 0, fixturePassed: 0 }, { total: 3, fixturePassed: 4 }];
-  // One after another: on a slow host a proof that times out adds a problem and fails `only` for the wrong reason.
-  for (const proof of proofs) only(await prove({ ...validFiles(), 'task.json': taskJson({ proof }) }), /"proof" must be/);
+  for (const proof of proofs) only(await proveFiles({ ...validFiles(), 'task.json': taskJson({ proof }) }), /"proof" must be/);
 });
 
 test('a proof whose total differs from the measured one is reported', async () => {
@@ -293,13 +321,13 @@ test('a proof whose fixturePassed differs from the measured one is reported', as
 // ---- rule i: the fixture's own test script -------------------------------------------------------------------------
 
 test('a fixture without package.json is reported', async () => {
-  only(await prove({ ...validFiles(), 'fixture/package.json': null }), /fixture\/package\.json is missing/);
+  only(await proveFiles({ ...validFiles(), 'fixture/package.json': null }), /fixture\/package\.json is missing/);
 });
 
 test('a fixture whose scripts.test is not the agreed command is reported', async () => {
   const wrong = JSON.stringify({ name: 'quote', scripts: { test: 'node --test' } });
-  only(await prove({ ...validFiles(), 'fixture/package.json': wrong }), /scripts\.test must be exactly node --test "tests\/\*\*\/\*\.spec\.mjs"/);
-  only(await prove({ ...validFiles(), 'fixture/package.json': '{ nope' }), /fixture\/package\.json cannot be read/);
+  only(await proveFiles({ ...validFiles(), 'fixture/package.json': wrong }), /scripts\.test must be exactly node --test "tests\/\*\*\/\*\.spec\.mjs"/);
+  only(await proveFiles({ ...validFiles(), 'fixture/package.json': '{ nope' }), /fixture\/package\.json cannot be read/);
 });
 
 // ---- rule j: the visible suite is green with and without the reference ---------------------------------------------
@@ -352,14 +380,14 @@ test('touches the workspace', () => {
 
 test('every file Node would discover as a test is reported, wherever it is in the task', async () => {
   const found = ['fixture/lib/a.test.mjs', 'fixture/b-test.js', 'grader/c_test.mjs', 'fixture/test-d.mjs', 'reference/test.js', 'fixture/test/helper.mjs', 'fixture/lib/e.test.ts', 'fixture/lib/f.test.mts', 'fixture/lib/g.test.cts', 'grader/test/h.ts'];
-  const result = await prove({ ...validFiles(), ...Object.fromEntries(found.map((name) => [name, '\n'])) });
+  const result = await proveFiles({ ...validFiles(), ...Object.fromEntries(found.map((name) => [name, '\n'])) });
   only(result, /Node's default test discovery/);
   for (const name of found) assert.ok(result.problems[0].includes(name), `${name} is named`);
 });
 
 test('names that only look like tests are not reported', async () => {
   const near = ['fixture/lib/latest.mjs', 'fixture/lib/testing.mjs', 'fixture/lib/contest.js', 'fixture/lib/mytest.mjs', 'fixture/lib/test.json', 'fixture/tests/helper.mjs', 'fixture/test/data.txt', 'grader/report-test.json', 'fixture/lib/a.test.jsx'];
-  const result = await prove({ ...validFiles(), ...Object.fromEntries(near.map((name) => [name, '\n'])) });
+  const result = await proveFiles({ ...validFiles(), ...Object.fromEntries(near.map((name) => [name, '\n'])) });
   assert.deepEqual(result.problems, []);
 });
 
@@ -424,14 +452,14 @@ test('the discovery rule agrees with the files this Node runs when given no argu
 // ---- rule l: the grader has a grader file --------------------------------------------------------------------------
 
 test('a grader directory with no *.grade.mjs file is reported', async () => {
-  const result = await prove({ ...validFiles(), 'task.json': scripted("'# tests 3\\n# pass 0\\n# fail 3'"), 'grader/calc.grade.mjs': null, 'grader/check.js': '// hidden\n' });
+  const result = await proveFiles({ ...validFiles(), 'grader/calc.grade.mjs': null, 'grader/check.js': '// hidden\n' });
   only(result, /grader\/ holds no \*\.grade\.mjs file/);
 });
 
 // ---- rule m: the fixture brings no agent context --------------------------------------------------------------------
 
 test('agent instructions, a .claude entry and node_modules anywhere in the fixture are reported once each', async () => {
-  const result = await prove({
+  const result = await proveFiles({
     ...validFiles(),
     'fixture/AGENTS.md': '\n',
     'fixture/lib/CLAUDE.md': '\n',
@@ -450,13 +478,13 @@ test('agent instructions, a .claude entry and node_modules anywhere in the fixtu
 // ---- rule n: the prompt does not name the grader ------------------------------------------------------------------
 
 test('a task.md that names the hidden grader directory is reported', async () => {
-  only(await prove({ ...validFiles(), 'task.md': 'Make .eval-grader/calc.grade.mjs pass.\n' }), /task\.md names \.eval-grader/);
+  only(await proveFiles({ ...validFiles(), 'task.md': 'Make .eval-grader/calc.grade.mjs pass.\n' }), /task\.md names \.eval-grader/);
 });
 
 // ---- rule o: LF line endings --------------------------------------------------------------------------------------
 
 test('a text file with a CRLF line ending is reported by its path, and a binary file is not', async () => {
-  const result = await prove({
+  const result = await proveFiles({
     ...validFiles(),
     'task.md': 'Implement mul.\r\nIn calc.mjs.\n',
     'fixture/README.md': 'a\r\nb\r\n',

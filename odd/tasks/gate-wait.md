@@ -976,8 +976,9 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       figure and the two questions sent to the orchestrator. Route: inline, one file.
 - [x] T11 · The merge hook, first and alone: `.githooks/pre-merge-commit` on
       `feat/gate-merge-hook`, both reviews, its pull request. Route: inline.
-- [ ] T12 · The identical-tree proof (Design, "No repeated control"), after the cut of git
-      processes and unless he drops it. Route: inline; built, uncommitted.
+- [x] T12 · The identical-tree proof (Design, "No repeated control"), after the cut of git
+      processes. Route: inline. Evidence: `b4309dd`, and `0e0f385` after Codex's finding, on
+      `feat/gate-wait-same-tree` off `main` `addf6ae` (Progress, 2026-10-13).
 - [x] T13 · The quick checks that read documents run on a documents-only commit, if they
       are seconds; the figure to the orchestrator if they are minutes. Route: inline.
 - [x] T14 · Road 1, first slice (Design): the eval tests take one process snapshot a file.
@@ -999,6 +1000,10 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       starts the half below it; nothing moved. Route: inline, tests first, on
       `feat/gate-wait-two-halves` off the cut; Codex's review is the outside read (the
       orchestrator: no reader for it); judged by M1g, the whole suite by file after it.
+- [x] T18 · Road 1, second slice, its first row: the tests of a task's file rules
+      (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
+      Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
+      before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2543,6 +2548,30 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   **M1g is taken after the stop, with a sample of the machine before it.**
   **Next:** `main` moved by documents (`53826d8`, pull request 91): one clean merge in
   a lock turn; M1g; then the push and the pull request.
+- 2026-10-13 · **Road 1, second slice, first row: `85566a8` on `test/eval-fewer-starts`**
+  (07:20 to 07:31; written above M1g's entry so that it does not meet T12's record, which
+  its own branch appends at the end). Thirteen tests of `evals/task-proof.test.mjs` prove
+  a rule that reads files only (`checkFiles`, `readProof`): they end in `only` or `some`
+  on the rule and read nothing a run produced, and each `proveTask` started five
+  processes. They now take their runs from `answered`, a run answered in the test's
+  process by what the workspace holds, through the `runProcess` parameter `proveTask`
+  has had since the first slice; nothing that ships changes. One new test ties the
+  stand-in to the real runs: for the valid task both give the same results, read
+  against one constant (`VALID_RUNS`). The tests of what a run does stay on real
+  processes, the borderline ones of the reading of 2026-10-12 included.
+  - **The count, one turn, the same tool, the file alone** (`s2-turn.sh`,
+    `count-git.mjs --json`): other starts 176 before, **85 after (91 fewer)**; processes
+    reported 223 and 132; git 5 and 5. Run plainly the new file: 36 of 36, 17.9 s. A
+    change of tests has no red step: the count and the green file are its proof. The
+    commit's gate passed whole. No timing of the suite was taken: on this machine a
+    saved start is load, and no file is the wall any more (M1g).
+  - gentle-ai: not due (`under_budget`, 70 lines). Codex once, medium, 07:30:
+    correct (0.92), 137,509 input tokens (plan 30,000, allowance 300,000).
+  - **Not built, and why:** the second row of the slice as it was sized, the sweeps
+    that find nothing and the version probes of the suites of `evals/runner.test.mjs`
+    that do not stub them (21 starts by the reading). It is six places, each a suite
+    whose trial is real for another reason, for a fifth of what this row gave; it
+    wants its own look, with slice 3 or alone.
 - 2026-10-13 · **M1g: with the file as two processes the whole suite takes 533 s, where
   it took 601 s; T17 done** (`m1g-turn.log`, the counting tool on `afcadea`, 01:10 to
   01:19, one run, after this session's tsserver was stopped; beside it M1f on the cut):
@@ -2579,6 +2608,43 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   so the counting tool reaches `main`; T8 as half; T10 the close. And one for the
   harness, not built: nothing warns that a session's own tsserver is spinning beside
   a gate, twice in one day here.
+- 2026-10-13 · **T12, the identical-tree proof, is committed: `b4309dd` and its correction
+  `0e0f385`** on `feat/gate-wait-same-tree`, by the orchestrator's order of 05:58 ("commit
+  it or say why it is dropped"). What was built on 2026-10-12 sat 192 commits behind
+  `main`; it was carried onto `addf6ae` (`git checkout -m -B`, a backup first), with five
+  conflicts, each a place where `main` and the slice had both added: the import of
+  `bin/check.test.mjs`, the declaration in `harness.json` (main's `documentSensors` and
+  the slice's `"sameTree": "skip"`), the head of `checkSensors` (the slice's declaration
+  is read before main's documents block), and two blocks of tests. The copy of the merge
+  hook the slice held is gone: the hook is on `main` since pull request 75.
+  - **The turn, 06:39 to 06:50** (`t12-turn.sh`): RED, the two code files at HEAD and the
+    module hidden, 3 of 3 test files fail (`ERR_MODULE_NOT_FOUND`, no export `isTreeKey`);
+    GREEN 225 of 225 in the three files; the commit's gate passed whole (574 s by the gate
+    log). gentle-ai: not due (`under_budget`, medium risk, 606 lines).
+  - **Codex, once, 07:00 to 07:02**, medium effort, two parts of `addf6ae..b4309dd`, plan
+    256,000 and allowance 724,800: 453,786 input tokens. Part 1 correct (0.84). **Part 2
+    "the patch is incorrect" (0.97), one finding, P2, `bin/lib/gate-tree.mjs:59-65`:**
+    under `core.autocrlf` two files with CRLF and LF at other lines are one object in the
+    index, one clean status and one line of the listing (`w/mixed`), so one key stood for
+    two files a sensor that reads bytes can tell apart. **True, read with real git**
+    (2.54.0.windows.1, a scratch repository): a rearrangement of the same size is a clean
+    folder and the same listing. A file of another size git calls changed without reading
+    it (`status` says ` M` while `diff` prints nothing), which was no key already.
+  - **The correction, `0e0f385`:** a folder with a file `w/mixed` has no key, which is a
+    gate that runs its sensors. Hashing every file's bytes was the other way out: it reads
+    the whole tree at every gate for a case this repository does not hold (232 files
+    CRLF, 175 LF, 1 with no line end, none mixed, by `git ls-files --eol`). Two tests:
+    the listing's field with a stand-in, and real git with the two arrangements. What a
+    filter of the repository's own folds into one object is named in the module's head
+    as outside the key. Its turn ran twice (`t12b-turn.sh`): at 07:04 it stopped at GREEN
+    with nothing committed, because my new test's last step asked for a clean status
+    after the file was rewritten whole, which is the other-size case above; the step now
+    stages the file. At 07:06 to 07:14: RED 2 of 8 on HEAD's module, GREEN 8 of 8, the
+    gate whole. Codex on `b4309dd..0e0f385` alone, 07:14: correct (0.92), 103,858 input
+    tokens (plan 30,000, allowance 300,000). The push check: 2 code commits, both covered.
+  - **Not known:** how often a gate here finds its proof. The log's lines of kind `same`
+    will say; nobody has counted the cases (a commit amended in its message, a clean
+    merge of an already proven tree, a pick that lands on the same files).
 
 ## Next
 
@@ -2595,9 +2661,9 @@ antivirus spends on each (his).
 1. **Pull request of T17** (`feat/gate-wait-two-halves`): open, the orchestrator
    merges. If `main` moves under it, merge `main` once more with
    `clean-merge-turn.sh <worktree>` in a lock turn.
-2. **Road 1, slice 2** (Design, "Roads to a shorter wait"): fewer starts in the eval
-   tests, sized 110 to 150 starts and 130 to 180 lines; slice 3 needs its own design.
-   Tests first, both reviews.
+2. **Road 1, slice 2**: its first row is done (T18, Progress of 2026-10-13: 91 fewer
+   starts in `evals/task-proof.test.mjs`). Its second row (21 starts in
+   `evals/runner.test.mjs`, by the reading) is not built; slice 3 needs its own design.
 3. **The merge-base in the join** (Progress, 2026-10-12, "A probe for the design's
    point 6"): about 550 git starts of the command's tests; the rule is written there
    (taken only when there is exactly one caret line). It changes
@@ -2610,8 +2676,8 @@ antivirus spends on each (his).
 5. **T8 as half**: gentle-ai's review leaves the lock, Codex's stays, and a Codex
    record says when the review ran tests; behind road 1, on a day a gentle-ai review
    is due.
-6. **T12** (the identical-tree proof, `gate-wait-same-tree`, built, uncommitted) stays
-   parked unless he asks. **T9** (`trial/gate-on-github`, pushed, never merged) is
+6. **T12** is done (Progress, 2026-10-13: `b4309dd`, `0e0f385`) and waits only for its
+   pull request to be merged. **T9** (`trial/gate-on-github`, pushed, never merged) is
    answered in Progress and waits for nothing.
 7. **T10, the close**: `docs/ROADMAP.md`, the closing notice.
 
@@ -2636,10 +2702,11 @@ antivirus spends on each (his).
 - **This document** is on `feat/gate-wait-two-halves` (worktree
   `D:\js-harness-worktrees\gate-wait-two-halves`) until its pull request is merged,
   then on `main`. A new slice starts on a branch off `main` and carries the document.
-- **Worktrees of this feature still there:** `gate-wait-two-halves` (T17);
+- **Worktrees of this feature still there:**
   `gate-wait-count` (`feat/gate-wait-count`, `fc70dc3`, the counting tool, not
   pushed); `gate-on-github` (`trial/gate-on-github`, pushed, never merged);
-  `gate-wait-same-tree` (T12, uncommitted, parked). Gone: `gate-wait`,
+  `gate-wait-same-tree` (T12, `0e0f385`, pushed, to remove once its pull request is
+  merged). Gone: `gate-wait-two-halves` (removed on 2026-10-13, merged), `gate-wait`,
   `gate-wait-git-cut`, `review-effort-medium`, `gate-wait-eval-sweep`.
 - **The scratchpad of the session that wrote this** holds the turn scripts worth
   reusing: `clean-merge-turn.sh`, `m1g-turn.sh` with `m1-table.cjs` (the whole suite

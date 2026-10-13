@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// `status`, `update`, `upgrade`: version detection and upgrade. The package manager and the
-// release source are both injectable because on this machine `npm` on PATH is a pnpm shim. `status`
-// also answers by location (T5 design); see `statusMain` for which folders report the project, the
-// machine install, or refuse.
+// `status`, `update`, `upgrade`: version detection and upgrade. The package manager is injectable
+// because on this machine `npm` on PATH is a pnpm shim; it installs a tarball and is never asked which
+// release is the latest (see `resolveLatest`). `status` also answers by location (T5 design); see
+// `statusMain` for which folders report the project, the machine install, or refuse.
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage } from './lib/project.mjs';
-import { latestFromSource, splitCommand, viewArgs, installArgs, isNewer } from './lib/version.mjs';
+import { INSTALL_NEWEST, latestFromSource, splitCommand, installArgs, isNewer } from './lib/version.mjs';
 
 const PKG_NAME = 'js-harness';
 
@@ -30,20 +30,28 @@ function resolvePm(pm, env) {
   return pm ?? env.JS_HARNESS_PM ?? 'npm';
 }
 
-/** Looks up the latest available version: a local tarball dir with `--source`, else the registry. */
-export function resolveLatest({ source, pm }, env, spawn = spawnSync) {
-  if (source) return latestFromSource(source);
+/** What the commands say where there is no release to look for: none is tagged before 1.0.0
+ * (docs/ROADMAP.md, "Release source"), and how a machine gets the newest copy until then. */
+export const NO_RELEASE = `no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get the newest copy: ${INSTALL_NEWEST}`;
 
-  const [cmd, ...head] = splitCommand(resolvePm(pm, env));
-  const result = spawn(cmd, [...head, ...viewArgs(PKG_NAME)], { encoding: 'utf8' });
-  if (result.status !== 0) return null;
-  const version = result.stdout.trim();
-  return version ? { version, file: null } : null;
+/** The newest release in `source`, a folder of `npm pack` tarballs the caller named with `--source` or
+ * `JS_HARNESS_SOURCE`, as `{ version, file }`; `null` when that folder holds none, and `null` when there
+ * is no source. It starts no process, and that is the point: the public registry is never asked about
+ * the name `js-harness`, which nobody holds there, so whoever registered it would decide what `upgrade`
+ * installs and runs. Reading the tags of this repository, the decided release source, belongs here when
+ * the first one exists. A source folder that cannot be read throws, as `fs.readdirSync` does. */
+export function resolveLatest({ source }) {
+  return source ? latestFromSource(source) : null;
 }
 
-/** The install spec for `<pm> install -g`: a tarball path for `--source`, else `name@version`. */
-export function resolveSpec({ source, latest }) {
-  return source ? latest.file : `${PKG_NAME}@${latest.version}`;
+/** `resolveLatest` for a command: `{ latest }`, or `{ problem }` with a line to print when the source
+ * folder cannot be read. */
+function latestFor(opts) {
+  try {
+    return { latest: resolveLatest(opts) };
+  } catch (err) {
+    return { problem: `cannot read the source folder ${opts.source}: ${err.code ?? err.message}` };
+  }
 }
 
 /** The upgraded binary's path under `--prefix`: npm's Windows vs POSIX --prefix layout differ. */
@@ -167,15 +175,18 @@ function notInitializedMessage(cwd) {
 async function machineStatus(opts, env, spawn) {
   const installed = currentVersion();
   const recorded = installedVersion(opts.home);
-  const latest = resolveLatest(opts, env, spawn);
+  const { latest, problem } = latestFor(opts);
 
   console.log(`installed package version: ${installed}`);
   console.log(`manifest version: ${recorded ?? '(not installed)'}`);
   if (latest) {
     console.log(`latest available: ${latest.version}`);
     if (isNewer(latest.version, installed)) console.log(`update available: ${latest.version}`);
+  } else if (opts.source) {
+    // A source that was named and answers nothing is not known, which is not the same as no release.
+    console.log(`latest available: (unknown${problem ? `: ${problem}` : ''})`);
   } else {
-    console.log('latest available: (unknown)');
+    console.log('latest available: (no release is tagged yet)');
   }
   return 0;
 }
@@ -183,7 +194,15 @@ async function machineStatus(opts, env, spawn) {
 export async function updateMain(argv, env = process.env, spawn = spawnSync) {
   const opts = parseArgs(argv, env);
   const installed = currentVersion();
-  const latest = resolveLatest(opts, env, spawn);
+  if (!opts.source) {
+    console.log(`${NO_RELEASE} (installed: ${installed})`);
+    return 0;
+  }
+  const { latest, problem } = latestFor(opts);
+  if (problem) {
+    console.error(problem);
+    return 1;
+  }
 
   if (!latest) {
     console.log('could not determine the latest version');
@@ -199,15 +218,29 @@ export async function updateMain(argv, env = process.env, spawn = spawnSync) {
 
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
   const opts = parseArgs(argv, env);
-  const latest = resolveLatest(opts, env, spawn);
+  if (!opts.source) {
+    console.error(`nothing was installed: ${NO_RELEASE}`);
+    return 1;
+  }
+  const { latest, problem } = latestFor(opts);
+  if (problem) {
+    console.error(problem);
+    return 1;
+  }
   if (!latest) {
     console.error('could not determine the latest version to upgrade to');
     return 1;
   }
+  // Only a newer release replaces the installed one: the folder may hold the same version, or an older.
+  const installed = currentVersion();
+  if (!isNewer(latest.version, installed)) {
+    console.log(`up to date: ${installed} (the source holds ${latest.version})`);
+    return 0;
+  }
 
-  const spec = resolveSpec({ source: opts.source, latest });
+  // The one thing ever installed: the tarball of the folder the caller named, never a name on a registry.
   const [cmd, ...head] = splitCommand(resolvePm(opts.pm, env));
-  const installResult = spawn(cmd, [...head, ...installArgs(spec, opts.prefix)], { encoding: 'utf8' });
+  const installResult = spawn(cmd, [...head, ...installArgs(latest.file, opts.prefix)], { encoding: 'utf8' });
   if (installResult.status !== 0) {
     console.error(`upgrade failed: ${cmd} exited ${installResult.status}`);
     return installResult.status ?? 1;
