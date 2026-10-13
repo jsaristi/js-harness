@@ -12,6 +12,7 @@ import {
   gitTopLevel,
   resolveGitPath,
   gitDirs,
+  gitDirsAndCommits,
   agentsTemplate,
   runCodegraphInit,
   InitWriteError,
@@ -1294,6 +1295,89 @@ test('gitDirs returns null on both, having started one process, when git cannot 
     const spawn = countingSpawn(answer);
     assert.deepEqual(gitDirs(root, spawn), { gitDir: null, commonGitDir: null }, which);
     assert.deepEqual(spawn.asked, [BOTH_DIRS], which);
+  }
+});
+
+// --- gitDirsAndCommits: both directories and the commits some revs name, from one process ---
+
+test('gitDirsAndCommits gives, from one process, what gitDirs and `rev-parse --verify` of each rev give, and nothing for a rev git may read another way', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-commits-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  const inMain = (...args) => {
+    const ran = spawnSync('git', args, { cwd: main, encoding: 'utf8' });
+    assert.equal(ran.status, 0, `git ${args.join(' ')} failed: ${ran.stderr}`);
+    return ran.stdout.trim();
+  };
+  try {
+    fs.writeFileSync(path.join(main, 'f.txt'), 'y', 'utf8');
+    inMain('commit', '-am', 'two');
+    // A name that is a branch and an annotated tag at once, each of another commit, as a rev may be.
+    inMain('branch', 'both', 'HEAD~1');
+    inMain('tag', '-a', 'both', '-m', 'both', 'HEAD');
+    inMain('worktree', 'add', worktree, '-b', 'js-harness-test-wt-commits', 'HEAD~1');
+    const verified = (cwd, rev) => spawnSync('git', ['rev-parse', '--verify', `${rev}^{commit}`], { cwd, encoding: 'utf8' }).stdout.trim();
+    const first = verified(main, 'HEAD~1');
+    for (const [cwd, rev] of [[main, 'HEAD~1'], [main, 'both'], [main, first.slice(0, 9)], [worktree, 'both']]) {
+      const spawn = countingSpawn();
+      const commits = [verified(cwd, 'HEAD'), verified(cwd, rev)];
+      assert.match(commits.join(' '), /^[0-9a-f]{40,64} [0-9a-f]{40,64}$/, `${cwd} ${rev}`);
+      assert.deepEqual(gitDirsAndCommits(cwd, ['HEAD', rev], spawn), { ...gitDirs(cwd, spawnSync), commits }, `${cwd} ${rev}`);
+      assert.deepEqual(spawn.asked, [[...BOTH_DIRS, 'HEAD^{commit}', `${rev}^{commit}`]], `${cwd} ${rev}`);
+    }
+    // No commit, or an argument `rev-parse` takes as its own: with no `--verify` it exits 0 on some of these.
+    for (const rev of ['no-such-rev', '', '--all', '--since=yesterday', '--glob=refs/heads/*', 'HEAD~1..HEAD', 'HEAD~1...HEAD', 'HEAD:f.txt']) {
+      assert.equal(gitDirsAndCommits(main, ['HEAD', rev], spawnSync), null, `the rev "${rev}"`);
+    }
+    // A repository with no commit has no HEAD to name.
+    const unborn = makeTmpRepo();
+    try {
+      assert.equal(gitDirsAndCommits(unborn, ['HEAD'], spawnSync), null);
+    } finally {
+      fs.rmSync(unborn, { recursive: true, force: true });
+    }
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('gitDirsAndCommits takes an answer only when it can be read one way: a line for each directory and each rev, and every rev a full commit id of one length', () => {
+  const root = path.resolve('no-such-root');
+  const [one, other, long] = ['a'.repeat(40), 'b'.repeat(40), 'c'.repeat(64)];
+  const said = (stdout, more = {}) => () => ({ status: 0, stdout, stderr: '', ...more });
+  const whole = `.git\n.git\n${one}\n${other}\n`;
+  const dirs = { gitDir: path.join(root, '.git'), commonGitDir: path.join(root, '.git') };
+  assert.deepEqual(gitDirsAndCommits(root, ['HEAD', 'base'], said(whole)), { ...dirs, commits: [one, other] });
+  assert.deepEqual(gitDirsAndCommits(root, ['HEAD', 'base'], said(`.git\n.git\n${long}\n${long}\n`)), { ...dirs, commits: [long, long] });
+  assert.deepEqual(gitDirsAndCommits(root, [], said('.git\n.git\n')), { ...dirs, commits: [] });
+  const refused = [
+    ['a spawn that throws', () => {
+      throw new Error('spawn git EACCES');
+    }],
+    ['a spawn that answers nothing', () => undefined],
+    ['git that could not be started', said(whole, { status: null, error: new Error('spawn git ENOENT') })],
+    ['git that fails after the first rev', said(`.git\n.git\n${one}\n`, { status: 128 })],
+    ['git that fails and still prints every line', said(whole, { status: 1 })],
+    ['an answer that is bytes', said(Buffer.from(whole))],
+    ['an answer that is a number', said(7)],
+    ['an answer that is nothing', said('')],
+    ['a line short', said(`.git\n.git\n${one}\n`)],
+    ['a line more', said(`${whole}${one}\n`)],
+    ['a last line that does not end', said(whole.slice(0, -1))],
+    ['an argument printed back', said(`.git\n.git\n${one}\n--all^{commit}\n`)],
+    ['an abbreviated id', said(`.git\n.git\n${one}\n${other.slice(0, 12)}\n`)],
+    ['a commit that is excluded', said(`.git\n.git\n${one}\n^${other}\n`)],
+    ['an id in capitals', said(`.git\n.git\n${one}\n${other.toUpperCase()}\n`)],
+    ['ids of two lengths', said(`.git\n.git\n${one}\n${long}\n`)],
+    ['lines that end as another system ends them', said(whole.replace(/\n/g, '\r\n'))],
+    ['a directory that is an empty line', said(`.git\n\n${one}\n${other}\n`)],
+  ];
+  for (const [which, answer] of refused) {
+    const spawn = countingSpawn(answer);
+    assert.equal(gitDirsAndCommits(root, ['HEAD', 'base'], spawn), null, which);
+    assert.deepEqual(spawn.asked, [[...BOTH_DIRS, 'HEAD^{commit}', 'base^{commit}']], which);
   }
 });
 

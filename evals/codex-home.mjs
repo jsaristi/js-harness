@@ -4,7 +4,8 @@
 // machinery; what differs is what Codex keeps where. The plan is `odd/tasks/codex-parity.md` (T2).
 //
 //  - The login is a FILE, `auth.json`, not an environment variable. It is copied byte for byte into the
-//    trial's own `CODEX_HOME` and nothing here opens it; it never enters the template, which outlives a trial.
+//    trial's own `CODEX_HOME` and never enters the template, which outlives a trial. One function here opens
+//    it, `assertLoginFresh`, and takes one thing from it: when its access token expires.
 //  - `config.toml` is TOML and this repository has no parser for it (zero deps), so it is handled as text:
 //    a path into the real `.codex` becomes a placeholder, and the engram server's env is set by a line scan
 //    that refuses any shape it cannot rewrite safely.
@@ -36,41 +37,83 @@ export function assertLogin(authFile) {
   }
 }
 
-/** How old a ChatGPT login is when Codex refreshes it in place: about eight days. An ASSUMPTION about Codex,
- * not read from the source of 0.159.1. What was observed here: the real `auth.json` kept its 2026-09-27 date
- * through four real runs on 2026-10-04, so a login under eight days old is used as it is. */
-export const LOGIN_REFRESH_AFTER_HOURS = 192;
-/** The oldest login a run may copy: six hours short of that, the room a run needs to end before the refresh. */
-export const DEFAULT_MAX_LOGIN_AGE_HOURS = LOGIN_REFRESH_AFTER_HOURS - 6;
-/** How far after "now" a file's date may read and still be now: a file written this instant carries a fraction
- * of a millisecond the clock (`Date.now()`) has dropped, and some file systems keep dates to two seconds. */
-const CLOCK_SLACK_MS = 2000;
+/** How many hours the access token of a login must still have when a run starts. A CHOSEN number, not one read
+ * from Codex: over three times the 220 minutes the 60 trials of F5 took. What it leaves room for is what is
+ * not known, how long before the expiry Codex refreshes a login (`odd/tasks/codex-parity.md`, Constraints). */
+export const DEFAULT_MIN_LOGIN_HOURS_LEFT = 12;
 
-/** Throws unless the login `authFile` was last written less than `maxAgeHours` before `now` (milliseconds);
- * returns `{ ageHours }`. Why: once a login is that old Codex refreshes it, and a refresh made by a trial
- * rewrites the trial's COPY and may leave the real login invalid, which a run must not risk for a
- * measurement (`odd/tasks/codex-parity.md`, Constraints). The age is the file's date and nothing else: the
- * login is never opened. That date is when the file was last written, ASSUMED to be its last refresh; a file
- * restored or touched since then looks younger than its login is.
+const HOUR_MS = 3_600_000;
+/** How the refusal of an option shows what it was given: a number as it reads (`NaN`), anything else as JSON. */
+const shown = (value) => (typeof value === 'number' ? String(value) : JSON.stringify(value));
+
+const NOT_JSON = Symbol('not JSON');
+/** `text` read as JSON, or `NOT_JSON`. The error of a `JSON.parse` that fails is dropped on purpose: its
+ * message quotes the text it was given. */
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return NOT_JSON;
+  }
+}
+
+/** When the access token of the login `authFile` expires, in milliseconds since the epoch: the `exp` claim
+ * (seconds, as a JWT counts them) in the payload of `tokens.access_token`, which is the second of the token's
+ * three dot-separated parts, JSON in base64url. The signature is not checked: this asks a login for a date,
+ * it authenticates nobody. It FAILS CLOSED: a file that is not JSON, that holds no such token, or whose
+ * token's expiry cannot be read is an error that says to log in again, never a login taken for a good one.
  *
- * An age that cannot be trusted is refused too, since "under the limit" would then mean nothing: a `now` that
- * is not a finite number (every comparison with the NaN it makes is false, so it would pass), and a file
- * dated after `now`, whose age comes out negative and so under any limit. */
-export function assertLoginFresh(authFile, { maxAgeHours = DEFAULT_MAX_LOGIN_AGE_HOURS, now = Date.now() } = {}) {
-  if (typeof maxAgeHours !== 'number' || !(maxAgeHours > 0)) throw new Error(`the oldest login allowed must be a positive number of hours, got ${JSON.stringify(maxAgeHours)}`);
-  if (typeof now !== 'number' || !Number.isFinite(now)) throw new Error(`the time the age of the Codex login is measured from must be a finite number of milliseconds, got ${typeof now === 'number' ? String(now) : JSON.stringify(now)}`);
+ * NOTHING OF THE LOGIN LEAVES THIS FUNCTION BUT THAT DATE: no message quotes the file, the token, a part of
+ * it or another claim. A file that cannot be read at all fails with the file system's own error, which names
+ * a path and a code. */
+function loginExpiry(authFile) {
+  const unreadable = (why) => new Error(`the Codex login at ${authFile} ${why}, so when it expires cannot be told and no run starts on it: run \`codex logout\`, then \`codex login\`, then run again`);
+  const login = parseJson(fs.readFileSync(authFile, 'utf8'));
+  if (login === NOT_JSON) throw unreadable('is not JSON');
+  const token = login?.tokens?.access_token;
+  if (typeof token !== 'string' || token === '') throw unreadable('holds no access token (`tokens.access_token`)');
+  const parts = token.split('.');
+  if (parts.length !== 3) throw unreadable('holds an access token that is not a JWT, three parts separated by dots');
+  const payload = parseJson(Buffer.from(parts[1], 'base64url').toString('utf8'));
+  if (payload === NOT_JSON || payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw unreadable('holds an access token whose payload is not a JSON object');
+  const expiresMs = typeof payload.exp === 'number' && payload.exp > 0 ? payload.exp * 1000 : Number.NaN;
+  // A number no date holds (an `exp` of 1e999 is read as Infinity) is no expiry either.
+  if (Number.isNaN(new Date(expiresMs).getTime())) throw unreadable('holds an access token whose expiry (`exp`) is not a date');
+  return expiresMs;
+}
+
+/** Throws unless the access token of the login `authFile` still has `minHoursLeft` hours at `now`
+ * (milliseconds); returns `{ hoursLeft, expiresAt, ageHours }`, `expiresAt` an ISO date. A token with exactly
+ * that many hours passes; an expired one never does. Why: Codex refreshes a login in place, a refresh made by
+ * a trial rewrites the trial's COPY and may leave the real login invalid, which a run must not risk for a
+ * measurement (`odd/tasks/codex-parity.md`, Constraints), and a token must not run out half way through a
+ * run. The login is checked once, when a run starts: a run longer than the hours asked for is not guarded.
+ *
+ * The expiry is read because the date of the file measured the wrong thing. OBSERVED on 2026-10-05: the real
+ * `auth.json` kept its date of 2026-09-27 21:45:10Z through interactive use at 191.9 and at 192.05 hours, a
+ * `codex login status` and a plain `codex login`, and the token in it, issued on 2026-09-27, expires on
+ * 2026-10-07, ten days later. So the limit this replaces, 186 hours since the file was written, refused a
+ * login with two days left. UNVERIFIED still: how long before the expiry Codex refreshes a login, and whether
+ * a refresh inside a copy leaves the real login invalid.
+ *
+ * `ageHours` is the hours since the file was last written, never negative; it is there to be reported and
+ * decides nothing. Of the login only the expiry is read, and nothing else of it is repeated (`loginExpiry`).
+ * A `now` that is not a finite number is refused, because every comparison with the NaN it makes is false and
+ * any login would pass; a minimum that is not a positive number is refused too. */
+export function assertLoginFresh(authFile, { minHoursLeft = DEFAULT_MIN_LOGIN_HOURS_LEFT, now = Date.now() } = {}) {
+  if (typeof minHoursLeft !== 'number' || !Number.isFinite(minHoursLeft) || !(minHoursLeft > 0)) throw new Error(`the hours a Codex login must have left must be a positive number, got ${shown(minHoursLeft)}`);
+  if (typeof now !== 'number' || !Number.isFinite(now)) throw new Error(`the time the hours a Codex login has left are measured from must be a finite number of milliseconds, got ${shown(now)}`);
   assertLogin(authFile);
-  const written = fs.statSync(authFile).mtimeMs;
-  const aheadMs = written - now;
-  if (aheadMs > CLOCK_SLACK_MS) {
-    const ahead = aheadMs < 3_600_000 ? `${Math.round(aheadMs / 1000)} seconds` : `${(aheadMs / 3_600_000).toFixed(1)} hours`;
-    throw new Error(`the Codex login at ${authFile} is dated ${ahead} in the future (${new Date(written).toISOString()}, and it is ${new Date(now).toISOString()}): its age cannot be told, so neither can whether Codex would refresh it inside a trial. Check this machine's clock and the date of that file, then run again`);
+  const expiresMs = loginExpiry(authFile);
+  const expiresAt = new Date(expiresMs).toISOString();
+  const hoursLeft = (expiresMs - now) / HOUR_MS;
+  if (hoursLeft < minHoursLeft) {
+    // Rounded down, so that what is left is never shown as the minimum it is under.
+    const when = hoursLeft > 0 ? `expires at ${expiresAt}, in ${(Math.floor(hoursLeft * 10) / 10).toFixed(1)} hours` : `expired at ${expiresAt}, ${(-hoursLeft).toFixed(1)} hours ago`;
+    throw new Error(`the access token of the Codex login at ${authFile} ${when}: a run starts only while it has at least ${minHoursLeft} hours left, because Codex may refresh a login that nears its expiry, and a refresh made inside a trial's copy may leave the real login invalid. Run \`codex logout\`, then \`codex login\`, then run again`);
   }
-  const ageHours = Math.max(0, -aheadMs) / 3_600_000;
-  if (ageHours > maxAgeHours) {
-    throw new Error(`the Codex login at ${authFile} was last written ${ageHours.toFixed(1)} hours ago, over the ${maxAgeHours} hours allowed: Codex refreshes a ChatGPT login in place once it is about eight days (${LOGIN_REFRESH_AFTER_HOURS} hours) old, and a refresh made inside a trial's copy may leave the real login invalid. Use the real Codex once, so that it refreshes its own login, then run again`);
-  }
-  return { ageHours };
+  const ageHours = Math.max(0, now - fs.statSync(authFile).mtimeMs) / HOUR_MS;
+  return { hoursLeft, expiresAt, ageHours };
 }
 
 /** Where the login of the trial home `home` goes; an error when that is `authFile` itself, because a
@@ -82,8 +125,8 @@ function loginTarget({ authFile, home }) {
   return target;
 }
 
-/** Copies the login `authFile` into the trial home's `CODEX_HOME`, byte for byte (`copyFileSync`: the content
- * never passes through this process as text, so it cannot reach a log), and returns where it went. The real
+/** Copies the login `authFile` into the trial home's `CODEX_HOME`, byte for byte (`copyFileSync`: the copy
+ * never holds the content as text, so it cannot put it in a log), and returns where it went. The real
  * file is only read. Codex refreshes a login in place, so a trial may rewrite its copy; whether the real one
  * stays valid after that is UNVERIFIED until the real trials (`odd/tasks/codex-parity.md`, Constraints). */
 export function copyLogin({ authFile, home }) {

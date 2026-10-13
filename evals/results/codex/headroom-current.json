@@ -1,0 +1,436 @@
+{
+  "format": 1,
+  "name": "headroom-current",
+  "createdAt": "2026-10-06T00:24:39.767Z",
+  "agent": "codex",
+  "model": "gpt-6.1-sol",
+  "permissionMode": "dangerously-bypass-approvals-and-sandbox",
+  "stack": {
+    "codex": "codex-cli 0.160.0",
+    "gentleAi": "4.0.0",
+    "engram": "3.1.0"
+  },
+  "args": {
+    "codex": "C:\\Users\\Oficina\\AppData\\Local\\pnpm\\global\\v11\\105c-18dbbbbc8832effc-0\\node_modules\\.pnpm\\@openai+codex@0.160.0-win32-x64\\node_modules\\@openai\\codex\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+    "configs": [
+      "current"
+    ],
+    "efforts": [
+      "medium"
+    ],
+    "repeats": 3,
+    "tasks": [
+      "format-v2",
+      "house-rules",
+      "lost-updates",
+      "resolver",
+      "spec-drift"
+    ],
+    "workRoot": "D:\\js-harness-worktrees\\js-harness-evals-work"
+  },
+  "trials": [
+    {
+      "task": "format-v2",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 1,
+      "score": 0.2553191489361702,
+      "passed": 12,
+      "total": 47,
+      "inputTokens": 414680,
+      "outputTokens": 1821,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 414680,
+          "cached_input_tokens": 368640,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1821,
+          "reasoning_output_tokens": 171
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 368640,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 171,
+      "wallMs": 170156,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T00:24:51.796Z"
+    },
+    {
+      "task": "house-rules",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 1,
+      "score": 0.7446808510638298,
+      "passed": 35,
+      "total": 47,
+      "inputTokens": 812805,
+      "outputTokens": 3903,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 812805,
+          "cached_input_tokens": 757632,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3903,
+          "reasoning_output_tokens": 94
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 757632,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 94,
+      "wallMs": 411792,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T00:27:53.046Z"
+    },
+    {
+      "task": "lost-updates",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 1,
+      "score": 0.8372093023255814,
+      "passed": 36,
+      "total": 43,
+      "inputTokens": 842087,
+      "outputTokens": 4810,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 842087,
+          "cached_input_tokens": 776960,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 4810,
+          "reasoning_output_tokens": 497
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 776960,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 497,
+      "wallMs": 488029,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T00:34:56.821Z"
+    },
+    {
+      "task": "resolver",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 1,
+      "score": 1,
+      "passed": 45,
+      "total": 45,
+      "inputTokens": 1063333,
+      "outputTokens": 5065,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 1063333,
+          "cached_input_tokens": 999936,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 5065,
+          "reasoning_output_tokens": 301
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 999936,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 301,
+      "wallMs": 484335,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T03:07:37.246Z"
+    },
+    {
+      "task": "spec-drift",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 1,
+      "score": 1,
+      "passed": 51,
+      "total": 51,
+      "inputTokens": 1194128,
+      "outputTokens": 5603,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 1194128,
+          "cached_input_tokens": 1130368,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 5603,
+          "reasoning_output_tokens": 474
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 1130368,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 474,
+      "wallMs": 769686,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T03:15:54.515Z"
+    },
+    {
+      "task": "format-v2",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 2,
+      "score": 1,
+      "passed": 47,
+      "total": 47,
+      "inputTokens": 1453552,
+      "outputTokens": 6894,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 1453552,
+          "cached_input_tokens": 1387008,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 6894,
+          "reasoning_output_tokens": 1207
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 1387008,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 1207,
+      "wallMs": 1087984,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T03:28:56.434Z"
+    },
+    {
+      "task": "house-rules",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 2,
+      "score": 0.8085106382978723,
+      "passed": 38,
+      "total": 47,
+      "inputTokens": 913793,
+      "outputTokens": 4629,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 913793,
+          "cached_input_tokens": 859008,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 4629,
+          "reasoning_output_tokens": 131
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 859008,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 131,
+      "wallMs": 349471,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T03:47:15.118Z"
+    },
+    {
+      "task": "lost-updates",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 2,
+      "score": 1,
+      "passed": 43,
+      "total": 43,
+      "inputTokens": 746254,
+      "outputTokens": 3691,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 746254,
+          "cached_input_tokens": 690560,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3691,
+          "reasoning_output_tokens": 106
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 690560,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 106,
+      "wallMs": 349839,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T03:53:15.913Z"
+    },
+    {
+      "task": "resolver",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 2,
+      "score": 1,
+      "passed": 45,
+      "total": 45,
+      "inputTokens": 1052509,
+      "outputTokens": 5135,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 1052509,
+          "cached_input_tokens": 992256,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 5135,
+          "reasoning_output_tokens": 349
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 992256,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 349,
+      "wallMs": 777690,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T08:05:12.020Z"
+    },
+    {
+      "task": "spec-drift",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 2,
+      "score": 1,
+      "passed": 51,
+      "total": 51,
+      "inputTokens": 1142219,
+      "outputTokens": 5375,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 1142219,
+          "cached_input_tokens": 1081344,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 5375,
+          "reasoning_output_tokens": 294
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 1081344,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 294,
+      "wallMs": 905133,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T08:18:21.776Z"
+    },
+    {
+      "task": "format-v2",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 3,
+      "score": 0.2553191489361702,
+      "passed": 12,
+      "total": 47,
+      "inputTokens": 372682,
+      "outputTokens": 1390,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 372682,
+          "cached_input_tokens": 327808,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1390,
+          "reasoning_output_tokens": 128
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 327808,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 128,
+      "wallMs": 188490,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T08:33:37.462Z"
+    },
+    {
+      "task": "house-rules",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 3,
+      "score": 0.9787234042553191,
+      "passed": 46,
+      "total": 47,
+      "inputTokens": 1103828,
+      "outputTokens": 5927,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 1103828,
+          "cached_input_tokens": 1030912,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 5927,
+          "reasoning_output_tokens": 697
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 1030912,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 697,
+      "wallMs": 616896,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T08:36:57.504Z"
+    },
+    {
+      "task": "lost-updates",
+      "config": "current",
+      "effort": "medium",
+      "repeat": 3,
+      "score": 1,
+      "passed": 43,
+      "total": 43,
+      "inputTokens": 1071832,
+      "outputTokens": 5470,
+      "turns": null,
+      "usage": [
+        {
+          "input_tokens": 1071832,
+          "cached_input_tokens": 1014272,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 5470,
+          "reasoning_output_tokens": 673
+        }
+      ],
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "cachedInputTokens": 1014272,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 673,
+      "wallMs": 948938,
+      "cliVersion": "codex-cli 0.160.0",
+      "error": null,
+      "startedAt": "2026-10-06T08:47:25.587Z"
+    }
+  ]
+}

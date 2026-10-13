@@ -6,7 +6,7 @@
 //
 //   node evals/codex-isolation-probe.mjs --codex <absolute path of codex.exe> [--arm current|minimal|both]
 //     [--model <id>] [--effort <word>] [--control-ms <n>] [--report <path>] [--raw-dir <path>]
-//     [--keep-sandbox] [--timeout-ms <n>] [--max-login-age-hours <n>] [--work-root <abs>]
+//     [--keep-sandbox] [--timeout-ms <n>] [--min-login-hours-left <n>] [--work-root <abs>]
 //
 // What differs from Claude's probe, and why:
 //  - THE MODEL IS REAL. Claude's probe scripts the agent from a loopback fake API; through a custom provider
@@ -20,10 +20,11 @@
 //    grades a task with a hidden grader, puts the home and the workspace in two unrelated directories (the
 //    scan looks for ONE unique sandbox name) and hands back neither the raw run nor the sandbox before it is
 //    removed.
-//  - THE LOGIN IS A FILE. The real `auth.json` is never opened by a snapshot (size and date only). Once, after
-//    the agent, it is compared with the trial's copy byte for byte in memory, and all the report says is
-//    whether they are the same. A login old enough for Codex to refresh inside a trial refuses the run
-//    (`assertLoginFresh`).
+//  - THE LOGIN IS A FILE. The real `auth.json` is never opened by a snapshot (size and date only). It is read
+//    twice, and nothing of it is kept or said but what follows. Before anything is spent, for the expiry of
+//    its access token: one with too few hours left, or with no expiry that can be read, refuses the run
+//    (`assertLoginFresh`), and the report says how many hours it had. Once after the agent, to compare it
+//    with the trial's copy byte for byte in memory: all the report says is whether they are the same.
 //  - EVEN `--version` RUNS IN THE SANDBOX. Every start of Codex writes into its `CODEX_HOME` (`tmp/arg0`), the
 //    version probe included, so the version is read per arm under the trial's own env, as `runTrial` reads it.
 //  - POSITIVE CONTROLS come from the workspace and the agent's own output, not from a request log: the reader
@@ -41,7 +42,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCodexOutput } from './agent-output.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
-import { DEFAULT_MAX_LOGIN_AGE_HOURS, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, removeLogin, seedFromCodexTemplate } from './codex-home.mjs';
+import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, removeLogin, seedFromCodexTemplate } from './codex-home.mjs';
 import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
 import {
   cap, defaultTrees, diffLines, diffSnapshots, errorMessage, findInStore, leakHits, makeNonce, makeScrubber, megabytes, parseEnvLines, reportDiff, scanFile, seconds,
@@ -110,7 +111,7 @@ const STAT_ONLY_DIRS = ['plugins/.plugin-appserver', 'packages/app-server-daemon
 /** The real places a Codex run, or a tool it starts, may write: every tree of Claude's probe (`defaultTrees`:
  * the hooks and MCP servers of a seeded home are the same engram, gentle-ai and codegraph under both hosts),
  * then Codex's own.
- *  - `.codex` is content-hashed and scanned, except the login (`auth.json`: the probe has no business
+ *  - `.codex` is content-hashed and scanned, except the login (`auth.json`: a scan has no business
  *    reading one) and the files of `statOnlyDirs`, which are listed when the trees are built.
  *  - `AppData/Local/Codex` and `OpenAI`, and `AppData/Roaming/Codex`, are where the desktop app keeps its
  *    state, and `AppData/Local/engram` where the engram plugin's binary lives.
@@ -608,7 +609,7 @@ function armFailures(result) {
  * Options (all but `codex` optional): `codex` is the absolute path of the real binary, never a `.cmd` shim;
  * `arms` is `['minimal', 'current']` by default, the cheaper one first; `model` and `effort`; `controlMs`,
  * the length of the no-agent window that measures live churn (0 skips it); `timeoutMs`, the agent's bound;
- * `maxLoginAgeHours` (`assertLoginFresh`); `rawDir`, where each arm's raw stdout and stderr are written;
+ * `minLoginHoursLeft` (`assertLoginFresh`); `rawDir`, where each arm's raw stdout and stderr are written;
  * `reportFile`, where the caller will write the report (only checked here, never written); `keepSandbox`.
  * For tests and unusual machines: `commandArgs` (what comes before Codex's own arguments when the command is
  * a launcher), `workRoot` and `checkWorkRoot(root, { realHome })`, `realHome`, `localAppData`, `appData` and
@@ -618,13 +619,13 @@ function armFailures(result) {
  * `listEngram()`, `takeSnapshot(trees, options)` (default `snapshotTrees`), `wait(ms)`, `log(message)`, and
  * `concurrency`, `chunkSize`, `openRead` and `retryDelayMs` (how a real file is read).
  *
- * Before anything is spent, it throws unless the command is a real binary, the login exists and is young
- * enough, the work root is a place trials can run, the raw directory is not one the scan reads, and the raw
- * directory and the report's can be written (both are made here). Then: the template of the real `.codex`
- * is built once if the current arm runs (and removed whatever happens), the real trees are snapshotted, and
- * each arm reads `--version` in its own sandbox (an arm whose binary does not answer fails there, with no
- * session) and runs ONE agent process. An arm that fails ends the run: the arms after it are listed in
- * `skipped` and not started.
+ * Before anything is spent, it throws unless the command is a real binary, the login exists and its access
+ * token has the hours left, the work root is a place trials can run, the raw directory is not one the scan
+ * reads, and the raw directory and the report's can be written (both are made here). Then: the template of
+ * the real `.codex` is built once if the current arm runs (and removed whatever happens), the real trees are
+ * snapshotted, and each arm reads `--version` in its own sandbox (an arm whose binary does not answer fails
+ * there, with no session) and runs ONE agent process. An arm that fails ends the run: the arms after it are
+ * listed in `skipped` and not started.
  *
  * It throws only while no session has started. Once one has, whatever breaks in the probe itself (a real tree
  * that cannot be read, a sandbox that cannot be made) is written into the report instead: the arm fails as
@@ -644,7 +645,7 @@ export async function runCodexIsolationProbe(options) {
     effort: PROBE_EFFORT,
     controlMs: 0,
     timeoutMs: 600_000,
-    maxLoginAgeHours: DEFAULT_MAX_LOGIN_AGE_HOURS,
+    minLoginHoursLeft: DEFAULT_MIN_LOGIN_HOURS_LEFT,
     keepSandbox: false,
     commandArgs: [],
     localAppData: process.env.LOCALAPPDATA ?? path.join(realHome, 'AppData', 'Local'),
@@ -662,7 +663,7 @@ export async function runCodexIsolationProbe(options) {
   for (const arm of o.arms) if (!ARMS.includes(arm)) throw new Error(`unknown arm ${JSON.stringify(arm)}: use "minimal" or "current"`);
   if (typeof o.effort !== 'string' || !/^[A-Za-z0-9_-]+$/.test(o.effort)) throw new Error(`"effort" must be a plain word, got ${JSON.stringify(o.effort)}`);
   const authFile = path.join(codexHomeOf(realHome), 'auth.json');
-  const login = assertLoginFresh(authFile, { maxAgeHours: o.maxLoginAgeHours });
+  const login = assertLoginFresh(authFile, { minHoursLeft: o.minLoginHoursLeft });
   // The builder checks the command, the model and the login path; nothing is made by building a config.
   const configOptions = { command: o.codex, commandArgs: o.commandArgs, model: o.model, authFile, allocatePort: o.allocatePort, releasePort: o.releasePort, killPort: o.killPort };
   codexMinimalConfig(configOptions);
@@ -713,9 +714,10 @@ async function probeUnder(o, { authFile, login, configOptions, trees, workRootCr
     const why = tree.name === '.codex' ? ` (the login, and the desktop app's binaries under ${STAT_ONLY_DIRS.join(' and ')})` : '';
     return `${tree.name}: ${tree.statOnly.slice(0, 2).join(', ')}${more} described by size and date, never opened${why}`;
   });
+  const tenths = (hours) => Math.round(hours * 10) / 10;
   const report = {
     tool: 'codex-isolation-probe', startedAt, node: process.version, platform: process.platform, codex: o.codex, codexVersion: null, workRoot: o.workRoot, workRootCreated,
-    config: { model: o.model, effort: o.effort }, login: { ageHours: Math.round(login.ageHours * 10) / 10, maxAgeHours: o.maxLoginAgeHours },
+    config: { model: o.model, effort: o.effort }, login: { hoursLeft: tenths(login.hoursLeft), minHoursLeft: o.minLoginHoursLeft, ageHours: tenths(login.ageHours) },
     trees: trees.map(({ name, mode, statOnly }) => ({ name, mode, ...(statOnly?.length > 0 && { statOnly: statOnly.length }) })), notes: unread,
     template: null, control: null, arms: [], skipped: [], incomplete: [], hashing,
   };
@@ -830,7 +832,7 @@ export function formatSummary(report) {
   const lines = [];
   const hashed = report.hashing.reduce((total, entry) => ({ ms: total.ms + entry.ms, bytes: Math.max(total.bytes, entry.bytes), files: Math.max(total.files, entry.files) }), { ms: 0, bytes: 0, files: 0 });
   lines.push(`codex isolation probe: ${report.ok ? 'PASS' : report.incomplete.length > 0 ? 'INCOMPLETE' : 'FAIL'}`);
-  lines.push(`codex ${report.codex} (${report.codexVersion ?? 'version not read'}) as ${report.config.model}, effort ${report.config.effort}; the login was last written ${report.login.ageHours} h ago (limit ${report.login.maxAgeHours} h)`);
+  lines.push(`codex ${report.codex} (${report.codexVersion ?? 'version not read'}) as ${report.config.model}, effort ${report.config.effort}; the login's access token had ${report.login.hoursLeft} h left (minimum ${report.login.minHoursLeft} h)`);
   lines.push(`work root: ${report.workRoot} (${report.workRootCreated ? 'made by this run' : 'was there already'})`);
   lines.push(`real trees: ${report.hashing.length} passes in ${seconds(hashed.ms)}, ${hashed.files} files, ${megabytes(hashed.bytes)} content-hashed per pass (${report.hashing.map((entry) => `${entry.label} ${seconds(entry.ms)}`).join(', ')})`);
   for (const note of report.notes) lines.push(`  ${note}`);
@@ -904,7 +906,7 @@ export function formatSummary(report) {
 }
 
 const USAGE = `usage: node evals/codex-isolation-probe.mjs --codex <absolute path of codex.exe> [--arm current|minimal|both] [--model <id>] [--effort <word>]
-  [--control-ms <n>] [--report <path>] [--raw-dir <path>] [--keep-sandbox] [--timeout-ms <n>] [--max-login-age-hours <n>] [--work-root <abs>]
+  [--control-ms <n>] [--report <path>] [--raw-dir <path>] [--keep-sandbox] [--timeout-ms <n>] [--min-login-hours-left <n>] [--work-root <abs>]
 
 Runs ONE real Codex session per arm (minimal first) under the eval sandbox, on the real login: each arm is a
 paid trial, never retried, and an arm that fails ends the run. Then it checks the machine's real Codex, engram
@@ -914,7 +916,7 @@ and gentle-ai state was untouched.
 --model       default ${PROBE_MODEL}; --effort default ${PROBE_EFFORT}
 --control-ms  first wait this long with no agent, to tell live writers from the trial
 --raw-dir     keep each arm's raw stdout and stderr there; it must be outside every tree the probe scans
---max-login-age-hours  refuse a login older than this (default ${DEFAULT_MAX_LOGIN_AGE_HOURS}): Codex would refresh it inside the trial
+--min-login-hours-left  refuse a login whose access token expires sooner than this (default ${DEFAULT_MIN_LOGIN_HOURS_LEFT}): Codex may refresh it inside the trial
 --work-root   where sandboxes and the template are built (default: js-harness-evals-work next to this repository)
 
 Exit 0: every positive control held, nothing of the run was found in the real trees, the real login kept its
@@ -949,7 +951,7 @@ function parseArgs(argv) {
     else if (flag === '--effort') options.effort = value(i++, flag);
     else if (flag === '--control-ms') options.controlMs = integer(value(i++, flag), flag);
     else if (flag === '--timeout-ms') options.timeoutMs = integer(value(i++, flag), flag);
-    else if (flag === '--max-login-age-hours') options.maxLoginAgeHours = integer(value(i++, flag), flag, 1);
+    else if (flag === '--min-login-hours-left') options.minLoginHoursLeft = integer(value(i++, flag), flag, 1);
     else if (flag === '--report') options.report = path.resolve(value(i++, flag));
     else if (flag === '--raw-dir') options.rawDir = absolute(value(i++, flag), flag);
     else if (flag === '--work-root') options.workRoot = absolute(value(i++, flag), flag);

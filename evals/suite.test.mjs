@@ -7,7 +7,7 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { readClaudeOutput, readCodexOutput } from './agent-output.mjs';
-import { CODEX_TEMPLATE_KIND, DEFAULT_MAX_LOGIN_AGE_HOURS } from './codex-home.mjs';
+import { CODEX_TEMPLATE_KIND, DEFAULT_MIN_LOGIN_HOURS_LEFT } from './codex-home.mjs';
 import { DELEGATION_MODES, assertWorkRoot, defaultWorkRoot } from './configs.mjs';
 import { killByPath, planTrials, resolveAgent, runTrial, trialKey } from './runner.mjs';
 import {
@@ -858,17 +858,26 @@ const NOW = new Date('2026-10-02T12:00:00.000Z');
 const HOUR = 3_600_000;
 // Made up for these tests: no login of anything.
 const FAKE_LOGIN = 'FAKE-CODEX-LOGIN-never-in-a-stream-or-a-template-0123456789';
+const base64url = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+/** A made-up access token in the shape of a JWT, `header.payload.signature`, that expires `hoursLeft` after the
+ * clock the suite is given. Its signature is the made-up login, and its payload holds it as another claim. */
+const fakeAccessToken = (hoursLeft) => `${base64url({ alg: 'none' })}.${base64url({ sub: FAKE_LOGIN, exp: (NOW.getTime() + hoursLeft * HOUR) / 1000 })}.${FAKE_LOGIN}`;
+/** The text of a login file whose access token has `hoursLeft` hours left. */
+const fakeLogin = (hoursLeft) => JSON.stringify({ made_up: FAKE_LOGIN, tokens: { access_token: fakeAccessToken(hoursLeft), refresh_token: FAKE_LOGIN } });
+/** What no stream may hold of the login text `login`: the made-up login, and each part of its access token. */
+const loginSecrets = (login) => [FAKE_LOGIN, ...(JSON.parse(login).tokens?.access_token ?? '').split('.')].filter((text) => text.length >= 8);
 
-/** A fake machine whose real home also holds a Codex setup: a config, global instructions and a login last written
- * `loginAgeHours` before the clock the suite is given (`null`: no login at all). */
-function codexMachine({ loginAgeHours = 24, config = 'model = "gpt-6.1-sol"\n' } = {}) {
+/** A fake machine whose real home also holds a Codex setup: a config, global instructions and a login, which is the
+ * text `login` (default: one whose access token has two days left by the clock the suite is given; `null`: no login
+ * at all), last written `loginAgeHours` before that clock. */
+function codexMachine({ login = fakeLogin(48), loginAgeHours = 24, config = 'model = "gpt-6.1-sol"\n' } = {}) {
   const m = machine();
   const codexHome = path.join(m.realHome, '.codex');
   write(path.join(codexHome, 'config.toml'), config);
   write(path.join(codexHome, 'AGENTS.md'), '# the global rules of Codex\n');
   const authFile = path.join(codexHome, 'auth.json');
-  if (loginAgeHours !== null) {
-    write(authFile, JSON.stringify({ made_up: FAKE_LOGIN }));
+  if (login !== null) {
+    write(authFile, login);
     const written = new Date(NOW.getTime() - loginAgeHours * HOUR);
     fs.utimesSync(authFile, written, written);
   }
@@ -951,30 +960,40 @@ test('a wrong Codex command line prints the usage, which states it, and exits 2 
   assert.match(USAGE, /evals\/results\/codex\/<name>\.json/);
 });
 
-test('a Codex login that is missing, too old or dated in the future stops the run before anything is read, built or run, and says what to do', async () => {
-  for (const [label, loginAgeHours, pattern] of [
-    ['missing', null, /there is no Codex login at .*auth\.json: run `codex login` first/],
-    ['too old', DEFAULT_MAX_LOGIN_AGE_HOURS + 4, /last written 190\.0 hours ago, over the 186 hours allowed.*Use the real Codex once, so that it refreshes its own login, then run again/],
-    ['dated in the future', -5, /is dated 5\.0 hours in the future/],
+test('a Codex login that is missing, near its expiry, expired or without an expiry to read stops the run before anything is read, built or run, and says what to do', async () => {
+  const logInAgain = 'run `codex logout`, then `codex login`, then run again';
+  for (const [label, login, pattern, todo] of [
+    ['missing', null, /there is no Codex login at .*auth\.json/, 'run `codex login` first'],
+    ['near its expiry', fakeLogin(DEFAULT_MIN_LOGIN_HOURS_LEFT - 4), /expires at 2026-10-02T20:00:00\.000Z, in 8\.0 hours: a run starts only while it has at least 12 hours left/, logInAgain],
+    ['expired', fakeLogin(-5), /expired at 2026-10-02T07:00:00\.000Z, 5\.0 hours ago/, logInAgain],
+    ['without an access token', JSON.stringify({ made_up: FAKE_LOGIN }), /holds no access token.*so when it expires cannot be told/, logInAgain],
+    ['not JSON', `not json ${FAKE_LOGIN}`, /is not JSON, so when it expires cannot be told/, logInAgain],
   ]) {
-    const m = codexMachine({ loginAgeHours });
+    const m = codexMachine({ login });
     const stacks = [];
     const { io, deps } = codexDeps(m, { readCodexStack: () => { stacks.push('read'); return { ...CODEX_STACK }; } });
     assert.equal(await suiteMain(codexRunArgv(m), {}, deps), 2, label);
     assert.match(io.err, pattern, label);
+    assert.ok(io.err.toLowerCase().includes(todo), `${label}: what to do`);
     assert.match(io.err, /no trial was started/i, label);
     assert.ok(!io.err.includes(USAGE), `${label}: the command line was right, so the usage is not what to read`);
     assert.equal(io.out, '');
     assert.deepEqual([deps.runTrial.asked, stacks], [[], []], `${label}: nothing was run and no version was asked`);
     nothingCreated(m);
-    assert.ok(!(io.err + io.out).includes(FAKE_LOGIN), `${label}: the login is never opened`);
+    const secrets = login === null || label === 'not JSON' ? [FAKE_LOGIN] : loginSecrets(login);
+    for (const secret of secrets) assert.ok(!(io.err + io.out).includes(secret), `${label}: nothing of the login is printed but its dates`);
   }
-  // Under the limit it is used, and the run says how old it was.
-  const m = codexMachine({ loginAgeHours: DEFAULT_MAX_LOGIN_AGE_HOURS - 1 });
+  // With the hours left it is used, however old its file is, and the run says what it had left.
+  const login = fakeLogin(DEFAULT_MIN_LOGIN_HOURS_LEFT + 1);
+  const m = codexMachine({ login, loginAgeHours: 192 });
   const { io, deps } = codexDeps(m);
   assert.equal(await suiteMain(codexRunArgv(m, { '--configs': 'minimal' }), {}, deps), 0, io.err);
-  assert.match(io.err, /Codex login: last written 185\.0 hours ago \(a run refuses one over 186\)/);
-  assert.equal(fs.statSync(m.authFile).mtimeMs, NOW.getTime() - 185 * HOUR, 'and the real login is left as it was');
+  assert.match(io.err, /Codex login: its access token has 13\.0 hours left, until 2026-10-03T01:00:00\.000Z \(a run needs at least 12\)/);
+  for (const secret of loginSecrets(login)) assert.ok(!(io.err + io.out).includes(secret), 'nothing of the login is printed but its dates');
+  assert.equal(fs.statSync(m.authFile).mtimeMs, NOW.getTime() - 192 * HOUR, 'and the real login is left as it was');
+  assert.equal(fs.readFileSync(m.authFile, 'utf8'), login);
+  assert.match(USAGE, /A run starts only while that token has at least 12 hours left/);
+  assert.match(USAGE, /run `codex logout`, then `codex login`, then run again/);
 });
 
 /** The deps of a Codex run on `m` whose stack is read by the real `readCodexStack`, in the work root of the run:
@@ -997,7 +1016,7 @@ test('a Codex run whose Codex version cannot be read is refused, exit 2, before 
     assert.equal(io.out, '', label);
     assert.deepEqual(fs.readdirSync(m.workRoot), [], `${label}: no template was built, and the home of the probe is gone`);
     assert.equal(fs.existsSync(m.runsDir), false, `${label}: no raw log`);
-    assert.ok(!(io.err + io.out).includes(FAKE_LOGIN), `${label}: the login is never opened`);
+    assert.ok(!(io.err + io.out).includes(FAKE_LOGIN), `${label}: nothing of the login is printed`);
   };
 
   const fresh = probingDeps(m, () => null);

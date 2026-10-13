@@ -122,6 +122,9 @@ check said or before its answer was read.
   and went on
 - Seen: 2026-10-11 — relief file, line 286 — the line that records "merged" was written by the command
   whose merge was refused; corrected in line 287 (the orchestrator's own report, not read here)
+- Seen: 2026-10-12 — session 9265156a (JH 7), by its own messages to the lead (claimed) — a commit,
+  its push and its pull request were joined by `;` in one command, twice; each step succeeded, so
+  nothing went out that its check would have stopped
 - Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
 
 ### checked-not-read
@@ -366,6 +369,15 @@ A test run or a count started while a gate, or a batch that measures durations, 
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
   yet)
 
+### hold-read-after-build
+A session was told to hold before building, and built: the message waited behind its own turn
+while it acted on another session's answer.
+- Class: unseen-state
+- Seen: 2026-10-13 — relief file, line 544 — the lead's hold on two pieces of JH 7 was written at
+  00:41 and queued; JH 7 read it at 00:52, after JH 8's "start now" and with both pieces
+  written (odd/tasks/rule-hierarchy.md, Progress of that day). Nothing was spent on Codex or
+  pushed; one sub-agent and the session's own turns were. His answer later lifted the hold
+
 ### host-restart-unseen
 The app restarts a session's process: the session goes on in a new transcript, its background work
 has no owner, and the board keeps showing rows and work that nobody holds.
@@ -453,6 +465,25 @@ came later.
   lock; the same fact at odd/tasks/gate-log.md:757-758
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — a commit waited 60 min 1 s and gave up
   with no sensor run, while four sessions asked for the lock
+
+### memory-note-overwritten
+A session saved a memory note under a name another session had just used, without looking for
+one, and the first text was lost.
+- Class: rule-not-acting
+- Seen: 2026-10-12 — the memory note `questions-through-the-question-tool` of this project, its
+  last paragraph — written by another session at about 19:57 and overwritten by JH 7 a moment
+  later; what is there is JH 7's rewrite, and the rule's fuller record is the note
+  `questions-with-buttons`, untouched
+
+### merge-review-covers-main
+A merge of the default branch in which somebody wrote a few lines became a code commit whose
+review covers everything the merge brought, code that already had its review.
+- Class: delivery
+- Seen: 2026-10-12 — JH 8's message to JH 7 (claimed) — the push check asked for a review of
+  1,724 lines brought by a merge of `main` whose resolution decided nine lines of one test file;
+  the rule that makes such a merge a code commit is `bin/lib/codex-review-coverage.mjs:207-215`.
+  Narrowing the review to the lines written in the merge changes what a review covers, which is
+  his to decide
 
 ### message-to-wrong-session
 A prompt or a message went to a session that was not the one for it: one that never existed, or one
@@ -572,6 +603,14 @@ the harness's.
   the run is still refused
 - Control: check — evals/paths.test.mjs — "exists says a path below a file is not there, where the
   system says ENOTDIR" — since 2026-10-12
+
+### resume-names-wrong-maker
+The resume hook said the host had compacted a session by itself when he had typed the command.
+- Class: wrong-information
+- Seen: 2026-10-12 — the lead's message to JH 7 (claimed; JH 5's candidate) — after his `/compact`
+  the hook's text opened with "The host compacted this session by itself"; the hook says so
+  whenever the boundary is not in the transcript yet (`bin/resume.mjs:651`), which it takes for
+  the host's way alone
 
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left

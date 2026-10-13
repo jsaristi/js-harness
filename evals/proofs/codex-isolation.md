@@ -1,7 +1,8 @@
 # Codex isolation proof
 
 The run that proves the Codex arms of the eval leave the real machine untouched
-(`odd/tasks/codex-parity.md`, T3). It is the record of one run, not a document to keep current.
+(`odd/tasks/codex-parity.md`, T3). It is the record of one run, and of a second on the next
+Codex version, not a document to keep current.
 
 ## The run
 
@@ -101,8 +102,59 @@ Everything below landed inside the trial's home, which is removed after the tria
 - The current arm ran without the desktop app's pieces (`odd/tasks/codex-parity.md`, the decision
   of 2026-10-04), so this run says nothing about them.
 
+## Second run: codex-cli 0.160.0
+
+Codex was updated from 0.159.1 to 0.160.0 on 2026-10-05, before any trial of the matrix, so
+the same command was run again on the new binary (`odd/tasks/codex-parity.md`, T3b). Everything
+above is the record of the first run; this section holds what the second one adds or changes.
+
+- When: 2026-10-05, 22:40:30Z to 22:47:35Z, probe exit 0, verdict **PASS**, both arms.
+- Probe: `evals/codex-isolation-probe.mjs` as of `ef0e71f`, with the corrections of `9c5ef12`
+  and the login check on the token's expiry. The follow-up that attributes an engram process
+  by its parent was not done first: Sebastián had the probe run as it is.
+- Binary: `codex.exe` of `@openai/codex` 0.160.0 (`codex-cli 0.160.0`). Same model, effort and
+  login. engram was 3.1.0 on this run and 3.0.0 on the first.
+- Spend: two more real sessions, one per arm, never retried.
+- Login: the access token had 47.1 h left (minimum 12 h) and the file was 192.9 h old. After
+  each arm the trial's copy was byte-identical to the real file, and the real file kept its
+  date and size. So a session does not refresh a login past its eighth day either, which is
+  what the first run could not show at 177 h.
+- Hashed: four passes, 44,713 files, 2,315 MB per pass. The first pass took 162.5 s and the
+  other three 31 to 38 s.
+
+| | minimal | current |
+|---|---|---|
+| Agent | exit 0, 19.2 s, 1 turn | exit 0, 40.5 s, 1 turn |
+| Input tokens (cached) | 47,438 (43,520) | 105,282 (76,800) |
+| Output tokens (reasoning) | 400 (0) | 563 (0) |
+| Items | 2 `command_execution`, 2 `agent_message` | 2 `error`, 3 `mcp_tool_call`, 2 `command_execution`, 1 `agent_message` |
+| Shell environment | 22 of 22 variables as the sandbox set them | 22 of 22 |
+| Nonce file, env file | present, correct | present, correct |
+| Engram | none in this arm | the trial's own store holds the memory and the nonce |
+| Trial's engram port afterwards | nothing listening, no process left | nothing listening, no process left |
+| Leak scan of the real trees | nothing found | nothing found |
+| `CODEX_HOME` gained | 375 files | 611 files, 5 changed |
+
+- The events, the items and the three engram calls of the current arm are the ones of the
+  first run, so 0.160.0 prints the same `codex exec --json` stream on this task.
+- The current arm read 105,282 input tokens against 142,308 on 0.159.1, on the same task. One
+  session per version does not say why: the binary, engram and the global `AGENTS.md` all
+  changed between the two runs.
+- The machine was busier than in the first run. With no agent running, the control window
+  already saw the desktop app's profile under `AppData/Roaming/Codex`, its log, and
+  `logs_2.sqlite` and `models_cache.json` in the real `~/.codex` change: four Codex processes
+  of Sebastián's were open. New in an arm's own window: one more file of that profile in the
+  minimal arm; in the current arm, the transcript, file history and account-file backups of
+  another Claude Code session working on another project, and that session's engram writing
+  the real `~/.engram/engram.db-wal`. None of it holds the nonce, a sandbox name or a thread
+  id.
+- 33 real files could not be read and so were not scanned for the needles; the report lists
+  them.
+- Still not settled: `reasoning_output_tokens` was 0 again, and no session failed.
+
 ## Kept outside the repository
 
 The probe's full JSON report (1,705 lines) and each arm's raw stdout and stderr are in
-`D:\js-harness-worktrees\codex-parity-t3-raw`. The raw files hold the nonce and the thread ids,
-which mean nothing once the run is over.
+`D:\js-harness-worktrees\codex-parity-t3-raw`; those of the second run (2,025 lines) are in its
+`0.160.0` folder. The raw files hold the nonce and the thread ids, which mean nothing once the
+run is over.

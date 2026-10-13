@@ -1,7 +1,6 @@
-// The bounds that are not proved usable elsewhere, each held to its declared rule, and the two values of a
-// Codex review that are still written twice, once in the source and once in the rule. GATE_WAIT_MS is read
-// from its rule, and no other test names it. Left: the model and the effort of a Codex review, whose command
-// another feature has open.
+// The bounds that are not proved usable elsewhere, each held to its declared rule. Every constant here is
+// read from its rule and no other test names its value: GATE_WAIT_MS, the context pause, and the model and
+// the effort of a Codex review, which the command's own test also holds to being written once.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { REVIEW_EFFORT, REVIEW_MODEL } from '../codex-review.mjs';

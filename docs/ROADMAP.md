@@ -45,7 +45,7 @@ First request of a one-word prompt, estimated tokens:
 | Stack | gentle-ai 4 (ODD, RDD review, test-first by default), engram 3 (the binary, and its Claude plugin since `gentle-ai sync` installs it: hooks and one skill, no second MCP server), codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` on every turn — Claude Code reads it natively; the skills `install` writes for each host (`js-harness`, `js-harness-orchestrator`) load on demand |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
-| Release source | Decided and not built: git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. `update` asks the registry (`<pm> view js-harness version`, `bin/lib/version.mjs`), and a machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
+| Release source | Decided and not built: git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. `update` asks the registry (`<pm> view js-harness version`, `bin/lib/version.mjs`), and a machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`) |
@@ -84,7 +84,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
-| F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián since 2026-10-06, on the branch `feat/codex-parity`, whose `odd/tasks/codex-parity.md` holds its state (see Next) |
+| F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián on 2026-10-06, closed by him on 13 of its 15 trials on 2026-10-12, and brought to `main` on 2026-10-13 from a branch cut from it (see "F6 result") |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
 
 ## Checklist
@@ -173,8 +173,8 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 
 ### F6 Codex parity
-- [ ] The eval tasks run on Codex
-- [ ] Differences measured and written down
+- [x] The eval tasks run on Codex
+- [x] Differences measured and written down
 
 ### F7 Future-model protocol
 - [ ] Written procedure: measure payload, run evals, strip one component at a time
@@ -206,6 +206,51 @@ each, and takes longer on every task. The predecessor's score-only rule separate
 spec-drift at medium, by 0.01. Read plainly: on tasks like these the stack's context and
 workflow add cost without adding score; what it may buy (recall across sessions, review, larger
 work) these tasks do not measure.
+
+## F6 result
+
+The same five tasks on the Codex CLI, at `medium`, the one effort the Codex matrix holds since
+he cut it on 2026-10-05: 15 trials of `minimal` and 13 of `current`, recorded on 2026-10-05
+and 06 on `gpt-6.1-sol` with codex-cli 0.160.0, gentle-ai 4.0.0 and engram 3.1.0. Two trials
+of `current` were never run, the third of resolver and of spec-drift: the usage cap stopped
+them, he paused the run on 2026-10-06 and closed F6 on 13 on 2026-10-12 (Next, item 1, with
+his line), so those two cells are means of 2 and the matrix is 28 of 30. Each value is the
+mean of its cell, Claude Code / Codex, from `node evals/report.mjs --codex-results-dir
+evals/results/codex`; the data is `evals/results/codex/`, and Claude Code's rows are F5's.
+
+| Task | Config | Trials | Score | Tokens | Cost, Codex's estimated | Wall time |
+|---|---|---|---|---|---|---|
+| format-v2 | minimal | 3 / 3 | 0.99 / 1.00 | 1.09M / 393.7k | $1.38 / $0.25 | 4m55s / 5m12s |
+| format-v2 | current | 3 / 3 | 0.99 / 0.50 | 3.43M / 750.3k | $2.50 / $0.21 | 7m24s / 8m02s |
+| house-rules | minimal | 3 / 3 | 0.98 / 1.00 | 312.7k / 202.8k | $0.40 / $0.12 | 1m17s / 2m10s |
+| house-rules | current | 3 / 3 | 0.98 / 0.84 | 1.04M / 948.3k | $1.01 / $0.26 | 2m20s / 7m39s |
+| lost-updates | minimal | 3 / 3 | 1.00 / 1.00 | 341.6k / 220.8k | $0.52 / $0.18 | 2m19s / 3m22s |
+| lost-updates | current | 3 / 3 | 1.00 / 0.95 | 967.6k / 891.4k | $1.03 / $0.25 | 2m55s / 9m56s |
+| resolver | minimal | 3 / 3 | 1.00 / 1.00 | 194.6k / 232.0k | $0.41 / $0.16 | 1m40s / 3m26s |
+| resolver | current | 3 / 2 | 1.00 / 1.00 | 824.1k / 1.06M | $1.01 / $0.27 | 2m52s / 10m31s |
+| spec-drift | minimal | 3 / 3 | 0.99 / 1.00 | 384.7k / 226.1k | $0.54 / $0.17 | 1m44s / 3m17s |
+| spec-drift | current | 3 / 2 | 1.00 / 1.00 | 1.15M / 1.17M | $1.21 / $0.29 | 3m01s / 13m57s |
+
+What it says, and what it does not. On Codex the minimal config scored 1.00 on all 15 trials.
+The current stack did not add score on any task and lowered it on three: format-v2 to 0.50,
+house-rules to 0.84, lost-updates to 0.95. The 0.50 is two sessions of three that ended at
+0.26, before writing anything, on a question the stack has the agent ask with nobody there to
+answer (the delivery strategy; `odd/tasks/codex-parity.md`, Progress, 2026-10-05 and 06). The
+current stack also sent about 1.9 to 5.2 times the tokens of the minimal one and took 1.5 to
+4.2 times as long. Its estimated cost moves less, from under the minimal one on format-v2,
+where two sessions ended early, to 2.2 times it.
+
+Between the hosts, with the limits of the measurement: a Codex trial's cost is an estimate,
+its tokens at the list price of its model, since Codex reports tokens and no cost; its wall
+time includes a download of about 60 MB at the start of each trial that a Claude Code trial
+does not have; the two hosts ran on different days, on stacks one engram version apart; and
+three trials a cell is a small sample. Within those limits: on the minimal config the two
+hosts score alike, and Codex's estimated cost is 0.2 to 0.4 times Claude Code's list cost; on
+the current config Claude Code keeps its score and Codex does not.
+
+Read plainly, it is F5's finding again and sharper on the second host: on tasks like these
+the stack's context and workflow add cost without adding score, and on Codex, run with no
+person to answer, a question the workflow asks can end the session.
 
 ## Codex review result
 
@@ -1053,17 +1098,47 @@ hierarchy above, not by this feature.
 
 ## Next
 
+**What the first version holds, by his answer of 2026-10-13.** Asked what enters the first
+version, the 1.0.0, he had four options: what is already installed, well finished (the one
+recommended); that and everything for several sessions; everything he asked for, with no date;
+or a trial in his other project first. He tapped "Todo lo que pedí, sin fecha" (the lead's
+transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 10519, 2026-10-13T09:18Z, read with
+`js-harness sessions --quote`). So nothing he ordered is cut to reach it, and it has no date:
+the open tasks of this map (`js-harness progress`), the defects in shipped behaviour that have
+no task yet, and what he ordered that has no design yet (the functions on demand and the
+switch of the Codex review among them, open decision 4) are all inside it. Which defects and
+which items those are is so far a list made by the lead's readers, sub-agents' claims that
+were not verified for this paragraph (the lead's relief file, lines 543 to 546); each enters
+this map as a task when it has been read in the code. Tagging still starts with that version
+(Decided, "Release source"). And nothing is frozen on the way to it: asked what is done with
+the ideas and improvements that appear meanwhile (his own enter and the rest is noted, the one
+recommended; everything keeps entering as today; everything is noted, his too), he tapped
+"Todo sigue entrando como hoy" (the same transcript, line 10609, 2026-10-13T09:25Z, read the
+same way). So an improvement that appears becomes a task of the first version, not a note for
+after it.
+
 Being built, each in a session of its own: the session channel
 (`odd/tasks/session-channel.md`), the gate log (`odd/tasks/gate-log.md`) and the rule hierarchy
 (`odd/tasks/rule-hierarchy.md`, current on the branch `feat/failures-register`). What is done
 of each is read in its document, under "Next step"; the order they come from, with its
 reasons, is under [Session channel](#session-channel). Also open:
 
-1. F6 Codex parity, paused by Sebastián since 2026-10-06 (`odd/tasks/codex-parity.md`, branch
-   `feat/codex-parity`, in the linked worktree `D:\js-harness-worktrees\codex-parity`): it
-   waits for his choice between running the trials of T7 still missing and closing it
-   without them (the count is below). Sebastián approved its plan and a staged spend on
-   2026-10-03: 2 smoke trials, then 15, then his go-ahead for the other 45.
+1. F6 Codex parity, paused by Sebastián on 2026-10-06 and closed by him on 13 of the 15
+   trials of T7 on 2026-10-12 (`odd/tasks/codex-parity.md`, branch `feat/codex-parity`, in the
+   linked worktree `D:\js-harness-worktrees\codex-parity`). Asked by the lead whether to close
+   with 13, run 15 new ones, or go back and run the two, he tapped "Cerrar con 13
+   (Recomendada)" (the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 9794,
+   2026-10-13T03:33Z, read with `js-harness sessions --quote`). The two not run are resolver
+   #3 and spec-drift #3 of `current` at `medium`. They could not join the same run as things
+   stand: the suite refuses to continue a results file recorded on another stack
+   (`evals/suite.mjs:751`, the message of `refusalOf`, `:329`); that branch's document records
+   codex-cli 0.160.0, gentle-ai 4.0.0 and engram 3.1.0 (`odd/tasks/codex-parity.md:1059`
+   there); and this machine answers codex-cli 0.162.0, gentle-ai 4.1.1 and engram 3.4.0 (each
+   `--version`, 2026-10-12). Putting the recorded versions back would have meant downgrading
+   programs over the memory store in use, which is what the question named. Its result is
+   written on those 13 ("F6 result") and its content is on `main` since 2026-10-13; nothing
+   more of it is paid for, and no task of it is open. Sebastián approved its plan and a staged
+   spend on 2026-10-03: 2 smoke trials, then 15, then his go-ahead for the other 45.
    Remote sessions, which he put before it that day, closed on 2026-10-04
    (`odd/tasks/remote-control.md`). The branch was brought up to `main` on 2026-10-04, so it
    holds the gate fix (`a3a1eb1`) without which a commit from a linked worktree can turn this
@@ -1073,8 +1148,14 @@ reasons, is under [Session channel](#session-channel). Also open:
    and reviewed, and merged on 2026-10-05 (#34): `node evals/suite.mjs --agent codex`
    runs the matrix, and `node evals/report.mjs --codex-results-dir evals/results/codex` sets the
    two hosts side by side, with a Codex trial's cost estimated at the list price of its model.
-   Slice 3 is on that branch, neither merged nor pushed: the 15 trials of T6 ran and T7 is
-   paused at 13 of its 15; its state is that branch's `odd/tasks/codex-parity.md`, "Next step".
+   Slice 3 reached `main` on 2026-10-13 as three commits of a branch cut from it,
+   `feat/codex-parity-close`: the login fix applied again on today's suite, the two results
+   files and the isolation proof byte for byte, and the documents; a merge of the old branch,
+   506 commits behind, would have been a code commit whose review covers everything `main`
+   brought (`odd/tasks/codex-parity.md`, Progress, 2026-10-13). Still his, and the one thing
+   left: what is kept of the raw trial output that lives only on this machine (`evals/runs/`
+   in the old worktree, and `D:\js-harness-worktrees\codex-parity-t3-raw`); until he says,
+   the old branch and its worktree stay as they are.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.
 3. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
@@ -1183,7 +1264,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    cuando este investigativo o analisis y cuando ya llegue la hora de codigo y asi a la inversa
    cuando se vuelva a analisis e inveastigacion desactivar osea que sea a demanda, que te
    parece?" So: the harness serves a project with code and one without, and what serves only
-   code is on demand, in both directions. It ends in a question, so the how is not settled.
+   code is on demand, in both directions. It ended in a question, and he answered the lead's reply to it at 19:42 (line 8315, read
+   with `sessions --quote`): "listo entonces apliquemoslo asi". That is a yes to the direction
+   below and to its when; it is not a yes to a design, which is still owed with its two reviews.
    What the lead answered him, the lead's reading and not a design: no watcher of the
    conversation that flips a mode, since the hook was such a guesser (33 of 55 prompts, the
    evidence above); each function pays only when the work calls for it, as three already do
@@ -1192,6 +1275,14 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    demand, its paste off and the tool asked; what is chosen only when a session starts (the
    TypeScript server) chosen from the project's files at `init`, with a switch in the manifest;
    `install` preparing nothing of code in a project that has none until the first appears.
+   **The Codex review is one of those functions, by his order** (line 8758, read with
+   `sessions --quote`; he sent it while the lead worked): "tambien quiero que la funcionalidad
+   de revision con Codex se pueda desactivar ya que por ejemplo si este harnes lo utiliza otra
+   persona o en otro proyecto y no tengo para pagar la el plan para la revision entonces se
+   desactiva y dejamos solo la revision del mismo claude peroque hace gentle-ai". So a project
+   can turn the Codex review off and keep gentle-ai's alone. Today the push check refuses a
+   branch whose code commits no Codex record covers, so the switch has to reach that check
+   too. Not designed, not assigned; it joins the candidate above.
    When: after JH 8's cut of the review command is on `main`; not assigned. A third sample of
    the switch, the lead's claim: his prompt of line 8250 carries no attachment of the hook,
    where the one of line 8161 had one at line 8163.
@@ -1204,9 +1295,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    the account's minutes ("Session channel", the order, item 2).
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks
    (`odd/tasks/codex-review-lean.md`, "Proposal for the Codex plugin").
-9. F6: the trials of T7 still missing, or closed without them (Next, item 1, with the count).
 
-Closed: the F5 spend ceiling (none; see Decided, Eval spend).
+Closed: the F5 spend ceiling (none; see Decided, Eval spend). F6's missing trials: closed
+without them, on 13 of 15, by his answer of 2026-10-12 (Next, item 1, with its line).
 
 ## Risks
 
