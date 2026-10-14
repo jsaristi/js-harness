@@ -373,7 +373,7 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
 document it works on and what to read there, so nobody pastes a resume prompt. It writes
-nothing and always exits 0. `resume --pause` is the hook of the context pause.
+nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet.
 
 ```console
 $ js-harness resume --hook < hook-input.json
