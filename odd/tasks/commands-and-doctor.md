@@ -30,7 +30,8 @@ command prints, which is the harness's whole bet.
   two rows in `bin/lib/stack.mjs` (`memory-rules`, `session-classes`); their tests; the help text and
   docs of what changes. Each file another session holds is cleared with the orchestrator first.
 - Out: `odd/tasks/rule-hierarchy.md` and `odd/tasks/session-channel.md` (their sessions put the
-  pointers); `AGENTS.md`; the `install` flag that writes `crossSessionInbound` until he says so (S4).
+  pointers); `AGENTS.md`. The `install` flag that writes `crossSessionInbound` is in since his
+  answer (L3), with `bin/install.mjs` and `bin/lib/manifest.mjs`.
 
 ## Constraints
 - A writing command refuses before it writes anything, exit 2 and the unknown flag named — because
@@ -137,8 +138,9 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   is merged in. Route: inline.
 - [ ] T3 (S2; from rule-hierarchy T5) The row `citations`, INFO. Route: inline.
 - [ ] T4 (S3; from rule-hierarchy T6) The row `memory-rules` of `doctor`. Route: inline.
-- [ ] T5 (S4; from session-channel T7) The row `session-classes` of `doctor`; the `install` flag only
-  on his word. Route: inline.
+- [ ] T5 (S4; from session-channel T7) The row `session-classes` of `doctor`; and the explicit
+  `install` flag that writes `crossSessionInbound: "accept"`, recorded and undone by `uninstall`
+  (his answer, L3). Route: inline.
 
 ## Log
 - L1 — The opening of this session, by the orchestrator "JH ORQ · js-harness", 2026-10-14 (a claim,
@@ -155,5 +157,50 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   orchestrator before any edit, since `update.mjs`, `check.mjs` and `resume.mjs` belong to other
   sessions.
 
+- L3 — His answer to S4's question, tapped, the orchestrator's transcript `ffe99ebf` line 3298
+  (2026-10-14T08:05:52Z), read with `sessions --quote`: question "¿`install` tiene que traer una
+  opción explícita que escriba en tu configuración de Claude Code que se acepten los mensajes entre
+  sesiones (crossSessionInbound: "accept"), anotada en el manifiesto y deshecha por `uninstall`?";
+  answer "Sí, con opción explícita (Recomendada)". So T5 builds the flag too. The orchestrator
+  cleared T1, T4 and T5 (hunks in `update.mjs` and `resume.mjs` limited to the parser swap and the
+  pinned test); T2 and T3 touch `bin/check.mjs` only after JH 8's pull request 121 (the WSL gate)
+  is merged and `origin/main` is merged here.
+- L4 — T1 decisions: `update` writes nothing, so it keeps ignoring unknown flags (its pinned test
+  stays, retitled to name only `update`); `upgrade`, which shares its parser, refuses. A hook mode
+  (`doctor --hook`, `resume --hook`) refuses too, before its fail-open part: `install` writes only
+  `--hook`, so an unknown flag there means the copy on the path is older than the install, and a
+  `SessionStart` hook's exit 2 shows its line without stopping the session. RED observed before the
+  fixes: 9 of 32 rows of `bin/writing-flags.test.mjs` failed.
+
+- L5 — 2026-10-14 03:37 HPS: T1, T4 and T5 built in the working tree, not committed: a code commit
+  runs the gate, and no gate turn is taken before the WSL gate is on `main`. Evidence, each file run
+  alone: `bin/writing-flags.test.mjs` 32/32 (RED 9 before), `bin/lib/args.test.mjs` 5/5, the new
+  codex-review test RED without the fix and GREEN with it (it runs in
+  `bin/codex-review.second.test.mjs`, the file's second half), `bin/lib/memory-rules.test.mjs` 5/5,
+  `bin/lib/session-classes.test.mjs` 4/4, `bin/lib/manifest-settings.test.mjs` 8/8,
+  `bin/install-session-messages.test.mjs` 3/3 (RED 3 before), the two new `doctor` tests RED without
+  the rows; and the touched suites green: doctor 54, doctor-hook 11, tui 76, stack 123, js-harness 33,
+  install 70, manifest 122, update 46, resume 77, remote 111. Not yet run whole after the last change:
+  the two halves of codex-review's tests (four minutes each; a first run of the second half failed 5,
+  a later run of both halves failed only the `--part-lines` case the helper then fixed: the gate's
+  run settles it).
+  On this machine: `memory-rules` is `stale` with 29 notes (28 `feedback`, 1 `project`; the 31 notes
+  carry their type under `metadata:`, none is `user`), and `session-classes` is `mismatch` (26
+  sessions of the last 7 days bypass, 1 asks; `crossSessionInbound` not set). Running the install
+  flag on his machine is his, not this session's.
+  Decisions: the rows put their gap in the `claude` cell, as `hook-commands` does (`stale` for a rule
+  note, `mismatch` for the classes); both run in the session-start hook; both read the main
+  checkout's folder, since Claude Code keeps one memory and one sessions folder per repository. The
+  two classes are the host's (https://code.claude.com/docs/en/cross-session-messaging, read
+  2026-10-14 through a docs reader): sessions that bypass permission prompts, and every other; only
+  the user settings are read, not managed or `--settings`. The protocol "recording a new rule" that
+  the `memory-rules` fix names is JH 7's skill, not shipped yet: the fix line carries its order (a
+  check, else a line of `AGENTS.md`, else a protocol) until it is. `uninstall`'s result has
+  `settingsRestored` and `settingsKept` only when the manifest records a setting, so the fifteen tests
+  of `bin/lib/manifest.test.mjs` that compare the whole result stay as they are.
+
 ## Next step
-Send the orchestrator the file list and the S4 question; on its clearance, T1 test first.
+When `origin/main` holds the WSL gate: merge it, run the gate, commit T1, T4 and T5 as three work
+units (T5 is Risk item 2, a security setting written on a flag, so it gets an independent verifier),
+then gentle-ai's assessment and Codex per AGENTS.md. After JH 8's pull request 121: T2 and T3 in
+`bin/check.mjs`.

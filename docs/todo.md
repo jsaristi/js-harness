@@ -58,8 +58,8 @@ matters, who holds it, and where it was seen.
 
 - The practice run with a real host session (practice-project T5): needed before 1.0.0, no session
   holds it. The orchestrator places it.
-- Every writing command refuses an unknown flag (rule-hierarchy T4): the one task a first user would
-  meet; its order is not set. JH 7's feature.
+- Every writing command refuses an unknown flag (rule-hierarchy T4): placed on 2026-10-14 as T1 of
+  `odd/tasks/commands-and-doctor.md` (session JH 12), with rule-hierarchy T5-T6 and session-channel T7.
 - An installed project's own rules: the last item he ordered that has no design; it waits behind the
   README in JH 7's queue and is on the path to the date. The orchestrator decides who takes it.
 - Which model the native gentle-ai review used (his answer of 2026-10-12, line 9776): read it from JH
