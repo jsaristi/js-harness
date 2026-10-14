@@ -186,3 +186,19 @@ test('a command the runner stops at its bound is said to have timed out, and one
   assert.ok(!own.stderr.includes(TIMED_OUT_MARK), own.stderr);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// Codex, 2026-10-14, on adae7c8..f5cbaf4: whole seconds called an exit 124 of the command's own, near the
+// bound, a timeout. Five runs, since a rounding fault shows in most of them and not in all.
+test('a command that exits 124 by itself just before its bound is never said to have timed out', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
+  const source = path.join(root, 'tree');
+  fs.mkdirSync(source);
+  const runner = path.join(root, 'runner.sh');
+  fs.writeFileSync(runner, runnerScript({ source, mirror: 'm', node: path.dirname(process.execPath), command: 'sleep 0.7; exit 124', held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds: 1 }));
+  for (let run = 0; run < 5; run += 1) {
+    const own = spawnSync('bash', [runner], { encoding: 'utf8', env: { ...process.env, HOME: root } });
+    assert.equal(own.status, 124);
+    assert.ok(!own.stderr.includes(TIMED_OUT_MARK), `run ${run}: ${own.stderr}`);
+  }
+  fs.rmSync(root, { recursive: true, force: true });
+});

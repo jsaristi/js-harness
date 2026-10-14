@@ -42,10 +42,11 @@ high
 Anything on his Windows machine outside the js-harness home (`.wslconfig`, services, antivirus).
 
 ## Resume here
-- 02:23 · T2b committed (`adae7c8`); Codex over `3f59bb2..adae7c8` recorded, incorrect, four P2 (L8);
-  T2c, their correction, written with its tests, green, in its commit turn (`t2c-turn.sh`,
-  `t2c-msg.txt`). Then Codex over `adae7c8..<T2c>` once, then the pull request.
-- After 109 is on `main`: `main` merged in and T3, one real gate in WSL2.
+- 02:59 · pull request 121 is open (head `d85d46f`, a clean merge of `main` `9546fb7` whose gate ran in
+  WSL2: T3). T2d, Codex's two P2 on `adae7c8..f5cbaf4` (L11), written with its tests, green, in its
+  commit turn; then Codex over `d85d46f..<T2d>` once, the push to 121, and the orchestrator merges.
+- Then: the second guard probe (`codex exec review`, at most 150,000 input tokens; the scripts are
+  in the scratchpad's `guard` folder of the session before its restart), then the ticket (part 3).
 
 ## Specs
 - S1 — His answer, `ffe99ebf-72fb-48da-a79b-e7db21a20b3f` line 1350 (2026-10-14T05:41Z): "Se instala
@@ -101,8 +102,10 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
       project opts in, `--checksum`, `--delete-excluded` and the paths left in the mirror, a `flock` on
       the mirror · inline · test first · `adae7c8`; gentle-ai `under_budget`; Codex over
       `3f59bb2..adae7c8`: incorrect, four P2 (L8)
-- [ ] T2c · S1 · Codex's four P2 (L8) · inline · test first
-- [ ] T3 · S2 · the switch file on this machine (after the orchestrator has it), one gate measured
+- [x] T2c · S1 · Codex's four P2 (L8) · inline · test first · `f5cbaf4`; gentle-ai `under_budget`;
+      Codex over `adae7c8..f5cbaf4`: incorrect, two P2 (L11)
+- [ ] T2d · S1 · Codex's two P2 (L11) · inline · test first
+- [x] T3 · S2 · the switch file on this machine (after the orchestrator has it), one gate measured
       through it, docs
 - [ ] T4 · S2 · `.wslconfig` text to the orchestrator; the run per merged batch named where merges
       are made
@@ -170,3 +173,14 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
   policy"), where `codex exec review` had run `node --test` the same night. Stopped, told the
   orchestrator; no second probe. Part 2 stays a candidate until another probe is granted, best through
   `exec review` itself.
+- L11 · 02:52 to 02:57 · T2c committed `f5cbaf4` (its first commit died with the session's restart at
+  about 02:26 after its gate had passed; the second ran the gate again and committed). Codex over
+  `adae7c8..f5cbaf4`, 111,495 input tokens (80,128 cached; allowance 315,000): incorrect (0.98), two P2,
+  both real: the mark of a timeout was taken without `timeout`'s exit status, so a sensor that passed
+  and printed it would fail; the runner measured the command in whole seconds, so an exit 124 of its
+  own near the bound read as a timeout. **T3:** the clean merge of `main` `9546fb7` (with pull request
+  109's fix of the ports test) ran its whole gate in WSL2 and passed, "npm run test passed in WSL2
+  (Ubuntu, its mirror synced in 4.4 s)", the turn from 02:54:33 to 02:56:58, merge included: the first
+  real gate in WSL2. Pull request 121 opened on it. T2d: the mark counts only beside exit 124 and alone
+  on its line; the runner measures in nanoseconds. RED: the two new tests fail (one in WSL2); GREEN: 17
+  of 17 in `bin/check.test.mjs` (by name), 15 of 15 in WSL2.

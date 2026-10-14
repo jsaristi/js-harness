@@ -4605,3 +4605,16 @@ test('a sensor whose time ran out before WSL2 synced its mirror runs on Windows,
   const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
   assert.equal(end.sensors[0].ranIn, undefined);
 }));
+
+// Codex, 2026-10-14, on adae7c8..f5cbaf4: the mark alone turned a sensor that passed into a timeout.
+test('the mark of a time that ran out counts only beside the exit status of timeout, alone on its line', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const printed = `${SYNCED_MARK}800 ms\na test printed: ${TIMED_OUT_MARK}\n${TIMED_OUT_MARK}\n`;
+  const spawn = spawnsInTurn({ status: 0, signal: null, stdout: '', stderr: printed }, { status: 1, signal: null, stdout: '', stderr: printed });
+  const passed = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(passed.code, 0, passed.output);
+  assert.match(passed.output, /^PASS {2}tests {2}npm run test passed in WSL2 /m);
+  const failed = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(failed.code, 1);
+  assert.match(failed.output, /^FAIL {2}tests {2}npm run test exited 1 in WSL2 \(Ubuntu\)$/m);
+}));

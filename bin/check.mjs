@@ -644,7 +644,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
       else fellBack = result.error?.code === 'ETIMEDOUT' ? 'its time ran out before the mirror was synced' : notReached(output, result);
       // The bound inside the distribution is a little short of this one, and stops the command first:
       // what the runner says of it is a time that ran out, as this one is (Codex, 2026-10-14).
-      if (ranIn && !result.error && output.includes(TIMED_OUT_MARK)) {
+      // Beside `timeout`'s own exit status and alone on its line: a test may print the mark, and a sensor
+      // that passed is never a timeout (Codex, 2026-10-14).
+      if (ranIn && !result.error && result.status === 124 && output.split(/\r?\n/).includes(TIMED_OUT_MARK)) {
         result = { ...result, error: Object.assign(new Error(`timed out after ${sensorTimeout} ms in WSL2`), { code: 'ETIMEDOUT' }) };
       }
     } else if (route) {
