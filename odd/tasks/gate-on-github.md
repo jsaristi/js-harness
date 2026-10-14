@@ -432,7 +432,7 @@ the real runs once they exist (Done when), so the month's use is read and not gu
       readers still out.
 - [x] T4 · Two independent readers attack the design (opus, effort high); their findings
       taken or answered under "What the readers changed". Route: delegated, read-only.
-- [ ] T5 · The five failures of Linux that `main` still holds, test first, through the local
+- [x] T5 · The five failures of Linux that `main` still holds, test first, through the local
       gate, with gentle-ai's assessment and a Codex record: `evals/ports.mjs` names a process
       by its image (`/proc/<pid>/exe`), and three tests stop expecting Windows' answers
       (`bin/lib/payload.test.mjs`, `evals/codex-isolation-probe.test.mjs`). Route: inline (one
@@ -486,19 +486,64 @@ the real runs once they exist (Done when), so the month's use is read and not gu
   `evals/ports.mjs:168` answered `MainThread` for a Node process, so the listener is "not
   engram: left alone"). The orchestrator was asked whether any of those files is another
   session's before they are edited.
+- 2026-10-13 · **His answer on visibility:** "Se queda privado", tapped, to "¿Cuándo pensás hacer
+  público el repositorio js-harness? (Solo tu intención, para orientar el diseño; no publica
+  nada.)", among "Apenas esté revisado y limpio | Recién en la versión 1.0.0 | Se queda privado |
+  Todavía no lo sé" (the orchestrator's transcript, line 13033, read here with `sessions
+  --quote`). It replaces his words of 2026-09-26. So the design is for a private repository
+  with no card: Linux alone, 2,000 minutes a month for the whole account, and no road here
+  counts on a public repository (R3's "or nothing in a public repository" no longer applies).
+- 2026-10-13 · **T5, the five failures of Linux, `75532ff`.** RED, in the gate's line (asked
+  19:17:40, ended 19:34:30): the two new tests of `evals/ports.test.mjs` failed for the name
+  (`name: ''` where `node` was expected; `ps` asked where no call was owed), the third new one
+  passed, as the fallback already existed. One turn (`t5-turn.log`, taken 20:03:04): the four
+  test files green at 20:05:20, then the commit, whose whole gate passed (`PASS  tests`,
+  committed 20:18:36). The three test-only fixes have no RED on this machine: their RED is the
+  trial's log (`t9-ubuntu.log`), and their GREEN on Linux is the first run on GitHub.
+  Risk: item 2 (the name is what `killByPort` may kill by).
+- 2026-10-13 · **T6, the workflow and its test, `83876f0`.** RED at 20:19:04: 7 of 7 of
+  `scripts/gate-workflow.test.mjs` fail with no workflow; GREEN at 20:19:06, 7 of 7. The
+  commit waited 50 minutes for its turn (asked 20:19:23, ended 21:09:18) and its whole gate
+  passed. Not built, by choice: the count of skipped tests on a green run, since a passed
+  sensor prints nothing of the suite (`bin/check.mjs:617-626`); it is read from the run made
+  red on purpose, and a row that carries the counts is a proposal for JH 8's file.
+  Risk: item 5 (a workflow is delivery), held by its test and both reviews.
+- 2026-10-13 · **Both reviews of the slice `75b0ceb..83876f0`, in one turn**
+  (`t6-review-turn.log`, 21:13:39 to 21:16:06). gentle-ai assessed it high risk (`shell_source`
+  in the workflow), so its review was due: started with his standing consent, lineage
+  `review-5ba00685b483e51f`, lenses risk and reliability, captures of 52.7 s and 83.8 s,
+  **approved and acknowledged**. Codex on `6928573..83876f0`: "the patch is correct (confidence
+  0.86)", 181,330 input tokens (125,440 cached) against an allowance of 313,200 and a plan of
+  about 140,000; recorded. Five findings of gentle-ai, all informational, none taken into this
+  slice: (1, both lenses, a warning) on Linux a process started through a wrapper script has
+  the script's name as `comm` and the interpreter as its image, so an engram launched that way
+  would no longer be named `engram`: `killByPort` would leave it alone (the safe side) and
+  `findProcesses('engram')` would miss it. Nothing shows engram is launched so (it is a native
+  binary); kept as a follow-up to settle with the first real Linux runs. (2) the workflow test
+  reads the file by shape, not as YAML; (3) the payload expectation mirrors the code's rule;
+  (4) the probe test asserts nothing about `HOMEDRIVE` off Windows.
+- 2026-10-13 · **From the orchestrator, for T7** (its claims): the files of T5 were free; a
+  quote and one test file under half a minute may run beside a gate, a whole suite, a measure,
+  a board read and a reviewer may not; the local gate took 533 s alone in the lock on a quiet
+  machine and 805 s loaded, 13 to 19 minutes tonight; and what the exchange must say: what
+  brings a run under 180 s (3 billed minutes), whether a run can stop at its first red, the
+  month when the run that stands in for a local gate is the one that matters, what a session
+  does from the day the quota ends, a count of minutes used this month that a session can read
+  without the `user` scope, and a cap of our own before the account's quota. The quota's reach
+  was told to him (ten private repositories, four with workflows) and he did not change his
+  answer.
 
 ## Next
-In the order the orchestrator set after his yes: T5 (the five failures of Linux), then T6 (the
-workflow and its first runs), then T7 (the design of the exchange, which he asked to be told
-of). The orchestrator is told before the first push that starts a run.
+T6, what is left: the pull request, its first run on GitHub quoted with its minutes, and one
+run seen red (on a branch of its own, never merged, if the first run is not red by itself).
+Then T7, the design of the exchange, which he asked to be told of.
 
 ## Resume here
-Worktree `D:/js-harness-worktrees/github-gate`, branch `feat/gate-on-github`, replayed on
-`main` at `75b0ceb`. T1 to T4 are done. T5 is in the working tree, not committed: the new
-tests of `evals/ports.test.mjs` are written and their RED run waits for its turn at the gate
-(`node bin/js-harness.mjs gate -- node --test evals/ports.test.mjs`); `evals/ports.mjs` is
-not changed yet (the design is in T5 and in the tests: the name of a process on Linux is the
-basename of `/proc/<pid>/exe`, `ps` and `ss` kept when the link cannot be read, through an
-injected `readlink`); `bin/lib/payload.test.mjs` and `evals/codex-isolation-probe.test.mjs`
-hold their test-only fixes. Then one commit through the gate, gentle-ai's assessment and
-`js-harness codex-review --base <boundary>` inside the rate, and T6.
+Worktree `D:/js-harness-worktrees/github-gate`, branch `feat/gate-on-github`. T1 to T5 are
+done; T6 is committed (`83876f0`) and both reviews of `75b0ceb..83876f0` passed. The
+orchestrator was told before the first push. If no pull request of this branch exists (`gh pr
+list --head feat/gate-on-github`): merge `origin/main` (documents only), push, open it with
+what the orchestrator asked to read in it (the two code commits, each review's range and
+outcome, the run's link and billed minutes, the state of the head). If it exists: read its
+run (`gh run list --workflow gate --branch feat/gate-on-github`), write the run in Progress,
+and go on to T7.
