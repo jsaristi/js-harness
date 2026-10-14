@@ -2834,7 +2834,20 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-14 00:15, THE NEWEST OF ALL. Slice (c) on `feat/question-texts`: the
+      STATE AT 2026-10-14 01:10, THE NEWEST OF ALL: PAUSED, by his order (the lead's
+      transcript `ffe99ebf`, line 1647, sent while it worked, read with `sessions --quote`, exit
+      0: "si pero la idea es pausar todo precisamente para hacer unicamente esta mejora
+      implementarla y ahi si seguir con lo siguiente"); only the faster check goes on (JH 8 and
+      JH 10), by the lead's message. Slice (c) is three commits on `feat/question-texts`, each
+      reviewed: `13b07b5` (Codex "correct", 0.93), `cb09dc0` (one P2, true), `db4c44e` its fix
+      (Codex "correct", 0.95); the tree is clean and nothing is pushed. The merge of `main`
+      (`3f59bb2` at 01:04) and `check --push` were queued at the gate, lost to the machine's
+      reboot, queued again and cancelled for the pause, with the gate's waiting process
+      stopped. ON RESUME: queue that turn again (`queue-merge.sh` in this session's
+      scratchpad), and on its exit 0 with a clean tree push, open the pull request with the
+      body `pr-body-question-texts.md` there, and send its number to the lead; then the row of
+      the Codex CLI in `doctor`.
+      STATE AT 2026-10-14 00:15 (the state before the one above). Slice (c) on `feat/question-texts`: the
       first unit is `13b07b5`, `main` merged as `4cd0eca`; the second unit (a stopped session,
       Progress 00:15) is the commit that carries this text. NEXT: `check --push`, push, pull
       request, its number to the lead; then the row of the Codex CLI in `doctor` (planned, the
