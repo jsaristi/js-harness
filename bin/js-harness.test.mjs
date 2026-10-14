@@ -80,6 +80,14 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
   assert.match(result.stdout, /codex-review/);
 });
 
+test('functions is listed in --help and wired through the dispatcher', () => {
+  assert.match(run(['--help']).stdout, /functions {3}Show each function this project can turn off and on/);
+  const result = run(['functions', '--no-such-flag']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /unknown argument: --no-such-flag/);
+  assert.match(result.stderr, /Usage: js-harness functions/);
+});
+
 // R3-dispatch-untested: the command is wired through the real dispatcher, not only importable.
 test('codex-review without --base exits 2 with its usage through the dispatcher', () => {
   const result = run(['codex-review']);
