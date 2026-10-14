@@ -9,13 +9,14 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
-import { ruleHere, ruleOf } from './lib/rules.mjs';
+import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 
 const USAGE =
   'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--timeout <minutes>] [--cwd <dir>] | goal <file> [--cwd <dir>] | modes <file> [--task <id>] [--cwd <dir>]';
 
-// Each done-when command may run this long, unless `run --timeout <minutes>` says otherwise.
-const DEFAULT_TIMEOUT_MINUTES = 30;
+// Each done-when command may run this long, unless `run --timeout <minutes>` says otherwise: the declared
+// rule `contract-run-timeout` (bin/lib/rules-data.mjs).
+export const DEFAULT_TIMEOUT_MINUTES = ruleValue('contract-run-timeout', 'minutes');
 // The `js-harness.mjs` beside this file: the one that is running, whatever `js-harness` is on PATH.
 const RUNNING_HARNESS = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 
