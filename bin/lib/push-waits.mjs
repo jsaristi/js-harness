@@ -5,11 +5,19 @@
 import { spawnSync } from 'node:child_process';
 import { checkCodexReviews } from '../check.mjs';
 
-/** What git or gh answered, trimmed, or `null` when it failed. */
+/** The milliseconds git or gh is given for one answer before it is stopped. A gh that hangs on the network or
+ * on a credential helper would otherwise hold the gate before any bound of its own applies (Codex,
+ * 2026-10-14); stopped, it is an answer that could not be had, which refuses nothing. */
+export const ANSWER_TIMEOUT_MS = 10_000;
+
+/** `run`, a spawnSync, with every call given `ANSWER_TIMEOUT_MS`. */
+const bounded = (run) => (command, args, options) => run(command, args, { ...options, timeout: ANSWER_TIMEOUT_MS });
+
+/** What git or gh answered, trimmed, or `null` when it failed or was stopped at its timeout. */
 function answer(run, command, args, cwd) {
   let result;
   try {
-    result = run(command, args, { cwd, encoding: 'utf8', windowsHide: true });
+    result = bounded(run)(command, args, { cwd, encoding: 'utf8', windowsHide: true });
   } catch {
     return null;
   }
@@ -17,9 +25,11 @@ function answer(run, command, args, cwd) {
   return String(result.stdout ?? '').trim();
 }
 
-/** A command line that pushes or merges: the turn a waiting push is no reason to refuse. */
+/** A command line that pushes or merges: the turn a waiting push is no reason to refuse. The command has to
+ * be one the shell runs, at the start of the line or after `&&`, `||`, `;`, `|` or `(`: named in an
+ * argument (`echo git push && node --test`) it runs nothing of the kind (Codex, 2026-10-14). */
 export function isPushOrMerge(commandLine) {
-  return /\bgit\s+(?:-C\s+(?:"[^"]*"|'[^']*'|\S+)\s+)?(?:push|merge)\b/.test(commandLine) || /\bgh\s+pr\s+merge\b/.test(commandLine);
+  return /(?:^|[;&|(\n])\s*(?:git\s+(?:-C\s+(?:"[^"]*"|'[^']*'|\S+)\s+)?(?:push|merge)|gh\s+pr\s+merge)(?:\s|$)/.test(commandLine);
 }
 
 /** A path as one word of the command line printed for a person to run. */
@@ -28,8 +38,9 @@ const pathWord = (dir) => (/[\s"'&|;<>()]/.test(dir) ? `"${dir}"` : dir);
 /** `null`, or the push that waits in the worktree at `cwd`: `{ branch, count, pullRequest, command }`.
  * One waits when all of these hold, asked in this order so that the network is asked last and only then:
  * - `HEAD` is a branch, which has a remote ref (its upstream, or `<remote>/<branch>`): it was pushed once;
- * - the branch holds `count` commits that ref does not. Each passed its gate when it was made, since the
- *   pre-commit hook runs the gate;
+ * - the branch holds `count` commits that ref does not, and the ref is one of its ancestors, so the push is a
+ *   fast-forward (a branch that came apart from its remote one is refused at the push: Codex, 2026-10-14).
+ *   Each commit passed its gate when it was made, since the pre-commit hook runs the gate;
  * - the pre-push check of the Codex records (`checkCodexReviews`) accepts the head, so a push goes now;
  * - `gh` lists an open pull request for the branch.
  * Anything that cannot be told is no wait: a guard must never stop the gates of a machine. `deps.git`,
@@ -45,9 +56,10 @@ export function pushWaiting(cwd, { git = spawnSync, gh = spawnSync, codexReviews
   if (!ask('rev-parse', '--verify', '--quiet', tracked)) return null;
   const count = Number(ask('rev-list', '--count', `${tracked}..HEAD`));
   if (!(count > 0)) return null;
+  if (ask('merge-base', '--is-ancestor', tracked, 'HEAD') === null) return null;
   let accepted;
   try {
-    accepted = codexReviews(cwd, 'HEAD', { spawn: git, remote }).pass === true;
+    accepted = codexReviews(cwd, 'HEAD', { spawn: bounded(git), remote }).pass === true;
   } catch {
     return null;
   }

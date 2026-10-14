@@ -1307,7 +1307,9 @@ function branchWithUnpushedCommit(dir, { code = false } = {}) {
  * fails as a `gh` that is not logged in does when `open` is a number, its exit code. */
 function ghWith(open) {
   const gh = (command, args, options) => {
-    gh.asked.push({ command, args, cwd: options?.cwd });
+    gh.asked.push({ command, args, cwd: options?.cwd, timeout: options?.timeout });
+    // What spawnSync answers when its timeout stopped a `gh` that hung on the network.
+    if (open === 'hangs') return { status: null, signal: 'SIGTERM', stdout: '', stderr: '', error: Object.assign(new Error('spawnSync gh ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
     if (typeof open === 'number') return { status: open, stdout: '', stderr: 'To get started with GitHub CLI, please run:  gh auth login' };
     return { status: 0, stdout: JSON.stringify(open), stderr: '' };
   };
@@ -1329,7 +1331,7 @@ test('gate refuses a turn while a commit that a push takes now waits on a branch
   const gh = ghWith(OPEN);
   const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'sh', 'measure.sh'], {}, { spawn: spawned, gh, takeGateLock: () => assert.fail('the lock was asked for') });
   assert.deepEqual([code, said, spawned.asked.length], [GATE_NOT_RUN, pushFirst(dir), 0]);
-  assert.deepEqual(gh.asked, [{ command: 'gh', args: ['pr', 'list', '--head', 'feat/x', '--state', 'open', '--limit', '1', '--json', 'number,url'], cwd: dir }]);
+  assert.deepEqual(gh.asked, [{ command: 'gh', args: ['pr', 'list', '--head', 'feat/x', '--state', 'open', '--limit', '1', '--json', 'number,url'], cwd: dir, timeout: 10_000 }]);
   const [gate] = gatesOf(readGateLog(home).events);
   assert.equal(gate.refused?.reason, 'push waits', JSON.stringify(gate));
 }));
@@ -1340,6 +1342,16 @@ test('gate runs the push itself, and a merge, while that push waits', withHome(a
     const spawned = ranWith(0);
     const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', command], {}, { spawn: spawned, gh: ghWith(OPEN) });
     assert.deepEqual([code, said, spawned.asked.length], [0, [], 1], command);
+  }
+}));
+
+// Codex, 2026-10-14: a push or a merge named in an argument is no push, and its turn is refused like any other.
+test('gate refuses a turn that only names a push or a merge in an argument while that push waits', withHome(async (home, dir) => {
+  branchWithUnpushedCommit(dir);
+  for (const command of ['echo git push && node --test', 'node --test --test-name-pattern "gh pr merge"']) {
+    const spawned = ranWith(0);
+    const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', command], {}, { spawn: spawned, gh: ghWith(OPEN) });
+    assert.deepEqual([code, said, spawned.asked.length], [GATE_NOT_RUN, pushFirst(dir), 0], command);
   }
 }));
 
@@ -1368,9 +1380,18 @@ test('gate runs a turn when the branch has no open pull request, when gh cannot 
   const none = ghWith(OPEN);
   assert.deepEqual(await runs(none), [0, [], 1]);
   assert.deepEqual(none.asked, [], 'gh is asked last, and only when a push waits');
-  const { head } = branchWithUnpushedCommit(dir);
+  const { pushed, head } = branchWithUnpushedCommit(dir);
   assert.deepEqual(await runs(ghWith([])), [0, [], 1]);
   assert.deepEqual(await runs(ghWith(4)), [0, [], 1]);
+  // A gh that hangs is stopped by its timeout and refuses nothing (Codex, 2026-10-14).
+  assert.deepEqual(await runs(ghWith('hangs')), [0, [], 1]);
+  // A branch that has come apart from its remote one: the push printed would be refused as no fast-forward,
+  // so none waits (Codex, 2026-10-14).
+  const elsewhere = git(dir, 'commit-tree', `${pushed}^{tree}`, '-p', pushed, '-m', 'docs: pushed from another clone');
+  git(dir, 'update-ref', 'refs/remotes/origin/feat/x', elsewhere);
+  const diverged = ghWith(OPEN);
+  assert.deepEqual(await runs(diverged), [0, [], 1]);
+  assert.deepEqual(diverged.asked, []);
   git(dir, 'update-ref', 'refs/remotes/origin/feat/x', head);
   const pushedAll = ghWith(OPEN);
   assert.deepEqual(await runs(pushedAll), [0, [], 1]);

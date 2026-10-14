@@ -73,3 +73,11 @@ Nothing planned: both orders come from the lead with his word quoted.
   107.6 s, peak memory 1,144 MB of 3,917; pair 1: 238.8 s and 242.7 s, slower than two in a row
   (215 s). Decision: the lock keeps one slot, the WSL sensors being bound by the processor and not by
   memory; the pairs are not run again.
+- **L3** (2026-10-14): commit `9ed9f60` (T1-T3); its gate passed in WSL2 after one fix of the bound's
+  real test, which ran `node` with no PATH there (exit 127). gentle-ai's assessment: medium,
+  `under_budget`, no review due. Codex reviewed `8aa93c3..9ed9f60` (218,153 input tokens, allowance
+  332,640): three P2, all taken in one batch, test first: the guard's git and gh calls get a 10 s
+  timeout and a gh that hangs refuses nothing; a branch that came apart from its remote one waits for no
+  push (the push printed would not be a fast-forward); a push or a merge counts only as a command the
+  shell runs, not as words in an argument (`echo git push && node --test` is refused). The recheck is
+  Codex on the fix's range alone; a new finding there is a follow-up, not another round.
