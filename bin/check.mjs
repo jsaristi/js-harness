@@ -18,7 +18,7 @@ import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
-import { innerSeconds, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
+import { innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
 
@@ -321,6 +321,19 @@ export function discoverSameTree(cwd) {
   return { skip: false, error: `${SAME_TREE_SHAPE}; it is ${JSON.stringify(declared.sameTree)}` };
 }
 
+/** Whether the project lets the sensors of a gate's turn run in WSL2 where its machine opts in
+ * (`./lib/gate-wsl.mjs`): `harness.json` `"sensorsInWsl": true`. `{ value }`, false when it says nothing,
+ * or `{ value: false, error }` for a value that is not `true` or `false`. A project says it because the
+ * mirror runs its suite on Linux, without `node_modules`: a suite that cannot run there must not be
+ * moved by a switch file that another project's needs put on the machine. */
+export function discoverSensorsInWsl(cwd) {
+  const { declared, error } = readHarness(cwd);
+  if (error) return { value: false, error };
+  if (!declared || !('sensorsInWsl' in declared)) return { value: false };
+  if (typeof declared.sensorsInWsl === 'boolean') return { value: declared.sensorsInWsl };
+  return { value: false, error: `harness.json "sensorsInWsl" must be true or false; it is ${JSON.stringify(declared.sensorsInWsl)}` };
+}
+
 /** `iso` as a row says it: the local day and time, to the minute. */
 function rowTime(iso) {
   const at = new Date(iso);
@@ -440,6 +453,16 @@ function treeRows(before, after) {
   if (appeared.length === 0) return [];
   const [paths, them] = appeared.length === 1 ? ['1 untracked path', 'it'] : [`${appeared.length} untracked paths`, 'them'];
   return [{ name: 'tree', pass: true, info: true, detail: `${paths} appeared in the working tree while the sensors ran (a test may have written ${them})`, lines: namedPaths(appeared) }];
+}
+
+/** The row that names what the sensors left in their WSL2 mirror (`leftPaths` of `./lib/gate-wsl.mjs`),
+ * as `treeRows` names what appeared in the Windows tree: the suite writes into the mirror, so a test that
+ * litters the tree is seen there. None when nothing was left or nothing ran there. */
+function mirrorRows(ran) {
+  const left = ran.flatMap((row) => row.left ?? []);
+  if (left.length === 0) return [];
+  const [paths, them] = left.length === 1 ? ['1 path', 'it'] : [`${left.length} paths`, 'them'];
+  return [{ name: 'tree', pass: true, info: true, detail: `${paths} appeared in the WSL2 mirror while the sensors ran (a test may have written ${them})`, lines: namedPaths(left) }];
 }
 
 // Once the shell has exited, the pipes should close at once; a grandchild that kept them open (a
@@ -646,7 +669,8 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   if (result.sweepError) detail += `; could not stop what it left running: ${result.sweepError}`;
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
-  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }) };
+  const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
+  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
 }
 
 /** How one sensor runs in WSL2: `{ command }`, the command that runs the runner script it wrote into the
@@ -971,9 +995,11 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * `deps.git`, outside the two lines of the gate's record so that the seconds of the log stay the sensors',
  * and not at all where no sensor runs or for a caller that is no gate.
  *
- * `lock.wsl` is what the machine's switch file of WSL2 says (`readGateWsl` of `./lib/gate-wsl.mjs`): with a
- * distribution, the sensors of the turn run there (`checkSensor`); with an error, the gate fails in one row
- * named `wsl` before any sensor runs. The sensors of documents never move: they are checks of seconds. */
+ * `lock.wsl` is what the machine's switch file of WSL2 says (`readGateWsl` of `./lib/gate-wsl.mjs`), and it
+ * counts only for a project that lets it (`discoverSensorsInWsl`): with a distribution, the sensors of the
+ * turn run there (`checkSensor`), where they ran is part of the tree's key, and what they left in the
+ * mirror is named in a `tree` row (`mirrorRows`); with an error, the gate fails in one row named `wsl`
+ * before any sensor runs. The sensors of documents never move: they are checks of seconds. */
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
@@ -983,6 +1009,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
   if (declared.error) return [{ name: 'sensors', pass: false, detail: declared.error }];
   const sameTree = discoverSameTree(cwd);
   if (sameTree.error) return [{ name: 'sensors', pass: false, detail: sameTree.error }];
+  const inWsl = discoverSensorsInWsl(cwd);
+  if (inWsl.error) return [{ name: 'sensors', pass: false, detail: inWsl.error }];
   const quick = discoverDocumentSensors(cwd, declared.documents);
   if (quick.error) return [{ name: 'sensors', pass: false, detail: quick.error }];
   // Git is asked only by a project that declares documents, and has a sensor their commit would not run
@@ -1001,7 +1029,13 @@ export async function checkSensors(cwd, deps = {}, lock) {
   }
   // A switch file of WSL2 that cannot be taken fails the gate as a broken declaration does: a gate that
   // ran its suite where nobody asked would say nothing of the file that was meant to move it.
-  if (lock?.wsl?.error) return [{ name: 'wsl', pass: false, detail: lock.wsl.error }];
+  // The machine says how (its switch file), the project whether (`sensorsInWsl`): a project whose suite
+  // cannot run on Linux is never moved by a file another project's machine holds.
+  const wsl = inWsl.value ? lock?.wsl ?? null : null;
+  if (wsl?.error) return [{ name: 'wsl', pass: false, detail: wsl.error }];
+  // Where the sensors run is part of the key of the tree: a pass in WSL2 proves nothing for a run on
+  // Windows, which is there to catch what WSL2 cannot.
+  const place = wsl?.distro && (deps.platform ?? process.platform) === 'win32' ? `wsl ${wsl.distro} ${wsl.node}` : undefined;
   const record = lock && lock.log !== false && lock.home !== undefined
     ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
     : null;
@@ -1013,7 +1047,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // The key of the tree this gate guards (`treeKey`), where the project declares that a tree is not run
   // twice and this gate keeps a record: the proof is a line of the gate log, so a gate that neither reads
   // nor writes that log has no key. `null` in every doubt, which is a gate that runs its sensors.
-  const keyNow = () => (sameTree.skip && record ? treeKey(hookGit(cwd, deps.git), { sensors }) : null);
+  const keyNow = () => (sameTree.skip && record ? treeKey(hookGit(cwd, deps.git), { sensors, place }) : null);
   // The rows of a gate that runs no sensor because the gate log holds the proof of `key`, after its own
   // line is written; `null` when there is no key or no proof.
   const proven = (key) => {
@@ -1061,16 +1095,18 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // log says the sensors took: a fraction of one.
     let code;
     try {
-      for (const sensor of sensors) ran.push(await checkSensor(cwd, sensor, { ...deps, gateHeld, wsl: lock?.wsl ?? null }));
+      for (const sensor of sensors) ran.push(await checkSensor(cwd, sensor, { ...deps, gateHeld, wsl }));
       result = sensorsResult(ran);
-      if (result === 'pass' && key !== null && keyNow() === key) code = key;
+      // A sensor that came back to Windows ran where its key does not say: it proves no tree.
+      const ranWhereKeyed = ran.every((row) => (place ? row.ranIn === 'wsl' : !row.ranIn));
+      if (result === 'pass' && key !== null && ranWhereKeyed && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut, ranIn }) => ({ name, seconds, pass, timedOut, ...(ranIn && { ranIn }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
-    return [...rows, ...ran, ...treeRows(before, after), ...gateLogRows(record)];
+    return [...rows, ...ran, ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
   };
   if (!lock) return run();
   if (lock.held) {

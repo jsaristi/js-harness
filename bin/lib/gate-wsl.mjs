@@ -15,6 +15,16 @@ export const GATE_WSL_ENV = 'JS_HARNESS_GATE_WSL';
  * runs that sensor on Windows: a gate that skipped its suite would be worse than a slow one. */
 export const SYNCED_MARK = 'js-harness-gate-wsl: synced in ';
 
+/** What the runner prints before each path a command left in the mirror, one line each: files the tree
+ * does not hold, which a test wrote where it ran. The gate names them as it names the untracked paths
+ * that appear in a Windows tree, and the next sync takes them away. */
+export const LEFT_MARK = 'js-harness-gate-wsl: left ';
+
+/** The paths the runner said a command left in the mirror. */
+export function leftPaths(output) {
+  return output.split(/\r?\n/).filter((line) => line.startsWith(LEFT_MARK)).map((line) => line.slice(LEFT_MARK.length));
+}
+
 const DISTRO = /^[A-Za-z0-9._-]+$/;
 
 /** The switch file of a machine: `<home>/.js-harness/gate-wsl.json`. */
@@ -75,17 +85,26 @@ const word = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
  * the mark of a held lock when `held`. `seconds` bounds the command inside the distribution, a little
  * short of the gate's own bound, so what the gate kills on Windows has already been stopped in Linux.
  * The tree is synced without `.git`, which on Windows names folders that Linux cannot read, `.codegraph`
- * and `node_modules`. Exit 97 is a sync that failed, before the mark. LF ends: bash reads no CR. */
-export function runnerScript({ source, mirror, node, command, held, heldVariable, seconds }) {
+ * and `node_modules`, and what the mirror holds of those goes too (`--delete-excluded`): a test that made
+ * one there must not change the next run. Files are compared by content (`--checksum`): `/mnt` shows
+ * mtimes to the second, and a change of the same size in the same second was measured to stay out of a
+ * mirror compared by size and time. After the command, each path it left in the mirror is printed after
+ * `LEFT_MARK`. A lock on the mirror (`flock`, `lockSeconds` at most) keeps two runs of one tree apart.
+ * Exit 97 is a mirror that could not be had or synced, before the mark. LF ends: bash reads no CR. */
+export function runnerScript({ source, mirror, node, command, held, heldVariable, seconds, lockSeconds = 60 }) {
+  const sync = 'rsync -a --delete --delete-excluded --exclude=/.git --exclude=/.codegraph --exclude=node_modules';
   return [
     '#!/bin/bash',
     '# Written by js-harness check for one sensor of a gate; see bin/lib/gate-wsl.mjs.',
     'set -u',
     `source=${word(source)}`,
     `mirror="$HOME/.js-harness-gate/mirrors/"${word(mirror)}`,
+    'mkdir -p "$(dirname "$mirror")" || exit 97',
+    'exec 9>"$mirror.lock" || exit 97',
+    `flock -w ${lockSeconds} 9 || { echo "js-harness-gate-wsl: another run holds the mirror" >&2; exit 97; }`,
     'started=$(date +%s%N)',
     'mkdir -p "$mirror" || exit 97',
-    'rsync -a --delete --exclude=/.git --exclude=/.codegraph --exclude=node_modules "$source/" "$mirror/" || exit 97',
+    `${sync} --checksum "$source/" "$mirror/" || exit 97`,
     `echo "${SYNCED_MARK}$(( ($(date +%s%N) - started) / 1000000 )) ms" >&2`,
     'home=$(mktemp -d) || exit 1',
     'cd "$mirror" || exit 1',
@@ -94,6 +113,7 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     `  timeout -k 10 ${seconds} bash -c ${word(command)}`,
     'code=$?',
     'rm -rf "$home"',
+    `${sync} -n --itemize-changes "$source/" "$mirror/" 2>/dev/null | sed -n 's/^\\*deleting  *//p' | while IFS= read -r left; do echo "${LEFT_MARK}$left" >&2; done`,
     'exit $code',
     '',
   ].join('\n');

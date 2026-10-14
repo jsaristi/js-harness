@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { GATE_WSL_ENV, SYNCED_MARK, gateWslPath, innerSeconds, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
+import { GATE_WSL_ENV, SYNCED_MARK, gateWslPath, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
 
 const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-home-'));
 const writeSwitch = (home, text) => {
@@ -111,5 +111,59 @@ test('a tree the runner cannot sync exits 97 before the mark', { skip: !posixWit
   const run = spawnSync('bash', [runner], { encoding: 'utf8', env: { ...process.env, HOME: root } });
   assert.equal(run.status, 97);
   assert.equal(syncedMs(run.stderr), null);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('the runner names each file a command left in the mirror, and the next sync takes them away, excluded paths included', { skip: !posixWithRsync && 'needs bash, rsync and timeout on a POSIX system' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
+  const source = path.join(root, 'tree');
+  const linuxHome = path.join(root, 'home');
+  fs.mkdirSync(source);
+  fs.mkdirSync(linuxHome);
+  fs.writeFileSync(path.join(source, 'a.txt'), 'one');
+  const runner = path.join(root, 'runner.sh');
+  const run = (command) => {
+    fs.writeFileSync(runner, runnerScript({ source, mirror: 'm', node: path.dirname(process.execPath), command, held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds: 30 }));
+    return spawnSync('bash', [runner], { encoding: 'utf8', env: { ...process.env, HOME: linuxHome } });
+  };
+  const first = run('mkdir -p .git out && echo x > out/b.txt && echo y > c.txt');
+  assert.equal(first.status, 0, first.stderr);
+  assert.deepEqual(leftPaths(first.stderr).sort(), ['.git/', 'c.txt', 'out/', 'out/b.txt']);
+  const second = run('ls -A');
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(second.stdout, 'a.txt\n');
+  assert.deepEqual(leftPaths(second.stderr), []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('the runner copies a change that keeps the size and the second of the mtime', { skip: !posixWithRsync && 'needs bash, rsync and timeout on a POSIX system' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
+  const source = path.join(root, 'tree');
+  fs.mkdirSync(source);
+  const file = path.join(source, 'f.txt');
+  const at = new Date('2026-10-14T06:00:00Z');
+  fs.writeFileSync(file, 'aaaa');
+  fs.utimesSync(file, at, at);
+  const runner = path.join(root, 'runner.sh');
+  fs.writeFileSync(runner, runnerScript({ source, mirror: 'm', node: path.dirname(process.execPath), command: 'cat f.txt', held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds: 30 }));
+  const env = { ...process.env, HOME: root };
+  assert.equal(spawnSync('bash', [runner], { encoding: 'utf8', env }).stdout, 'aaaa');
+  fs.writeFileSync(file, 'bbbb');
+  fs.utimesSync(file, at, at);
+  assert.equal(spawnSync('bash', [runner], { encoding: 'utf8', env }).stdout, 'bbbb');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a mirror another runner holds is not waited for past its bound: exit 97 before the mark', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
+  const source = path.join(root, 'tree');
+  fs.mkdirSync(source);
+  const runner = path.join(root, 'runner.sh');
+  fs.writeFileSync(runner, runnerScript({ source, mirror: 'm', node: '/n', command: 'true', held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds: 5, lockSeconds: 1 }));
+  const mirrors = path.join(root, '.js-harness-gate', 'mirrors');
+  fs.mkdirSync(mirrors, { recursive: true });
+  const holder = spawnSync('bash', ['-c', 'exec 9>"$1/m.lock"; flock 9; bash "$2"; echo "exit $?" >&2', '_', mirrors, runner], { encoding: 'utf8', env: { ...process.env, HOME: root } });
+  assert.match(holder.stderr, /exit 97/);
+  assert.equal(syncedMs(holder.stderr), null);
   fs.rmSync(root, { recursive: true, force: true });
 });

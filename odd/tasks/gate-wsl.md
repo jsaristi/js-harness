@@ -42,17 +42,13 @@ high
 Anything on his Windows machine outside the js-harness home (`.wslconfig`, services, antivirus).
 
 ## Resume here
-- 01:26 · T2 written, its tests green (6 in `bin/check.test.mjs`, 10 in `bin/lib/gate-wsl.test.mjs`),
-  not committed: the commit turn is the scratchpad's `t2w-turn.sh` with `t2w-msg.txt`. The measure
-  turn (`wsl-measure-turn.sh`, background `b8c7almgt`) runs both halves in the detached worktree
-  `gate-wsl-measure` at `3f59bb2`, the Windows half with `TEMP` and `TMP` on `D:\js-harness-tmp`
-  (he excluded all of `D:` from Defender before it ran, so the Windows number includes it).
-- The orchestrator's go (its message, read at 01:25): write
-  `C:\Users\Oficina\.js-harness\gate-wsl.json` with exactly
-  `{"distro":"Ubuntu","node":"/home/oficina/.local/node/bin"}` after the measure, then tell it.
-  One line to it at each step: measure with both numbers, file written, commit, pull request.
-- Next: measure → the file → the commit turn → T3 (a real gate through the file) → the pull request
-  (undo lines in its body) → `.wslconfig` text with the peak memory → T4.
+- 02:01 · T2 committed (`d6670b4`, its gate on Windows passed). T2b, the two readers' corrections of
+  the faster-check design (`odd/tasks/faster-check.md`, pull request 118), written with their tests,
+  green, not committed: the commit turn is the scratchpad's `t2b-turn.sh` with `t2b-msg.txt`.
+- The switch file is on the machine (L6); this branch's own gates run with `JS_HARNESS_GATE_WSL=0`
+  until pull request 109 is on `main` (L3).
+- Next: the T2b commit turn → Codex over `3f59bb2..<T2b>` once (allowance by its plan) → the pull
+  request (undo lines in its body) → after 109 merges, `main` merged in and T3: one real gate in WSL2.
 
 ## Specs
 - S1 — His answer, `ffe99ebf-72fb-48da-a79b-e7db21a20b3f` line 1350 (2026-10-14T05:41Z): "Se instala
@@ -65,7 +61,9 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
 
 ## Design
 - **The switch:** `<home>/.js-harness/gate-wsl.json`, `{ "distro": "Ubuntu", "node": "<linux dir of
-  node>" }`. Present and valid: the sensors of a gate's turn run in WSL2. `JS_HARNESS_GATE_WSL=0` in
+  node>" }`, says how; the project's `harness.json` `"sensorsInWsl": true` says whether (reader A: a
+  file of the machine alone would move every project on it). Both present: the sensors of a gate's
+  turn run in WSL2. `JS_HARNESS_GATE_WSL=0` in
   the environment runs one gate on Windows (the run per merged batch). A file that does not parse is a
   FAIL row, like a broken `harness.json`.
 - **One run:** `checkSensor` writes a runner script with LF ends into the throwaway home it already
@@ -99,8 +97,12 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
 ## Tasks
 - [x] T1 · S1-S2 · measure: the test sensor of `3f59bb2` in WSL2 (mirror) and on Windows, one lock
       turn · inline · WSL2 111.5 s (one known failure, L3), Windows 603 s (L5)
-- [ ] T2 · S1 · `bin/lib/gate-wsl.mjs` (switch, runner text, path to `/mnt`), the route in
-      `checkSensor`, the fallback row, `ranIn` · inline · test first
+- [x] T2 · S1 · `bin/lib/gate-wsl.mjs` (switch, runner text, path to `/mnt`), the route in
+      `checkSensor`, the fallback row, `ranIn` · inline · test first · `d6670b4`; gentle-ai
+      `under_budget`
+- [ ] T2b · S1 · the readers' corrections (L7): the key of the tree says where the sensors ran, the
+      project opts in, `--checksum`, `--delete-excluded` and the paths left in the mirror, a `flock` on
+      the mirror · inline · test first
 - [ ] T3 · S2 · the switch file on this machine (after the orchestrator has it), one gate measured
       through it, docs
 - [ ] T4 · S2 · `.wslconfig` text to the orchestrator; the run per merged batch named where merges
@@ -138,3 +140,13 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
   readers with the rest of the faster-check design. The case: tonight's measure waited about 15
   minutes behind other sessions while he waited for its numbers, and four sessions were paused by
   hand. It goes into the faster-check design (`odd/tasks/gate-wait.md`, "Resume here", THEN).
+- L7 · 02:01 · two Opus readers of the faster-check design (pull request 118) found defects in T2, the
+  first one independently both: (1) the key of a tree did not say where its sensors ran, so with
+  `sameTree: skip` a pass in WSL2 proved the tree for the run on Windows, which then ran no sensor; (2)
+  the switch was per machine, so it moved every project on it; (3) a test's litter in the mirror was
+  seen by nobody, and `--delete` kept excluded paths a test made there; (4) rsync's size and time
+  compare: measured true in WSL2 between 01:49 and 02:01 (`/mnt/d` shows mtimes to the second; a change of the same
+  size in the same second stayed out of the mirror); (5) two runs of one mirror. Measured false: killing
+  `wsl.exe` leaves no Linux process (a background grandchild included). RED before the fix: 5 of the
+  10 WSL tests of `bin/check.test.mjs`, the place test of `gate-tree`, and the runner tests that import
+  `leftPaths`; GREEN after: 10 of 10, 17 of 17 on Windows, 13 of 13 in WSL2.

@@ -910,10 +910,15 @@ podamos implementar todo"), each a feature of its own with its own document and 
    - The sensors in WSL2 (2026-10-14, `odd/tasks/gate-wsl.md`): on one commit the whole suite
      took 111.5 s in WSL2 and 603 s on this machine's Windows, and the lock had been busy
      for hours. Where the js-harness home holds `gate-wsl.json` (a distribution and the
-     Linux folder of node), the sensors of a gate's turn run in that distribution from a
-     mirror of the working tree on the Linux disk, synced by `rsync` before each run
-     (about two seconds once it exists; `.git`, `.codegraph` and `node_modules` stay out),
-     under a clean environment. The lock, the load sample, the gate log, the tree key and
+     Linux folder of node) and the project's `harness.json` says `"sensorsInWsl": true`
+     (the machine says how, the project whether: a suite that cannot run on Linux is never
+     moved), the sensors of a gate's turn run in that distribution from a mirror of the
+     working tree on the Linux disk, synced by `rsync --checksum` before each run (about
+     seven seconds once it exists: `/mnt` shows mtimes to the second, so size and time
+     missed a change; `.git`, `.codegraph` and `node_modules` stay out, and what a test
+     made of them in the mirror goes), under a clean environment. Where they ran is part
+     of the tree's key, so a pass in WSL2 never spares a run on Windows; what a test left
+     in the mirror is named in a `tree` row. The lock, the load sample, the gate log, the tree key and
      every question to git stay on Windows, and the sensors of documents never move. A
      sensor that never reached the mirror runs on Windows and its row says why; one that
      failed there failed; a switch file that cannot be taken fails the gate in a row `wsl`.
