@@ -96,67 +96,130 @@ multi-part review's part (`:1410`, `:1581`); a record with an outcome other than
   the flow after `startingAt` (`:1198-1290`), `logRun` (`:1527-1599`), the record (`:1815-1827`);
   the rest is a new `bin/lib/codex-review-recheck.mjs`.
 
-## Design (first version, before its readers)
+## Design (second version, after its two readers; 2026-10-14)
 
 ### (a) The estimate, from what parts cost
 
-**What is wrong today** (the explorer's map, 2026-10-14; `bin/lib/codex-review-plan.mjs:108-128`).
-A part's estimate is `max(floor, changedLines × median cost a changed line)`, in two bands split
-at 400 changed lines, and the floor is the cheapest part ever measured (24,206). It has no fixed
-cost per part, and a part has one. A straight-line fit over the 261 measured parts on this
-machine gives about 191,500 input tokens a part plus about 175 a changed line. The first request
-of every part is about 7,600, so most of a part's cost is the session reading code, whatever the
-part's size. So small parts come out far too low (part 5 of JH 5's review: 55 lines, planned
-24,206, took 132,324), and splitting a range into parts multiplies a cost the plan never counts.
-Replayed on the log as it stood before each, the last seven reviews came out between 0.15 and 1.35
-times their cost. A review of 557 lines in 2 parts: 281,079 planned, 718,613 taken.
+**What is wrong today** (the explorer's map and reader A's replay, 2026-10-14;
+`bin/lib/codex-review-plan.mjs:108-128`). Today a part's estimate is `max(floor, changedLines ×
+median cost a changed line)`:
+- two bands, split at 400 changed lines;
+- the floor is the cheapest part ever measured (24,206);
+- no fixed cost per part.
 
-**S1, the model.** A part's estimate is a fixed cost plus a cost a changed line, both fitted by
-least squares on the measured parts of the same model and effort (all measured parts when fewer
-than 5 are of that pair, as today). A negative fitted cost a line is taken as 0, and the fixed
-cost then the median part. No bands, and no floor at the cheapest part. Ranges are still split
-at 400 changed lines a part, so each part pays its fixed cost.
+A part has a fixed cost, though. Fitted on this machine's run log:
+- high effort: about 190,000 input tokens a part plus 328 a changed line (179 parts);
+- medium effort: about 122,000 plus 78 (80 parts).
 
-**S2, the high figure.** Today it prices each part at the highest cost a changed line ever seen,
-and overshoots 2 to 7 times. It becomes the estimate times the 90th percentile of what measured
-parts cost over what the model says they should: a figure about one review in ten exceeds.
+About three quarters of that fixed cost is cached context sent again with each request (cached
+share median 0.75; median 7 requests a part). It follows the session's requests, not the size of
+the part.
 
-**S3, how the method did, printed.** The plan prints one line: on the last ten reviews this
-machine recorded, the method (S1, replayed on the log as it stood before each review) estimated
-between `x` and `y` times what they took, with the median. That line is the evidence the plan
-learns from its records; it costs no request.
+Replayed on the log as it stood before each of 101 reviews, the actual cost over today's estimate
+is:
+- all 101 reviews: median 1.43, p10–p90 0.76–3.03;
+- the last 20: median 2.48, p10–p90 1.11–5.47.
 
-**S4, the plan recorded.** Each run line of a reviewed part records the estimate it was planned
-at (an optional field, so old lines still read). Later, S3 reads the recorded figure in place of
-a replay, which is what the method then was, not what it is now. Open: whether the run log's
-readers accept a field they do not know (to read in T4 before the field is added).
+Medium-effort parts from prompt v1 (2026-10-08) cost about half what v3 parts cost, and the pair
+rule keeps them in every basis.
 
-**What it changes for his allowance.** Nothing in the allowance: its floor of 300,000, its rate
-of 1,200 a changed line and its 5 percent margin stay. The estimate it is judged against rises:
-by the fit, a 6-line review is about 192,000 (inside 300,000), JH 5's 1,207 lines in 5 parts
-about 1,170,000 (inside its 1,448,400), and 557 lines in 2 parts about 480,000 (inside 668,400).
-More reviews may come out over it than today, and each of those is asked of him, as today.
+**S1, the model.** A part's estimate is a fixed cost plus a cost a changed line, fitted by least
+squares on the **most recent 20 measured parts** of the review's model and effort (all measured
+parts, most recent 20, when fewer than 5 are of that pair). Replayed on all 101 reviews, it comes
+to a median of 1.01 (p10–p90 0.58–1.52) and a median absolute log error of 0.27, against 0.45
+today. The window follows a change of prompt or effort without the code having to know which
+fields mark one. Its edges:
+- when the parts' changed lines do not vary, or fewer than 2 parts are measured, the fixed cost
+  is the median part and the cost a line is 0;
+- a fitted cost a line below 0 is taken as 0, with the fixed cost refitted as the median part;
+- a fixed cost below 0 is taken as 0.
 
-### (b) The pace, read from `main`'s history
+No bands, and no floor at the cheapest part. Ranges are still split at 400 changed lines a part,
+so each part pays its fixed cost.
 
-**S5, the command.** `js-harness progress --pace [--days <n>]` prints, for each of the last `n`
-days (14 by default), the tasks closed, the tasks added and the tasks removed on the first-parent
-line of `HEAD`, by the day of the commit in this machine's time zone; then the totals and a
-mean a day. `--json` carries the same days. Without `--pace`, `progress` prints what it prints
-today and starts no git process.
+**S2, the high figure.** The estimate times the 90th percentile of what the window's parts cost
+over what the model says they should. In replay, 12 of 101 reviews went over it (13 percent of
+parts), against 10 of 101 for today's high figure. It stands at a median of 1.80 times the actual
+cost, where today's stands at 3.21.
 
-**S6, how it reads.** Two git processes: one `git log --first-parent --format=<commit, date>
---raw` over `docs/ROADMAP.md` and `odd/tasks/*.md`, for the blob of each file at each commit,
-and one `git cat-file --batch` for those blobs. Each blob is parsed by the parser `progress`
-uses now (`bin/lib/progress.mjs`), so code fences and the roadmap's `## Checklist` section count
-as they count today. Between one commit and the one before, in one file, a task whose text was
-open and is now checked is closed; a task text that is new is added; one that is gone is
-removed; one checked and now open is reopened. A task reworded is one removed and one added; it
-is said so in the help, not guessed at.
+**S3, how the method did, printed.** One line:
+- what it says: on the last ten reviews this machine recorded, the method's estimate came to
+  between `x` and `y` times what each took, with the median;
+- how it is measured: per part, against that part's own run line;
+- what is grouped: the run lines a review record names (`run`, `runs`), since the run log has no
+  review id and parallel parts write out of order;
+- what is left out: kept parts (they cost nothing in that run) and failed attempts (no record);
+- in a project with no review recorded yet: "no reviews recorded yet".
 
-**Why `main`'s first parent.** It is the day the work landed, and the line `progress` already
-counts from. 116 of the 692 commits that touch `odd/tasks` are on it; a feature branch's own
-commits would count the same task once on the branch and again in its merge.
+**S4, the plan recorded.** Each run line of a part records the estimate and the high figure it
+was planned at, with the method's version (`plan: { estimate, high, method }`). The figures come
+from `plan.parts[i]` and are passed into `logRun`, since `attempt()` gets only `part` today. Run
+log readers keep any JSON object (`bin/lib/codex-reviews.mjs:92-97`), so the field is safe; the
+schema stays `v1`, as it did through five additions. S3 reads the recorded figure once lines hold
+it; before that, a replay. `--plan` records nothing.
+
+**What it changes for his allowance.** Nothing in the allowance itself: its floor of 300,000, its
+rate of 1,200 a changed line and its 5 percent margin all stay. The estimate it is judged against
+rises:
+
+| Review | Model | Estimate |
+|---|---|---|
+| 6-line review | medium fit | about 122,000 |
+| 6-line review | high fit | about 192,000 |
+| JH 5's 1,207 lines in 5 parts | medium | about 702,000 |
+| JH 5's 1,207 lines in 5 parts | high | about 1,347,000 |
+| 557 lines in 2 parts | medium | about 287,000 |
+| 557 lines in 2 parts | high | about 563,000 |
+
+Each is inside its allowance (1,448,400 and 668,400). More reviews may come out over it than
+today, and each of those is asked of him, as today.
+
+### (b) The pace, read from the default branch's history
+
+**S5, the command.** `js-harness progress --pace [--days <n>]`:
+- what it prints: for each of the last `n` days (14 by default, an integer of at least 1), the
+  tasks closed, added and removed, then the totals and a mean a day;
+- where it reads: the first-parent line of the default branch (from `origin/HEAD`, else `main`,
+  else `HEAD`), named on the first line;
+- how a day is cut: by the committer date (`%cI`) in this machine's time zone, which tests inject
+  with the clock;
+- gaps: a day with no commit prints 0, and today is marked as partial;
+- `--pace --json`: a shape of its own; `--json` alone and the parser's output do not change
+  (`bin/lib/sessions.mjs:7` imports the parser);
+- without `--pace`, `progress` starts no git process, as today;
+- outside a git repository, `--pace` exits 1 with one line;
+- the help (`bin/progress.mjs:11`) and the AGENTS block that `bin/lib/manifest.mjs:61` writes name
+  `--pace`.
+
+**S6, how it reads.** Two git processes, each with a time limit and a buffer for megabytes.
+
+The first is `git log --first-parent --diff-merges=first-parent --no-renames --no-abbrev --raw -z
+--since=<window> --format=<id, date>` over `docs/ROADMAP.md` and `:(glob)odd/tasks/*.md`. It gives
+each changed file's old and new blob. The window's first change gives the starting state through
+its old blob. On this repository, all of history comes to 216 blobs, 16.4 MB, 283 ms of `cat-file`
+and 759 ms of parsing.
+
+The second is `git cat-file --batch`, for those blobs. Each is parsed by the parser `progress` uses
+now: the roadmap's `## Checklist` steps flattened out of its phases, with code fences counted as
+today. Steps are compared per commit, across all the files it changed.
+
+What each change counts as:
+- **Closed:** a task open before and checked now. A task that is new and already checked counts as
+  added and closed. On `main`, 119 of 136 first-parent commits are merges, and most tasks arrive
+  checked inside one; reading only flips would see about a quarter of the closes.
+- **Matched:** a task is matched by its leading ID (`T3`, `T5b`, with or without `**`) when both
+  sides have one, and otherwise by its exact text. 23 percent of the flips on `main` reworded the
+  task's first line in the same commit, and every one kept its ID.
+- **Reopened:** a task checked before and open now.
+- **Removed:** a task that is gone.
+- **Reworded or moved:** a roadmap item reworded as it is checked, and a moved file, count as
+  removed and added; the help says so.
+- **Shallow clones:** a commit with no parent is the start of the history, never a day of added
+  work.
+
+### What its two readers changed
+- Reader A (the numbers and the model, by replay of the run log) moved S1 to the most recent 20 parts of the pair and gave its edge cases; corrected the allowance figures, which had used a fit mixing both efforts; measured S2; showed the fixed cost is cached context resent each request; and gave S3 its grouping by the review records.
+- Reader B (what the design left out) found that tasks mostly arrive checked in merges, that tasks must be matched by their ID, which branch is read, the git flags merges and paths need, the size of the history and its buffer, the window that spares reading it all, the parser's other reader, the help and the AGENTS block, and the per-part comparison S3 and S4 need.
 
 ## Tasks
 - [x] T0 · S7 to S11, the recheck, test first, its own pull request; his order of 2026-10-14,
@@ -231,4 +294,4 @@ commits would count the same task once on the branch and again in its merge.
 
 ## Next
 0. T0: the orchestrator's word (05:43): wait for PR 124 to be MERGED, then merge `origin/main` once, gate, push, tell it.
-1. T2: take both readers' findings into the design, then the design to the orchestrator.
+1. T2: both readers' findings are in the design (second version); send it to the orchestrator, then T3 test first.
