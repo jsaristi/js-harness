@@ -286,3 +286,32 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
   `odd/tasks/practice-project.md`, T5); line 15778, he is away about ten hours; line 15820, "Decidí
   vos lo reversible (Recomendada)", so the lead decides reversible questions meanwhile. T1 is done;
   T2 starts after the lead clears each file of another session.
+- L6. 2026-10-14, T2 to T6 written in the worktree, tests first and each seen failing before its
+  change: `readRules(list, { project: true })` and the `sensor` body (`bin/lib/rules.mjs`);
+  `bin/lib/project-rules.mjs` and `bin/lib/project-rules-read.mjs`, 32 tests; `rules`, `rules <id>`
+  and `rules check` at a project (`bin/rules.mjs`, `bin/rules-project.test.mjs`, 9 tests); the
+  `rules` row of `check` (3 tests) and the line of `status` (1 test); the skill bullet and the
+  template's clause (2 tests); the journey's step `project-rules` (3 tests of its pure part). The
+  rules tests of the harness's own list still pass (198), and `rules check` here still prints
+  `PASS rules 18 rules`. Not committed: the files of other sessions wait for the lead to clear them
+  (its message of 2026-10-14 asks to be told each file before it is edited).
+
+## Resume here (2026-10-14, context 76%)
+- Worktree `D:\js-harness-worktrees\project-rules`, branch `feat/project-rules`, pushed at `2f49487`.
+  Uncommitted and green: everything under L6, plus the host step's pure part in
+  `scripts/practice-lib.mjs` (`HOST_STEP`, `hostEnv`, `redacted`, `parseArgs` `--no-host` and
+  `--only`, `recordLine` `left` and `host`, `practiceLayout().hostHome`, the journey id
+  `host-loads`; 94 tests pass in `scripts/practice-lib.test.mjs`).
+- Waiting on the lead: a clear for the files of other sessions (the list in its message of
+  2026-10-14 from this session, items 1 to 5), then one commit per task (T2, T3, T4, T5, T6).
+- The host probe (try 1 of the three he allowed): `scratchpad/probe.mjs` run as `js-harness gate --
+  node probe.mjs probe-out` in background task `bl6ztlhr6`, queued for the lock at 23:15. It writes
+  `probe-out/call1..3.jsonl` (the stream of three Haiku 5.5 calls in the practice project, token
+  redacted). Next: read their field names (init skills and tools, hook events, result usage and
+  cost), check that the real `~/.claude/projects` has no practice folder, then write the parser of
+  the stream with those files as its fixture (copied into `scripts/fixtures/`), and the step
+  `host-loads` in `scripts/practice.mjs` (design: `odd/tasks/practice-project.md`, "T5: the step
+  host-loads"). The step is not in `STEPS` yet, so the journey fails at it today: write it before
+  any journey run.
+- Then: the full journey inside `js-harness gate --` (tries 2 and 3), the README and roadmap
+  lines (T5 docs), the SPEC notes to the lead (T7).
