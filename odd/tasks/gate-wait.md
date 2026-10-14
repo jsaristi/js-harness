@@ -1009,6 +1009,13 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       "JH 9" on `bin/check.mjs` is on `main`). With it, the comment at the head of
       `bin/gate.mjs` says the whole rule for runs beside a gate. Route: inline, with a reader
       for the design.
+- [ ] T20 · A queued command is refused before it waits, not after (candidate, 2026-10-13, the
+      orchestrator's, from a failure of the session "JH 9": its Codex review waited about 40
+      minutes for the lock and then started nothing, "Tracked files have uncommitted changes").
+      Two parts: `codex-review --plan` says that the tree is dirty; and `js-harness gate` can
+      run a cheap refusal the queued command declares, when it is queued and again when its
+      turn comes. The turn scripts of this session have the same hole: their check of the head
+      and of a clean tree runs after the wait. Not sized.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2796,6 +2803,29 @@ antivirus spends on each (his).
   merge's own resolution only" as his.
 
 ## Resume here
+
+**At 21:14 on 2026-10-13, at 84% of the context, the session "JH 8" cuts at a task's end.
+This paragraph is the newest; where the state below it says "in flight", it is done.**
+
+- **install-update T8 is delivered:** pull request 107 (`fix/upgrade-sync-from-path`, head
+  `0d09e14`: `0cca602`, the correction `c188381`, the record `f0567a4`, and a clean merge of
+  `main` `02567ed`), the orchestrator's to merge. Codex: 125,690 and 43,527 input tokens, the
+  second correct (0.98). The session "JH 9" adds its two lines to `bin/js-harness.mjs` after
+  it is on `main`. Its worktree `upgrade-sync-path` goes once it is merged, with
+  `package-contents` and `status-no-pin`.
+- **Owed, waiting on him:** he answered that he restarts `PcaSvc` himself (Progress); at
+  21:10 it still had pid 8936 and the whole checks of the ninety minutes before read 641 to
+  815 s. When the orchestrator says the pid changed: the seconds of the first whole check in
+  the gate log after it (`checks-load.cjs <log> 2`), and one read of 20 s beside it
+  (`two-pids.ps1 20`), both written in Progress and sent to the orchestrator.
+- **Next, in the orchestrator's order:** T19 (ordered, after the stretch of "JH 9" on
+  `bin/check.mjs` is on `main`; with it the whole sentence of the rule in the comment at the
+  head of `bin/gate.mjs`, and T20 below if it is a few lines); then the guard of the Codex
+  review outside the lock (one slice, one probe granted; the design it starts from is in
+  the state below); then the list of "Next".
+- **Codex of this session on 2026-10-13 after its compaction of 17:55:** 135,381 (T6), 74,849
+  (T7), 125,690 and 43,527 (T8): 379,447 input tokens in four reviews, each inside its
+  allowance. No sub-agent.
 
 **State of the session "JH 8" at 20:13 on 2026-10-13, at 78% of its context (the app
 compacts it at 93%). Read this first; it is newer than the rest of this section.**
