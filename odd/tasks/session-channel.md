@@ -1201,7 +1201,7 @@ reader, and that table names this feature as their owner.
   `1f5d67a`). Owed: (c) the orchestrator skill's text, the printed texts in words an
   installed project defines, the sentences for `AGENTS.md` and the two declared rules (the
   last two placed by the owner of the rules' wording; Progress, 2026-10-13 23:46)
-- [ ] T18 Every background timer, watcher or wake loop a session starts declares, in the same
+- [x] T18 Every background timer, watcher or wake loop a session starts declares, in the same
   step, what it is for, the condition that ends or cancels it, and who stops it, written to the
   session's state (the relief file for the orchestrator, the feature document for a work
   session); when its condition resolves another way, it is stopped in that same step. His
@@ -1209,7 +1209,7 @@ reader, and that table names this feature as their owner.
   `sessions --quote`, exit 0): the lead left a 05:00 timer running after the Linux gate it
   guarded against was proven. The rule's wording above is the lead's. The mechanism, the
   lead's candidate: `resume --hook` and the board list each session's live background tasks
-  with their declared purpose, so one left behind is seen after a compaction. After slice (c)
+  with their declared purpose, so one left behind is seen after a compaction. After slice (c). BUILT (Progress, 2026-10-14 06:10): the skill's rule, and the resume's line under the work in flight; the board already prints each open piece with its description
 - [ ] T19 `notify` stamps the sender's hour and context share from its own reading, so a
   notice carries both read, never typed: JH 14 typed its share unread twice on 2026-10-14, and
   JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
@@ -2873,6 +2873,17 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
+      AT 06:10: the doctor row is pull request 132 (`9e6f523`, `check --push` exit 0 at
+      06:08), pushed by the lead's correction of 06:01 (finished, gated, reviewed work never
+      waits unpushed; an idle session is never compacted, so the work goes on in this turn).
+      T18 is built on `feat/background-purpose`, cut from that branch, test first (one failed
+      in each file, then manifest 126 and resume 77 passed): the orchestrator skill's shared
+      part says that a background task declares in its description what it is for and what
+      ends it, is written to the session's state with who stops it, and is stopped in the step
+      its condition resolves another way; the resume, under the work in flight, says to judge
+      each piece at once and stop one that resolved or says neither. The board already prints
+      each open piece with its description (`workLine`), which is the purpose. Next: commit,
+      reviews, push, pull request; then T19.
       AT 06:00, BEFORE A CUT: the doctor row is `ca75816` on `feat/doctor-codex-cli` (gate
       PASS; gentle-ai not due; Codex in 4 parts, 478,911 input tokens, all "correct", 0.90 to
       0.99, no finding); not pushed, its pull request after T18 and T19. NO background task

@@ -1813,6 +1813,8 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('in the reply to their next message'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
+  // A timer outlived what it waited for (his correction, 2026-10-14): a background task declares its purpose and its end.
+  assert.ok(text.includes('A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it'));
   // A session the user refused or stopped waited six hours in silence: it tells the orchestrator first.
   assert.ok(text.includes('- When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need'));
   // Terms an installed project never defines: who wrote the harness, and the conventions of its own repository.

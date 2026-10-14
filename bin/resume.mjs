@@ -524,6 +524,9 @@ function flightLinesOf(transcript, worktree, { gate, home }) {
   if (open.length > 0) {
     const named = open.slice(0, IN_FLIGHT_LISTED).map(workNameOf);
     lines.push(`In flight when it was compacted, by the transcript: ${open.length} (${named.join(', ')}${open.length > IN_FLIGHT_LISTED ? ', …' : ''}).`);
+    // A timer outlived what it waited for and could have acted on its own (his correction, 2026-10-14): after a
+    // compaction each piece is judged at once, by what its description says.
+    lines.push('Each says in its description what it is for and what ends it. Stop now (TaskStop) one whose condition resolved another way, or that says neither; write what stays running, and who stops it, to this session\'s state.');
   }
   if (worktree !== null) lines.push(...gateLinesOf(worktree, { gate, home }));
   return lines;
