@@ -328,8 +328,17 @@ questions listed.
   bin/readme.test.mjs bin/js-harness.test.mjs` 120 pass; `contract modes` on this document prints
   T2-T6; `contract check` passes all 20 contracts. Three old tests changed with the spec: `##
   Effort` no longer required, the template ends with a task line
-- [ ] T3 (kind: build) The mode line of `resume --hook` (S2, the half without a lead)
-- [ ] T4 (kind: build) `js-harness subagents` (S3)
+- [ ] T3 (kind: build) The mode line of `resume --hook` (S2, the half without a lead). Not
+  started; the one line of `bin/resume.mjs` is cleared by the orchestrator (L5), after a merge of
+  `origin/main` (JH 12 edits that file too)
+- [ ] T4 (kind: build) `js-harness subagents` (S3). Built and committed, not yet wired:
+  `bin/lib/subagent-count.mjs` (roles, token sums, the join, the count) and `bin/subagents.mjs`
+  (`subagentsMain`), 38 tests green. Two Haiku writers wrote `roleOf`/`verbOf` and `usageOf` (RED
+  then GREEN seen by them, code read by the parent); the parent wrote the join and the command,
+  whose tests were written after the draft, so their RED was not observed. Left: the entry in
+  `COMMANDS` and the help line of `bin/js-harness.mjs`, a README section with a real run
+  (`bin/readme.test.mjs` asks one for each command of `--help`), and the first real run on this
+  project's records, under `js-harness gate` since it reads about 231 MB
 - [ ] T5 (kind: docs) The paragraph for JH 5's skill and the js-harness skill, `taskModes` for
   JH 7's check, the startup item for JH 8, handed through the orchestrator (S2)
 - [ ] T6 (kind: verify) Two real days counted, the figures and a proposed rule on launches (C4)
@@ -373,3 +382,11 @@ questions listed.
   per-launch records `{ session, agentId, meta, entries }`; its output is unchanged for JH 15.
 - L9 (2026-10-14): `README.md` (JH 7's) gained one additive sentence on `modes`, as AGENTS.md asks
   of a new command; told to the orchestrator with the pull request.
+- L10 (2026-10-14 14:44): PAUSED by his order, read with `js-harness sessions --quote
+  ffe99ebf-72fb-48da-a79b-e7db21a20b3f 5906`: "Listo entonces quiero que pausemos todo e
+  implementemos las soluciones para que funcionemos con todas las soluciones y sin fallas"; and
+  line 5853: the fixes come first, "tiene que quedar funcionando como un reloj suizo". This is a
+  new capability, so it waits. State: T2 committed (8bc6a14); T4's library and command committed
+  unwired; nothing pushed (the orchestrator's instruction). Resume when the orchestrator says so
+  (a line "JH 13 resume" in `docs/todo.md` on `origin/main`, or `js-harness wait` once JH 5 lands
+  it): merge `origin/main`, finish T4's wiring and real run, then T3, then the pull request.
