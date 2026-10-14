@@ -528,3 +528,20 @@ lifted, G6's `config === 'current'` checks widened to every template-built confi
 section, F5/F6 output byte-identical first), C6 (probe, `minimal-with` beyond MCP), C7 (documents).
 No branch for G2 is pushed yet; push it with a pull request after C4 at the latest. Owed: T10,
 T11; Codex review of the G2 slice before its push.
+
+L13 (2026-10-14) The lead at 13:58, a claim: work on without waiting for a compaction, never end a
+turn waiting for a message (arm a background wait), merge main into #130 again, then G2's review,
+push and PR. Done at 14:15: `origin/main` `c33b7bf` merged into #130 as `d2367dc` in a gate turn,
+pushed. The lead at 14:21, citing his decision (the lead's transcript ffe99ebf, line 5394, not read
+here): a code pull request now merges on a green GitHub run against the main it lands on; main is
+not merged into #130 again, only on a conflict or when its code is needed. G2's Codex review
+(`258bf6e..`, about 130,000 input tokens estimated, allowance 300,000) runs in a gate turn.
+
+L14 (2026-10-14, 14:44 by `date`) PAUSED by the lead's message of 14:45, citing his order (the
+lead's transcript ffe99ebf, lines 5906 and 5853, not read here): everything pauses for the
+corrections; G2 is pushed with its pull request if committed and reviewed, else parked. At the
+pause: C1 `fa39244` and C2 `21a06bf` committed; their Codex review was running in a gate turn,
+chained to push `feat/eval-arms` and open its pull request (based on #130) only with a review
+record and no P0 to P2 finding. Resume when origin/main's `docs/todo.md` holds "JH 14 resume"
+(the wait armed at the pause); then read this Log to its end, check the review's outcome and the
+pull request, and go on with C3a.
