@@ -67,6 +67,10 @@ or changed on his machine.
   un proyecto instalado?".
 - S5. The design below, once its readers and his answers to the questions that are his have
   passed. Not his words: a design, with its path.
+- S7. His answer to the question of the design, 2026-10-14T03:49Z (the lead's transcript, line
+  15809, tapped, read with `sessions --quote`), to "Un proyecto donde se instala el harness,
+  ¿puede tener una lista de reglas propias que el harness controle?": "Sí, en prosa y por sensor
+  (Recomendada)". So version 2 is built as written, with no overrides.
 - S6. How the material for `docs/SPEC.md` is gathered, 2026-10-14T03:37Z (the lead's transcript,
   line 14050, tapped, read with `sessions --quote`), to "¿Cómo dejan las sesiones la recopilación
   para el que documente al final?": "Que me lo manden a mí". The lead's reading (its message,
@@ -236,7 +240,7 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
 (the skill sentence; JH 8); `bin/status.mjs` or wherever `status` prints (JH 8).
 
 ## Tasks
-- [ ] T1 The design: draft, his earlier words searched, two readers, the version after them sent
+- [x] T1 The design: draft, his earlier words searched, two readers, the version after them sent
   to the lead with his questions (S1-S5; route: inline, readers delegated)
 - [ ] T2 `readRules` with `{ keys, owner }` (default unchanged, proved on the shipped list) and the
   reader of `docs/rules.json`: format, byte-order mark, the three bodies, `failure` (S5; route:
@@ -276,3 +280,9 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
   feature (A: no reader knows its project, and two of them guard spend; B: they would make a
   third place for a project's settings beside JH 9's switches). The question that is his is now
   one.
+- L5. 2026-10-14, his answers through the lead, each read with `sessions --quote` in the lead's
+  transcript `65318fd5-80e7-4bb8-92b5-06737140185b`: line 15809 (S7); line 15828, the practice
+  run with a real host session may run tonight within the plan (quoted in
+  `odd/tasks/practice-project.md`, T5); line 15778, he is away about ten hours; line 15820, "Decidí
+  vos lo reversible (Recomendada)", so the lead decides reversible questions meanwhile. T1 is done;
+  T2 starts after the lead clears each file of another session.
