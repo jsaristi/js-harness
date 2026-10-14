@@ -26,10 +26,10 @@ candidate, by fast-forward from the main it was built from. Exit 0 landed or not
 
 const TIMEOUT_MS = 60_000;
 
-function answer(run, command, args, cwd, timeout = TIMEOUT_MS) {
+function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
   let result;
   try {
-    result = run(command, args, { cwd, encoding: 'utf8', windowsHide: true, timeout, maxBuffer: 64 * 1024 * 1024 });
+    result = run(command, args, { cwd, encoding: 'utf8', windowsHide: true, timeout, maxBuffer: 64 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}) });
   } catch (err) {
     return { ok: false, out: '', err: err.message };
   }
@@ -148,7 +148,8 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
     return 4;
   }
   stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
-  const pushed = gitIn(place, 'push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`);
+  // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
+  const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
   if (!pushed.ok) {
     const now = gitIn(place, 'ls-remote', 'origin', 'refs/heads/main').out.split('\t')[0];
     if (now && now !== main) {

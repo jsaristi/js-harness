@@ -55,11 +55,12 @@ function makeRepo(failing = []) {
   return root;
 }
 
-function runHook(root, stdin) {
+function runHook(root, stdin, env = {}) {
   const result = spawnSync('sh', ['pre-push', 'origin', 'https://example.invalid/repo.git'], {
     cwd: root,
     input: stdin,
     encoding: 'utf8',
+    env: { ...process.env, JS_HARNESS_MERGE_QUEUE: '', ...env },
   });
   const log = path.join(root, 'calls.log');
   const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean) : [];
@@ -124,4 +125,31 @@ test('the remote the push goes to is passed through, and the check never reads t
     `--push --remote upstream --head ${B}`,
     `--push --remote upstream --head ${'c'.repeat(40)}`,
   ]);
+});
+
+// The merge queue is the only pusher of main (odd/tasks/merge-queue.md, S9): main tested as a candidate is
+// main as pushed only when nothing else pushes it. The queue says it is the queue in its own push.
+const toMain = (localSha, remoteSha = A) => `refs/heads/main ${localSha} refs/heads/main ${remoteSha}
+`;
+
+test('a push of main from anywhere but the merge queue is refused, and names the queue', { skip }, () => {
+  const root = makeRepo();
+  const result = runHook(root, line(B) + toMain(B));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /main is pushed only by js-harness merge-queue --land/);
+  assert.deepEqual(result.calls, [`--push --remote origin --head ${B}`], 'the other refs are still checked');
+});
+
+test('a delete of main is refused too', { skip }, () => {
+  const root = makeRepo();
+  const result = runHook(root, `(delete) ${ZEROS} refs/heads/main ${A}
+`);
+  assert.notEqual(result.status, 0);
+});
+
+test('the push of main by the merge queue is checked as any other ref', { skip }, () => {
+  const root = makeRepo();
+  const result = runHook(root, toMain(B), { JS_HARNESS_MERGE_QUEUE: '1' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.calls, [`--push --remote origin --head ${B}`]);
 });
