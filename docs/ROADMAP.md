@@ -85,7 +85,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián on 2026-10-06, closed by him on 13 of its 15 trials on 2026-10-12, and brought to `main` on 2026-10-13 from a branch cut from it (see "F6 result") |
-| F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
+| F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | Procedure written 2026-10-14: [future-model.md](future-model.md), version 2 after one reader (`odd/tasks/future-model-protocol.md`); it cannot run on a new model until its gaps are built: G5, G6, G3 and G2 cleared for that feature, G1, G4 and G7 later |
 
 ## Checklist
 
@@ -177,7 +177,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] Differences measured and written down
 
 ### F7 Future-model protocol
-- [ ] Written procedure: measure payload, run evals, strip one component at a time
+- [x] Written procedure: measure payload, run evals, strip one component at a time ([future-model.md](future-model.md))
 
 ## F5 result
 
