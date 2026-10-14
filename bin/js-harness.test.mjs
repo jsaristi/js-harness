@@ -206,19 +206,23 @@ test('run from the pre-commit hook of a linked worktree, this file leaves the re
 
 // R3-002 (accepted T1 review follow-up): this must not depend on the host's real binaries or on
 // network access (T2 adds a real latest-version fetch) — a temp `--home`, a temp `--cwd` outside
-// any repo, and `--offline` keep it hermetic, while `--json` parsing to the six known ids is what
+// any repo, and `--offline` keep it hermetic, while `--json` parsing to the known ids is what
 // actually proves dispatch reached `doctorMain`, not just that *something* printed.
 test('doctor dispatches to a temp home and exits 0, hermetically (no host binaries or network)', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-cwd-'));
   try {
+    // The project declares codexReview off, so the codex row is left out whatever the host has installed. Left
+    // undeclared, a temp folder outside git reads `auto` as on (its files cannot be listed), and the row would
+    // depend on whether this machine has the Codex CLI.
+    fs.writeFileSync(path.join(cwd, 'harness.json'), JSON.stringify({ functions: { codexReview: 'off' } }), 'utf8');
     const result = run(['doctor', '--home', home, '--cwd', cwd, '--offline', '--json']);
     assert.equal(result.status, 0);
     const rows = JSON.parse(result.stdout);
     assert.deepEqual(
       rows.map((r) => r.id),
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account', 'remote-server', 'hook-commands'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'claude-account', 'remote-server', 'hook-commands'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -268,12 +272,14 @@ test('--help says what --at-login does to remote start and stop, and so does the
 // Hermetic: `run` marks the dispatcher as inside a gate, as a sensor's process is, so `gate` takes no lock
 // and this machine's real gates are neither waited for nor held up.
 test('--help lists gate, gate without a command exits 2 with its usage, and gate -- <command> exits with the command\'s code through the dispatcher', () => {
-  assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] -- <command>.*exit code is the command's/m);
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] -- <command>.*exit code is the command's/m);
+  // The two guards of a turn (odd/tasks/gate-turn-guards.md): a bound of wall time, and a push that waits goes first.
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+.*--max is how many minutes the command may run before it is stopped with every process it started \(30 when not given\)\. While the branch of the folder it runs in has an open pull request and commits a push would take now, it refuses any command but that push or a merge, and prints the push command\./m);
   const refused = run(['gate', '--no-wait']);
   assert.equal(refused.status, 2);
   // The last line of the usage says what the two flags of a wait mean, since 2026-10-11: the bound counts from
   // the last time the lock changed hands, which "--wait <minutes>" does not say by itself.
-  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--max <minutes>: how long the command may run before it is stopped with every process it started \(30 when not given\)\n$/);
   assert.match(run(['--help']).stdout, /^ {2}gate\s+.*It waits for its turn in the order the gates arrived; --wait is how many minutes the lock may go without changing hands before it gives up \(60 when not given\), and --no-wait refuses at once\./m);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-gate-home-'));
   try {

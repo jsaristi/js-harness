@@ -10,6 +10,7 @@
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { probeStack, resolveProjectRoot, tools } from './lib/stack.mjs';
+import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
@@ -157,8 +158,10 @@ export async function buildReport({ home, cwd, offline, interactive }, deps) {
   const fetchImpl = deps.fetch ?? fetch;
   const now = deps.now;
   const project = resolveProjectRoot(cwd, spawn);
+  // The project's switches, resolved once for every row: the Codex row is shown only while codexReview is not off.
+  const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn)));
 
-  const localRows = probeStack({ home, project, spawn, platform, interactive });
+  const localRows = probeStack({ home, project, spawn, platform, interactive, functions });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
   return localRows.map((row) => {
     const latest = latestVersions[row.id];

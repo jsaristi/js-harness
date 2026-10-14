@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { GATE_NOT_RUN, commandLineOf, gateMain } from './gate.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
@@ -86,9 +86,10 @@ function gateClock() {
 // The third line is there since 2026-10-11: the bound of a wait counts from the last time the lock changed
 // hands, which "--wait <minutes>" does not say by itself.
 const USAGE = [
-  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]',
+  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
   "       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (60 when not given); --no-wait: refuse at once instead of waiting",
+  '       --max <minutes>: how long the command may run before it is stopped with every process it started (30 when not given)',
 ].join('\n');
 
 /** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
@@ -108,7 +109,8 @@ test('gate runs the command in its folder, in the environment it was given, and 
     assert.deepEqual(said, []);
     assert.equal(spawned.asked.length, 1);
     const [{ commandLine, cwd, env: given, timeout, inherit }] = spawned.asked;
-    assert.deepEqual([commandLine, cwd, timeout, inherit], ['node --test', dir, 0, true]);
+    // The bound of a turn's wall time, 30 minutes when --max does not say (odd/tasks/gate-turn-guards.md, S2).
+    assert.deepEqual([commandLine, cwd, timeout, inherit], ['node --test', dir, 30 * 60_000, true]);
     // Not a sensor: no throwaway home, and nothing that says "inside a gate" to what it runs. One thing is
     // added, the mark of the lock this process holds while the command runs.
     assert.deepEqual(given, { ...env, JS_HARNESS_GATE_HELD: '1' });
@@ -370,6 +372,10 @@ test('gate errors with usage on stderr, exits 2 and runs nothing for arguments i
     [['--wait', 'soon', '--', 'x'], '--wait takes a number of minutes above zero, not "soon"'],
     [['--wait', '0', '--', 'x'], '--wait takes a number of minutes above zero, not "0"'],
     [['--wait', '5', '--no-wait', '--', 'x'], '--wait and --no-wait cannot be given together'],
+    [['--max', '--', 'x'], '--max requires a value'],
+    [['--max', 'long', '--', 'x'], '--max takes a number of minutes above zero, not "long"'],
+    [['--max', '0', '--', 'x'], '--max takes a number of minutes above zero, not "0"'],
+    [['--max', '1', '--max', '2', '--', 'x'], '--max given twice'],
     [['--home', '--', 'x'], '--home requires a value'],
     [['--cwd', '--', 'x'], '--cwd requires a value'],
     [['--push', '--', 'x'], 'unknown argument: --push'],
@@ -1259,4 +1265,163 @@ test('a real check started by a real gate, in the same home, runs its sensors in
   } finally {
     fs.rmSync(checkout, { recursive: true, force: true });
   }
+}));
+
+// Two guards on a turn (odd/tasks/gate-turn-guards.md). S1: a turn is refused while the asking worktree's
+// branch has an open pull request and commits that a push would take now: its gate passed when it was
+// committed, and the pre-push check of its Codex records accepts its head. S2: a command is stopped at a
+// bound of wall time, so a hung script cannot hold the lock for every session.
+
+function git(cwd, ...args) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+/** Commits one file and returns the commit's full id. */
+function commitFile(root, file, content, message) {
+  fs.writeFileSync(path.join(root, file), content, 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-q', '-m', message);
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+/** A repository in `dir` on the branch `feat/x`, pushed once (its remote ref is at `pushed`), with one
+ * commit more that is not pushed: a document, which needs no Codex review, or code when `code`. */
+function branchWithUnpushedCommit(dir, { code = false } = {}) {
+  git(dir, 'init', '-q');
+  git(dir, 'symbolic-ref', 'HEAD', 'refs/heads/main');
+  git(dir, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(dir, 'config', 'user.name', 'js-harness test');
+  git(dir, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  const base = commitFile(dir, 'a.js', 'one', 'init');
+  git(dir, 'update-ref', 'refs/remotes/origin/main', base);
+  git(dir, 'checkout', '-q', '-b', 'feat/x');
+  const pushed = commitFile(dir, 'notes.md', 'first', 'docs: first');
+  git(dir, 'update-ref', 'refs/remotes/origin/feat/x', pushed);
+  const head = code ? commitFile(dir, 'b.js', 'two', 'feat: two') : commitFile(dir, 'more.md', 'second', 'docs: second');
+  return { base, pushed, head };
+}
+
+/** A stand-in for `gh`: it keeps what it was asked and answers the open pull requests `open` lists, or
+ * fails as a `gh` that is not logged in does when `open` is a number, its exit code. */
+function ghWith(open) {
+  const gh = (command, args, options) => {
+    gh.asked.push({ command, args, cwd: options?.cwd, timeout: options?.timeout });
+    // What spawnSync answers when its timeout stopped a `gh` that hung on the network.
+    if (open === 'hangs') return { status: null, signal: 'SIGTERM', stdout: '', stderr: '', error: Object.assign(new Error('spawnSync gh ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
+    if (typeof open === 'number') return { status: open, stdout: '', stderr: 'To get started with GitHub CLI, please run:  gh auth login' };
+    return { status: 0, stdout: JSON.stringify(open), stderr: '' };
+  };
+  gh.asked = [];
+  return gh;
+}
+
+const OPEN = [{ number: 7, url: 'https://example.invalid/js-harness-test/pull/7' }];
+
+/** What `gate` says when it refuses a turn because a push waits. */
+const pushFirst = (dir, count = 1) => [
+  `gate: nothing ran: feat/x has ${count} commit${count === 1 ? '' : 's'} that a push takes now (${count === 1 ? 'its gate' : 'their gate'} passed and the pre-push check of the Codex records accepts the head), and pull request #7 is open: push in the same step the last check passed, then ask for a turn`,
+  `gate: git -C ${dir} push origin feat/x`,
+];
+
+test('gate refuses a turn while a commit that a push takes now waits on a branch with an open pull request, prints the push command, and writes the refusal', withHome(async (home, dir) => {
+  branchWithUnpushedCommit(dir);
+  const spawned = ranWith(0);
+  const gh = ghWith(OPEN);
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'sh', 'measure.sh'], {}, { spawn: spawned, gh, takeGateLock: () => assert.fail('the lock was asked for') });
+  assert.deepEqual([code, said, spawned.asked.length], [GATE_NOT_RUN, pushFirst(dir), 0]);
+  assert.deepEqual(gh.asked, [{ command: 'gh', args: ['pr', 'list', '--head', 'feat/x', '--state', 'open', '--limit', '1', '--json', 'number,url'], cwd: dir, timeout: 10_000 }]);
+  const [gate] = gatesOf(readGateLog(home).events);
+  assert.equal(gate.refused?.reason, 'push waits', JSON.stringify(gate));
+}));
+
+test('gate runs the push itself, and a merge, while that push waits', withHome(async (home, dir) => {
+  branchWithUnpushedCommit(dir);
+  for (const command of ['git push origin feat/x', `git -C ${dir} push`, 'git merge origin/main', 'gh pr merge 7 --merge']) {
+    const spawned = ranWith(0);
+    const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', command], {}, { spawn: spawned, gh: ghWith(OPEN) });
+    assert.deepEqual([code, said, spawned.asked.length], [0, [], 1], command);
+  }
+}));
+
+// Codex, 2026-10-14: a push or a merge named in an argument is no push, and its turn is refused like any other.
+test('gate refuses a turn that only names a push or a merge in an argument while that push waits', withHome(async (home, dir) => {
+  branchWithUnpushedCommit(dir);
+  for (const command of ['echo git push && node --test', 'node --test --test-name-pattern "gh pr merge"']) {
+    const spawned = ranWith(0);
+    const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', command], {}, { spawn: spawned, gh: ghWith(OPEN) });
+    assert.deepEqual([code, said, spawned.asked.length], [GATE_NOT_RUN, pushFirst(dir), 0], command);
+  }
+}));
+
+test('gate runs a turn when no push could go now: a code commit no Codex record covers, until a record covers it', withHome(async (home, dir) => {
+  const { pushed, head } = branchWithUnpushedCommit(dir, { code: true });
+  const argv = ['--home', home, '--cwd', dir, '--', 'sh', 'measure.sh'];
+  const spawned = ranWith(0);
+  assert.deepEqual((await runGate(argv, {}, { spawn: spawned, gh: ghWith(OPEN) })).code, 0);
+  assert.equal(spawned.asked.length, 1);
+  const records = path.join(dir, '.git', 'js-harness', 'codex-reviews.jsonl');
+  fs.mkdirSync(path.dirname(records), { recursive: true });
+  fs.writeFileSync(records, `${JSON.stringify({ schema: 'js-harness.codex-review/v1', base: pushed, head, reviewedAt: '2026-10-14T00:00:00.000Z', outcome: 'reviewed' })}\n`);
+  const after = ranWith(0);
+  const { code, said } = await runGate(argv, {}, { spawn: after, gh: ghWith(OPEN) });
+  assert.deepEqual([code, said, after.asked.length], [GATE_NOT_RUN, pushFirst(dir), 0]);
+}));
+
+test('gate runs a turn when the branch has no open pull request, when gh cannot answer, when nothing waits to be pushed, and outside a branch', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'sh', 'measure.sh'];
+  const runs = async (gh) => {
+    const spawned = ranWith(0);
+    const { code, said } = await runGate(argv, {}, { spawn: spawned, gh });
+    return [code, said, spawned.asked.length];
+  };
+  // Not a repository: the folder of every other test here.
+  const none = ghWith(OPEN);
+  assert.deepEqual(await runs(none), [0, [], 1]);
+  assert.deepEqual(none.asked, [], 'gh is asked last, and only when a push waits');
+  const { pushed, head } = branchWithUnpushedCommit(dir);
+  assert.deepEqual(await runs(ghWith([])), [0, [], 1]);
+  assert.deepEqual(await runs(ghWith(4)), [0, [], 1]);
+  // A gh that hangs is stopped by its timeout and refuses nothing (Codex, 2026-10-14).
+  assert.deepEqual(await runs(ghWith('hangs')), [0, [], 1]);
+  // A branch that has come apart from its remote one: the push printed would be refused as no fast-forward,
+  // so none waits (Codex, 2026-10-14).
+  const elsewhere = git(dir, 'commit-tree', `${pushed}^{tree}`, '-p', pushed, '-m', 'docs: pushed from another clone');
+  git(dir, 'update-ref', 'refs/remotes/origin/feat/x', elsewhere);
+  const diverged = ghWith(OPEN);
+  assert.deepEqual(await runs(diverged), [0, [], 1]);
+  assert.deepEqual(diverged.asked, []);
+  git(dir, 'update-ref', 'refs/remotes/origin/feat/x', head);
+  const pushedAll = ghWith(OPEN);
+  assert.deepEqual(await runs(pushedAll), [0, [], 1]);
+  assert.deepEqual(pushedAll.asked, []);
+  git(dir, 'checkout', '-q', '--detach');
+  assert.deepEqual(await runs(ghWith(OPEN)), [0, [], 1]);
+  // A branch never pushed has no pull request to wait for.
+  git(dir, 'checkout', '-q', '-b', 'feat/y');
+  commitFile(dir, 'other.md', 'y', 'docs: y');
+  const neverPushed = ghWith(OPEN);
+  assert.deepEqual(await runs(neverPushed), [0, [], 1]);
+  assert.deepEqual(neverPushed.asked, []);
+}));
+
+test('gate hands its command a bound of wall time: 30 minutes, or what --max says', withHome(async (home, dir) => {
+  for (const [flags, ms] of [[[], 30 * 60_000], [['--max', '5'], 5 * 60_000], [['--max', '0.5'], 30_000]]) {
+    const spawned = ranWith(0);
+    await runGate(['--home', home, '--cwd', dir, ...flags, '--', 'node', '--test'], {}, { spawn: spawned });
+    assert.equal(spawned.asked[0].timeout, ms, flags.join(' '));
+  }
+}));
+
+test('gate stops a command that outlives its bound, with every process it started, exits 1, says so and writes it', withHome(async (home, dir) => {
+  const started = Date.now();
+  // This node by its path: the gate is given no environment here, so no PATH to find a `node` by (in WSL2 the
+  // shell answered 127, command not found).
+  const command = `"${process.execPath}" -e "setTimeout(() => {}, 60000)"`;
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--max', '0.02', '--', command]);
+  assert.ok(Date.now() - started < 30_000, 'it did not wait for the command');
+  assert.deepEqual([code, said], [1, [`gate: ${command} ran past its bound of 0.02 minutes and was stopped with every process it started; --max <minutes> sets another bound`]]);
+  const [gate] = gatesOf(readGateLog(home).events);
+  assert.equal(gate.end?.result, 'timed out', JSON.stringify(gate));
 }));

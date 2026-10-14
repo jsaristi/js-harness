@@ -11,6 +11,10 @@ matters, who holds it, and where it was seen.
 
 ## Faster
 
+- ~~A push that waits behind a turn it does not need (pull request 121, 16 minutes behind a measure),
+  and a scripted turn that hangs with the lock (the pair measure, 24 minutes).~~ Placed: JH 8,
+  `odd/tasks/gate-turn-guards.md`: `gate` refuses a turn while a push waits, and stops a command at
+  30 minutes (`--max`); done when its pull request merges.
 - The antivirus (MsMpEng) takes one to two of the eight processors while a check runs (124 to 189
   percent of one processor, read 2026-10-13 22:07). His: nothing is changed without his word. JH 8
   measures what an exclusion of the suite's temporary folders would give before anything reaches him.
@@ -67,6 +71,9 @@ matters, who holds it, and where it was seen.
   orchestrator's transcript `ffe99ebf`, line 4215). Each one declares what it is for, what ends
   it and who stops it, and the board and the resume list the live ones. JH 5, the channel:
   `odd/tasks/session-channel.md`, T18, after slice (c).
+- Hours and context shares typed by hand in notices drift (JH 14 typed its share unread twice on
+  2026-10-14). `js-harness notify` could stamp both from its own reading. JH 5, the channel:
+  `odd/tasks/session-channel.md`, T19, after T18.
 
 ## Owed and not yet placed
 
