@@ -3045,8 +3045,34 @@ function openQuestionLines(questions, now, self = null) {
  * gates that run and wait, open pull requests and the orchestrator's relief file, and a last line that
  * says what the board cannot see. */
 
+/** The board's opening column: every session whose context was read, the fullest first, with the share it holds of the
+ * window, the room left before the host compacts it, its id and title, and whether it is past the pause. The app no
+ * longer shows a session's context, and the rows below say it one session at a time; a session whose context was
+ * not read is counted, and its row says why. Nothing when no session's context was read. */
+function contextColumnLines(board) {
+  const window = board.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+  const read = board.sessions.filter((session) => Number.isFinite(session.context?.tokens));
+  if (read.length === 0) return [];
+  const roomOf = (session) => {
+    if (!Number.isFinite(session.contextRoom)) return 'room not known';
+    return session.contextRoom > 0 ? `room ${someThousands(session.contextRoom)}` : 'no room';
+  };
+  const rows = [...read].sort((a, b) => b.context.tokens - a.context.tokens).map((session) => {
+    const share = `${String(percentOf(session.context.tokens, window)).padStart(3)}%`;
+    const marks = [session.atContextPause ? '  past the pause' : '', session.self === true ? '  (this session)' : ''].join('');
+    return `  ${share}  ${roomOf(session).padEnd(12)}  ${session.id.slice(0, 8)}  ${session.title ?? '(no title)'}${marks}`;
+  });
+  const unread = board.sessions.length - read.length;
+  return [
+    'Context  the share each session holds of its window and the room left before the host compacts it, the fullest first',
+    ...rows,
+    ...(unread > 0 ? [`  ${unread} session${unread === 1 ? '' : 's'} whose context was not read: ${unread === 1 ? 'its row says' : 'their rows say'} why`] : []),
+    '',
+  ];
+}
+
 export function renderBoard(board, { now }) {
-  const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
+  const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, '', ...contextColumnLines(board)];
   const sizes = contextSizes(board);
   const ended = endedSessions(board);
   for (const session of board.sessions) lines.push(...sessionLines(session, now, sizes, ended.get(session.id)), '');
