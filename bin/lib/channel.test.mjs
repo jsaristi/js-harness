@@ -176,7 +176,7 @@ test('a question is the base notice, then its id, its options and its waits, in 
 
 test('a question goes to the orchestrator, who asks him, and takes an id of one line and 100 characters at most', () => {
   assert.equal(asking({ to: 'ORQ' }).to.role, 'orchestrator');
-  askingRefused({ to: '5' }, /a question goes to the orchestrator, who asks him/);
+  askingRefused({ to: '5' }, /a question goes to the orchestrator, who asks the user/);
   askingRefused({ id: undefined }, /the id of a question is empty/);
   askingRefused({ id: '' }, /the id of a question is empty/);
   askingRefused({ id: 'x'.repeat(101) }, /the id of a question has 101 characters, 100 at most/);
@@ -681,18 +681,24 @@ const folder = (files) => ({
 
 test('the sender is the session the host names in the environment, with the title and permission mode its transcript gives', () => {
   const where = folder({ [`${SESSION}.jsonl`]: titled('JH 5 · canal entre sesiones', 'auto'), [`${OTHER}.jsonl`]: titled('JH ORQ · js-harness') });
-  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...where }), { host: 'claude-code', id: SESSION, source: 'environment', title: 'JH 5 · canal entre sesiones', permissionMode: 'auto' });
+  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...where }), { host: 'claude-code', id: SESSION, source: 'environment', title: 'JH 5 · canal entre sesiones', permissionMode: 'auto', context: null });
+});
+
+test('the sender carries the share of its context its transcript gives: the tokens of its last reply with usage and the whole percentage of the window', () => {
+  const reply = { type: 'assistant', timestamp: AT, isSidechain: false, message: { role: 'assistant', model: 'made-up-model', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }], usage: { input_tokens: 150000, cache_read_input_tokens: 50000, cache_creation_input_tokens: 0, output_tokens: 300 } } };
+  const withUsage = transcript({ type: 'custom-title', customTitle: 'JH 5 · canal entre sesiones' }, { type: 'user', timestamp: AT, permissionMode: 'auto', origin: { kind: 'human' }, message: { role: 'user', content: 'made up' } }, reply);
+  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...folder({ [`${SESSION}.jsonl`]: withUsage }) }), { host: 'claude-code', id: SESSION, source: 'environment', title: 'JH 5 · canal entre sesiones', permissionMode: 'auto', context: { tokens: 200000, percent: 40 } });
 });
 
 test('--self names the sender instead, by its id or the start of it, and the record says the id came from the flag', () => {
   const where = folder({ [`${SESSION}.jsonl`]: titled('JH 5 · canal entre sesiones'), 'bbbbbbbb-2222-4222-8222-222222222222.jsonl': titled('JH ORQ · js-harness') });
   const whole = channel.senderOf({ self: SESSION, env: { CLAUDE_CODE_SESSION_ID: 'bbbbbbbb-2222-4222-8222-222222222222' }, ...where });
-  assert.deepEqual(whole, { host: 'claude-code', id: SESSION, source: 'flag', title: 'JH 5 · canal entre sesiones', permissionMode: 'bypassPermissions' });
+  assert.deepEqual(whole, { host: 'claude-code', id: SESSION, source: 'flag', title: 'JH 5 · canal entre sesiones', permissionMode: 'bypassPermissions', context: null });
   assert.deepEqual(channel.senderOf({ self: 'aaaaaaaa', env: {}, ...where }), whole, 'the start of an id is completed from the transcript it names');
 });
 
 test('a sender with no transcript to read keeps its id and has no title; a start that names two transcripts names neither', () => {
-  const none = { title: null, permissionMode: null };
+  const none = { title: null, permissionMode: null, context: null };
   assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...folder({}) }), { host: 'claude-code', id: SESSION, source: 'environment', ...none });
   // An id typed with --self that no transcript carries is only a claim: no host is named for it.
   assert.deepEqual(channel.senderOf({ self: 'cccccccc', env: {}, ...folder({}) }), { host: 'unknown', id: 'cccccccc', source: 'flag', ...none });
@@ -706,11 +712,11 @@ test('a sender with no transcript to read keeps its id and has no title; a start
 
 test('only a title the session was given is one: the start of its first prompt names nobody', () => {
   const untitled = transcript({ type: 'user', timestamp: AT, permissionMode: 'auto', origin: { kind: 'human' }, message: { role: 'user', content: 'build the channel' } });
-  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...folder({ [`${SESSION}.jsonl`]: untitled }) }), { host: 'claude-code', id: SESSION, source: 'environment', title: null, permissionMode: 'auto' });
+  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...folder({ [`${SESSION}.jsonl`]: untitled }) }), { host: 'claude-code', id: SESSION, source: 'environment', title: null, permissionMode: 'auto', context: null });
 });
 
 test('with no id from the host and none given the sender is not known, and the host is not guessed', () => {
-  const unknown = { host: 'unknown', id: null, source: null, title: null, permissionMode: null };
+  const unknown = { host: 'unknown', id: null, source: null, title: null, permissionMode: null, context: null };
   const neverRead = { projectDir: 'C:\\nowhere', readdir: () => assert.fail('nothing to look for'), readFile: () => assert.fail('nothing to read') };
   assert.deepEqual(channel.senderOf({ env: {}, ...neverRead }), unknown);
   assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: '' }, ...neverRead }), unknown);

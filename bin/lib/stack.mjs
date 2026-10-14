@@ -1,8 +1,8 @@
 // The stack's tools as data, plus read-only, injectable probes for three of their four states:
 // installed (+ version), configured (per host, per project). `outdated` is T2's job — see
 // odd/tasks/stack-doctor.md — so every row here carries `upToDate: 'unknown'` for it to fill.
-// The Codex plugin row (`codex-plugin`, T6) keeps the column meanings: `claude` is the plugin
-// enabled, `codex` is "the Codex side is ready", i.e. logged in. `checks` holds what doctor reports
+// The Codex row (`codex`, the Codex CLI itself) has `claude` `n/a` (Claude Code has no Codex side any more) and `codex`
+// "the Codex CLI is logged in". `checks` holds what doctor reports
 // that is not a tool: the Claude account check, whose `claude` cell is `ok`, `mismatch` or `unknown`, the
 // remote server check, whose `claude` cell is `ok`, `down`, `unknown` or `n/a`, and the hook commands check, whose
 // `claude` cell is `ok`, `stale`, `unknown` or `n/a`.
@@ -223,8 +223,7 @@ function context7InstalledVersion(home) {
 
 /** A Claude Code plugin has no CLI to ask: its version comes from the plugin marketplace's own
  * record of what it installed (`installed_plugins.json`), since that is the only place the version
- * is written down. Used by typescript-lsp and the Codex plugin, each with its own
- * `<name>@<marketplace>` id. */
+ * is written down. Used by typescript-lsp, with its `<name>@<marketplace>` id. */
 function pluginInstalledVersion(home, pluginId) {
   const { found, data } = readJsonFile(path.join(home, '.claude', 'plugins', 'installed_plugins.json'));
   if (!found) return { state: 'missing', version: null };
@@ -240,27 +239,19 @@ function sameDirectory(a, b, platform) {
   return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 }
 
-/** Whether Codex is logged in, by asking Codex itself: `codex login status` exits 0 when it is.
- * Run with `CODEX_HOME=<home>/.codex` so `--home` means the same Codex home and a fixture home
- * never reads the real one — except when `home` is the real home and the user already set their
- * own `CODEX_HOME`: that one is kept, since it is where their login actually lives (R3-codex-home-
- * overrides-user-env). `env` and `homedir` are injectable so tests never touch `process.env`. The
- * MCP probes still read `<home>/.codex` regardless — a pre-existing gap, out of scope here.
- * `codex` is `unknown` on a timeout; any other outcome (not logged in, no `codex` on PATH, a spawn
- * that throws) is `missing`. Only then is `codex --version` spawned (same env, same timeout) to tell
- * a logged-out Codex from a missing CLI, reported as `codexCli` (T6d, Codex P2) — the `codex` cell is
- * `missing` either way, and only the fix differs. `codexCli` is absent when nothing was probed for
- * it. Never reads `auth.json`. */
+/** Whether the Codex CLI is logged in, by asking Codex itself: `codex login status` exits 0 when it is.
+ * Run with `CODEX_HOME=<home>/.codex` so `--home` means the same Codex home and a fixture home never reads
+ * the real one — except when `home` is the real home and the user already set their own `CODEX_HOME`: that
+ * one is kept, since it is where their login actually lives (R3-codex-home-overrides-user-env). `env` and
+ * `homedir` are injectable so tests never touch `process.env`. `unknown` on a timeout; any other outcome
+ * (not logged in, no `codex` on PATH, a spawn that throws) is `missing`. Never reads `auth.json`. */
 function codexLoginState({ home, env: userEnv = process.env, homedir = os.homedir(), ...deps }) {
   const platform = deps.platform ?? process.platform;
   const keepUsersCodexHome = Boolean(userEnv.CODEX_HOME) && sameDirectory(home, homedir, platform);
   const env = keepUsersCodexHome ? undefined : { CODEX_HOME: path.join(home, '.codex') };
-  const probeDeps = { ...deps, env };
-  const result = spawnProbe('codex', ['login', 'status'], probeDeps);
-  if (result && probeTimedOut(result)) return { codex: 'unknown' };
-  if (result && !result.error && result.status === 0) return { codex: 'ok', codexCli: 'ok' };
-  const cli = probeVersionCommand('codex', ['--version'], probeDeps);
-  return { codex: 'missing', codexCli: cli.state === 'missing' ? 'missing' : 'ok' };
+  const result = spawnProbe('codex', ['login', 'status'], { ...deps, env });
+  if (result && probeTimedOut(result)) return 'unknown';
+  return result && !result.error && result.status === 0 ? 'ok' : 'missing';
 }
 
 const GENTLE_AI_UPGRADE_FIX = ['gentle-ai upgrade', 'gentle-ai sync'];
@@ -269,13 +260,14 @@ const GENTLE_AI_UPGRADE_FIX = ['gentle-ai upgrade', 'gentle-ai sync'];
  * configured state for the current project, and its own fix command per dimension that can gap
  * (`installed`/`claude`/`codex`/`project`/`upToDate` — a tool omits a dimension it has no meaning
  * for, e.g. context7 has no CLI to `installed`-fix, typescript-lsp has no Codex equivalent; the
- * Codex plugin's `codex` dimension is "logged in", not "registered"). A fix is one command string,
+ * Codex row's `codex` dimension is "logged in", not "registered"). A fix is one command string,
  * or an array of commands to run in order when it takes several steps: no single separator works
- * in both `cmd.exe` (no `;`) and Windows PowerShell 5.1 (no `&&`). `fix`
- * takes the same `deps` bag as the other probes, since codegraph's `project` fix must carry the
- * actual resolved project root, not a placeholder; it also gets `configured`'s own result as a
- * second argument (the Codex plugin reads its probed `codexCli` there; every other tool ignores
- * it). Adding a tool never touches
+ * in both `cmd.exe` (no `;`) and Windows PowerShell 5.1 (no `&&`). `fix` takes the same `deps` bag
+ * as the other probes, since codegraph's `project` fix must carry the actual resolved project root,
+ * not a placeholder; it also gets `configured`'s own result as a second argument. `configured` gets
+ * the tool's own `installed` probe as its second argument, so a tool never probes the same binary
+ * twice. `when`, when given, decides whether a tool is shown at all (`probeStack` leaves out a tool
+ * whose `when` says no). Adding a tool never touches
  * `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. Commands
  * verified on this machine 2026-09-26 (`codex mcp add --help`, `claude mcp add --help`, `gentle-ai
  * --help`) — see odd/tasks/stack-doctor.md. */
@@ -284,7 +276,7 @@ export const tools = [
     id: 'gentle-ai',
     installed: (deps) => probeVersionCommand('gentle-ai', ['version'], deps),
     // A configured host whose hooks call a command `gentle-ai help` no longer lists is `stale`;
-    // `staleHooks` (its fix lines per host) is internal, like the Codex plugin's `codexCli`.
+    // `staleHooks` (its fix lines per host) is internal: `probeTool` never copies it into the row.
     configured: (deps) => {
       const cells = {
         claude: gentleAiInstalledAgent(deps.home, 'claude-code'),
@@ -383,26 +375,21 @@ export const tools = [
     }),
   },
   {
-    // `codex` here is "logged in", not a registration: the plugin's Codex side is Codex itself
-    // being signed in. Its fixes are the tool's own commands (the marketplace source is the one
-    // recorded in `known_marketplaces.json`).
-    id: 'codex-plugin',
-    installed: ({ home }) => pluginInstalledVersion(home, 'codex@openai-codex'),
-    // `codexCli` is internal: `probeTool` hands it to `fix` but never copies it into the row.
-    configured: (deps) => ({
-      claude: claudeEnabledPlugin(deps.home, 'codex@openai-codex'),
-      // No plugin, nothing to be logged in for: `n/a`, and `codex login status` is never spawned.
-      ...(pluginInstalledVersion(deps.home, 'codex@openai-codex').state === 'ok'
-        ? codexLoginState(deps)
-        : { codex: 'n/a' }),
+    // The Codex CLI itself (the Codex plugin row is gone): `installed` is its version, `codex` is "logged in".
+    // Shown only while the project's codexReview switch is not off; a switch that did not resolve shows it.
+    id: 'codex',
+    installed: (deps) => probeVersionCommand('codex', ['--version'], deps),
+    when: (deps) => deps.functions?.codexReview?.value !== 'off',
+    // A missing CLI has no login to ask about: `n/a`, and `codex login status` is never spawned.
+    configured: (deps, installed = probeVersionCommand('codex', ['--version'], deps)) => ({
+      claude: 'n/a',
+      codex: installed.state === 'missing' ? 'n/a' : codexLoginState(deps),
     }),
     project: () => 'n/a',
-    fix: (_deps, configured) => ({
-      installed: ['claude plugin marketplace add openai/codex-plugin-cc', 'claude plugin install codex@openai-codex'],
-      claude: 'claude plugin enable codex@openai-codex',
-      // A missing Codex CLI needs installing before there is anything to log in to.
-      codex: configured?.codexCli === 'missing' ? ['npm i -g @openai/codex', 'codex login'] : 'codex login',
-      upToDate: 'claude plugin update codex@openai-codex',
+    fix: () => ({
+      installed: 'npm i -g @openai/codex',
+      codex: 'codex login',
+      upToDate: 'npm i -g @openai/codex@latest',
     }),
   },
 ];
@@ -469,7 +456,7 @@ function recordedLaunchers(home, platform) {
  * `claude` is `n/a` with no launcher recorded, `down` when at least one server is not running (the gap, whatever
  * the others are), else `unknown` when one could not be told (a manifest, launcher or state file that cannot be
  * read, a look at the processes that failed), else `ok`. The `down` list beside it is internal, like the Codex
- * plugin's `codexCli`: the servers that are down, each `{ args, stopped }`, `stopped` when the marker of a
+ * `staleHooks`: the servers that are down, each `{ args, stopped }`, `stopped` when the marker of a
  * `remote stop` is there, which is why the watchdog left that one down.
  *
  * `doctor` runs at every session start, so the processes are looked at only when some state file names one, once
@@ -672,8 +659,9 @@ export function resolveProjectRoot(cwd, spawn = spawnSync) {
 /** One tool's full doctor row: installed state + version, configured per host, configured for the
  * project, `upToDate` left `unknown` for T2, and the tool's own fix command per dimension. */
 export function probeTool(tool, deps) {
-  const { state: installed, version } = tool.installed(deps);
-  const configured = tool.configured(deps);
+  const installedProbe = tool.installed(deps);
+  const { state: installed, version } = installedProbe;
+  const configured = tool.configured(deps, installedProbe);
   return {
     id: tool.id,
     version,
@@ -686,10 +674,12 @@ export function probeTool(tool, deps) {
   };
 }
 
-/** Every tool's row, in `tools` order, then every check's, in `checks` order. A check marked `interactiveOnly` starts
+/** Every shown tool's row, in `tools` order, then every check's, in `checks` order. A tool whose `when` says no is
+ * left out (the Codex row while the project's codexReview switch is off). A check marked `interactiveOnly` starts
  * processes of its own, so it is left out unless `deps.interactive` is set: only `doctor`'s own report sets it, and the
  * session-start report (`doctor --hook`) and the TUI's stack block keep their cost. */
 export function probeStack(deps) {
+  const shown = tools.filter((tool) => !tool.when || tool.when(deps));
   const selected = checks.filter((check) => deps.interactive || !check.interactiveOnly);
-  return [...tools, ...selected].map((tool) => probeTool(tool, deps));
+  return [...shown, ...selected].map((tool) => probeTool(tool, deps));
 }

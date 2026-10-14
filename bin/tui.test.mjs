@@ -432,7 +432,7 @@ test('computeStackState resolves real rows from local probes without ever callin
     assert.ok(Array.isArray(stack));
     assert.deepEqual(
       stack.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'memory-rules', 'session-classes', 'claude-account', 'remote-server'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server'],
     );
     assert.deepEqual(stack.at(-2), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');
     assert.deepEqual(stack.at(-1), { id: 'remote-server', version: 'n/a', state: 'ok' }, 'an empty home records no launcher, so no server is down');

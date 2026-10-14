@@ -20,7 +20,7 @@ const ROWS = [
   { id: 'codegraph', version: '1.6.0' },
   { id: 'context7', version: null },
   { id: 'typescript-lsp', version: null },
-  { id: 'codex-plugin', version: null },
+  { id: 'codex', version: null },
 ];
 
 test('gentle-ai and engram fetch their GitHub releases/latest tag_name, stripped of a leading v', async () => {
@@ -150,32 +150,61 @@ function marketplaceFile(home, marketplace) {
   return path.join(home, '.claude', 'plugins', 'marketplaces', marketplace, '.claude-plugin', 'marketplace.json');
 }
 
-test('codex-plugin reads its latest version offline from the openai-codex marketplace, plugin "codex"', () => {
+test('typescript-lsp reads its latest version offline from the claude-plugins-official marketplace', () => {
   const home = makeTmpHome();
   try {
-    writeJson(marketplaceFile(home, 'openai-codex'), {
-      plugins: [{ name: 'codex', version: '1.0.7' }, { name: 'other-plugin', version: '9.9.9' }],
+    writeJson(marketplaceFile(home, 'claude-plugins-official'), {
+      plugins: [{ name: 'typescript-lsp', version: '1.0.1' }, { name: 'other-plugin', version: '9.9.9' }],
     });
     // A same-named plugin in the other marketplace must never leak in: the marketplace name matters.
-    writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'codex', version: '8.8.8' }] });
-    const rows = [{ id: 'codex-plugin', version: '1.0.6' }];
+    writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'typescript-lsp', version: '8.8.8' }] });
+    const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
     const versions = readLocalLatestVersions(rows, { home });
-    assert.equal(versions['codex-plugin'], '1.0.7');
+    assert.equal(versions['typescript-lsp'], '1.0.1');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('codex-plugin reads null when the openai-codex marketplace file does not exist or lacks the plugin', () => {
+test('typescript-lsp reads null when its marketplace file does not exist or lacks the plugin', () => {
   const home = makeTmpHome();
   try {
-    const rows = [{ id: 'codex-plugin', version: '1.0.6' }];
+    const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
     const missing = readLocalLatestVersions(rows, { home });
-    assert.equal(missing['codex-plugin'], null);
+    assert.equal(missing['typescript-lsp'], null);
 
-    writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'other-plugin', version: '1.0.0' }] });
+    writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'other-plugin', version: '1.0.0' }] });
     const absent = readLocalLatestVersions(rows, { home });
-    assert.equal(absent['codex-plugin'], null);
+    assert.equal(absent['typescript-lsp'], null);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex fetches its latest version from the npm registry, as @openai/codex', async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url === 'https://registry.npmjs.org/%40openai%2Fcodex/latest') {
+      return { ok: true, json: async () => ({ version: '0.131.0' }) };
+    }
+    return { ok: false };
+  };
+  const home = makeTmpHome();
+  try {
+    const versions = await fetchLatestVersions([{ id: 'codex', version: '0.130.0' }], { fetch: fetchImpl, home });
+    assert.equal(versions.codex, '0.131.0');
+    assert.deepEqual(calls, ['https://registry.npmjs.org/%40openai%2Fcodex/latest']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex has no local marketplace source: its latest version is never read from a plugin file', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'codex', version: '1.0.7' }] });
+    assert.deepEqual(readLocalLatestVersions([{ id: 'codex', version: '0.130.0' }], { home }), {});
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -285,29 +314,29 @@ test('every tool lookup runs concurrently, not one at a time', async () => {
 // read on every run by `readLocalLatestVersions`, never fetched, and `isLookupAttempted` (what the
 // doctor's outage rule counts) covers only the network sources. ---
 
-test('isLocalSource is true for the two marketplace-backed rows and false for network rows', () => {
+test('isLocalSource is true for the marketplace-backed typescript-lsp row and false for network rows', () => {
   assert.equal(isLocalSource({ id: 'typescript-lsp', version: '1.0.0' }), true);
-  assert.equal(isLocalSource({ id: 'codex-plugin', version: '1.0.6' }), true);
+  assert.equal(isLocalSource({ id: 'codex', version: '0.130.0' }), false);
   assert.equal(isLocalSource({ id: 'gentle-ai', version: '3.7.0' }), false);
   assert.equal(isLocalSource({ id: 'some-future-tool', version: '1.0.0' }), false);
 });
 
-test('isLookupAttempted is false for a local-source row: only network lookups count as attempted', () => {
+test('isLookupAttempted is false for a local-source row and true for the Codex CLI\'s npm lookup', () => {
   assert.equal(isLookupAttempted({ id: 'typescript-lsp', version: '1.0.0' }), false);
-  assert.equal(isLookupAttempted({ id: 'codex-plugin', version: '1.0.6' }), false);
+  assert.equal(isLookupAttempted({ id: 'codex', version: '0.130.0' }), true);
 });
 
 test('fetchLatestVersions never resolves a local-source row: that is readLocalLatestVersions\'s job', async () => {
   const home = makeTmpHome();
   try {
-    writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'codex', version: '1.0.7' }] });
+    writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'typescript-lsp', version: '1.0.1' }] });
     let fetchCalled = false;
     const fetchImpl = async () => {
       fetchCalled = true;
       return { ok: false };
     };
-    const versions = await fetchLatestVersions([{ id: 'codex-plugin', version: '1.0.6' }], { fetch: fetchImpl, home });
-    assert.equal(versions['codex-plugin'], null);
+    const versions = await fetchLatestVersions([{ id: 'typescript-lsp', version: '1.0.0' }], { fetch: fetchImpl, home });
+    assert.equal(versions['typescript-lsp'], null);
     assert.equal(fetchCalled, false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -317,13 +346,13 @@ test('fetchLatestVersions never resolves a local-source row: that is readLocalLa
 test('readLocalLatestVersions returns one entry per local-source row only, null where the file has no answer', () => {
   const home = makeTmpHome();
   try {
-    writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'codex', version: '1.0.7' }] });
+    writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'typescript-lsp', version: '1.0.1' }] });
     const rows = [
       { id: 'gentle-ai', version: '3.7.0' },
       { id: 'typescript-lsp', version: '1.0.0' },
-      { id: 'codex-plugin', version: '1.0.6' },
+      { id: 'codex', version: '0.130.0' },
     ];
-    assert.deepEqual(readLocalLatestVersions(rows, { home }), { 'typescript-lsp': null, 'codex-plugin': '1.0.7' });
+    assert.deepEqual(readLocalLatestVersions(rows, { home }), { 'typescript-lsp': '1.0.1' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
