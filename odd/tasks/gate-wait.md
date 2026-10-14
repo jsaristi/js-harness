@@ -1004,9 +1004,11 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
       Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
       before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
-- [ ] T19 · A gate keeps who spent the processor over its run (candidate, 2026-10-13, from
-      the measure of the slower check in Progress; not ordered yet). Route: inline, with a
-      reader for the design.
+- [ ] T19 · A gate keeps who spent the processor over its run (2026-10-13, from the measure of
+      the slower check in Progress; ordered by the orchestrator at 20:13, after the stretch of
+      "JH 9" on `bin/check.mjs` is on `main`). With it, the comment at the head of
+      `bin/gate.mjs` says the whole rule for runs beside a gate. Route: inline, with a reader
+      for the design.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2706,6 +2708,32 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     43 minutes of lock a day and 42 of waits. The orchestrator put its guard behind this
     measure, bounded it to one slice and granted one probe of 100,000 input tokens at most
     (a `NODE_OPTIONS` preload that ends a `node --test` Codex starts); not started.
+- 2026-10-13 · **After the measure** (written at 20:16; each line is the orchestrator's
+  message unless it says otherwise).
+  - *A second dated change in the gap, the orchestrator's own:* at 16:56 to 16:57 it updated
+    the installed copy (`pnpm add -g github:jsaristi/js-harness`, a new folder in pnpm's
+    global store, the old one left) and ran `js-harness install`. So two things changed
+    between the last fast check (14:13) and the first slow one (17:01): the desktop app's
+    restart and that install. Which of them, if either, set `PcaSvc` going is not proven.
+  - *The orchestrator's own read at 20:08*, a gate running, three reads of the performance
+    counters: the svchost of `PcaSvc` 76 to 97% of a processor, MsMpEng 86 to 138%.
+  - *His answer*, tapped, read by me (`js-harness sessions --quote
+    65318fd5-80e7-4bb8-92b5-06737140185b 13354`, 2026-10-14T01:12:32Z): "Lo reinicio yo ahora
+    (Recomendada)", to "El servicio de Windows "Asistente de compatibilidad" (PcaSvc) está
+    usando un núcleo entero y alarga cada comprobación de 9 a 13 minutos. ¿Qué hacemos?"
+    (the others: "Reinicio la máquina", "No tocar nada"). He restarts the service himself;
+    nobody else touches the machine. **Owed here:** the seconds of the first whole check in
+    the gate log after the service's pid changes (it was 8936), set beside 700 to 1,132 s
+    before; no extra run unless the log cannot tell.
+  - *The rule beside a gate, the orchestrator's ruling on my text:* beside a gate, a quote
+    and one test file of under half a minute are free; a whole run, a measure, a board read
+    and a reviewer are not. The comment at the head of `bin/gate.mjs` already says the
+    first half ("One test file run alone during a task stays free; this is for what takes
+    minutes"); its sentence is made whole in T19's commit, which edits that file, so that
+    one line of comment does not cost the line a whole gate of its own.
+  - *T19 is ordered:* after the stretch of the session "JH 9" on `bin/check.mjs` is on
+    `main`. The antivirus is his and nothing is recommended there: the numbers are 1,139
+    processor-seconds in a run of 805 s, 859 in one of 533.
 
 ## Next
 
@@ -2768,6 +2796,59 @@ antivirus spends on each (his).
   merge's own resolution only" as his.
 
 ## Resume here
+
+**State of the session "JH 8" at 20:13 on 2026-10-13, at 78% of its context (the app
+compacts it at 93%). Read this first; it is newer than the rest of this section.**
+
+- **In flight: the correction of install-update T8.** Worktree
+  `D:\js-harness-worktrees\upgrade-sync-path`, branch `fix/upgrade-sync-from-path`, head
+  `0cca602` (T8: after `upgrade --source` with no `--prefix` the copy on the path says its
+  version, with a new `js-harness --version`, before it is let to sync; design `6d09c57` in
+  `odd/tasks/install-update.md`, "T8 design"). Codex on `6d09c57..0cca602`: one P2, true (the
+  refusal offered a second `upgrade` with `--prefix`, which would say "up to date" and sync
+  nothing), 125,690 input tokens (plan 76,000, allowance 300,000). The correction is applied
+  in that tree, not committed (`bin/update.mjs`, `bin/update.test.mjs`,
+  `odd/tasks/install-update.md`), and its turn waits in the line of the lock since 20:03:
+  `t8b-turn.sh` (red with `bin/update.mjs` at HEAD, green, the commit with the message
+  `t8b-msg.txt`, then the Codex plan); its log is `t8b-turn.log`. **Then:** Codex once on
+  `0cca602..<the correction>` (`codex-turn.sh <worktree> 0cca602 <short head> 315000 t8b`,
+  only if the printed plan is inside the allowance); the record in
+  `odd/tasks/install-update.md` (T8 checked, Progress with both turns and both reviews,
+  "Next step"); merge `origin/main` in (`clean-merge-turn.sh <worktree>`: the branch is
+  stacked on `6dd2480`, and `main` `75b0ceb` holds it by a merge commit); push; pull request
+  with no AI attribution; the head to the orchestrator. The session "JH 9" adds two lines to
+  `bin/js-harness.mjs` only after T8 is on `main`.
+- **Done by this session on 2026-10-13 after its compaction of 17:55:** install-update T6
+  (`243794e`, pull request 103, merged), T7 (`5502d54`, pull request 104, merged), T8's first
+  commit; the measure of the slower check (Progress above; pull request 105, documents only,
+  this branch). Codex since that compaction: 135,381 (T6), 74,849 (T7), 125,690 (T8). No
+  sub-agent.
+- **Waiting on others:** his answer on `PcaSvc` (through the orchestrator), then one measured
+  check; the orchestrator's word on T19 and on the one text for the rule about small runs
+  beside a gate (my proposal: beside a gate, a quote and one test file of under half a minute
+  are free; a whole run, a measure, a board read and a reviewer are not; `bin/gate.mjs:4`
+  changes to match).
+- **Next after T8, by the orchestrator's order:** T19 if it orders it; then the guard of the
+  Codex review outside the lock (one slice at most, with a reader; one probe granted, 100,000
+  input tokens at most, medium effort, in a scratch folder, recorded here). The design I
+  would write first: `codex-review` builds Codex's environment in one place
+  (`bin/codex-review.mjs`, `childEnv` and `leanEnv`); outside a turn of the lock it adds a
+  `NODE_OPTIONS` preload that ends any `node` started with `--test` with one line, so a
+  review beside a gate cannot run a second copy of the tests; the probe is whether Codex
+  hands that variable to the commands it starts (else Codex's own
+  `shell_environment_policy.set`). The sandbox is no guard: seven of this session's reviews
+  ran `node --test`. If it comes out larger than one slice or needs anything of his: a
+  candidate with its number (43 minutes of lock a day, up to 42 of waits) and on to "Next".
+- **Worktrees of this session now:** `upgrade-sync-path` (T8, in flight);
+  `gate-wait-run-load` (this branch, pull request 105); `package-contents` and
+  `status-no-pin` (merged: to remove); `gate-wait-count` (the counting tool, `fc70dc3`, not
+  pushed); `gate-on-github` (JH 10 reads it; leave it).
+- **Scripts of this evening in the scratchpad:** `t6-turn.sh` and `t8-turn.sh` (the model of a
+  turn with several code files), `codex-turn.sh`, `m1h-turn.sh` with `m1-table.cjs` (the whole
+  suite by file against M1g), `checks-load.cjs`, `svchost-since.cjs`, `codex-in-lock.cjs`,
+  `cpu-sample.ps1`, `cpu-speed-log.ps1`, `two-pids.ps1`, `svchost-who.ps1`.
+- **Engram refuses this session's saves** ("Claude host session already ended"), so nothing
+  of this evening is in memory: the feature documents are the record.
 
 - **This document** is on `feat/gate-wait-two-halves` (worktree
   `D:\js-harness-worktrees\gate-wait-two-halves`) until its pull request is merged,
