@@ -77,6 +77,10 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   him the same day: "Solo los comandos (Recomendada)" to question 24, read in the
   orchestrator's transcript at line 11146). `package.json` lists `bin/` without its test files
   and no `AGENTS.md`; a test reads npm's own list and pins it. Route: inline.
+- [ ] T8 After `upgrade --source` with no `--prefix`, the copy of js-harness on the path says its
+  version before it is let to sync. Added on 2026-10-13 (the candidate under "Next step", told to
+  the orchestrator at 06:27 and ordered by it at 16:57). Design below ("T8 design"). Route:
+  inline; high risk by item 5 (an installer path), so Codex reads it and the turn proves it.
 
 ## Progress
 - 2026-09-26: document created. Measured: `npm` on PATH is `exec pnpm "$@"` (pnpm 12.6.0); the real
@@ -271,6 +275,41 @@ package's contents:
   it was the upgraded copy comes after it ran.
 Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it changes the test
 "resolveLatest starts no process and answers nothing when no source is named" on purpose.
+
+## T8 design (written at 19:02 on 2026-10-13, read in the code on `6dd2480`; nothing built)
+
+- **What happens today** (`bin/update.mjs`, `upgradeMain`, the `syncResult` block). After the
+  package manager installed the tarball, with `--prefix` the sync is run from the file the
+  prefix names, by this same node, with no shell. With no `--prefix` it is
+  `spawn('js-harness', ['sync', '--home', <home>, '--global'], { shell: true })`: whatever
+  `js-harness` the shell finds on the path. Only after it ran does `upgrade` read the manifest
+  and say "the js-harness found is not the upgraded one". By then a copy that is not the
+  upgraded one has written the machine install: skills and hook entries of another version.
+- **The rule.** The copy on the path is asked which version it is before it is let to write.
+  `upgrade` runs `js-harness --version` through the same shell; only when the answer is
+  exactly the version it just installed does it run that copy's `sync`. Any other answer, no
+  answer, or a failure: nothing is synced, exit 1, and the line says what the copy on the path
+  answered, what was installed, and the two ways out (run `js-harness sync --global` with the
+  upgraded copy, or name where it was installed with `--prefix`).
+- **`js-harness --version`** is new: it prints the running version, one line, exit 0. An older
+  copy on the path does not know it and answers "Unknown command", exit 2, which is a refusal
+  here, and rightly: a copy that cannot say its version is not the one just installed.
+- **What is printed of the answer.** The output of a program found on the path is not printed
+  as it comes: only when it is a plain version (digits, dots and the letters semver allows) is
+  it named; otherwise the line says the copy on the path "did not answer --version".
+- **What stays.** The check of the manifest after the sync stays, as the second proof. With
+  `--prefix` nothing changes. The probe and the run are two starts of the same name a moment
+  apart; a path that changes between them is not defended against.
+- **Considered and left:** running this process's own file when its `package.json` reads the
+  new version after the install (no shell at all). It is true for npm, which replaces the
+  folder in place, and not for a manager that keeps each version in its own folder (pnpm), where
+  it would refuse an upgrade that works today. One rule that holds for every manager is worth
+  more than a branch per manager.
+- **Tests, first and red** (`bin/update.test.mjs`, with the injected `spawn`): the probe is the
+  second process and the sync the third, both through the shell; a copy that answers another
+  version, or none, or fails: exit 1, no sync started, the line names both versions and prints
+  none of the copy's own bytes. The older tests whose stand-in answers nothing now answer the
+  probe. `bin/js-harness.test.mjs`: `--version` prints the version and the help lists it.
 
 ## T6: state for a resume
 
