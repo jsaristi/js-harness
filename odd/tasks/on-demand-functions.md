@@ -486,7 +486,8 @@ own rule.
   needed, which become switches, where a switch is stored, how each command reads it, the
   defaults, the migration; attacked by two readers; its questions sent to the orchestrator.
   Specs: S1 to S5. Open until his four answers are in the Log.
-- [ ] T1 (route: inline; S1, S2) `bin/lib/functions.mjs`, new: reads and validates `functions`
+- [x] T1 (done 2026-10-13; the commit after `82761e8`, named in the Log) `bin/lib/functions.mjs`
+  and `bin/lib/functions.test.mjs`. As planned (route: inline; S1, S2): reads and validates `functions`
   from a parsed `harness.json`, answers "the project holds code" from a list of paths, resolves
   each switch with its reason. Pure, no git and no file read in it, so every rule is a test.
   The default of `codexReview` is one constant, since question 2 may move it.
@@ -549,3 +550,18 @@ each to `main`, as this project's pull requests already go.
   readers' claims: `bin/doctor.mjs:215-236`, `bin/lib/project.mjs:1500-1536`,
   `bin/check.mjs:1124-1142`. Next: the four questions and the meeting points to the
   orchestrator; then T1.
+- **L6** (2026-10-13 19:18) The design's second version committed as `82761e8`. The four
+  questions, the finding that goes before the first, the two things to tell him and the meeting
+  points sent to the orchestrator by its session id (delivered; its turn started on it). A slip
+  in that message: its last line gave a context share nobody had read; corrected in a second
+  message with the reading (50 percent, 249,627 of 500,000).
+- **L7** (2026-10-13) T1. RED: `node --test bin/lib/functions.test.mjs` failed with the module
+  absent (the file's one failure, before `functions.mjs` existed). GREEN: the same command, 21
+  tests, 21 pass. What the module is: `readFunctions` (a parsed `harness.json` to `{ values,
+  declared, errors }`), `programFile` and `typeScriptFile` (the first path of a list whose name
+  is a program's, or TypeScript's), `resolveFunctions` (each switch to `{ value, declared,
+  because }`). Decisions taken in it, beyond the design: a name under `functions` that is no
+  switch is an error, since a misspelt switch would otherwise be a silent default; a value that
+  cannot be read is read as on (`strict`), so the push path, which must not refuse on it, has an
+  answer; files that could not be read make every `auto` on. No existing command or option is
+  touched: nothing imports the module yet. Risk: none (two new files, no caller).
