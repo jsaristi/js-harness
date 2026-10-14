@@ -482,6 +482,21 @@ quota between day 15 and day 25, and from that day to the month's end no run sta
 GitHub, in this repository or in any other private one of his. The minutes are counted from
 the real runs once they exist (Done when), so the month's use is read and not guessed.
 
+**T7, the exchange: reader B (gaps; not yet taken into the design, which is still its first
+version).**
+- 1. A session's side is not written. Today's rule is in the orchestrator's relief file (~/.js-harness/relief/D--js-harness.md:276): head contains origin/main "or the session merges main in and gates the result first". Should say: a session merges main only on a conflict (GitHub starts no run then) or when it needs code from main; the text goes into the relief file and to each session. A clean merge's Codex record needs nothing (gate-wait.md:2799).
+- 2. Nobody owns a main that is red (on Windows or Linux): no run on main is covered by his yes, no local gate runs on the merged tree; the first Windows proof of it is the next session's first code commit, which then fails for a cause not its own. Should say who fixes a red that traces to main, how a session tells its red from a main red, whether the orchestrator stops merging until then. Settle in the design, not ask him.
+- 3. The base a run tested cannot be read: gh pr checks shows none. GITHUB_SHA is the last merge commit of refs/pull/N/merge, so HEAD^1 on the runner is the base. Should say: the workflow prints `git rev-parse HEAD^1`, the merge check compares it with origin/main. Judgment: "MERGEABLE, CLEAN" may not tell no-check from green; read the four states separately.
+- 4. Several PRs ready at once: after the first merge each next needs close+reopen (~4 min + queue), may conflict and fall back to a local merge; N ready = N-1 runs in a row. Close+reopen leaves the PR CLOSED for a moment; the board reads only open PRs (bin/lib/sessions.mjs:1061). Reopen mechanism unproven. Should say the order, what the board shows, the fallback if a reopen does not recompute the merge.
+- 5. A red only on Linux: the four states give no action. Should say: red = no merge under the exchange; the session fixes it or merges main locally and the old rule applies; the cause is recorded. (Flake candidate: T6 review finding 1.)
+- 6. Going back must be one decision: record each merge made on a GitHub run (run URL, base, head; in the merge commit body or a relief line); the measure of the loss needs JH 8's gate log to tell a merge gate from a commit gate; on return every open branch that did not merge main merges it and gates once.
+- 7. Twice judged: no merge rule ships (bin/lib/manifest.mjs:30,51,59); an installed project's runner cannot fetch the private harness; the merges of main may be mostly this repository's cost (ROADMAP "Session channel" advice). Should say: a rule for this repository only.
+- 8. A cheaper alternative not compared: the orchestrator already runs `git merge-tree` of each open branch against the new main (relief line 276). "Merge without the local merge gate when merge-tree is clean and the branch and the new main changed no code file in common" frees part of the same gates with no minutes and no reopen; gives up two code files that interact without overlapping. Weigh it against the exchange.
+- Question for him (judgment): answerable, but hides the account-wide stop (busiest pace about day 9 by the same arithmetic) and the automatic fallback on the day the quota ends; put both in the same question; settle "who repairs main" in the design.
+- Looked for and not a gap: Codex coverage is from the merge-base (bin/lib/codex-review-coverage.mjs:273-284); sameTree; only 2 of 24 merges of main since 97703f9 had a hand resolution (git show --remerge-diff); the month's arithmetic checks out.
+
+**T7: reader A** was still running when this was written.
+
 ## Tasks
 - [x] T1 · This document, opened with the task contract, on its own branch and worktree,
       mirrored in engram. Route: inline. Evidence: the commit that adds it.
