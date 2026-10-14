@@ -1214,6 +1214,7 @@ reader, and that table names this feature as their owner.
   notice carries both read, never typed: JH 14 typed its share unread twice on 2026-10-14, and
   JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
   wording). After T18
+- [ ] T20 `js-harness wait`: one command a session runs in the background that ends when its condition holds (a pull request merged, by gh; origin/main holding a commit or a file content; a notice addressed to this session in the channel record), printing its purpose and its end at start (T18); and the skill and the hooks say that while he is not present a work session never ends a turn waiting for a message, his /compact or an event: it writes its state, arms `js-harness wait` and keeps working. His order of 2026-10-14, typed, read with `sessions --quote`, exit 0 (the lead's transcript `ffe99ebf`, line 5141): nothing ran from 06:40 to 13:34. The rule's wording is the lead's message of 13:58.
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -2873,6 +2874,7 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
+      AT 13:58, THE NEWEST: T19 is pull request 136; T18 (133) merged. NEW ORDER, T20 (Tasks): branch `feat/wait-command` from origin/main; one writer builds `js-harness wait` test first; then the skill's and hooks' text; small pull request; its number to the lead. Live background: that writer only.
       AT 06:31: T19 is built on `feat/notify-stamp` by one writer on Haiku 5.5, test first (6, 11, 1 and 1 failed; then channel 51, notify 131, the library 281, the dispatcher 33 passed; resume 77 and sessions 207 untouched and passing; notify 131 rerun by this session): `senderOf` returns the sender's context (tokens and share), a notice records it in `from`, the confirmation of `notify` says the local hour and the share read, and the board's channel section prints the share. Not done: the watch's line for a notice to the orchestrator does not print the share yet. It is the commit that carries this text; then its reviews, push and pull request.
       AT 06:22, AT THE CONTEXT PAUSE: pull request 132 (the doctor row) is MERGED; T18 is
       pull request 133 (`0f8527e`, `check --push` exit 0 at 06:22, Codex "correct", 0.91). The
