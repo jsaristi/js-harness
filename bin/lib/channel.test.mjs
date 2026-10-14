@@ -176,7 +176,7 @@ test('a question is the base notice, then its id, its options and its waits, in 
 
 test('a question goes to the orchestrator, who asks him, and takes an id of one line and 100 characters at most', () => {
   assert.equal(asking({ to: 'ORQ' }).to.role, 'orchestrator');
-  askingRefused({ to: '5' }, /a question goes to the orchestrator, who asks him/);
+  askingRefused({ to: '5' }, /a question goes to the orchestrator, who asks the user/);
   askingRefused({ id: undefined }, /the id of a question is empty/);
   askingRefused({ id: '' }, /the id of a question is empty/);
   askingRefused({ id: 'x'.repeat(101) }, /the id of a question has 101 characters, 100 at most/);

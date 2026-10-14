@@ -17,7 +17,7 @@ import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
-import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
+import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
@@ -36,7 +36,7 @@ const USAGE = [
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
   '    keys text, options and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
-  '    The record numbers it, and the number is printed: he is asked with its text headed by',
+  '    The record numbers it, and the number is printed: the user is asked with its text headed by',
   '    "Pregunta <n>: ". An answer or a withdrawal names its question with --question <n>. A verified answer',
   '    is one read at its line of the transcript, and its copy is kept with it; with no transcript to read,',
   '    the answer is recorded unverified, and that is said.',
@@ -44,7 +44,7 @@ const USAGE = [
   '    local date and time of the clock.',
   `  --opening stores the opening of the session with that title (one line, ${OPENING_TITLE_MAX} characters at most):`,
   `    its text is read from standard input as UTF-8, ${OPENING_TEXT_MAX} characters at most, and the same title`,
-  '    again replaces it.',
+  '    again replaces it. It then prints the session\'s first message as a block to copy.',
   '  A text, a line or a title that begins with -- goes after a lone --: -- "--a text", --relief -- "--a line", --opening -- "--a title".',
   '    Without it, it is read as an option this command does not know, and refused.',
   '  A notice is a claim of the session that wrote it, never the user\'s word. It sends no message.',
@@ -141,10 +141,10 @@ function parseArgs(argv) {
  * and holds a question that starts with the question's prefix: one call may ask several questions. */
 function copyOfAnswer(text, { line, file, number, asked }) {
   const quote = quoteOf(text, line);
-  if (!quote.person) return { refused: `line ${line} of ${file} is ${quote.what}: not his answer` };
+  if (!quote.person) return { refused: `line ${line} of ${file} is ${quote.what}: not the user's answer` };
   const recordedAt = Date.parse(asked.at);
   if (quote.answered === undefined) {
-    if (quote.pastedOnly) return { refused: `line ${line} of ${file} holds only pasted text: not his words typed in the chat` };
+    if (quote.pastedOnly) return { refused: `line ${line} of ${file} holds only pasted text: not the user's words typed in the chat` };
     if (quote.at === null) return { refused: `line ${line} of ${file} has no time, so it cannot be told to come after question ${number}` };
     if (!(Date.parse(quote.at) > recordedAt)) return { refused: `line ${line} of ${file} was sent before question ${number} was recorded` };
     return { copy: { tool: null, answers: [{ question: asked.text, options: [], answer: quote.text, how: 'typed in the chat' }] } };
@@ -298,6 +298,16 @@ export async function notifyMain(
     }
     const lines = draft.text.replace(/\n$/, '').split('\n').length;
     stdout(`js-harness notify: opening for ${JSON.stringify(draft.title)} ${stored.replaced ? 'replaced' : 'written'} in ${stored.path} (${plural(lines, 'line')}, ${plural(draft.text.length, 'character')})`);
+    // The first message of the session, as a block to copy: the user pastes it as it is into the new session.
+    const quoted = JSON.stringify(draft.title);
+    stdout(`The first message of the session ${quoted}, to send in it as it is:`);
+    stdout('```');
+    // The command only for a title every shell reads alike; for another, the request in words (`openingCommand`).
+    const command = openingCommand(draft.title);
+    stdout(command !== null
+      ? `You are the session ${quoted}. Read your opening with ${command} and follow it.`
+      : `You are the session ${quoted}. Read your opening with js-harness sessions --opening, giving it your title as one argument, after a lone -- when it begins with --, and follow it.`);
+    stdout('```');
     senderNotKnown();
     if (roleOfTitle(draft.title) === null) {
       stderr(`js-harness notify: ${JSON.stringify(draft.title)} is not of the shape <code> <role> · <what it does>: the opening is found by its whole title, not by a code and a role`);
@@ -387,7 +397,7 @@ export async function notifyMain(
         : notice.kind;
   stdout(`js-harness notify: recorded ${what} for ${role} at ${at} from ${senderWords(from)} in ${file}`);
   if (notice.copy) {
-    for (const one of notice.copy.answers) stdout(`his answer, ${one.how}: ${one.answer.length > SHOWN ? `${one.answer.slice(0, SHOWN)}…` : one.answer}`);
+    for (const one of notice.copy.answers) stdout(`the user's answer, ${one.how}: ${one.answer.length > SHOWN ? `${one.answer.slice(0, SHOWN)}…` : one.answer}`);
   }
   if (questionNumber !== null) stdout(`prefix: ${JSON.stringify(questionPrefix(questionNumber))}`);
   senderNotKnown();
@@ -416,8 +426,8 @@ export async function notifyMain(
     const ask = JSON.stringify(questionPrefix(questionNumber));
     const rule = () => askingRule(personAtOf(), now(), { waiting: questionsWaiting });
     if (roleOfTitle(from.title)?.role === 'orchestrator') stdout(`you hold that role: ${rule()}. Its text is headed by ${ask}; until it is asked the question waits as this notice`);
-    else if (address === null) stdout(`no orchestrator to show it: ask him yourself: ${rule()}. Its text is headed by ${ask}. Then record his answer: js-harness notify --to orchestrator --kind answer --question ${questionNumber} --transcript <session id> --line <n> "<his answer in one line>"`);
-    else stdout(`question ${questionNumber} is recorded for ${address} to show to him: ring it with the number, and go on with what does not wait on it`);
+    else if (address === null) stdout(`no orchestrator to show it: ask the user yourself: ${rule()}. Its text is headed by ${ask}. Then record the user's answer: js-harness notify --to orchestrator --kind answer --question ${questionNumber} --transcript <session id> --line <n> "<the user's answer in one line>"`);
+    else stdout(`question ${questionNumber} is recorded for ${address} to show to the user: ring it with the number, and go on with what does not wait on it`);
   };
 
   // The address of the role, so the sender can ring it: the answer of `sessions --address`, asked of the
