@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP,
+  pauseReplyLine, pauseHookInput, pauseHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
@@ -1074,6 +1074,14 @@ test('the host session runs in an allowlist: the practice config, a scratch home
     assert.equal(Object.hasOwn(env, name), false, name);
   }
   assert.equal(Object.values(env).includes(null), false);
+});
+
+test('after a second init, only an AGENTS.md that is the candidate template may differ from the commit', () => {
+  const template = '# project\n';
+  assert.equal(secondInitProblem('', template, template), null);
+  assert.equal(secondInitProblem(' M AGENTS.md', template, template), null);
+  assert.equal(secondInitProblem(' M AGENTS.md', '# edited\n', template), 'tracked files differ after the second js-harness init:\n M AGENTS.md');
+  assert.equal(secondInitProblem(' M AGENTS.md\n M add.mjs', template, template), 'tracked files differ after the second js-harness init:\n M AGENTS.md\n M add.mjs');
 });
 
 test('a text is redacted of the token wherever it appears, and left as it is with no token', () => {

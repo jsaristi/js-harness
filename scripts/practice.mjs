@@ -18,8 +18,9 @@ import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
   uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
-  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN,
+  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
 } from './practice-lib.mjs';
+import { agentsTemplate } from '../bin/lib/project.mjs';
 import { classifyAgentFailure } from '../evals/agent-output.mjs';
 import { killByPath } from '../evals/runner.mjs';
 
@@ -544,7 +545,9 @@ const STEPS = {
     expectOk(harness(ctx, 'init', '--cwd', project), 'js-harness init, again');
     assertThat(fs.existsSync(hook), `${hook} is missing after the second js-harness init`);
     const differs = porcelain(ctx, '--untracked-files=no');
-    assertThat(differs === '', `tracked files differ after the second js-harness init:\n${differs}`);
+    const agentsText = readIfThere(path.join(project, 'AGENTS.md'))?.toString('utf8');
+    const problem = secondInitProblem(differs, agentsText, agentsTemplate(project));
+    assertThat(problem === null, problem);
     return `uninstall removed the hook, the project manifest, harness.json, AGENTS.md and .codegraph, and git status showed:\n${after.join('\n')}\ninit again: the hook is back and no tracked file differs`;
   },
 

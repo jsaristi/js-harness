@@ -465,6 +465,16 @@ export const JOURNEY = Object.freeze([
   { id: 'record', title: 'one line is appended to record.jsonl' },
 ].map((step) => Object.freeze(step)));
 
+/** What is wrong after `uninstall` and a second `init` of the practice project, or `null`: no tracked file may differ
+ * from the commit, but for an `AGENTS.md` that is exactly the candidate's template (`template`). `init` writes the
+ * template of the copy that runs it, and the project committed the one of an earlier candidate, so a candidate that
+ * changes the template shows it here once; the next run's `commit-passes` commits it. */
+export function secondInitProblem(porcelainText, agentsText, template) {
+  const lines = porcelainText.split('\n').filter(Boolean);
+  const onlyTemplate = lines.length === 1 && lines[0] === ' M AGENTS.md' && agentsText === template;
+  return lines.length === 0 || onlyTemplate ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
+}
+
 /** The one step that starts a host session, and so spends a model: `run --no-host` leaves it out. */
 export const HOST_STEP = 'host-loads';
 
