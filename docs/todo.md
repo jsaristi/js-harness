@@ -77,14 +77,17 @@ matters, who holds it, and where it was seen.
 
 ## Owed and not yet placed
 
-- The practice run with a real host session (practice-project T5): needed before 1.0.0. Held by
+- ~~The practice run with a real host session (practice-project T5): needed before 1.0.0. Held by
   "JH 11 · reglas del proyecto y prueba final" since 2026-10-13, by his answer "Una sexta sesión
-  (Recomendada)" (the lead's transcript `65318fd5`, line 13854, read with `sessions --quote`).
+  (Recomendada)" (the lead's transcript `65318fd5`, line 13854, read with `sessions --quote`).~~
+  Placed: built in pull request 134 (`feat/project-rules`, the step `host-loads`, 13 of 13 on
+  `1659801`); done when it merges.
 - Every writing command refuses an unknown flag: the one task a first user would meet; its order is
   not set. Moved on 2026-10-14 from rule-hierarchy T4 to JH 12's `odd/tasks/commands-and-doctor.md`
   (T1), not on `main` yet.
-- An installed project's own rules: held by JH 11 with the practice run, by the same answer (line
-  13854); it left JH 7's queue.
+- ~~An installed project's own rules: held by JH 11 with the practice run, by the same answer (line
+  13854); it left JH 7's queue.~~ Placed: built in pull request 134 (`odd/tasks/project-rules.md`);
+  done when it merges.
 - Which model the native gentle-ai review used (his answer of 2026-10-12, line 9776): read it from JH
   10's review of 2026-10-13 (lineage review-5ba00685b483e51f). The orchestrator.
 - ~~pnpm's pack refuses this checkout on Windows (ERR_PNPM_BIN_CRLF, `bin/js-harness.mjs` checked
@@ -113,6 +116,10 @@ matters, who holds it, and where it was seen.
   `session-classes` row of `doctor` (JH 12, T5). The fix is `js-harness install
   --accept-session-messages`, which records the setting and is undone by `uninstall`; it needs his
   installed copy (ad7b37b) updated first, a change on his machine, his, with its undo.
+- A gate whose sensors ran in WSL2 keeps no name of a failing test: the gate log records `tests:
+  fail, 120.6 s, wsl` and the runner keeps no output, so a failure that does not come back cannot
+  be named afterwards. Seen 2026-10-14: JH 11's gate of 10:01 UTC failed one test in WSL2 and passed
+  on the retry, and its name was lost (`fix/flaky-tests`, `bin/lib/remote.test.mjs`). Held by JH 8.
 
 ## His to tidy, when he wants (nothing waits on them)
 
