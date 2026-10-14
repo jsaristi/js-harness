@@ -2590,6 +2590,18 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**2026-10-14, 05:15 by `date`: the README is merged (pull request 123, `main` 78cd45e) and the
+register's entries are pull request 125** (`docs/register-2026-10-14`): seven new entries and
+seven sightings, the lead's three items (a, b, c) among them, and the four owed controls that
+pointed at T4, T5 and T6 moved to JH 12's document. **A correction to the block of 00:07 below:**
+the session did not wait six hours in silence after a refusal. Its transcript (lines 16871 and
+16883) shows the call made at 17:02 and its result, "User rejected tool use", written at 23:47,
+with the lead's messages to it delivered only then: it was held by an unanswered permission
+prompt for almost seven hours (entry `permission-prompt-unseen`). The "17:50" came from the
+lead's question to him (`ca93c7ef`, line 953). Next: the roadmap lines of the lead's messages of
+18:45 to 22:29 on the 13th, each read with `sessions --quote` first, and the roadmap's lines 510
+and 533, which still point at this document's T10 and C9, now JH 15's.
+
 **Resumed on 2026-10-14 at 03:54, when `main` held the gate in WSL (`"sensorsInWsl": true`),
 by the lead's message and his lines 1647 and 2856 of the lead's transcript (2856, read with
 `sessions --quote`: "Retomar con el gate viejo (Recomendada)", for the case the WSL gate had not
