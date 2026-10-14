@@ -124,3 +124,12 @@ push and the pull request only when Codex has no P0 to P2; the body gets the gen
   it if its turn comes first." Worktree: `D:\js-harness-worktrees\codex-out-of-lock`, branch
   `feat/codex-out-of-lock`; the preload of the probe is `guard/no-test-preload.cjs` in the old scratchpad
   (d14eb9a1); a map of codex-review is being made by an explorer.
+- 15:5x, the map of codex-review (explorer): it takes no lock itself (only callers wrap it in `js-harness gate
+  --`; `WAYS_ON`, `bin/codex-review.mjs:660-665`, tells users to); Codex is launched at :1576-1580 with
+  `leanEnv(childEnv(env))`, where NODE_OPTIONS would go; the default prompt `codex` (:226, :264) puts nothing on
+  stdin, so the sentence "the gate already ran the suite; a refused node --test is expected" reaches Codex
+  only through `own` (`reviewPrompt`, `bin/lib/codex-review-prompt.mjs:141`); there is no `blocked` outcome:
+  "blocks" means `owesCorrection` (`codex-review-recheck.mjs:62`, verdict `incorrect` or any P0-P2). Tests stub
+  Codex with `fakeCodex()` (`codex-review.test.mjs:298`); the env test at :531 breaks once NODE_OPTIONS is added.
+  Two questions went to the lead: move the default prompt to `own`, and how to tell a complaint about the
+  refusal alone from a real `incorrect` with no finding. PR 145 (testRunWarning) is open, a wait watches it.
