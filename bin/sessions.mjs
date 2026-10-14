@@ -60,19 +60,21 @@ const USAGE = [
   '                           [--cwd <path>] [--claude-home <path>]',
   '         prints the title of the one other session that holds the role: exit 0 for one,',
   '         1 for none with every transcript read, 2 for several or when it cannot tell',
-  '       js-harness sessions --opening [--] "<title>"|"<code> <role>" [--self <session id>]',
+  '       js-harness sessions --opening [--] "<title>"|"<code> <role>" [--self <session id>] [--peek]',
   '                           [--cwd <path>] [--claude-home <path>]',
   '         prints the opening stored for that session (notify --opening) and records in the channel which session read it:',
   '         exit 0 for one, 1 for none, 2 for several or when it cannot tell;',
+  '         a session keeps the title of the first opening it reads, so one of another title is printed and not',
+  '         recorded; --peek reads an opening and records nothing;',
   '         a lone -- before a title that begins with -- (--opening -- "--a title")',
   '       js-harness sessions --quote <transcript file or session id> <line> [--cwd <path>] [--claude-home <path>]',
   '         prints the entry at that line of the transcript only when the user sent it, with its time:',
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
   '         or no such line, saying which; 2 when it cannot look. It warns when the entry is only pasted content.',
-  '         a message the user sent while the session worked (the host queues it) is his too, and is said so',
-  '         his answer to a question the session asked with the host\'s question tool is his too: it prints',
-  '         the question, the options shown and whether he tapped one or typed his own; the result of any',
-  '         other tool is not, and a question he closed without answering is exit 1',
+  '         a message the user sent while the session worked (the host queues it) is the user\'s too, and is said so',
+  '         the user\'s answer to a question the session asked with the host\'s question tool is the user\'s too: it prints',
+  '         the question, the options shown and whether they tapped one or typed their own; the result of any',
+  '         other tool is not, and a question the user closed without answering is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
 ].join('\n');
 
@@ -138,6 +140,8 @@ function parseArgs(argv) {
       const seconds = plainNumber(requireValue(argv, i, token), { decimals: true });
       if (!(seconds > 0 && seconds <= MAX_WAIT)) throw new SessionsArgError(`${token} takes a number of seconds above zero, up to ${MAX_WAIT}`);
       parsed[waits.get(token)] = seconds;
+    } else if (token === '--peek') {
+      parsed.peek = true;
     } else if (token === '--self') {
       parsed.self = requireValue(argv, i, token);
       if (parsed.self.length < 8) throw new SessionsArgError('--self takes a session id, or its first eight characters or more');
@@ -194,6 +198,7 @@ function parseArgs(argv) {
   // same holds for an opening and for a quote, and each of the three is asked alone.
   const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript']].filter(([, asked]) => asked !== undefined);
   if (answers.length > 1) throw new SessionsArgError(`${answers.map(([flag]) => flag).join(' and ')} are asked one at a time`);
+  if (parsed.peek && parsed.opening === undefined) throw new SessionsArgError('--peek goes only with --opening: it reads an opening and records nothing');
   for (const [flag, , what] of answers) {
     if (parsed.watch || parsed.json) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch or --json`);
   }
@@ -538,6 +543,8 @@ export async function sessionsMain(
     // file written by anything else may end in a carriage return and a line feed.
     stdout(opening.text.replace(/(\r\n|\n|\r)$/, ''));
     if (found.unreadable > 0) stderr(`js-harness sessions: ${unreadable} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`);
+    // A look at an opening, another session's most often: printed, and nothing is recorded.
+    if (parsed.peek) return 0;
     const reader = senderOf({ self: parsed.self ?? null, env, projectDir, readdir, readFile, readFacts });
     // The session that stored the opening reads it back to check it: it is not the session it is for,
     // and a reading of its own would give it that title on the board if its transcript carried none. It
@@ -560,6 +567,17 @@ export async function sessionsMain(
     }
     if (named.length > 1) {
       stderr(`js-harness sessions: the opening was read, and no reading was recorded: ${named.length} transcripts of this project are named by ${JSON.stringify(reader.id)}, and a reading under it would give each of them the title. Give more of the id`);
+      return 0;
+    }
+    // The first opening a session reads is its own: the line the user sends in a new session asks for it. A
+    // later one of another title is another session's, read to see what it does, and recording it would give
+    // this session that title on the board (JH 15, 2026-10-14). It is printed, and the reason it is not
+    // recorded is said.
+    // Either id may be the start of the other: a reading under the whole id and one under `--self`'s start,
+    // with no transcript to complete it, are the same session's (`sameSession`).
+    const held = readNotices(harnessHome, slug, { readFile }).readings.findLast((reading) => sameSession(reading.reader.id, reader.id))?.title ?? null;
+    if (held !== null && held !== opening.title) {
+      stderr(`js-harness sessions: the opening was read, and no reading was recorded: this session already read the opening of ${JSON.stringify(held)}, which stays its title (--peek reads an opening and records nothing)`);
       return 0;
     }
     try {
@@ -629,7 +647,7 @@ export async function sessionsMain(
     const when = quote.queued ? ' while the session was working (the host queued it)' : '';
     stdout(`${file}, line ${line}, ${quote.at ?? 'no time recorded'}, sent by the user${when}${images}:`);
     stdout(quote.text);
-    if (quote.pastedOnly) stderr(`js-harness sessions: line ${line} is only pasted content: nothing was typed with it, and a paste alone is not his word`);
+    if (quote.pastedOnly) stderr(`js-harness sessions: line ${line} is only pasted content: nothing was typed with it, and a paste alone is not the user's word`);
     return 0;
   }
 
