@@ -1674,3 +1674,40 @@ test('a run recorded with current trials but no setup, before setups were record
   assert.match(again.io.err, /unknown ->/);
   assert.deepEqual(again.deps.runTrial.asked, []);
 });
+
+// G3 of `odd/tasks/future-model-protocol.md`: `--plan` says what a run would cost, from what was recorded, and starts
+// nothing.
+test('--plan is a flag of a run, never of a summary', () => {
+  assert.deepEqual(parseArgs([...argv(), '--plan'], { taskIds: TASKS }), { ...parse(), plan: true });
+  assert.equal('plan' in parse(), false);
+  assert.throws(() => parseArgs(['--summary', '--name', 'screen', '--plan'], { taskIds: TASKS }), usageError(/--plan/));
+});
+
+test('--plan prints the estimate from the recorded runs and starts nothing: no token, no binary, no trial, no template, no file', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const results = fs.readdirSync(m.resultsDir).sort();
+  const work = fs.readdirSync(m.workRoot).sort();
+  fs.rmSync(m.claude);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--name': 'next', '--efforts': 'medium,high' }), '--plan'], {}, plan.deps), 0, plan.io.err);
+  assert.deepEqual(plan.deps.runTrial.asked, []);
+  assert.match(plan.io.out, /8 trials planned on claude-opus-5-5, 8 to run/);
+  assert.match(plan.io.out, /estimate for 4 of the 8 trials to run: about 0 min of agent time, list cost unknown/);
+  assert.match(plan.io.out, /unknown for 4 trials, .*alpha minimal high \(1\)/);
+  assert.match(plan.io.out, /usage-cap windows: unknown/);
+  assert.match(plan.io.out, /source: screen \(2026-10-02\)/);
+  assert.deepEqual(fs.readdirSync(m.resultsDir).sort(), results, 'no results file');
+  assert.deepEqual(fs.readdirSync(m.workRoot).sort(), work, 'no template, nothing in the work root');
+});
+
+test('--plan of a recorded run counts only the trials left to run', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--efforts': 'medium', '--repeats': '2' }), '--plan'], {}, plan.deps), 0, plan.io.err);
+  assert.match(plan.io.out, /8 trials planned on claude-opus-5-5, 4 to run/);
+  assert.match(plan.io.out, /estimate for 4 of the 4 trials to run/);
+});

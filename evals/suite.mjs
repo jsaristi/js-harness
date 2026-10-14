@@ -3,14 +3,14 @@
 // file. Zero deps, plain Node. The headroom screen (T4) and the A/B run (T5) are both runs of it:
 //
 //   node evals/suite.mjs --claude <path> --configs minimal,current --efforts medium,high --repeats 3 \
-//     --tasks all --permission-mode <mode> --name <run name> [--work-root <dir>] [--model <id>]
+//     --tasks all --permission-mode <mode> --name <run name> [--work-root <dir>] [--model <id>] [--plan]
 //   node evals/suite.mjs --summary --name <run name>
 //
 // The same suite runs on the Codex CLI (`odd/tasks/codex-parity.md`, T4), which takes no permission mode and no
 // token, and keeps everything it writes in a `codex` directory of its own:
 //
 //   node evals/suite.mjs --agent codex --codex <path> --configs minimal,current --efforts medium,high --repeats 3 \
-//     --tasks all --name <run name> [--work-root <dir>] [--model <id>]
+//     --tasks all --name <run name> [--work-root <dir>] [--model <id>] [--plan]
 //   node evals/suite.mjs --agent codex --summary --name <run name>
 //
 // The subagent configs (`odd/tasks/subagent-model-routing.md`) are runs of Claude Code too, named in `--configs` in
@@ -35,6 +35,7 @@ import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, cod
 import { SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, minimalConfig, subagentConfig, subagentPin } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
+import { cellBasis, planLines, runPlan } from './plan.mjs';
 import { LIST_PRICES } from './prices.mjs';
 import { CODEX_LIST_PRICES } from './report.mjs';
 import { loadTask, planTrials, probeVersion, removeDir, runSuite, runTrial as runRealTrial, trialKey } from './runner.mjs';
@@ -92,9 +93,9 @@ const isSubagentConfig = (name) => Object.hasOwn(SUBAGENT_CONFIGS, name);
 
 export const USAGE = [
   'Usage: node evals/suite.mjs --claude <path> --configs <minimal,current> --efforts <medium,high> --repeats <n> --tasks <ids|all>',
-  '                            --permission-mode <mode> --name <run name> [--work-root <dir>] [--model <id>]',
+  '                            --permission-mode <mode> --name <run name> [--work-root <dir>] [--model <id>] [--plan]',
   '       node evals/suite.mjs --agent codex --codex <path> --configs <minimal,current> --efforts <medium,high> --repeats <n>',
-  '                            --tasks <ids|all> --name <run name> [--work-root <dir>] [--model <id>]',
+  '                            --tasks <ids|all> --name <run name> [--work-root <dir>] [--model <id>] [--plan]',
   '       node evals/suite.mjs [--agent codex] --summary --name <run name>',
   '       node evals/suite.mjs --summary --subagents --name <run name>',
   '',
@@ -114,6 +115,8 @@ export const USAGE = [
   '  --work-root <dir>         where trials run (default: js-harness-evals-work next to the repository)',
   `  --model <id>              the model both arms run on, recorded with the run (default ${EVAL_MODEL}; with --agent codex,`,
   `                            ${CODEX_EVAL_MODEL}); a Claude model by its full id, never an alias. A recorded run continues only on its model`,
+  '  --plan                    with a run: print the trials it would run and their agent time and list cost, estimated from',
+  '                            the recorded results of the same model, "unknown" where there are none, and start nothing',
   '  --summary                 print the summary of a recorded run and run nothing',
   `  --subagents               with --summary: read the run from evals/results/${SUBAGENTS_DIR}/, where a run of subagent configs is recorded;`,
   `                            without it a summary reads evals/results/ (evals/results/${CODEX_DIR}/ with --agent codex) and looks nowhere else`,
@@ -191,10 +194,13 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
   const given = new Map();
   let summary = false;
   let subagents = false;
+  let plan = false;
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (token === '--summary') {
       summary = true;
+    } else if (token === '--plan') {
+      plan = true;
     } else if (token === '--subagents') {
       subagents = true;
     } else if (VALUE_FLAGS.includes(token)) {
@@ -220,6 +226,7 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
   if (subagents && !summary) throw new UsageError('--subagents selects a recorded subagent run and is taken only with --summary: a run says where its results go by the configs it names');
 
   if (summary) {
+    if (plan) throw new UsageError('--plan states what a run would cost and is taken only on a run, not with --summary');
     const others = [...given.keys()].filter((flag) => flag !== '--name' && flag !== '--agent');
     if (others.length > 0) throw new UsageError(`--summary reads a recorded run and takes only --name, --agent and --subagents, not ${others.join(', ')}`);
     if (!given.has('--name')) throw new UsageError('--name is required with --summary');
@@ -276,7 +283,7 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
   if (model !== undefined && !MODEL_PATTERNS[agent].test(model)) {
     throw new UsageError(`--model ${JSON.stringify(model)} is not ${codex ? 'a Codex model id' : 'a full Claude model id such as claude-opus-5-5: an alias names a different model as the CLI changes'}`);
   }
-  const chosen = model === undefined ? {} : { model };
+  const chosen = { ...(model !== undefined && { model }), ...(plan && { plan }) };
   if (codex) return { mode: 'run', agent, codex: given.get('--codex'), ...cells, name: given.get('--name'), workRoot, ...chosen };
   return { mode: 'run', claude, ...cells, permissionMode, name: given.get('--name'), workRoot, ...chosen };
 }
@@ -665,6 +672,43 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
         return 1;
       }
       say(formatSummary(summarizeResults(doc), { screen: !subagents }));
+      return 0;
+    } catch (err) {
+      warn(`${err.message}\n`);
+      return 1;
+    }
+  }
+
+  // `--plan` (G3 of `odd/tasks/future-model-protocol.md`): what the run would cost, from the results files of its own
+  // directory, said before anything is spent. It needs no token, no binary and no login, and writes nothing.
+  if (args.plan) {
+    try {
+      const recorded = new Set((readResultsDocument(file)?.trials ?? []).map(trialKey));
+      let planned = 0;
+      const toRun = [];
+      for (const task of args.tasks) {
+        for (const config of args.configs) {
+          for (const effort of args.efforts) {
+            for (let repeat = 1; repeat <= args.repeats; repeat += 1) {
+              planned += 1;
+              if (!recorded.has(trialKey({ task, config, effort, repeat }))) toRun.push({ task, config, effort });
+            }
+          }
+        }
+      }
+      const docs = (fs.existsSync(resultsHome) ? fs.readdirSync(resultsHome) : [])
+        .filter((name) => name.endsWith('.json'))
+        .flatMap((name) => {
+          try {
+            const doc = readResultsDocument(path.join(resultsHome, name));
+            return doc === null ? [] : [{ name: name.slice(0, -'.json'.length), doc }];
+          } catch (err) {
+            warn(`--plan leaves out ${name}: ${err.message}\n`);
+            return [];
+          }
+        });
+      const agent = agentOf(args);
+      say(`${planLines(runPlan({ planned, toRun, basis: cellBasis({ docs, model, agent }), model, agent })).join('\n')}\n`);
       return 0;
     } catch (err) {
       warn(`${err.message}\n`);

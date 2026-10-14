@@ -87,6 +87,11 @@ comparison across models is made by hand, table beside table, and says so.
 
 ## Step 4. Run the evals (**spend**)
 
+Before asking, the same command with `--plan` prints the trials it would run and their agent
+time and list cost, estimated from the recorded runs of the same model, and starts nothing. On a
+new model nothing is recorded yet, so it says "no estimate": the smoke trials are what give the
+first figures, and the plan of each later batch is made from them.
+
 The five tasks of F5, both arms, on the new model:
 
 - Claude: `node evals/suite.mjs --claude <absolute path to claude> --configs minimal,current
@@ -207,7 +212,7 @@ Each one is a task of `odd/tasks/future-model-protocol.md`.
   cost from the last results on the same model, "unknown" for a cell with none, and starts
   nothing (the precedent is `js-harness codex-review --plan`). The cap windows stay unknown: no
   results file records where a cap stopped a run, and the agent time leaves out each trial's
-  setup. Until then the table above is the estimate, by hand.
+  setup. Built: `--plan` on `evals/suite.mjs`; the cap windows are still unknown.
 - G4. The whole first request (tools, MCP, skills list) measured by a committed script.
 - G5. The eval model chosen for a run and recorded with it, in place of the constants. Built:
   `--model`.

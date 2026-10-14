@@ -169,7 +169,7 @@ no token; without `--plan` the plan line unchanged. About 140 and 160 lines.
   that spends can run on a new model (S3; route: inline). G5 `a23f834` and G6a `f6e09fc`, each
   assessed medium and under budget by gentle-ai; G6b, the record and the refusal, next; left of
   G6: codegraph's version and the js-harness commit
-- [ ] T6 G3, a cost statement before a run (S3; after the WSL gate, if cleared)
+- [x] T6 G3, a cost statement before a run (S3; route: inline): `--plan` on `evals/suite.mjs`, with `evals/plan.mjs`
 - [ ] T7 G2, arms of one component (S3; after the WSL gate, if cleared)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
@@ -255,3 +255,17 @@ staged main's code, so its pre-merge-commit ran a whole check under the lock, a 
 opening had paused, told to the lead as it ran); T4 (`85e873b`); the PR's body given its review
 line (gentle-ai passive, not due). The wait for the WSL gate is armed; T5 to T7 start when it
 fires.
+
+L8 (2026-10-14) State at the context pause (75 percent by get_usage, after T6). Branch
+`feat/eval-model-per-run`, cut from `origin/main` at `8aa93c3` once the WSL gate was there (PR #120
+merged in it). Commits: G5 `a23f834`, G6a `f6e09fc`, G6b `148d5dd`, each assessed medium and under
+budget by gentle-ai (pending in the slice), each gate passed in WSL2; G3 (`--plan`, `evals/plan.mjs`
+and its tests, the suite's tests) written, RED then GREEN observed, committed next. Nothing pushed
+yet: the pre-push hook needs a Codex review record over `8aa93c3..HEAD`. Next, in order: the
+slice's gentle-ai assessment over `8aa93c3..HEAD` (`--base-ref 8aa93c3 --committed-only`), then
+`js-harness codex-review --base 8aa93c3 --plan` and the review if within the allowance; push; a pull
+request; tell the lead. Then T7, G2 (arms of one component), the largest: design it from the
+section "Design of G5, G6 and G3" and `docs/future-model.md` Step 5 before writing. Free check
+still owed: rebuild the real templates hours after 04:27 (read from the file's time; an earlier reply of this session said 04:49 without reading it, the third unread figure of the day) and compare with the baseline saved in
+the session's scratchpad (`fp-baseline.json`); a later session redoes it from scratch (two builds
+hours apart, both hosts), since the scratchpad does not survive.
