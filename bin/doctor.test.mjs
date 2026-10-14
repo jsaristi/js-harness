@@ -143,13 +143,13 @@ test('doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'claude-account', 'remote-server', 'hook-commands'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead.
-      assert.equal(row.upToDate, ['context7', 'claude-account', 'remote-server', 'hook-commands'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -433,6 +433,57 @@ function seedHealthyWithAccounts(home, project, accounts) {
 const accountLine = (state) =>
   'claude-account'.padEnd(16) + 'n/a'.padEnd(10) + state.padEnd(10) + 'n/a'.padEnd(10) + 'n/a'.padEnd(10) + 'n/a';
 
+// T4 of odd/tasks/commands-and-doctor.md: a memory note that holds a rule is a gap of the report, of
+// `--json` and of the session-start hook, which says so once.
+test('doctorMain reports the rule notes of the project memory as the memory-rules gap, in the table, under Fix, in --json and from the hook', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    const memory = path.join(home, '.claude', 'projects', project.replace(/[^A-Za-z0-9]/g, '-'), 'memory');
+    fs.mkdirSync(memory, { recursive: true });
+    fs.writeFileSync(path.join(memory, 'MEMORY.md'), '- [Rule](rule.md)\n');
+    fs.writeFileSync(path.join(memory, 'rule.md'), '---\nname: rule\nmetadata:\n  type: feedback\n---\nAlways do X.\n');
+    fs.writeFileSync(path.join(memory, 'me.md'), '---\nname: me\nmetadata:\n  type: user\n---\nThe user.\n');
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.equal(text.code, 0);
+    assert.ok(text.output.includes(`\n${'memory-rules'.padEnd(16)}${'n/a'.padEnd(10)}${'stale'.padEnd(10)}${'n/a'.padEnd(10)}${'n/a'.padEnd(10)}n/a\n`), text.output);
+    assert.match(text.output, /\nFix:\n {2}memory-rules \(claude\):\n {4}place each note with the protocol "recording a new rule" .*then delete the note:\n {4}rule\.md \(feedback\)\n/);
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
+    const row = JSON.parse(json.output).find((r) => r.id === 'memory-rules');
+    assert.deepEqual(row.gaps.map((gap) => [gap.dimension, gap.state]), [['claude', 'stale']]);
+
+    const first = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, deps);
+    assert.deepEqual([first.code, JSON.parse(first.output).systemMessage], [0, 'js-harness: 1 stack gap — run js-harness doctor']);
+    const again = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, deps);
+    assert.deepEqual([again.code, again.output], [0, ''], 'the same gap is told once');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// T5 of odd/tasks/commands-and-doctor.md: sessions of both permission classes with nothing joining them.
+test('doctorMain reports recent sessions of both permission classes as the session-classes gap, whose fix is the install flag', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    const sessions = path.join(home, '.claude', 'projects', project.replace(/[^A-Za-z0-9]/g, '-'));
+    fs.mkdirSync(sessions, { recursive: true });
+    fs.writeFileSync(path.join(sessions, 'a.jsonl'), '{"type":"user","permissionMode":"bypassPermissions"}\n');
+    fs.writeFileSync(path.join(sessions, 'b.jsonl'), '{"type":"user","permissionMode":"auto"}\n');
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.match(text.output, /\n {2}session-classes \(claude\):\n {4}js-harness install --accept-session-messages, .*\n {4}1 of the project's sessions of the last 7 days bypass permission prompts and 1 asks for them; crossSessionInbound is not set in .*settings\.json, so a message from one class to the other is held\n/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('doctorMain shows the account check after the tools, ok when both accounts match, with nothing to fix', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
@@ -446,7 +497,7 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
     assert.equal(lines.at(-3), accountLine('ok'), output);
     assert.equal(lines.at(-2), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
     assert.equal(lines.at(-1), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
-    assert.equal(lines.length, 10, 'the header, the six tools and the three checks');
+    assert.equal(lines.length, 12, 'the header, the six tools and the five checks');
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -585,7 +636,7 @@ test('doctorMain reports a recorded launcher whose server is down as a gap whose
 
     const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
     assert.equal(text.code, 0);
-    assert.equal(text.output.split('\n').filter(Boolean).at(8), remoteLine('down'), text.output);
+    assert.equal(text.output.split('\n').filter(Boolean).at(10), remoteLine('down'), text.output);
     assert.match(text.output, /\nFix:\n  remote-server \(claude\): js-harness remote start --cwd D:\\work\\proj --name proj\n$/, 'the only gap of this home');
 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);

@@ -576,7 +576,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks'];
+const ON_REQUEST = ['optional', 'tasks', 'settings'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -610,6 +610,116 @@ function forgetRecord(home, key, matches, listDir) {
     writeManifest(home, rest);
   }
   return true;
+}
+
+// ---- settings ---------------------------------------------------------------------------------------------------------
+
+/** Claude Code's setting for messages between sessions, and the value `install --accept-session-messages` gives it:
+ * with `accept`, a message from a session of another permission class arrives instead of being held (his choice of
+ * 2026-10-11, and his answer of 2026-10-14 that `install` writes it on an explicit flag; T5 of
+ * odd/tasks/commands-and-doctor.md). It is a security setting, so nothing writes it without that flag. */
+export const SESSION_MESSAGES = { key: 'crossSessionInbound', value: 'accept' };
+
+/** The user settings of Claude Code under `home`, where `SESSION_MESSAGES` is read. */
+export function userSettingsPath(home) {
+  return path.join(home, '.claude', 'settings.json');
+}
+
+/** Reads a JSON settings file as `{ data, style }`, `style` being what `serializeJson` needs to write it back as it
+ * was; a missing file is an empty object written with two spaces. Throws with the reason a file cannot be taken. */
+function readSettings(target) {
+  const existed = fs.existsSync(target);
+  const raw = existed ? fs.readFileSync(target, 'utf8') : '{}';
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error('malformed JSON');
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Error('not a JSON object');
+  return { data, existed, raw, style: { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: existed ? detectIndent(raw) : 2 } };
+}
+
+/** Sets `SESSION_MESSAGES` in the user settings and records it in the manifest's `settings` array as `{ path, key,
+ * value, had, previous, createdFile }`, what was there before (`had: false` when the key was not, `createdFile` when
+ * the file was not). Returns `{ status, path }`:
+ * `written`, with `was`, the value it replaced (`null` for none); `already` when it already holds the value
+ * (recorded all the same, so `uninstall` knows to leave it); `skipped` with a `reason` when the file cannot be
+ * read, is no JSON object or cannot be written, and then nothing is written or recorded. A second call keeps the first record, which holds what the user had. Like the other records kept on
+ * request, `install` and `sync` carry it forward and `uninstall` puts the value back (`restoreSettings`). */
+export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord } = {}) {
+  const target = userSettingsPath(home);
+  const { key, value } = SESSION_MESSAGES;
+  let settings;
+  try {
+    settings = readSettings(target);
+  } catch (err) {
+    return { status: 'skipped', path: target, reason: err.message };
+  }
+  const { data, existed, style } = settings;
+  const matches = (entry) => entry.path === target && entry.key === key;
+  const record = { path: target, key, value, had: Object.hasOwn(data, key), previous: data[key] ?? null, createdFile: !existed };
+  // Recorded only once the file holds the value: a write that fails leaves no record that would later have
+  // `uninstall` take a value the user set by hand for one this command wrote.
+  const keep = () => {
+    if (!readManifest(home)?.settings?.some(matches)) recordIt(home, 'settings', record, matches);
+  };
+  if (data[key] === value) {
+    keep();
+    return { status: 'already', path: target };
+  }
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    writeFile(target, serializeJson({ ...data, [key]: value }, style), 'utf8');
+  } catch (err) {
+    return { status: 'skipped', path: target, reason: `not writable (${err.code ?? err.message})` };
+  }
+  // A setting nothing records could never be put back (Codex's finding of 2026-10-14): when the record cannot
+  // be written, the file goes back to the bytes it had, or away when this made it.
+  try {
+    keep();
+  } catch (err) {
+    if (existed) fs.writeFileSync(target, settings.raw, 'utf8');
+    else fs.rmSync(target, { force: true });
+    return { status: 'skipped', path: target, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was put back` };
+  }
+  return { status: 'written', path: target, was: record.previous };
+}
+
+/** Puts back each setting the manifest records, as `{ restored, kept }` (paths): a value still the one recorded is
+ * set back to what was there before, or its key removed when there was none, and a file left holding nothing it did
+ * not hold before is removed (`createdFile`, and nothing else in it), with the folders it leaves empty; a value the
+ * user changed since is theirs and is kept, and so is a file that cannot be read. A record whose value was already
+ * there before is left with nothing to do. */
+function restoreSettings(manifest, home, listDir) {
+  const restored = [];
+  const kept = [];
+  for (const record of manifest.settings ?? []) {
+    if (record.had && record.previous === record.value) continue;
+    let settings;
+    try {
+      settings = readSettings(record.path);
+    } catch {
+      kept.push(record.path);
+      continue;
+    }
+    const { data, existed, style } = settings;
+    if (!existed) continue;
+    if (data[record.key] !== record.value) {
+      kept.push(record.path);
+      continue;
+    }
+    if (record.had) data[record.key] = record.previous;
+    else delete data[record.key];
+    if (record.createdFile && Object.keys(data).length === 0) {
+      fs.rmSync(record.path);
+      removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
+    } else {
+      fs.writeFileSync(record.path, serializeJson(data, style), 'utf8');
+    }
+    restored.push(record.path);
+  }
+  return { restored, kept };
 }
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
@@ -972,6 +1082,10 @@ export function uninstall(home, deps = {}) {
     keptOptional.push({ path: file.path, ...why });
   }
 
+  // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
+  // are taken out: a settings file install made is then removed with its last entry, as without the setting.
+  const settings = restoreSettings(manifest, home, listDir);
+
   const entriesRemoved = [];
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {
@@ -1012,7 +1126,9 @@ export function uninstall(home, deps = {}) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+  // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
+  const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

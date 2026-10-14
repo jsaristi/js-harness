@@ -176,6 +176,7 @@ import { killTree } from './lib/process-tree.mjs';
 import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
+import { unknownArgument } from './lib/args.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
 // (odd/tasks/codex-review-cost.md): the one model a review runs on, at `high`, in place of the `medium` he
@@ -237,8 +238,17 @@ function requireValue(argv, i, flag) {
   return value;
 }
 
+const KNOWN = {
+  valued: ['--base', '--unavailable', '--home', '--session', '--prompt', '--doc', '--part-lines', '--max-parts', '--cwd'],
+  bare: ['--keep-home', '--plan', '--again', '--fresh'],
+};
+
 /** Parses `argv`. `--base` is required even with `--unavailable`: the record needs its range. */
 function parseArgs(argv) {
+  // A flag it does not know is refused before anything starts: ignored, `--base X --bogus` ran a whole
+  // review without what the flag was meant to say (T1 of odd/tasks/commands-and-doctor.md).
+  const unknown = unknownArgument(argv, KNOWN);
+  if (unknown !== null) throw new ArgError(`unknown argument: ${unknown}`);
   const get = (flag) => {
     const i = argv.indexOf(flag);
     return i !== -1 ? requireValue(argv, i, flag) : undefined;

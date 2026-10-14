@@ -217,6 +217,46 @@ test('a merge commit needs no review of its own', () => {
   assert.match(row.detail, /1 code commit since origin\/main/);
 });
 
+// Failure 15 (docs/FAILURES.md, assessment-counts-main; T2 of odd/tasks/commands-and-doctor.md): after
+// `main` was merged in, the hint named the commit before the oldest uncovered one, the `main` the branch
+// left, so its range read again all `main` gained since (41 parts where 6 were due, 2026-10-09).
+test('after main is merged in, the push row hints the base the plain row sizes, never the main the branch left', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const own = commit(root, 'b.js', 'two', 'feat: two');
+  git(root, 'checkout', 'main');
+  commit(root, 'other.js', 'elsewhere', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-ff', '-m', 'merge main into feature', 'main');
+  commit(root, 'c.js', 'three', 'feat: three');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  const hint = row.lines.at(-1);
+  assert.notEqual(hint, `make the record with: js-harness codex-review --base ${short(root, own)}^`);
+  // The plain row's base is the one whose review it sized: both rows name one review.
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(hint, debt.lines.find((line) => line.startsWith('make the record with: ')), debt.lines.join('\n'));
+});
+
+test('after main is merged in with the commits before it covered, the hint starts at the merge commit', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const own = commit(root, 'b.js', 'two', 'feat: two');
+  record(root, base, own);
+  git(root, 'checkout', 'main');
+  commit(root, 'other.js', 'elsewhere', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-ff', '-m', 'merge main into feature', 'main');
+  const merge = git(root, 'rev-parse', 'HEAD');
+  const after = commit(root, 'c.js', 'three', 'feat: three');
+  const row = checkCodexReviews(root, 'HEAD');
+  // `<after>^` is the merge commit: the range from there holds only what came after it.
+  assert.equal(git(root, 'rev-parse', `${after}^`), merge);
+  assert.equal(row.lines.at(-1), `make the record with: js-harness codex-review --base ${short(root, after)}^`);
+});
+
 test('a merge commit somebody wrote code in needs a record, as the commit it is', () => {
   const { root, base } = makeRepo();
   feature(root);
