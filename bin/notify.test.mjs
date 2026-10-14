@@ -45,12 +45,12 @@ function withMachine(body) {
 }
 
 /** A session of the project titled `title`, whose last entry is `seconds` before NOW. */
-function writeSession(machine, id, title, { seconds = 60, permissionMode = 'bypassPermissions' } = {}) {
+function writeSession(machine, id, title, { seconds = 60, permissionMode = 'bypassPermissions', usage = null } = {}) {
   const at = before(seconds).toISOString();
   const entries = [
     { type: 'custom-title', customTitle: title, sessionId: id },
     { type: 'user', timestamp: at, cwd: machine.root, gitBranch: 'main', isSidechain: false, permissionMode, origin: { kind: 'human' }, message: { role: 'user', content: 'made up' } },
-    { type: 'assistant', timestamp: at, cwd: machine.root, gitBranch: 'main', isSidechain: false, message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }] } },
+    { type: 'assistant', timestamp: at, cwd: machine.root, gitBranch: 'main', isSidechain: false, message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }], ...(usage === null ? {} : { usage }) } },
   ];
   const file = path.join(machine.projectDir, `${id}.jsonl`);
   fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n', 'utf8');
@@ -101,6 +101,12 @@ async function runAddress(machine, role, { self = SENDER, run = fakeGit(machine)
 }
 
 const recorded = (machine) => readNotices(machine.home, machine.slug);
+
+/** The stamp of a time as the confirmation writes it: the hour and minute on this process's clock, then the ISO time. */
+const localStamp = (iso) => {
+  const at = new Date(iso);
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')} local (${iso})`;
+};
 
 // --- usage ---
 
@@ -227,7 +233,7 @@ test('notify appends one line to the project\'s record with the clock, the sende
     {
       schema: 'js-harness.channel-notice/v1',
       at: '2026-01-01T12:00:00.000Z',
-      from: { host: 'claude-code', id: SENDER, source: 'environment', title: SENDER_TITLE, permissionMode: 'auto' },
+      from: { host: 'claude-code', id: SENDER, source: 'environment', title: SENDER_TITLE, permissionMode: 'auto', context: null },
       to: { role: 'orchestrator', number: null },
       kind: 'opened',
       text: 'session channel, T1',
@@ -237,7 +243,7 @@ test('notify appends one line to the project\'s record with the clock, the sende
     },
   ]);
   assert.deepEqual(out, [
-    `js-harness notify: recorded opened for the orchestrator at 2026-01-01T12:00:00.000Z from "${SENDER_TITLE}" in ${machine.record}`,
+    `js-harness notify: recorded opened for the orchestrator at ${localStamp('2026-01-01T12:00:00.000Z')} from "${SENDER_TITLE}" in ${machine.record}`,
     `address of the orchestrator: ${ORCHESTRATOR_TITLE}`,
   ]);
 }));
@@ -296,7 +302,7 @@ test('--self names the sender in place of the host\'s id, and is the one the add
   // The orchestrator writes to its own role: no other session holds it.
   const { code, out } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'relieved', 'JH ORQ nueva has the role', '--self', 'bbbbbbbb']);
   assert.equal(code, 0);
-  assert.deepEqual(recorded(machine).notices[0].from, { host: 'claude-code', id: ORCHESTRATOR, source: 'flag', title: ORCHESTRATOR_TITLE, permissionMode: 'bypassPermissions' });
+  assert.deepEqual(recorded(machine).notices[0].from, { host: 'claude-code', id: ORCHESTRATOR, source: 'flag', title: ORCHESTRATOR_TITLE, permissionMode: 'bypassPermissions', context: null });
   const address = await runAddress(machine, 'orchestrator', { self: 'bbbbbbbb' });
   assert.equal(address.code, 1);
   assert.equal(out[1], `address of the orchestrator: no single one now (sessions --address exit 1): ${address.err[0].replace('js-harness sessions: ', '')}`);
@@ -306,8 +312,8 @@ test('a session the host does not name still records its notice, as a sender tha
   writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
   const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'closed', 'delivered; nothing more goes to this session'], { env: { CODEX_HOME: 'C:\\codex' } });
   assert.equal(code, 0);
-  assert.deepEqual(recorded(machine).notices[0].from, { host: 'unknown', id: null, source: null, title: null, permissionMode: null });
-  assert.match(out[0], /recorded closed for the orchestrator at \S+ from a sender the host does not name in /);
+  assert.deepEqual(recorded(machine).notices[0].from, { host: 'unknown', id: null, source: null, title: null, permissionMode: null, context: null });
+  assert.match(out[0], /recorded closed for the orchestrator at \d\d:\d\d local \(\S+\) from a sender the host does not name in /);
   assert.equal(out[1], `address of the orchestrator: ${ORCHESTRATOR_TITLE}`);
   assert.deepEqual(err, ['js-harness notify: the sender is not known: the host gave no session id (CLAUDE_CODE_SESSION_ID is not set) and --self names none']);
 }));
@@ -315,6 +321,22 @@ test('a session the host does not name still records its notice, as a sender tha
 test('a sender whose transcript gives no title is named by the start of its id', withMachine(async (machine) => {
   const { out } = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe']);
   assert.match(out[0], / from session aaaaaaaa in /);
+}));
+
+test('the confirmation stamps the hour on the local clock and the share of its context the sender holds, read from its transcript', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE, { usage: { input_tokens: 150000, cache_read_input_tokens: 50000, cache_creation_input_tokens: 0, output_tokens: 300 } });
+  const { code, out } = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe']);
+  assert.equal(code, 0);
+  assert.equal(out[0], `js-harness notify: recorded note for work session 5 at ${localStamp('2026-01-01T12:00:00.000Z')} from "${SENDER_TITLE}", holding 40% of its context in ${machine.record}`);
+  assert.deepEqual(recorded(machine).notices[0].from.context, { tokens: 200000, percent: 40 });
+}));
+
+test('a sender whose context is not known gets no share in the confirmation, and its notice records none', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const { code, out } = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe']);
+  assert.equal(code, 0);
+  assert.equal(out[0], `js-harness notify: recorded note for work session 5 at ${localStamp('2026-01-01T12:00:00.000Z')} from "${SENDER_TITLE}" in ${machine.record}`);
+  assert.equal(recorded(machine).notices[0].from.context, null);
 }));
 
 /** A session as the phone opens one: its transcript carries no title, only what was typed to it. */
@@ -547,7 +569,7 @@ test('--opening stores the text of standard input under the title, and the same 
   assert.deepEqual([first.code, first.err], [0, []]);
   assert.deepEqual(first.out, [`js-harness notify: opening for "${SENDER_TITLE}" written in ${file} (2 lines, ${OPENING.length} characters)`, ...firstMessageBlock(SENDER_TITLE)]);
   assert.deepEqual(findOpenings(machine.home, machine.slug, 'JH 5').openings, [
-    { path: file, title: SENDER_TITLE, at: '2026-01-01T12:00:00.000Z', from: { host: 'claude-code', id: SENDER, source: 'environment', title: ORCHESTRATOR_TITLE, permissionMode: 'bypassPermissions' }, text: OPENING },
+    { path: file, title: SENDER_TITLE, at: '2026-01-01T12:00:00.000Z', from: { host: 'claude-code', id: SENDER, source: 'environment', title: ORCHESTRATOR_TITLE, permissionMode: 'bypassPermissions', context: null }, text: OPENING },
   ]);
 
   const second = await runNotify(machine, ['--opening', SENDER_TITLE], { readStdin: () => 'One line.', now: () => NOW + 60000 });
@@ -741,7 +763,7 @@ test('a question takes its id from the seam, and is stored with its options and 
   assert.deepEqual(notice, {
     schema: 'js-harness.channel-notice/v1',
     at: QUESTION_AT,
-    from: { host: 'claude-code', id: SENDER, source: 'environment', title: SENDER_TITLE, permissionMode: 'bypassPermissions' },
+    from: { host: 'claude-code', id: SENDER, source: 'environment', title: SENDER_TITLE, permissionMode: 'bypassPermissions', context: null },
     to: { role: 'orchestrator', number: null },
     kind: 'question',
     text: QUESTION,
@@ -772,13 +794,13 @@ test('a recorded question is printed with its number and its prefix, and the lin
   const first = await askQuestion(machine);
   assert.deepEqual([first.code, first.err], [0, []]);
   assert.deepEqual(first.out, [
-    `js-harness notify: recorded question 1 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`,
+    `js-harness notify: recorded question 1 for the orchestrator at ${localStamp(QUESTION_AT)} from "${SENDER_TITLE}" in ${machine.record}`,
     'prefix: "Pregunta 1: "',
     `address of the orchestrator: ${ORCHESTRATOR_TITLE}`,
     `question 1 is recorded for ${ORCHESTRATOR_TITLE} to show to the user: ring it with the number, and go on with what does not wait on it`,
   ]);
   const second = await askQuestion(machine, { newId: () => SECOND_ID });
-  assert.equal(second.out[0], `js-harness notify: recorded question 2 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`);
+  assert.equal(second.out[0], `js-harness notify: recorded question 2 for the orchestrator at ${localStamp(QUESTION_AT)} from "${SENDER_TITLE}" in ${machine.record}`);
   assert.equal(second.out[1], 'prefix: "Pregunta 2: "');
   assert.deepEqual(recorded(machine).notices.map((one) => one.id), [QUESTION_ID, SECOND_ID]);
 }));
@@ -839,7 +861,7 @@ test('a question whose number cannot be read back is recorded all the same, with
   writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
   const { code, out, err } = await askQuestion(machine, { readFile: busyRecord(machine) });
   assert.equal(code, 0);
-  assert.equal(out[0], `js-harness notify: recorded question (number not known) for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`);
+  assert.equal(out[0], `js-harness notify: recorded question (number not known) for the orchestrator at ${localStamp(QUESTION_AT)} from "${SENDER_TITLE}" in ${machine.record}`);
   assert.equal(out.some((line) => line.startsWith('prefix: ')), false);
   assert.deepEqual(err.filter((line) => line.startsWith('js-harness notify: ')), [`js-harness notify: the number of the question is not known: the channel's record ${machine.record} could not be read back (EBUSY): its number is read with js-harness sessions`]);
   assert.deepEqual(recorded(machine).notices.map((one) => one.id), [QUESTION_ID]);
@@ -919,7 +941,7 @@ test('an answer is recorded unverified, and said so, when no transcript starts w
   assert.equal((await askQuestion(machine)).code, 0);
   const none = await answerTo(machine, { transcript: 'ffffffff' });
   assert.equal(none.code, 0);
-  assert.equal(none.out[0], `js-harness notify: recorded answer to question 1 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`);
+  assert.equal(none.out[0], `js-harness notify: recorded answer to question 1 for the orchestrator at ${localStamp(QUESTION_AT)} from "${SENDER_TITLE}" in ${machine.record}`);
   assert.deepEqual(none.err, ["js-harness notify: the answer to question 1 is recorded UNVERIFIED: no transcript starts with ffffffff: it is the sender's claim until the line is read"]);
   // A second question, since a question holds one claim: a file of the sessions folder that is not there.
   assert.equal((await askQuestion(machine, { newId: () => SECOND_ID })).code, 0);
@@ -960,7 +982,7 @@ test('an answer typed in the chat after its question is verified, and its words 
   const { code, out, err } = await answerTo(machine);
   assert.deepEqual([code, err], [0, []]);
   assert.deepEqual(out.slice(0, 2), [
-    `js-harness notify: recorded answer to question 1 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`,
+    `js-harness notify: recorded answer to question 1 for the orchestrator at ${localStamp(QUESTION_AT)} from "${SENDER_TITLE}" in ${machine.record}`,
     'the user\'s answer, typed in the chat: Entonces la A',
   ]);
   const answer = recorded(machine).notices.at(-1);
@@ -1020,7 +1042,7 @@ test('a withdrawal names its question and closes it, and an answer to a withdraw
   const withdrawal = ['--to', 'orchestrator', '--kind', 'withdrawn', '--question', '1', 'the orchestrator no longer needs it'];
   const done = await runNotify(machine, withdrawal);
   assert.deepEqual([done.code, done.err], [0, []]);
-  assert.equal(done.out[0], `js-harness notify: recorded withdrawn question 1 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`);
+  assert.equal(done.out[0], `js-harness notify: recorded withdrawn question 1 for the orchestrator at ${localStamp(QUESTION_AT)} from "${SENDER_TITLE}" in ${machine.record}`);
   const notice = recorded(machine).notices.at(-1);
   assert.deepEqual(Object.keys(notice), ['schema', 'at', 'from', 'to', 'kind', 'text', 'cwd', 'worktree', 'branch', 'question']);
   assert.deepEqual([notice.kind, notice.question, notice.text], ['withdrawn', 1, 'the orchestrator no longer needs it']);
@@ -1041,7 +1063,7 @@ test('an answer without --question is written as it was before: the same keys, a
   writeSession(machine, SENDER, SENDER_TITLE);
   const { code, out, err } = await runNotify(machine, ['--to', '5', '--kind', 'answer', '--transcript', '1d16beeb', '--line', '406', 'Entonces la A']);
   assert.deepEqual([code, err], [0, []]);
-  assert.equal(out[0], `js-harness notify: recorded answer for work session 5 at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`);
+  assert.equal(out[0], `js-harness notify: recorded answer for work session 5 at ${localStamp(QUESTION_AT)} from "${SENDER_TITLE}" in ${machine.record}`);
   assert.deepEqual(out.filter((line) => line.startsWith('the user\'s answer') || line.startsWith('prefix')), []);
   const [line, ...rest] = fs.readFileSync(machine.record, 'utf8').split('\n');
   assert.deepEqual(rest, ['']);
@@ -1049,7 +1071,7 @@ test('an answer without --question is written as it was before: the same keys, a
   assert.deepEqual(JSON.parse(line), {
     schema: 'js-harness.channel-notice/v1',
     at: QUESTION_AT,
-    from: { host: 'claude-code', id: SENDER, source: 'environment', title: SENDER_TITLE, permissionMode: 'bypassPermissions' },
+    from: { host: 'claude-code', id: SENDER, source: 'environment', title: SENDER_TITLE, permissionMode: 'bypassPermissions', context: null },
     to: { role: 'work', number: 5 },
     kind: 'answer',
     text: 'Entonces la A',

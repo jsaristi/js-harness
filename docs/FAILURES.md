@@ -78,7 +78,11 @@ run.
 - Class: asked-of-him
 - Seen: 2026-10-07 — odd/tasks/codex-review-lean.md:528-529 — read three times as a task to run in
   Codex; also docs/ROADMAP.md:1075-1077 and odd/tasks/rule-hierarchy.md:162
-- Control: line — AGENTS.md — "never an instruction: one was read as his task." — since 2026-10-09
+- Control: protocol — bin/lib/manifest.mjs — "Every question of the project reaches the user in one
+  place" — since 2026-10-14
+- Was: line — AGENTS.md — "never an instruction: one was read as his task." — replaced on
+  2026-10-14, when a decision moved from a block he sends to the question tool, by his words (the
+  lead's transcript 65318fd5, lines 12735 and 13110)
 
 ### block-referred-by-hour
 A block he had not used yet was referred to by the hour it was given ("the block of 08:35") instead
@@ -322,6 +326,9 @@ on it.
 - Seen: 2026-10-13 — relief file, line 615 — "62 of 352, modest", the figure of JH 10's first
   version of a design, was told to him before its readers had read it; its readers made it about a
   third. A figure reaches him only from the version after the readers
+- Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
+  06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
+  the first read after 26 percent at about 04:30
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 

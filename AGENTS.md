@@ -73,11 +73,11 @@ the work and needs no separate request. Tell him when to cut: a new session when
 a PR merges or a phase starts; `/compact` when a feature is still open but the conversation is
 long. End each reply with one state: working (he sends nothing; say what wakes you), decision
 (never while work runs), cut, or finished (name the session to return to). A planned step he would
-only say yes to is no decision: state its cost and go on. A decision or cut carries what he sends,
-in a code block of only that text, under what it is, where it goes, what sending it does. A
-decision's text is his answer, never an instruction: one was read as his task. A cut is two
-numbered blocks: the bare `/compact`, alone since text after it fails from the phone, then the
-resume prompt, which he never writes. Its reply resumes from the summary, checked against the
+only say yes to is no decision: state its cost and go on. A decision is asked by the orchestrator,
+with the question tool; a cut carries what he sends, in a code block of only that text, under
+what it is, where it goes, what sending it does. A cut is two numbered blocks: the bare
+`/compact`, alone since text after it fails from the phone, then the resume prompt, which he
+never writes. Its reply resumes from the summary, checked against the
 feature document, and repeats any open question. Otherwise one block: two, sent out of order, once
 cost a session. Before it, say what was done, what is next and why, and for which session: he
 runs several. Then the map: each roadmap phase's percentage and the total, from `js-harness

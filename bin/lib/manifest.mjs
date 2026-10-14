@@ -48,6 +48,8 @@ description: Use when asked to orchestrate, supervise or watch the other session
 
 Two kinds of session. A work session owns one feature: its worktree, its feature document (\`odd/tasks/<feature>.md\`) and its own prompts. The orchestrator is a dedicated session that owns no feature. Follow the part that is yours.
 
+A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step. After a compaction, the resume names each one still open.
+
 A change does not exist until it is in a file. Where each thing lives:
 - the project's plan (the order of the features, the decisions): the roadmap on the default branch, changed through small documentation pull requests;
 - a feature's plan (tasks, progress, next step): its feature document on its branch, written only by the session that owns the feature;
