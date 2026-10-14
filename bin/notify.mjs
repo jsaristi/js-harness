@@ -18,7 +18,7 @@ import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
-import { mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, titleRead, transcriptNamed } from './lib/sessions.mjs';
+import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] "<one line>"',
@@ -371,11 +371,15 @@ export async function notifyMain(
   // The number a question has in the record: it is read back by the id the question was given.
   let questionNumber = null;
   let numberNotKnown = null;
+  // How many questions of the record wait for him once this one is written: the rule for asking him says how many.
+  let questionsWaiting = 0;
   if (notice.kind === 'question') {
     const back = readNotices(home, slug, { readFile });
     const found = back.unavailable === undefined ? back.questions.find((one) => one.notice.id === notice.id) : undefined;
-    if (found !== undefined) questionNumber = found.number;
-    else numberNotKnown = back.unavailable !== undefined ? `the channel's record ${back.path} could not be read back (${back.unavailable})` : 'the question is not in the record';
+    if (found !== undefined) {
+      questionNumber = found.number;
+      questionsWaiting = recordedQuestions(back).filter((one) => one.closed === null).length;
+    } else numberNotKnown = back.unavailable !== undefined ? `the channel's record ${back.path} could not be read back (${back.unavailable})` : 'the question is not in the record';
   }
   const what = notice.kind === 'question' ? (questionNumber === null ? 'question (number not known)' : `question ${questionNumber}`)
     : notice.kind === 'answer' && notice.question !== undefined ? `answer to question ${notice.question}`
@@ -390,17 +394,29 @@ export async function notifyMain(
   if (unverified !== null) stderr(`js-harness notify: the answer to question ${notice.question} is recorded UNVERIFIED: ${unverified}: it is the sender's claim until the line is read`);
   if (numberNotKnown !== null) stderr(`js-harness notify: the number of the question is not known: ${numberNotKnown}: its number is read with js-harness sessions`);
 
+  // When he last wrote in the sender's own transcript: the rule for asking him reads it. A transcript that cannot be
+  // read gives no time, and the rule says so rather than guess where he is.
+  const personAtOf = () => {
+    if (from.id === null) return null;
+    try {
+      return sessionFacts(readFile(path.join(projectDir, `${from.id}.jsonl`)), { tail: 0 }).personAt;
+    } catch {
+      return null;
+    }
+  };
+
   // What the sender does with a question once its number is known: ring the one orchestrator, or, when the
   // sender is that orchestrator or there is none to ring, ask him itself. The line says which, and is the
   // last thing printed. `address` is the one title the address is, or `null` when there is no single one.
   // The orchestrator is known by its own title, since `sessions --address` does not count the session that
-  // asks. Whoever asks him is told when: the question tool holds the session that calls it until he answers,
-  // so it is called only in the reply to a message he has just written.
+  // asks. Whoever asks him is told how: the question tool holds the session that calls it until he answers, so
+  // `askingRule` says whether he is there to be asked now or only in the reply to his next message.
   const followUp = (address) => {
     if (questionNumber === null) return;
     const ask = JSON.stringify(questionPrefix(questionNumber));
-    if (roleOfTitle(from.title)?.role === 'orchestrator') stdout(`you hold that role: ask him with the question tool only in the reply to a message he has just written, the text headed by ${ask}; until then the question waits as this notice`);
-    else if (address === null) stdout(`no orchestrator to show it: ask him yourself with the question tool, only in the reply to a message he has just written, the text headed by ${ask}, then record his answer: js-harness notify --to orchestrator --kind answer --question ${questionNumber} --transcript <session id> --line <n> "<his answer in one line>"`);
+    const rule = () => askingRule(personAtOf(), now(), { waiting: questionsWaiting });
+    if (roleOfTitle(from.title)?.role === 'orchestrator') stdout(`you hold that role: ${rule()}. Its text is headed by ${ask}; until it is asked the question waits as this notice`);
+    else if (address === null) stdout(`no orchestrator to show it: ask him yourself: ${rule()}. Its text is headed by ${ask}. Then record his answer: js-harness notify --to orchestrator --kind answer --question ${questionNumber} --transcript <session id> --line <n> "<his answer in one line>"`);
     else stdout(`question ${questionNumber} is recorded for ${address} to show to him: ring it with the number, and go on with what does not wait on it`);
   };
 

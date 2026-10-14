@@ -12,7 +12,7 @@
 // After a compaction it adds what its transcript holds of the stretch of work before the compaction: the
 // compaction itself, the pause's notice, how old the state the session wrote is and what its worktree holds
 // uncommitted, the work the transcript leaves in flight and the machine's gate, the user's and other sessions'
-// messages, and the last reply. It
+// messages, the last reply, and the questions the channel's record holds. It
 // reads for nine seconds at most and says what it left unread. Each comes from a file, and what no file says
 // is said as not known, with where to look. Like every
 // hook: it acts only in a project that opted in (a `harness.json` at the root of the checkout the session
@@ -21,15 +21,19 @@
 // nothing, not even the reading `sessions --opening` records. The one thing it says on standard error is
 // that its input was not read, when it was not: a person who runs it at a shell is told why nothing came
 // out, and a host shows a hook's standard error to nobody when it exits 0. Zero dependencies.
+//
+// The questions block gives each question of the channel's record with the call the transcript makes for it, in
+// every state, the answered ones too. A block that named only the unanswered calls would leave a question he has
+// answered with no call to it in the record, and an orchestrator compacted just after his tap would ask him again.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
-import { findOpenings, openingsDir, placeOf, reliefPath, readNotices } from './lib/channel.mjs';
+import { findOpenings, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { pauseNotice, toldBetween } from './lib/pause.mjs';
-import { comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, readPlans, reliefTail, replyOf, roleOfTitle, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
+import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness resume --hook',
@@ -68,6 +72,7 @@ const STEP = {
   worktree: 'the worktree\'s changes',
   flight: 'the work in flight and the machine\'s gate',
   reply: 'this session\'s last reply',
+  questions: 'the questions',
 };
 
 // Why a git call was not started, and why a search was cut short: the words of the hook's own deadline.
@@ -652,6 +657,116 @@ function beforeLines(file, stretch, { transcript, sessionId, target, projectDir,
   return [head, ...lines.map((line) => `  ${line}`)];
 }
 
+// How many characters of a question's text the hook prints, and of the answers a closed question's line names; how many
+// closed questions the list of a work session prints, the last ones by number; and the line the list ends with.
+const QUESTION_LISTED = 200;
+const ANSWER_LISTED = 300;
+const CLOSED_LISTED = 5;
+const BOARD_QUESTIONS = 'The board lists the questions of every session: js-harness sessions';
+
+/** A text cut to `max` characters, as the reply's cut counts them, so a cut never splits a character; with an ellipsis at
+ * its end when it was longer. */
+const cutTo = (text, max) => {
+  const chars = Array.from(text);
+  return chars.length > max ? `${chars.slice(0, max).join('')}…` : text;
+};
+
+/** How long before `now` a notice's time was, as `ago` says it, or that the time is not known: a record holds text, and a
+ * notice whose time does not parse says so rather than a number of minutes that is not one. */
+const agoOf = (at, now) => (Number.isNaN(Date.parse(at)) ? 'at an unknown time' : ago(Date.parse(at), now));
+
+/** Who asked a question, as the line names the asker: its title in JSON quotes, else its session by the first eight characters
+ * of its id, else that the host named no sender. `from` is a notice's `from`, or what `questionRecordOf` gives. */
+function askerOf(from) {
+  if (isObject(from) && typeof from.title === 'string' && from.title !== '') return printedTitle(from.title);
+  if (isObject(from) && typeof from.id === 'string' && from.id !== '') return `session ${from.id.slice(0, 8)}`;
+  return 'a sender the host does not name';
+}
+
+/** What the transcript holds of a question of the record, in words, for the line under the question: that no call of it is in
+ * the transcript, or the state of the call it is joined to (`recordQuestionsIn`). `ownWork` is true for a work session's own
+ * question, which the orchestrator shows him; `sessionId` is the session's id, or `null` when the hook has none. `read`
+ * is whether the hook has the transcript: without it, a question with no call is not known to be unasked, and the line says
+ * to look, never to ask. `ask` is how to ask him now, `askingRule`'s sentence, for a question that has to be asked again. */
+function callSaid(item, { ownWork, sessionId, read, ask }) {
+  const { call } = item;
+  if (call === null && !read) return 'this session\'s transcript was not read, so it is not known whether it was asked or answered here: look (js-harness sessions) before asking';
+  if (call === null) {
+    return ownWork
+      ? 'recorded, no answer yet: the orchestrator shows it to him; go on with what does not wait on it (js-harness sessions lists it)'
+      : `not asked in this transcript: ${ask}. Its text is headed by "${questionPrefix(item.number)}"`;
+  }
+  if (call.state === 'pending') return `asked at line ${call.line} of this transcript, with no answer in it: it may be on his screen; look (js-harness sessions) before asking again`;
+  if (call.state === 'closed') return `he closed it without answering (asked at line ${call.line}): ask it again: ${ask}`;
+  if (call.state === 'unanswered') return `asked at line ${call.line}, and its result is no answer of his: ask it again: ${ask}`;
+  // Answered: the reply goes back to the asker's work session when its title names one, else to the orchestrator, which asks him.
+  const role = roleOfTitle(item.from.title);
+  const to = role?.role === 'work' ? role.number : 'orchestrator';
+  const id = sessionId ?? '<session id>';
+  return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. Read it: js-harness sessions --quote ${id} ${call.answeredLine}  Then record it: js-harness notify --to ${to} --kind answer --question ${item.number} --transcript ${id} --line ${call.answeredLine} "<his answer in one line>"`;
+}
+
+/** A question of the record that no notice closed, as two lines: the question with its asker, its age and what waits on it,
+ * and under it what the transcript holds of it (`callSaid`). `ask` is how to ask him now (`askingRule`). */
+function openLinesOf(item, { ownWork, sessionId, now, read, ask }) {
+  return [
+    `  ${QUESTION_WORD} ${item.number}  recorded ${agoOf(item.at, now)} by ${askerOf(item.from)}  waits: ${item.waits ?? ''}  ${cutTo(oneLine(item.text), QUESTION_LISTED)}`,
+    `    ${callSaid(item, { ownWork, sessionId, read, ask })}`,
+  ];
+}
+
+/** A question of the record that a notice closed, as one line: a withdrawal with its reason; an answer that was read, with the
+ * answers its copy holds; or an answer that no transcript confirmed, which is the sender's claim and says where it was read. */
+function closedLineOf(question) {
+  const { by, notice } = question.closed;
+  const head = `  ${QUESTION_WORD} ${question.number}  `;
+  if (by === 'withdrawn') return `${head}withdrawn by ${askerOf(notice.from)}: ${notice.text}`;
+  const read = `${notice.transcript}:${notice.line}`;
+  if (notice.verified === true) {
+    const answers = oneLine((notice.copy?.answers ?? []).map((answer) => answer.answer).join('; '));
+    return `${head}ANSWERED, read at ${read}: ${cutTo(answers, ANSWER_LISTED)}`;
+  }
+  return `${head}answered by the claim of ${askerOf(notice.from)}, NOT VERIFIED (${read}): ${notice.text}`;
+}
+
+/** The lines of the questions of the channel's record, for the session the hook speaks to, or none when the record holds none
+ * for it. An orchestrator gets every question that no notice closed, each with what its transcript holds of it. A work session
+ * gets the questions it recorded itself: its open ones with the same lines, and its last closed ones, one line each. A record
+ * that could not be read is said in one line. The record is what `readNotices` read; the calls are the transcript's own
+ * (`sessionFacts`), and none when no transcript could be read. */
+function questionLinesOf(record, { transcript, sessionId, orchestrator, now }) {
+  if (record.unavailable !== undefined) return [`Questions: not read (the channel's record ${record.path} could not be read: ${record.unavailable})`];
+  const recorded = recordedQuestions(record);
+  if (recorded.length === 0) return [];
+  const mine = orchestrator ? recorded : recorded.filter((question) => isObject(question.notice.from) && sameSession(question.notice.from.id, sessionId));
+  if (mine.length === 0) return [];
+  // One reading of the transcript for both: its question calls, and when he last wrote in it.
+  const facts = transcript === null ? null : sessionFacts(transcript, { tail: 0 });
+  const calls = facts === null ? [] : facts.questions;
+  const items = recordQuestionsIn(questionRecordOf(mine), calls);
+  const open = items.filter((item) => !item.closed);
+  // How to ask him a question that has to be asked again: when he last wrote in this transcript, and how many wait.
+  const ask = askingRule(facts?.personAt ?? null, now, { waiting: open.length });
+  if (orchestrator) {
+    if (open.length === 0) return [`Questions: the record holds ${recorded.length}, none open.`];
+    return [
+      `Questions with no answer in the record (${open.length} of ${recorded.length} recorded), with what this transcript holds of each:`,
+      ...open.flatMap((item) => openLinesOf(item, { ownWork: false, sessionId, now, read: transcript !== null, ask })),
+      BOARD_QUESTIONS,
+    ];
+  }
+  const closed = mine.filter((question) => question.closed !== null);
+  const shown = closed.slice(-CLOSED_LISTED);
+  const earlier = closed.length - shown.length;
+  return [
+    `Questions this session recorded (${mine.length}):`,
+    ...open.flatMap((item) => openLinesOf(item, { ownWork: true, sessionId, now, read: transcript !== null, ask })),
+    ...shown.map(closedLineOf),
+    ...(earlier > 0 ? [`  ${earlier} earlier ones are in the record: ${record.path}`] : []),
+    BOARD_QUESTIONS,
+  ];
+}
+
 /** The lines the hook prints for the hook input `input`, or none when it is not for it to speak: an input
  * that is not a compaction's, a sub-agent's, or a project that did not opt in. */
 function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, readdir, stat, now, late, isFile, gate }) {
@@ -752,6 +867,9 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
     const quoted = path.relative(projectDir, file) === path.basename(file);
     lines.push(...beforeLines(file, stretch, { transcript, sessionId, target: quoted ? sessionId : null, projectDir, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
   }
+  // The questions come after the stretch's lines and before the deadline's line. Past the deadline they are named as not read.
+  if (late()) left.push(STEP.questions);
+  else lines.push(...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now() })));
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
   if (!orchestrator) lines.push(NOTIFY);

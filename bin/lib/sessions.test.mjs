@@ -3206,6 +3206,44 @@ test('questionRecordOf keeps what the board says of each recorded question: its 
   assert.deepEqual(lib.questionRecordOf([]), []);
 });
 
+test('recordQuestionsIn joins each recorded question to its call in every state, and gives an answered call the line of its answer', () => {
+  const recorded = (number) => ({ number, notice: { at: at(1), from: { host: 'claude-code', id: A, source: 'environment', title: 'title a', permissionMode: 'auto' }, text: `Made up ${number}?`, waits: 'the board' }, closed: null });
+  const record = lib.questionRecordOf([1, 2, 3, 4, 5].map(recorded));
+  const questions = lib.questionsOf(lib.parseTranscript(transcript(
+    asked('toolu_2', 2, [asking('Pregunta 2: ¿b?')]),
+    asked('toolu_3', 3, [asking('Pregunta 3: ¿c?')]),
+    answered('toolu_3', 4, { 'Pregunta 3: ¿c?': OPTIONS[1] }),
+    asked('toolu_4', 5, [asking('Pregunta 4: ¿d?')]),
+    result('toolu_4', { questions: [], answers: { 'Pregunta 4: ¿d?': DISMISSED } }, 6),
+    asked('toolu_5', 7, [asking('Pregunta 5: ¿e?')]),
+    result('toolu_5', undefined, 8),
+  )).entries);
+  assert.deepEqual(lib.recordQuestionsIn(record, questions).map(({ number, call }) => [number, call]), [
+    // No call of the number: the question is not asked in this transcript.
+    [1, null],
+    [2, { id: 'toolu_2', state: 'pending', at: at(2), line: 1 }],
+    [3, { id: 'toolu_3', state: 'answered', at: at(3), line: 2, answeredAt: at(4), answeredLine: 3 }],
+    [4, { id: 'toolu_4', state: 'closed', at: at(5), line: 4 }],
+    [5, { id: 'toolu_5', state: 'unanswered', at: at(7), line: 6 }],
+  ]);
+  // The record it was given is not changed: the call is a key of the copy.
+  assert.equal('call' in record[0], false);
+});
+
+test('recordQuestionsIn joins no call asked before its notice, nor one whose text lacks the exact prefix of the number', () => {
+  const record = lib.questionRecordOf([{ number: 1, notice: { at: at(5), from: { host: 'claude-code', id: A, source: 'environment', title: 'title a', permissionMode: 'auto' }, text: 'Made up?', waits: 'the board' }, closed: null }]);
+  const before = lib.questionsOf(lib.parseTranscript(transcript(
+    // Numbered by hand before the record held the question: this call is not its question.
+    asked('toolu_a', 2, [asking('Pregunta 1: ¿a?')]),
+    // Asked after the notice, with the number but not the prefix: its text is no question of the record.
+    asked('toolu_b', 6, [asking('Pregunta 1 - ¿a?')]),
+  )).entries);
+  assert.deepEqual(lib.recordQuestionsIn(record, before).map(({ call }) => call), [null]);
+  // The call that has the exact prefix, asked after the notice, is the question's.
+  const after = lib.questionsOf(lib.parseTranscript(transcript(asked('toolu_c', 7, [asking('Pregunta 1: ¿a?')]))).entries);
+  assert.deepEqual(lib.recordQuestionsIn(record, [...before, ...after]).map(({ call }) => call.id), ['toolu_c']);
+});
+
 test('openQuestionsOf with the record lists the recorded questions no notice closed, joins each to its call by the number, and leaves the joined calls out of open', () => {
   const put = (id, minute, state, asked) => ({ id, at: at(minute), asked, state });
   const answered = (id, minute, line, asked) => ({ ...put(id, minute, 'answered', asked), answeredAt: at(minute + 1), answeredLine: line });
@@ -3286,12 +3324,81 @@ test('renderBoard prints the recorded questions first under Open questions, with
     '  Pregunta 1  30m ago  JH ORQ · proj  recorded, not shown to him yet  Should it show?',
     '  Pregunta 2  20m ago  session cccccccc  answered at dddddddd:14, not carried yet  Which one?',
     '  10m ago  JH 5 · made up  closed by him without an answer  Pregunta 1: ¿a?',
+    '  to ask: when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that 1 question waits and about what, and never writes the options out as text',
     '  read in 2 transcripts changed in the last 12h, each read whole',
     '',
   ]);
   // Recorded questions with no row of the transcripts: no `none`. Neither list has a row: `none`, and the read.
   assert.deepEqual(section({ recorded, open: [], transcripts: 1, hours: 12 }).includes('  none'), false);
   assert.deepEqual(section({ recorded: [], open: [], transcripts: 1, hours: 12 }), ['Open questions', '  none', '  read in 1 transcript changed in the last 12h, each read whole', '']);
+});
+
+test('sessionFacts gives the time of the newest entry he wrote, whichever way he wrote it, and of no other', () => {
+  const said = (...entries) => lib.sessionFacts(transcript(...entries), { tail: 0 }).personAt;
+  // His own: a typed message, one queued while the session worked, and the answer he tapped to a question.
+  assert.equal(said(prompt('typed', 1)), at(1));
+  assert.equal(said(reply('working', 1), queued(2)), at(2), 'a message queued while the session worked');
+  assert.equal(said(asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: OPTIONS[1] })), at(2), 'an answer he tapped');
+  // The newest by its time: a resumed session writes an older entry of his again, after the newer one.
+  assert.equal(said(prompt('newer', 5), prompt('older', 2)), at(5));
+  // Not his, so the newest of his stays: another session's message, a task's end, a tool result, a compaction
+  // summary, a reply of the session, a side chain's entry, a queued message the host does not mark as his turn,
+  // and an answer the host marked as an error.
+  assert.equal(said(prompt('typed', 1), told(2)), at(1), 'a message from another session');
+  assert.equal(said(prompt('typed', 1), notified({ task: 'b1', status: 'completed' }, 2)), at(1), 'a task\'s end');
+  assert.equal(said(prompt('typed', 1), result('toolu_b1', { stdout: '' }, 2)), at(1), 'a tool result');
+  assert.equal(said(prompt('typed', 1), { ...prompt('summary', 2), isCompactSummary: true }), at(1), 'a compaction summary');
+  assert.equal(said(prompt('typed', 1), reply('done', 2)), at(1), 'a reply of the session');
+  assert.equal(said(prompt('typed', 1), { ...prompt('side', 2), isSidechain: true }), at(1), 'an entry of a side chain');
+  assert.equal(said(prompt('typed', 1), queued(2, { humanTurn: undefined })), at(1), 'a queued message the host does not mark as his turn');
+  assert.equal(said(prompt('typed', 1), asked('toolu_q1', 2), answered('toolu_q1', 3, { [QUESTION]: OPTIONS[1] }, { is_error: true })), at(1), 'an answer the host marked as an error');
+  // No entry of his at all, or his entry has no time: `null`.
+  assert.equal(said(reply('only mine', 1)), null);
+  assert.equal(said({ ...prompt('no time', 1), timestamp: undefined }), null, 'his entry with no time');
+});
+
+test('askingRule says how to ask him: with the question tool when he wrote a short while ago, in the reply to his next message when longer, and never guesses where he is', () => {
+  const ago = (ms) => new Date(NOW - ms).toISOString();
+  const LONG = (since, waits) => `he last wrote here ${since} ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+  const NOT_KNOWN = (waits) => `when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+  assert.equal(lib.askingRule(ago(60 * 1000), NOW), 'he wrote here 1m ago: put it to him now with the question tool');
+  assert.equal(lib.askingRule(ago(lib.PERSON_PRESENT_MS - 1000), NOW), 'he wrote here 14m ago: put it to him now with the question tool', 'just under the limit he is there');
+  assert.equal(lib.askingRule(ago(lib.PERSON_PRESENT_MS), NOW), LONG('15m', '1 question waits'), 'at the limit he is away');
+  assert.equal(lib.askingRule(ago(2 * 3600 * 1000 + 5 * 60 * 1000), NOW, { waiting: 3 }), LONG('2h 05m', '3 questions wait'));
+  assert.equal(lib.askingRule(ago(3 * 86400 * 1000), NOW, { waiting: 2 }), LONG('3d', '2 questions wait'));
+  assert.equal(lib.askingRule(ago(-5000), NOW), 'he wrote here 0s ago: put it to him now with the question tool', 'a time in the future is just now');
+  assert.equal(lib.askingRule(null, NOW), NOT_KNOWN('1 question waits'), 'no entry of his is read');
+  assert.equal(lib.askingRule('not a time', NOW, { waiting: 2 }), NOT_KNOWN('2 questions wait'), 'a time that does not parse');
+});
+
+test('renderBoard says how to ask him the recorded questions that wait, from when he last wrote in the board\'s own session, and nothing when none waits', () => {
+  const minutesAgo = (minutes) => new Date(NOW - minutes * 60000).toISOString();
+  const recorded = [
+    { number: 1, at: minutesAgo(30), asker: { id: A, title: 'JH ORQ · proj' }, question: 'Should it show?', waits: 'the board', state: 'not-shown', call: null },
+    { number: 2, at: minutesAgo(20), asker: { id: C, title: null }, question: 'Which one?', waits: 'the board', state: 'closed', call: 'toolu_2' },
+    { number: 3, at: minutesAgo(15), asker: { id: B, title: 'JH 5 · made up' }, question: 'Still?', waits: 'the board', state: 'answered-not-carried', call: 'toolu_3', answered: { session: C, line: 4, at: minutesAgo(9) } },
+  ];
+  const self = (personAt) => ({ id: B, title: 'JH 2 · the board', self: true, personAt, state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', skippedLines: 0, work: [], tail: [] });
+  const section = (sessions, list = recorded) => {
+    const lines = lib.renderBoard({ ...BOARD, sessions, questions: { recorded: list, open: [], transcripts: 1, hours: 12 } }, { now: NOW });
+    const from = lines.indexOf('Open questions');
+    return lines.slice(from, lines.indexOf('', from) + 1);
+  };
+  const rows = [
+    '  Pregunta 1  30m ago  JH ORQ · proj  recorded, not shown to him yet  Should it show?',
+    '  Pregunta 2  20m ago  session cccccccc  closed by him without an answer  Which one?',
+    '  Pregunta 3  15m ago  JH 5 · made up  answered at cccccccc:4, not carried yet  Still?',
+  ];
+  const READ = '  read in 1 transcript changed in the last 12h, each read whole';
+  const WAITING = 'until then a reply says in one line that 2 questions wait and about what, and never writes the options out as text';
+  // Two of the three wait (one not shown, one closed); the answered one does not. He was there five minutes ago.
+  assert.deepEqual(section([self(minutesAgo(5))]), ['Open questions', ...rows, '  to ask: he wrote here 5m ago: put it to him now with the question tool', READ, '']);
+  // No session of the board is his: the rule says it is not known.
+  assert.deepEqual(section([]), ['Open questions', ...rows, `  to ask: when he last wrote here is not known: call the question tool in the reply to a message of his; ${WAITING}`, READ, '']);
+  // Away for two hours: the question tool waits for his next message.
+  assert.deepEqual(section([self(minutesAgo(120))]), ['Open questions', ...rows, `  to ask: he last wrote here 2h 00m ago: the question tool would hold this session until he answers, so call it in the reply to his next message; ${WAITING}`, READ, '']);
+  // Nothing waits to be asked, whoever is there: no such line.
+  assert.deepEqual(section([self(minutesAgo(5))], [recorded[2]]), ['Open questions', rows[2], READ, '']);
 });
 
 const openOf = (...open) => ({ questions: { open, transcripts: 2, hours: 12 } });
@@ -3959,10 +4066,13 @@ test('a queued instruction of the person or of another session starts a task, as
   const unanswered = lib.sessionFacts(transcript(...worked(queued(4))));
   assert.deepEqual([unanswered.state, unanswered.lastTask], ['working', { tokens: 60000, startedBy: 'person', startedAt: at(1), endedAt: at(3), compactions: 0 }]);
 
-  // It moves the task accounting and nothing else: the state of the row, the end of its turn, the
-  // messages it received and every other fact are the ones of the transcript without it. One from
-  // another session is also a message the session received, and moves nothing more than that.
-  const rest = ({ lastTask, lastTaskFits, ...others }) => others;
+  // It moves the task accounting and nothing else, but the time of his newest entry: what he queued is his, so
+  // personAt moves to its minute, and one from another session is not his and leaves personAt where it was.
+  // Otherwise the state of the row, the end of its turn, the messages it received and every other fact are
+  // the ones of the transcript without it. One from another session is also a message the session received.
+  const rest = ({ lastTask, lastTaskFits, personAt, ...others }) => others;
+  assert.deepEqual([his.personAt, theirs.personAt], [at(4), plain.personAt]);
+  assert.equal(plain.personAt, at(1));
   assert.deepEqual(rest(his), rest(plain));
   assert.deepEqual(rest({ ...theirs, received: [] }), rest(plain));
   assert.deepEqual(theirs.received, [{ at: at(4), from: 'session', name: 'JH 1 · made up', session: null, mode: null, id: null }]);

@@ -461,7 +461,10 @@ function end(work, at, status) {
  *
  * `pendingCall` is the last tool call of the session's own chain that no tool result names, `{ id, tool, at }`
  * with the time of its entry, or `null` when every call has its result. It is a plain fact for any tool, a
- * question tool included: what the board says of a call that waits too long is `sessionLines`' rule. */
+ * question tool included: what the board says of a call that waits too long is `sessionLines`' rule.
+ *
+ * `personAt` is the time of the newest entry the person wrote, by `quoteOf`'s rule with the question calls of
+ * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time. */
 export function sessionFacts(
   text,
   {
@@ -653,6 +656,15 @@ export function sessionFacts(
   const state = turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting';
   const compactsAt = measured === null ? { tokens: contextCompactionDefault, measured: false, at: null } : { tokens: measured.tokens, measured: true, at: measured.at };
   const room = context === null ? null : compactsAt.tokens - context.tokens;
+  // When he last wrote here, for the rule that says how to ask him a question (`askingRule`). The newest by its
+  // time, not the last in the file: a resumed session writes older entries again after the newer ones, and an
+  // equal time keeps the later entry. An entry with no time is not counted.
+  const questionCalls = questionCallsOf(entries);
+  let personAt = null;
+  for (const entry of entries) {
+    const quote = quoteEntry(entry, questionCalls);
+    if (quote.person && typeof quote.at === 'string' && (personAt === null || quote.at >= personAt)) personAt = quote.at;
+  }
   let lastTask;
   if (stretch === null) lastTask = { unavailable: 'the transcript holds no prompt of a person and no message from another session' };
   else if (state === 'waiting') lastTask = taskOf(stretch);
@@ -661,6 +673,7 @@ export function sessionFacts(
     title: customTitle ?? (firstPrompt === null ? null : oneLine(firstPrompt)),
     titleSource: customTitle !== null ? 'custom-title' : firstPrompt !== null ? 'first-prompt' : null,
     lastEntryAt,
+    personAt,
     cwd,
     gitBranch,
     permissionMode,
@@ -690,6 +703,11 @@ export function sessionFacts(
  * at ten minutes and its result arrives a few seconds later (601 to 606 s, of 9,100 Bash calls paired with their
  * results), so a call older than the cap plus a margin is held by the host for approval, or it hangs. */
 export const PENDING_CALL_LIMIT_MS = 15 * 60 * 1000;
+
+/** How long since he last wrote, in ms, under which he is taken to be there: a question is then put to him at once,
+ * and past it the question waits for his next message (`askingRule`). The figure is the orchestrator's guess of
+ * 2026-10-13, to be replaced by his own when he names one. */
+export const PERSON_PRESENT_MS = 15 * 60 * 1000;
 
 // ---- machine facts ------------------------------------------------------------------------------------
 //
@@ -1707,6 +1725,21 @@ export function questionRecordOf(recorded) {
   }));
 }
 
+/** The questions of the channel's record with the call each one is joined to, in the order of the numbers: each item of
+ * `questionRecordOf` (`record`, open or closed) with one more key, `call`. It is `null` when no call of `questions`
+ * (`questionsOf`, for one transcript) is joined to the question, else `{ id, state, at, line }`, with `answeredAt` and
+ * `answeredLine` as well when the call is answered. The join is `callOfNumber`: a call asked after the notice, with the
+ * prefix of the number. Every state is given, the answered calls too: a session compacted after he tapped an answer
+ * must know that the question is answered, or it asks him again. */
+export function recordQuestionsIn(record, questions) {
+  return [...record].sort((one, other) => one.number - other.number).map((item) => {
+    const call = callOfNumber(questions, item.number, item.at);
+    if (call === null) return { ...item, call: null };
+    const joined = { id: call.id, state: call.state, at: call.at, line: call.line };
+    return { ...item, call: call.state === 'answered' ? { ...joined, answeredAt: call.answeredAt, answeredLine: call.answeredLine } : joined };
+  });
+}
+
 /** What an entry is when it is not what the person sent, in words: `null` for one that is. The result of a tool
  * call is never his here: `quoteEntry` asks `answerOf` first, which knows the one result that is. */
 function notThePersons(entry) {
@@ -2579,6 +2612,22 @@ function durationOf(seconds) {
   return `${Math.floor(hours / 24)}d`;
 }
 
+/** The sentence that tells a session which must ask him a question how to ask it, given when he last wrote in the
+ * transcript (`personAt`, a transcript's time, or `null`), `now` in ms and how many questions `waiting` for him. The
+ * question tool holds the session until he answers, so it is called at once only when he wrote less than
+ * `PERSON_PRESENT_MS` ago. Past that, the session waits for his next message and says in one line what waits, and
+ * never writes the options out as text, since he answers them with the tool. A time that is not known is said so,
+ * and that is the rule too: no session guesses where he is. */
+export function askingRule(personAt, now, { waiting = 1 } = {}) {
+  const waits = waiting === 1 ? '1 question waits' : `${waiting} questions wait`;
+  const at = typeof personAt === 'string' ? Date.parse(personAt) : NaN;
+  if (Number.isNaN(at)) return `when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+  const elapsed = Math.max(0, now - at);
+  const since = durationOf(Math.round(elapsed / 1000));
+  if (elapsed < PERSON_PRESENT_MS) return `he wrote here ${since} ago: put it to him now with the question tool`;
+  return `he last wrote here ${since} ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+}
+
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */
 function counted(value, label) {
   return value?.unavailable ? `${label} unavailable: ${value.unavailable}` : `${value} ${label}`;
@@ -2913,18 +2962,26 @@ function recordedStateWords({ state, answered }) {
   return QUESTION_STATE_WORDS[state];
 }
 
+/** The recorded questions' states that wait for him to be asked again or for the first time: not shown yet, closed by
+ * him without an answer, or with no answer in their result. The others are answered, or on his screen. */
+const TO_ASK_STATES = new Set(['not-shown', 'closed', 'unanswered']);
+
 /** The `Open questions` section (`openQuestionsOf`): first the questions the channel's record holds that no notice
  * has closed (`Pregunta <n>`, when the notice was written, who asked, what became of it and the text), then a line
  * for each question put to the person that has no answer of his, oldest first, with how long ago it was asked, who
- * asked, what became of it and the first text asked; then what was read, since an empty list from one transcript
- * is not one from fifty. `none` only when neither list has a row. No section for a board that holds no such key. */
-function openQuestionLines(questions, now) {
+ * asked, what became of it and the first text asked. When any recorded question waits to be asked, one line says how
+ * to ask him (`askingRule`), from the board's own session `self` when it has one; then what was read, since an empty
+ * list from one transcript is not one from fifty. `none` only when neither list has a row. No section for a board that
+ * holds no such key. */
+function openQuestionLines(questions, now, self = null) {
   if (!questions) return [];
   const asker = ({ id, title }) => title ?? `transcript ${String(id).slice(0, 8)}`;
   const recorded = (questions.recorded ?? []).map((question) => `  ${QUESTION_WORD} ${question.number}  ${ago(question.at, now)}  ${senderWords(question.asker)}  ${recordedStateWords(question)}  ${clipped(question.question)}`);
   const rows = questions.open.map((question) => `  ${question.at === null ? 'time not recorded' : ago(question.at, now)}  ${asker(question.asker)}  ${QUESTION_STATE_WORDS[question.state]}  ${questionWords(question)}`);
+  const waiting = (questions.recorded ?? []).filter((question) => TO_ASK_STATES.has(question.state)).length;
+  const toAsk = waiting > 0 ? [`  to ask: ${askingRule(self?.personAt ?? null, now, { waiting })}`] : [];
   const read = `  read in ${questions.transcripts} transcript${questions.transcripts === 1 ? '' : 's'} changed in the last ${questions.hours}h, each read whole`;
-  return ['Open questions', ...(recorded.length + rows.length > 0 ? [...recorded, ...rows] : ['  none']), read, ''];
+  return ['Open questions', ...(recorded.length + rows.length > 0 ? [...recorded, ...rows] : ['  none']), ...toAsk, read, ''];
 }
 
 /** The board as lines of text: the sessions (in the order given, most recent first), the roster of
@@ -2942,7 +2999,7 @@ export function renderBoard(board, { now }) {
   lines.push(
     ...(board.roster ? rosterLines(board.roster, now) : []),
     ...channelLines(board.channel, now),
-    ...openQuestionLines(board.questions, now),
+    ...openQuestionLines(board.questions, now, board.sessions.find((session) => session.self === true) ?? null),
     ...sectionLines('Worktrees', board.worktrees, 'none', (tree) => {
       const upstream = tree.aheadOfUpstream === 'no upstream' ? 'no upstream' : counted(tree.aheadOfUpstream, 'not pushed');
       const line = `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseStatus, resumeMain, transcriptTitle } from './resume.mjs';
-import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, reliefPath, writeOpening } from './lib/channel.mjs';
+import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, recordPath, reliefPath, writeOpening } from './lib/channel.mjs';
 import { pauseNotice, statePath } from './lib/pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
@@ -138,6 +138,37 @@ const STATE_OF = (machine) => `State: ${DOCUMENT_OF(machine)} was last written a
 const CLEAN_OF = (machine) => `Worktree ${machine.worktree}: branch feat/channel, head 1111111, nothing changed and not committed.`;
 // What a transcript of `titled` says of its stretch: no boundary, the user wrote nothing, and the one reply is on line 2.
 const TITLED_BLOCK = (machine) => [headOf(machine), ...indented(`${NO_BOUNDARY}; the transcript records none before it.`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), NO_USER, REPLY_LINE(2, minute(1), 'Done.'), HOST)];
+
+// The questions of the channel's record. Its notices are written at minute 0, before every call of the transcripts below
+// (minute 1 and later), and the test's clock reads two hours after them, so each question is "recorded 2h ago".
+const ORQ = 'JH ORQ · the channel';
+const BY_OTHER = { host: 'claude-code', id: 'bbbbbbbb-2222-4222-8222-222222222222', source: 'environment', title: null, permissionMode: 'auto' };
+const OPTIONS_OF_QUESTION = [{ label: 'Yes (Recommended)', description: 'made up' }, { label: 'No', description: 'made up' }];
+const DISMISSED = '[User dismissed — do not proceed, wait for next instruction]';
+const RECORD_PATH = (machine) => recordPath(machine.home, machine.slug);
+/** A question put to him, written by `from` (the session's own unless `more` says otherwise), with no call or answer yet. */
+const askQuestion = (machine, text, more = {}) => appendNotice(machine.home, machine.slug, newNotice({ at: minute(0), from, to: 'orchestrator', kind: 'question', text, id: `id ${text}`, options: OPTIONS_OF_QUESTION, waits: 'the board', ...more }));
+/** The withdrawal of question `question`, with its reason. */
+const withdraw = (machine, question, reason) => appendNotice(machine.home, machine.slug, newNotice({ at: minute(0), from, to: 'orchestrator', kind: 'withdrawn', text: reason, question }));
+/** His answer to question `question`, read at `line` of the session's transcript: verified, with its copy, unless `verified` is false. */
+const answerTo = (machine, question, { line, answer = 'Yes (Recommended)', verified = true, text = answer }) => appendNotice(machine.home, machine.slug, newNotice({ at: minute(0), from, to: 'orchestrator', kind: 'answer', text, transcript: SESSION, line, question, verified, copy: verified ? { tool: 'AskUserQuestion', answers: [{ question: 'made up', options: ['Yes (Recommended)', 'No'], answer, how: 'tapped' }] } : null }));
+/** A call of the question tool at minute `m` that asks `question`, as the transcript writes it. */
+const askedAt = (m, id, question) => ({ type: 'assistant', timestamp: minute(m), message: { model: 'made-up-model', role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name: 'AskUserQuestion', input: { questions: [{ question, header: 'Made up', multiSelect: false, options: OPTIONS_OF_QUESTION }] } }] } });
+/** Its result at minute `m`: his `answer`, or none at all when `answer` is undefined (no answer of his). */
+const resultAt = (m, id, question, answer) => ({ type: 'user', timestamp: minute(m), ...(answer === undefined ? {} : { toolUseResult: { answers: { [question]: answer } } }), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'made up' }] } });
+/** How to ask him when no entry of his is read in the transcript, for `waits` questions: the rule's sentence for a time that is not known. */
+const UNKNOWN_WHEN = (count) => `when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that ${count === 1 ? '1 question waits' : `${count} questions wait`} and about what, and never writes the options out as text`;
+/** The same rule for a time that is known: `ago` is how long before the test's clock his newest words were. */
+const KNOWN_WHEN = (ago, count) => `he last wrote here ${ago} ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that ${count === 1 ? '1 question waits' : `${count} questions wait`} and about what, and never writes the options out as text`;
+/** The lines the questions step prints: from the first that starts with "Questions" to the line after them, which is the
+ * deadline's, the notify line, or the end. `null` when the hook printed none. */
+function questionLinesOf(lines) {
+  const start = lines.findIndex((line) => line.startsWith('Questions'));
+  if (start === -1) return null;
+  const rest = lines.slice(start);
+  const end = rest.findIndex((line) => line.startsWith('Not read before') || line === NOTIFY);
+  return end === -1 ? rest : rest.slice(0, end);
+}
 
 /** Every file under `folder` with its size and the time of its last write: what a command that writes
  * nothing leaves as it was. */
@@ -493,6 +524,7 @@ test('when the disk cannot be read the hook prints what it still knows, and says
     `  ${path.join(machine.worktree, 'odd', 'tasks')}  (branch feat/channel, last written 12m ago)`,
     `  ${path.join(machine.root, 'odd', 'tasks')}  (branch main, no document)`,
     'Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.',
+    `Questions: not read (the channel's record ${RECORD_PATH(machine)} could not be read: made up)`,
   ];
   assert.deepEqual(await printed({ session_title: TITLE }, { readFile: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${dir})`, ...unread, NOTIFY]);
   // With no title from the host either, the transcript and the record are all that could give one, and
@@ -782,7 +814,7 @@ test('past the hook\'s own deadline once its transcript is read, the stretch, th
     `Session: "${TITLE}" (the title the host gave the hook)`,
     `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`,
     'Feature document: not known (this hook\'s own deadline passed before it was looked for)',
-    'Not read before this hook\'s own deadline (9 s): the stretch of work before this compaction, the feature document, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply.',
+    'Not read before this hook\'s own deadline (9 s): the stretch of work before this compaction, the feature document, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply, the questions.',
     NOTIFY,
   ]);
   // Each git call is allowed two seconds, and the host gives the hook fifteen in all: none is started past the deadline.
@@ -804,7 +836,7 @@ test('the deadline that passes inside the search for the feature document stops 
     'Feature document: not known (this hook\'s own deadline passed while it was looked for)',
     headOf(machine),
     ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, USER_LINE(1, '2')),
-    'Not read before this hook\'s own deadline (9 s): the feature document, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply.',
+    'Not read before this hook\'s own deadline (9 s): the feature document, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply, the questions.',
     NOTIFY,
   ]);
   assert.deepEqual(calls.filter((call) => / (diff|ls-files|worktree|log|status) /.test(`${call} `)), []);
@@ -827,7 +859,7 @@ test('past the deadline after the stretch is read, its lines are printed, and th
     READ,
     headOf(machine),
     ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, USER_LINE(1, '2')),
-    'Not read before this hook\'s own deadline (9 s): the pause\'s notice, when the state was last written and committed, the worktree\'s changes, the work in flight and the machine\'s gate, this session\'s last reply.',
+    'Not read before this hook\'s own deadline (9 s): the pause\'s notice, when the state was last written and committed, the worktree\'s changes, the work in flight and the machine\'s gate, this session\'s last reply, the questions.',
     NOTIFY,
   ]);
 }));
@@ -1166,11 +1198,11 @@ test('the three steps after the pause are each checked against the deadline befo
   // The deadline passes in the state's own `git log`: the state line is read, and the worktree, the flight and the reply are named.
   const atLog = (await later('log')).lines;
   assert.ok(atLog.includes(`  ${STATE_OF(machine)}`));
-  assert.equal(atLog.at(-2), 'Not read before this hook\'s own deadline (9 s): the worktree\'s changes, the work in flight and the machine\'s gate, this session\'s last reply.');
+  assert.equal(atLog.at(-2), 'Not read before this hook\'s own deadline (9 s): the worktree\'s changes, the work in flight and the machine\'s gate, this session\'s last reply, the questions.');
   // It passes in the worktree's `git status`: the worktree line is read, and the flight and the reply are named.
   const atStatus = (await later('status')).lines;
   assert.ok(atStatus.includes(`  ${CLEAN_OF(machine)}`));
-  assert.equal(atStatus.at(-2), 'Not read before this hook\'s own deadline (9 s): the work in flight and the machine\'s gate, this session\'s last reply.');
+  assert.equal(atStatus.at(-2), 'Not read before this hook\'s own deadline (9 s): the work in flight and the machine\'s gate, this session\'s last reply, the questions.');
 }));
 
 const PAUSED = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_PAUSE_PERCENT);
@@ -1308,4 +1340,146 @@ test('js-harness resume --pause, run as a process: past the pause its standard o
   assert.deepEqual([run.status, run.stderr], [0, '']);
   assert.equal(run.stdout.trim().split(/\r?\n/).length, 1);
   assert.equal(JSON.parse(run.stdout).hookSpecificOutput.hookEventName, 'PostToolUse');
+}));
+
+test('a record that holds no question prints no line of questions, for an orchestrator and for a work session', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  assert.equal(questionLinesOf((await runHook(machine, hookInput(machine))).lines), null);
+  assert.equal(questionLinesOf((await runHook(machine, hookInput(machine, { session_title: ORQ }))).lines), null);
+}));
+
+test('a record that could not be read is said in one line, with its path and the reason, for an orchestrator and for a work session', withMachine(async (machine) => {
+  titled(machine);
+  const file = RECORD_PATH(machine);
+  const denied = (asked) => {
+    if (asked === file) throw Object.assign(new Error('made up'), { code: 'EACCES' });
+    return fs.readFileSync(asked, 'utf8');
+  };
+  const said = [`Questions: not read (the channel's record ${file} could not be read: EACCES)`];
+  assert.deepEqual(questionLinesOf((await runHook(machine, hookInput(machine), { readFile: denied })).lines), said);
+  assert.deepEqual(questionLinesOf((await runHook(machine, hookInput(machine, { session_title: ORQ }), { readFile: denied })).lines), said);
+}));
+
+test('an orchestrator is given every question no notice closed, each with what its transcript holds of it: no call, pending, closed, unanswered and answered', withMachine(async (machine) => {
+  askQuestion(machine, 'Which branch?', { from: BY_OTHER });
+  askQuestion(machine, 'Merge now?');
+  askQuestion(machine, 'Ship it?');
+  askQuestion(machine, 'Closed by an answer?');
+  askQuestion(machine, 'Withdrawn?');
+  askQuestion(machine, 'Dismissed?');
+  askQuestion(machine, 'Unanswered?');
+  answerTo(machine, 4, { line: 9 });
+  withdraw(machine, 5, 'no longer needed');
+  transcriptWith(machine, [
+    askedAt(1, 'toolu_1', 'Pregunta 1: Which branch?'),
+    askedAt(2, 'toolu_2', 'Pregunta 2: Merge now?'),
+    resultAt(3, 'toolu_2', 'Pregunta 2: Merge now?', 'Yes (Recommended)'),
+    askedAt(4, 'toolu_6', 'Pregunta 6: Dismissed?'),
+    resultAt(5, 'toolu_6', 'Pregunta 6: Dismissed?', DISMISSED),
+    askedAt(6, 'toolu_7', 'Pregunta 7: Unanswered?'),
+    resultAt(7, 'toolu_7', 'Pregunta 7: Unanswered?', undefined),
+  ]);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: ORQ }));
+  // Closed by a notice (4 and 5) they are not listed; the five open ones are, oldest number first, and the answer's line is the result's.
+  // His newest words here are the answer he tapped at line 4 (minute 3, an hour and 57 minutes before the clock), and the five that wait are said.
+  assert.deepEqual(questionLinesOf(lines), [
+    'Questions with no answer in the record (5 of 7 recorded), with what this transcript holds of each:',
+    '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Which branch?',
+    '    asked at line 2 of this transcript, with no answer in it: it may be on his screen; look (js-harness sessions) before asking again',
+    '  Pregunta 2  recorded 2h ago by "JH 5 · the channel"  waits: the board  Merge now?',
+    `    he ANSWERED it at line 4 of this transcript: do not ask it again. Read it: js-harness sessions --quote ${SESSION} 4  Then record it: js-harness notify --to 5 --kind answer --question 2 --transcript ${SESSION} --line 4 "<his answer in one line>"`,
+    '  Pregunta 3  recorded 2h ago by "JH 5 · the channel"  waits: the board  Ship it?',
+    `    not asked in this transcript: ${KNOWN_WHEN('1h 57m', 5)}. Its text is headed by "Pregunta 3: "`,
+    '  Pregunta 6  recorded 2h ago by "JH 5 · the channel"  waits: the board  Dismissed?',
+    `    he closed it without answering (asked at line 5): ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
+    '  Pregunta 7  recorded 2h ago by "JH 5 · the channel"  waits: the board  Unanswered?',
+    `    asked at line 7, and its result is no answer of his: ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
+    'The board lists the questions of every session: js-harness sessions',
+  ]);
+}));
+
+test('a work session is given the questions it recorded itself: its open ones with what its transcript holds, its last closed ones in one line each, and no others', withMachine(async (machine) => {
+  titled(machine);
+  askQuestion(machine, 'Own?');
+  askQuestion(machine, 'Not mine?', { from: BY_OTHER });
+  askQuestion(machine, 'Closed by a verified answer?');
+  askQuestion(machine, 'Closed by a claim?');
+  askQuestion(machine, 'Withdrawn?');
+  answerTo(machine, 3, { line: 9, answer: 'No' });
+  answerTo(machine, 4, { line: 10, verified: false, text: 'Yes, made up' });
+  withdraw(machine, 5, 'no longer needed');
+  const { lines } = await runHook(machine, hookInput(machine));
+  assert.deepEqual(questionLinesOf(lines), [
+    'Questions this session recorded (4):',
+    '  Pregunta 1  recorded 2h ago by "JH 5 · the channel"  waits: the board  Own?',
+    '    recorded, no answer yet: the orchestrator shows it to him; go on with what does not wait on it (js-harness sessions lists it)',
+    `  Pregunta 3  ANSWERED, read at ${SESSION}:9: No`,
+    `  Pregunta 4  answered by the claim of "JH 5 · the channel", NOT VERIFIED (${SESSION}:10): Yes, made up`,
+    '  Pregunta 5  withdrawn by "JH 5 · the channel": no longer needed',
+    'The board lists the questions of every session: js-harness sessions',
+  ]);
+}));
+
+test('a work session is given none of the questions another session recorded, and an orchestrator is given them', withMachine(async (machine) => {
+  titled(machine);
+  askQuestion(machine, 'Not mine?', { from: BY_OTHER });
+  assert.equal(questionLinesOf((await runHook(machine, hookInput(machine))).lines), null);
+  assert.deepEqual(questionLinesOf((await runHook(machine, hookInput(machine, { session_title: ORQ }))).lines), [
+    'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
+    '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Not mine?',
+    `    not asked in this transcript: ${UNKNOWN_WHEN(1)}. Its text is headed by "Pregunta 1: "`,
+    'The board lists the questions of every session: js-harness sessions',
+  ]);
+}));
+
+test('a work session\'s closed questions are its last five by number, and the earlier ones are a count with the record\'s path', withMachine(async (machine) => {
+  titled(machine);
+  for (let number = 1; number <= 7; number++) askQuestion(machine, `Question ${number}?`);
+  for (let number = 1; number <= 7; number++) withdraw(machine, number, `reason ${number}`);
+  const { lines } = await runHook(machine, hookInput(machine));
+  assert.deepEqual(questionLinesOf(lines), [
+    'Questions this session recorded (7):',
+    ...[3, 4, 5, 6, 7].map((number) => `  Pregunta ${number}  withdrawn by "JH 5 · the channel": reason ${number}`),
+    `  2 earlier ones are in the record: ${RECORD_PATH(machine)}`,
+    'The board lists the questions of every session: js-harness sessions',
+  ]);
+}));
+
+test('with no transcript read, a question with no call is not said to be unasked: the hook says to look before asking', withMachine(async (machine) => {
+  titled(machine);
+  askQuestion(machine, 'Asked already?', { from: BY_OTHER });
+  // The sessions folder cannot be read; the record, under the harness home, can.
+  const busy = (file) => {
+    if (path.resolve(file).startsWith(path.resolve(machine.projectDir))) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+    return fs.readFileSync(file, 'utf8');
+  };
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: ORQ }), { readFile: busy });
+  assert.deepEqual(questionLinesOf(lines), [
+    'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
+    '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Asked already?',
+    '    this session\'s transcript was not read, so it is not known whether it was asked or answered here: look (js-harness sessions) before asking',
+    'The board lists the questions of every session: js-harness sessions',
+  ]);
+}));
+
+test('an orchestrator whose record has no question open is told how many questions it holds, in one line', withMachine(async (machine) => {
+  titled(machine);
+  askQuestion(machine, 'Done?');
+  askQuestion(machine, 'Also done?');
+  withdraw(machine, 1, 'no longer needed');
+  answerTo(machine, 2, { line: 4 });
+  assert.deepEqual(questionLinesOf((await runHook(machine, hookInput(machine, { session_title: ORQ }))).lines), ['Questions: the record holds 2, none open.']);
+}));
+
+test('past the hook\'s own deadline no line of the questions is printed, and they are named among the lines not read', withMachine(async (machine) => {
+  titled(machine);
+  askQuestion(machine, 'Own?');
+  // The first read is the start of the hook; every read after it is past the nine seconds of its deadline.
+  let reads = 0;
+  const late = await runHook(machine, hookInput(machine), { now: () => (reads++ === 0 ? NOW : NOW + 9000) });
+  assert.equal(questionLinesOf(late.lines), null, late.lines.join('\n'));
+  assert.equal(late.lines.at(-2).endsWith(', the questions.'), true, late.lines.join('\n'));
+  // In time, the same record is given its four lines.
+  assert.equal(questionLinesOf((await runHook(machine, hookInput(machine))).lines).length, 4);
 }));

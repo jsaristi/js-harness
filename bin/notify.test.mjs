@@ -724,10 +724,11 @@ test('a recorded question is printed with its number and its prefix, and the lin
   assert.deepEqual(recorded(machine).notices.map((one) => one.id), [QUESTION_ID, SECOND_ID]);
 }));
 
-test('a question the orchestrator records itself is to be asked only in the reply to a message he has just written, alone or beside another of its title', withMachine(async (machine) => {
+test('a question the orchestrator records itself is told how to ask him, by when he last wrote, alone or beside another of its title', withMachine(async (machine) => {
   // `sessions --address` does not count the session that asks, so an orchestrator alone has no address to
   // ring: it is known by its own title, and told when to call the tool, which holds it until he answers.
-  const HOLDS = (number) => `you hold that role: ask him with the question tool only in the reply to a message he has just written, the text headed by "Pregunta ${number}: "; until then the question waits as this notice`;
+  // The sender wrote a minute ago, so he is there: the question tool is called now.
+  const HOLDS = (number) => `you hold that role: he wrote here 1m ago: put it to him now with the question tool. Its text is headed by "Pregunta ${number}: "; until it is asked the question waits as this notice`;
   writeSession(machine, SENDER, ORCHESTRATOR_TITLE);
   const alone = await askQuestion(machine);
   assert.equal(alone.code, 0);
@@ -742,13 +743,36 @@ test('a question the orchestrator records itself is to be asked only in the repl
   assert.deepEqual(beside.err, (await runAddress(machine, 'orchestrator')).err);
 }));
 
+const ANSWER_LINE = 'Then record his answer: js-harness notify --to orchestrator --kind answer --question 1 --transcript <session id> --line <n> "<his answer in one line>"';
+
 test('a question with no orchestrator is to be asked by the sender itself, and the line says how to record his answer', withMachine(async (machine) => {
+  // He wrote a minute ago, so the sender asks him now, with the question tool.
   writeSession(machine, SENDER, SENDER_TITLE);
   const { code, out, err } = await askQuestion(machine);
   assert.equal(code, 0);
   assert.deepEqual(err, []);
   assert.match(out[2], /^address of the orchestrator: no single one now \(sessions --address exit 1\): /);
-  assert.equal(out[3], 'no orchestrator to show it: ask him yourself with the question tool, only in the reply to a message he has just written, the text headed by "Pregunta 1: ", then record his answer: js-harness notify --to orchestrator --kind answer --question 1 --transcript <session id> --line <n> "<his answer in one line>"');
+  assert.equal(out[3], `no orchestrator to show it: ask him yourself: he wrote here 1m ago: put it to him now with the question tool. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
+  assert.equal(out.length, 4);
+}));
+
+test('a question with no orchestrator, when he wrote longer ago, is to be asked in the reply to his next message, and not with the tool now', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE, { seconds: 3600 });
+  const { code, out, err } = await askQuestion(machine);
+  assert.equal(code, 0);
+  assert.deepEqual(err, []);
+  assert.equal(out[3], `no orchestrator to show it: ask him yourself: he last wrote here 1h 00m ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that 1 question waits and about what, and never writes the options out as text. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
+  assert.equal(out.length, 4);
+}));
+
+test('a question with no orchestrator, when the sender\'s transcript holds no words of his, says that when he last wrote is not known', withMachine(async (machine) => {
+  // A transcript with its title and a reply of the session, and no entry of his: no time to go by.
+  writeTranscript(machine, SENDER, [{ type: 'custom-title', customTitle: SENDER_TITLE, sessionId: SENDER }, replied(-60)]);
+  const { code, out, err } = await askQuestion(machine);
+  assert.equal(code, 0);
+  assert.deepEqual(err, []);
+  assert.equal(out[3], `no orchestrator to show it: ask him yourself: when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that 1 question waits and about what, and never writes the options out as text. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
+  assert.equal(out.length, 4);
 }));
 
 test('a question whose number cannot be read back is recorded all the same, with the number not known and the reason on stderr', withMachine(async (machine) => {

@@ -2352,6 +2352,21 @@ session needs beside it to go on; the summary of a compaction is not the record.
   the three parts; and a check of a reply (a Stop hook that blocks a question written out with
   options and no tool call) is measured over the transcripts before it is proposed: installing
   a hook that blocks is his to decide.
+- 2026-10-13, written at 21:16: the fix of the board's half is `30206e3` (gate PASS after fifty
+  minutes in the line; gentle-ai: not due; Codex on `c9b1bb5..30206e3`: 135,286 input tokens,
+  "correct (0.92)", no finding). PART 3 AND THE ASKING RULE are the commit that carries this
+  entry, one commit and not two: the rule rewrites lines part 3 adds, and a commit cost forty
+  minutes at the gate this evening. As built: the resume's block of questions
+  (`questionLinesOf` in `bin/resume.mjs`, `recordQuestionsIn` in the library), read once from
+  the transcript's facts; `personAt` is the NEWEST entry of his by its time, not the last in the
+  file, since a resumed session writes older entries again after newer ones; `askingRule` gives
+  the sentence, and `notify`, the resume and the board (the line `to ask:` under "Open
+  questions", from the board's own session) print it. Two bounded writers wrote them on copies
+  outside the tree while the gate was held, and this session read the code. Test first: 18
+  tests failed without the code; with it 724 passed and 10 failed, each an expectation and none
+  a defect of the code (a capital letter in three; a queued message of his that counts for
+  `personAt`; five older tests of the resume that gained the new step; one that had no time for
+  his tapped answer); corrected, the four files passed, 684.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
@@ -2764,7 +2779,34 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 18:59, THE NEWEST OF ALL (read this first). Part 2 is two commits:
+      STATE AT 2026-10-13 21:12, THE NEWEST OF ALL (read this first; then the end of the file
+      `STATE-before-compaction.md` in this session's scratchpad, which has every step).
+      On `feat/question-notice`, committed and reviewed: `6ab6958`, `567f81f` (part 1 and its
+      fix), `fc7fee2` (the record and `notify`), `c9b1bb5` and `30206e3` (the board's half and
+      the fix of Codex's two findings on it; Codex on `c9b1bb5..30206e3`: 135,286 input
+      tokens, "correct (0.92)"). IN THE TREE, NOT COMMITTED: part 3 (the resume's block of
+      questions, `recordQuestionsIn`) together with the asking rule (`personAt`,
+      `PERSON_PRESENT_MS`, `askingRule`, printed by `notify`, the resume and the board), six
+      files: `bin/lib/sessions.mjs`, `bin/notify.mjs`, `bin/resume.mjs` and their tests. They
+      go in ONE commit, message `commit-msg-p3ask.txt` in the scratchpad. Its red-green turn
+      (log `jh5-p3ask`): 18 tests failed without the code; with it 724 passed and 10 failed,
+      all read as wrong or outdated expectations of tests (a capital letter in three of
+      `notify`; `personAt` of a queued message in one; five older tests of the resume that
+      lack the new step; one of the orchestrator's list not read yet). A bounded writer
+      corrects those expectations and reports any that is a defect of the code. THEN: the
+      three test files again through the gate, a Progress entry, the commit turn
+      (`queue-commit.sh`), its hash to the lead (it waits for it: its failures 1 and 2 of the
+      evening land there); one merge of `main`, `check --push`, the push, the pull request
+      with no attribution line, its number to the lead. THEN SLICE (c), with what the lead
+      sent for it this evening: the three parts of the rule on questions (Progress, 19:49);
+      what may run beside a gate (a `sessions --quote` and one test file of under half a
+      minute; not a whole run, a measure, a board read or a reviewer); the merge check worded
+      as "the gate proved the tree the merge will produce"; and the measure of a reply check
+      over the transcripts before any blocking hook is proposed. The doctor row of the Codex
+      CLI must read the switch of JH 9's design (his approvals are at lines 12777, 12795,
+      12814 and 12828 of the lead's transcript: read them with `--quote` first), and the lead
+      is told when that slice is planned.
+      STATE AT 2026-10-13 18:59 (the state before the one above). Part 2 is two commits:
       `fc7fee2` (the record and `notify`, reviewed) and the commit that carries this text (the
       board's half; in the tree if it did not land: `git status` says). PART 3, the resume's
       half, is written and read and waits as copies in this session's scratchpad (folder
