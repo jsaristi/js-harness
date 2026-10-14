@@ -1593,10 +1593,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (found by Codex in `21686a5`, second priority): today a fence under an item that opens
     within three spaces and closes deeper is left open, and with the option off a checkbox
     shown in a fence indented past three spaces is counted as a step by `js-harness progress`
-- [ ] T4 Every command that writes outside the repository refuses a flag it does not know; and
-  the push row hints the merge commit as the base after `main` is merged in (failure 15)
-- [ ] T5 The row `citations`, INFO
-- [ ] T6 The row `memory-rules` of `doctor`
+- Moved on 2026-10-14 to "JH 12 · comandos y diagnóstico", by the lead's message to this
+  session; their state is kept in `odd/tasks/commands-and-doctor.md`, and only there: T4 (every
+  command that writes outside the repository refuses a flag it does not know; and the push row
+  hints the merge commit as the base after `main` is merged in, failure 15), T5 (the row
+  `citations`, INFO) and T6 (the row `memory-rules` of `doctor`). They carry no checkbox here,
+  so that `js-harness progress` counts them once
 - [ ] T7 The skill `js-harness-protocols`, six sections, each opening with its incident
 - [ ] T8 `AGENTS.md` rewritten within the budget, its wording passed by him. His idea of
   2026-10-11 for how (relief file, line 203), recorded here and not built yet: the text is
@@ -1607,19 +1609,21 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   a half-written version would govern the session that writes it
 - [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
   reply check on is asked of him
-- [ ] T10 The honesty eval: the task and its proof; then, before any spend is asked of him, the
-  number of trials, their cost at list price and the difference in score that counts as "the
-  line moves it"; then the trials with and without the line
+- Moved on 2026-10-14 to "JH 15 · auditoría de honestidad", by the lead's message to this
+  session; their state is kept in `odd/tasks/honesty-audit.md`, and only there: T10 (the honesty
+  eval: the task and its proof; then, before any spend is asked of him, the number of trials,
+  their cost at list price and the difference in score that counts as "the line moves it"; then
+  the trials with and without the line), T13 (the sub-agent model check, C8) and T14 (the
+  honesty audit, C9). No checkbox here, so that `js-harness progress` counts them once
 - [ ] T11 Every rule moved: the memory notes placed and, on his word, deleted; the remaining
   contradictions of the roadmap corrected
 - [ ] T12 Practice journey: a step for the template's lines and one for the reply hook
-- [ ] T13 The sub-agent model check (C8), after his answer on what enters from the comparison
-- [ ] T14 The honesty audit (C9): the transcript reader read first, then designed as a count or
-  recorded as not worth it
-- [ ] T15 The seven signals read and recorded; the roadmap's section replaced by a pointer only
-  after what it holds and this document does not (the reading of the specification, "how far
-  is far enough", the bullets on bias and research, the team rules) is in `docs/SPEC.md` or
-  here
+- Moved on 2026-10-14 to "JH 14 · protocolo para modelos futuros", by the lead's message to
+  this session; its state is kept in `odd/tasks/future-model-protocol.md`, and only there: T15
+  (the seven signals read and recorded; the roadmap's section replaced by a pointer only after
+  what it holds and this document does not, the reading of the specification, "how far is far
+  enough", the bullets on bias and research, the team rules, is in `docs/SPEC.md` or here). No
+  checkbox here, so that `js-harness progress` counts it once
 - [ ] T16 One home for every rule, by the protocol of "One home for every rule (T16)" and in
   its order (route: delegated; after T17, before T1)
   - [x] T16a The approved protocol in this document, read against the relief file's lines 253
@@ -2586,7 +2590,115 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
-**Where this session stands, later on 2026-10-13: stopped by the lead's call, at a task end.**
+**Resumed on 2026-10-14 at 03:54, when `main` held the gate in WSL (`"sensorsInWsl": true`),
+by the lead's message and his lines 1647 and 2856 of the lead's transcript (2856, read with
+`sessions --quote`: "Retomar con el gate viejo (Recomendada)", for the case the WSL gate had not
+landed by 05:00; it landed first).** `main` (`8aa93c3`) was merged in at 04:20 (`8660763`).
+Seven tasks left this document for the sessions named at them in `## Tasks`. Next: the README,
+from its red test, as the queue below says.
+
+**The README, written on 2026-10-14 at about 04:40.** Its test, put back at
+`bin/readme.test.mjs`, was seen red again on the merged tree (1 passes, 3 fail on the missing
+file); the dispatcher now lists 20 commands, `functions` added. `README.md` holds what the
+harness is, `## Install`, `## Remove` and one section for each command with an example from a
+run made for it on the merged tree: in a temporary home and a temporary git project
+(`readme-runs-2/` in this session's scratchpad, made by `readme-journey.sh` there, which sets
+`JS_HARNESS_HOME`, `HOME` and `USERPROFILE` to the temporary home and unsets
+`CLAUDE_CONFIG_DIR` and `CODEX_HOME`), and the read-only ones in this repository. A fifth test
+was added when the first draft failed: the contract template shown as an example opens with
+`## Goal`, which the test read as a heading of the page, so the test now reads headings only
+outside fenced blocks. Then 5 pass. **Found by the runs, for the lead:** after `uninstall
+--global` the temporary home kept, beside the empty `.claude/` and `.codex/` and an empty
+`AppData/Roaming/`, the folder `.codegraph/` with `telemetry-queue.jsonl` and `telemetry.json`,
+which codegraph writes when `init` runs `codegraph init`; no manifest records them, so nothing
+removes them. The README says so as it is. Next: the commit through the gate, gentle-ai's
+assessment, the Codex review of the test, the pull request, its number to the lead.
+
+**PAUSED on 2026-10-14 at about 01:15, by his order that everything stops but the faster check
+(the orchestrator's transcript `ffe99ebf-72fb-48da-a79b-e7db21a20b3f`, line 1647, read with
+`sessions --quote`: "si pero la idea es pausar todo precisamente para hacer unicamente esta
+mejora implementarla y ahi si seguir con lo siguiente").** Resume only on the lead's word. At
+the pause: a merge of `main` (`3f59bb2`) was waiting in the gate's line and was taken out before
+it began, so nothing was merged; the README's red test is not in the worktree but in this
+session's scratchpad as `readme.test.mjs.hold`, set aside so that a gate of this branch would
+not run it; put it back at `bin/readme.test.mjs` on resume. After `uninstall --global` in an
+empty temporary home, the two folders left are `.claude/` and `.codex/`, empty: the README says
+so. Then the queue below, from the README.
+
+**State for a resume, 2026-10-14 at 00:07 (`date`), at 91 percent before a compaction.** He
+rejected a commit of this session at about 17:50 of the 13th (its message file was outside the
+scratchpad); the session waited six hours in silence, and his answer is to go on with the queue
+("Que siga con su cola (Recomendada)", the orchestrator's new transcript
+`ca93c7ef-90b4-48f3-879e-c51742f78f64`, line 971) and his correction that a rejection is first
+told to the lead (line 957: "pero no entiendo por que no me pasa la pregunta para aca como ya
+habiamos quedado y cementado"). The queue, in order: this commit is the rejected one, redone
+with its message in the scratchpad; then the README (below, item 1, with its runs); the register
+entries the lead sent on the night of the 13th, with this silence as one more (a rejection or a
+stop by him is told to the lead first); the roadmap lines in the lead's messages of 18:45 to
+22:29 (decisions 3, 4 and 7, the private repository, `docs/SPEC.md` written last), each read
+with `sessions --quote` first; the spec notes the lead asked for; JH 5's two rules
+(`slice-c-for-rules-owner.md` in its scratchpad) into `bin/lib/rules-data.mjs` and `AGENTS.md`.
+Not this session's any more: `docs/todo.md` (JH 5) and the design of an installed project's
+own rules (JH 11, told that nothing of it existed here).
+
+**State for a resume, written on 2026-10-13 at about 83 percent of this session's context,
+before a compaction and before any of the work below is started.** The stop below is over:
+he raised the plan and its week is back at 0 percent ("Listo ya tenemos la suscripcion de 20x
+y ademas tenemos el uso reestablecido", the lead's transcript
+`65318fd5-80e7-4bb8-92b5-06737140185b`, line 11381, read with `js-harness sessions --quote`),
+so sub-agents are allowed again where a design needs readers. Pull request 97 is merged;
+`main` is `ad7b37b` (pull requests 97 to 101, the lead's claim for what they moved: no command
+asks a registry any more, a gate whose tree a gate already passed runs no sensor, `uninstall`
+undoes exactly). The lead's order for this session, in this order, on the branch
+`docs/readme` (worktree `D:/js-harness-worktrees/rules-review-readers`, cut from `ad7b37b`):
+1. **The README**, this session's. His answer, read: "Una página y cada comando" (line 10979,
+   tapped, to what the README holds). One page: what the harness is, how to install it, how
+   to remove it leaving nothing; then each command with an example taken from a real run. With
+   it a test or a check that holds the README's list of commands to the dispatcher's
+   (`bin/js-harness.mjs`), so that it cannot go stale silently: that test is written first.
+   Load the skill `cognitive-doc-design` before writing it. It is code and a document: gate,
+   gentle-ai, Codex by the rule.
+   **Started, and where it stopped:** the test is written and not committed,
+   `bin/readme.test.mjs` in the worktree (four tests: the dispatcher's list read from
+   `js-harness --help`; one `### js-harness <name>` section for each command under
+   `## Commands`, in the same order and no other; a fenced example in each; `## Install`, then
+   `## Remove`, then `## Commands`). Seen RED: 1 passes and 3 fail on "ENOENT … README.md".
+   The dispatcher lists 19 commands (`bin/js-harness.mjs:9-27`): check, gate, init, install,
+   sync, uninstall, status, update, upgrade, doctor, progress, contract, failures, rules,
+   codex-review, remote, sessions, notify, resume. Next: write `README.md` at the root, each
+   example from a run made for it (read a command's flags in its source before running it:
+   `install`, `init`, `sync`, `uninstall`, `upgrade`, `remote start` and `notify` write, so
+   their examples come from the practice folder or a temporary home, never from his); then
+   the test green, the commit through the gate, the reviews.
+   **Runs already made for the examples**, each saved whole with its command line and exit
+   code in this session's scratchpad, folder `readme-runs/` (session
+   `9265156a-3a86-4da5-80f9-aebe66cd887c`): in this repository `status` (exit 1, no pin),
+   `update`, `progress`, `failures`, `rules`, `contract check`, `codex-review --plan`; and in a
+   temporary home and a temporary git project made for it (`readme-runs/journey/`), in this
+   order, all exit 0: `install`, `init`, `status`, `sync`, `uninstall`, `uninstall --global`.
+   Their paths are long temporary ones and are shortened in the README to `~` and the project's
+   folder, said once. To check before the page says "leaving nothing": after `uninstall
+   --global` the temporary home still held 2 entries (`fd -H . readme-runs/journey/home`);
+   read which and say it as it is. Not run yet: `check`, `gate`, `doctor`, `upgrade`, `remote`,
+   `sessions`, `notify`, `resume`.
+2. **The roadmap**: open decisions 9 and 10 closed with their lines, both read: 9 by line
+   10979; 10 by line 11146, "Solo los comandos (Recomendada)" (JH 8 builds it). Also read, for
+   the task `install-update.md` T6: line 11166, "Vale, sin versión fijada (Recomendada)", to
+   what the commands answer where a project's file is hand-written with no version (JH 8
+   builds it). And the register entries of that morning, each a claim of the lead to read in
+   its relief file first: the app words a stop by another session as the user's refusal
+   (relief line 565); the question tool holds the asker (560); a flake of the end hook of
+   `evals/codex-isolation-probe.test.mjs` (561); messages between sessions held three hours
+   (550).
+3. **The design of an installed project's own rules** (T16f and item d of the proposal), with
+   two readers, sent to the lead before a task exists: one of the four items with no design
+   that his line 10519 puts inside the first version.
+4. **The rest of T16b's second part**, after telling JH 5 and JH 8 the lines in `bin/check.mjs`,
+   `bin/lib/manifest.mjs` and `bin/contract.mjs`.
+T1's paid measurement stays his: its cost figure goes to the lead when it is reached. T2 and
+T8 are his and are asked by the lead.
+
+**Where this session stood earlier on 2026-10-13: stopped by the lead's call, at a task end.**
 Pull requests 91, 93, 94 and 96 are merged; the last piece is the documents branch
 `docs/shipped-defects`: the six defects in shipped behaviour that had no task, each read in
 the code on `main` at `f98f478` and all true, written in the roadmap ("Next") with a task in
