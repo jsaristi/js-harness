@@ -96,6 +96,12 @@ export function backticksInDoubleQuotes(command) {
       if (c === "'") stack.pop();
       continue;
     }
+    if (here.kind === 'ansi') {
+      // `$'...'`: literal like single quotes, but a backslash escapes the next character, `\'` among them.
+      if (c === '\\') i++;
+      else if (c === "'") stack.pop();
+      continue;
+    }
     if (c === '\\') {
       // A backslash-newline is removed by bash and leaves the word boundary as it was.
       if (text[i + 1] === '\n') wordStart = atWordStart;
@@ -114,7 +120,8 @@ export function backticksInDoubleQuotes(command) {
       continue;
     }
     // `out` or `sub`: quotes open contexts.
-    if (c === "'") stack.push({ kind: 'single' });
+    if (c === '$' && text[i + 1] === "'") { stack.push({ kind: 'ansi' }); i++; }
+    else if (c === "'") stack.push({ kind: 'single' });
     else if (c === '"') stack.push({ kind: 'double' });
     else if (c === '#' && atWordStart) {
       // A comment runs to the end of its line, and its quotes are no quotes (`$#`, `a#b` and `a\ #` are no comment).

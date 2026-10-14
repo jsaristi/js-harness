@@ -131,6 +131,11 @@ test('a comment is left out, so its quotes neither refuse nor hide a command (Co
   assert.equal(backtickRefusal('echo \\\n# "the `check` row"'), null);
 });
 
+test('an ANSI-C string $\'...\' is literal and its \\\' does not close it (Codex, 2026-10-14)', () => {
+  assert.equal(backtickRefusal('git commit -m $\'it\\\'s "the `check` row"\''), null);
+  assert.deepEqual(backticksInDoubleQuotes('echo $\'a\\\'b\' "the `x` row"'), ['x']);
+});
+
 test('each context skips only its own heredocs: one inside a $(...) leaves the outer one pending (Codex, 2026-10-14)', () => {
   assert.deepEqual(backticksInDoubleQuotes('cat <<\'OUT\' "$(cat <<\'IN\'\ninner\nIN\n)"\nouter\nOUT\necho "`x`"'), ['x']);
 });

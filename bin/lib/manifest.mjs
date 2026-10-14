@@ -30,11 +30,8 @@ js-harness commands:
 - \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
-<<<<<<< HEAD
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed.
-=======
 - \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock.
->>>>>>> feat/honesty-audit
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.

@@ -1726,6 +1726,18 @@ test('the installed skill names the --global forms for the machine and the proje
   assert.equal(components[1].content('0.1.0'), text, 'Claude and Codex read the same text');
 });
 
+// A merge resolved by hand once left its markers inside the skill's template, and every install would have
+// written them to both hosts (Codex, 2026-10-14, on PR 157).
+test('the installed skill holds no merge conflict marker, and names both wait and guard', () => {
+  for (const component of components.filter((c) => typeof c.content === 'function')) {
+    const text = component.content('0.1.0');
+    assert.doesNotMatch(text, /^(<{7}|={7}|>{7})( |\r?$)/m, component.id);
+  }
+  const text = components[0].content('0.1.0');
+  assert.match(text, /^- `js-harness wait /m);
+  assert.match(text, /^- `js-harness guard --hook`/m);
+});
+
 // The skill is where an agent learns the review record exists; without it `codex-review` is only
 // discoverable by reading the source.
 test('the installed skill names codex-review and check --push', () => {

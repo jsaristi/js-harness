@@ -560,3 +560,16 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
   branch's history on `feat/honesty-audit` (its earlier commits stay in the reflog and in the Codex
   records); it gets its own Codex review. gentle-ai assess of the guard range: medium, not due
   (`under_budget`).
+- 2026-10-14, written at 18:37: the squash landed as `63fec3c` (gate green). Codex on `780f3fd..63fec3c`
+  (450,206 input tokens, within 1.05 x 1,200 x 587 = 739k; recorded) found two P2, both real:
+  1. MY SLIP: the skill conflict in `bin/lib/manifest.mjs` was committed with its markers, inside the
+     skill's template, so every install would have written them to both hosts. Cause: the file in the
+     worktree is CRLF, `rg`'s `$` does not match before `\r`, so the `rg ... && node ...` that was to
+     strip them never ran the strip, and the `rg -c` that was to prove them gone was blind the same way;
+     its silence was read as absence. The gate did not see it either: the manifest tests do not read the
+     skill's whole text. Fix: markers removed by Edit, and a test that no generated component holds a
+     marker and the skill names both `wait` and `guard` (RED seen, manifest 133/133). The harness's
+     gap: the gate runs no `git diff --cached --check`, which reports conflict markers.
+  2. An ANSI-C string `$'...'` was read as single quotes, so its `\'` closed it and
+     `git commit -m $'it\'s "the `check` row"'` was a false refusal. Fix: an `ansi` context where a
+     backslash escapes (RED 1, GREEN 15 + 7; 8,239 commands: the same 2 real, none false).
