@@ -771,3 +771,11 @@ What the code already gives, so the slice stays call sites and one new module
   Run: `node --test bin/lib/functions.test.mjs bin/lib/settings-key.test.mjs`, 40 of 40; the
   two tests of `project-functions.test.mjs` that match "cannot be read", 2 of 2. No existing
   command or option is touched. Risk: none (the modules have no caller yet).
+- **L15** (2026-10-13 21:29 to 22:15) The fixes are `7b6ce12` (its check: lock waited 1 min
+  26 s, `npm run test` passed, review medium, not due). `main` at `9b227df` (JH 8's T8, with
+  `js-harness --version`) merged as `dac972b` (its check waited 29 min 59 s, tests passed). Then
+  `functions` routed in `bin/js-harness.mjs` with its help line, and one test that it is listed
+  and wired through the dispatcher: red with the route stashed (0 of 1), green with it
+  (`node --test bin/js-harness.test.mjs`, 33 of 33). The route touches the dispatcher every
+  command shares, by one entry in its table; the test of `--help` that lists the other commands
+  still passes. Risk: none.
