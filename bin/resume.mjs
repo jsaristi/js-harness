@@ -687,14 +687,17 @@ function askerOf(from) {
  * the transcript, or the state of the call it is joined to (`recordQuestionsIn`). `ownWork` is true for a work session's own
  * question, which the orchestrator shows him; `sessionId` is the session's id, or `null` when the hook has none. `read`
  * is whether the hook has the transcript: without it, a question with no call is not known to be unasked, and the line says
- * to look, never to ask. `ask` is how to ask him now, `askingRule`'s sentence, for a question that has to be asked again. */
-function callSaid(item, { ownWork, sessionId, read, ask }) {
+ * to look, never to ask. `ask` is how to ask him now, `askingRule`'s sentence, for a question that has to be asked again.
+ * `quoted` is whether `sessions --quote` can read this transcript, which is true only in this project's sessions folder. */
+function callSaid(item, { ownWork, sessionId, read, ask, quoted }) {
   const { call } = item;
   if (call === null && !read) return 'this session\'s transcript was not read, so it is not known whether it was asked or answered here: look (js-harness sessions) before asking';
+  // An orchestrator's line sends it to look first: a work session may have asked the question and had his answer, with no
+  // answer notice yet, and only the board sees that, not this transcript.
   if (call === null) {
     return ownWork
       ? 'recorded, no answer yet: the orchestrator shows it to him; go on with what does not wait on it (js-harness sessions lists it)'
-      : `not asked in this transcript: ${ask}. Its text is headed by "${questionPrefix(item.number)}"`;
+      : `not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${ask}. Its text is headed by "${questionPrefix(item.number)}"`;
   }
   if (call.state === 'pending') return `asked at line ${call.line} of this transcript, with no answer in it: it may be on his screen; look (js-harness sessions) before asking again`;
   if (call.state === 'closed') return `he closed it without answering (asked at line ${call.line}): ask it again: ${ask}`;
@@ -703,15 +706,18 @@ function callSaid(item, { ownWork, sessionId, read, ask }) {
   const role = roleOfTitle(item.from.title);
   const to = role?.role === 'work' ? role.number : 'orchestrator';
   const id = sessionId ?? '<session id>';
+  // `sessions --quote` reads only this project's sessions folder: a transcript filed elsewhere cannot be quoted from there,
+  // so its answer is recorded from the line, as unverified, and no quote command is named.
+  if (!quoted) return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so its line cannot be quoted from there: record it with js-harness notify --to ${to} --kind answer --question ${item.number} --transcript ${id} --line ${call.answeredLine} "<his answer in one line>", which keeps it as unverified`;
   return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. Read it: js-harness sessions --quote ${id} ${call.answeredLine}  Then record it: js-harness notify --to ${to} --kind answer --question ${item.number} --transcript ${id} --line ${call.answeredLine} "<his answer in one line>"`;
 }
 
 /** A question of the record that no notice closed, as two lines: the question with its asker, its age and what waits on it,
- * and under it what the transcript holds of it (`callSaid`). `ask` is how to ask him now (`askingRule`). */
-function openLinesOf(item, { ownWork, sessionId, now, read, ask }) {
+ * and under it what the transcript holds of it (`callSaid`). `ask` is how to ask him now (`askingRule`), `quoted` as `callSaid` takes it. */
+function openLinesOf(item, { ownWork, sessionId, now, read, ask, quoted }) {
   return [
     `  ${QUESTION_WORD} ${item.number}  recorded ${agoOf(item.at, now)} by ${askerOf(item.from)}  waits: ${item.waits ?? ''}  ${cutTo(oneLine(item.text), QUESTION_LISTED)}`,
-    `    ${callSaid(item, { ownWork, sessionId, read, ask })}`,
+    `    ${callSaid(item, { ownWork, sessionId, read, ask, quoted })}`,
   ];
 }
 
@@ -733,8 +739,9 @@ function closedLineOf(question) {
  * for it. An orchestrator gets every question that no notice closed, each with what its transcript holds of it. A work session
  * gets the questions it recorded itself: its open ones with the same lines, and its last closed ones, one line each. A record
  * that could not be read is said in one line. The record is what `readNotices` read; the calls are the transcript's own
- * (`sessionFacts`), and none when no transcript could be read. */
-function questionLinesOf(record, { transcript, sessionId, orchestrator, now }) {
+ * (`sessionFacts`), and none when no transcript could be read. `quoted` is whether the transcript is in this project's sessions
+ * folder, which `sessions --quote` reads (`resumeLines` computes it once for the stretch's lines too). */
+function questionLinesOf(record, { transcript, sessionId, orchestrator, now, quoted }) {
   if (record.unavailable !== undefined) return [`Questions: not read (the channel's record ${record.path} could not be read: ${record.unavailable})`];
   const recorded = recordedQuestions(record);
   if (recorded.length === 0) return [];
@@ -751,7 +758,7 @@ function questionLinesOf(record, { transcript, sessionId, orchestrator, now }) {
     if (open.length === 0) return [`Questions: the record holds ${recorded.length}, none open.`];
     return [
       `Questions with no answer in the record (${open.length} of ${recorded.length} recorded), with what this transcript holds of each:`,
-      ...open.flatMap((item) => openLinesOf(item, { ownWork: false, sessionId, now, read: transcript !== null, ask })),
+      ...open.flatMap((item) => openLinesOf(item, { ownWork: false, sessionId, now, read: transcript !== null, ask, quoted })),
       BOARD_QUESTIONS,
     ];
   }
@@ -760,7 +767,7 @@ function questionLinesOf(record, { transcript, sessionId, orchestrator, now }) {
   const earlier = closed.length - shown.length;
   return [
     `Questions this session recorded (${mine.length}):`,
-    ...open.flatMap((item) => openLinesOf(item, { ownWork: true, sessionId, now, read: transcript !== null, ask })),
+    ...open.flatMap((item) => openLinesOf(item, { ownWork: true, sessionId, now, read: transcript !== null, ask, quoted })),
     ...shown.map(closedLineOf),
     ...(earlier > 0 ? [`  ${earlier} earlier ones are in the record: ${record.path}`] : []),
     BOARD_QUESTIONS,
@@ -796,6 +803,10 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   const sessionId = typeof input.session_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/.test(input.session_id) ? input.session_id : null;
   const record = readNotices(harnessHome, slug, { readFile });
   const transcript = transcriptOf(input, sessionId, { projectDir, projectsDir, readFile });
+  // Whether `sessions --quote` can read the transcript: it is in the project's sessions folder, the one that command reads.
+  // The stretch's lines and the questions' lines take this one fact; without a transcript it is not used.
+  const transcriptFile = transcriptFileOf(input, sessionId, { projectDir, projectsDir });
+  const quoted = transcriptFile !== null && path.relative(projectDir, transcriptFile) === path.basename(transcriptFile);
   const { title, from } = titleOf(input, sessionId, { transcript, record });
 
   const lines = ['js-harness resume: this session was just compacted. What follows is read from files; the summary of the compaction is not the record.'];
@@ -862,14 +873,12 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   if (transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
   if (transcript !== null && stretch !== null) {
     // The session is named by its id, as `sessions --quote` takes it, when its transcript is in the project's sessions
-    // folder, the one that command reads; a transcript is read only when the hook has one.
-    const file = transcriptFileOf(input, sessionId, { projectDir, projectsDir });
-    const quoted = path.relative(projectDir, file) === path.basename(file);
-    lines.push(...beforeLines(file, stretch, { transcript, sessionId, target: quoted ? sessionId : null, projectDir, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
+    // folder (`quoted`); a transcript is read only when the hook has one.
+    lines.push(...beforeLines(transcriptFile, stretch, { transcript, sessionId, target: quoted ? sessionId : null, projectDir, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
   }
   // The questions come after the stretch's lines and before the deadline's line. Past the deadline they are named as not read.
   if (late()) left.push(STEP.questions);
-  else lines.push(...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now() })));
+  else lines.push(...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now(), quoted })));
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
   if (!orchestrator) lines.push(NOTIFY);

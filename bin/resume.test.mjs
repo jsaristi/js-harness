@@ -1390,13 +1390,43 @@ test('an orchestrator is given every question no notice closed, each with what i
     '  Pregunta 2  recorded 2h ago by "JH 5 · the channel"  waits: the board  Merge now?',
     `    he ANSWERED it at line 4 of this transcript: do not ask it again. Read it: js-harness sessions --quote ${SESSION} 4  Then record it: js-harness notify --to 5 --kind answer --question 2 --transcript ${SESSION} --line 4 "<his answer in one line>"`,
     '  Pregunta 3  recorded 2h ago by "JH 5 · the channel"  waits: the board  Ship it?',
-    `    not asked in this transcript: ${KNOWN_WHEN('1h 57m', 5)}. Its text is headed by "Pregunta 3: "`,
+    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${KNOWN_WHEN('1h 57m', 5)}. Its text is headed by "Pregunta 3: "`,
     '  Pregunta 6  recorded 2h ago by "JH 5 · the channel"  waits: the board  Dismissed?',
     `    he closed it without answering (asked at line 5): ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
     '  Pregunta 7  recorded 2h ago by "JH 5 · the channel"  waits: the board  Unanswered?',
     `    asked at line 7, and its result is no answer of his: ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
     'The board lists the questions of every session: js-harness sessions',
   ]);
+}));
+
+test('an orchestrator told that a question has no call here is sent to look on the board first, since another session may have had his answer', withMachine(async (machine) => {
+  askQuestion(machine, 'Asked elsewhere?', { from: BY_OTHER });
+  // His words at minute 1 (an hour and 59 minutes before the clock) are the last of this transcript; the question has no call in it.
+  transcriptWith(machine, [asked(1, 'the stretch')]);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: ORQ }));
+  assert.deepEqual(questionLinesOf(lines), [
+    'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
+    '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Asked elsewhere?',
+    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${KNOWN_WHEN('1h 59m', 1)}. Its text is headed by "Pregunta 1: "`,
+    'The board lists the questions of every session: js-harness sessions',
+  ]);
+}));
+
+test('an orchestrator is told an answer in a transcript outside this project\'s sessions folder is recorded from its line as unverified, with no quote command', withMachine(async (machine) => {
+  askQuestion(machine, 'Which branch?');
+  // A transcript of the same session filed under another project: `sessions --quote` cannot read it from this project's folder.
+  const other = path.join(machine.claudeHome, 'projects', 'other-project', `${SESSION}.jsonl`);
+  fs.mkdirSync(path.dirname(other), { recursive: true });
+  fs.writeFileSync(other, [{ type: 'custom-title', customTitle: TITLE, sessionId: SESSION }, askedAt(1, 'toolu_1', 'Pregunta 1: Which branch?'), resultAt(2, 'toolu_1', 'Pregunta 1: Which branch?', 'Yes (Recommended)')].map((entry) => `${JSON.stringify(entry)}\n`).join(''));
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: ORQ, transcript_path: other }));
+  // The answer is the result at line 3: the title is line 1 and the call at line 2.
+  assert.deepEqual(questionLinesOf(lines), [
+    'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
+    '  Pregunta 1  recorded 2h ago by "JH 5 · the channel"  waits: the board  Which branch?',
+    `    he ANSWERED it at line 3 of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so its line cannot be quoted from there: record it with js-harness notify --to 5 --kind answer --question 1 --transcript ${SESSION} --line 3 "<his answer in one line>", which keeps it as unverified`,
+    'The board lists the questions of every session: js-harness sessions',
+  ]);
+  assert.equal(lines.some((line) => line.includes(`--quote ${SESSION}`)), false, lines.join('\n'));
 }));
 
 test('a work session is given the questions it recorded itself: its open ones with what its transcript holds, its last closed ones in one line each, and no others', withMachine(async (machine) => {
@@ -1428,7 +1458,7 @@ test('a work session is given none of the questions another session recorded, an
   assert.deepEqual(questionLinesOf((await runHook(machine, hookInput(machine, { session_title: ORQ }))).lines), [
     'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
     '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Not mine?',
-    `    not asked in this transcript: ${UNKNOWN_WHEN(1)}. Its text is headed by "Pregunta 1: "`,
+    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${UNKNOWN_WHEN(1)}. Its text is headed by "Pregunta 1: "`,
     'The board lists the questions of every session: js-harness sessions',
   ]);
 }));

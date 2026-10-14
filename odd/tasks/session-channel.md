@@ -2779,7 +2779,13 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 21:12, THE NEWEST OF ALL (read this first; then the end of the file
+      STATE AT 2026-10-13 22:14, THE NEWEST OF ALL. Part 3 and the asking rule are `02343e6`
+      (Codex: 718,613 input tokens, two P2 on the resume's block, both true); their fix,
+      test first (4 failed, then 356 passed), is the commit that carries this text, or is in
+      the tree (`git status`). NEXT: the merge of `main` (`turn-merge-push-check.sh` in the
+      scratchpad: merge, then `check --push`), the push, the pull request with no attribution
+      line, its number to the lead; then slice (c) as the paragraph below says.
+      STATE AT 2026-10-13 21:12 (the state before the one above; then the end of the file
       `STATE-before-compaction.md` in this session's scratchpad, which has every step).
       On `feat/question-notice`, committed and reviewed: `6ab6958`, `567f81f` (part 1 and its
       fix), `fc7fee2` (the record and `notify`), `c9b1bb5` and `30206e3` (the board's half and
