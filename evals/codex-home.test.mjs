@@ -800,3 +800,19 @@ test('assertLoginFresh needs a login that is there, a minimum that is a positive
   fs.rmSync(authFile);
   assert.throws(() => assertLoginFresh(authFile), /no Codex login at .*run `codex login`/);
 });
+
+// ---- the fingerprint of the setup (G6 of odd/tasks/future-model-protocol.md) ---------------------------
+
+test('the fingerprint of a Codex template leaves out the projects and notices of config.toml, and moves with the rest of it', () => {
+  const fingerprintOf = (config) => buildCodexTemplate({ realHome: makeRealHome({ config }), templateDir: path.join(tmp('template'), 'tpl') }).fingerprint;
+  const home = path.join(tmp('real'), 'Person');
+  const base = configToml(home);
+  const first = fingerprintOf(base);
+  assert.match(first.sha256, /^[0-9a-f]{64}$/);
+  assert.ok(Object.keys(first.items).includes('.codex/config.toml'));
+  const busy = fingerprintOf(`${base}\n[projects.'D:/work/repo']\ntrust_level = "trusted"\n\n[notice]\nhide_full_access_warning = true\n\n[notice.model_migrations]\n"a" = "b"\n`);
+  assert.equal(busy.items['.codex/config.toml'], first.items['.codex/config.toml'], 'projects and notices are not the setup');
+  const changed = fingerprintOf(`${base}\nmodel_verbosity = "high"\n`);
+  assert.notEqual(changed.items['.codex/config.toml'], first.items['.codex/config.toml']);
+  assert.notEqual(changed.sha256, first.sha256);
+});
