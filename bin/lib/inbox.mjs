@@ -126,12 +126,22 @@ export function mainCheckoutByFiles(cwd, fileSystem = fs) {
     }
     if (info?.isDirectory()) return dir;
     if (info?.isFile()) {
+      // A worktree: its git folder names the common one in `commondir`, as git reads it. A common folder named
+      // `.git` is in the main checkout; any other layout is not guessed, and the caller asks git (`null`).
       try {
         const pointed = /^gitdir:\s*(.+?)\s*$/m.exec(fileSystem.readFileSync(dotGit, 'utf8'))?.[1];
-        const main = pointed ? /^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$/.exec(path.resolve(dir, pointed))?.[1] : undefined;
-        return main ?? dir;
+        if (!pointed) return null;
+        const gitdir = path.resolve(dir, pointed);
+        let common;
+        try {
+          common = path.resolve(gitdir, fileSystem.readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim());
+        } catch {
+          // No commondir: the usual layout, `<common>/worktrees/<name>`, or the git folder itself.
+          common = /^(.*)[\\/]worktrees[\\/][^\\/]+$/.exec(gitdir)?.[1] ?? gitdir;
+        }
+        return path.basename(common) === '.git' ? path.dirname(common) : null;
       } catch {
-        return dir;
+        return null;
       }
     }
     if (path.dirname(dir) === dir) return path.resolve(cwd);
@@ -167,8 +177,12 @@ export function inboxNotice({ transcript, sessionId, cwd, home, now = () => Date
     const keep = () => {
       if (['cwd', 'slug', 'title', 'recordSize', 'seen'].some((key) => next[key] !== state[key])) writeState(file, next, fileSystem);
     };
-    // No record yet: nothing to say and nothing to keep. A record and a title as they were: nothing new to read.
-    if (size === null) return null;
+    // No record yet: nothing to say; a title seen is kept, since it may leave the end of the transcript before the
+    // record begins. A record and a title as they were: nothing new to read.
+    if (size === null) {
+      if (next.title !== null && next.title !== state.title) writeState(file, { ...state, title: next.title }, fileSystem);
+      return null;
+    }
     if (size === state.recordSize && next.title === (state.title ?? null)) {
       keep();
       return null;
@@ -187,7 +201,8 @@ export function inboxNotice({ transcript, sessionId, cwd, home, now = () => Date
     // The first look takes the last hour; a record that shrank (an uninstall removed it) is read from its start.
     const first = !Number.isSafeInteger(state.seen);
     const from = first || state.seen > record.notices.length ? 0 : state.seen;
-    const since = new Date(now() - FIRST_LOOK_MS).toISOString();
+    // A state from before the count cursor kept the time of the last notice it told (`told`): its first look starts there.
+    const since = typeof state.told === 'string' ? state.told : new Date(now() - FIRST_LOOK_MS).toISOString();
     const fresh = record.notices.slice(from).filter((notice) => (!first || (typeof notice.at === 'string' && notice.at > since))
       && addressedTo(notice, role) && !sameSession(notice.from?.id, sessionId));
     if (fresh.length === 0) {

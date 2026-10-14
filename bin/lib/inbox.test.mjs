@@ -89,6 +89,40 @@ test('the main checkout is found from the files, with no git: the folder up that
   assert.equal(mainCheckoutByFiles(nested), main);
   assert.equal(mainCheckoutByFiles(path.join(tree, 'src')), main);
   assert.equal(mainCheckoutByFiles(outside), outside, 'no repository up: the folder itself');
+  // A worktree whose common git folder is named otherwise is not guessed: git is asked (`null`), as `notify` asks it.
+  const odd = path.join(home, 'odd-tree');
+  const gitdir = path.join(home, 'store', 'worktrees', 'odd');
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(gitdir, 'commondir'), '../..\n');
+  fs.mkdirSync(odd);
+  fs.writeFileSync(path.join(odd, '.git'), `gitdir: ${gitdir}\n`);
+  assert.equal(mainCheckoutByFiles(odd), null);
+  // The worktree's commondir is read, as git reads it.
+  const via = path.join(home, 'via-commondir');
+  const linked = path.join(main, '.git', 'worktrees', 'via');
+  fs.mkdirSync(linked, { recursive: true });
+  fs.writeFileSync(path.join(linked, 'commondir'), '../..\n');
+  fs.mkdirSync(via);
+  fs.writeFileSync(path.join(via, '.git'), `gitdir: ${linked}\n`);
+  assert.equal(mainCheckoutByFiles(via), main);
+}));
+
+// Codex's three P2s on 2c25dd9.
+test('a title seen before the project has a record is kept, and names the session once the record exists', inHome((home) => {
+  assert.equal(look(home, transcriptOf(home, 'JH 5 · canal entre sesiones')), null, 'no record yet');
+  note(home, { text: 'after the record began' });
+  assert.match(look(home, transcriptOf(home, null)).text, /after the record began$/);
+}));
+
+test('a state from before the count cursor keeps its time cursor for its first look, so nothing told is told again', inHome((home) => {
+  const transcript = transcriptOf(home, 'JH 5 · canal entre sesiones');
+  note(home, { minutes: 20, text: 'told before the update' });
+  fs.mkdirSync(path.dirname(inboxStatePath(home, SESSION)), { recursive: true });
+  fs.writeFileSync(inboxStatePath(home, SESSION), JSON.stringify({ cwd: 'D:\\proj', slug: SLUG, title: 'JH 5 · canal entre sesiones', recordSize: 1, told: ago(20) }));
+  note(home, { minutes: 1, text: 'new after the update' });
+  const said = look(home, transcript);
+  assert.equal(said.count, 1);
+  assert.ok(!said.text.includes('told before the update'), said.text);
 }));
 
 // Codex's two P2s on c930ccc.
