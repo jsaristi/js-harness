@@ -132,13 +132,13 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
 `git diff --cached -U0` belongs.
 
 ## Tasks
-- [ ] T1 (S1, first half; from rule-hierarchy T4) The five lenient commands above refuse an unknown
+- [x] T1 (S1, first half; from rule-hierarchy T4) The five lenient commands above refuse an unknown
   flag with exit 2 before writing; one table test over every writing command. Route: inline.
-- [ ] T2 (S1, second half; failure 15) The push row hints the merge commit as the base after `main`
+- [x] T2 (S1, second half; failure 15) The push row hints the merge commit as the base after `main`
   is merged in. Route: inline.
-- [ ] T3 (S2; from rule-hierarchy T5) The row `citations`, INFO. Route: inline.
-- [ ] T4 (S3; from rule-hierarchy T6) The row `memory-rules` of `doctor`. Route: inline.
-- [ ] T5 (S4; from session-channel T7) The row `session-classes` of `doctor`; and the explicit
+- [x] T3 (S2; from rule-hierarchy T5) The row `citations`, INFO. Route: inline.
+- [x] T4 (S3; from rule-hierarchy T6) The row `memory-rules` of `doctor`. Route: inline.
+- [x] T5 (S4; from session-channel T7) The row `session-classes` of `doctor`; and the explicit
   `install` flag that writes `crossSessionInbound: "accept"`, recorded and undone by `uninstall`
   (his answer, L3). Route: inline.
 
@@ -217,7 +217,26 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   commits of branches never merged), which is why the row starts as INFO. Its wiring in
   `bin/check.mjs` waits for pull request 121.
 
+- L7 — 2026-10-14 05:45 HPS: the WSL gate and pull requests 121 and 122 are on `main`, merged here
+  (`573158c`). The first gate of T1 failed on three codex-review tests that pinned a seam or model
+  flag as taken and dropped; they now pin it as refused before Codex starts. Committed, each through
+  a whole gate in WSL2 (11 to 14 minutes waited for the lock each): T1 `f4e9e2f`; T2 and T3
+  `44e8ee2` (the push row takes its base as the plain row does; the row `citations` in the static
+  rows); T4 and T5's row `5561dc8`. T5's install flag, high risk (item 2, a security setting), had
+  an independent verifier (opus, effort high, 25 probes in a scratch copy, 203 tests): no blocker,
+  every must-hold item holds, restore byte for byte across CRLF, indent and other keys. Its two
+  advisories are fixed in the flag's commit: the record is written only after the file holds the
+  value, and a write that fails is `skipped` with the reason (A1); asked again, the line says the
+  value it replaced and what `uninstall` gives back (A2). Their tests are GREEN; their RED was the
+  module stashed whole, not a precise one.
+- Tasks: T1 `f4e9e2f`, T2 and T3 `44e8ee2`, T4 `5561dc8`, T5 `5561dc8` and the flag's commit.
+  Pending for each: gentle-ai's assessment of its commit and Codex's review (AGENTS.md), then the
+  push and the pull request.
+
 ## Next step
+Assess each work-unit commit with gentle-ai (`--base-ref` the last reviewed boundary,
+`--committed-only`), review what is due, then `js-harness codex-review --base <boundary>` within the
+rate (`--plan` first), push, open the pull request and tell the orchestrator. Older text, kept:
 When `origin/main` holds the WSL gate: merge it, run the gate, commit T1, T4 and T5 as three work
 units (T5 is Risk item 2, a security setting written on a flag, so it gets an independent verifier),
 then gentle-ai's assessment and Codex per AGENTS.md. After JH 8's pull request 121: T2 and T3 in

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { install, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
+import { SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -18,7 +18,7 @@ import {
 } from './lib/project.mjs';
 import { INSTALL_NEWEST } from './lib/version.mjs';
 
-const INSTALL_USAGE = 'Usage: js-harness install [--home <path>]';
+const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
 const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global]';
 const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
@@ -35,13 +35,39 @@ function requireScopeValue(argv, i, flag) {
  * as nothing at all, so `js-harness install --help`, typed to read its flags, installed under the real home. */
 function parseInstallArgs(argv, env) {
   let home;
+  let acceptMessages = false;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
+    if (token === '--accept-session-messages') {
+      acceptMessages = true;
+      continue;
+    }
     if (token !== '--home') throw new ScopeArgError(`unknown flag: ${token}`);
     home = requireScopeValue(argv, i, token);
     i++;
   }
-  return home ?? env.JS_HARNESS_HOME ?? os.homedir();
+  return { home: home ?? env.JS_HARNESS_HOME ?? os.homedir(), acceptMessages };
+}
+
+/** What `install --accept-session-messages` did to Claude Code's `crossSessionInbound`, said in one line, and the
+ * exit code: 1 when the setting could not be written, since the one thing the flag asked for was not done. */
+function reportSessionMessages(home) {
+  const result = acceptSessionMessages(home);
+  const { key, value } = SESSION_MESSAGES;
+  if (result.status === 'skipped') {
+    console.error(`${key} was not set: ${result.path} is ${result.reason}; set it there by hand`);
+    return 1;
+  }
+  if (result.status === 'already') {
+    console.log(`${key} is already "${value}" in ${result.path}`);
+    return 0;
+  }
+  // What it replaced now, and what `uninstall` gives back: the value before the first time, which the record keeps.
+  const record = readManifest(home)?.settings?.find((entry) => entry.path === result.path && entry.key === key);
+  const was = result.was === null ? 'it was not set' : `it was ${JSON.stringify(result.was)}`;
+  const back = record?.had ? `uninstall puts back ${JSON.stringify(record.previous)}` : 'uninstall removes it';
+  console.log(`set ${key} to "${value}" in ${result.path} (${was}; ${back})`);
+  return 0;
 }
 
 /** The flags `uninstall` and `sync` share. Strict like `init`'s parsing (an unknown flag or a missing
@@ -173,20 +199,21 @@ function writtenCount(manifest) {
 }
 
 export async function installMain(argv, env = process.env, deps = {}) {
-  let home;
+  let parsed;
   try {
-    home = parseInstallArgs(argv, env);
+    parsed = parseInstallArgs(argv, env);
   } catch (err) {
     if (!(err instanceof ScopeArgError)) throw err;
     console.error(`${err.message}\n\n${INSTALL_USAGE}`);
     return 2;
   }
+  const { home, acceptMessages } = parsed;
   const version = currentVersion();
   const manifest = install(home, version, deps);
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
-  return 0;
+  return acceptMessages ? reportSessionMessages(home) : 0;
 }
 
 function logSyncProjectAction(action) {
@@ -366,6 +393,8 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   }
   for (const p of result.entriesRemoved) console.log(`removed hook entry from ${p}`);
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
+  for (const p of result.settingsRestored ?? []) console.log(`put ${SESSION_MESSAGES.key} back in ${p}`);
+  for (const p of result.settingsKept ?? []) console.log(`kept ${SESSION_MESSAGES.key} in ${p} (modified by you)`);
   // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with
   // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
   // this command can be run again: it goes to stderr with that, and with how to look and delete it by hand.

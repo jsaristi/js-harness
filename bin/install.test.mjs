@@ -152,7 +152,7 @@ test('installMain refuses a word it does not know before it writes anything: exi
       for (const words of [argv, ['--home', home, ...argv], [...argv, '--home', home]]) {
         const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
         assert.equal(code, 2, words.join(' '));
-        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>]`], words.join(' '));
+        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]`], words.join(' '));
         assert.deepEqual(outLines, [], words.join(' '));
         assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
       }
@@ -168,7 +168,7 @@ test('installMain refuses --home with no path after it: exit 2, and nothing is w
     for (const words of [['--home'], ['--home', '--home', home]]) {
       const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
       assert.equal(code, 2, words.join(' '));
-      assert.deepEqual(errLines, ['--home requires a value\n\nUsage: js-harness install [--home <path>]'], words.join(' '));
+      assert.deepEqual(errLines, ['--home requires a value\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]'], words.join(' '));
       assert.deepEqual(outLines, [], words.join(' '));
       assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
     }
