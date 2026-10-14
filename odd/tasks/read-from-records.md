@@ -57,15 +57,19 @@ findings and a run line only their counts; finding texts survive only in `kept.r
 multi-part review's part (`:1410`, `:1581`); a record with an outcome other than `reviewed`,
 `unavailable` or `nothing-to-review` covers nothing and fails the push (`codex-reviews.test.mjs:335`).
 
-- **S7, findings kept.** Every reviewed run line keeps its normalized answer (the findings with
-  file, lines, severity, title and body; the verdict) in a field `answer`. Old lines without it
-  still read; a review recorded before this change cannot be rechecked and is reviewed as today.
+- **S7, findings kept.** Every run line has `answer`: for a review that stands, its normalized
+  findings (file, lines, severity, title and body) and its verdict; `null` otherwise. Old lines
+  without it still read. A review recorded before this change is rechecked only when it was made
+  in parts, whose parts kept their answers in `kept.review`; any other is reviewed as today.
 - **S8, when a review is a recheck.** Decided by the code, not by a flag, so momentum cannot skip
-  it: after the range's start is moved past what records cover (`startingAt`), the range starts
-  exactly at the head of a `reviewed` record whose run lines kept findings (one or more), and that
-  head is an ancestor of `HEAD`. A recheck is reviewed in one part; a correction over one part's
-  bound is refused before it runs, exit 1, nothing recorded, with a message to commit the
-  correction alone or record a follow-up task.
+  it: after the range's start is moved past what records cover (`startingAt`), it is the head of
+  a `reviewed` record, or only documents changed between that head and it (a feature document
+  committed before the fix does not move it); and that review owed a correction: a verdict of
+  `incorrect`, or a finding of P0 to P2. A review that called the patch correct with only P3
+  findings leaves the next range a review. A recheck is reviewed in one part; a correction over
+  one part's bound is refused before it runs, exit 1, nothing recorded, with a message to commit
+  the correction alone or record a follow-up task. `--plan` says when a run would be a recheck or
+  refused.
 - **S9, its prompt.** It lists each prior finding (file, lines, title, body) and asks, for each,
   whether the range fixes it. Its answer, in Codex's own rubric: a finding titled `[not fixed]`
   for each prior finding still open; anything new titled `[follow-up]`, which does not block;
@@ -76,11 +80,15 @@ multi-part review's part (`:1410`, `:1581`); a record with an outcome other than
   `recheck: {of, findings, fixed, notFixed, followUps, blocking}`. The command prints one line a
   prior finding (fixed or not), then the follow-ups apart, marked as not blocking. The exit code
   stays as today.
-- **S11, no second recheck.** A range that starts at the head of a recheck that left a finding
-  not fixed or blocking is refused before it runs, exit 1, nothing recorded: "a second recheck of
-  the same findings is not run: record a follow-up task for what is still open, then record this
-  range with `codex-review --base <base> --unavailable \"second recheck refused: <task>\"`". A
-  recheck that fixed every finding and blocks nothing leaves the next range a normal review.
+- **S11, no second recheck.** Refused before it runs, exit 1, nothing recorded, with what to
+  record instead (a follow-up task, then `codex-review --base <base> --unavailable "second recheck
+  refused: <task>"`): a range that starts at the head of a recheck that left a finding not fixed,
+  blocking or unmarked (documents after it do not move it); and a range that starts at the head of
+  a review whose findings were already rechecked, whatever that recheck left (`--again`
+  included). A recheck that fixed every finding and blocks nothing leaves the next range a review.
+  A finding the answer does not mark is taken as open, never as fixed; the marks are read in any
+  case, with or without brackets or emphasis. Each earlier finding is printed with `fixed`, `not
+  fixed` (the answer gives its number) or `not said`.
 - **Its limit, named.** New code committed in the same range as a correction is read as a
   follow-up, not as a review; only `[blocks]` stops it. A session that wants new work reviewed
   fully commits the correction first.
@@ -184,7 +192,23 @@ commits would count the same task once on the branch and again in its merge.
   hunks do not overlap. An independent verifier is reading it. No gate turn yet: JH 8's WSL gate
   (PR 121) is still open.
 
+- 2026-10-14 · **T0, the verifier and one correction.** The independent verifier (opus, high,
+  probes in a scratch copy) found five blockers:
+  1. a document committed between the reviewed head and the fix moved the start, so no recheck ran;
+  2. `--again` from the original head ran a second recheck;
+  3. a document committed after an open recheck dodged the refusal and started a full review;
+  4. a title without a mark counted as fixed;
+  5. the fixed findings were never listed.
+
+  One correction batch fixed all five. It also took two of the verifier's advisories: a review
+  that called the patch correct with only P3 findings owes no recheck, and `--plan` says when a
+  run would be a recheck or refused. S7, S8 and S11 were rewritten to match. The verifier's one
+  recheck, limited to those five, found all fixed. Its advisory (the fixed count disagreed with
+  the list when no number was given) was taken: a finding counts as fixed only when the list says
+  so, and "not said" is counted on the line. Tests: 445 of 445 in the codex-review files before
+  that last change, then 12 of 12 unit and 10 of 10 recheck tests after it.
+
 ## Next
-0. T0: the verifier's verdict, then, once PR 121 is on `main`, merge `main`, commit through the
-   gate, gentle-ai assessment, Codex review, push, its pull request; tell the orchestrator.
+0. T0: commit through the gate, merge `main` once (PR 121 is merged), gentle-ai assessment,
+   Codex review, push, its pull request; tell the orchestrator.
 1. T2: take both readers' findings into the design, then the design to the orchestrator.
