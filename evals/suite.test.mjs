@@ -1721,3 +1721,29 @@ test('--plan of a run recorded on another model says the run would be refused, a
   assert.match(plan.io.err, /recorded on claude-opus-5-5: a run on claude-fable-5-5 would be refused/);
   assert.doesNotMatch(plan.io.out, /0 to run/);
 });
+
+// G2 of `odd/tasks/future-model-protocol.md`: the arms of one component on the command line.
+test('--configs takes arms of one component beside their base, and refuses an arm without its base or one evals/arms.mjs refuses', () => {
+  assert.deepEqual(parse({ '--configs': 'current,current-without-skills' }).configs, ['current', 'current-without-skills']);
+  assert.deepEqual(parse({ '--configs': 'minimal,minimal-with-mcp-engram' }).configs, ['minimal', 'minimal-with-mcp-engram']);
+  assert.throws(() => parse({ '--configs': 'minimal,current-without-skills' }), usageError(/current-without-skills is compared with current, which the run does not name/));
+  assert.throws(() => parse({ '--configs': 'current,current-without-nothing' }), usageError(/--configs: .*nothing is not a component/));
+  assert.throws(() => parse({ '--configs': 'minimal,minimal-with-skills' }), usageError(/switch it off/));
+  assert.throws(() => parseCodex({ '--configs': 'minimal,minimal-with-mcp-engram' }), usageError(/Codex takes no minimal-with/));
+  assert.deepEqual(parseCodex({ '--configs': 'current,current-without-agents-md' }).configs, ['current', 'current-without-agents-md']);
+  assert.throws(() => parse({ '--configs': 'current,sub-opus-write,current-without-skills' }), usageError(/cannot share a run/));
+  assert.throws(() => parse({ '--configs': 'current,current-without-skills,current-without-skills' }), usageError(/listed twice/));
+});
+
+test('a run that names an arm is refused until arms are built, and nothing runs; --plan still states it', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-skills' }), ENV, deps), 2);
+  assert.match(io.err, /current-without-skills/);
+  assert.match(io.err, /not built yet/);
+  assert.deepEqual(deps.runTrial.asked, []);
+  nothingCreated(m);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--configs': 'current,current-without-skills', '--efforts': 'medium' }), '--plan'], {}, plan.deps), 0, plan.io.err);
+  assert.match(plan.io.out, /unknown for 4 trials, .*alpha current-without-skills medium \(1\)/);
+});
