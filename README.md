@@ -340,6 +340,19 @@ js-harness notify: recorded note for the orchestrator at 2026-10-14T09:24:29.740
 address of the orchestrator: no single one now (sessions --address exit 1): …
 ```
 
+### js-harness wait
+
+Waits in the background for one condition and ends when it holds: a pull request merged, a
+commit or a file content on `origin/main`, or a notice addressed to a session in the channel
+record. It says at start what it waits for and what ends it, so a session keeps working instead
+of ending its turn to wait.
+
+```console
+$ js-harness wait --pr 133 --for 1 --every 5
+js-harness wait: waits for the merge of pull request 133; ends when it holds, or after 1 minutes; stop it with TaskStop when it is no longer needed
+js-harness wait: the merge of pull request 133 holds (14:12)
+```
+
 ### js-harness resume
 
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.

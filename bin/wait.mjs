@@ -1,0 +1,253 @@
+#!/usr/bin/env node
+// `wait`: one command a session runs in the background until its condition holds: a pull request merged (gh),
+// origin/main holding a commit or a file's text (git, after a fetch), or a notice addressed to a role in the
+// channel record (bin/lib/channel.mjs). It says what it waits for and when it ends, checks at once and then every
+// `--every` seconds, and ends: exit 0 when the condition holds; exit 1 when the time runs out, or when the pull
+// request is closed without merging; exit 2 for a usage error, with nothing checked. Zero dependencies.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { readNotices } from './lib/channel.mjs';
+import { mainCheckout, projectSlug, roleNamed } from './lib/sessions.mjs';
+
+const USAGE = [
+  'Usage: js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)',
+  '                       [--every <seconds>] [--for <minutes>] [--cwd <path>] [--home <path>]',
+  '  Ends when its one condition holds, and prints one line that says so (exit 0). It first prints what it waits',
+  '    for and when it ends, checks at once and then every --every seconds (120 when not given), and after --for',
+  '    minutes (480 when not given) prints that the time ran out (exit 1). A check that cannot run is said once on',
+  '    stderr and retried at the next tick. Run it in the background; stop it with TaskStop when it is no longer needed.',
+  '  --pr <number>: the pull request is merged (gh). Closed without merging, it ends with exit 1, and says so.',
+  '  --main-has <commit>: origin/main holds the commit, after git fetch origin.',
+  '  --main-file <path> --contains <text>: the file of origin/main holds the text, after git fetch origin.',
+  "  --notice-to <role>: a notice addressed to orchestrator (or ORQ), or to a work session's number, is in the channel",
+  '    record and was written after the wait started; its kind, sender and text are printed.',
+  '  Exit 2: a usage error, and nothing is checked.',
+].join('\n');
+
+/** A mistake in the arguments: answered with the usage and exit 2, before anything is checked. */
+class WaitArgError extends Error {}
+
+const FLAGS = new Map([
+  ['--pr', 'pr'],
+  ['--main-has', 'mainHas'],
+  ['--main-file', 'mainFile'],
+  ['--contains', 'contains'],
+  ['--notice-to', 'noticeTo'],
+  ['--every', 'every'],
+  ['--for', 'minutes'],
+  ['--cwd', 'cwd'],
+  ['--home', 'home'],
+]);
+
+/** A whole number from 1 as a flag takes it, or `undefined` when the flag is not given. */
+function wholeNumber(flag, value, what) {
+  if (value === undefined) return undefined;
+  if (!/^[1-9]\d*$/.test(value)) throw new WaitArgError(`${flag} takes ${what}, from 1`);
+  return Number(value);
+}
+
+/** Walks argv flag by flag. What comes out is the settings and the one condition, `{ condition, every, minutes,
+ * cwd, home }`. A flag it does not know, a flag without its value, one given twice, no condition or two of them
+ * is a usage error. */
+function parseArgs(argv) {
+  const values = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const flag = argv[i];
+    const key = FLAGS.get(flag);
+    if (key === undefined) throw new WaitArgError(flag.startsWith('-') ? `unknown argument: ${flag}` : `unexpected argument: ${flag}`);
+    if (values[key] !== undefined) throw new WaitArgError(`${flag} is given twice`);
+    const value = argv[i + 1];
+    if (value === undefined || value === '' || value.startsWith('--')) throw new WaitArgError(`${flag} requires a value`);
+    values[key] = value;
+    i += 1;
+  }
+
+  const picked = [];
+  if (values.pr !== undefined) picked.push('pr');
+  if (values.mainHas !== undefined) picked.push('mainHas');
+  if (values.noticeTo !== undefined) picked.push('noticeTo');
+  if (values.mainFile !== undefined || values.contains !== undefined) {
+    if (values.mainFile === undefined) throw new WaitArgError('--contains needs --main-file <path> with it');
+    if (values.contains === undefined) throw new WaitArgError('--main-file <path> needs --contains <text> with it');
+    picked.push('mainFile');
+  }
+  if (picked.length === 0) throw new WaitArgError('a condition is required: --pr, --main-has, --main-file with --contains, or --notice-to');
+  if (picked.length > 1) throw new WaitArgError(`one condition only, not ${picked.length}: give one of --pr, --main-has, --main-file with --contains, or --notice-to`);
+
+  let condition;
+  if (values.pr !== undefined) condition = { kind: 'pr', number: wholeNumber('--pr', values.pr, 'the number of a pull request') };
+  else if (values.mainHas !== undefined) {
+    if (values.mainHas.startsWith('-')) throw new WaitArgError('--main-has takes a commit, not an option');
+    condition = { kind: 'commit', commit: values.mainHas };
+  } else if (values.noticeTo !== undefined) {
+    const role = roleNamed(values.noticeTo);
+    if (role === null) throw new WaitArgError('--notice-to takes a role: orchestrator (or ORQ), or the number of a work session');
+    condition = { kind: 'notice', role };
+  } else condition = { kind: 'file', file: values.mainFile, contains: values.contains };
+
+  return {
+    condition,
+    every: wholeNumber('--every', values.every, 'a number of seconds'),
+    minutes: wholeNumber('--for', values.minutes, 'a number of minutes'),
+    cwd: values.cwd,
+    home: values.home,
+  };
+}
+
+/** The local time as `HH:MM`. */
+function hourOf(ms) {
+  const date = new Date(ms);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const failed = (reason) => ({ state: 'failed', reason });
+const WAITING = { state: 'waiting' };
+
+/** Why a program did not run or failed, in one line: what the system said when it could not start, else the first
+ * line it wrote to stderr, else its exit status. */
+function reasonOf(program, result) {
+  if (result.error?.code === 'ENOENT') return `${program} is not installed or not on PATH`;
+  if (result.error) return result.error.message;
+  return String(result.stderr ?? '').trim().split(/\r?\n/)[0] || `${program} exited ${result.status}`;
+}
+
+/** The condition as the wait says it (`phrase`), and `check`: one look, which gives `{ state: 'waiting' }`,
+ * `{ state: 'failed', reason }` (a check that cannot run, retried), `{ state: 'holds', lines }` or
+ * `{ state: 'ended', line }` (the wait ends without its condition: a pull request closed without merging). */
+function conditionOf(condition, { cwd, home, run, readFile, now, started }) {
+  const hour = () => hourOf(now());
+  // `git fetch origin` before a look at origin/main; its failure is a check that cannot run.
+  const fetchOrigin = () => {
+    const result = run('git', ['fetch', '-q', 'origin'], { cwd });
+    return result.error || result.status !== 0 ? failed(`git fetch origin: ${reasonOf('git', result)}`) : null;
+  };
+
+  if (condition.kind === 'pr') {
+    const phrase = `the merge of pull request ${condition.number}`;
+    return {
+      phrase,
+      check: () => {
+        const result = run('gh', ['pr', 'view', String(condition.number), '--json', 'state', '-q', '.state'], { cwd });
+        if (result.error || result.status !== 0) return failed(reasonOf('gh', result));
+        const state = String(result.stdout ?? '').trim();
+        if (state === 'MERGED') return { state: 'holds', lines: [`js-harness wait: ${phrase} holds (${hour()})`] };
+        if (state === 'CLOSED') return { state: 'ended', line: `js-harness wait: pull request ${condition.number} was closed without merging (${hour()}); the wait ends` };
+        if (state === 'OPEN') return WAITING;
+        return failed(`gh printed no known state for pull request ${condition.number}`);
+      },
+    };
+  }
+
+  if (condition.kind === 'commit') {
+    const phrase = `commit ${condition.commit} on origin/main`;
+    return {
+      phrase,
+      check: () => {
+        const fetching = fetchOrigin();
+        if (fetching !== null) return fetching;
+        const result = run('git', ['merge-base', '--is-ancestor', condition.commit, 'origin/main'], { cwd });
+        if (!result.error && result.status === 0) return { state: 'holds', lines: [`js-harness wait: ${phrase} holds (${hour()})`] };
+        if (!result.error && result.status === 1) return WAITING;
+        return failed(`git merge-base: ${reasonOf('git', result)}`);
+      },
+    };
+  }
+
+  if (condition.kind === 'file') {
+    const phrase = `the text "${condition.contains}" in ${condition.file} on origin/main`;
+    return {
+      phrase,
+      check: () => {
+        const fetching = fetchOrigin();
+        if (fetching !== null) return fetching;
+        const result = run('git', ['show', `origin/main:${condition.file}`], { cwd });
+        if (result.error || result.status !== 0) return failed(`git show origin/main:${condition.file}: ${reasonOf('git', result)}`);
+        if (!String(result.stdout ?? '').includes(condition.contains)) return WAITING;
+        return { state: 'holds', lines: [`js-harness wait: ${phrase} holds (${hour()})`] };
+      },
+    };
+  }
+
+  const label = condition.role.role === 'orchestrator' ? 'orchestrator' : String(condition.role.number);
+  const phrase = `a notice to ${label}`;
+  return {
+    phrase,
+    check: () => {
+      // The record of the project the folder is in, as `notify` names it: the same slug and home.
+      const record = readNotices(home, projectSlug(mainCheckout(run, cwd)), { readFile });
+      if (record.unavailable !== undefined) return failed(`the channel's record ${record.path} could not be read (${record.unavailable})`);
+      const found = record.notices.find(
+        (notice) => notice.to.role === condition.role.role && (notice.to.number ?? null) === condition.role.number && Date.parse(notice.at) >= started,
+      );
+      if (found === undefined) return WAITING;
+      const sender = found.from?.title || 'a session with no title';
+      return { state: 'holds', lines: [`js-harness wait: ${phrase} holds (${hour()})`, `${found.kind} from ${sender}: ${found.text}`] };
+    },
+  };
+}
+
+/** The wait itself. `env` gives the harness home when `--home` is not given, as `notify` reads it. The seams are
+ * the folder (`cwd`), the output (`stdout`, `stderr`), the clock (`now`, in milliseconds), the pause (`sleep`),
+ * `run` (`spawnSync`'s shape, for git and gh), `readFile` (the channel record) and `homedir`. */
+export async function waitMain(
+  argv = [],
+  env = process.env,
+  {
+    cwd: defaultCwd = process.cwd(),
+    stdout = console.log,
+    stderr = console.error,
+    now = Date.now,
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 120000, maxBuffer: 64 * 1024 * 1024 }),
+    readFile = (file) => fs.readFileSync(file, 'utf8'),
+    homedir = os.homedir,
+  } = {},
+) {
+  let parsed;
+  try {
+    parsed = parseArgs(argv);
+  } catch (err) {
+    if (!(err instanceof WaitArgError)) throw err;
+    stderr(`js-harness wait: ${err.message}\n\n${USAGE}`);
+    return 2;
+  }
+
+  const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
+  const home = path.resolve(defaultCwd, parsed.home ?? (env.JS_HARNESS_HOME || homedir()));
+  const seconds = parsed.every ?? 120;
+  const minutes = parsed.minutes ?? 480;
+  const started = now();
+  const { phrase, check } = conditionOf(parsed.condition, { cwd, home, run, readFile, now, started });
+  stdout(`js-harness wait: waits for ${phrase}; ends when it holds, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`);
+
+  let lastReason = null;
+  for (;;) {
+    let outcome;
+    try {
+      outcome = check();
+    } catch (err) {
+      outcome = failed(err.message);
+    }
+    if (outcome.state === 'holds') {
+      for (const line of outcome.lines) stdout(line);
+      return 0;
+    }
+    if (outcome.state === 'ended') {
+      stdout(outcome.line);
+      return 1;
+    }
+    if (outcome.state === 'failed' && outcome.reason !== lastReason) {
+      lastReason = outcome.reason;
+      stderr(`js-harness wait: a check did not run (${outcome.reason}); it is retried at the next tick`);
+    }
+    const left = minutes * 60000 - (now() - started);
+    if (left <= 0) {
+      stdout(`js-harness wait: ${phrase} did not hold after ${minutes} minutes; the time ran out (${hourOf(now())})`);
+      return 1;
+    }
+    await sleep(Math.min(seconds * 1000, left));
+  }
+}
