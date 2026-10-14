@@ -42,13 +42,10 @@ high
 Anything on his Windows machine outside the js-harness home (`.wslconfig`, services, antivirus).
 
 ## Resume here
-- 02:01 · T2 committed (`d6670b4`, its gate on Windows passed). T2b, the two readers' corrections of
-  the faster-check design (`odd/tasks/faster-check.md`, pull request 118), written with their tests,
-  green, not committed: the commit turn is the scratchpad's `t2b-turn.sh` with `t2b-msg.txt`.
-- The switch file is on the machine (L6); this branch's own gates run with `JS_HARNESS_GATE_WSL=0`
-  until pull request 109 is on `main` (L3).
-- Next: the T2b commit turn → Codex over `3f59bb2..<T2b>` once (allowance by its plan) → the pull
-  request (undo lines in its body) → after 109 merges, `main` merged in and T3: one real gate in WSL2.
+- 02:23 · T2b committed (`adae7c8`); Codex over `3f59bb2..adae7c8` recorded, incorrect, four P2 (L8);
+  T2c, their correction, written with its tests, green, in its commit turn (`t2c-turn.sh`,
+  `t2c-msg.txt`). Then Codex over `adae7c8..<T2c>` once, then the pull request.
+- After 109 is on `main`: `main` merged in and T3, one real gate in WSL2.
 
 ## Specs
 - S1 — His answer, `ffe99ebf-72fb-48da-a79b-e7db21a20b3f` line 1350 (2026-10-14T05:41Z): "Se instala
@@ -100,9 +97,11 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
 - [x] T2 · S1 · `bin/lib/gate-wsl.mjs` (switch, runner text, path to `/mnt`), the route in
       `checkSensor`, the fallback row, `ranIn` · inline · test first · `d6670b4`; gentle-ai
       `under_budget`
-- [ ] T2b · S1 · the readers' corrections (L7): the key of the tree says where the sensors ran, the
+- [x] T2b · S1 · the readers' corrections (L7): the key of the tree says where the sensors ran, the
       project opts in, `--checksum`, `--delete-excluded` and the paths left in the mirror, a `flock` on
-      the mirror · inline · test first
+      the mirror · inline · test first · `adae7c8`; gentle-ai `under_budget`; Codex over
+      `3f59bb2..adae7c8`: incorrect, four P2 (L8)
+- [ ] T2c · S1 · Codex's four P2 (L8) · inline · test first
 - [ ] T3 · S2 · the switch file on this machine (after the orchestrator has it), one gate measured
       through it, docs
 - [ ] T4 · S2 · `.wslconfig` text to the orchestrator; the run per merged batch named where merges
@@ -150,3 +149,24 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
   `wsl.exe` leaves no Linux process (a background grandchild included). RED before the fix: 5 of the
   10 WSL tests of `bin/check.test.mjs`, the place test of `gate-tree`, and the runner tests that import
   `leftPaths`; GREEN after: 10 of 10, 17 of 17 on Windows, 13 of 13 in WSL2.
+- L8 · 02:21 · Codex (`gpt-6.1-sol`, medium) over `3f59bb2..adae7c8`, two parts, 417,522 input
+  tokens (310,656 cached; allowance 781,200): incorrect (0.96, 0.98), four P2, all real: a time that
+  ran out inside the distribution (`timeout`'s exit 124) was an ordinary failure; one that ran out
+  before the mirror was synced kept the sensor in WSL2 instead of running it on Windows; the runner's
+  own side of the first; the runner tests did not ask for `flock`. Corrected in T2c: the runner prints
+  a mark when it stopped the command at its bound (exit 124 and the bound's seconds spent: a command
+  may exit 124 by itself), the gate reads it as a timeout; no mark and a time run out is a mirror never
+  reached, so the sensor runs on Windows; the tests ask for `flock`. RED: both test files fail to
+  import the new mark. GREEN: 16 of 16 in `bin/check.test.mjs` (by name), 17 of 17 on Windows, 14 of
+  14 in WSL2.
+- L9 · the orchestrator (its message after pull request 118 merged): its two questions decided as
+  recommended (reversible, under his line 15820): the order of build is part 1's corrections now, then
+  parts 2, 3, 7, 5, 4 of `odd/tasks/faster-check.md`; a work session may issue a gate ticket on its
+  quoted word, flagged on the board.
+- L10 · 02:21:44 to 02:22:08 · the one probe granted for part 2 (Codex out of the lock): `codex exec`,
+  `gpt-6.1-sol` at medium, read-only sandbox, a scratch repository, `NODE_OPTIONS=--require=<a
+  preload that ends any node --test>`. It spent 112,943 input tokens (87,424 cached), over the
+  100,000 granted, and answered nothing: both commands were refused before they ran ("blocked by
+  policy"), where `codex exec review` had run `node --test` the same night. Stopped, told the
+  orchestrator; no second probe. Part 2 stays a candidate until another probe is granted, best through
+  `exec review` itself.

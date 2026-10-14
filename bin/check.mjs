@@ -18,7 +18,7 @@ import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
-import { innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
+import { TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
 
@@ -639,8 +639,14 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
       result = await spawn(route.command, { cwd, env, timeout: sensorTimeout });
       const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
       const synced = syncedMs(output);
-      if (synced !== null || result.error?.code === 'ETIMEDOUT') ranIn = { distro: wsl.distro, synced };
-      else fellBack = notReached(output, result);
+      if (synced !== null) ranIn = { distro: wsl.distro, synced };
+      // A bound that ran out before the mark is a mirror never reached, like any other: the suite never ran.
+      else fellBack = result.error?.code === 'ETIMEDOUT' ? 'its time ran out before the mirror was synced' : notReached(output, result);
+      // The bound inside the distribution is a little short of this one, and stops the command first:
+      // what the runner says of it is a time that ran out, as this one is (Codex, 2026-10-14).
+      if (ranIn && !result.error && output.includes(TIMED_OUT_MARK)) {
+        result = { ...result, error: Object.assign(new Error(`timed out after ${sensorTimeout} ms in WSL2`), { code: 'ETIMEDOUT' }) };
+      }
     } else if (route) {
       fellBack = route.why;
     }

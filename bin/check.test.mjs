@@ -10,7 +10,7 @@ import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
-import { LEFT_MARK, SYNCED_MARK } from './lib/gate-wsl.mjs';
+import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -4579,4 +4579,29 @@ test('a sensorsInWsl that is not true or false fails the gate in one row named s
   assert.equal(code, 1);
   assert.equal(spawn.calls.length, 0);
   assert.match(output, /^FAIL {2}sensors {2}harness\.json "sensorsInWsl" must be true or false/m);
+}));
+
+// Codex, 2026-10-14, on 3f59bb2..adae7c8: a time that ran out inside the distribution was an ordinary
+// failure, and one that ran out before the mirror was synced kept the sensor in WSL2.
+test('a sensor whose time ran out inside WSL2 is a timeout in its row and in the gate log, not an ordinary failure', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn({ status: 124, signal: null, stdout: '', stderr: `${SYNCED_MARK}800 ms\n${TIMED_OUT_MARK}\n` });
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 1);
+  assert.equal(spawn.calls.length, 1);
+  assert.match(output, /^FAIL {2}tests {2}npm run test timed out after \d+ s in WSL2 \(Ubuntu\)$/m);
+  const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.equal(end.result, 'timeout');
+  assert.deepEqual(end.sensors.map(({ timedOut, ranIn }) => ({ timedOut, ranIn })), [{ timedOut: true, ranIn: 'wsl' }]);
+}));
+
+test('a sensor whose time ran out before WSL2 synced its mirror runs on Windows, and its row says why', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn({ status: null, signal: null, stdout: '', stderr: '', error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }) }, sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command }) => command.startsWith('wsl.exe')), [true, false]);
+  assert.match(output, /^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \(its time ran out before the mirror was synced\)$/m);
+  const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.equal(end.sensors[0].ranIn, undefined);
 }));

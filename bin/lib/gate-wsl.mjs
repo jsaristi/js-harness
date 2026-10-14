@@ -15,6 +15,11 @@ export const GATE_WSL_ENV = 'JS_HARNESS_GATE_WSL';
  * runs that sensor on Windows: a gate that skipped its suite would be worse than a slow one. */
 export const SYNCED_MARK = 'js-harness-gate-wsl: synced in ';
 
+/** What the runner prints when it stopped the command at its bound: `timeout` exits 124 then, and so may a
+ * command by itself, so the runner tells them apart by the time the command took. The gate reads it as
+ * a sensor whose time ran out, as it reads its own bound on Windows. */
+export const TIMED_OUT_MARK = 'js-harness-gate-wsl: timed out';
+
 /** What the runner prints before each path a command left in the mirror, one line each: files the tree
  * does not hold, which a test wrote where it ran. The gate names them as it names the untracked paths
  * that appear in a Windows tree, and the next sync takes them away. */
@@ -108,10 +113,12 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     `echo "${SYNCED_MARK}$(( ($(date +%s%N) - started) / 1000000 )) ms" >&2`,
     'home=$(mktemp -d) || exit 1',
     'cd "$mirror" || exit 1',
+    'ran=$(date +%s)',
     `env -i HOME="$home" LANG=C.UTF-8 TERM=dumb PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin' \\`,
     `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}npm_config_cache="$home/.npm-cache" \\`,
     `  timeout -k 10 ${seconds} bash -c ${word(command)}`,
     'code=$?',
+    `[ "$code" -eq 124 ] && [ $(( $(date +%s) - ran )) -ge ${seconds} ] && echo "${TIMED_OUT_MARK}" >&2`,
     'rm -rf "$home"',
     `${sync} -n --itemize-changes "$source/" "$mirror/" 2>/dev/null | sed -n 's/^\\*deleting  *//p' | while IFS= read -r left; do echo "${LEFT_MARK}$left" >&2; done`,
     'exit $code',

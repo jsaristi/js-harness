@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { GATE_WSL_ENV, SYNCED_MARK, gateWslPath, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
+import { GATE_WSL_ENV, SYNCED_MARK, TIMED_OUT_MARK, gateWslPath, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
 
 const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-home-'));
 const writeSwitch = (home, text) => {
@@ -77,9 +77,9 @@ test('the runner script quotes every value it is given and holds no carriage ret
   assert.doesNotMatch(runnerScript({ source: '/s', mirror: 'm', node: '/n', command: 'c', held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds: 5 }), /GATE_HELD/);
 });
 
-const posixWithRsync = process.platform !== 'win32' && spawnSync('bash', ['-c', 'command -v rsync && command -v timeout'], { encoding: 'utf8' }).status === 0;
+const posixWithRsync = process.platform !== 'win32' && spawnSync('bash', ['-c', 'command -v rsync && command -v timeout && command -v flock'], { encoding: 'utf8' }).status === 0;
 
-test('the runner syncs the tree without .git, runs the command in the mirror with a clean environment, and passes its exit on', { skip: !posixWithRsync && 'needs bash, rsync and timeout on a POSIX system' }, () => {
+test('the runner syncs the tree without .git, runs the command in the mirror with a clean environment, and passes its exit on', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
   const source = path.join(root, 'tree');
   const linuxHome = path.join(root, 'home');
@@ -104,7 +104,7 @@ test('the runner syncs the tree without .git, runs the command in the mirror wit
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('a tree the runner cannot sync exits 97 before the mark', { skip: !posixWithRsync && 'needs bash, rsync and timeout on a POSIX system' }, () => {
+test('a tree the runner cannot sync exits 97 before the mark', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
   const runner = path.join(root, 'runner.sh');
   fs.writeFileSync(runner, runnerScript({ source: path.join(root, 'absent'), mirror: 'm', node: '/n', command: 'true', held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds: 5 }));
@@ -114,7 +114,7 @@ test('a tree the runner cannot sync exits 97 before the mark', { skip: !posixWit
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('the runner names each file a command left in the mirror, and the next sync takes them away, excluded paths included', { skip: !posixWithRsync && 'needs bash, rsync and timeout on a POSIX system' }, () => {
+test('the runner names each file a command left in the mirror, and the next sync takes them away, excluded paths included', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
   const source = path.join(root, 'tree');
   const linuxHome = path.join(root, 'home');
@@ -136,7 +136,7 @@ test('the runner names each file a command left in the mirror, and the next sync
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('the runner copies a change that keeps the size and the second of the mtime', { skip: !posixWithRsync && 'needs bash, rsync and timeout on a POSIX system' }, () => {
+test('the runner copies a change that keeps the size and the second of the mtime', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
   const source = path.join(root, 'tree');
   fs.mkdirSync(source);
@@ -165,5 +165,24 @@ test('a mirror another runner holds is not waited for past its bound: exit 97 be
   const holder = spawnSync('bash', ['-c', 'exec 9>"$1/m.lock"; flock 9; bash "$2"; echo "exit $?" >&2', '_', mirrors, runner], { encoding: 'utf8', env: { ...process.env, HOME: root } });
   assert.match(holder.stderr, /exit 97/);
   assert.equal(syncedMs(holder.stderr), null);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+// Codex, 2026-10-14, on 3f59bb2..adae7c8: the bound inside the distribution must read as a timeout.
+test('a command the runner stops at its bound is said to have timed out, and one that exits 124 by itself is not', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
+  const source = path.join(root, 'tree');
+  fs.mkdirSync(source);
+  const runner = path.join(root, 'runner.sh');
+  const run = (command, seconds) => {
+    fs.writeFileSync(runner, runnerScript({ source, mirror: 'm', node: path.dirname(process.execPath), command, held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds }));
+    return spawnSync('bash', [runner], { encoding: 'utf8', env: { ...process.env, HOME: root } });
+  };
+  const stopped = run('sleep 30', 1);
+  assert.equal(stopped.status, 124);
+  assert.ok(stopped.stderr.includes(TIMED_OUT_MARK), stopped.stderr);
+  const own = run('exit 124', 30);
+  assert.equal(own.status, 124);
+  assert.ok(!own.stderr.includes(TIMED_OUT_MARK), own.stderr);
   fs.rmSync(root, { recursive: true, force: true });
 });
