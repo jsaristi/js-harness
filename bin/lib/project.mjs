@@ -1606,6 +1606,15 @@ function syncPrePush(root, manifest, gitBases, wanted, { spawn, writeFile, rm, c
     writeHookInto(root, manifest, HOOKS.prePush, { spawn, writeFile, createdPaths, createdDirs, actions });
   } else if (entry) {
     const abs = resolveManifestEntryPath(root, entry);
+    // The real-path containment `uninstall` checks (T3b item 1): a link along the way that now sends the
+    // hook somewhere else makes it not this run's to judge, let alone remove.
+    const realBases = entry.gitDir
+      ? [safeRealpath(gitBases.gitDir), safeRealpath(gitBases.commonGitDir)].filter(Boolean)
+      : [fs.realpathSync(root)];
+    if (!stillWithinRecordedBase(abs, realBases)) {
+      actions.push(kept(entry.path, 'moved outside'));
+      return;
+    }
     const there = fs.existsSync(abs);
     if (there && !(fs.lstatSync(abs).isFile() && matchesRecordedHash(fs.readFileSync(abs, 'utf8'), entry.sha256))) {
       actions.push(kept(entry.path, 'changed since it was written; the Codex review is off here, so remove it yourself'));

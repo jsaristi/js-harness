@@ -223,3 +223,20 @@ test('apply and set take no --json and no other word: a usage error, exit 2', as
     assert.match(err.join('\n'), /^unknown argument: .*\n\nUsage: js-harness functions/);
   }
 });
+
+test('set and apply outside a git repository write nothing, and a folder that does not exist is said so', async (t) => {
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-functions-cmd-nogit-'));
+  t.after(() => fs.rmSync(plain, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(plain, 'harness.json'), '{}\n');
+  for (const argv of [['set', 'codeMap', 'off'], ['apply']]) {
+    assert.deepEqual(await run(plain, ...argv), {
+      code: 1,
+      out: [],
+      err: ['not inside a git repository: functions apply and set act on a project'],
+    });
+  }
+  assert.equal(fs.readFileSync(path.join(plain, 'harness.json'), 'utf8'), '{}\n');
+
+  const missing = path.join(plain, 'no-such-folder');
+  assert.deepEqual(await run(plain, 'apply', '--cwd', missing), { code: 1, out: [], err: [`no such directory: ${missing}`] });
+});

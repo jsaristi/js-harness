@@ -309,3 +309,24 @@ test('a clone where only the switches were applied is not set up, and sync sets 
   assert.equal(projectLocation(root, deps()).functionsOnly, false);
   assert.equal(syncProject(root, '0.1.0', deps()).upToDate, true);
 });
+
+test('turning the review off never removes a push check that a link now sends outside the repository', (t) => {
+  const root = repo(t, { 'bin/a.mjs': '' });
+  initProject(root, '0.1.0', deps());
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-switches-outside-'));
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
+  // The hooks folder moves out, and a link (a junction on Windows) takes its place.
+  const hooks = path.join(root, '.git', 'hooks');
+  fs.cpSync(hooks, path.join(outside, 'hooks'), { recursive: true });
+  fs.rmSync(hooks, { recursive: true });
+  fs.symlinkSync(path.join(outside, 'hooks'), hooks, 'junction');
+
+  harness(root, { version: '0.1.0', functions: { codexReview: 'off' } });
+  const synced = syncProject(root, '0.1.0', deps());
+  assert.deepEqual(synced.actions.find((a) => a.path === '.git/hooks/pre-push'), {
+    kind: 'kept',
+    path: '.git/hooks/pre-push',
+    reason: 'moved outside',
+  });
+  assert.ok(fs.existsSync(path.join(outside, 'hooks', 'pre-push')));
+});

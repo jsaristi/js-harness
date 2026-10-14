@@ -834,3 +834,21 @@ What the code already gives, so the slice stays call sites and one new module
   `enabledPlugins` `{ "typescript-lsp@claude-plugins-official": false }`, `claude plugin list --json` there
   gave that plugin `"enabled": false`; with the file removed, `"enabled": true`. Both keys are honored from
   the clone's own file.
+- **L18** (2026-10-14 05:14 to 05:30) gentle-ai over `a86c7e0..02e898f`: medium risk, 1,411 lines, review not
+  due (`under_budget`). The Codex review of that range, planned at about 904,000 input tokens inside an
+  allowance of 1,618,800, ran under the lock in 5 parts and is recorded: 859,614 input tokens (630,784 cached),
+  339 s. Parts 3 and 5 "correct"; parts 1, 2 and 4 "incorrect", six P2 findings, five defects, all true, all
+  fixed in the commit that carries this entry, each with its test seen red first:
+  1. `functions set` outside a git repository rewrote `harness.json` before `apply` refused: both verbs now
+     refuse first and write nothing.
+  2. `functions apply --cwd` a folder that does not exist threw on `result.actions`: it now says "no such
+     directory" and exits 1.
+  3. A recorded key written again (somebody removed the key and left its object) lost what the harness had
+     made, so the last undo left the file: the earlier record now counts with the others.
+  4. A write or an undo that throws partway (a disk error) lost the record of a key already written, in
+     `applySettings` and so in `init` and `sync`: each key's throw is now that key's `problem` or `failed`,
+     and what was written is returned to be recorded (two findings, one defect).
+  5. Taking the push check away followed a hooks folder that a link now sends outside the repository: the
+     real-path containment `uninstall` checks runs first, and such a hook is kept ("moved outside").
+  Runs: `node --test bin/lib/project-apply.test.mjs` 19 of 19, `bin/functions.test.mjs` 15 of 15,
+  `bin/lib/project-switches.test.mjs` 19 of 19.

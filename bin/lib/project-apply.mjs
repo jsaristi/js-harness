@@ -39,6 +39,15 @@ export function settingLabel(pointer) {
   return `${SETTINGS_FILE}#/${pointer.join('/')}`;
 }
 
+/** `run()`, or `{ state: 'problem', reason }` when it throws. */
+function attempt(run) {
+  try {
+    return run();
+  } catch (err) {
+    return { state: 'problem', reason: err.message };
+  }
+}
+
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** Whether `record` is one this module wrote: a known key, its own pointer and value, in the settings file
@@ -65,8 +74,13 @@ export function isValidSettingsRecord(record) {
  *   a record says it is the harness's) or holds another value, which is never overwritten and leaves the
  *   switch not applied; `problem` when the file cannot be read;
  * - a recorded key no longer wanted: `removed`; `kept` when somebody changed it since; `alreadyGone`; a
- *   `failed` when the file cannot be read, whose record stays so that a later run can undo it. */
-export function applySettings(root, records, wanted) {
+ *   `failed` when the file cannot be read, whose record stays so that a later run can undo it.
+ * A write or an undo that throws (a disk error) is that key's `problem` or `failed`, never the whole call's:
+ * the keys already written are returned with the rest, so a caller can record them or take them back.
+ * `deps` (`applyKey`, `undoKey`) stand in for bin/lib/settings-key.mjs in a test. */
+export function applySettings(root, records, wanted, deps = {}) {
+  const applyKey = deps.applyKey ?? applySettingsKey;
+  const undoKey = deps.undoKey ?? undoSettingsKey;
   const file = path.join(root, ...SETTINGS_FILE.split('/'));
   const actions = [];
   let held = [];
@@ -77,7 +91,7 @@ export function applySettings(root, records, wanted) {
       continue;
     }
     const label = settingLabel(record.pointer);
-    const undone = undoSettingsKey(file, record);
+    const undone = attempt(() => undoKey(file, record));
     if (undone.state === 'removed') actions.push({ kind: 'removed', path: label });
     else if (undone.state === 'changed') actions.push({ kind: 'kept', path: label, reason: 'changed since it was written' });
     else if (undone.state === 'gone') actions.push({ kind: 'alreadyGone', path: label });
@@ -92,7 +106,9 @@ export function applySettings(root, records, wanted) {
     const label = settingLabel(pointer);
     const recorded = held.find((record) => record.key === key);
     const others = held.filter((record) => record !== recorded);
-    const applied = applySettingsKey(file, pointer, value, others);
+    // The earlier record of this key goes in with the others: what it made (the file, its folder, an object
+    // of the path) is still the harness's when the key is written again into it.
+    const applied = attempt(() => applyKey(file, pointer, value, held));
     if (applied.state === 'written') {
       // Written again where a record says it was before: the key had gone, and the new record replaces it.
       held = [...others, { key, path: SETTINGS_FILE, ...applied.record }];

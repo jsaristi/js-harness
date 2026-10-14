@@ -110,7 +110,9 @@ async function apply(top, { stdout, stderr, spawn, platform }) {
     stderr(`functions apply failed: ${err.message}; ${cleanupClause(err)}`);
     return 1;
   }
-  if (result.notGitRepo) return (stderr('not inside a git repository: functions apply needs a project'), 1);
+  // `functionsMain` refuses both before it gets here; a folder removed in between still ends in words.
+  if (result.noSuchDirectory) return (stderr(`no such directory: ${result.cwd}`), 1);
+  if (result.notGitRepo) return (stderr('not inside a git repository: functions apply and set act on a project'), 1);
   if (result.notInitialized) return (stderr('no harness.json here: js-harness init writes one'), 1);
   if (result.newerManifest) return (stderr(newerManifestMessage(result)), 1);
   if (result.malformedManifest) {
@@ -138,9 +140,20 @@ export async function functionsMain(
     stderr(`${args.error}\n\n${USAGE}`);
     return 2;
   }
+  if (!fs.existsSync(args.cwd)) {
+    stderr(`no such directory: ${args.cwd}`);
+    return 1;
+  }
   // The project is the repository's top, where harness.json lives; outside a repository, the folder itself.
-  const top = gitIn(args.cwd, spawn)(['rev-parse', '--show-toplevel'])?.trim() || args.cwd;
+  const repositoryTop = gitIn(args.cwd, spawn)(['rev-parse', '--show-toplevel'])?.trim();
+  const top = repositoryTop || args.cwd;
 
+  // What apply writes is recorded in the repository's own manifest, so outside one nothing is written, the
+  // switch of set included.
+  if (args.verb && !repositoryTop) {
+    stderr('not inside a git repository: functions apply and set act on a project');
+    return 1;
+  }
   if (args.verb === 'set') {
     const set = setSwitch(top, args.name, args.value);
     if (set.error) {

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { SETTINGS_FILE, applySettings, isValidSettingsRecord, planFunctions, settingLabel } from './project-apply.mjs';
+import { applySettingsKey } from './settings-key.mjs';
 import { readFunctions, resolveFunctions } from './functions.mjs';
 
 const PASTE = settingLabel(['env', 'CODEGRAPH_NO_PROMPT_HOOK']);
@@ -172,4 +173,46 @@ test('a record is valid only for a known key, its own pointer and value, in the 
   assert.equal(isValidSettingsRecord({ ...good, createdContainers: 2 }), false);
   assert.equal(isValidSettingsRecord({ ...good, createdFile: 'yes' }), false);
   assert.equal(isValidSettingsRecord(null), false);
+});
+
+// --- Codex's review of slice 2 (L18) ---
+
+test('a recorded key written again keeps what the harness made, so the last undo still takes the file away', (t) => {
+  const root = project(t);
+  const { records } = applySettings(root, [], ['paste', 'languageServer']);
+  // Somebody removes one key and leaves the object that held it.
+  fs.writeFileSync(settingsFile(root), '{ "env": {}, "enabledPlugins": { "typescript-lsp@claude-plugins-official": false } }\n');
+  const again = applySettings(root, records, ['paste', 'languageServer']);
+  assert.deepEqual(again.actions, [{ kind: 'wrote', path: PASTE }]);
+  const undone = applySettings(root, again.records, []);
+  assert.deepEqual(undone.records, []);
+  assert.equal(fs.existsSync(path.join(root, '.claude')), false);
+});
+
+test('a key whose write throws is a problem, and the keys written before it are still returned to be recorded', (t) => {
+  const root = project(t);
+  let calls = 0;
+  const applyKey = (...args) => {
+    calls += 1;
+    if (calls === 2) throw new Error('EIO: i/o error, write');
+    return applySettingsKey(...args);
+  };
+  const applied = applySettings(root, [], ['paste', 'languageServer'], { applyKey });
+  assert.deepEqual(applied.records.map((record) => record.key), ['paste']);
+  assert.deepEqual(applied.actions, [
+    { kind: 'wrote', path: PASTE },
+    { kind: 'problem', path: PLUGIN, reason: 'EIO: i/o error, write' },
+  ]);
+});
+
+test('an undo that throws keeps its record and is reported as failed', (t) => {
+  const root = project(t);
+  const { records } = applySettings(root, [], ['paste']);
+  const undoKey = () => {
+    throw new Error('EBUSY: resource busy');
+  };
+  assert.deepEqual(applySettings(root, records, [], { undoKey }), {
+    records,
+    actions: [{ kind: 'failed', path: PASTE, reason: 'EBUSY: resource busy' }],
+  });
 });
