@@ -1535,6 +1535,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           spent: spentOfKept(keptLine),
           durationMs: Number.isFinite(keptLine.durationMs) ? keptLine.durationMs : null,
           kept: true,
+          // A part whose `incorrect` was excused keeps the mark its line holds, for the record of the range
+          // (Codex, 2026-10-14).
+          excused: keptLine.answer?.excused === EXCUSED_REFUSED_TESTS,
         };
       }
       // Why HEAD and the tracked tree are not the range, or `null` when they are. Asked of a part alone, after

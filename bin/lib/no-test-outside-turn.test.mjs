@@ -17,7 +17,8 @@ function run(args, extraEnv = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-no-test-'));
   try {
     fs.writeFileSync(path.join(dir, 'a.test.cjs'), 'require("node:test")("x", () => {});\n');
-    const env = { ...process.env, NODE_OPTIONS: `--require=${NO_TEST_PRELOAD}`, ...extraEnv };
+    // Quoted as a review quotes it: a checkout whose path holds a space would split an unquoted one (Codex, 2026-10-14).
+    const env = { ...process.env, NODE_OPTIONS: noTestNodeOptions('', NO_TEST_PRELOAD), ...extraEnv };
     delete env.NODE_TEST_CONTEXT;
     delete env.JS_HARNESS_GATE_HELD;
     delete env.JS_HARNESS_CHECK_INNER;

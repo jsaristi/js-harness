@@ -242,3 +242,7 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
   that a review whose only complaint is the refusal is not recorded as blocked." The sentence goes in its
   own block (`## The tests`) after the intent block, since a review with no feature document has no
   intent block to put it in. Built as T4.
+- L6 · 2026-10-14, T4's first commit `e06cf68`, gate passed in WSL2. Codex over `c0364f8..e06cf68` in two
+  parts (296,816 input tokens, inside the allowance of 570,780): two P2, fixed in one batch. A part kept
+  from an earlier run of its range now keeps its `excused` mark for the record (RED, then GREEN); the
+  preload's own test quotes the path as a review does (no RED here: this checkout's path has no space).

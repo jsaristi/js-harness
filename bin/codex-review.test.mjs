@@ -3768,6 +3768,30 @@ test('a range that failed at its last part is run again from that part: the part
   assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(4), runs: [idOf(1), idOf(2), idOf(4)] }]);
 });
 
+test('out of a turn, a part whose incorrect was excused and that is kept for the next run of its range keeps the mark: the record of the range still says excused', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  const outOfTurn = { PATH: '/usr/bin' };
+  // Part 1 ran `git diff` of its file and a `node --test` the preload refused, and blamed only the refusal.
+  const refusedPart = jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- a.txt`, 0, partDiff(root, base, head, 'a.txt')), REFUSED, msg(FINDINGS), done);
+  const failed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], {
+    ...fakeCodexInParts(
+      { stdout: refusedPart, said: ONLY_THE_REFUSAL },
+      { stdout: partShown(root, base, head, 'b.txt') },
+      { stdout: partShown(root, base, head, 'c.txt'), answer: { status: 9 } },
+    ),
+    platform: process.platform,
+    randomUUID: ids,
+  }, outOfTurn);
+  assert.equal(failed.code, 9, failed.err);
+  assert.equal(readCodexReviews(root).length, 0);
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'c.txt') });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids }, outOfTurn);
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1, 'parts 1 and 2 were kept');
+  assert.equal(readCodexReviews(root).at(-1).excused, 'refused-tests');
+});
+
 test('a part that passed while a tracked file was not as the range is not kept, and the parts after it are not started: the next run of the range asks every part', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ids = runIds();
