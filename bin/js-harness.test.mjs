@@ -346,6 +346,19 @@ test('--help lists resume; without --hook it exits 2 with its usage, and the hoo
   }
 });
 
+// T20 (session channel): the command a session runs in the background until its condition holds.
+test('--help lists wait, and wait with no condition exits 2 with its usage through the dispatcher, checking nothing', () => {
+  assert.match(
+    run(['--help']).stdout,
+    /^ {2}wait\s+Wait in the background until one condition holds.*js-harness wait \(--pr.*--notice-to.*--every.*--for.*It checks at once.*exit 1.*TaskStop/m,
+  );
+  const result = run(['wait']);
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /^js-harness wait: a condition is required/);
+  assert.match(result.stderr, /Usage: js-harness wait \(--pr <number>/);
+});
+
 test('--help lists notify, and notify with nothing to write exits 2 with its usage through the dispatcher', () => {
   assert.match(
     run(['--help']).stdout,
