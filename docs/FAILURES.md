@@ -304,6 +304,15 @@ commit can break a test, pass its own gate, and fail the next gate with code in 
 - Control: check — bin/check.test.mjs — "a commit of documents alone runs the sensors of documents,
   in their order and with a bound of two minutes" — since 2026-10-12
 
+### documents-merge-runs-gate
+A merge of `main` into a pull request of documents alone staged `main`'s code, so its hook ran a whole
+gate for a change that held no code.
+- Class: machine
+- Seen: 2026-10-14 — relief file, line 720 — the merge into pull request 120 ran a whole Windows check
+  at 03:09 and cost about 10 minutes of the lock; the skip owed (the merge equals its `main` parent
+  plus declared documents) is JH 8's, in docs/todo.md
+- Seen: 2026-10-14 — relief file, line 741 — at 05:40 documents commits still took a whole gate
+
 ### engram-writes-lost
 A session lost what it had written to engram after each of its two compactions.
 - Class: tool
@@ -531,6 +540,14 @@ review covers everything the merge brought, code that already had its review.
   Narrowing the review to the lines written in the merge changes what a review covers, which is
   his to decide
 
+### message-cap-ran-out
+The lead's messages to sessions are limited to ten for each message he types; they ran out while he
+was away, and the sessions it could no longer tell stopped.
+- Class: tool
+- Seen: 2026-10-14 — relief file, line 748 — ten of ten sent by 06:03 (the rule at line 714); from
+  then the lead only merged what was ready; JH 8 never got its "merged" message (line 759). The fix
+  owed is JH 5's `js-harness wait` and its rule, so no session waits on a message (line 760)
+
 ### message-to-wrong-session
 A prompt or a message went to a session that was not the one for it: one that never existed, or one
 that no longer held the role.
@@ -652,6 +669,16 @@ The board counted the few seconds of a push's check as a second gate.
 - Seen: 2026-10-07 — odd/tasks/session-board.md:978-984 — "gate started ... while another runs" for
   a pre-push hook
 
+### push-waited-behind-measure
+A session queued a long measure in the gate before the push of its reviewed commit, so the push, and
+everything waiting on it, waited behind the measure.
+- Class: delivery
+- Seen: 2026-10-14 — relief file, line 727 — JH 8's review ended at 03:32 and its push went at about
+  03:49, behind its pair measure; the WSL gate reached `main` late; his order to fix it so it never
+  recurs (the lead's transcript ffe99ebf, line 3977)
+- Control: check — bin/gate.test.mjs — "gate refuses a turn while a commit that a push takes now waits
+  on a branch with an open pull request" — since 2026-10-14
+
 ### question-tool-holds-asker
 The question tool holds the session that asks until he answers, so a question asked while he was
 away held the lead, and the merges it owed, for seven hours.
@@ -689,6 +716,25 @@ the harness's.
   the run is still refused
 - Control: check — evals/paths.test.mjs — "exists says a path below a file is not there, where the
   system says ENOTDIR" — since 2026-10-12
+
+### remerge-chase
+Each code merge sent every other open code pull request back to merge `main` and pass a whole gate
+again, so the queue of gates grew with each merge.
+- Class: delivery
+- Seen: 2026-10-14 — relief file, line 753 — by 06:14, 124 merged `main` three times and 130 twice
+- Seen: 2026-10-14 — relief file, line 755 — by 06:27, 124 three times, 128, 130 and 129 twice, 134
+  once
+- Seen: 2026-10-14 — relief file, line 763 — after 129 merged at 14:12, 128, 130, 131 and 134 lacked
+  `main` again. In place since 14:23, outside the repository: his decision to take the exchange (the
+  lead's transcript ffe99ebf, line 5394), a code pull request merged on a green run on GitHub against
+  the `main` it lands on, by the lead's script (relief file, line 764)
+
+### reopen-tested-old-base
+A pull request reopened right after a merge was tested by GitHub against the old base, since GitHub
+computes the merge ref later.
+- Class: tool
+- Seen: 2026-10-14 — relief file, line 765 — at 14:34; in place since 14:39, outside the repository:
+  the lead's script reopens only once `refs/pull/<n>/merge^1` equals `main` (line 767)
 
 ### resume-names-wrong-maker
 The resume hook said the host had compacted a session by itself when he had typed the command.
@@ -729,6 +775,15 @@ path.
 - Seen: 2026-10-10 — odd/tasks/practice-project.md:577-579 — `d639bdf` carries
   `D:js-harnesspractice`
 
+### scripted-turn-hung-lock
+A scripted measure run in a turn of the gate never returned, and it held the machine's lock while the
+sessions waited.
+- Class: machine
+- Seen: 2026-10-14 — relief file, line 728 — `pair()` of the measure waited for all its children,
+  the memory sampler among them, and held the lock from 03:32:27 to 03:56:31, 24 minutes
+- Control: check — bin/gate.test.mjs — "gate hands its command a bound of wall time: 30 minutes, or
+  what --max says" — since 2026-10-14
+
 ### secret-printed
 A secret reached output that is kept: a sub-agent printed a token into its transcript, and a gate's
 report could print a password from a command line.
@@ -739,6 +794,13 @@ report could print a password from a command line.
   (claimed); also odd/tasks/gate-log.md:134
 - Control: check — bin/lib/machine-busiest.test.mjs — "scriptOf says nothing of an argument that is
   not the whole path of a file that exists, however it is spelled" — since 2026-10-11
+
+### session-never-woken
+Sessions told to start after an event armed no wait for it, so nothing woke them when it came.
+- Class: unseen-state
+- Seen: 2026-10-14 — relief file, line 758 — JH 13 idle from 03:13 and JH 15 from 03:44, both told to
+  start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
+  is armed before he leaves, in the orchestrator skill (JH 5)
 
 ### session-state-misreported
 A session was reported to him as waiting for his prompt while it still had a commit in the gate and
@@ -883,6 +945,19 @@ was not so.
   a gate now names the processes that spent the processor before its command
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
+
+### turn-ended-waiting
+Sessions ended their turn waiting for his `/compact` or for a message while he was away, so nothing
+ran.
+- Class: asked-of-him
+- Seen: 2026-10-14 — relief file, line 747 — at 06:00 JH 5 stopped to wait for his `/compact`
+  (claimed), the third of the night after JH 9 and JH 11
+- Seen: 2026-10-14 — relief file, line 756 — at 06:27 JH 7 ended on a cut at 76 percent, the fourth
+- Seen: 2026-10-14 — relief file, line 758 — nothing ran from about 06:40 to 13:34, seven hours: JH 7,
+  9, 10, 12 and 14 waited for his `/compact`, JH 5 and JH 11 for an order, JH 8 for a message, and
+  five code pull requests for a merge of `main` (line 759); his order to fix it, the lead's
+  transcript ffe99ebf, line 5141. The fix owed is JH 5's `js-harness wait` and its rule: while he is
+  not there, a turn never ends waiting; it arms a wait and works on (line 760)
 
 ### two-blocks-out-of-order
 Two blocks were given in one reply, he sent them out of order, and it cost a session.
