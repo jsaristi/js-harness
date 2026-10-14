@@ -58,6 +58,14 @@ export const RULES = [
     "flag": "--wait"
   },
   {
+    "id": "person-present",
+    "subject": "how long after the user last wrote in a session a question is put to them at once with the question tool",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 15,
+    "unit": "minutes"
+  },
+  {
     "id": "review-effort",
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",

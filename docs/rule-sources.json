@@ -75,6 +75,10 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "person-present": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
+  },
   "review-effort": {
     "kind": "words",
     "quotes": [
