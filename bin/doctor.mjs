@@ -14,6 +14,7 @@ import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
+import { unknownArgument } from './lib/args.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -30,7 +31,13 @@ function requireValue(argv, i, flag) {
   return value;
 }
 
+// Every flag `doctor` takes, for `unknownArgument`: a flag it does not know is refused before the
+// report, which writes its cache under the home (T1 of odd/tasks/commands-and-doctor.md).
+const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook'] };
+
 function parseArgs(argv, env) {
+  const unknown = unknownArgument(argv, KNOWN);
+  if (unknown !== null) throw new DoctorArgError(`unknown argument: ${unknown}`);
   const get = (flag) => {
     const i = argv.indexOf(flag);
     return i !== -1 ? requireValue(argv, i, flag) : undefined;
@@ -170,7 +177,17 @@ export async function buildReport({ home, cwd, offline, interactive }, deps) {
 }
 
 export async function doctorMain(argv, env = process.env, deps = {}) {
-  if (argv.includes('--hook')) return hookMain(argv, env, deps);
+  // The hook refuses an argument it does not know as the report does, before its fail-open part: an
+  // installed entry carries only `--hook`, so an unknown one means the copy on the path is older than
+  // the install that wrote it, and a SessionStart hook's exit 2 shows its one line without stopping it.
+  if (argv.includes('--hook')) {
+    const unknown = unknownArgument(argv, KNOWN);
+    if (unknown !== null) {
+      console.error(`unknown argument: ${unknown}\n\n${USAGE}`);
+      return 2;
+    }
+    return hookMain(argv, env, deps);
+  }
 
   let parsed;
   try {

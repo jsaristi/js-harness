@@ -941,9 +941,14 @@ export async function resumeMain(
   } = {},
 ) {
   // `--pause` is the mode of a `PostToolUse` hook, so it takes no other argument: a hook never sends one, and a
-  // person who types one at a shell gets the usage.
+  // person who types one at a shell gets the usage. `--hook` takes none either: `install` writes it alone, so
+  // another one means the copy on the path is older than the install, and it is named (T1 of
+  // odd/tasks/commands-and-doctor.md); a SessionStart hook's exit 2 shows the line and stops nothing.
   const pause = argv.includes('--pause');
-  if (pause ? argv.length !== 1 : !argv.includes('--hook')) {
+  const mode = pause ? '--pause' : '--hook';
+  if (argv.length !== 1 || argv[0] !== mode) {
+    const unknown = argv.includes(mode) ? argv.find((token) => token !== mode) : undefined;
+    if (unknown !== undefined) stderr(`unknown argument: ${unknown}`);
     stderr(USAGE);
     return 2;
   }

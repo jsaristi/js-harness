@@ -4123,6 +4123,21 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   assert.match(refused.err, /showed 0 of 2 changed lines of part 2 of 3/);
 });
 
+// T1 of odd/tasks/commands-and-doctor.md: before it, `--base X --bogus` ran a whole review.
+test('a flag it does not know is a usage error that names it, in a repository with a range to review, and nothing runs', async () => {
+  const { root, base } = makeRepo();
+  for (const flags of [['--bogus'], ['--plan', '--help'], ['--session', 'lean', '-x']]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 2, flags.join(' '));
+    assert.match(result.err, new RegExp(`^unknown argument: ${flags.at(-1)}\\n`), flags.join(' '));
+    assert.match(result.err, /Usage: js-harness codex-review /);
+    assert.deepEqual([fake.calls.length, fake.probes.length], [0, 0]);
+  }
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
+});
+
 test('--part-lines takes a positive integer: anything else is a usage error, and nothing runs', async () => {
   const { root, base } = makeRepo();
   const cases = [
@@ -4858,12 +4873,13 @@ test('an injected `everyFile` makes the run read every file of its range, as eve
   const inParts = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '2', ...all.home, '--cwd', root], { ...all.deps, everyFile: true });
   assert.equal(inParts.out.split('\n')[0], `Plan of the Codex review of ${short}: ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, 4 parts, 10 changed lines in 4 files.`);
   // It is injected, for the comparison of the configurations, whose cells stay what they measured. Nothing
-  // on the command line is it: the usage names no such flag, and one spelled after it changes nothing.
+  // on the command line is it: the usage names no such flag, and one spelled after it is refused.
   assert.doesNotMatch((await run(['--cwd', root])).err, /every.?file/i);
   for (const flag of ['--every-file', '--everyFile', '--read-every-file']) {
     const nothing = startsNothing(root);
+    // Refused since T1 of odd/tasks/commands-and-doctor.md, where it was taken and dropped: no plan is printed.
     const plan = await run(['--base', 'HEAD~1', '--again', '--plan', flag, ...nothing.home, '--cwd', root], nothing.deps);
-    assert.deepEqual([plan.code, plan.out.split('\n')[0], plan.out.split('\n')[2]], [0, `Plan of the Codex review of ${short}: ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, 1 part, 4 changed lines in 2 files.`, LEFT_OUT_LINE], flag);
+    assert.deepEqual([plan.code, plan.out, plan.err.split('\n')[0]], [2, '', `unknown argument: ${flag}`], flag);
   }
 });
 
@@ -5661,7 +5677,7 @@ test('injected extra configuration is added to the argv, before what is reviewed
   assert.equal(windows.calls[0].command, windowsCommandLine('codex', [...leanArgv(base, 'win32').slice(0, -2), ...asFlags(CODEGRAPH_CONFIG), '--base', base]));
 });
 
-test('no flag reaches what is injected: the usage names none of the seams, and a flag named after one changes nothing', async () => {
+test('no flag reaches what is injected: the usage names none of the seams, and a flag named after one is refused', async () => {
   const { root, base } = makeRepo();
   const usage = await run(['--cwd', root], fakeCodex(''));
   assert.equal(usage.code, 2);
@@ -5677,11 +5693,14 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
     STARTS_WHERE_RECORDS_END,
   ]);
   const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
+  // Since T1 of odd/tasks/commands-and-doctor.md a flag named after a seam is refused before anything starts,
+  // where it was taken and dropped.
   for (const flags of [[], ['--session', 'lean']]) {
     const lean = fakeCodex(reviewed(root, base));
-    assert.equal((await run(['--base', 'HEAD~1', '--again', ...flags, ...seams, '--cwd', root], lean)).code, 0, flags.join(' '));
-    assert.deepEqual(lean.calls[0].args, leanArgv(base), flags.join(' '));
-    assert.equal(readCodexReviewRuns(root).at(-1).effort, REVIEW_EFFORT, flags.join(' '));
+    const refused = await run(['--base', 'HEAD~1', '--again', ...flags, ...seams, '--cwd', root], lean);
+    assert.equal(refused.code, 2, flags.join(' '));
+    assert.match(refused.err, /^unknown argument: --effort\n/, flags.join(' '));
+    assert.deepEqual([lean.calls.length, lean.probes.length], [0, 0], flags.join(' '));
   }
   // The seam that ran the removed session in a seeded copy of the Codex home is gone with it: a caller that
   // still hands it over gets the one session there is, in a home that holds the login and nothing else.
@@ -5697,7 +5716,9 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   assert.equal(readCodexReviewRuns(root).at(-1).session, 'lean');
 });
 
-test('nothing on the command line selects another model or effort: the usage names no flag for either, and one spelled as Codex spells it is not passed on', async () => {
+// Since T1 of odd/tasks/commands-and-doctor.md each try is refused before anything starts, where it was
+// taken and dropped: the run that would have carried it never begins.
+test('nothing on the command line selects another model or effort: the usage names no flag for either, and one spelled as Codex spells it is refused before Codex starts', async () => {
   const { root, base } = makeRepo();
   const usage = await run(['--cwd', root], fakeCodex(''));
   assert.doesNotMatch(usage.err.split('\n').find((line) => line.startsWith('Usage: ')), /model|effort|-m\b|-c\b/);
@@ -5712,14 +5733,12 @@ test('nothing on the command line selects another model or effort: the usage nam
       const fake = fakeCodex(reviewed(root, base));
       const result = await run(['--base', 'HEAD~1', '--again', ...session, ...flags, '--cwd', root], fake);
       const which = [...session, ...flags].join(' ');
-      assert.equal(result.code, 0, `${which}: ${result.err}`);
-      assert.deepEqual(fake.calls[0].args, leanArgv(base), which);
-      assert.deepEqual(modelAndEffort(fake.calls[0].args), { models: [REVIEW_MODEL], efforts: [`model_reasoning_effort="${REVIEW_EFFORT}"`] }, which);
-      assert.equal(fake.calls[0].args.some((token) => /astra|low/.test(token)), false, which);
-      const logged = readCodexReviewRuns(root).at(-1);
-      assert.deepEqual([logged.model, logged.effort], [REVIEW_MODEL, REVIEW_EFFORT], which);
+      assert.equal(result.code, 2, `${which}: ${result.err}`);
+      assert.match(result.err, new RegExp(`^unknown argument: ${flags[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n`), which);
+      assert.deepEqual([fake.calls.length, fake.probes.length], [0, 0], which);
     }
   }
+  assert.equal(readCodexReviewRuns(root).length, 0, 'no run was started, so none was logged');
 });
 
 test('onResult is handed every attempt that launched Codex: its run line, whether it was logged, and the answer as data', async () => {
