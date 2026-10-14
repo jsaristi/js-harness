@@ -219,8 +219,9 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
   fs.mkdirSync(path.dirname(place), { recursive: true });
   if (!gitIn(cwd, 'worktree', 'add', '--quiet', '--detach', place, main).ok) return fail('could not make the worktree of the candidate.');
   try {
-    gitIn(place, 'config', 'user.name', 'js-harness merge-queue');
-    gitIn(place, 'config', 'user.email', 'merge-queue@js-harness.invalid');
+    // No identity is written: a linked worktree has no configuration of its own, so `git config` here wrote the
+    // shared one, and every session's commits were authored "js-harness merge-queue" until it was undone
+    // (verifier, 2026-10-14). The merges take the identity the repository already has.
     const merged = [];
     for (const pr of candidates) {
       // `--no-verify`: the repository's pre-merge-commit hook runs the gate on every merge, which the queue

@@ -89,6 +89,14 @@ test('the merges of the candidate run no hook: the repository\'s pre-merge-commi
   assert.equal(out[0], `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/a).`);
 });
 
+test('a run leaves the configuration of the repository as it found it: the candidate\'s identity is given to each merge, never written (verifier, 2026-10-14)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const before = git(root, 'config', '--local', '--list');
+  const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(git(root, 'config', '--local', '--list'), before);
+});
+
 test('a merge that fails with no conflict says what git said, not that it conflicts', async () => {
   const { root, heads } = makeQueueRepo();
   const { code, out } = await dryRun(root, [pr(1, 'feat/a', 'f'.repeat(40))]);
