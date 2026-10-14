@@ -659,7 +659,7 @@ version).**
   them from its jobs when it is written up.
 
 ## Next
-0. GO from the orchestrator (about 23:35): `bin/lib/codex-reviews.mjs` is free; its own small PR off main like 112; one write per record preferred over a lock if it holds on Linux and Windows; local gate, both reviews, tell it the PR number; after its merge, merge main into 109 once and push. The torn append (Progress, the second run): with the
+0. IN PROGRESS 2026-10-14 01:10: worktree D:/js-harness-worktrees/codex-reviews-append, branch fix/codex-reviews-whole-lines off main 3f59bb2. Reading: each record is already one write (appendJsonLine, appendFileSync); the race is endsUnterminated seeing a tail mid-write and prefixing a newline, so the extra lines are blank (hypothesis, the next Linux run shows it). Change: the test counts non-blank lines and still parses each; commit asked in the gate's line (scratchpad append-commit.log); then Codex review, push, its PR, tell the orchestrator the number. GO from the orchestrator (about 23:35): `bin/lib/codex-reviews.mjs` is free; its own small PR off main like 112; one write per record preferred over a lock if it holds on Linux and Windows; local gate, both reviews, tell it the PR number; after its merge, merge main into 109 once and push. The torn append (Progress, the second run): with the
    orchestrator's word on the file, fix it test first (one write per record, or a lock), local
    gate, reviews, own pull request or on 109 as it says; then one push to 109.
 1. Done: pull request 112 (`fix/check-output-on-exit`, `945e31b`: `check` exits once its output is
