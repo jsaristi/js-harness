@@ -1906,9 +1906,38 @@ const BOARD = {
   pullRequests: { available: false, reason: 'gh pr: gh is not installed or not on PATH' },
 };
 
+/** A board's lines from its first session row: past the header and the context column, which has a test of its own. */
+function rowsOf(lines) {
+  const start = lines[2]?.startsWith('Context  ') ? lines.indexOf('', 2) + 1 : 2;
+  return lines.slice(start);
+}
+
+// The share and the room of every session in one column at the top: the app no longer shows a session's context, and
+// the rows say it one session at a time, far apart.
+test('renderBoard opens with the context of every session in one column, the fullest first, with its room and the pause', () => {
+  const at = (tokens, room, more = {}) => ({ context: { tokens, model: 'model-x', at: before(60) }, contextRoom: room, contextCompaction: { tokens: tokens + room, measured: true }, ...more });
+  const sessions = [
+    seen(A, 'waiting', { title: 'JH 1 · low', ...at(100000, 367000) }),
+    seen(B, 'working', { title: 'JH 2 · full', ...at(450000, -5000), atContextPause: true }),
+    seen(C, 'working', { title: 'JH 3 · paused', ...at(440000, 27000), atContextPause: true, self: true }),
+  ];
+  const lines = lib.renderBoard(boardOf({ root: 'D:\\proj', sessions }), { now: NOW });
+  const top = lines.slice(lines.indexOf('') + 1, lines.indexOf('', lines.indexOf('') + 1));
+  assert.deepEqual(top, [
+    'Context  the share each session holds of its window and the room left before the host compacts it, the fullest first',
+    `  ${String(lib.percentOf(450000, WINDOW)).padStart(3)}%  no room       ${B.slice(0, 8)}  JH 2 · full  past the pause`,
+    `  ${String(lib.percentOf(440000, WINDOW)).padStart(3)}%  room 27k      ${C.slice(0, 8)}  JH 3 · paused  past the pause  (this session)`,
+    `  ${String(lib.percentOf(100000, WINDOW)).padStart(3)}%  room 367k     ${A.slice(0, 8)}  JH 1 · low`,
+  ]);
+});
+
 test('renderBoard prints the sessions, then worktrees, gates and pull requests, and what the board cannot see', () => {
   assert.deepEqual(lib.renderBoard(BOARD, { now: NOW }), [
     'Sessions  D:\\proj  3 changed in the last 12h',
+    '',
+    'Context  the share each session holds of its window and the room left before the host compacts it, the fullest first',
+    '   55%  room not known  aaaaaaaa  Board feature',
+    '  2 sessions whose context was not read: their rows say why',
     '',
     'aaaaaaaa  background  Board feature  last entry 2m ago',
     '  cwd D:\\proj  branch main',
@@ -2081,7 +2110,7 @@ test('renderBoard says the context held, the room left and the last task\'s cost
     session('44444444-d', over, { lastTask: task(3400), lastTaskFits: false }),
   ];
   const lines = lib.renderBoard({ ...BOARD, sessions }, { now: NOW });
-  assert.deepEqual(lines.slice(2, 17), [
+  assert.deepEqual(rowsOf(lines).slice(0, 15), [
     '11111111  waiting  t  last entry 1m ago',
     '  cwd C:\\p  branch main',
     `  context ${share(past)}  room ${k(COMPACTION - past)} before the host compacts (${k(COMPACTION)})  last task 62k, which no longer fits  at the pause: ${PAUSE_SAID}`,
@@ -2100,10 +2129,10 @@ test('renderBoard says the context held, the room left and the last task\'s cost
   ]);
   // The pause given in tokens is said as its share of the window too, and the window can be another.
   const wide = lib.renderBoard({ ...BOARD, contextPause: 300000, contextWindow: 1000000, sessions: [{ ...sessions[0], atContextPause: true }] }, { now: NOW });
-  assert.equal(wide[4], `  context ${k(past)} tokens (${lib.percentOf(past, 1000000)}%)  room ${k(COMPACTION - past)} before the host compacts (${k(COMPACTION)})  last task 62k, which no longer fits  at the pause: 30% of the window (300k)`);
+  assert.equal(rowsOf(wide)[2], `  context ${k(past)} tokens (${lib.percentOf(past, 1000000)}%)  room ${k(COMPACTION - past)} before the host compacts (${k(COMPACTION)})  last task 62k, which no longer fits  at the pause: 30% of the window (300k)`);
   // A board from before these facts were kept (a watch's first look after an update) says what it has.
   const older = lib.renderBoard({ ...BOARD, sessions: [{ id: '55555555-e', title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens: 100000, model: 'model-x', at: before(60) }, skippedLines: 0, work: [], tail: [] }] }, { now: NOW });
-  assert.equal(older[4], '  context 100k tokens (20%)');
+  assert.equal(rowsOf(older)[2], '  context 100k tokens (20%)');
 });
 
 // The room is said in thousands, and rounding must not make the row say what is not so: `room 0k` of a
@@ -2111,7 +2140,8 @@ test('renderBoard says the context held, the room left and the last task\'s cost
 test('renderBoard says a room at, just short of and just past where the host compacts without a 0k that is not zero', () => {
   const session = (room) => ({ id: '66666666-f', title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens: COMPACTION - room, model: 'model-x', at: before(60) }, atContextPause: false, contextCompaction: { tokens: COMPACTION, measured: false, at: null }, contextRoom: room, lastTask: { unavailable: 'its first task has not ended' }, lastTaskFits: null, skippedLines: 0, work: [], tail: [] });
   // The piece of the row between what the session holds and its last task.
-  const said = (room) => lib.renderBoard({ ...BOARD, sessions: [session(room)] }, { now: NOW })[4].split('  ')[2];
+  const boardWith = (room) => lib.renderBoard({ ...BOARD, sessions: [session(room)] }, { now: NOW });
+  const said = (room) => rowsOf(boardWith(room))[2].split('  ')[2];
   const where = `the host compacts (${k(COMPACTION)})`;
   assert.deepEqual([1000, 500, 499, 1, 0, -1, -499, -500, -1000].map(said), [
     `room 1k before ${where}`,
