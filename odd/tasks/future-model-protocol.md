@@ -277,3 +277,10 @@ cached), recorded. Two P2 findings, both real, fixed test-first in the next comm
 compared setups only against the first run, so a minimal-only first run let differing current
 setups pool (now each current-bearing run against the first of them); and `--plan` counted the
 trials of a run recorded on another model as done (now it says the run would be refused).
+
+L10 (2026-10-14, 06:00 by `date`) The fix `91f1dc3` passed its gate; Codex reviewed
+`41cbc41..91f1dc3` (87,575 input tokens, no finding, recorded). Pushed; PR jsaristi/js-harness#130
+opened and told to the lead. T5 stays open for G6's last part (codegraph's version and the
+js-harness commit) and the owed check of the fingerprint hours apart. Context 80 percent by
+`get_usage`: compacting at this task end, since T7 (G2) does not fit. Resume: read this document
+until the end of the Log, then design G2 before writing it.
