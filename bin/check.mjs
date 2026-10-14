@@ -13,7 +13,9 @@ import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
-import { codexReviewsPath } from './lib/codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
@@ -1354,12 +1356,74 @@ function coveredDetail({ codeCommits, base }) {
     : `no code commits since ${base}`;
 }
 
+/** What the Codex review the pushed branch ends on still owes: `null` when it owes nothing, or when nothing
+ * can be proven, else the `detail` and `lines` of a refusal.
+ *
+ * Why. A record covers its commits whatever its review found, so coverage alone let a branch push right
+ * after Codex called its head incorrect (2026-10-14: two P2 findings, then "all covered by a Codex review
+ * record"). The review the branch ends on is the last record that covers its newest code commit; what it
+ * owes is what `codex-review` reads to decide whether the next range is a recheck (`recheckState`). So this
+ * refuses the head whose next review would be a recheck, and the head of a recheck that left findings open,
+ * and nothing else. Coverage is still read from the records alone (./lib/codex-review-runs.mjs says why);
+ * the run log, where the findings are kept, only adds this refusal, and a log that cannot be read proves
+ * nothing owed. Documents committed after that head change nothing here: they are no code commit. */
+function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
+  const newest = codeCommits[0];
+  if (newest === undefined) return null;
+  const last = covers.filter(({ covered }) => covered.has(newest.id)).at(-1);
+  if (last === undefined) return null;
+  const from = last.rec.head;
+  let records;
+  let runs;
+  try {
+    records = readCodexReviews(cwd, { spawn });
+    runs = readCodexReviewRuns(cwd, { spawn });
+  } catch {
+    return null;
+  }
+  const state = recheckState({ from, records, runs });
+  if (state.kind === 'review' || (state.kind === 'refused' && state.open === 0)) return null;
+  const shortOf = (id) => gitOut(spawn, cwd, ['rev-parse', '--short', id]) ?? id.slice(0, 7);
+  const findings = (n) => `${n} finding${n === 1 ? '' : 's'}`;
+  if (state.kind === 'recheck') {
+    const at = shortOf(from);
+    return {
+      detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
+      lines: [...state.findings.map(priorLine), `commit the correction, then recheck it: js-harness codex-review --base ${at}`],
+    };
+  }
+
+  // A recheck that left findings open, which a second recheck may not take up: the recheck is the last
+  // reviewed record that ends at `from` when it is one, else the last one of the findings that ended there.
+  const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
+  const atFrom = reviewed.filter((rec) => rec.head === from).at(-1);
+  const recheck = typeof atFrom?.recheckOf === 'string' ? atFrom : reviewed.filter((rec) => rec.recheckOf === from).at(-1);
+  const id = Array.isArray(recheck.runs) ? recheck.runs.at(-1) : recheck.run;
+  const line = runs.findLast((one) => one?.id === id);
+  const answered = runAnswerFindings(line);
+  const prior = line?.recheck?.findings;
+  // The findings it left open are those its answer marked not fixed or blocking, or did not mark, as
+  // `codex-review` counted them; a line that kept no answer or no count lists none, and still refuses.
+  const read = answered !== null && Number.isInteger(prior) ? classifyRecheck({ findings: answered }, prior) : null;
+  const open = read === null ? [] : [...read.notFixed, ...read.blocking, ...read.unmarked];
+  const at = shortOf(recheck.head);
+  const left = state.open === null ? 'findings open (its counts were not kept)' : `${findings(state.open)} open`;
+  return {
+    detail: `the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(state.of)}`,
+    lines: [
+      ...open.map(priorLine),
+      `a second recheck is refused: record a follow-up task for what is open in the feature document, then record the range after the recheck as a skip: js-harness codex-review --base ${at} --unavailable "second recheck refused: <task>"`,
+    ],
+  };
+}
+
 /** The `--push` row: every commit between the remote's default branch and `head` that changes a file
  * a review reads (not a document, not a path the project marks; a merge by the files somebody wrote
  * in it, so one that only brings two sides together needs none: `reviewCoverage`)
  * must lie in a range some `codex-review` record covers (any
  * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
- * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
+ * nothing for a review to look at, such as a change and its revert; both are listed), and the review the
+ * branch ends on must owe no correction (`correctionOwed`). Plain `check` never
  * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed: what it
  * runs is `checkCodexReviewDebt`, which reads the same records and fails nothing. */
 export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
@@ -1389,6 +1453,9 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     const lines = [...uncoveredNames(uncovered), hint];
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
+
+  const owed = correctionOwed(cwd, state, { spawn });
+  if (owed !== null) return fail(`${owed.detail}${note}`, owed.lines);
 
   // The records that cover a code commit here and are no review of Codex's, each as a line that says which
   // it is and why: an explicit skip, or a range that held nothing to review. The detail counts the commits

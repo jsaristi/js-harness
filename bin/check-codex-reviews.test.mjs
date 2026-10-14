@@ -9,6 +9,8 @@ import { PART_MAX_CHANGED_LINES } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG } from './lib/codex-review-plan.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
+import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
+import { priorLine } from './lib/codex-review-recheck.mjs';
 import { gitDirs } from './lib/project.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
@@ -165,6 +167,67 @@ test('an uncovered code commit fails, naming it and the command that records it'
   assert.ok(lines.includes(`${short(root, second)} feat: three, never reviewed`), lines);
   assert.ok(!lines.includes(`${short(root, first)} feat: two`), lines);
   assert.ok(lines.includes(`js-harness codex-review --base ${short(root, second)}^`), lines);
+});
+
+/** Writes one line of the Codex run log, which a record names by its `id`, told where the git folder is. */
+const run = (root, line) => appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, outcome: 'reviewed', ...line }, { where: whereOf(root) });
+
+const finding = { file: 'bin/b.js', start: 3, end: 5, severity: 'P2', title: 'The guard reads the wrong field', body: 'It reads `a` where it means `b`.', confidence: 0.8 };
+
+/** A feature commit reviewed by a record whose run line found `answer`: the repository, its base and head. */
+function reviewedWith(answer) {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'run-1', answer });
+  record(root, base, head, { run: 'run-1' });
+  return { root, base, head };
+}
+
+test('a head whose last review owes a correction is refused, naming its open findings and the recheck', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  const lines = row.lines.join('\n');
+  assert.ok(lines.includes(priorLine(finding)), lines);
+  assert.ok(lines.includes(`js-harness codex-review --base ${short(root, head)}`), lines);
+});
+
+test('a correction its recheck found fixed passes', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');
+  run(root, { id: 'run-2', answer: { verdict: 'correct', findings: [] }, recheck: { of: head, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /2 code commits since origin.main, all covered by a Codex review record/);
+});
+
+test('a recheck that left a finding not fixed is refused, naming the findings it left open', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, half fixed', 'fix: read the right field, once');
+  const left = { ...finding, title: '[not fixed] 1 The guard reads the wrong field' };
+  run(root, { id: 'run-2', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: head, findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`recheck that ended at ${short(root, fix)} left 1 finding open`));
+  const lines = row.lines.join('\n');
+  assert.ok(lines.includes(priorLine(left)), lines);
+  assert.ok(lines.includes(`js-harness codex-review --base ${short(root, fix)} --unavailable`), lines);
+});
+
+test('a review that found nothing, or a branch with no run log, passes as before', () => {
+  const { root } = reviewedWith({ verdict: 'correct', findings: [] });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
+  const { root: bare, base } = makeRepo();
+  feature(bare);
+  const head = commit(bare, 'b.js', 'two', 'feat: two');
+  record(bare, base, head, { run: 'run-1' });
+  const row = checkCodexReviews(bare, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /1 code commit since origin.main, all covered by a Codex review record/);
 });
 
 test('with several uncovered commits the fix starts from the oldest', () => {
