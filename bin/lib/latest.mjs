@@ -1,6 +1,6 @@
 // Latest-version lookups: one request per tool (a GitHub release or an npm registry entry), each
-// bounded by a 5s timeout and run in parallel, plus the two Claude plugins' latest versions, which
-// are read from their local plugin marketplace files instead (`LOCAL_SOURCES`, never cached).
+// bounded by a 5s timeout and run in parallel, plus typescript-lsp's latest version, which is read from
+// its local plugin marketplace file instead (`LOCAL_SOURCES`, never cached).
 // Every lookup fails open to `null` ("unknown" upstream) instead of throwing: a network outage or
 // a malformed body for one tool never blocks the others, and `doctor` is a report, not a gate.
 import fs from 'node:fs';
@@ -35,8 +35,7 @@ async function fetchNpmLatestVersion(pkgName, fetchImpl) {
 }
 
 /** A Claude plugin has no CLI and no registry: its latest version is read offline from the local
- * marketplace file its own marketplace ships (`claude-plugins-official` for typescript-lsp,
- * `openai-codex` for the Codex plugin). */
+ * marketplace file its own marketplace ships (`claude-plugins-official` for typescript-lsp). */
 function readMarketplacePluginVersion(home, marketplace, pluginName) {
   const filePath = path.join(
     home,
@@ -65,6 +64,7 @@ const SOURCES = {
   engram: ({ fetch: fetchImpl }) => fetchGithubReleaseVersion('Gentleman-Programming', 'engram', fetchImpl),
   codegraph: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@colbymchenry/codegraph', fetchImpl),
   context7: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@upstash/context7-mcp', fetchImpl),
+  codex: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@openai/codex', fetchImpl),
 };
 
 /** Latest-version sources that are a local file, not a request. Each receives the shared deps
@@ -73,7 +73,6 @@ const SOURCES = {
  * must be compared at once, not up to 6h later (T6d, Codex P2). */
 const LOCAL_SOURCES = {
   'typescript-lsp': ({ home }) => readMarketplacePluginVersion(home, 'claude-plugins-official', 'typescript-lsp'),
-  'codex-plugin': ({ home }) => readMarketplacePluginVersion(home, 'openai-codex', 'codex'),
 };
 
 /** True when `row`'s latest version is read from a local file (`LOCAL_SOURCES`), not fetched. */
