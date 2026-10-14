@@ -908,10 +908,12 @@ test('a Codex run needs no token and keeps everything in a codex directory of it
     assert.deepEqual(fs.readdirSync(m.resultsDir), ['codex'], 'nothing is written beside the results of the Claude runs');
     assert.deepEqual(fs.readdirSync(path.join(m.resultsDir, 'codex')), ['screen.json'], 'no temporary file is left');
     const doc = readCodexDoc(m);
+    assert.match(doc.setup?.sha256 ?? '', /^[0-9a-f]{64}$/, 'the setup of the current arm, the fingerprint of its Codex template');
+    assert.ok(Object.keys(doc.setup.items).some((item) => item.startsWith('.codex/')), JSON.stringify(doc.setup.items));
     assert.deepEqual({ ...doc, trials: keysOf(doc.trials) }, {
       format: 1, name: 'screen', createdAt: '2026-10-02T12:00:00.000Z', ...CODEX_RUN,
       args: { codex: m.codex, configs: ['minimal', 'current'], efforts: ['medium', 'high'], repeats: 1, tasks: ['alpha', 'beta'], workRoot: m.workRoot },
-      trials: PLAN,
+      trials: PLAN, setup: doc.setup,
     });
     assert.deepEqual(deps.runTrial.asked, PLAN);
     assert.deepEqual(asked, [{ codex: m.codex, workRoot: m.workRoot }], 'the version is asked once, of this binary, in the work root that was checked');
@@ -1622,4 +1624,53 @@ test('a recorded run is continued only on its own model: another --model, or non
   assert.match(bare.io.err, new RegExp(`--model ${NEW_CLAUDE_MODEL}`));
   assert.deepEqual(bare.deps.runTrial.asked, []);
   assert.deepEqual(fs.readFileSync(resultsFile(m, 'fable')), recorded);
+});
+
+// G6 of `odd/tasks/future-model-protocol.md`: a run with the current arm records the fingerprint of its home template
+// as its setup, and is continued only on the same setup.
+test('a run with the current arm records the fingerprint of its home template as its setup; a run without it records none', async () => {
+  const m = machine();
+  const both = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m), ENV, both.deps), 0, both.io.err);
+  const { setup } = readDoc(m);
+  assert.match(setup.sha256, /^[0-9a-f]{64}$/);
+  assert.ok(Object.keys(setup.items).includes('.claude/CLAUDE.md'), JSON.stringify(setup.items));
+  const bare = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--name': 'bare', '--configs': 'minimal' }), ENV, bare.deps), 0, bare.io.err);
+  assert.equal('setup' in readDoc(m, 'bare'), false);
+  const gained = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--name': 'bare', '--configs': 'minimal,current' }), ENV, gained.deps), 0, gained.io.err);
+  assert.deepEqual(readDoc(m, 'bare').setup, setup, 'a run that gains the current arm records the setup it gains it on');
+});
+
+test('a run is continued on the same setup, and refused on another, naming the part that moved, before any trial and with the file untouched', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m), ENV, first.deps), 0, first.io.err);
+  const same = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--repeats': '2' }), ENV, same.deps), 0, same.io.err);
+  assert.ok(same.deps.runTrial.asked.length > 0, 'the same setup continues');
+
+  write(path.join(m.realHome, '.claude', 'CLAUDE.md'), '# the global rules, edited\n');
+  const before = fs.readFileSync(resultsFile(m));
+  const moved = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--repeats': '3' }), ENV, moved.deps), 1);
+  assert.match(moved.io.err, /another setup/);
+  assert.match(moved.io.err, /setup \.claude\/CLAUDE\.md/);
+  assert.deepEqual(moved.deps.runTrial.asked, []);
+  assert.deepEqual(fs.readFileSync(resultsFile(m)), before);
+  assert.deepEqual(fs.readdirSync(m.workRoot).filter((name) => name.startsWith('js-harness-suite-template-')), [], 'the template is removed');
+});
+
+test('a run recorded with current trials but no setup, before setups were recorded, is not continued: nothing says what it ran on', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m), ENV, first.deps), 0, first.io.err);
+  const { setup, ...old } = readDoc(m);
+  write(resultsFile(m), JSON.stringify(old));
+  const again = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--repeats': '2' }), ENV, again.deps), 1);
+  assert.match(again.io.err, /another setup/);
+  assert.match(again.io.err, /unknown ->/);
+  assert.deepEqual(again.deps.runTrial.asked, []);
 });

@@ -303,11 +303,15 @@ function stackDifferences(a, b) {
     .map((key) => ({ field: `stack.${key}`, a: left[key], b: right[key] }));
 }
 
+const holdsCurrent = (doc) => (doc.trials ?? []).some((entry) => entry.config === 'current');
+/** A setup as the first 12 characters of its sha256, enough to tell two apart in a refusal. */
+const setupOf = (doc) => (typeof doc.setup?.sha256 === 'string' ? `sha256 ${doc.setup.sha256.slice(0, 12)}` : null);
+
 /** Throws a `ReportError` when the runs cannot be read together: an agent, a model, a permission mode or a stack that
  * differs from the first run's (deep equality), or the same trial (task, config, effort, repeat) recorded twice, in
  * two runs or in one. Half the trials on one CLI and half on another measure neither, and a trial counted twice would
  * shrink every spread. Every difference is listed, so the message names all that must be fixed. A run that names
- * no agent is Claude Code's (`AGENTS`). */
+ * no agent is Claude Code's (`AGENTS`). Two runs that both hold current trials must also share their setup. */
 export function checkRuns(runs) {
   const problems = [];
   const [first, ...rest] = runs;
@@ -317,6 +321,10 @@ export function checkRuns(runs) {
       ['model', first.doc.model, run.doc.model],
       ['permission mode', first.doc.permissionMode, run.doc.permissionMode],
       ...stackDifferences(first.doc.stack, run.doc.stack).map(({ field, a, b }) => [field, a, b]),
+      // The setup of the current arm (G6 of `odd/tasks/future-model-protocol.md`), compared only between runs that
+      // both hold current trials: a run of the minimal arm alone has none to compare, and two runs recorded before
+      // setups were have none either, which reads as equal, as an unknown version does.
+      ...(holdsCurrent(first.doc) && holdsCurrent(run.doc) ? [['setup', setupOf(first.doc), setupOf(run.doc)]] : []),
     ];
     for (const [field, a, b] of pairs) {
       if (canonical(a) !== canonical(b)) problems.push(`runs ${first.name} and ${run.name} differ in ${field}: ${shown(a)} vs ${shown(b)}`);

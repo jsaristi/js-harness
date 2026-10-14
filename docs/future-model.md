@@ -37,10 +37,12 @@ The setup is frozen for the whole run, from Step 4's first trial to the last tri
 update of Claude Code, Codex, gentle-ai, engram or codegraph, and no edit of the global
 `CLAUDE.md`, the output style or the settings. The suite builds the `current` arm from the live
 home once per invocation (`evals/home.mjs`), so arms run in one invocation share one setup; but a
-run is resumed by a new invocation after a cap stops it, and the suite records only the versions
-of Claude Code, gentle-ai, engram and its plugin, not codegraph's nor the js-harness commit the
-workspace is initialized from, so any other change between invocations would go unseen (F6 held
-the same rule, `odd/tasks/codex-parity.md`, Constraints; gap G6).
+run is resumed by a new invocation after a cap stops it. The suite records the versions of Claude
+Code, gentle-ai, engram and its plugin, and the fingerprint of the home template as the run's
+`setup` (G6): a run is continued only on the same setup, and the report refuses to read together
+two runs whose current arms ran on different ones. Not recorded yet: codegraph's version and the
+js-harness commit the workspace is initialized from, so for those the freeze is the only guard
+(F6 held the same rule, `odd/tasks/codex-parity.md`, Constraints).
 
 ## Step 1. Preconditions (no spend)
 
@@ -211,6 +213,7 @@ Each one is a task of `odd/tasks/future-model-protocol.md`.
   `--model`.
 - G6. The setup recorded with a run: a fingerprint of the home template beside the versions,
   leaving out the counters and timestamps a day of sessions changes, so a run resumed on another
-  setup, or two runs pooled across setups, are refused, not unseen.
+  setup, or two runs pooled across setups, are refused, not unseen. Built: `setup` in the
+  results file; left: codegraph's version and the js-harness commit of the workspace.
 - G7. A new model noticed: a row that compares the model of the session with the eval model and
   the review model, and says when they differ.

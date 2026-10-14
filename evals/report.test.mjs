@@ -890,3 +890,17 @@ test('--codex-results-dir takes a directory, once, and neither gate: a gate hold
   assert.equal(only.code, 0, only.err);
   assert.deepEqual(JSON.parse(only.out).claude.runs, ['other']);
 });
+
+// G6 of `odd/tasks/future-model-protocol.md`: runs whose current arms ran on different setups are not read together.
+test('runs that both hold current trials and differ in setup are refused; a run without current trials, or two runs recorded before setups, still pool', () => {
+  const setupA = { sha256: 'a'.repeat(64), items: {} };
+  const setupB = { sha256: 'b'.repeat(64), items: {} };
+  const currentOf = (task) => [trial({ task, config: 'current' })];
+  const load = (docs) => loadRuns({ dir: resultsDir(docs) });
+  const message = refusal(() => buildReport(load({ a: docOf('a', bothConfigs(), { setup: setupA }), b: docOf('b', currentOf('gamma'), { setup: setupB }) })));
+  assert.match(message, /runs a and b differ in setup/);
+  assert.ok(message.includes('a'.repeat(12)) && message.includes('b'.repeat(12)), message);
+  assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs(), { setup: setupA }), b: docOf('b', [trial({ task: 'gamma' })]) })), 'b has no current trial');
+  assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs()), b: docOf('b', currentOf('gamma')) })), 'two runs recorded before setups');
+  assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs(), { setup: setupA }), b: docOf('b', currentOf('gamma'), { setup: setupA }) })), 'the same setup');
+});

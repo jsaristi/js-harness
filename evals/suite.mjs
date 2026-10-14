@@ -329,9 +329,24 @@ function runChanges(recorded, current) {
   return pairs.filter(([, , before, now]) => before !== now).map(([kind, field, before, now]) => ({ kind, field, recorded: before, current: now }));
 }
 
+/** The changes of a run's setup, kind `setup`: none when the run recorded no current trial and no setup, since it
+ * gains the setup it is now built on; else one per item of the fingerprint that differs, or one for the whole when
+ * the file has no setup at all. */
+function setupChanges(recorded, fingerprint) {
+  const before = recorded.setup ?? null;
+  if (before === null && !(recorded.trials ?? []).some((entry) => entry.config === 'current')) return [];
+  if (before === null) return [{ kind: 'setup', field: 'setup', recorded: null, current: fingerprint.sha256 }];
+  if (before.sha256 === fingerprint.sha256) return [];
+  const items = [...new Set([...Object.keys(before.items ?? {}), ...Object.keys(fingerprint.items)])].sort();
+  return items
+    .filter((item) => (before.items?.[item] ?? null) !== (fingerprint.items[item] ?? null))
+    .map((item) => ({ kind: 'setup', field: `setup ${item}`, recorded: before.items?.[item] ?? null, current: fingerprint.items[item] ?? null }));
+}
+
 /** For each kind of change: what the file is said to have been recorded with, and what must not change. */
 const CHANGE_KINDS = {
   stack: ['on another stack', 'versions'],
+  setup: ['on another setup', 'the home the current arm is built from'],
   subagentModel: ['with another subagent model', 'the model a config forces on its subagents'],
   delegation: ['with another delegation text', 'the delegation text of a config'],
 };
@@ -343,7 +358,7 @@ const listed = (items) => (items.length < 2 ? items.join('') : `${items.slice(0,
  * tell two apart. */
 function refusalOf(file, changes) {
   const kinds = Object.keys(CHANGE_KINDS).filter((kind) => changes.some((change) => change.kind === kind));
-  const shown = (kind, value) => (value === null ? 'unknown' : kind === 'delegation' ? `sha256 ${String(value).slice(0, 12)}` : value);
+  const shown = (kind, value) => (value === null ? 'unknown' : kind === 'delegation' || kind === 'setup' ? `sha256 ${String(value).slice(0, 12)}` : value);
   return `${file} was recorded ${listed(kinds.map((kind) => CHANGE_KINDS[kind][0]))}, and ${listed(kinds.map((kind) => CHANGE_KINDS[kind][1]))} must not change within a run, so it is not continued:\n`
     + `${changes.map(({ kind, field, recorded, current }) => `  ${field}: ${shown(kind, recorded)} -> ${shown(kind, current)}`).join('\n')}\n`
     + `${kinds.length === 1 && kinds[0] === 'stack' ? 'Restore the recorded versions' : 'Restore what was recorded'}, or start a new run with another --name.\n`;
@@ -801,6 +816,15 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       // real `.codex`, which never holds the login (`codex-home.mjs`).
       const built = (codex ? buildCodexTemplate : buildTemplate)({ realHome, templateDir });
       for (const warning of built.warnings) warn(`home template: ${warning}\n`);
+      // The setup the current arm runs on (G6 of `odd/tasks/future-model-protocol.md`): recorded with the run, and a
+      // run continued only on the same one. A file whose current trials were recorded before setups were has none,
+      // so nothing says what they ran on, and it is not continued either.
+      const changes = setupChanges(doc, built.fingerprint);
+      if (changes.length > 0) {
+        warn(refusalOf(file, changes));
+        return 1;
+      }
+      doc.setup = built.fingerprint;
       seed = (codex ? seedFromCodexTemplate : seedFromTemplate)(templateDir, { runInit });
     }
     let configs;
