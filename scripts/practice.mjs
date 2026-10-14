@@ -320,10 +320,11 @@ function hostLoads(ctx, token) {
     return stream;
   };
   let detail;
+  let session;
   try {
     fs.appendFileSync(agents, `\nThe word of this run is ${word}.\n`);
     const load = call('load', ['-p', 'Reply with the word of this run that your project instructions name, and nothing else.', '--tools', '']);
-    const session = load.init.session_id;
+    session = load.init.session_id;
     fs.writeFileSync(agents, original);
     call('skill', ['-p', 'Invoke the js-harness skill, then quote its line that starts with `js-harness check --push`, and nothing else.', '--resume', session, '--tools', 'Skill', '--allowedTools', 'Skill']);
     call('compact', ['-p', '/compact', '--resume', session]);
@@ -336,9 +337,14 @@ function hostLoads(ctx, token) {
 
   // What the session left: the host's own files in the practice config are removed, the files the harness wrote there
   // are as they were, the project is as it was, and the real home names no practice project.
+  // The proof the sandbox held is this session's own transcript in the practice config, not a new `projects` folder:
+  // one left by an earlier session (the probe of 2026-10-13) already stands there (run 4, 2026-10-14).
+  const projects = path.join(config, 'projects');
+  const transcripts = (fs.existsSync(projects) ? fs.readdirSync(projects) : []).map((dir) => path.join(projects, dir, `${session}.jsonl`)).filter((file) => fs.existsSync(file));
+  assertThat(transcripts.length > 0, `the session ${session} wrote no transcript under ${projects}, so the sandbox may not have held`);
   const added = fs.readdirSync(config).filter((name) => !configBefore.has(name));
-  assertThat(added.includes('projects') && fs.readdirSync(path.join(config, 'projects')).length > 0, `the session wrote no transcript under ${config}, so the sandbox may not have held`);
   for (const name of added) fs.rmSync(path.join(config, name), { recursive: true, force: true });
+  for (const file of transcripts) fs.rmSync(file, { force: true });
   kept.forEach((file, i) => assertThat(contentHash(readIfThere(file)) === keptBefore[i], `${file} changed during the host session`));
   const differs = porcelain(ctx, '--untracked-files=no');
   assertThat(differs === '', `tracked files of the project differ after the host session:\n${differs}`);
@@ -346,7 +352,7 @@ function hostLoads(ctx, token) {
   assertThat(traces.length === 0, `the real home names the practice project after the host session: ${traces.join(', ')}`);
   const doctorAt = fs.statSync(doctorFile, { throwIfNoEntry: false })?.mtimeMs ?? 0;
   assertThat(doctorAt >= startedAt - 1000, `${doctorFile} was not written during the session, so js-harness doctor --hook did not run`);
-  return `${detail}\nthe hooks ran js-harness from ${resolved}; removed from ${config}: ${added.join(', ')}; the real home names no practice project`;
+  return `${detail}\nthe hooks ran js-harness from ${resolved}; the transcript ${transcripts.map((file) => path.relative(config, file)).join(', ')} and ${added.length > 0 ? added.join(', ') : 'nothing new'} removed from ${config}; the real home names no practice project`;
 }
 
 // ---- the steps of the journey ----------------------------------------------------------------------------------------
