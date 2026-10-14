@@ -1446,6 +1446,22 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   return rows.every((row) => row.pass) ? 0 : 1;
 }
 
+/** Ends the process with `code` once what was printed to each of `streams` has been handed to the system,
+ * one stream after the other. On a pipe, which is what a hook and a CI runner give `check`, a write on
+ * POSIX is asynchronous and `process.exit` drops what is not written yet: the first run of the gate on
+ * GitHub's Linux lost the end of a failed suite's output, its failures and its summary. The exit itself
+ * stays immediate and is not left to the natural end of the process, so that a process a sensor left
+ * running, or a handle nobody closed, never keeps a finished gate alive. A stream that cannot be written
+ * any more (its reader is gone) still ends in the exit. `streams` and `exit` are injectable. */
+export function exitWhenWritten(code, { streams = [process.stdout, process.stderr], exit = process.exit } = {}) {
+  const [first, ...rest] = streams;
+  if (!first) {
+    exit(code);
+    return;
+  }
+  first.write('', () => exitWhenWritten(code, { streams: rest, exit }));
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then((code) => process.exit(code));
+  main().then((code) => exitWhenWritten(code));
 }
