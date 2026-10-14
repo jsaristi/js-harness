@@ -96,7 +96,7 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
   JH 8's queue, after the gate log's failing test names of a WSL run and the warning for a `node --test`
   of several files outside a turn. Nothing of it is built yet: this document is its whole state.
 
-## Resume here (JH 8, 2026-10-14 15:15 by `date`, context 87%)
+## Resume here (JH 8, 2026-10-14 15:13 by `date`, context 87%)
 
 The queue is his order of corrections first (`ffe99ebf` line 5906), in the lead's order. Each slice ships in
 one lock turn by the scratchpad script `ship-turn.sh` (commit with its gate, Codex over the slice, then the
