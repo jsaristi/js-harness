@@ -17,6 +17,8 @@ import { readManifest } from './manifest.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
 import { INSTALL_NEWEST } from './version.mjs';
+import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
+import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -610,8 +612,27 @@ function hookCommandsState(deps) {
  * nothing here signs in or out. The remote server check's gap is `down`, in the `claude` cell too (the server is
  * Claude Code's; Codex has none); its fix is there only while a server is down, since it names that server. The hook
  * commands check's gap is `stale` in the `claude` cell: a tried command of a recorded hook entry does not exit 0 with the
- * copy on the path. It runs processes, so it is `interactiveOnly`. */
+ * copy on the path. It runs processes, so it is `interactiveOnly`. The memory rules check's gap is `stale` in the
+ * `claude` cell too: a note of the project's Claude Code memory that holds a rule or a decision, which nothing acts on
+ * there (`memory-rules.mjs`); it runs in the session-start report as well, so a new one is told at the next session.
+ * The session classes check's gap is `mismatch` in the `claude` cell: the project's recent sessions are of both
+ * permission classes and the user setting that lets a message cross between them is not `accept`
+ * (`session-classes.mjs`); its fix is `install --accept-session-messages`. */
 export const checks = [
+  {
+    id: 'memory-rules',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: memoryRulesState,
+    project: () => 'n/a',
+    fix: (_deps, configured) => (configured?.claude === 'stale' ? { claude: [MEMORY_RULES_FIX, ...configured.lines] } : {}),
+  },
+  {
+    id: 'session-classes',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: sessionClassesState,
+    project: () => 'n/a',
+    fix: (_deps, configured) => (configured?.claude === 'mismatch' ? { claude: [SESSION_CLASSES_FIX, ...configured.lines] } : {}),
+  },
   {
     id: 'claude-account',
     installed: () => ({ state: 'n/a', version: null }),
