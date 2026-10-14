@@ -246,3 +246,5 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
   parts (296,816 input tokens, inside the allowance of 570,780): two P2, fixed in one batch. A part kept
   from an earlier run of its range now keeps its `excused` mark for the record (RED, then GREEN); the
   preload's own test quotes the path as a review does (no RED here: this checkout's path has no space).
+- L7 · 2026-10-14, T3 merged: pull request 124, `f819d0b`, at 11:05:42Z by `gh pr view 124`. Its
+  follow-ups F1 to F3 are in `odd/tasks/gate-turn-guards.md`.

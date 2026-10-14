@@ -70,7 +70,10 @@ INFO  sensors  no sensors declared: add test, lint or typecheck scripts to packa
 ### js-harness gate
 
 Runs a heavy command under the machine's gate lock, one at a time with the gates of every
-project, and records the run in the machine's gate log. `gate log` prints the last runs.
+project, and records the run in the machine's gate log. `gate log` prints the last runs. A
+command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
+in has an open pull request and commits a push would take now, any command but that push or a merge
+is refused, with the push command printed.
 
 ```console
 $ js-harness gate --no-wait -- node -e "console.log('a heavy run, one at a time')"
