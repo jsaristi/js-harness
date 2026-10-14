@@ -968,6 +968,95 @@ above: "no, not as designed"). The lead took it whole. What it changed, each wit
   reasons to write to him (none is "a session sent a question"), and the first line of the
   work session's part.
 
+Version 3 of slice (b2), 2026-10-13, written before it is built and before its reader. What the
+night between version 2 and this one showed, each read in a file: the question tool HOLDS the
+session that calls it until he answers (the lead sat seven hours inside one call, its relief
+file, line 560; three sessions idled three hours on another, line 548), and a call the host
+holds, for his approval or for no reason anyone could read, looks like work from outside (this
+session, 2026-10-13 07:00:14 to 14:10:56: one Bash call with no result, and the app listed it as
+running the whole time). The lead's order for the slice names both. So (b2) is three parts,
+each its own commit, the cheapest protection first:
+1. A call that waits is seen. A transcript's facts gain the call that has no result yet: the
+   last tool call of the session's own chain (no side chain) whose id no later result names,
+   with the tool's name and when it was asked. The session's row on the board says it once it
+   is older than the longest a foreground command may run on this host (ten minutes, one
+   constant): "a Bash call has had no result for 7h 10m: the host may be holding it for his
+   approval, or it hangs". A question-tool call is not said there: it is in "Open questions"
+   as on his screen. A call of the agent tool is said as a sub-agent at work while its side
+   chain writes, and as waiting once that is silent too for the same ten minutes. A watch
+   returns once when a session's call crosses the limit, as it does once for the pause. Not
+   read: whether the host is asking for approval; no file of the host that this code reads
+   says it, and the line says "may".
+2. The `question` notice, as version 2 has it (fields `text`, `options`, `waits`; the number
+   is the ordinal of the question's line, read back and printed), with what lets the asker go
+   on: `notify --kind question` answers with the number and one line that says the question
+   is recorded, that the orchestrator shows it to him, and to go on with what does not wait on
+   it. Nothing in it calls the question tool. The board's list joins the record and the calls
+   by the number at the head of the call's text, with four states told apart: recorded and
+   not shown to him yet (with its age, so one that waits for hours is seen); on his screen;
+   closed by him; answered at file:line and not carried yet. `answer --question N` reads the
+   line with `quoteOf` where the transcript can be read and refuses one that is not his,
+   copies what the line holds, and is marked unverified where no transcript can be read;
+   `withdrawn --question N "why"` closes one without his answer. A watch returns for a
+   `question` written to the orchestrator, as for any notice to it, and for one that turns
+   answered and not carried.
+3. The resume's half: after a compaction the hook prints the record's open questions and the
+   unanswered question calls of the session's own transcript, and names `js-harness sessions`
+   for the rest.
+For slice (c), from the same night: the orchestrator calls the question tool only in the reply
+to a message he has just written, never in a turn another session or a watch began, because
+the call holds the orchestrator for as long as he is away; between his messages a question
+lives as its notice, and the reply to his next message shows the oldest one not yet shown.
+
+Version 3 after its reader (one reader, read-only, 43 tool uses over the code and the 57
+transcripts; its verdict: "build with changes"; "the number join in part 2 is wrong as written
+and would mis-file his answers on the first question recorded"). Taken whole. What changes:
+- Part 1, the limit. Of 9,100 Bash calls paired with their results, twelve came back 601 to
+  606 seconds after the call (a command at the host's cap) and a watch looks every 30 s, so a
+  flat ten minutes fires on normal work: the limit is the cap plus a margin, fifteen minutes,
+  one constant. Only Bash, the agent tool and the question tool ever waited over ten minutes.
+- Part 1, "once". A watch's first look is its baseline, so a call that crosses the limit
+  between two watches is never said by either: the watch says it when it crosses and again
+  each time its age doubles. The row says it only while the session's state is working and
+  not after its `closed` notice. A held session's file does not change, so after the board's
+  window it leaves the board: the row is the only place it shows, which is one more reason to
+  wake early.
+- Part 1, sub-agents. A main transcript holds no side-chain entry (none of the 57 files; the
+  sub-agents write under `<session>/subagents/`), so "no side chain" filters nothing and the
+  silence of a sub-agent cannot come from the transcript's facts. It exists already: a
+  foreground call of the agent tool is open work with its file's last write. That line gets
+  the same limit, and the new fact is only the call's tool name and the wake.
+- Part 2, the join. The number is no unique key: the record holds no question yet, so its
+  ordinals start at 1, and the transcripts hold calls numbered by hand from "Pregunta 1" to
+  "Pregunta 25". A call joins question N only when it was asked after the notice was written
+  and its text starts with the exact prefix `notify` printed for N; `answer --question N`
+  refuses a line whose call fails either test, since `quoteOf` proves the line is his and not
+  what it answers. The prefix's word is data, as the tools' names are.
+- Part 2, the number. The append has no lock, so a count taken after it can be another
+  writer's: the notice carries an id of its own and is found by it, and the ordinal counts
+  the lines by a test that never changes (the schema and the kind, nothing a later version
+  may read otherwise).
+- Part 2, the reply of `notify`. "The orchestrator shows it" is false with no orchestrator
+  open or one that watches through an older copy, which skips a kind it does not know and
+  wakes for nothing. The reply follows the address `notify` already resolves: one
+  orchestrator, and it says to ring that title with the number; none or several, and it says
+  to ask him itself with the tool, the text headed by the prefix.
+- Part 2, a question the asker put to him itself (the orchestrator's, the common case): the
+  answer comes back into the asker's own turn, so it is closed by construction when the
+  answered call is in the asker's transcript, and no watch returns for it. "Answered and not
+  carried" is only for a question one session recorded and another asked. For that the facts
+  must keep the line of each call and of its result, and the list the answered calls and the
+  file that holds the answer: slice (b1) keeps neither.
+- Part 2, the fields arrive on standard input as UTF-8, as an opening does, not through the
+  shell; the copy of a typed answer is capped, since the append relies on one small write.
+  The state `unanswered` of slice (b1) stays; of several calls for one number, the newest wins.
+- Part 3 repeated version 2's failure: printing the unanswered calls only, an orchestrator
+  compacted after his tap would see N open and no call, and ask again. The resume joins the
+  record with its own numbered calls in every state; a work session's prints its own
+  questions, with the ones answered since. Known and not solved here: a session the host
+  continued into a new file has its calls in the old one, which the resume does not read; an
+  answered call whose transcript leaves the board's window reads as not shown yet.
+
 Slices, version 2, the smallest that loses nothing first: (a) piece 3, built; (b1) the number
 in the tool's text and "Open questions" on the board, computed from the question-tool calls
 of the window's transcripts, counted once by id, with the three states and the coverage line:
@@ -2165,6 +2254,120 @@ session needs beside it to go on; the summary of a compaction is not the record.
   `STATE-before-compaction.md`: this section and "Next step" are the record, that file is
   what was true at the minute it was written.
 
+- 2026-10-13, written at 17:51: slice (b2) of T17 on branch `feat/question-notice`, cut from `ad7b37b`.
+  Its design is point 15, "Version 3 of slice (b2)" (`89836c6`) with what its reader changed
+  (`921bc03`). Part 1 is commit `6ab6958`: the fact `pendingCall`, the row line after
+  `PENDING_CALL_LIMIT_MS` and the watch line when the age crosses the limit and each time it
+  doubles; written by a bounded writer sub-agent from the design and read by this session;
+  three tests failed first, then 530 passed; one older command test changed for a true reason
+  (a watch that waits 24 days says the call its fixture still waits on). Gate PASS; gentle-ai:
+  not due; Codex on `921bc03..6ab6958`: 194,050 input tokens, "incorrect (0.99)", two
+  findings, P2: a pending agent call was matched to its sub-agent by timestamp, which two
+  calls of one entry share; and a look that could not read a transcript swallowed the
+  crossing, since the kept facts were measured at the later look. Fixed in the commit that
+  carries this entry, test first (both failed, then 533 passed): `pendingCall` carries the
+  call id and the sub-agent is found by it; a session kept across a failed read has `readAt`
+  and its earlier age is measured there. Parts 2 and 3 are not started.
+- 2026-10-13, written at 18:24: the fix above is commit `567f81f` (gate PASS; gentle-ai: not due;
+  Codex on `6ab6958..567f81f`: 181,048 input tokens, "correct (0.93)", no finding). The host
+  compacted this session by itself between the two commits; nothing was lost, the fix was in the
+  tree and its state in this document. PART 2 is built as two commits. The first is the commit
+  that carries this entry: the record and `notify`. As built, where the design left it open:
+  - the fields of a question are JSON on standard input, `{ text, options: [{ label,
+    description }], waits }`, each one line and capped (`QUESTION_TEXT_MAX` and its neighbours in
+    `bin/lib/channel.mjs`); an empty list of options is a question with nothing to tap;
+  - the number is the ordinal among the lines with this schema and the kind `question`, valid or
+    not, so a broken question line still takes its number; `readNotices` gives `questions`, and
+    `recordedQuestions` says what closed each;
+  - `notify` prints the number, `prefix: "Pregunta N: "` and one line by who can show it: one
+    orchestrator, ring it and go on; the orchestrator itself (known by its own title, since
+    `sessions --address` does not count the session that asks) and a session with none to ring
+    are told to call the question tool only in the reply to a message he has just written;
+  - `answer --question N` is refused (exit 1, nothing written) for a line that is not his, a
+    typed line sent before the question was recorded, a call asked before it, or a call none of
+    whose texts starts with the prefix; what the line holds is copied (`answerCopyOf`, capped);
+  - an answer whose transcript cannot be read is recorded with `verified: false` and said on
+    standard error. Added after reading the writer's code, and not in the design: such a claim
+    shuts out a second claim and a withdrawal, and gives way to an answer read at its line, or
+    an unverifiable sentence would close his question for ever;
+  - `transcriptNamed` (`bin/lib/sessions.mjs`) is the one rule for which file is a transcript of
+    the project, moved out of `sessions --quote`; `quoteOf` gives `askedAt`, when the answered
+    call was asked.
+  Three bounded writers (Haiku, high effort) wrote it on disjoint files from briefs this session
+  wrote, and this session read every line of code: two changes after reading (the claim that
+  gives way; the orchestrator known by its title, which the writer had tied to an address the
+  command never gives it). Test first: 48 tests failed without the code (44 new, 4 that compare a
+  whole record and gained `questions`), then 740 passed and 1 failed (the usage had no line for
+  `--kind question`: added), then the two files again, 173 passed. The second commit is the
+  board's half (`openQuestionsOf` with the record, the rows `Pregunta N`, the watch for a
+  question answered and not carried): written and read, set aside until this one lands.
+- 2026-10-13, written at 18:59: the first commit of part 2 is `fc7fee2` (gate PASS; gentle-ai:
+  not due, medium, 1,254 changed lines; Codex on `567f81f..fc7fee2` in five parts: 999,502 input
+  tokens against a plan of 435,000 and a cap by the rate of 1,580,040, all five "correct", 0.85
+  to 0.98, no finding). The second is the commit that carries this entry, the board's half. As
+  built: `parseTranscript` keeps the line of each entry in a weak map and `questionsOf` gives
+  `line` and `answeredLine`; the board keeps the record's questions as plain data
+  (`questionRecordOf`, the key `questions.record`); `openQuestionsOf` with it gives `recorded`,
+  one item a question no notice closed, joined by `callOfNumber` (asked after the notice, the
+  exact prefix, the newest wins) with the states `not-shown`, `pending`, `closed`, `unanswered`
+  and `answered-not-carried` (with the session and the line of the answer); an answer in the
+  asker's own transcript leaves the question out; a joined call is not listed again; the rows
+  `Pregunta N` come first under "Open questions"; a watch says once a question that turns
+  answered and not carried, or closed by him. Test first: 8 failed without the code, then 748
+  passed and 1 failed for a defect of slice (b1) that this test found: the calls with no time
+  were listed first, not last, since the sort compared by the locale's rules, which put `~`
+  before the digits; they are compared as text now, and the two files passed again, 477. The
+  gate was held fifteen minutes by another session's turn before the first run.
+  PART 3 is written on copies outside the tree by a fourth bounded writer and read by this
+  session: `recordQuestionsIn` and the block of questions the resume prints.
+- 2026-10-13, written at 19:49: the board's half is commit `c9b1bb5` (gate PASS; gentle-ai: not
+  due; Codex on `fc7fee2..c9b1bb5`: 254,242 input tokens, "incorrect (0.99)", two findings, P2,
+  both true). A call that asks a recorded question and another one lost the other from both
+  lists, since the joined call left the list of calls whole: only the texts with the record's
+  prefix leave it now. And a look that could not read the channel's record left a baseline with
+  no recorded questions, so the look that read it again compared with nothing and an answer
+  across the failed read was never said: such a look now keeps the record and its questions as
+  the look before had them (`questionsKept`), says nothing of them, and reads the calls with
+  that record. Fixed in the commit that carries this entry, test first (2 failed, then 545
+  passed). The gate was held twenty-five minutes by another session before that run.
+  HIS WORDS on questions, twice this evening, each read by this session with `sessions --quote`
+  in the lead's transcript `65318fd5`: line 12735, "siempre hazme las preguntas como te pedi que
+  me la dieras SIEMPRE tienes que cementarlo en el harnes"; line 13110, "Te dije que todas las
+  preguntas de todas las sesiones me las haces aca y eso debe quedar cementado osea te pasa la
+  pregunta aca y yo te la respondo aqui y le pasas la informacion. SIEMPRE debe ser asi ya
+  habiamos quedado en eso." What he met: the line `notify` prints since `fc7fee2` ("only in
+  the reply to a message he has just written") was read by the lead as "only when the turn
+  began with his message"; it held a question while he was there and wrote another out as text
+  with its options. THE LEAD'S READING, not his words: (1) every question of every session goes
+  to the orchestrator, which asks it in its own chat with the tool and carries the answer back
+  with its line; (2) he is there when he wrote a short while ago, and then the tool is called
+  at once; (3) only a longer silence earns one line that N questions wait, and the options are
+  never written out as text. WHAT THIS SESSION BUILDS FROM IT, a commit of its own after part
+  3: a transcript's facts gain when he last wrote in it (`personAt`); one function words the
+  rule from that and the clock (`askingRule`: "he wrote here 4m ago: put it to him now", or
+  "he last wrote here 2h ago: … call it in the reply to his next message; until then one line
+  says that N questions wait"); `notify`, the resume and the board's "Open questions" print
+  it. The limit is one constant, fifteen minutes, the lead's guess until he names a figure.
+  Its brief is `brief-ask-rule.md` in this session's scratchpad. For slice (c): the texts say
+  the three parts; and a check of a reply (a Stop hook that blocks a question written out with
+  options and no tool call) is measured over the transcripts before it is proposed: installing
+  a hook that blocks is his to decide.
+- 2026-10-13, written at 21:16: the fix of the board's half is `30206e3` (gate PASS after fifty
+  minutes in the line; gentle-ai: not due; Codex on `c9b1bb5..30206e3`: 135,286 input tokens,
+  "correct (0.92)", no finding). PART 3 AND THE ASKING RULE are the commit that carries this
+  entry, one commit and not two: the rule rewrites lines part 3 adds, and a commit cost forty
+  minutes at the gate this evening. As built: the resume's block of questions
+  (`questionLinesOf` in `bin/resume.mjs`, `recordQuestionsIn` in the library), read once from
+  the transcript's facts; `personAt` is the NEWEST entry of his by its time, not the last in the
+  file, since a resumed session writes older entries again after newer ones; `askingRule` gives
+  the sentence, and `notify`, the resume and the board (the line `to ask:` under "Open
+  questions", from the board's own session) print it. Two bounded writers wrote them on copies
+  outside the tree while the gate was held, and this session read the code. Test first: 18
+  tests failed without the code; with it 724 passed and 10 failed, each an expectation and none
+  a defect of the code (a capital letter in three; a queued message of his that counts for
+  `personAt`; five older tests of the resume that gained the new step; one that had no time for
+  his tapped answer); corrected, the four files passed, 684.
+
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
 `feat/session-compaction`, cut from `main` at `78bbc80`, with documents only until the build
@@ -2576,7 +2779,115 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 14:13, THE NEWEST OF ALL (read this first after a compaction).
+      STATE AT 2026-10-13 22:50, THE NEWEST OF ALL. The P2 left open below is fixed in the
+      commit that carries this text, test first (1 failed, then 77 passed): the command names
+      `--transcript outside-the-project-folder`, which no transcript resolves to, so `notify`
+      records the answer unverified. NEXT: the merge of `main`, `check --push`, the push, the
+      pull request, its number to the lead; then one note a capability for the SPEC's draft,
+      sent to the lead (its order, its line 14050); then slice (c).
+      STATE AT 2026-10-13 22:26 (the state before the one above). The fix of the two findings is `55fd886`
+      (gate PASS). Codex on `02343e6..55fd886`: 194,633 input tokens, "incorrect (0.91)", ONE
+      P2, OPEN: for a transcript outside the project's folder the resume's answered line gives
+      `notify … --transcript <session id>`, and that id can resolve to a transcript of the
+      project's own folder, so the answer would be checked against another file. To decide
+      and fix BEFORE the merge of `main`: the line must name nothing `transcriptNamed` can
+      resolve to a local transcript (say it cannot be recorded from here and why, or a name
+      that resolves to none and so is recorded unverified). Then the merge, the push, the
+      pull request.
+      STATE AT 2026-10-13 22:14 (the state before the one above). Part 3 and the asking rule are `02343e6`
+      (Codex: 718,613 input tokens, two P2 on the resume's block, both true); their fix,
+      test first (4 failed, then 356 passed), is the commit that carries this text, or is in
+      the tree (`git status`). NEXT: the merge of `main` (`turn-merge-push-check.sh` in the
+      scratchpad: merge, then `check --push`), the push, the pull request with no attribution
+      line, its number to the lead; then slice (c) as the paragraph below says.
+      STATE AT 2026-10-13 21:12 (the state before the one above; then the end of the file
+      `STATE-before-compaction.md` in this session's scratchpad, which has every step).
+      On `feat/question-notice`, committed and reviewed: `6ab6958`, `567f81f` (part 1 and its
+      fix), `fc7fee2` (the record and `notify`), `c9b1bb5` and `30206e3` (the board's half and
+      the fix of Codex's two findings on it; Codex on `c9b1bb5..30206e3`: 135,286 input
+      tokens, "correct (0.92)"). IN THE TREE, NOT COMMITTED: part 3 (the resume's block of
+      questions, `recordQuestionsIn`) together with the asking rule (`personAt`,
+      `PERSON_PRESENT_MS`, `askingRule`, printed by `notify`, the resume and the board), six
+      files: `bin/lib/sessions.mjs`, `bin/notify.mjs`, `bin/resume.mjs` and their tests. They
+      go in ONE commit, message `commit-msg-p3ask.txt` in the scratchpad. Its red-green turn
+      (log `jh5-p3ask`): 18 tests failed without the code; with it 724 passed and 10 failed,
+      all read as wrong or outdated expectations of tests (a capital letter in three of
+      `notify`; `personAt` of a queued message in one; five older tests of the resume that
+      lack the new step; one of the orchestrator's list not read yet). A bounded writer
+      corrects those expectations and reports any that is a defect of the code. THEN: the
+      three test files again through the gate, a Progress entry, the commit turn
+      (`queue-commit.sh`), its hash to the lead (it waits for it: its failures 1 and 2 of the
+      evening land there); one merge of `main`, `check --push`, the push, the pull request
+      with no attribution line, its number to the lead. THEN SLICE (c), with what the lead
+      sent for it this evening: the three parts of the rule on questions (Progress, 19:49);
+      what may run beside a gate (a `sessions --quote` and one test file of under half a
+      minute; not a whole run, a measure, a board read or a reviewer); the merge check worded
+      as "the gate proved the tree the merge will produce"; and the measure of a reply check
+      over the transcripts before any blocking hook is proposed. The doctor row of the Codex
+      CLI must read the switch of JH 9's design (his approvals are at lines 12777, 12795,
+      12814 and 12828 of the lead's transcript: read them with `--quote` first), and the lead
+      is told when that slice is planned.
+      STATE AT 2026-10-13 18:59 (the state before the one above). Part 2 is two commits:
+      `fc7fee2` (the record and `notify`, reviewed) and the commit that carries this text (the
+      board's half; in the tree if it did not land: `git status` says). PART 3, the resume's
+      half, is written and read and waits as copies in this session's scratchpad (folder
+      `p3/bin`: `resume.mjs`, `resume.test.mjs`, `lib/sessions.mjs`, `lib/sessions.test.mjs`);
+      a test is still owed there for a transcript the hook could not read. If the folder is
+      gone, write it again from the Progress entries of 18:24 and 18:59 and the paragraph
+      below. After it: one merge of `main`, `check --push`, the push, the pull request.
+      STATE AT 2026-10-13 18:24 (the state before the one above). Part 1 and its fix are
+      `6ab6958` and `567f81f`. PART 2 is two commits: the record and `notify` go in the commit
+      that carries this text (or are in the tree if it did not land: `git status` says); the
+      board's half is written and read and waits as files outside the tree (this session's
+      scratchpad, folder `p2-w3`; if that folder is gone, write it again from point 15 and
+      the Progress entry of 18:24: `questionRecordOf`, `openQuestionsOf` with `record`, the
+      rows `Pregunta N` under "Open questions", two more lines of `questionChanges`, the line
+      of each call and of its answer kept by `parseTranscript` in a weak map). THEN PART 3,
+      the resume's half: it joins the record's questions with the session's own numbered
+      calls in every state, the answered ones included, so an orchestrator compacted after
+      his tap does not ask again. Then one merge of `main`, `check --push`, the push and the
+      pull request. The lead's order after (b2) is two paragraphs below.
+      STATE AFTER THE COMPACTION OF 2026-10-13 (the state before the one above). Part 1
+      of (b2) is commit `6ab6958`; Codex found two defects in it and their fix, test first,
+      goes in the commit that carries this text, or is still in the tree if that commit did
+      not land (`git status` says). The Progress entry of 2026-10-13 written at 17:51 holds
+      the figures. NEXT: Codex on the fix commit, the lead told of both commits, then PART 2
+      and PART 3 as the paragraph below says, then one merge of `main`, the push and the
+      pull request.
+      STATE AT THE CONTEXT PAUSE, 2026-10-13 17:27 (the state before the one above).
+      The design of (b2) is committed with what
+      its reader changed (`89836c6`, `921bc03`: point 15, "Version 3 of slice (b2)" and
+      "Version 3 after its reader"). PART 1 IS BUILT and goes in the commit that carries this
+      text, or is still in the tree if that commit did not land (`git status` says): a
+      transcript's facts hold `pendingCall`, the session's row says a call with no result
+      after fifteen minutes (`PENDING_CALL_LIMIT_MS`), and a watch returns when it crosses
+      and each time its age doubles. A bounded writer sub-agent wrote it from the design and
+      this session read its code; its three tests failed first and then 530 passed, with one
+      older command test changed for a true reason (a watch that waits 24 days now says the
+      call its fixture's session still waits on). AFTER THAT COMMIT: its reviews (gentle-ai,
+      Codex), then PART 2 (the `question` notice: read "Version 3 after its reader", the six
+      bullets that start "Part 2", before writing a line; it needs the facts to keep the line
+      of each call and of its result, and the list to keep answered calls), then PART 3 (the
+      resume's half), each its own commit, then one merge of `main`, the push and the pull
+      request. The lead's order after (b2) is in the paragraph below.
+      STATE AT 2026-10-13 16:59 (the state before the one above).
+      Pull request 101 (the exact undo of `uninstall`) is on `main` (`ad7b37b`, read with
+      `gh`). The lead gave the go by his word (its line 11381, read with `--quote`: the plan
+      is raised and its week is at 0). THE WORK IN HAND is slice (b2) of T17 on branch
+      `feat/question-notice`, cut from `ad7b37b`: its design is point 15, "Version 3 of slice
+      (b2)", three parts, each its own commit, test first: (1) a call with no result shows
+      on the board and wakes a watch; (2) the `question` notice with its number, the join
+      with the calls, `answer --question`, `withdrawn`; (3) the resume's half. A reader
+      attacks that design before part 2 is built; part 1 is small and may be built while it
+      reads. THE LEAD'S ORDER after (b2): (c) the texts, with the terms an installed project
+      never defines and the sentence that the question tool is called only in the reply to a
+      message he has just written; the row of the Codex CLI in place of the plugin's in
+      `doctor` (he ordered the plugin removed: the lead's relief file, line 500); the pause's
+      window (the default of 500,000) as a task; what a session pays for the pause entry.
+      The lead is told before `bin/update.mjs`, `bin/check.mjs` or `package.json` is taken
+      (JH 8 works there). Sub-agents are allowed again where a design needs a reader. The
+      paragraph below is what came before.
+      STATE AT 2026-10-13 14:13 (the state before the one above).
       Slice (b1) is on `main` (pull request 95). The exact undo of `uninstall` (the finding
       on `pointersIn` and the folder `~/.js-harness/remote/`) is BUILT on
       `fix/uninstall-pointers`, reviewed, with `main` merged in; its pull request is the

@@ -2814,6 +2814,39 @@ antivirus spends on each (his).
 
 ## Resume here
 
+**BEFORE EVERYTHING, by his answer typed at 2026-10-14T05:41Z (the orchestrator's transcript `ffe99ebf-72fb-48da-a79b-e7db21a20b3f`, line 1350, read by me): "Se instala ahora y ademas tiene que quedar funcionando y JH8 tiene que diseñarlo ya y debe quedar funcionando ya". He installs WSL2 (Ubuntu 24.04) now, with a reboot that restarts every session. The first task after it: design the gate running in WSL2 and get it working: node 22 from the nodejs.org tarball in his Linux home, no sudo; the code run from a mirror of the worktree on the Linux filesystem, synced before each run (not over /mnt/d); the memory cap in C:\Users\Oficina\.wslconfig is HIS file, its text goes to the orchestrator; anything installed or changed outside his Linux home goes to the orchestrator first; WSL measured against Windows on the same commit; Windows kept by one local whole run per merged batch. The orchestrator says when his Ubuntu is ready.**
+
+**THEN, by his answer (written at 00:37 on 2026-10-14): design a faster whole check of the
+same quality.** His request: the orchestrator's transcript `f6584277-0ceb-482c-a3d3-a7168c0f74ae`,
+line 1090; "Sí, primero que todo (Recomendada)", line 1111; "Seguir y darle prioridad
+(Recomendada)", line 1203 (the other sessions go on; this design comes first; when building
+starts, the orchestrator keeps the others off the gate). "Sol" is `gpt-6.1-sol`. Before T19, the
+Codex guard, T20 and the spec notes (those follow at the design's end).
+- *Measure, the orchestrator's:* last 3 hours at 00:10, 28 turns, 14 whole checks (164 minutes
+  held, 115 waited), the lock never free, 235 minutes of waiting in all. The same suite takes
+  145 s on GitHub's Linux (run 38511223058) and 11 to 12 minutes here. In that run's log 4,197
+  top-level tests sum to 139 s against a wall of 145 (measure whether the files run in
+  parallel there before believing it); 23 tests, 0.5%, take 55 s, most waiting out real
+  timeouts of 3 s or more.
+- *Ideas to design, each with its cost, what it can miss, and the safety net:* (1) at each
+  commit only the changed files' tests and their importers; (2) the whole suite once per pull
+  request on GitHub (JH 10's pull request 109; minutes against his 2,000); (3) merges in
+  batches of pull requests with disjoint files, one whole check on `main` after; (4) a slow
+  tier out of the commit, on the pull request and nightly; (5) the plan reviewed by Opus and
+  `gpt-6.1-sol` before writing, and one review by both over the pull request, instead of Codex
+  per slice; (6) Windows kept: one whole local run a day or per merged batch; (7) an
+  affected-test cache keyed by each test file's import closure, with declared data files;
+  (8) fixture repositories built once and copied; (9) the slow tests made fast (an injected
+  clock, shorter timeouts) or moved to the slow tier; (10) a `merge-ready <pr>` command; (11)
+  his machine, his decision, measured first: the gate in WSL2, antivirus exclusions. Safety
+  net explicit: a whole suite before any merge, a Windows run per merged batch. Say what
+  installed projects get by default.
+- *Process:* his earlier words searched; two independent readers (Opus, effort high) attack
+  it; the version after them to the orchestrator with what each reader changed; the questions
+  that can be undone apart (the orchestrator decides them) from his (spend outside the plan,
+  irreversible, his machine). Tell the orchestrator before touching JH 10's workflow or JH 5's
+  skill.
+
 **At 21:14 on 2026-10-13, at 84% of the context, the session "JH 8" cuts at a task's end.
 This paragraph is the newest; where the state below it says "in flight", it is done.**
 
