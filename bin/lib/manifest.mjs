@@ -25,7 +25,7 @@ js-harness commands:
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run.
 - \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone 60 minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
-- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), and its exit code is the command's.
+- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after 30 minutes (\`--max <minutes>\`), and its exit code is the command's.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
@@ -47,6 +47,8 @@ description: Use when asked to orchestrate, supervise or watch the other session
 # Several sessions, one project
 
 Two kinds of session. A work session owns one feature: its worktree, its feature document (\`odd/tasks/<feature>.md\`) and its own prompts. The orchestrator is a dedicated session that owns no feature. Follow the part that is yours.
+
+A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step. After a compaction, the resume names each one still open.
 
 A change does not exist until it is in a file. Where each thing lives:
 - the project's plan (the order of the features, the decisions): the roadmap on the default branch, changed through small documentation pull requests;
@@ -108,6 +110,7 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
 - Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too.
+- Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, \`js-harness gate\` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (\`--cwd <worktree>\`).
 - While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a reviewer wait for the gate to end.
 - Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
 - When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
