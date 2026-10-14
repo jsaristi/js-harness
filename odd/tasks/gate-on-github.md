@@ -309,6 +309,70 @@ commits with code, and only an exchange he has not been asked about, or a Window
 (paid, or free the day the repository is public, which he once said it will be) takes those
 off the machine.
 
+### The exchange, R1 (T7, first version, before its readers)
+
+**What is exchanged.** Today a pull request is read only when its head contains `main`, so
+each time `main` moves every open branch merges it and that merge runs a whole local gate
+(`.githooks/pre-merge-commit`, since `97703f9`). This branch paid one tonight: `82aa048`,
+asked about 21:18, committed after its turn, the whole suite. The exchange: a branch no longer
+merges `main` to be read; the pull request is merged when a run on GitHub tested its head
+merged with the `main` it will land on, and was green.
+
+**What it frees.** 22 of 65 whole gates since the hook (34 percent), 14 of 47 in the last 24
+hours; each 9 minutes on a quiet machine and 13 to 19 tonight (the orchestrator's measure). A
+merge with a conflict still merges and gates on the machine, as today.
+
+**What it gives up.** The combination of the branch and the new `main` is proven on Linux
+alone: the 132 tests Linux skips and Windows itself are no longer run on it. Each side was
+proven on Windows by itself. How often a local merge gate is red where both parents were green
+is not known: a red gate leaves no commit and the gate log does not tell a merge gate from a
+commit gate. Measuring it needs one field in JH 8's gate log; until then the loss is named, not
+sized.
+
+**How the run meets the new `main`** (the readers' finding: a re-run tests the old merge).
+- *A, recommended:* the orchestrator closes and reopens the pull request just before its merge,
+  when `main` moved since the last run. A reopen is an event of the workflow, and GitHub tests
+  the head merged with the base as it is then. No commit, so no local gate and no Codex record.
+  Not proven: that a reopen recomputes the merge against the new base; the first test of it is
+  one reopen of a pull request, one run, about 4 minutes.
+- *B:* the branch updated on GitHub's side. Its merge commit is gated by no hook, and a session
+  with local commits must then merge or rebase anyway: it does not free the gate it was for.
+- Then the merge itself: `gh pr merge --match-head-commit <sha>`, and only while `main` is still
+  the one the green run merged with; if `main` moved in between, the run is asked again.
+
+**The month, in minutes, with R1** (a run is 4 billed minutes; A' is "The figure after its
+readers"). R1 adds at most one run a pull request, the one before its merge, when `main`
+moved: at most one for each pull request with code, about 144 a month at the mean (1,336
+minutes with A', inside 2,000) and about 540 at the pace of the last 24 hours (4,620 minutes:
+the quota ends about day 13). The run that matters is the one
+before the merge. If only that one ran (no run at each push), a month at the mean is about 576
+minutes and one like the last 24 hours about 2,160 (the quota ends about day 28).
+
+**The day the quota ends.** No run starts on GitHub until the month turns, in any private
+repository of his. Every pull request is then in the fourth state ("no run that should
+exist"), and the orchestrator goes back to today's rule for it: the branch merges `main` and
+its local gate runs. Nothing else changes on the machine. A session can see that day coming
+only by a count of its own (next).
+
+**A count of minutes a session can read.** The billing page needs the `user` scope, which is
+not on the token. What can be read with `repo`: every run of the month in his private
+repositories that have a workflow (four, by the orchestrator), and each job's start and end;
+each job rounded up to the minute and summed is the month's use, an estimate GitHub's own
+figure may differ from. A command that prints it is the harness's way; a cap of our own
+(the orchestrator stops relying on GitHub at, say, 1,800) reads that count. Neither is built.
+
+**A shorter run.** 204 s is 4 billed minutes; 180 s or less is 3, a third more runs a month.
+The suite took 183.7 s of it, one file at a time on two processors. What would bring it under:
+two files at once on the runner (the runner's `node --test` runs one, since it keeps a
+processor free), which only a measure on GitHub can size; and JH 8's road 1, fewer process
+starts in the four longest files. Whether `node --test` can stop at the first failure was not
+read; a red run costs as much as a green one until it is.
+
+**For him, one question:** whether a pull request may be merged on a green run on GitHub
+against the `main` it lands on, without the branch merging `main` and running the whole local
+gate; giving up the Windows proof of that combination, freeing about a third of the whole
+gates, at about 144 more runs a month (540 at the pace of the last 24 hours).
+
 ## What the readers changed
 Three readers that did not write the design, all read-only, on 2026-10-13: one searched his
 earlier words in the 59 transcripts of the project, one looked for what the design left out,
