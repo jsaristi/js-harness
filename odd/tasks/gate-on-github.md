@@ -647,8 +647,22 @@ version).**
   read). The child test passes on this machine either way, since its pipes are written at once:
   its proof is the next run on Linux. The commit went to the gate's line.
 
+- 2026-10-13 · **Second run on GitHub, after pull request 112 and a merge of `main` (`01ce88e`,
+  pushed 23:24:19): red, and readable.** Run `38511223058`: the output reaches its summary, so
+  the exit fix works on Linux. 4,330 tests, 4,195 pass, 1 fail, 134 skipped (132 in the trial),
+  suite 145.0 s. The one failure: `bin/lib/codex-reviews.test.mjs:130`, "records appended in the
+  same moment by several processes each stay one whole line, in the order each process wrote
+  them", at `:164`: 425 lines where 401 were expected, so four writers of 100 appends each tore
+  lines on Linux. A real defect of `appendCodexReview` (`bin/lib/codex-reviews.mjs`) on Linux,
+  not of the test: its own comment says a tear needs the scheduler to interleave two writes.
+  The orchestrator is asked whose file it is before it is edited. Minutes of the run: read
+  them from its jobs when it is written up.
+
 ## Next
-1. Pull request 112 (`fix/check-output-on-exit`, `945e31b`: `check` exits once its output is
+0. The torn append of `bin/lib/codex-reviews.mjs` on Linux (Progress, the second run): with the
+   orchestrator's word on the file, fix it test first (one write per record, or a lock), local
+   gate, reviews, own pull request or on 109 as it says; then one push to 109.
+1. Done: pull request 112 (`fix/check-output-on-exit`, `945e31b`: `check` exits once its output is
    written; gentle-ai not due, Codex "correct" 57,594 tokens) is open for the orchestrator. Once
    it is on `main`: merge `main` into 109 once (its local gate), push: one run of about 4
    minutes, the first whose red can be read; fix its failures test first until a run is green;
