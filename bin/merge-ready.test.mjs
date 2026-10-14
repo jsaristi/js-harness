@@ -56,7 +56,7 @@ test('merge-ready with a stale tested base exits 3 and reads the first parent of
   const { code, out } = await main(['7'], [
     ['gh run view 42 --log', { stdout: log(OLD) }],
     ['git merge-base --is-ancestor', {}],
-    [`git diff --name-only ${OLD} ${MAIN}`, { stdout: 'bin/check.mjs\n' }],
+    [`git diff --name-only --no-renames ${OLD} ${MAIN}`, { stdout: 'bin/check.mjs\n' }],
     ['git fetch -q origin refs/pull/7/merge', {}],
     ['git rev-parse FETCH_HEAD^1', { stdout: `${MAIN}\n` }],
   ]);
@@ -69,11 +69,15 @@ test('merge-ready behind main only by documents checks the merge into main is cl
   const entries = (clean) => [
     ['gh run view 42 --log', { stdout: log(OLD) }],
     ['git merge-base --is-ancestor', {}],
-    [`git diff --name-only ${OLD} ${MAIN}`, { stdout: 'docs/ROADMAP.md\n' }],
+    [`git diff --name-only --no-renames ${OLD} ${MAIN}`, { stdout: 'docs/ROADMAP.md\n' }],
     [`git merge-tree --write-tree ${MAIN} ${HEAD}`, { status: clean ? 0 : 1, stdout: PULL_MERGE }],
   ];
   assert.equal((await main(['7'], entries(true))).code, 0);
   assert.equal((await main(['7'], entries(false))).code, 1);
+  // A diff that could not be read is no list of documents: nothing says main changed only those (Codex, 2026-10-14).
+  const unread = await main(['7'], [...entries(true), [`git diff --name-only --no-renames ${OLD} ${MAIN}`, { status: 128 }]]);
+  assert.equal(unread.code, 1, unread.out);
+  assert.match(unread.out, /could not read what main changed since/);
 });
 
 test('merge-ready with no green run for the head exits 4 and does not read a log', async () => {

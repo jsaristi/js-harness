@@ -77,7 +77,11 @@ export async function mergeReadyMain(argv = process.argv.slice(2), { run = spawn
       const base = facts.tested.base;
       facts.baseIsAncestor = answer(run, 'git', ['merge-base', '--is-ancestor', base, main]).ok;
       if (facts.baseIsAncestor) {
-        facts.changedSinceBase = answer(run, 'git', ['diff', '--name-only', base, main]).out.split('\n').map((path) => path.trim()).filter(Boolean);
+        // Renames off: a code file moved into docs/ is then the code path it removed as well, never only
+        // the document it became. And a diff that cannot be read is no list of documents (Codex, 2026-10-14).
+        const changed = answer(run, 'git', ['diff', '--name-only', '--no-renames', base, main]);
+        if (!changed.ok) return fail(`could not read what main changed since the tested base ${base.slice(0, 7)}.`);
+        facts.changedSinceBase = changed.out.split('\n').map((path) => path.trim()).filter(Boolean);
         facts.mergeTreeClean = answer(run, 'git', ['merge-tree', '--write-tree', main, pr.headRefOid]).ok;
       }
       if (answer(run, 'git', ['fetch', '-q', 'origin', `refs/pull/${number}/merge`]).ok) {
