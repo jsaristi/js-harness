@@ -18,6 +18,7 @@ import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
+import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
@@ -273,6 +274,30 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const paths = listed?.split('\0').filter(Boolean) ?? [];
   const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
   return paths.length > 0 && paths.every(isDocument) ? paths : null;
+}
+
+/** The row `citations` (T3 of odd/tasks/commands-and-doctor.md): the lines the staged change adds to the feature
+ * documents (`odd/tasks/`), each code span that cites a `path:line` or a commit resolved against the folder and the
+ * repository (`bin/lib/citations.mjs`), with one line for each that does not. It is INFO and stops nothing: documents
+ * cite other branches and removed files on purpose, so it becomes a failure only once its false alarms have been
+ * none over twenty commits. No row when no feature document is staged, or git does not answer. */
+export function checkCitations(cwd, spawn = spawnSync) {
+  const git = hookGit(cwd, spawn);
+  const diff = git?.(['diff', '--cached', '-U0', '--no-renames', '--no-relative', '--no-color', '--', 'odd/tasks/']);
+  if (!diff) return [];
+  const lineCount = (file) => {
+    try {
+      // A file that ends in a newline has no line after it.
+      return fs.readFileSync(path.join(cwd, file), 'utf8').replace(/\r?\n$/, '').split(/\r?\n/).length;
+    } catch {
+      return null;
+    }
+  };
+  const commitExists = (id) => git(['cat-file', '-e', `${id}^{commit}`]) !== null;
+  const { checked, unresolved } = resolveCitations(addedLines(diff), { lineCount, commitExists });
+  const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;
+  const row = { name: 'citations', pass: true, info: true, detail: `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}` };
+  return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
 }
 
 /** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
@@ -1273,7 +1298,7 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
   const state = codexReviewCoverage(cwd, head, { spawn, remote });
   if (state.unknown) return fail(state.unknown.detail, state.unknown.lines);
-  const { base, codeCommits, covers, uncovered, note } = state;
+  const { tip, baseRef, base, codeCommits, covers, uncovered, note } = state;
   if (uncovered.length) {
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
     const oldest = uncovered[uncovered.length - 1];
@@ -1282,9 +1307,16 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     // not "the review": over a range with nothing to review it records that, and starts no review.
     // A merge is no root commit: its `<id>^` is the first of its parents, and the range from there holds
     // the merge and all it changed against that parent, what was written in it included.
+    // The base is the one the plain row sizes (`checkCodexReviewDebt`): the parent of the oldest uncovered
+    // commit only where a review can start there (`reviewStart`), else the default branch. Named as
+    // `<oldest>^` alone, it was the `main` a branch left once `main` had been merged in after that commit,
+    // and the range read again all `main` gained since (failure 15, 41 parts where 6 were due). With the
+    // commits before the merge covered, that parent is the merge commit itself.
+    const range = rangeStart(cwd, { base: baseRef, tip, spawn });
+    const { before } = range.unknown ? { before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
     const hint = oldest.isRoot
       ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
-      : `make the record with: js-harness codex-review --base ${oldest.shortId}^`;
+      : `make the record with: js-harness codex-review --base ${before === null ? base : `${before.shortId}^`}`;
     const lines = [...uncoveredNames(uncovered), hint];
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
@@ -1493,7 +1525,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
+    : [...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
