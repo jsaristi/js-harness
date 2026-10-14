@@ -95,3 +95,18 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
   lands on, and sessions stop merging main again. The ticket matters less with that, so it goes last in
   JH 8's queue, after the gate log's failing test names of a WSL run and the warning for a `node --test`
   of several files outside a turn. Nothing of it is built yet: this document is its whole state.
+
+## Resume here (JH 8, 2026-10-14 15:15 by `date`, context 87%)
+
+The queue is his order of corrections first (`ffe99ebf` line 5906), in the lead's order. Each slice ships in
+one lock turn by the scratchpad script `ship-turn.sh` (commit with its gate, Codex over the slice, then the
+push and the pull request only when Codex has no P0 to P2; the body gets the gentle-ai line).
+1. Documents-only skip: `feat/merge-documents-skip` (worktree `merge-documents-skip`), `5c5028c` plus a fix
+   of Codex's P2 (nothing staged asks no other side), its recheck turn queued (`mds2`). No PR yet; when it
+   opens, its gentle-ai line covers only the fix: replace it with the range from `c33b7bf`.
+2. Failing test names in the gate log: PR 142, merged (`028d658`).
+3. testRunWarning: `feat/test-run-warning`, `1b88b76` plus the fix of Codex's three P2, recheck turn queued
+   (`trw2`); then tell JH 15 it is on main (JH 15 refuses with it, his line 5718).
+4. Codex out of the lock: probe 2 (at most 150,000 input tokens), queued by a background chain after (b).
+5. PR 137 (124's documents) waits for its green GitHub run; a background wait watches it.
+6. Then this ticket, after all of the above are merged.
