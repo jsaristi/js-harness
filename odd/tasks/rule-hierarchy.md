@@ -2590,6 +2590,24 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**State for a resume, 2026-10-14 at 06:25 by `date`, at 76 percent of the context, at a task
+end.** Merged since 05:15: the register's entries (pull request 125) and the roadmap lines (126:
+open decisions 3, 7 and 9 answered, 4 with JH 9's design and his four answers, the repository
+private, `docs/SPEC.md` last). Sent to the lead: the SPEC notes of the four capabilities this
+session built (declared rules, the failures register, the review's allowance, the README).
+**Open: pull request 129** (`feat/rule-person-present`, worktree
+`D:\js-harness-worktrees\rule-person-present`, head `564d694`, holds `main` 3637ce5): JH 5's two
+rules, `person-present` (96741db) and `questions-one-place` with the `AGENTS.md` sentence
+"A decision is asked by the orchestrator, with the question tool" (00d531d; `AGENTS.md` at
+1,492 of 1,500), each with its Codex record (0.98 and 0.95) and gentle-ai not due; the lead
+merges it. The lead was told late that `AGENTS.md` changed, and asked whether its wording is his
+(T8). **Next, on the lead's word only:** the rest of T16b's second part, one file a commit, each
+told to its owner first: `bin/check.mjs` (`SENSOR_TIMEOUT_MS`, 20 minutes; `TOKEN_BUDGET`,
+1,500), `bin/codex-review.mjs` (a review's timeout, 30 minutes), `bin/contract.mjs`
+(`DEFAULT_TIMEOUT_MINUTES`, 30); the lead was asked which is free. Then the queue of "What T16b
+builds", item 2. T1's paid measurement, T2 and T8 are his. The worktrees `register-2026-10-14`
+(this branch, `docs/rule-hierarchy-state`) and `rules-review-readers` (merged) can be removed.
+
 **2026-10-14, 05:15 by `date`: the README is merged (pull request 123, `main` 78cd45e) and the
 register's entries are pull request 125** (`docs/register-2026-10-14`): seven new entries and
 seven sightings, the lead's three items (a, b, c) among them, and the four owed controls that
