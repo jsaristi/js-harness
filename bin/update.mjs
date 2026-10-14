@@ -224,6 +224,27 @@ export async function updateMain(argv, env = process.env, spawn = spawnSync) {
   return 0;
 }
 
+/** A version as `js-harness --version` prints it. What a program found on the path answered is named in a
+ * line only when it is this plain; anything else is never printed (it may hold terminal escapes). */
+const PLAIN_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?$/;
+
+/** Why the `js-harness` on the path may not run the sync after an upgrade to `version`, or `null` when it
+ * may (T8): it is asked its version through the same shell the sync would run it through, and only the
+ * version just installed passes. A copy that fails, is not found or does not know `--version` (one older
+ * than this) is not the upgraded one either. Nothing is written by the question. */
+function pathCopyRefusal(spawn, version) {
+  const asked = spawn('js-harness', ['--version'], { shell: true, encoding: 'utf8' });
+  const answered = asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
+  if (answered === version) return null;
+  const found = PLAIN_VERSION.test(answered)
+    ? `the js-harness on the path is ${answered}, not the upgraded ${version}`
+    : `the js-harness on the path did not answer --version, so it is not the upgraded ${version}`;
+  return (
+    `${found}: nothing was synced. Run \`js-harness sync --global\` with the upgraded copy, ` +
+    'or run the upgrade again with --prefix naming where the package manager installs it.'
+  );
+}
+
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
   const opts = parseArgs(argv, env);
   if (!opts.source) {
@@ -256,9 +277,17 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
 
   // Re-run the NEWLY installed binary's own sync, so files on disk match the new release
   // rather than whatever this (old) process would have written. With --prefix we know exactly
-  // where npm put it; without one, run whatever `js-harness` the shell resolves on PATH. `--global`
+  // where npm put it; without one, it is whatever `js-harness` the shell resolves on PATH, so that
+  // copy says its version first and only the version just installed is let to write (T8). `--global`
   // (T4): upgrade runs from any folder, and inside a git repository a plain `sync` would act on that
   // project (or refuse for it) instead of the machine install this is meant to bring up to date.
+  if (!opts.prefix) {
+    const refusal = pathCopyRefusal(spawn, latest.version);
+    if (refusal) {
+      console.error(refusal);
+      return 1;
+    }
+  }
   const syncResult = opts.prefix
     ? spawn(process.execPath, [upgradedBinPath(opts.prefix, platform), 'sync', '--home', opts.home, '--global'], {
         encoding: 'utf8',
