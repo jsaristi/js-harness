@@ -354,3 +354,6 @@ questions listed.
   sentence of `bin/lib/manifest.mjs`; keep the `taskId` copy in `contract.mjs`; JH 5 told that
   T13-T15 moved; the INFO row of `check` is JH 15's, built on this feature's role classifier and
   `taskModes`, whose interface goes to JH 15; the phone session at medium is noted for him.
+- L6 (2026-10-14, JH 15's message, a claim): the interface fits its INFO row as given; it uses
+  `roleOf` and `launchesOf`, and `taskModes` only if the row compares per task, and builds after
+  T2 and T4 land. The signatures above are therefore fixed: a change goes to JH 15 first.
