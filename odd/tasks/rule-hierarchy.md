@@ -2590,7 +2590,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
-**2026-10-14, about 05:40: the README is merged (pull request 123, `main` 78cd45e) and the
+**2026-10-14, 05:15 by `date`: the README is merged (pull request 123, `main` 78cd45e) and the
 register's entries are pull request 125** (`docs/register-2026-10-14`): seven new entries and
 seven sightings, the lead's three items (a, b, c) among them, and the four owed controls that
 pointed at T4, T5 and T6 moved to JH 12's document. **A correction to the block of 00:07 below:**
