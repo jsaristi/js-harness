@@ -2873,6 +2873,17 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
+      AT 06:22, AT THE CONTEXT PAUSE: pull request 132 (the doctor row) is MERGED; T18 is
+      pull request 133 (`0f8527e`, `check --push` exit 0 at 06:22, Codex "correct", 0.91). The
+      branch now is `feat/notify-stamp`, cut from `feat/background-purpose`, for T19; nothing
+      of it is written yet and no background task runs. T19, a first reading: a notice already
+      records the clock (`at`, UTC); what it lacks is the sender's context share, and what a
+      reader sees is the hour as the board prints it. So: `notify` reads the sender's context
+      from its transcript (the facts `senderOf` already reads) and records it in the notice
+      (`from.context`, tokens and share of the window), the board's channel section prints
+      each notice with its local hour and that share, and `notify`'s confirmation line says
+      both, so a session copies them into its message instead of typing them. Test first, on
+      `bin/lib/channel.mjs`, `bin/notify.mjs`, `bin/lib/sessions.mjs` and their tests.
       AT 06:10: the doctor row is pull request 132 (`9e6f523`, `check --push` exit 0 at
       06:08), pushed by the lead's correction of 06:01 (finished, gated, reviewed work never
       waits unpushed; an idle session is never compacted, so the work goes on in this turn).
