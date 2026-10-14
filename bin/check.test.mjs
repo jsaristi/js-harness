@@ -1016,6 +1016,64 @@ test('main --push does not run the contracts row', async () => {
   }
 });
 
+// --- rules row: a project's own rules, when it keeps a list (./lib/project-rules.mjs) ---
+
+test('main runs the rules row first, when a project keeps its own rules, and a rule that no longer holds makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), `- Never deploy by hand.\n${'a'.repeat(400)}`);
+    fs.mkdirSync(path.join(dir, 'docs'));
+    const rule = { id: 'no-direct-deploy', subject: 'a deploy goes through the pipeline', since: '2026-10-14', path: 'AGENTS.md', phrases: ['Never deploy by hand'] };
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), JSON.stringify({ format: 1, rules: [rule] }));
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    const namesOf = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line)).map((row) => row.split('  ')[1]);
+
+    const held = await runCheck(['--cwd', dir], env);
+    assert.equal(held.code, 0);
+    assert.deepEqual(namesOf(held.output).slice(0, 2), ['rules', 'budget']);
+    assert.match(held.output, /^PASS {2}rules {2}1 rule of the project holds \(docs\/rules\.json\)$/m);
+
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
+    assert.match(refused.output, /^ {6}rule "no-direct-deploy": AGENTS\.md no longer holds the phrase "Never deploy by hand"$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main has no rules row in a project that keeps no list of its own, nor in the harness repository', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    assert.doesNotMatch((await runCheck(['--cwd', dir], env)).output, /^(PASS|FAIL) {2}rules /m);
+    fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'bin', 'lib', 'rules-data.mjs'), 'export const RULES = [];\n');
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), '{ not json');
+    assert.doesNotMatch((await runCheck(['--cwd', dir], env)).output, /^(PASS|FAIL) {2}rules /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a project list that cannot be read fails the rules row and stops nothing else from printing', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), '﻿{ not json');
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir });
+    assert.equal(code, 1);
+    assert.match(output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
+    assert.match(output, /^PASS {2}budget /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- failures row: the register of failures, when the project keeps one (./failures.mjs) ---
 
 test('main runs the failures row first, before budget, when the project keeps a register, prints the entries that are not settled, and a register it cannot read makes it exit 1', async () => {

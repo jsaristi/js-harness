@@ -130,6 +130,32 @@ function reportProjectStatus(location, version) {
   );
 }
 
+/** One quiet line of a project's own rules (odd/tasks/project-rules.md): how many its docs/rules.json holds and how
+ * many findings `js-harness rules check` would name, or nothing when it keeps no list. The check itself is the
+ * `rules` row of the gate; this line only lets a person see it without committing. The modules are loaded here
+ * only, so the machine status loads none of the gate's. */
+async function reportOwnRules(root) {
+  const { readProjectRules } = await import('./lib/project-rules-read.mjs');
+  const { discoverSensors } = await import('./check.mjs');
+  const found = discoverSensors(root);
+  let read;
+  try {
+    read = readProjectRules(root, { sensors: found.error ? null : found.sensors.map((sensor) => sensor.name) });
+  } catch (err) {
+    console.log(`own rules: docs/rules.json cannot be read (${err.message})`);
+    return;
+  }
+  if (!read.present) return;
+  if (!read.readable) {
+    console.log('own rules: docs/rules.json cannot be read; js-harness rules check names why');
+    return;
+  }
+  const count = read.findings.length;
+  console.log(count === 0
+    ? `own rules: ${read.rules.length} in docs/rules.json, all holding`
+    : `own rules: ${read.rules.length} in docs/rules.json, ${count} ${count === 1 ? 'finding' : 'findings'}; js-harness rules check names ${count === 1 ? 'it' : 'them'}`);
+}
+
 /** `status` by location, the "Command scope" rule `sync` and `uninstall` follow: inside a git repository it
  * reports the project (exit 0), or names what is wrong with it (exit 1); outside one with no `--cwd`, or
  * with `--global`, it is the machine status. An explicit `--cwd` names a project, so when it is not an
@@ -152,6 +178,7 @@ ${STATUS_USAGE}`);
       case 'initialized':
       case 'noPin':
         reportProjectStatus(location, currentVersion());
+        await reportOwnRules(location.root);
         return 0;
       case 'invalidHarnessJson':
         console.error(invalidHarnessJsonMessage(location.harnessJsonPath, location.reason));

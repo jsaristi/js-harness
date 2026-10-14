@@ -648,6 +648,20 @@ survey.
 A limit of the feature as a whole: most of the text loaded on every turn is not this repository's but
 gentle-ai's managed block (F2), so this orders the thin layer, not the whole payload.
 
+**A project's own rules**, built on 2026-10-14 in `odd/tasks/project-rules.md` (S1-S7, design
+version 2 after two readers; his answer "Sí, en prosa y por sensor (Recomendada)", the lead's
+transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 15809). A project where the harness is
+installed declares its own rules in `docs/rules.json` (`{ "format": 1, "rules": [...] }`), each
+with an id, an owner and one body: prose (a file and phrases that must still be in it), a sensor
+(a name that must still be declared in `harness.json` or `package.json`), or retired. `js-harness
+rules`, `rules <id>` and `rules check` read that list at a project's git top; the gate's first row,
+`rules`, holds it there and only there, and refuses a phrase gone from its file, a sensor no
+longer declared, a `failure` id the register does not hold, and a rule present at `HEAD` and now
+missing (retire it instead). An id the harness also ships is a note, never a refusal. No values
+and no overrides of the harness's own rules: those would be a feature of their own, beside the
+switches of `harness.json`. The harness never writes the list, so `uninstall` has nothing of it
+to undo. `status` says how many hold; the skill and the `AGENTS.md` template name the list.
+
 ## Session channel
 
 Designed on 2026-10-10 in `odd/tasks/session-channel.md`, by the design session that also wrote
@@ -952,10 +966,15 @@ podamos implementar todo"), each a feature of its own with its own document and 
    appends one line to the folder's `record.jsonl` with the commit that was proven. A
    feature that changes what a project receives adds its own step, in its own branch: an
    entry in `JOURNEY` (`scripts/practice-lib.mjs`) and its function in `STEPS`
-   (`scripts/practice.mjs`), and the run exiting 0 goes in its contract. What the run does
-   not prove is that a host loads what was installed: no Claude Code or Codex session is
-   started in the practice project, and that proof is designed when the first feature that
-   needs it is planned.
+   (`scripts/practice.mjs`), and the run exiting 0 goes in its contract. Since 2026-10-14
+   the journey has thirteen steps (`odd/tasks/practice-project.md`, T5, and
+   `odd/tasks/project-rules.md`, T6): `project-rules` holds a project's own rules and refuses
+   two commits that break them, and `host-loads` starts a real Claude Code session in the
+   practice project, three Haiku 5.5 calls under a home of their own (about half a cent and
+   fifteen seconds; `--no-host` leaves it out, and it needs `JS_HARNESS_EVAL_OAUTH_TOKEN`). The
+   session lists both skills, answers with a word only `AGENTS.md` holds, runs the three hook
+   entries, and leaves no trace in his real home; the first full pass is of `1659801`. Not
+   proven: that Codex loads its `hooks.json` and its skills.
 5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
    each working three features at once, orchestrated together and able to talk to each
    other. What is known: the app's messages stay inside one account, so across accounts the
@@ -1207,7 +1226,9 @@ those features has a session open: the lead assigns them.
   not a semver string, and a file that is not a JSON object, are refused as before.
 - f. **The practice run starts no host session**, so it does not prove that a host loads what
   was installed (`scripts/practice-lib.mjs:450-461`; item 4 under "Session channel" says so).
-  `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve.
+  `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve. Done on
+  2026-10-14 for Claude Code (the step `host-loads`, within his allowance of three tries); Codex
+  is still not proven.
 - g. Already placed by the session-channel session in its own document, and only named here:
   the pause hook assumes a window of 500,000; the hook's text uses terms an installed project
   is never given; `uninstall` leaves `~/.js-harness/remote/`; and `pointersIn` of

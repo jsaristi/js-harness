@@ -8,6 +8,8 @@ import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
+import { readProjectRules } from './lib/project-rules-read.mjs';
+import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
@@ -160,7 +162,32 @@ export function discoverSensors(cwd) {
   return { sensors, source: 'package.json' };
 }
 
-const DOCUMENTS_SHAPE = 'harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
+/** The row of a project's own rules (odd/tasks/project-rules.md, "How it is checked"): it acts only when the project
+ * keeps a list, docs/rules.json, and never in the harness's own repository, whose list the rule hierarchy's row will
+ * hold (its T16d extends this row). It fails on any finding of `js-harness rules check`: a phrase gone from its
+ * file, a sensor no longer declared, a rule deleted since HEAD, or a list that cannot be read. A list that cannot be
+ * read fails this row only: no other row reads it, so the gate still prints every row before it stops. */
+export function checkOwnRules(cwd) {
+  if (fs.existsSync(path.join(cwd, 'bin', 'lib', 'rules-data.mjs'))) return [];
+  const found = discoverSensors(cwd);
+  let read;
+  try {
+    read = readProjectRules(cwd, { sensors: found.error ? null : found.sensors.map((sensor) => sensor.name) });
+  } catch (err) {
+    return [{ name: 'rules', pass: false, detail: `${PROJECT_RULES_PATH} cannot be read: ${err.message}` }];
+  }
+  if (!read.present) return [];
+  const notes = read.notes.map((note) => `note: ${note}`);
+  if (read.findings.length === 0) {
+    const n = read.rules.length;
+    const detail = `${n} ${n === 1 ? 'rule' : 'rules'} of the project ${n === 1 ? 'holds' : 'hold'} (${PROJECT_RULES_PATH})`;
+    return [{ name: 'rules', pass: true, detail, ...(notes.length > 0 && { lines: notes }) }];
+  }
+  const count = read.findings.length;
+  return [{ name: 'rules', pass: false, detail: `${count} ${count === 1 ? 'finding' : 'findings'} in ${PROJECT_RULES_PATH}`, lines: [...read.findings, ...notes] }];
+}
+
+const DOCUMENTS_SHAPE ='harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
 
 /** What keeps `entry` out of the `documents` of harness.json, as the end of a sentence about it, or
  * `null` when it is taken. */
@@ -1493,7 +1520,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
