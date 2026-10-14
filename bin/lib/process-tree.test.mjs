@@ -365,10 +365,23 @@ test('on POSIX a look is the answer to the number, since no creation time is rea
     if (pid === 322) throw Object.assign(new Error('gone'), { code: 'ESRCH' });
     if (pid === 323) throw Object.assign(new Error('not yours'), { code: 'EPERM' });
   };
-  const looks = createReaper({ platform: 'linux', spawnSync: never, kill }).look([321, 322, 323]);
+  const looks = createReaper({ platform: 'linux', spawnSync: never, kill, procState: () => null }).look([321, 322, 323]);
   assert.deepEqual(looks.map(({ alive }) => alive), [true, false, true], 'a process this user may not signal runs all the same');
   assert.match(looks[0].found, /pid 321 answers/);
   assert.equal(looks[1].found, null);
+});
+
+test('on Linux a number that answers for a zombie is not alive: the process is dead and only waits to be reaped, and the look says so', () => {
+  // A grandchild killed with its group is reparented and stays a zombie until init reaps it; `kill(pid, 0)` still
+  // answers for it (a WSL2 gate, 2026-10-14: evals/suite.test.mjs, alive [false, true] at the exit).
+  const never = () => assert.fail('nothing is spawned on POSIX');
+  const states = { 321: 'Z', 322: 'S', 323: 'X', 324: null };
+  const looks = createReaper({ platform: 'linux', spawnSync: never, kill: () => true, procState: (pid) => states[pid] }).look([321, 322, 323, 324]);
+  assert.deepEqual(looks.map(({ alive }) => alive), [false, true, false, true], 'a zombie or a dead entry is not alive; a sleeping process, or one with no state to read, is');
+  assert.match(looks[0].found, /pid 321 answers, and \/proc says it is a zombie \(Z\): dead, waiting to be reaped/);
+  assert.match(looks[1].found, /^pid 322 answers \(state S; no creation time is read on POSIX/);
+  assert.match(looks[2].found, /^pid 323 answers, and \/proc says it is dead \(X\)/);
+  assert.match(looks[3].found, /^pid 324 answers \(no creation time is read on POSIX/);
 });
 
 test('on POSIX there is no creation time to read, so a learned pid is signalled by its number, and no command runs', () => {

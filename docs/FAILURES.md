@@ -539,6 +539,10 @@ review covers everything the merge brought, code that already had its review.
   the rule that makes such a merge a code commit is `bin/lib/codex-review-coverage.mjs:207-215`.
   Narrowing the review to the lines written in the merge changes what a review covers, which is
   his to decide
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 16:20 (claimed) — in JH 12's pull request 144, a
+  merge of `main` with a one-line conflict resolved in `bin/check.mjs` (fbad613) made the push row
+  ask a review of the whole branch, 1,405 lines, about 1,030,000 Codex input tokens; the fix owed is
+  JH 10's review of a merge's conflict hunks, with a record for each commit (no task line yet)
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he
@@ -888,6 +892,23 @@ an untracked path makes the review assessment answer "unassessable".
   `Microsoft/` in the worktree `failures-register`, and the review row could not assess for it
 - Seen: 2026-10-11 — relief file, line 292 — in a worktree of JH 5 during a gate; which test starts
   PowerShell with a stripped environment is not known, and nobody owns finding it (claimed)
+
+### taskstop-leaves-work-alive
+Stopping a background task of the host ends its shell and not what that shell started, so the work
+went on, and a stop was taken for done without the process list confirming it.
+- Class: tool
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), first case — the lead's keeper,
+  version 1, merged pull requests 141 and 143 after its stop
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), second case — the lead's old
+  heartbeat
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), third case — the lead's monitor
+  tail
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), fourth case — JH 5's queued
+  gate wait, whose node would have committed a half-edited tree
+- Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a — after both of its queued gate turns
+  were stopped at about 14:50, their node waiters, pids 20948 and 19624, were still in the gate's
+  queue; read in the process list by pid and stopped by pid. The fix owed is JH 8's: the gate refuses
+  a turn whose starter is dead; until then every stop is confirmed in the process list
 
 ### temp-folders-left
 A test run killed at the gate's bound never removes its temporary folders; 2,357 of them were on his
