@@ -514,3 +514,17 @@ L11 (2026-10-14) The lead's message of 06:03, a claim of the lead: do not stop f
 merged, merge `origin/main` into PR 130 once, pass the gate, push and tell the lead; the owed
 checks become tasks (T10, T11). Done: T10 to T12 added; PR 124 merged at 06:06; `origin/main`
 merged as `5b37fac` in a gate turn (tests passed in WSL2); G2 designed (section above), next C1.
+
+L12 (2026-10-14) State at the context pause (87 percent by get_usage). PR #130
+(`feat/eval-model-per-run`, G5, G6, G3 and the fix) holds main and is MERGEABLE, waiting for the
+lead. G2 goes on `feat/eval-arms`, cut from it at `258bf6e`: C1 `fa39244` (`evals/arms.mjs`,
+`parseArm`, `armNames`, `ArmError`), C2 (`--configs` takes arms beside their base, a run naming an
+arm stops with exit 2 until the filters exist, `--plan` states them) committing under the gate.
+Next: C3a, the template filters of paths and JSON keys (`seedFromTemplate(dir, { without })` and
+its Codex twin, after the seed; each component removes exactly its pieces, the rest byte-equal; a
+component absent from the template refused), then C3b (marker blocks of the global CLAUDE.md and
+Codex AGENTS.md with a depth counter; TOML tables), C4 (wiring, `doc.arms` pins, the exit-2 stop
+lifted, G6's `config === 'current'` checks widened to every template-built config), C5 (report arms
+section, F5/F6 output byte-identical first), C6 (probe, `minimal-with` beyond MCP), C7 (documents).
+No branch for G2 is pushed yet; push it with a pull request after C4 at the latest. Owed: T10,
+T11; Codex review of the G2 slice before its push.
