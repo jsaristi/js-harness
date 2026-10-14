@@ -160,11 +160,11 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
-import { baseLeftOut, MARKS_UNREAD, notReviews, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
-import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import {
@@ -208,7 +208,8 @@ const USAGE =
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
   `--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
-  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given.';
+  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (`git show --remerge-diff`: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -874,8 +875,8 @@ function totalsLine(attempts) {
  *
  * `where` is what the run knows of its repository (`codexReviewMain`), so that git is not asked once more
  * where the top is, nor about a file it has already answered for at `head`. */
-function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, where }) {
-  const numstat = gitOutput(spawn, root, ['diff', '--numstat', '-z', '--no-renames', from, head], { maxBuffer: REVIEW_MAX_BUFFER });
+function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, where, merge = null }) {
+  const numstat = gitOutput(spawn, root, rangeDiff({ from, head, merge }, ['--numstat', '-z']), { maxBuffer: REVIEW_MAX_BUFFER });
   if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
   try {
     const files = numstatFiles(numstat);
@@ -897,6 +898,11 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, wher
 // patch read by one section a file (`patchOfRead`) would be a section short, or take the summary for the
 // end of the file before it.
 const SUBMODULE_AS_A_FILE = '--submodule=short';
+
+/** The line that says a review reads a merge by what was written in it (`mergeStart`). */
+export function mergeReviewSaid({ head, side, branch }) {
+  return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, a commit of ${branch}: its review reads what was written in the merge (\`git show --remerge-diff\`), not what the merge brought in.`;
+}
 
 /** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
  * lines than a part holds or more files (`PART_MAX_FILES`), from its `groups` (`rangeGroups`): `{ parts }`,
@@ -926,9 +932,11 @@ const SUBMODULE_AS_A_FILE = '--submodule=short';
  * moved, and a session cannot be held to lines its git never prints. The check that the parts add up to the
  * range is made on patches with `SUBMODULE_AS_A_FILE`, where the patch of a range is one section a file
  * whatever is configured, which is what tells the sections of the files left out apart. */
-function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
+function planParts(spawn, root, { from, head, groups, intent, paths, why, merge = null }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
-  if (groups.length <= 1 && why.size === 0) return { parts: null };
+  // A merge is asked by its files as well, also in one part: Codex's own review of a range reads a diff of two
+  // commits, never a remerge-diff (`mergeStart`).
+  if (groups.length <= 1 && why.size === 0 && merge === null) return { parts: null };
   const parts = [];
   const inAPart = new Set();
   for (const [at, group] of groups.entries()) {
@@ -936,7 +944,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
     const which = `part ${part.index} of ${part.of}`;
     let prompt;
     try {
-      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size });
+      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, merge: merge !== null });
     } catch (err) {
       const needs = part.of === 1 ? 'The range leaves files out of its review, so it is asked by the files it reads' : `The range needs ${part.of} parts`;
       return { error: `${needs}, and the prompt of ${which} cannot be written. ${err.message}` };
@@ -945,7 +953,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
     // git, and one such as `app/[id]/page.tsx` or `*.md` is a pattern that takes in the files of other
     // parts. What a part must have seen is the diff of its own files and no more, or the part is held to
     // lines its prompt never asks for and its count of changed lines does not hold.
-    const ofPart = (shape) => git(spawn, root, ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', ...shape, '--no-renames', from, head, '--', ...group.files], room);
+    const ofPart = (shape) => git(spawn, root, ['--literal-pathspecs', ...rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff', ...shape], group.files)], room);
     const shown = ofPart([]);
     const proved = shown === null ? null : ofPart([SUBMODULE_AS_A_FILE]);
     if (proved === null) return { error: `Could not run \`git diff\` over the files of ${which} to know what its review must see` };
@@ -956,7 +964,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
   // part show. A path a pathspec reads as something else, or one cut on its way here, would be a file in
   // no part. The files a review leaves out are in no part on purpose, so their sections are taken out of
   // the patch of the range first, by their place in it and never by a name (`patchOfRead`).
-  const whole = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', SUBMODULE_AS_A_FILE, '--no-renames', from, head], room);
+  const whole = git(spawn, root, rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff', SUBMODULE_AS_A_FILE]), room);
   if (whole === null) return { error: `Could not run \`git diff --no-renames ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
   let read;
   try {
@@ -1233,8 +1241,20 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * The base is asked about first: a range starts after its base, so a run never reads the commit `given`
    * names. When that commit is a code commit of the branch that no record covers, the line that says so comes
    * before what the records say (`baseLeftOutSaid`), whichever way they come out. */
+  // The merge a review reads by what was written in it, `{ side, branch }` (`mergeStart`), else `null`.
+  let merge = null;
   const startingAt = (given) => {
+    merge = null;
     if (args.again || everyFile || given === head) return given;
+    // A merge of the default branch at HEAD, after a branch whose every code commit has a record: the review
+    // starts at the first parent of the merge and reads what was written in it (`mergeStart`).
+    const atMerge = mergeStart(root, { given, tip: head, spawn, where });
+    if (atMerge !== null) {
+      merge = { side: atMerge.side, branch: atMerge.branch };
+      log(mergeReviewSaid({ head, ...merge }));
+      base = atMerge.from;
+      return atMerge.from;
+    }
     const leftOut = baseLeftOut(root, { from: given, tip: head, spawn, where });
     if (leftOut !== null) log(baseLeftOutSaid(leftOut));
     const left = leftByRecords(spawn, root, { from: given, head, given: `${base.slice(0, 7)}..${head.slice(0, 7)}`, where });
@@ -1261,15 +1281,16 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const from = startingAt(given);
     if (from === null) return 0;
-    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where });
+    // What a run of this range would be, when it is not a review as any other. The review of a merge is none
+    // of a recheck: the findings a recheck checks were made of another diff.
+    const state = merge !== null ? { kind: 'review' } : recheckFor(from);
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where, merge });
     if (split.error) {
       error(`${split.error}, so there is no plan of its review.`);
       return 1;
     }
     const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
-    // What a run of this range would be, when it is not a review as any other.
-    const state = recheckFor(from);
     if (state.kind === 'recheck') log(`A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
     if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ of: state.of, open: state.open, base: from }).split('\n')[0]}`);
     // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.
@@ -1336,14 +1357,16 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (from === null) return 0;
     // A range that starts where a review that found something ended is a recheck of those findings, and a
     // second recheck of the same findings is not run (`recheckFor`).
-    const state = recheckFor(from);
+    const state = merge !== null ? { kind: 'review' } : recheckFor(from);
     if (state.kind === 'refused') {
       error(secondRecheckRefused({ of: state.of, open: state.open, base: from }));
       return 1;
     }
     if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings };
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
-    const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', from, head], { maxBuffer: REVIEW_MAX_BUFFER });
+    // With renames as git detects them, as Codex's own review diffs a range; a merge has no other diff than its own.
+    const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
+    const patch = git(spawn, root, patchArgs, { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
       error(`Could not run \`git diff ${from.slice(0, 7)} HEAD\` to know what the review must see, so it was not started and nothing was recorded.`);
       return 1;
@@ -1360,7 +1383,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`${why}${why.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.`);
       return 1;
     };
-    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where });
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where, merge });
     if (split.error) return notSplit(split.error);
     // The plan, where the progress of the run is written and before its first session: what the run is
     // about to spend is on the screen before any of it is spent.
@@ -1402,7 +1425,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     // `null` for a range that is one part and leaves no file out.
-    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why });
+    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why, merge });
     if (made.error) return notSplit(made.error);
     ({ parts } = made);
     if (recheck !== null && parts !== null && parts.length > 1) {
@@ -1638,6 +1661,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             // What the review was asked with, and the version of the text when it is this command's own.
             prompt,
             promptVersion,
+            // A review of a merge by what was written in it (`mergeStart`); absent from any other line.
+            ...(merge === null ? {} : { diff: 'remerge' }),
             // The four counts, each `null` when it is not known, and where they were read from: `rollout`,
             // or `null` when none was. A line written before `usageSource` existed took its `usage` from
             // Codex's events (`bin/lib/codex-review-runs.mjs`).
@@ -1813,7 +1838,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         expectedKeys: part.expected,
         prompt: 'own',
         promptText: recheck !== null ? recheckPrompt(part.prompt, recheck.findings) : part.prompt,
-        promptVersion: recheck !== null ? RECHECK_PROMPT_VERSION : REVIEW_PART_PROMPT_VERSION,
+        promptVersion: recheck !== null ? RECHECK_PROMPT_VERSION : merge !== null ? REVIEW_MERGE_PROMPT_VERSION : REVIEW_PART_PROMPT_VERSION,
         part,
       });
       if (sole.exit !== 0) return sole.exit;
@@ -1845,7 +1870,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       }
       const passed = [];
       for (const part of parts) {
-        const one = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: REVIEW_PART_PROMPT_VERSION, part, keptRuns });
+        const one = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: merge !== null ? REVIEW_MERGE_PROMPT_VERSION : REVIEW_PART_PROMPT_VERSION, part, keptRuns });
         if (one.exit !== 0) {
           const later = part.of - part.index;
           const unstarted = later === 0 ? '' : later === 1 ? 'the part after it was not started and ' : `the ${later} parts after it were not started and `;
@@ -1929,6 +1954,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // What the review did not read, by count: the record says "reviewed" of the range, and this is how
     // much of the range that is not said of.
     ...(leftOut === null ? {} : { leftOut }),
+    // A merge reviewed by what was written in it (`mergeStart`): the record covers its commits as any
+    // other, and this says the diff it read was the merge's remerge-diff, not that of the range.
+    ...(merge === null ? {} : { diff: 'remerge' }),
     // The head whose findings this range was a recheck of: the record still says `reviewed`, so it covers
     // its commits for `check --push`, and this says it checked those findings and no more.
     ...(outcome === 'reviewed' && recheck !== null ? { recheckOf: recheck.of } : {}),

@@ -376,3 +376,44 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
     return null;
   }
 }
+
+/** The git arguments of the diff a review of `from..head` reads, with `shape` (options of the diff) and,
+ * when given, `files` as pathspecs: `git diff <from> <head>`, or, for the review of a merge (`merge`, from
+ * `mergeStart`), `git show --remerge-diff <head>`, what was written in the merge. Renames are off in both,
+ * as everywhere a range is counted, split or shown. */
+export function rangeDiff({ from, head, merge = null }, shape = [], files = null) {
+  const paths = files === null ? [] : ['--', ...files];
+  if (merge === null) return ['diff', ...shape, '--no-renames', from, head, ...paths];
+  return ['show', '--remerge-diff', '--format=', ...shape, '--no-renames', head, ...paths];
+}
+
+/** Where the review of `given..head` starts when it is that of a merge of the remote's default branch, read
+ * by what was written in it: `{ from, side, branch }`, the first parent of the merge, the merged parent and the
+ * label of the branch that holds it; else `null`, and the range is read as it would be without this.
+ *
+ * A branch that merges its default branch and resolves a conflict has one code commit no record covers, the
+ * merge (`writtenInMerge` counts it by the files written in it). Its review,
+ * asked from the default branch, started at the merged parent and read the whole branch again, which the
+ * records cannot move past (`reviewStart`: that parent is no ancestor of the first); asked from the first
+ * parent, it read everything the default branch brought in. Pull request 124 paid 175,025 input tokens for
+ * it. What the merge adds of its own is its remerge-diff, the merge against what merging its parents again
+ * gives: the resolution of its conflicts and any edit made in it.
+ *
+ * It is this case when `head` has two parents, the second is a commit of the default branch of `origin`
+ * (`defaultBranch`), and every code commit of `given` up to the first parent has a record. The record of
+ * `<first parent>..head` then covers the merge and the commits of the default branch it brought in, which
+ * had their reviews where they were made; a second parent off that branch would be commits nobody read
+ * called covered. `null` whenever git or the records cannot say. */
+export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, remote = 'origin' }) {
+  const parents = gitOut(spawn, cwd, ['rev-list', '--parents', '-n', '1', head])?.split(' ') ?? [];
+  if (parents.length !== 3 || parents[0] !== head) return null;
+  const [, first, side] = parents;
+  const branch = defaultBranch(spawn, cwd, remote);
+  if (branch === null) return null;
+  if (!gitYes(spawn, cwd, ['merge-base', '--is-ancestor', side, branch.ref])) return null;
+  if (given !== first) {
+    const before = reviewCoverage(cwd, { from: given, tip: first, spawn, where });
+    if (before.unknown !== undefined || before.uncovered.length > 0) return null;
+  }
+  return { from: first, side, branch: branch.label };
+}

@@ -7,10 +7,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, mergeReviewSaid, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
+import { numstatFiles } from './lib/codex-review-parts.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import * as reviewRuns from './lib/codex-review-runs.mjs';
@@ -1340,9 +1341,11 @@ test('--session current is a usage error since the session was removed: exit 2 w
   assert.ok(SESSION_REMOVED.includes(`on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`));
 });
 
-// The last line of the usage: a run pays for no review twice, and the flag that reviews again on purpose.
+// The last line of the usage: a run pays for no review twice, the flag that reviews again on purpose, and a
+// merge of the default branch read by what was written in it.
 const STARTS_WHERE_RECORDS_END =
-  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given.';
+  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (`git show --remerge-diff`: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
 
 test(`the usage names no session: its flags are those of a review, and its second line says what a review loads and that it runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`, async () => {
   const result = await run(['--cwd', '.']);
@@ -5112,6 +5115,71 @@ test('a merge somebody wrote in is a commit of the range: with a record for ever
   assert.deepEqual(await plan('a record covers the merge'), [`Nothing to review: ${rangeOf(base, head)} holds 3 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`]);
 });
 
+/** A branch that merged its remote's default branch and resolved a conflict in `m.txt`, while that branch also
+ * changed `s.txt`: `{ root, base, mine, main, head }`, with a record over `base..mine`. With `inMain` false,
+ * the merged side is a branch of its own, which the remote's default branch does not hold. */
+function makeResolvedMergeRepo({ inMain = true } = {}) {
+  const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
+  git(root, 'commit', '-am', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'side', base);
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 theirs\n', 'utf8');
+  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed on main\n', 'utf8');
+  git(root, 'commit', '-am', 'main moves');
+  const main = git(root, 'rev-parse', 'HEAD');
+  if (inMain) {
+    git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+    git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  }
+  git(root, 'checkout', '--quiet', trunk);
+  spawnSync('git', ['merge', '--no-ff', '--quiet', 'side'], { cwd: root });
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 both\n', 'utf8');
+  git(root, 'commit', '-am', 'merge main, resolving m.txt');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  return { root, base, mine, main, head };
+}
+
+/** What `git show --remerge-diff` of the merge `head` prints for `files` in `root`: what was written in it. */
+const remergeOf = (root, head, ...files) => git(root, '--literal-pathspecs', 'show', '--no-color', '--no-ext-diff', '--remerge-diff', '--format=', '--no-renames', head, '--', ...files);
+
+test('a merge of the default branch that resolved a conflict is reviewed by what was written in it: the plan names the resolved file alone', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  const nothing = startsNothing(root);
+  // As a branch asks it: from the default branch, which the records move to the first parent of the merge.
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  nothing.untouched('the plan of a merge');
+  const lines = result.out.split('\n');
+  assert.equal(lines[0], mergeReviewSaid({ head, side: main, branch: 'origin/main' }));
+  const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', head)).reduce((sum, file) => sum + file.changedLines, 0);
+  assert.deepEqual(lines.slice(1), planned(root, mine, head, [{ files: ['m.txt'], changedLines }]));
+});
+
+test('a merge of a branch the default branch does not hold is reviewed as before: from the merged branch, the whole branch', async () => {
+  const { root, main, head } = makeResolvedMergeRepo({ inMain: false });
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('remerge'), result.out);
+  assert.deepEqual(result.out.split('\n'), planned(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
+});
+
+test('the review of a resolved merge asks Codex for the remerge-diff of its files, and its record says so', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  const command = `git --literal-pathspecs show --remerge-diff --format= --no-renames ${head} -- m.txt`;
+  const fake = fakeCodexInParts({ stdout: jsonl(thread, turn, cmd(command, 0, remergeOf(root, head, 'm.txt')), msg(FINDINGS), done) });
+  const result = await run(['--base', main, '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1);
+  assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: mine, head, part: { index: 1, of: 1, files: ['m.txt'] }, merge: true }));
+  const record = readCodexReviews(root).at(-1);
+  assert.deepEqual([record.base, record.head, record.outcome, record.diff], [mine, head, 'reviewed', 'remerge']);
+  assert.equal(readCodexReviewRuns(root).at(-1).diff, 'remerge');
+});
+
 test('when the records cannot be read against the range, the range is reviewed as it was given, and one line says so', async () => {
   const { root, base, one, three } = makeSlicedRepo();
   appendCodexReview(root, reviewedRecord(base, one));
@@ -5277,7 +5345,10 @@ test('the row of the plain check and the plan of the command size the same revie
     git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
     return root;
   };
-  for (const [which, make, rowBase] of [['a record covers the first commit', sliced, /^[0-9a-f]+\^$/], ['a merged branch that forked earlier', merged, /^origin\/main$/]]) {
+  // A branch that merged the default branch and resolved a conflict: the row sizes the review of what was
+  // written in the merge, as the command reads it (`mergeStart`).
+  const resolved = () => makeResolvedMergeRepo().root;
+  for (const [which, make, rowBase] of [['a record covers the first commit', sliced, /^[0-9a-f]+\^$/], ['a merged branch that forked earlier', merged, /^origin\/main$/], ['a merge of the default branch that resolved a conflict', resolved, /^[0-9a-f]+\^$/]]) {
     const root = make();
     const row = checkCodexReviewDebt(root);
     const said = /: the review of (\S+)\.\.HEAD is (\d+ parts?) today, (\d+ changed lines? in \d+ files?)$/.exec(row.detail);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './codex-review-prompt.mjs';
+import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './codex-review-prompt.mjs';
 
 const FROM = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
@@ -9,6 +9,23 @@ const HEAD = 'b'.repeat(40);
 
 test('the prompt is versioned', () => {
   assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v1');
+  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v1');
+});
+
+test('the prompt of a merge names its remerge-diff by file, one part of one included, and is never that of a whole range', () => {
+  const text = reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 1, files: ['bin/a.mjs', 'odd name.txt'] }, merge: true });
+  assert.equal(
+    text,
+    [
+      `Review what was written in the merge commit ${HEAD}, whose first parent is ${FROM}: the resolution of its conflicts and any edit made in it. This review covers the files the command below names.`,
+      `Run \`git --literal-pathspecs show --remerge-diff --format= --no-renames ${HEAD} -- bin/a.mjs 'odd name.txt'\` to inspect them: its output compares the merge with what merging its two parents again automatically gives, conflict markers included, and it is the whole change under review.`,
+      'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.',
+      'What the merge took unchanged from either parent was reviewed on its own branch: read them for context, and report nothing about them.',
+      '',
+    ].join('\n'),
+  );
+  assert.match(reviewPrompt({ from: FROM, head: HEAD, part: { index: 2, of: 3, files: ['c.mjs'] }, merge: true }), /This review covers part 2 of 3 of that review: the files the command below names\./);
+  assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, merge: true }), /The review of a merge is asked by its files/);
 });
 
 test('reviewPrompt names the committed range and the command that shows it', () => {

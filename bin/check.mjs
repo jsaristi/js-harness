@@ -12,7 +12,7 @@ import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
-import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
@@ -1331,10 +1331,12 @@ const counted = (count, noun) => `${String(count).replace(/\B(?=(\d{3})+(?!\d))/
  * which are those of the files a review reads; `leftOut` is how many files of the range it leaves out, by
  * the marks of the commit `tip`, as that command reads them. `null` when git cannot say. Renames are off,
  * as in that command. */
-function reviewSize(spawn, cwd, from, tip) {
+function reviewSize(spawn, cwd, from, tip, merge = null) {
   // The output ends with the NUL that ends its last record, which is no whitespace: `gitOut` trims nothing of it.
   // `--no-relative`, as for the commits (`reviewCoverage`): every file of the range, named from the top.
-  const numstat = from === null ? null : gitOut(spawn, cwd, ['diff', '--numstat', '-z', '--no-renames', '--no-relative', from, tip]);
+  // A merge of the default branch is sized by what was written in it, as that command reads it (`mergeStart`).
+  const args = merge === null ? ['diff', '--numstat', '-z', '--no-renames', '--no-relative', from, tip] : rangeDiff({ from, head: tip, merge }, ['--numstat', '-z', '--no-relative']);
+  const numstat = from === null ? null : gitOut(spawn, cwd, args);
   if (numstat === null) return null;
   try {
     const files = numstatFiles(numstat);
@@ -1395,9 +1397,13 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   // Where git did not say which commit the range starts at, no start is known and none is sized: taken
   // for two histories that share none, a later start would be held to no commit (`rangeStart`).
   const range = rangeStart(cwd, { base: baseRef, tip, spawn });
-  const { start, before } = range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
+  // A merge of the default branch at the tip, after a branch whose every other code commit has a record, is
+  // reviewed from its first parent by what was written in it (`mergeStart`), and named as `<merge>^`.
+  const merge = range.unknown || range.from === null ? null : mergeStart(cwd, { given: range.from, tip, spawn, remote });
+  const atMerge = merge === null ? null : uncovered.find((commit) => commit.id === tip);
+  const { start, before } = atMerge ? { start: merge.from, before: atMerge } : range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
   const baseArg = before === null ? base : `${before.shortId}^`;
-  const size = reviewSize(spawn, cwd, start, tip);
+  const size = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
   const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
   let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;

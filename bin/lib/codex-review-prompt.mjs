@@ -40,6 +40,10 @@ export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v1';
 // line says so, and a range of one part is asked with this text as well.
 export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v3';
 
+// The version of the text `reviewPrompt` writes for a part of the review of a merge (`merge`): another text,
+// which names what was written in the merge (`git show --remerge-diff`) instead of a diff of two commits.
+export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v1';
+
 // How much of each section of the intent goes into the prompt: a feature document is written by hand and
 // has no bound of its own, and the prompt is paid on every request of the review.
 export const INTENT_MAX_CHARS = 2000;
@@ -78,10 +82,12 @@ const isPart = (part, leftOut) =>
 
 /** The lines that say what to review: the whole range, or the `part` of it, in a range that leaves `leftOut`
  * files out of the review. */
-function scope(from, head, part, leftOut) {
+function scope(from, head, part, leftOut, merge = false) {
   const findings = 'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.';
   if (!Number.isInteger(leftOut) || leftOut < 0) throw new Error(`How many files are left out of the review must be a count, got ${JSON.stringify(leftOut)}.`);
   if (part === null) {
+    // A merge is asked by its files, as a range that leaves files out is: its command is no diff of two commits.
+    if (merge) throw new Error('The review of a merge is asked by its files: the prompt of a whole range names a diff of two commits.');
     // Its command names no file, so it would show the files that were left out as well.
     if (leftOut > 0) throw new Error('A range that leaves files out of the review is asked by its files, as a part is: the prompt of a whole range names none.');
     return [
@@ -90,7 +96,7 @@ function scope(from, head, part, leftOut) {
       findings,
     ];
   }
-  if (!isPart(part, leftOut)) {
+  if (!isPart(part, merge ? Math.max(leftOut, 1) : leftOut)) {
     throw new Error(`Not a part of a range reviewed in parts (\`{ index, of, files }\`, with a file at least, and two parts or more unless the range leaves files out of the review): ${JSON.stringify(part)}.`);
   }
   // `--no-renames`: with it the diff of some files is the diff of each of them, whatever the others are. A
@@ -103,8 +109,23 @@ function scope(from, head, part, leftOut) {
   // which may leave the file itself out. With the option every name is that one path and nothing more. It
   // is an option of `git`, not of `diff`, so it goes before the subcommand. The command that says what a
   // part must have seen is run with it too (`planParts` in `../codex-review.mjs`).
-  const command = `git --literal-pathspecs diff --no-renames ${from} ${head} -- ${part.files.map(quotedPath).join(' ')}`;
+  const files = part.files.map(quotedPath).join(' ');
   const context = 'read them for context, and report nothing about them.';
+  // A merge of the default branch is reviewed by what was written in it: the merge as committed against what
+  // merging its two parents again gives, which is the resolution of its conflicts, conflict markers on the
+  // removed side, and any edit made in it. What the merge brought in from the default branch had its own
+  // review there (`mergeStart` in `../codex-review.mjs`).
+  if (merge) {
+    const command = `git --literal-pathspecs show --remerge-diff --format= --no-renames ${head} -- ${files}`;
+    const which = part.of === 1 ? 'the files the command below names' : `part ${part.index} of ${part.of} of that review: the files the command below names`;
+    return [
+      `Review what was written in the merge commit ${head}, whose first parent is ${from}: the resolution of its conflicts and any edit made in it. This review covers ${which}.`,
+      `Run \`${command}\` to inspect them: its output compares the merge with what merging its two parents again automatically gives, conflict markers included, and it is the whole change under review.`,
+      findings,
+      `What the merge took unchanged from either parent was reviewed on its own branch: ${context}`,
+    ];
+  }
+  const command = `git --literal-pathspecs diff --no-renames ${from} ${head} -- ${files}`;
   // The one part of a range that leaves files out: the review is of its files, and there is no other part
   // to speak of.
   if (part.of === 1) {
@@ -137,12 +158,16 @@ function scope(from, head, part, leftOut) {
  * `leftOut` is how many files the range leaves out of the review (`./codex-review-scope.mjs`), 0 when none.
  * A range that leaves some out has no prompt as a whole, since that prompt's command shows every file: it
  * is asked in parts, each of which then says the other files are in the other parts or left out, and when
- * its files fit in one part that part is `{ index: 1, of: 1, files }`, whose text speaks of no part. */
-export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0 }) {
+ * its files fit in one part that part is `{ index: 1, of: 1, files }`, whose text speaks of no part.
+ *
+ * `merge` is for the review of a merge of the default branch, `head` the merge and `from` its first parent:
+ * the command of each part is then `git show --remerge-diff` of the merge, what was written in it, and a
+ * merge is always asked by its files, one part of one included. */
+export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = false }) {
   for (const id of [from, head]) {
     if (typeof id !== 'string' || !COMMIT_ID.test(id)) throw new Error(`The review prompt names its range by full commit id, got ${JSON.stringify(id)}.`);
   }
-  const range = scope(from, head, part, leftOut);
+  const range = scope(from, head, part, leftOut, merge);
   if (intent === null) return `${range.join('\n')}\n`;
   const purpose = [
     '## What the change is for',
