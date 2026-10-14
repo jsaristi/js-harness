@@ -351,6 +351,8 @@ project carries its evidence.
 
 ## Constraints
 - <a real constraint> — <the reason behind it>
+
+A constraint the gate must hold gets an id in docs/rules.json (\`js-harness rules\`).
 `;
 }
 
