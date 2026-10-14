@@ -9,7 +9,7 @@ State 2026-10-13: opened by this session from the orchestrator's opening (`js-ha
 --opening "JH 10 · comprobación en GitHub"`). The figure went to the orchestrator and he
 answered the same evening: no payment method on the account, and the run on GitHub's Linux at
 each pull request with code (option A'). Three readers read the figure and the design, and
-"What the readers changed" says what moved. Nothing has run on GitHub and nothing is pushed.
+"What the readers changed" says what moved. The branch is pushed and pull request 109 is open; its first run was red.
 Only the orchestrator asks him.
 
 ## Goal
@@ -495,7 +495,16 @@ version).**
 - Question for him (judgment): answerable, but hides the account-wide stop (busiest pace about day 9 by the same arithmetic) and the automatic fallback on the day the quota ends; put both in the same question; settle "who repairs main" in the design.
 - Looked for and not a gap: Codex coverage is from the merge-base (bin/lib/codex-review-coverage.mjs:273-284); sameTree; only 2 of 24 merges of main since 97703f9 had a hand resolution (git show --remerge-diff); the month's arithmetic checks out.
 
-**T7: reader A** was still running when this was written.
+**T7, the exchange: reader A (errors; not yet taken into the design either).**
+- 1. The extra runs of R1 (144 a month at the mean, 540 at the last day's pace) are an upper bound, not the estimate: the run is owed only when main moved after a pull request's last run. Median code pull request open 4 minutes; in 14 days 10 of 70 code pull requests saw another merge land while open (#36, 37, 44, 52, 53, 69, 75, 81, 99, 100), 2 of 18 in the last 24 hours. So about 21 a month at the mean and 60 at the last day's pace; minutes about 844 at the mean and 2,700 at that pace (quota ends about day 22, not 13). R1 also removes runs A' counts: 3 of the 25 local merges of main since 97703f9 were pushed to an open pull request (#75, #99, #100).
+- 2. The day the quota ends is the wrong state: GitHub's troubleshooting page speaks of "workflows failing due to billing", so a blocked run looks red (failure or startup_failure, not read), not absent; the orchestrator must read the job's annotation. Minutes reset at the start of each billing cycle, not the calendar month.
+- 3. Which main a green run tested cannot be read from the checks: the run's head_sha is the pull request head (82aa048); the base appears only in the checkout log ("HEAD is now at 0f0f0ef Merge 82aa0480… into 9b227df…"). The rule must read that line or the merge commit's parents (the workflow can print `git rev-parse HEAD^1`).
+- 4. `gh pr merge --match-head-commit` checks the head only, never the base; "only while main is still the one the green run merged with" is a manual check no command enforces (no protection, allow_auto_merge false). Nothing documents that GitHub's merge commit has the run's tested tree.
+- 5. Mechanism A (close and reopen) is unproven on its key point: the test merge commit is made by a background job (mergeable may be null meanwhile); nothing says a reopened run waits for it. The one-reopen test must check the base in the log equals the current main; a green result alone proves nothing. `closed` is not a workflow type, so the close starts no run.
+- 6. What it gives up lands on main: the next session that branches from it meets the Windows break in its own pre-commit gate, on code it never touched. Concrete case: main changes one of the 132 Windows-only tests that exercises code the branch also changed. The budget case (AGENTS.md at 1,477 of 1,500 on the runner; two branches adding about 15 tokens each) is caught on the runner. The local merge gate also writes a gate-log record that the lock measures and sameTree read.
+- 7. "No commit, so no Codex record" holds, but because a clean merge needs no record anyway (`--diff-merges=combined`, bin/lib/codex-review-coverage.mjs:204-210): R1 frees nothing on the review side.
+- 8. The state line said "Nothing has run on GitHub": stale since run 38504042140.
+- Holds: 22 code-bringing merges since 97703f9 (24 merges, 2 documents only); the arithmetic given its inputs; default types opened, synchronize, reopened; no run on a conflict; 4 billed minutes a run.
 
 ## Tasks
 - [x] T1 · This document, opened with the task contract, on its own branch and worktree,
