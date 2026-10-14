@@ -174,6 +174,13 @@ no token; without `--plan` the plan line unchanged. About 140 and 160 lines.
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
+- [ ] T10 G6, last part: the version of codegraph and the js-harness commit of the workspace recorded
+  with a run and compared on a resume (S3; route: inline; the lead, 2026-10-14 06:03)
+- [ ] T11 The fingerprint held hours apart: the real templates of both hosts built twice, hours
+  apart, outside the home, and their fingerprints compared; a difference names a volatile key to
+  leave out (S3; route: inline, free)
+- [ ] T12 PR 130 holds main: once jsaristi/js-harness#124 is merged, `origin/main` merged in once,
+  the gate passed, pushed, the lead told
 
 ## Log
 
