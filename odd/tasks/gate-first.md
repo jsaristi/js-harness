@@ -144,3 +144,8 @@ push and the pull request only when Codex has no P0 to P2; the body gets the gen
   commit: the preload (a file in bin/lib, exit 97 with one line when `--test` and no turn), NODE_OPTIONS in
   `leanEnv` when no turn is held, the sentence in `reviewPrompt`'s intent block, `own` forced out of a turn,
   the exemption in `owesCorrection`, and a mark in the record; `WAYS_ON` no longer sends to `gate --`.
+- 15:58 by `date`: step 1 of the build is written, not committed, in `codex-out-of-lock`:
+  `bin/lib/no-test-outside-turn.cjs` (the preload), `bin/lib/no-test-outside-turn.mjs` (its path, line, exit
+  97) and their test (RED: module missing; GREEN 2/2). Open point for the next step: a preload path with a
+  space would need quotes inside NODE_OPTIONS. Next: NODE_OPTIONS in `leanEnv` out of a turn (the env test at
+  `codex-review.test.mjs:531` changes), then the sentence and `own`, then `owesCorrection` and the record's mark.
