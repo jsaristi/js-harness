@@ -34,6 +34,13 @@ function makeTmpRepo(prefix = 'js-harness-init-cli-') {
   return dir;
 }
 
+/** A program in the repository at `dir`, so the code map resolves on and `codegraph init` runs
+ * (odd/tasks/on-demand-functions.md: an empty repository holds no code). */
+function withProgram(dir) {
+  fs.writeFileSync(path.join(dir, 'index.js'), '', 'utf8');
+  return dir;
+}
+
 function makeTmpDir(prefix = 'js-harness-init-cli-nongit-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
@@ -251,7 +258,7 @@ test('initMain reports a rolled-back write failure on stderr and exits 1', async
 // this scenario's directory did not exist before the retry, so it succeeds — "nothing was left
 // behind" is the truthful message now, not "removed everything it wrote except .codegraph/").
 test('initMain reports a codegraph-retry manifest write failure on stderr and exits 1', async () => {
-  const root = makeTmpRepo();
+  const root = withProgram(makeTmpRepo());
   try {
     const failSpawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 1, stdout: '', stderr: 'boom' });
     await initMain(['--cwd', root], process.env, { spawn: failSpawn, platform: 'linux' });
@@ -291,7 +298,7 @@ test('initMain reports a codegraph-retry manifest write failure on stderr and ex
 
 // T2b item 2: codegraph retry on a re-run
 test('initMain retries codegraph on a re-run after a prior failure and reports the outcome', async () => {
-  const root = makeTmpRepo();
+  const root = withProgram(makeTmpRepo());
   const home = makeTmpHome();
   try {
     const failSpawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 1, stdout: '', stderr: 'boom' });
@@ -323,7 +330,7 @@ test('initMain retries codegraph on a re-run after a prior failure and reports t
 });
 
 test('initMain reports a codegraph failure on stderr and still exits 0', async () => {
-  const root = makeTmpRepo();
+  const root = withProgram(makeTmpRepo());
   const home = makeTmpHome();
   try {
     const spawn = (cmd, args, opts) => {

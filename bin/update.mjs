@@ -115,12 +115,12 @@ function reportProjectStatus(location, version) {
   console.log(`project: ${path.normalize(location.root)}`);
   console.log(`pinned version: ${pinned ? location.pin : 'none'}`);
   console.log(`running version: ${version}`);
-  const notSetUp = pinned
-    ? 'this clone: not set up; js-harness sync sets it up'
-    : 'this clone: not set up; js-harness sync sets it up once a version is pinned';
-  console.log(
-    location.manifestPresent ? `this clone: set up (manifest: ${path.normalize(location.manifestPath)})` : notSetUp,
-  );
+  const syncSetsUp = pinned ? 'js-harness sync sets it up' : 'js-harness sync sets it up once a version is pinned';
+  const manifestAt = `(manifest: ${path.normalize(location.manifestPath)})`;
+  // A manifest `functions apply` wrote holds the switches and no gate, so the clone is not set up by it.
+  if (!location.manifestPresent) console.log(`this clone: not set up; ${syncSetsUp}`);
+  else if (location.functionsOnly) console.log(`this clone: only its switches applied ${manifestAt}; ${syncSetsUp}`);
+  else console.log(`this clone: set up ${manifestAt}`);
   if (!pinned) {
     console.log(`to pin this project: ${howToPinClause(version)}`);
     return;
@@ -130,6 +130,32 @@ function reportProjectStatus(location, version) {
       ? 'pin and running version: match'
       : 'pin and running version: differ; js-harness sync names the ways out',
   );
+}
+
+/** One quiet line of a project's own rules (odd/tasks/project-rules.md): how many its docs/rules.json holds and how
+ * many findings `js-harness rules check` would name, or nothing when it keeps no list. The check itself is the
+ * `rules` row of the gate; this line only lets a person see it without committing. The modules are loaded here
+ * only, so the machine status loads none of the gate's. */
+async function reportOwnRules(root) {
+  const { readProjectRules } = await import('./lib/project-rules-read.mjs');
+  const { discoverSensors } = await import('./check.mjs');
+  const found = discoverSensors(root);
+  let read;
+  try {
+    read = readProjectRules(root, { sensors: found.error ? null : found.sensors.map((sensor) => sensor.name) });
+  } catch (err) {
+    console.log(`own rules: docs/rules.json cannot be read (${err.message})`);
+    return;
+  }
+  if (!read.present) return;
+  if (!read.readable) {
+    console.log('own rules: docs/rules.json cannot be read; js-harness rules check names why');
+    return;
+  }
+  const count = read.findings.length;
+  console.log(count === 0
+    ? `own rules: ${read.rules.length} in docs/rules.json, all holding`
+    : `own rules: ${read.rules.length} in docs/rules.json, ${count} ${count === 1 ? 'finding' : 'findings'}; js-harness rules check names ${count === 1 ? 'it' : 'them'}`);
 }
 
 /** `status` by location, the "Command scope" rule `sync` and `uninstall` follow: inside a git repository it
@@ -154,6 +180,7 @@ ${STATUS_USAGE}`);
       case 'initialized':
       case 'noPin':
         reportProjectStatus(location, currentVersion());
+        await reportOwnRules(location.root);
         return 0;
       case 'invalidHarnessJson':
         console.error(invalidHarnessJsonMessage(location.harnessJsonPath, location.reason));

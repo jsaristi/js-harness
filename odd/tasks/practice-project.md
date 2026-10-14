@@ -183,6 +183,122 @@ the machine's install has to be the candidate) or a sandbox of the host's own ho
 (`evals/home.mjs` builds one for the evals; whether a host session started that way loads the
 practice's skills is not known). It is decided when the first feature that needs it is planned.
 
+### T5: the step `host-loads` (version 2, after its two readers)
+Designed on 2026-10-13 by `JH 11 · reglas del proyecto y prueba final`. Draft 1 was read by two
+sub-agents that did not write it (opus, effort high): A attacked it against the code, B looked for
+what it lacks; "What the readers changed" closes this section. He allowed the run, the lead's
+transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 15828, tapped, to "La prueba final
+(instalar el harness en un proyecto de práctica y usarlo con una sesión de Claude real) gasta
+modelo. Si el diseño queda listo esta noche, ¿se puede correr?": "Sí, dentro del plan
+(Recomendada)". The lead's reading of it (its message, a claim): at most three tries, each inside a
+turn of the gate, stopped if the weekly plan nears 30 percent.
+
+**What it proves.** That a real Claude Code session started in the practice project, with the
+practice's home as its home, loads and runs what `install` and `init` wrote: the two skills
+(listed, and one of them invoked), the `SessionStart` entry of `startup|resume`, the `PostToolUse`
+pause entry, the `SessionStart` entry of `compact`, and the project's `AGENTS.md`; and that it
+leaves nothing in his real home. The entries' Windows shell and matchers have never been run by a
+host (`bin/lib/manifest.mjs:191-195` says so of the shell).
+
+**Where it sits.** After `pause-hook`, before `real-home-after`; the practice home holds a fresh
+`install`. A step of the journey is synchronous (`walkJourney` records a step's return value
+without awaiting it, `scripts/practice-lib.mjs:503`), so every process is `spawnSync`, and a test
+holds that a step returning a promise fails.
+
+**The environment: an allowlist.** Built with the evals' `sandboxEnv` (`evals/configs.mjs:138-148`)
+over the practice home, which moves `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP`,
+`HOMEDRIVE`, `HOMEPATH`, the XDG folders and `CLAUDE_CONFIG_DIR`, and sets its switches (updates,
+telemetry, auto-memory and claude.ai's connectors off); then the practice's command folder first
+on `PATH`, and the token. Not `childEnv`, which passes through what the session that starts the
+run carries: `CLAUDE_CODE_CHILD_SESSION` (it turns the transcript off), the messaging socket and
+token of his live desktop session, `CLAUDE_PLUGIN_DATA`, another login's ids. A test holds that
+none of those names reaches the child. The root is checked with the evals' `assertWorkRoot`
+(`evals/configs.mjs:42-58`), so no `CLAUDE.md` or `AGENTS.md` above it loads.
+
+**The login.** The token `claude setup-token` made for the evals, read from
+`JS_HARNESS_EVAL_OAUTH_TOKEN` and set only on that one call's environment as
+`CLAUDE_CODE_OAUTH_TOKEN`, never on the journey's context. Before the step returns or throws, its
+detail, the tail of the stream and any error are scanned for the value and redacted; a test plants
+it. With no token the step fails and names the command that makes one.
+
+**What runs.** Three calls of `claude -p` in the practice project, each `--model claude-haiku-5-5`
+(the alias `haiku` resolved to Haiku 4.5 on 2.1.292, `evals/configs.mjs:281-282`),
+`--output-format stream-json --verbose --include-hook-events`, two minutes at most:
+1. With no tools (`--tools ""`) and one turn: the prompt asks for the word of the run. Before it,
+   the step appends to the practice's `AGENTS.md` one line holding a hex nonce that the prompt
+   never contains; with no tool the model can only answer from what was loaded. Asserted: the init
+   event lists the skills `js-harness` and `js-harness-orchestrator` and no file tool; a
+   `SessionStart:startup` hook event ran `js-harness doctor --hook`, and the practice home's
+   `.js-harness/doctor.json` was written during the step (`doctor --hook` exits 0 even when it
+   throws, `bin/doctor.mjs:210-236`, so its exit is evidence and not proof); a hook killed by its
+   timeout of ten seconds (`bin/lib/manifest.mjs:172`) is a failure with its own words; the result
+   is a success in one turn and holds the nonce, compared without case.
+2. `--resume <session>` with only the Skill tool allowed: the prompt asks to invoke the
+   `js-harness` skill and quote its line that starts with `js-harness check --push`. Asserted: the
+   quote, and a `PostToolUse` hook event that ran `js-harness resume --pause || exit 0` and
+   exited 0 (the wiring and the shell; the notice itself is `pause-hook`'s).
+3. `--resume <session>` with `/compact`. Asserted: a `SessionStart:compact` hook event ran
+   `js-harness resume --hook`, exit 0.
+The field names of the stream are read from the first run and pinned in a recorded fixture; the
+reader is tested on it, so a change of Claude Code's stream fails a test and not a guess.
+
+**Which `js-harness` the hooks ran.** Every copy says `0.1.0`, so a hook's success does not tell
+the candidate from his pnpm copy. Under the same environment, the host's shell resolves the
+command (`bash -lc 'command -v js-harness'` on Windows, where the host runs hooks in Git Bash) and
+the step asserts it lies under the practice's prefix, with the path in its detail.
+
+**What it leaves.** Asserted after the three calls: the practice home's `.claude/settings.json` and
+`.codex/hooks.json` are byte for byte as before (else the next run fails a step later, in the
+wrong place); `git status --porcelain` of the project is as before; a transcript of the session
+lies under the practice home's `.claude/projects/` (the sandbox held); his real
+`~/.claude/projects/` has no folder for the practice project and his real `~/.claude.json` names
+it under no key (key names only: his live sessions rewrite that file). Then the host's own folders
+under the practice home are removed and named in the detail. `AGENTS.md` is restored in a
+`finally`, and, for a run killed before it, the step refuses to start while `AGENTS.md` differs
+from its last commit. After a timeout or a failure, the processes under the root are swept with
+the evals' `killByPath` (`evals/runner.mjs:221`), since a timeout kills only `claude.exe` on
+Windows.
+
+**A host failure is not a harness failure.** A plan cap, an auth error, the network, a timeout or
+a failed start is classified with the evals' `classifyAgentFailure`
+(`evals/agent-output.mjs:81-94`): the step still fails (never a pass, never a skip), but its detail
+and the record say `host unavailable (<kind>)`, so a tag decision reads it as such.
+
+**The record.** `recordLine` gains `host`: `claude --version` and the binary's path, the model the
+result names, input, output and cache tokens, the cost in dollars, the duration, and the failure
+kind when there is one. The step prints the same as its last line, so the recap carries the figure
+to him. The figure of a run is read from its result, never guessed.
+
+**Running it alone.** `run --root <dir> --only host-loads`, valid only on a folder that already
+holds a finished journey; its record line is `ok: false`, being partial. For the loops of a
+contract, `run --no-host` leaves the step out and the record says so; the run before a merge that
+changes what a project receives, and the run before the tag, are full.
+
+**Codex: not in this step, and said so.** Its login is a file, copied into a trial home by the
+evals (`evals/codex-home.mjs:1-36`); whether `codex exec --json` reports the skills and hooks it
+loaded is not known. A probe on the next Codex use answers it; until then the roadmap's list for
+1.0.0 says "Codex loads `hooks.json` and its skills: not proven".
+
+**Not here:** the pre-commit hook and `codegraph init`, which involve no host and are proven by
+steps 5 to 7.
+
+**What the readers changed.**
+- Reader A (the attack): the environment became `sandboxEnv`, an allowlist (1); the first call has
+  no tools, so the nonce proves loading and not reading (2); the model is named in full (3); the
+  doctor hook's proof is its file, not its exit, and its timeout is its own failure (4, 5); the
+  real home is checked where a host writes (6); synchronous calls and the sweep (7); a host
+  failure told apart (8); the guard for a killed run (9); the token redacted (10); `assertWorkRoot`
+  and a nonce outside the prompt (11); the stream's names pinned from a first run (12).
+- Reader B (what was missing): the pause entry and the `compact` entry run by the host (1, 2); a
+  skill invoked, not only listed (3); which `js-harness` ran (4); what the host leaves in the
+  practice home and the project (5); the evals' full sandbox (6); the token's open question (7);
+  the cost with the contracts' loops, hence `--no-host` (8); the record's `host` (9); the cap (10);
+  `--only` (11); the Windows sweep (12); Codex named as not proven (14); what is left out (15).
+- Not taken: B's list of host assertions that later features append to (13): no later feature
+  needs one yet, and the three calls are one session.
+- Still not guaranteed: macOS and Linux; Codex; the notice of the pause past its threshold inside
+  a real session (it would need a long session).
+
 ## Met on the road
 Read in the code, not run, unless it says so. Reported to the orchestrator; none is repaired here.
 
@@ -246,13 +362,17 @@ run itself.
 - [x] T3c Accepted follow-ups of the review of T3b, test first: `R3-non-error-throw-detail`, `R3-report-throw-aborts-walk`, `R3-recordline-foreign-ids`, `R3-setup-wiring-unproved` — route: inline (three small changes in the library, one call changed in the command, four tests)
 - [x] T3d The three findings of the Codex review, test first: the ceiling of git's search kept in the child environment, a root resolved before it is judged, a hook of the machine taken for the one `init` wrote — route: inline (the library, its test, two places of the command)
 - [x] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
-- [ ] T5 A step of the journey proves that a host loads what was installed. Added on
+- [x] T5 A step of the journey proves that a host loads what was installed. Added on
   2026-10-13, a gap in shipped behaviour that had no task (`docs/ROADMAP.md`, "Next", the
   defects read on that day, item f). Read on `main` at `f98f478`: the eleven steps of `JOURNEY`
   (`scripts/practice-lib.mjs:450-461`) install, adopt, commit, uninstall and run the pause
   hook's command, and none starts a Claude Code or a Codex session in the practice project;
   the roadmap says so itself ("What the run does not prove"). Such a step spends a model, so
-  what it runs and how often is his to approve when it is designed
+  what it runs and how often is his to approve when it is designed. Designed under "T5: the step
+  `host-loads`"; his allowance of the run is quoted there. Done on 2026-10-14, built on the branch
+  `feat/project-rules` (`ed24609`, `1659801`): the run of `1659801` passed its 13 steps, the
+  third of his three tries; the tries and their costs are in `odd/tasks/project-rules.md`, L7.
+  Codex is not proven
 
 ## Progress
 - 2026-10-10: session opened by Sebastián's paste of the orchestrator's opening prompt. Worktree

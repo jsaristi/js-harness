@@ -48,7 +48,7 @@ First request of a one-word prompt, estimated tokens:
 | Release source | Decided and not built: git tags in the private repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it stays private (Name, home), so that step has no date. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: until the first tag `update`, `upgrade` and `status` say that no release is tagged yet, and `upgrade` installs only the newer tarball of a folder named with `--source` (2026-10-13, `odd/tasks/install-update.md`, T5). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
-| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`). A project may declare `"sameTree": "skip"`: a gate whose tree, file for file, with the same sensors on the same Node, is the one a gate already ran every sensor on and passed, by a line of the gate log, runs no sensor and takes no lock, and says in its row which gate is the proof; off unless declared, since the key of a tree holds no file git ignores; this repository declares it (his decision of 2026-10-12, the lead's transcript, line 3913; built 2026-10-13, `odd/tasks/gate-wait.md`, T12) |
+| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. So does a commit, a merge above all, whose index differs in documents alone from the trunk as origin names it, or from `MERGE_HEAD` where git wrote one: the trunk merged into a branch of documents, whose code is the trunk's (2026-10-14, `odd/tasks/merge-documents-skip.md`). Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`). A project may declare `"sameTree": "skip"`: a gate whose tree, file for file, with the same sensors on the same Node, is the one a gate already ran every sensor on and passed, by a line of the gate log, runs no sensor and takes no lock, and says in its row which gate is the proof; off unless declared, since the key of a tree holds no file git ignores; this repository declares it (his decision of 2026-10-12, the lead's transcript, line 3913; built 2026-10-13, `odd/tasks/gate-wait.md`, T12) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
 | Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
 | Command scope | A command that exists at both levels acts by location, like npm: inside an initialized project (a git repo with `harness.json` or a project manifest) it acts on the project, anywhere else on the machine; `--global` forces the machine from anywhere. Inside a git repository that is not an initialized project, or with an explicit `--cwd` that is not one, the command refuses and names `--global`, so repeating it never reaches the machine by accident. `uninstall` first, `sync` next (decided 2026-09-28) |
@@ -648,6 +648,20 @@ survey.
 A limit of the feature as a whole: most of the text loaded on every turn is not this repository's but
 gentle-ai's managed block (F2), so this orders the thin layer, not the whole payload.
 
+**A project's own rules**, built on 2026-10-14 in `odd/tasks/project-rules.md` (S1-S7, design
+version 2 after two readers; his answer "Sí, en prosa y por sensor (Recomendada)", the lead's
+transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 15809). A project where the harness is
+installed declares its own rules in `docs/rules.json` (`{ "format": 1, "rules": [...] }`), each
+with an id, an owner and one body: prose (a file and phrases that must still be in it), a sensor
+(a name that must still be declared in `harness.json` or `package.json`), or retired. `js-harness
+rules`, `rules <id>` and `rules check` read that list at a project's git top; the gate's first row,
+`rules`, holds it there and only there, and refuses a phrase gone from its file, a sensor no
+longer declared, a `failure` id the register does not hold, and a rule present at `HEAD` and now
+missing (retire it instead). An id the harness also ships is a note, never a refusal. No values
+and no overrides of the harness's own rules: those would be a feature of their own, beside the
+switches of `harness.json`. The harness never writes the list, so `uninstall` has nothing of it
+to undo. `status` says how many hold; the skill and the `AGENTS.md` template name the list.
+
 ## Session channel
 
 Designed on 2026-10-10 in `odd/tasks/session-channel.md`, by the design session that also wrote
@@ -926,7 +940,9 @@ podamos implementar todo"), each a feature of its own with its own document and 
      every question to git stay on Windows, and the sensors of documents never move. A
      sensor that never reached the mirror runs on Windows and its row says why; one that
      failed there failed; a switch file that cannot be taken fails the gate in a row `wsl`.
-     The gate log marks each sensor that ran there (`ranIn`). With no file, off Windows,
+     The gate log marks each sensor that ran there (`ranIn`). A sensor that failed, there or on Windows, keeps in its end line
+     the names of its failing tests (`failing`, twenty at most), read from what `node --test`
+     printed (2026-10-14, `odd/tasks/gate-log-failing-tests.md`). With no file, off Windows,
      or with `JS_HARNESS_GATE_WSL=0`, a gate runs as it did; with the variable and the
      file, each row says where its temporary files went. What Windows loses per commit:
      its own code paths are tested by one run per merged batch, in a lock turn on `main`:
@@ -952,10 +968,15 @@ podamos implementar todo"), each a feature of its own with its own document and 
    appends one line to the folder's `record.jsonl` with the commit that was proven. A
    feature that changes what a project receives adds its own step, in its own branch: an
    entry in `JOURNEY` (`scripts/practice-lib.mjs`) and its function in `STEPS`
-   (`scripts/practice.mjs`), and the run exiting 0 goes in its contract. What the run does
-   not prove is that a host loads what was installed: no Claude Code or Codex session is
-   started in the practice project, and that proof is designed when the first feature that
-   needs it is planned.
+   (`scripts/practice.mjs`), and the run exiting 0 goes in its contract. Since 2026-10-14
+   the journey has thirteen steps (`odd/tasks/practice-project.md`, T5, and
+   `odd/tasks/project-rules.md`, T6): `project-rules` holds a project's own rules and refuses
+   two commits that break them, and `host-loads` starts a real Claude Code session in the
+   practice project, three Haiku 5.5 calls under a home of their own (about half a cent and
+   fifteen seconds; `--no-host` leaves it out, and it needs `JS_HARNESS_EVAL_OAUTH_TOKEN`). The
+   session lists both skills, answers with a word only `AGENTS.md` holds, runs the three hook
+   entries, and leaves no trace in his real home; the first full pass is of `1659801`. Not
+   proven: that Codex loads its `hooks.json` and its skills.
 5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
    each working three features at once, orchestrated together and able to talk to each
    other. What is known: the app's messages stay inside one account, so across accounts the
@@ -1207,7 +1228,9 @@ those features has a session open: the lead assigns them.
   not a semver string, and a file that is not a JSON object, are refused as before.
 - f. **The practice run starts no host session**, so it does not prove that a host loads what
   was installed (`scripts/practice-lib.mjs:450-461`; item 4 under "Session channel" says so).
-  `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve.
+  `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve. Done on
+  2026-10-14 for Claude Code (the step `host-loads`, within his allowance of three tries); Codex
+  is still not proven.
 - g. Already placed by the session-channel session in its own document, and only named here:
   the pause hook assumes a window of 500,000; the hook's text uses terms an installed project
   is never given; `uninstall` leaves `~/.js-harness/remote/`; and `pointersIn` of

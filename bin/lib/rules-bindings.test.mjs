@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { REVIEW_EFFORT, REVIEW_MODEL } from '../codex-review.mjs';
 import { GATE_WAIT_MS } from './gate-lock.mjs';
 import { ruleValue } from './rules.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT } from './sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, PERSON_PRESENT_MS } from './sessions.mjs';
 
 test('the model and the effort of a Codex review are the declared ones', () => {
   assert.equal(REVIEW_MODEL, ruleValue('review-model'));
@@ -17,6 +17,13 @@ test('the model and the effort of a Codex review are the declared ones', () => {
 test('the wait of a gate lock is the declared gate-wait in milliseconds, and a whole number above 0', () => {
   assert.equal(GATE_WAIT_MS, ruleValue('gate-wait', 'minutes') * 60_000);
   assert.ok(Number.isInteger(GATE_WAIT_MS) && GATE_WAIT_MS > 0);
+});
+
+// How long after he last wrote a question is put to him at once is declared before the code that asks it
+// reads it: until `askingRule` reads the rule, this holds its constant to the declaration.
+test('the time he counts as present is the declared person-present in milliseconds, and a whole number above 0', () => {
+  assert.equal(PERSON_PRESENT_MS, ruleValue('person-present', 'minutes') * 60_000);
+  assert.ok(Number.isInteger(PERSON_PRESENT_MS) && PERSON_PRESENT_MS > 0);
 });
 
 // The command's test file held both values in its expected output, 67 and 58 times: his change of the

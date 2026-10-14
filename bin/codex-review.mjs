@@ -8,6 +8,12 @@
 // all appear in the output of the commands that succeeded in its JSONL event stream (design and
 // probes: odd/tasks/codex-exec-review.md).
 //
+// A correction is checked against its findings once (./lib/codex-review-recheck.mjs). A range that starts at
+// the head of a review that found something is a recheck: its prompt lists those findings and asks whether
+// each is fixed, anything new is a follow-up that does not block unless it could make a failing check pass
+// or exposes data, and its record names that head (`recheckOf`). A range that starts at the head of a
+// recheck that left a finding open is refused, with what to record instead. No flag skips it.
+//
 // A review runs on one model at one effort, `REVIEW_MODEL` at `REVIEW_EFFORT`, which the command names to
 // Codex itself and no flag changes (Sebastián, 2026-10-08; odd/tasks/codex-review-cost.md). The session's
 // own rollout file says what it ran with, and the review is held to that: one that ran on anything else
@@ -160,7 +166,10 @@ import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } fro
 import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
-import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
+import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
+import {
+  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, secondRecheckRefused,
+} from './lib/codex-review-recheck.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
 import { killTree } from './lib/process-tree.mjs';
@@ -1178,14 +1187,43 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * on the model and at the effort the command passes, with its estimate from the run log of this
    * repository's machine. A log that cannot be read is one that measured nothing: the plan then says there
    * is no estimate, and a run goes on as it would. */
-  const planOf = ({ groups, leftOut }) => {
-    let runs = [];
-    try {
-      runs = readCodexReviewRuns(root, { spawn, where });
-    } catch {
-      // Nothing measured.
+  // The run log as it was before this run wrote to it, read once for the plan and the recheck: a log that
+  // cannot be read measured nothing, and holds no findings to recheck.
+  let runLog;
+  const readRunLog = () => {
+    if (runLog === undefined) {
+      try {
+        runLog = readCodexReviewRuns(root, { spawn, where });
+      } catch {
+        runLog = [];
+      }
     }
-    return reviewPlan({ base, head, model: REVIEW_MODEL, effort, parts: groups, runs, maxParts: args.maxParts, leftOut });
+    return runLog;
+  };
+  const planOf = ({ groups, leftOut }) =>
+    reviewPlan({ base, head, model: REVIEW_MODEL, effort, parts: groups, runs: readRunLog(), maxParts: args.maxParts, leftOut });
+  /** What a review of a range that starts at `from` is (./lib/codex-review-recheck.mjs): a review as any
+   * other, a recheck of the findings of the review that ended at `of`, or a second recheck, refused. Decided
+   * by the records, so that no flag skips it; a caller that measures every attempt (`onResult`, a
+   * comparison) or every file reviews as it asked. A run log that holds nothing, records that cannot be
+   * read, or git that cannot say which commits are behind `from`, leave the range a review as any other;
+   * the records are not read when the log holds nothing. */
+  const recheckFor = (from) => {
+    if (onResult !== null || everyFile || readRunLog().length === 0) return { kind: 'review' };
+    let records;
+    try {
+      records = readCodexReviews(root, { spawn, where });
+    } catch {
+      return { kind: 'review' };
+    }
+    const back = git(spawn, root, ['rev-list', `--max-count=${RECHECK_LOOK_BACK}`, from]);
+    if (back === null) return { kind: 'review' };
+    const changedBetween = (older, newer) => {
+      const names = git(spawn, root, ['diff', '--no-renames', '--name-only', '-z', older, newer]);
+      return names === null ? null : names.split('\0').filter(Boolean);
+    };
+    const anchor = recheckAnchor({ from, records, back: back.split('\n').filter(Boolean), changedBetween });
+    return recheckState({ from: anchor, records, runs: readRunLog() });
   };
 
   /** Where this run starts, once the Codex review records have been read against its range, `given..head`
@@ -1240,6 +1278,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
+    // What a run of this range would be, when it is not a review as any other.
+    const state = recheckFor(from);
+    if (state.kind === 'recheck') log(`A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
+    if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ of: state.of, open: state.open, base: from }).split('\n')[0]}`);
     // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.
     const allowance = allowanceLine(reviewAllowance(plan, readProjectRules(root)));
     if (allowance !== null) log(allowance);
@@ -1273,6 +1315,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // reads them: a document is left out at every commit, but a mark is that of the head of this range, so a
   // record that left a marked file out covers only what is pushed up to that head (`leftMarkedFilesOut`).
   let leftOut = null;
+  // `{ of, findings }` when this range is a recheck of the findings of the review that ended at `of`
+  // (./lib/codex-review-recheck.mjs); `null` for a review as any other, and for a skip.
+  let recheck = null;
   if (args.unavailable === undefined) {
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
     // dirty tracked tree would be reviewed and then recorded as if it were committed.
@@ -1299,6 +1344,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // The review starts where the records end, and there is none to start over a range they cover whole.
     const from = startingAt(given);
     if (from === null) return 0;
+    // A range that starts where a review that found something ended is a recheck of those findings, and a
+    // second recheck of the same findings is not run (`recheckFor`).
+    const state = recheckFor(from);
+    if (state.kind === 'refused') {
+      error(secondRecheckRefused({ of: state.of, open: state.open, base: from }));
+      return 1;
+    }
+    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings };
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
     const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', from, head], { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
@@ -1362,6 +1415,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why });
     if (made.error) return notSplit(made.error);
     ({ parts } = made);
+    if (recheck !== null && parts !== null && parts.length > 1) {
+      error(recheckTooLarge({ of: recheck.of, parts: parts.length }));
+      return 1;
+    }
     // The environment of the `--version` probe, and what the session's is made from: the session adds a
     // `CODEX_HOME` of its own below. The probe only asks for the version, which no home changes, so it
     // runs before that home is made.
@@ -1378,15 +1435,43 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // prompts of its parts instead (`planParts`).
     const own = args.prompt === 'own';
     let promptText;
-    if (own && parts === null) {
+    if ((own || recheck !== null) && parts === null) {
       try {
         promptText = reviewPrompt({ from, head, intent });
+        if (recheck !== null) promptText = recheckPrompt(promptText, recheck.findings);
       } catch (err) {
         error(`Could not write the review prompt (${err.message}), so the review was not started and nothing was recorded.`);
         return 1;
       }
     }
     const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+    /** What a recheck that stands found of the findings it checked, after the findings and the verdict: how
+     * many are fixed, then the follow-ups and the blocking findings apart, and whether the next range may be
+     * rechecked. */
+    const recheckSaid = (review) => {
+      const read = classifyRecheck(review, recheck.findings.length);
+      const { findings, fixed, notFixed } = read.counts;
+      const notSaid = read.status.filter((one) => one === 'not said').length;
+      log(`This range is a recheck of the ${counted(findings, 'finding')} of the review that ended at ${recheck.of.slice(0, 7)}: ${thousands(fixed)} fixed, ${thousands(notFixed)} not fixed${notSaid > 0 ? `, ${thousands(notSaid)} not said` : ''}.`);
+      // Each earlier finding, with what the recheck said of it.
+      recheck.findings.forEach((finding, at) => log(`  ${at + 1}. ${read.status[at]}: ${priorLine(finding)}`));
+      if (read.unmarked.length > 0) {
+        log(`Not marked as the recheck asks, so taken as open: ${thousands(read.unmarked.length)}.`);
+        for (const finding of read.unmarked) log(findingLine(finding));
+      }
+      if (read.blocking.length > 0) {
+        log(`Blocking, a new finding that could make a failing check pass or exposes data: ${thousands(read.blocking.length)}.`);
+        for (const finding of read.blocking) log(findingLine(finding));
+      }
+      if (read.followUps.length > 0) {
+        log(`Follow-ups, which do not block (record them as a task): ${thousands(read.followUps.length)}.`);
+        for (const finding of read.followUps) log(findingLine(finding));
+      }
+      const open = notFixed + read.blocking.length + read.unmarked.length;
+      if (open > 0) {
+        log(`A range that starts at ${head.slice(0, 7)} is not rechecked again: fix what is open in this branch and record a follow-up task for it.`);
+      }
+    };
     /** One attempt: one Codex session, over the whole range or over one `part` of it (see `planParts`),
      * from the making of its lean home to its line in the run log. `expectedKeys` are the changed lines
      * its commands must have shown (`patchKeys`), `prompt` what it is asked with (`codex` or `own`),
@@ -1586,9 +1671,18 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             findings: review ? findingCounts(review.findings) : null,
             verdict: review ? review.verdict : null,
             answerSource: review ? 'rollout' : null,
+            // What a review that stands found, whole, so that a range that starts at its head can be checked
+            // against it (./lib/codex-review-recheck.mjs); `null` on every other line, so that every line has
+            // the same fields.
+            answer: runOutcome === 'reviewed' && review !== null ? { findings: review.findings, verdict: review.verdict } : null,
             // A part that passed keeps what it answered, and the key of what its session was sent, so that a later
             // run of the same range does not ask it again (`runKept`, `keptPartFor`). No other line keeps one.
             ...(runOutcome === 'reviewed' && key !== null && review !== null ? { kept: { key, review, rendered: evidence.review } } : {}),
+            // For a recheck, what it found of the findings it checked, which says whether the range after it
+            // may be rechecked.
+            ...(runOutcome === 'reviewed' && review !== null && recheck !== null
+              ? { recheck: { of: recheck.of, ...classifyRecheck(review, recheck.findings.length).counts } }
+              : {}),
           };
           appendCodexReviewRun(root, run, { spawn, where });
           logged = true;
@@ -1712,18 +1806,29 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     };
 
     if (parts === null) {
-      const whole = await attempt({ expectedKeys: expected, prompt: args.prompt, promptText, promptVersion: own ? REVIEW_PROMPT_VERSION : null });
+      if (recheck !== null && !own) log('A recheck is asked with this command\'s own prompt, which lists the findings it checks: the sentence Codex writes for `--base` cannot.');
+      const asked = recheck !== null ? 'own' : args.prompt;
+      const version = recheck !== null ? RECHECK_PROMPT_VERSION : own ? REVIEW_PROMPT_VERSION : null;
+      const whole = await attempt({ expectedKeys: expected, prompt: asked, promptText, promptVersion: version });
       if (whole.exit !== 0) return whole.exit;
       runId = whole.runId;
+      if (recheck !== null) recheckSaid(whole.review);
     } else if (parts.length === 1) {
       // A range that leaves files out, whose other files fit in one part: one session, asked by its files
       // as a part is, since Codex's own review of a range reads every file of it. Said when the prompt
       // that was asked for, or the default, is not the one that is sent.
       if (!own) log('The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.');
       const [part] = parts;
-      const sole = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: REVIEW_PART_PROMPT_VERSION, part });
+      const sole = await attempt({
+        expectedKeys: part.expected,
+        prompt: 'own',
+        promptText: recheck !== null ? recheckPrompt(part.prompt, recheck.findings) : part.prompt,
+        promptVersion: recheck !== null ? RECHECK_PROMPT_VERSION : REVIEW_PART_PROMPT_VERSION,
+        part,
+      });
       if (sole.exit !== 0) return sole.exit;
       runId = sole.runId;
+      if (recheck !== null) recheckSaid(sole.review);
     } else {
       const lines = parts.reduce((sum, part) => sum + part.changedLines, 0);
       const files = parts.reduce((sum, part) => sum + part.files.length, 0);
@@ -1834,6 +1939,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // What the review did not read, by count: the record says "reviewed" of the range, and this is how
     // much of the range that is not said of.
     ...(leftOut === null ? {} : { leftOut }),
+    // The head whose findings this range was a recheck of: the record still says `reviewed`, so it covers
+    // its commits for `check --push`, and this says it checked those findings and no more.
+    ...(outcome === 'reviewed' && recheck !== null ? { recheckOf: recheck.of } : {}),
   });
   if (file === null) return 1;
   const what = outcome === 'reviewed' ? 'the Codex review' : `an unavailable Codex review (${args.unavailable})`;

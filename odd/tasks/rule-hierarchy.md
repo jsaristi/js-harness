@@ -2590,6 +2590,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**State for a resume, 2026-10-14 at about 15:00, at 89 percent of the context.** T16b is PAUSED by
+his order to fix the failures first (the lead's transcript ffe99ebf, lines 5906 and 5853). Parked:
+`feat/rule-contract-timeout` (worktree `rule-contract-timeout`, commit e3d3dee, stacked on pull
+request 129's branch, no Codex record yet: run `codex-review --base 2c65caf`, then its pull
+request); `feat/rule-review-timeout` (worktree `rule-review-timeout`, NOT committed: a merge of
+`main` staged with `--no-commit` and the review's timeout unstaged on it; commit both in one gate
+turn with `turn-merge-then-work.sh` of this session's scratchpad, as its message files there say).
+Then `bin/check.mjs` after JH 8's documents skip. The register's eight entries of the night of the
+14th are on `docs/failures-stall` (its pull request to the lead).
+
 **State for a resume, 2026-10-14 at 06:25 by `date`, at 76 percent of the context, at a task
 end.** Merged since 05:15: the register's entries (pull request 125) and the roadmap lines (126:
 open decisions 3, 7 and 9 answered, 4 with JH 9's design and his four answers, the repository

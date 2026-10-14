@@ -19,7 +19,7 @@ function indentOf(raw) {
 
 /** `data` as the text of a file that looked like `raw`: its indent, its line endings, and a newline at the
  * end only if it had one. */
-function textLike(raw, data) {
+export function textLike(raw, data) {
   const indent = indentOf(raw);
   let text = indent === null ? JSON.stringify(data) : JSON.stringify(data, null, indent);
   if (/\n$/.test(raw)) text += '\n';

@@ -827,6 +827,28 @@ test('status exits 0 in a project whose harness.json holds no version: no pin, h
   }
 });
 
+// A manifest `functions apply` wrote holds the switches and no gate (odd/tasks/on-demand-functions.md, slice 2).
+test('status says a clone whose manifest holds only its switches is not set up', async () => {
+  const root = makeProject({ manifest: true });
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(root, '.git', 'js-harness', 'manifest.json'), '{ "scope": "functions", "files": [] }\n', 'utf8');
+
+    const { code, out } = await runStatus(['--cwd', root, '--home', home], {}, noPackageManager);
+
+    assert.equal(code, 0);
+    assert.match(
+      out,
+      /^this clone: only its switches applied \(manifest: .*manifest\.json\); js-harness sync sets it up once a version is pinned$/m,
+    );
+    assert.doesNotMatch(out, /this clone: set up/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('status in a project with no pin says so in a clone that is set up too', async () => {
   const root = makeProject({ manifest: true });
   const home = makeTmpDir('js-harness-status-home-');
@@ -928,6 +950,27 @@ test('status with no --cwd, inside an initialized project, is the project status
     assert.equal(code, 0);
     assert.match(out, /pinned version:/);
     assert.doesNotMatch(out, /manifest version:/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('status in a project that keeps its own rules says how many and how many findings, and says nothing of them otherwise', async () => {
+  const root = makeProject();
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    const quiet = await inDir(root, () => runStatus(['--home', home], {}, noPackageManager));
+    assert.doesNotMatch(quiet.out, /own rules/);
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    const rule = { id: 'no-direct-deploy', subject: 'a deploy goes through the pipeline', since: '2026-10-14', path: 'AGENTS.md', phrases: ['Never deploy by hand'] };
+    fs.writeFileSync(path.join(root, 'docs', 'rules.json'), JSON.stringify({ format: 1, rules: [rule] }));
+    const found = await inDir(root, () => runStatus(['--home', home], {}, noPackageManager));
+    assert.equal(found.code, 0);
+    assert.match(found.out, /^own rules: 1 in docs\/rules\.json, 1 finding; js-harness rules check names it$/m);
+    fs.appendFileSync(path.join(root, 'AGENTS.md'), '\n- Never deploy by hand.\n');
+    const held = await inDir(root, () => runStatus(['--home', home], {}, noPackageManager));
+    assert.match(held.out, /^own rules: 1 in docs\/rules\.json, all holding$/m);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });

@@ -73,7 +73,7 @@ test('every argument but --work-root is required, and a missing one is named', (
 });
 
 test('an unknown flag, a flag without a value, a repeated flag and a stray word are usage errors', () => {
-  assert.throws(() => parseArgs([...argv(), '--model', 'x'], { taskIds: TASKS }), /--model/);
+  assert.throws(() => parseArgs([...argv(), '--temperature', 'x'], { taskIds: TASKS }), /--temperature/);
   assert.throws(() => parseArgs([...argv(), '--repeats'], { taskIds: TASKS }), /--repeats/);
   assert.throws(() => parseArgs(['--claude', '--configs', 'minimal'], { taskIds: TASKS }), /--claude requires a value/);
   assert.throws(() => parseArgs([...argv(), '--name', 'again'], { taskIds: TASKS }), /--name .*twice/);
@@ -908,10 +908,12 @@ test('a Codex run needs no token and keeps everything in a codex directory of it
     assert.deepEqual(fs.readdirSync(m.resultsDir), ['codex'], 'nothing is written beside the results of the Claude runs');
     assert.deepEqual(fs.readdirSync(path.join(m.resultsDir, 'codex')), ['screen.json'], 'no temporary file is left');
     const doc = readCodexDoc(m);
+    assert.match(doc.setup?.sha256 ?? '', /^[0-9a-f]{64}$/, 'the setup of the current arm, the fingerprint of its Codex template');
+    assert.ok(Object.keys(doc.setup.items).some((item) => item.startsWith('.codex/')), JSON.stringify(doc.setup.items));
     assert.deepEqual({ ...doc, trials: keysOf(doc.trials) }, {
       format: 1, name: 'screen', createdAt: '2026-10-02T12:00:00.000Z', ...CODEX_RUN,
       args: { codex: m.codex, configs: ['minimal', 'current'], efforts: ['medium', 'high'], repeats: 1, tasks: ['alpha', 'beta'], workRoot: m.workRoot },
-      trials: PLAN,
+      trials: PLAN, setup: doc.setup,
     });
     assert.deepEqual(deps.runTrial.asked, PLAN);
     assert.deepEqual(asked, [{ codex: m.codex, workRoot: m.workRoot }], 'the version is asked once, of this binary, in the work root that was checked');
@@ -1539,4 +1541,209 @@ test('a subagent suite runs a real trial of the fake agent: read as Claude Code\
   assert.deepEqual([trialKey(record), record.score, record.error], ['alpha|sub-haiku-verify|medium|1', 1, null]);
   assert.deepEqual(fs.readdirSync(path.join(m.runsDir, 'subagents', 'screen')).filter((name) => name.endsWith('.stdout.log')), ['alpha__sub-haiku-verify__medium__1.stdout.log']);
   assert.equal(fs.existsSync(path.join(m.runsDir, 'screen')), false, 'nothing under the runs of the minimal and current arms');
+});
+
+// G5 of `odd/tasks/future-model-protocol.md`: the model a run is measured on is chosen with `--model` and recorded
+// with it; without the flag it is the default constant, so a command line that worked before means what it meant.
+const NEW_CLAUDE_MODEL = 'claude-fable-5-5';
+const NEW_CODEX_MODEL = 'gpt-7-sol';
+
+test('--model is parsed into the run, for either agent, and is absent from what is parsed when it is not given', () => {
+  assert.deepEqual(parse({ '--model': NEW_CLAUDE_MODEL }), { ...parse(), model: NEW_CLAUDE_MODEL });
+  assert.equal('model' in parse(), false);
+  assert.deepEqual(parseCodex({ '--model': NEW_CODEX_MODEL }), { ...parseCodex(), model: NEW_CODEX_MODEL });
+  assert.equal('model' in parseCodex(), false);
+});
+
+test('--model refuses an alias or a malformed id for Claude Code, an empty or spaced one for Codex, and a summary', () => {
+  for (const model of ['opus', 'sonnet', 'claude-opus', 'Claude-Opus-5-5', 'claude-opus-5-5 ', '']) {
+    assert.throws(() => parse({ '--model': model }), usageError(/--model/), JSON.stringify(model));
+  }
+  for (const model of ['', 'gpt 7', ' gpt-7']) assert.throws(() => parseCodex({ '--model': model }), usageError(/--model/), JSON.stringify(model));
+  assert.throws(() => parseArgs(['--summary', '--name', 'screen', '--model', NEW_CLAUDE_MODEL], { taskIds: TASKS }), usageError(/--model/));
+});
+
+test('a Claude run on --model hands that model to every arm and records it as the run\'s model', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--model': NEW_CLAUDE_MODEL }), ENV, deps), 0, io.err);
+  assert.equal(readDoc(m).model, NEW_CLAUDE_MODEL);
+  for (const trial of deps.runTrial.trials) {
+    const agent = resolveAgent(trial.config, { effort: 'medium', home: path.join(m.base, 'home'), workspace: path.join(m.base, 'ws'), prepared: { engramPort: 41000 } });
+    assert.ok(agent.args.includes(NEW_CLAUDE_MODEL), trial.config.name);
+    assert.ok(!agent.args.includes(EVAL_MODEL), `${trial.config.name}: not the default`);
+  }
+});
+
+test('a Codex run on --model passes it with -m and records it as the run\'s model', async () => {
+  const m = codexMachine();
+  const { io, deps } = codexDeps(m);
+  assert.equal(await suiteMain(codexRunArgv(m, { '--model': NEW_CODEX_MODEL }), ENV, deps), 0, io.err);
+  assert.equal(readCodexDoc(m).model, NEW_CODEX_MODEL);
+  for (const trial of deps.runTrial.trials) {
+    const agent = resolveAgent(trial.config, { effort: 'high', home: path.join(m.base, 'home'), workspace: path.join(m.base, 'ws'), prepared: { engramPort: 41000 } });
+    assert.deepEqual(agent.args.slice(4, 6), ['-m', NEW_CODEX_MODEL], trial.config.name);
+  }
+});
+
+test('a model with no list price is warned about and still runs; the default models are not', async () => {
+  const claude = machine();
+  const priced = depsFor(claude);
+  assert.equal(await suiteMain(runArgv(claude), ENV, priced.deps), 0, priced.io.err);
+  assert.doesNotMatch(priced.io.err, /list price/);
+  const unpriced = depsFor(claude);
+  assert.equal(await suiteMain(runArgv(claude, { '--name': 'fable', '--model': NEW_CLAUDE_MODEL }), ENV, unpriced.deps), 0, unpriced.io.err);
+  assert.match(unpriced.io.err, new RegExp(`${NEW_CLAUDE_MODEL} has no list price in evals/prices\.mjs`));
+
+  const codex = codexMachine();
+  const codexPriced = codexDeps(codex);
+  assert.equal(await suiteMain(codexRunArgv(codex), ENV, codexPriced.deps), 0, codexPriced.io.err);
+  assert.doesNotMatch(codexPriced.io.err, /list price/);
+  const codexUnpriced = codexDeps(codex);
+  assert.equal(await suiteMain(codexRunArgv(codex, { '--name': 'next', '--model': NEW_CODEX_MODEL }), ENV, codexUnpriced.deps), 0, codexUnpriced.io.err);
+  assert.match(codexUnpriced.io.err, new RegExp(`${NEW_CODEX_MODEL} has no list price in CODEX_LIST_PRICES`));
+});
+
+test('a recorded run is continued only on its own model: another --model, or none for a run on another, is refused and the file is untouched', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal' }), ENV, first.deps), 0, first.io.err);
+  const before = fs.readFileSync(resultsFile(m));
+  const other = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal', '--model': NEW_CLAUDE_MODEL }), ENV, other.deps), 1);
+  assert.match(other.io.err, new RegExp(`model: ${EVAL_MODEL} -> ${NEW_CLAUDE_MODEL}`));
+  assert.match(other.io.err, new RegExp(`--model ${EVAL_MODEL}`), 'names the flag that continues it');
+  assert.deepEqual(other.deps.runTrial.asked, []);
+  assert.deepEqual(fs.readFileSync(resultsFile(m)), before);
+
+  const fable = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--name': 'fable', '--configs': 'minimal', '--model': NEW_CLAUDE_MODEL }), ENV, fable.deps), 0, fable.io.err);
+  const recorded = fs.readFileSync(resultsFile(m, 'fable'));
+  const bare = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--name': 'fable', '--configs': 'minimal' }), ENV, bare.deps), 1);
+  assert.match(bare.io.err, new RegExp(`--model ${NEW_CLAUDE_MODEL}`));
+  assert.deepEqual(bare.deps.runTrial.asked, []);
+  assert.deepEqual(fs.readFileSync(resultsFile(m, 'fable')), recorded);
+});
+
+// G6 of `odd/tasks/future-model-protocol.md`: a run with the current arm records the fingerprint of its home template
+// as its setup, and is continued only on the same setup.
+test('a run with the current arm records the fingerprint of its home template as its setup; a run without it records none', async () => {
+  const m = machine();
+  const both = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m), ENV, both.deps), 0, both.io.err);
+  const { setup } = readDoc(m);
+  assert.match(setup.sha256, /^[0-9a-f]{64}$/);
+  assert.ok(Object.keys(setup.items).includes('.claude/CLAUDE.md'), JSON.stringify(setup.items));
+  const bare = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--name': 'bare', '--configs': 'minimal' }), ENV, bare.deps), 0, bare.io.err);
+  assert.equal('setup' in readDoc(m, 'bare'), false);
+  const gained = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--name': 'bare', '--configs': 'minimal,current' }), ENV, gained.deps), 0, gained.io.err);
+  assert.deepEqual(readDoc(m, 'bare').setup, setup, 'a run that gains the current arm records the setup it gains it on');
+});
+
+test('a run is continued on the same setup, and refused on another, naming the part that moved, before any trial and with the file untouched', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m), ENV, first.deps), 0, first.io.err);
+  const same = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--repeats': '2' }), ENV, same.deps), 0, same.io.err);
+  assert.ok(same.deps.runTrial.asked.length > 0, 'the same setup continues');
+
+  write(path.join(m.realHome, '.claude', 'CLAUDE.md'), '# the global rules, edited\n');
+  const before = fs.readFileSync(resultsFile(m));
+  const moved = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--repeats': '3' }), ENV, moved.deps), 1);
+  assert.match(moved.io.err, /another setup/);
+  assert.match(moved.io.err, /setup \.claude\/CLAUDE\.md/);
+  assert.deepEqual(moved.deps.runTrial.asked, []);
+  assert.deepEqual(fs.readFileSync(resultsFile(m)), before);
+  assert.deepEqual(fs.readdirSync(m.workRoot).filter((name) => name.startsWith('js-harness-suite-template-')), [], 'the template is removed');
+});
+
+test('a run recorded with current trials but no setup, before setups were recorded, is not continued: nothing says what it ran on', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m), ENV, first.deps), 0, first.io.err);
+  const { setup, ...old } = readDoc(m);
+  write(resultsFile(m), JSON.stringify(old));
+  const again = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--repeats': '2' }), ENV, again.deps), 1);
+  assert.match(again.io.err, /another setup/);
+  assert.match(again.io.err, /unknown ->/);
+  assert.deepEqual(again.deps.runTrial.asked, []);
+});
+
+// G3 of `odd/tasks/future-model-protocol.md`: `--plan` says what a run would cost, from what was recorded, and starts
+// nothing.
+test('--plan is a flag of a run, never of a summary', () => {
+  assert.deepEqual(parseArgs([...argv(), '--plan'], { taskIds: TASKS }), { ...parse(), plan: true });
+  assert.equal('plan' in parse(), false);
+  assert.throws(() => parseArgs(['--summary', '--name', 'screen', '--plan'], { taskIds: TASKS }), usageError(/--plan/));
+});
+
+test('--plan prints the estimate from the recorded runs and starts nothing: no token, no binary, no trial, no template, no file', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const results = fs.readdirSync(m.resultsDir).sort();
+  const work = fs.readdirSync(m.workRoot).sort();
+  fs.rmSync(m.claude);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--name': 'next', '--efforts': 'medium,high' }), '--plan'], {}, plan.deps), 0, plan.io.err);
+  assert.deepEqual(plan.deps.runTrial.asked, []);
+  assert.match(plan.io.out, /8 trials planned on claude-opus-5-5, 8 to run/);
+  assert.match(plan.io.out, /estimate for 4 of the 8 trials to run: about 0 min of agent time, list cost unknown/);
+  assert.match(plan.io.out, /unknown for 4 trials, .*alpha minimal high \(1\)/);
+  assert.match(plan.io.out, /usage-cap windows: unknown/);
+  assert.match(plan.io.out, /source: screen \(2026-10-02\)/);
+  assert.deepEqual(fs.readdirSync(m.resultsDir).sort(), results, 'no results file');
+  assert.deepEqual(fs.readdirSync(m.workRoot).sort(), work, 'no template, nothing in the work root');
+});
+
+test('--plan of a recorded run counts only the trials left to run', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--efforts': 'medium', '--repeats': '2' }), '--plan'], {}, plan.deps), 0, plan.io.err);
+  assert.match(plan.io.out, /8 trials planned on claude-opus-5-5, 4 to run/);
+  assert.match(plan.io.out, /estimate for 4 of the 4 trials to run/);
+});
+
+test('--plan of a run recorded on another model says the run would be refused, and plans nothing as done', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal', '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--configs': 'minimal', '--efforts': 'medium', '--model': 'claude-fable-5-5' }), '--plan'], {}, plan.deps), 1);
+  assert.match(plan.io.err, /recorded on claude-opus-5-5: a run on claude-fable-5-5 would be refused/);
+  assert.doesNotMatch(plan.io.out, /0 to run/);
+});
+
+// G2 of `odd/tasks/future-model-protocol.md`: the arms of one component on the command line.
+test('--configs takes arms of one component beside their base, and refuses an arm without its base or one evals/arms.mjs refuses', () => {
+  assert.deepEqual(parse({ '--configs': 'current,current-without-skills' }).configs, ['current', 'current-without-skills']);
+  assert.deepEqual(parse({ '--configs': 'minimal,minimal-with-mcp-engram' }).configs, ['minimal', 'minimal-with-mcp-engram']);
+  assert.throws(() => parse({ '--configs': 'minimal,current-without-skills' }), usageError(/current-without-skills is compared with current, which the run does not name/));
+  assert.throws(() => parse({ '--configs': 'current,current-without-nothing' }), usageError(/--configs: .*nothing is not a component/));
+  assert.throws(() => parse({ '--configs': 'minimal,minimal-with-skills' }), usageError(/switch it off/));
+  assert.throws(() => parseCodex({ '--configs': 'minimal,minimal-with-mcp-engram' }), usageError(/Codex takes no minimal-with/));
+  assert.deepEqual(parseCodex({ '--configs': 'current,current-without-agents-md' }).configs, ['current', 'current-without-agents-md']);
+  assert.throws(() => parse({ '--configs': 'current,sub-opus-write,current-without-skills' }), usageError(/cannot share a run/));
+  assert.throws(() => parse({ '--configs': 'current,current-without-skills,current-without-skills' }), usageError(/listed twice/));
+});
+
+test('a run that names an arm is refused until arms are built, and nothing runs; --plan still states it', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-skills' }), ENV, deps), 2);
+  assert.match(io.err, /current-without-skills/);
+  assert.match(io.err, /not built yet/);
+  assert.deepEqual(deps.runTrial.asked, []);
+  nothingCreated(m);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--configs': 'current,current-without-skills', '--efforts': 'medium' }), '--plan'], {}, plan.deps), 0, plan.io.err);
+  assert.match(plan.io.out, /unknown for 4 trials, .*alpha current-without-skills medium \(1\)/);
 });
