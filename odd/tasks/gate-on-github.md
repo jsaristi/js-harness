@@ -181,8 +181,113 @@ on GitHub it is 22 minutes a run, red today, and about nine times what the Linux
 him first, since it sets whether any month can cost money at all: is a payment method on file
 on the account `jsaristi`, and does he want one there.
 
+### What a run on GitHub proves, and what it may stand in for (first version, before its readers)
+
+**`check`, row by row, and what each finds on a runner GitHub hosts** (`bin/check.mjs:1399-1437`).
+
+| Row | What it reads | On GitHub's runner |
+|---|---|---|
+| `failures`, `budget`, `contracts` | `docs/FAILURES.md`, `AGENTS.md`, `odd/tasks/` | The same files: they prove there what they prove here |
+| `payload` (informs) | the host files of the home | No such files; it informs and fails nothing |
+| sensors: `npm test`, under the gate lock of the home, 1,200 s a sensor | the working tree | Runs. On Linux 132 tests skip and 7 fail today |
+| `rules`, `document tests` | `harness.json` "documentSensors" | Run only in place of the suite, for staged documents |
+| `review` (informs, fail-open) | `gentle-ai review assess` | gentle-ai is not there: "gentle-ai was not found" (`bin/check.mjs:1066`) |
+| `codex-review` debt (informs), and the row of `--push` (fails) | `<git common dir>/js-harness/codex-reviews.jsonl` (`bin/lib/codex-reviews.mjs:38-48`) | The records never leave his machine: nothing to read |
+
+So a green run of `node bin/check.mjs` there proves, for the pull request's head merged with
+`main` as it was at that push: the three document rows, and the suite on Linux. It proves
+nothing of: the 132 tests that run on Windows alone and Windows itself (CRLF checkouts, `.cmd`
+shims, files held open, hooks under Git for Windows); the two reviews, whose records are local,
+so the pre-push hook on his machine stays the one thing that refuses unreviewed code; and his
+home (hosts' files, installed hooks, `doctor`).
+
+**What it adds whatever it replaces.** The harness is written for every operating system
+(Constraints) and no Linux had run its suite before the trial. That one run found seven
+failures: four faults of tests, one confirmed small defect (`evals/paths.mjs:6`) and one
+possible defect of the harness on Linux (`evals/ports.mjs:168-169`); JH 8's reading
+(`odd/tasks/gate-wait.md`, "what a Linux run leaves unproven"). A second system is a check the
+project does not have, on a product that ships to machines that are not his.
+
+**What it can stand in for: the local gates, counted** (`git log --all --since="14 days ago"`,
+read 2026-10-13: every commit the pre-commit and pre-merge-commit hooks gate with the suite).
+
+| Local gate | 14 days | Last 24 hours | A Linux run in its place loses |
+|---|---|---|---|
+| A commit with code | 290 | 33 | Windows for that commit: the trade he passed over on 2026-10-12 |
+| A merge of `main` into a branch (`.githooks/pre-merge-commit`) | 62 | 14 | Windows for the combination of two trees, each proven on Windows by itself |
+| A commit of Markdown alone (no suite, no lock) | 335 | 57 | nothing: no suite runs for it today |
+
+- **R0 · In place of nothing.** A second witness on every pull request with code. It frees no
+  minute of the lock. No trade; the spend of option A' (zero in a normal month).
+- **R1 · In place of the gate of a merge of `main`.** At most 62 of 352 whole gates in 14 days
+  (17.6 percent; 14 of 47 in the last 24 hours), about ten minutes of lock each. A session no
+  longer merges `main` into its branch to be read: the run on GitHub tests the head merged
+  with `main`, and when `main` moved after it the pull request is run again against the new
+  `main` (the branch updated on GitHub's side, or a run asked for by hand: a choice for the
+  build). A merge with a conflict is still made and gated on his machine. What is lost: the
+  combination is proven on Linux alone. It is his, as a smaller form of the trade; it also
+  changes the orchestrator's rule that a pull request is read only when its head contains
+  `main`, which is the orchestrator's to change.
+- **R2 · In place of the gate of a commit with code.** The trade he passed over, whole. His;
+  not proposed here.
+- **R3 · The Windows suite on GitHub as well** (option D of the figure). The one road that
+  could take gates off the machine with no loss of system: about $55 to $65 in a normal month
+  at each push to a pull request, or nothing in a public repository. It needs the 124 fixed
+  (one cause, fixtures' roots made canonical with `fs.realpathSync.native`), takes 22 minutes
+  a run where his machine takes about ten, proves a push and not each commit, and is not his
+  Windows. Named so the comparison is whole; not proposed.
+
+**A check cannot be required here.** The repository is private on a plan below Pro: branch
+protection answers 403. So "green before the merge" is not GitHub's rule but the
+orchestrator's: it reads `gh pr checks <number>` for the head it merges, and merges on green.
+That is text until a command holds it; a command that refuses a merge whose head has no green
+run is the harness's way (AGENTS.md: what a command can check belongs in `bin/`), and whether
+it ships is a product choice of his, with whether `init` writes the workflow. A required check
+by GitHub itself needs Pro or a public repository, both his.
+
+**The workflow, when a road is his yes.**
+- `on: pull_request` (opened, synchronize, reopened), with the paths of Markdown ignored: a
+  branch pushed with no pull request spends nothing, and neither does a change of documents.
+- One job on `ubuntu-latest`, Node 24, `fetch-depth: 0`, `node bin/check.mjs`. `permissions:
+  contents: read`, no secret, the two actions pinned by commit, `timeout-minutes: 15` (so a
+  run that hangs costs 15 minutes at most), `concurrency` by pull request with
+  `cancel-in-progress` (a second push stops the first run).
+- The file reaches `main` in its own pull request, after his yes: until it is on `main` it
+  runs for no other pull request.
+- What bounds the spend is not in the file: no payment method on file (GitHub stops at the
+  quota), or a budget of his with a stop.
+
+**The seven, before the first run can be green** (T5; each test first).
+- Four faults of tests: `bin/lib/payload.test.mjs:197` and `:212` (a Windows absolute path fed
+  on every system), `evals/codex-isolation-probe.test.mjs:301` (`HOMEDRIVE`, set on Windows
+  alone), `bin/lib/project.test.mjs:1919` (an expectation stale since `ae471e7`, unseen
+  because Windows skips that test).
+- One small defect: `exists` of `evals/paths.mjs:6` lets `ENOTDIR` through.
+- One possible defect, two tests: `evals/ports.mjs:168-169` names a process by `ps -o comm=`,
+  which answered `MainThread` for a Node child.
+- What this machine can prove of them: a test that injects the system (a path style, an error
+  code, the text `ps` answered) goes red and then green on Windows. That each passes on a real
+  Linux is proven only by the first run on GitHub, which is after his yes: there is no Linux
+  on this machine (no WSL distribution, no docker; JH 8's reading). Said so that the first run
+  is not promised green.
+- `bin/lib/project.test.mjs` sits beside `bin/lib/project.mjs`, which JH 8 changed last
+  (`243794e`): the orchestrator is told before that file is edited.
+
+**Twice judged.** Here, the workflow is one file and a rule of the orchestrator. In a project
+that installed the harness, the same file would run that project's `check` on its owner's
+minutes: it is written by `init` only if he says so, and never pushed or enabled by the
+harness itself.
+
+**Mine.** R0 now, on option A': it costs nothing in a normal month, it is the only Linux the
+product has, and it is the ground for R1. R1 is brought to him as its own question with the
+count above, once two weeks of runs say how often GitHub was red where his machine was green
+and the reverse. Said plainly, since the opening calls this the thing that raises the ceiling:
+on Linux alone and with no trade it frees nothing; with R1 it frees at most about a sixth of
+the whole gates; the rest of the line is commits with code, and only the trade he passed over
+or a paid or public Windows takes those off the machine.
+
 ## What the readers changed
-Nothing yet: the design (T3) is not written.
+Nothing yet: the readers (T4) have not read the design.
 
 ## Tasks
 - [x] T1 · This document, opened with the task contract, on its own branch and worktree,
@@ -190,10 +295,12 @@ Nothing yet: the design (T3) is not written.
 - [x] T2 · The figure: plan, prices, rounding, runs a month, the table of options and the
       roads that cost nothing, each read at its source; sent to the orchestrator with a
       recommendation. Route: inline, no source written. Evidence: "The figure"; Progress.
-- [ ] T3 · The design of what a run on GitHub must prove to stand in for a local check: the
+- [x] T3 · The design of what a run on GitHub must prove to stand in for a local check: the
       suite's 7 Linux failures and their causes, what `check` does beyond `npm test` (the
       contracts, the token budget, the review rows), what a required check on `main` would
       change for the orchestrator's merge; with a search of his earlier words. Route: inline.
+      Evidence: "What a run on GitHub proves"; first version, the search of his words and the
+      readers still out.
 - [ ] T4 · Two independent readers attack the design (opus, effort high); their findings
       taken or answered under "What the readers changed". Route: delegated, read-only.
 - [ ] T5 · The fixes that make the suite pass on Linux, the ones T3 names, test first, each
