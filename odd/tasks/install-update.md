@@ -77,7 +77,8 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   him the same day: "Solo los comandos (Recomendada)" to question 24, read in the
   orchestrator's transcript at line 11146). `package.json` lists `bin/` without its test files
   and no `AGENTS.md`; a test reads npm's own list and pins it. Route: inline.
-- [ ] T8 After `upgrade --source` with no `--prefix`, the copy of js-harness on the path says its
+- [x] T8 (0cca602, and c188381 after Codex's finding; route: inline; done on 2026-10-13, see
+  Progress) After `upgrade --source` with no `--prefix`, the copy of js-harness on the path says its
   version before it is let to sync. Added on 2026-10-13 (the candidate under "Next step", told to
   the orchestrator at 06:27 and ordered by it at 16:57). Design below ("T8 design"). Route:
   inline; high risk by item 5 (an installer path), so Codex reads it and the turn proves it.
@@ -264,10 +265,38 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   - Seen and not built, told to the orchestrator: pnpm's own `pack` refuses this checkout on
     Windows because `bin/js-harness.mjs` is checked out with CRLF; whether an install by pnpm
     from the repository meets the same refusal is not measured.
+- 2026-10-13 T8 (`0cca602`, `c188381`, branch `fix/upgrade-sync-from-path` stacked on
+  `fix/package-contents` `6dd2480`, written inline by the session "JH 8" on the orchestrator's
+  order; design above, "T8 design"): with no `--prefix`, `upgrade` asks the `js-harness` on
+  the path its version through the same shell the sync would run it through
+  (`pathCopyRefusal`, `bin/update.mjs`) and runs that copy's sync only when the answer is
+  exactly the version just installed. `js-harness --version` is new (`bin/js-harness.mjs`):
+  the version alone on one line; the help names it. What a program on the path printed is
+  named only when it is a plain version.
+  - Turn of 19:07 to 19:34 (`t8-turn.sh`): RED with the two code files at HEAD, 6 of 78 fail
+    (the probe before the sync, the four refusals, `--version`); GREEN 78 of 78; the scan for
+    a kill by number passes; `js-harness --version` prints `0.1.0`; the commit's gate passed
+    whole (774 s). gentle-ai: review not due (`under_budget`, medium risk, 155 lines).
+  - Codex, once, 19:48, medium effort, `6d09c57..0cca602`: "the patch is incorrect" (0.96),
+    one P2, `bin/update.mjs:243-244`: the refusal offered a second way out, "run the upgrade
+    again with --prefix", and where the package manager replaced the running copy in place
+    that run reads the new version as installed, says "up to date", exits 0 and syncs
+    nothing. 125,690 input tokens (plan 76,000, allowance 300,000). **True.** Correction
+    `c188381`: the refusal says the version was installed and nothing was synced, and names
+    the one way out, `js-harness sync --global` with the copy that was just installed; the
+    test holds that no second upgrade is offered. Turn of 20:03 to 20:56 (forty minutes of
+    it in the line of the lock): with `bin/update.mjs` at `0cca602` 4 of 46 fail, 46 of 46
+    with it, the gate whole. Codex on the correction alone, 21:10: correct (0.98), 43,527
+    (plan 24,000, allowance 300,000). The push check: 2 code commits, both covered. No
+    sub-agent.
+  - What this does not cover, said to the orchestrator and to the session "JH 9": a person
+    who runs an old copy by hand, and a manifest written by a newer js-harness that an older
+    copy reads; the second is JH 9's, where the manifest is read.
 
 ## Next step
-T5, T6 and T7 are done; T7 waits for its pull request to be merged by the orchestrator. One thing
-is open, sent to the orchestrator on 2026-10-13 at 06:27 and ordered by it at 16:57 after the
+T5 to T8 are done; T8 waits for its pull request to be merged by the orchestrator. Nothing of
+this feature is open after it but what "Next step" already said of the tags. What was
+open, sent to the orchestrator on 2026-10-13 at 06:27 and ordered by it at 16:57 after the
 package's contents:
 - **A candidate task, not yet in Tasks:** with no `--prefix`, `upgrade --source` runs the sync
   after its install as `js-harness sync --global` through a shell (`bin/update.mjs`, the
@@ -314,6 +343,9 @@ Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it c
   probe. `bin/js-harness.test.mjs`: `--version` prints the version and the help lists it.
 
 ## T6: state for a resume
+
+**At 21:11 on 2026-10-13: T8 is done and reviewed (`0cca602`, `c188381`, Progress). The newer
+state of the session "JH 8" is in `odd/tasks/gate-wait.md`, "Resume here".**
 
 **At 18:59 on 2026-10-13: T7 (the package's contents) is done and reviewed too (`5502d54`,
 Progress). Next, by the orchestrator's order: the sync that runs from the path after
