@@ -1071,7 +1071,7 @@ test('--watch prints nothing while the board does not change, and returns the ch
   assert.deepEqual(printedWhileWaiting, [0, 0]);
   assert.deepEqual(lines.slice(0, 3), ['sessions --watch: 1 change after 10s', `  ${D_WAITS}`, '']);
   assert.match(lines[3], /^Sessions {2}.* 3 changed in the last 12h$/);
-  assert.match(lines[5], /^dddddddd {2}waiting {2}watch me {2}/);
+  assert.match(lines.find((line) => line.startsWith('dddddddd  ')), /^dddddddd {2}waiting {2}watch me {2}/);
   assert.equal(lines.at(-1), NOT_VISIBLE);
 }));
 
@@ -1121,7 +1121,7 @@ test('--watch leaves out the session that watches: CLAUDE_CODE_SESSION_ID, or --
 test('the plain board marks the session that asked for it, and marks none when nothing names it', withMachine(async (machine) => {
   writeSessions(machine);
   const env = { CLAUDE_CODE_SESSION_ID: SESSION_A };
-  const marked = (await runSessions(machine, [], { env })).stdout.split('\n').filter((line) => line.endsWith('  (this session)'));
+  const marked = (await runSessions(machine, [], { env })).stdout.split('\n').filter((line) => /^[0-9a-f]{8} {2}/.test(line) && line.endsWith('  (this session)'));
   assert.deepEqual(marked.map((line) => line.slice(0, 8)), ['aaaaaaaa']);
   const board = JSON.parse((await runSessions(machine, ['--json'], { env })).stdout);
   assert.deepEqual([board.self, board.sessions.filter((session) => session.self).map((session) => session.id)], [SESSION_A, [SESSION_A]]);
