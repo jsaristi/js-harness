@@ -613,12 +613,16 @@ the real runs once they exist (Done when), so the month's use is read and not gu
   purpose: any push to it is a new run.
 
 ## Next
-1. The cut output of a failed `check` on Linux (Progress, the first run): the orchestrator was
-   asked whether the fix in `bin/check.mjs` (JH 8's) is made here; with its yes, test first
-   (a child `check` that fails with a large output through a pipe delivers all of it), the
-   local gate, both reviews, one push to pull request 109, and the run read: its failures
-   fixed the same way, until a run is green. Each push is a run of about 4 minutes.
-2. T7: the two readers of "The exchange" were running; take their findings into the design,
+1. The cut output of a failed `check` on Linux. The orchestrator's GO (22:12, its claim):
+   `bin/check.mjs` is free tonight; make it here as a SMALL PULL REQUEST OF ITS OWN off `main`
+   (a new worktree and branch, one commit and its records), not a commit on 109; prefer
+   `process.exitCode` and the natural end of the process if nothing in `check.mjs` needs the
+   exit to be immediate, and say which was chosen and why; test first: a child `check` with a
+   large failed output through a pipe delivers all of it, red with today's line 1450. After the
+   orchestrator merges it, merge `main` into 109 once: one run of about 4 minutes, the first
+   whose red can be read; fix its failures the same way until a run is green.
+2. T7: reader B returned (its eight gaps, summarized in the scratchpad file `t7-reader-b.md`);
+   reader A was still running. Take both into the design,
    then send the exchange to the orchestrator for him ("avísame cuando llegue el diseño del
    canje"), with its one question.
 
