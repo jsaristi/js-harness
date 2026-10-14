@@ -164,7 +164,7 @@ no token; without `--plan` the plan line unchanged. About 140 and 160 lines.
   L5)
 - [x] T3 The seven signals read and recorded, and the carry list for the roadmap's section (S2;
   route: inline)
-- [ ] T4 The roadmap's F7 row and checkbox point to `docs/future-model.md`, through the lead (S1)
+- [x] T4 The roadmap's F7 row and checkbox point to `docs/future-model.md`, through the lead (S1; the lead cleared this session to make the one-hunk edit itself, JH 7 being paused)
 - [ ] T5 G5 and G6, the eval model per run and the setup recorded with it: without G5 no step
   that spends can run on a new model (S3; after the WSL gate, if cleared)
 - [ ] T6 G3, a cost statement before a run (S3; after the WSL gate, if cleared)
