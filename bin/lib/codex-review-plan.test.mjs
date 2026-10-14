@@ -93,6 +93,9 @@ test('the fit reads the most recent twenty measured parts, so an older way of re
   const fit = inputEstimator([...older, ...recent], PAIR);
   assert.equal(fit.runs, RECENT_PARTS);
   assert.deepEqual([fit.fixed, fit.perChangedLine], [10000, 100]);
+  // Every part it reads ran as the review will, so the plan says nothing of another effort.
+  assert.deepEqual([fit.samePair, fit.atPair], [true, RECENT_PARTS]);
+  assert.doesNotMatch(planLines(reviewPlan({ base: 'a'.repeat(40), head: 'b'.repeat(40), ...PAIR, parts: [{ files: ['x.mjs'], changedLines: 10 }], runs: [...older, ...recent] })).at(-1), /another effort/);
 });
 
 test('parts whose changed lines do not vary, or a single part, put every part at the median part', () => {

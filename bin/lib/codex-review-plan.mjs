@@ -110,6 +110,9 @@ export function inputEstimator(runs, { model, effort }) {
   const samePair = same.length >= RUNS_TO_STAND_ALONE;
   const basis = (samePair ? same : measured).slice(-RECENT_PARTS);
   if (basis.length === 0) return { runs: 0, samePair: false, atPair: 0, fixed: null, perChangedLine: null, highRatio: null, estimate: null, high: null };
+  // How many of the parts the fit reads ran on that model at that effort: all of them when the pair stands
+  // alone, since the plan says of the parts it rests on how many ran as the review will.
+  const atPair = basis.filter((one) => one.model === model && one.effort === effort).length;
   const { fixed, perChangedLine } = fitted(basis);
   const estimate = (changedLines) => fixed + perChangedLine * changedLines;
   // What each part cost over what the fit says it should; a fit of nothing a part is a part of no cost, read
@@ -119,7 +122,7 @@ export function inputEstimator(runs, { model, effort }) {
     return expected > 0 ? one.inputTokens / expected : 1;
   });
   const highRatio = Math.max(1, percentile(ratios, HIGH_PERCENTILE));
-  return { runs: basis.length, samePair, atPair: same.length, fixed, perChangedLine, highRatio, estimate, high: (changedLines) => estimate(changedLines) * highRatio };
+  return { runs: basis.length, samePair, atPair, fixed, perChangedLine, highRatio, estimate, high: (changedLines) => estimate(changedLines) * highRatio };
 }
 
 /** The fixed cost of a part and its cost a changed line, by least squares over `parts`. Parts whose changed
