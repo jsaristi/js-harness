@@ -37,8 +37,9 @@ depend on `sessions --quote` exiting 0.
 - Class: wrong-information
 - Seen: 2026-10-13 — relief file, line 615 — lines 9780 and 9799 of the lead's transcript, early
   that day
-- Seen: 2026-10-13 — the lead's message to JH 7 at 19:54 (claimed; the lead's own) — lines 12783,
-  12805, 12818 and 12838, that evening, sent to four sessions
+- Seen: 2026-10-13 — the lead's message to JH 7 at 19:54 (claimed; the lead's own) — that evening,
+  lines 12783, 12805, 12818 and 12838 were sent to four sessions for his answers at 12777, 12795,
+  12814 and 12828 (each of the four read here with `sessions --quote`)
 - Control: check — bin/notify.test.mjs — "an answer to a question-tool call is verified when the call
   was asked after its question, and answers it only by its prefix" — since 2026-10-13
 

@@ -61,13 +61,14 @@ matters, who holds it, and where it was seen.
 
 ## Owed and not yet placed
 
-- The practice run with a real host session (practice-project T5): needed before 1.0.0, no session
-  holds it. The orchestrator places it.
+- The practice run with a real host session (practice-project T5): needed before 1.0.0. Held by
+  "JH 11 · reglas del proyecto y prueba final" since 2026-10-13, by his answer "Una sexta sesión
+  (Recomendada)" (the lead's transcript `65318fd5`, line 13854, read with `sessions --quote`).
 - Every writing command refuses an unknown flag: the one task a first user would meet; its order is
   not set. Moved on 2026-10-14 from rule-hierarchy T4 to JH 12's `odd/tasks/commands-and-doctor.md`
   (T1), not on `main` yet.
-- An installed project's own rules: the last item he ordered that has no design; it waits behind the
-  README in JH 7's queue and is on the path to the date. The orchestrator decides who takes it.
+- An installed project's own rules: held by JH 11 with the practice run, by the same answer (line
+  13854); it left JH 7's queue.
 - Which model the native gentle-ai review used (his answer of 2026-10-12, line 9776): read it from JH
   10's review of 2026-10-13 (lineage review-5ba00685b483e51f). The orchestrator.
 - ~~pnpm's pack refuses this checkout on Windows (ERR_PNPM_BIN_CRLF, `bin/js-harness.mjs` checked
