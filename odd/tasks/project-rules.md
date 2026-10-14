@@ -242,17 +242,17 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
 ## Tasks
 - [x] T1 The design: draft, his earlier words searched, two readers, the version after them sent
   to the lead with his questions (S1-S5; route: inline, readers delegated)
-- [ ] T2 `readRules` with `{ keys, owner }` (default unchanged, proved on the shipped list) and the
+- [x] T2 `readRules` with `{ keys, owner }` (default unchanged, proved on the shipped list) and the
   reader of `docs/rules.json`: format, byte-order mark, the three bodies, `failure` (S5; route:
-  inline; `bin/lib/rules.mjs` is JH 7's, agreed through the lead first)
-- [ ] T3 `js-harness rules` and `rules check` at the git top: the harness's repository or a
+  inline; `bin/lib/rules.mjs` is JH 7's, agreed through the lead first; 9164790)
+- [x] T3 `js-harness rules` and `rules check` at the git top: the harness's repository or a
   project, the phrases, the sensors, a rule gone since `HEAD`, ids that meet as a note (S5;
-  route: inline)
-- [ ] T4 The `rules` row of `js-harness check`, one row with two modes, and the line of `status`
-  (S5; route: inline; `bin/check.mjs` is shared with JH 8 and JH 9, agreed through the lead first)
-- [ ] T5 How it reaches an agent: the skill sentence, the template clause, the help line; README
-  and roadmap (S5; route: inline; files of JH 8, JH 9 and JH 7, agreed through the lead first)
-- [ ] T6 The practice journey's step for a project's own rule (S5; route: inline)
+  route: inline; 9164790)
+- [x] T4 The `rules` row of `js-harness check`, one row with two modes, and the line of `status`
+  (S5; route: inline; `bin/check.mjs` is shared with JH 8 and JH 9, agreed through the lead first; 9302730)
+- [x] T5 How it reaches an agent: the skill sentence, the template clause, the help line; README
+  and roadmap (S5; route: inline; files of JH 8, JH 9 and JH 7, agreed through the lead first; 9302730 and the roadmap commit)
+- [x] T6 The practice journey's step for a project's own rule (S5; route: inline; ed24609, bf3a8d5, bb7d53d, 1659801)
 - [ ] T7 At the close: one note per capability built, in the five parts of the SPEC
   (`docs/ROADMAP.md` 605-633), sent to the lead, who appends it (S6; route: inline)
 
@@ -295,69 +295,23 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
   rules tests of the harness's own list still pass (198), and `rules check` here still prints
   `PASS rules 18 rules`. Not committed: the files of other sessions wait for the lead to clear them
   (its message of 2026-10-14 asks to be told each file before it is edited).
+- L7. 2026-10-14, the practice runs after the pause (the lead's resume: wait for the gate in WSL2,
+  `"sensorsInWsl": true` on `origin/main`, merged at `c3720dd`). Run 2 (`ed24609`) had failed at
+  `project-uninstall` on ` M AGENTS.md`: the project held an older candidate's template; fixed by
+  `secondInitProblem` (`bf3a8d5`). Run 3 failed at `project-rules`: run 2 restored the rule files
+  with `git checkout` under `core.autocrlf`, which left them CRLF, so the step judged them stale
+  by their bytes, rewrote them and git had nothing to commit; the step now lets `git status`
+  decide (`bb7d53d`). That commit's first gate failed one test in WSL2, not named because the
+  output was filtered, and passed on the retry. Run 4 (host try 2 of 3) passed every call of the
+  host and failed after them: the check wanted a new `projects` folder, and the probe of
+  2026-10-13 had left one; the proof is now the session's own transcript (`1659801`). Run 5
+  (host try 3 of 3, the last): 13 of 13, candidate `1659801` clean, real home unchanged; Claude
+  Code 2.1.296, Haiku 5.5, three calls, 0.0049 dollars, 13.5 s. Host spend over the three tries
+  is about 0.019 dollars (0.0069, 0.0068 and 0.0049). The repository has no README, so T5's README part had no file; the
+  roadmap took the capability ("Rule hierarchy", "A project's own rules") and the journey's
+  thirteen steps, with "Codex loads its hooks.json and its skills" named as not proven.
 
-## Resume here (2026-10-14, context 76%)
-- Worktree `D:\js-harness-worktrees\project-rules`, branch `feat/project-rules`, pushed at `2f49487`.
-  Uncommitted and green: everything under L6, plus the host step's pure part in
-  `scripts/practice-lib.mjs` (`HOST_STEP`, `hostEnv`, `redacted`, `parseArgs` `--no-host` and
-  `--only`, `recordLine` `left` and `host`, `practiceLayout().hostHome`, the journey id
-  `host-loads`; 94 tests pass in `scripts/practice-lib.test.mjs`).
-- Waiting on the lead: a clear for the files of other sessions (the list in its message of
-  2026-10-14 from this session, items 1 to 5), then one commit per task (T2, T3, T4, T5, T6).
-- The host probe (try 1 of the three he allowed): `scratchpad/probe.mjs` run as `js-harness gate --
-  node probe.mjs probe-out` in background task `bl6ztlhr6`, queued for the lock at 23:15. It writes
-  `probe-out/call1..3.jsonl` (the stream of three Haiku 5.5 calls in the practice project, token
-  redacted). Next: read their field names (init skills and tools, hook events, result usage and
-  cost), check that the real `~/.claude/projects` has no practice folder, then write the parser of
-  the stream with those files as its fixture (copied into `scripts/fixtures/`), and the step
-  `host-loads` in `scripts/practice.mjs` (design: `odd/tasks/practice-project.md`, "T5: the step
-  host-loads"). The step is not in `STEPS` yet, so the journey fails at it today: write it before
-  any journey run.
-- Then: the full journey inside `js-harness gate --` (tries 2 and 3), the README and roadmap
-  lines (T5 docs), the SPEC notes to the lead (T7).
-- Probe done (2026-10-14, try 1 of 3, Haiku 5.5, 0.0069 dollars over three calls, Claude Code
-  2.1.296). The stream as it is, for the reader of `host-loads`: `system/init` has `skills` (both
-  of ours listed), `tools` (`[]` with `--tools ""`), `model`, `claude_code_version`, `cwd`;
-  `system/hook_response` has `hook_name` (`SessionStart:startup`, `SessionStart:resume`,
-  `SessionStart:compact`, `PostToolUse:Skill`), `exit_code`, `outcome` (`success`), `stdout`,
-  and NO command: the seeded hook prints `unrelated-claude-hook`, ours is told by its output
-  (`doctor --hook` printed a `{"systemMessage":"js-harness: ...` line only because its gaps
-  changed, so its proof is `home/.js-harness/doctor.json` rewritten; `resume --hook` on compact
-  prints `js-harness resume: this session was just compacted...`; `PostToolUse:Skill` is ours
-  alone). `result/success` has `is_error`, `num_turns` (1 with no tools; the call-1 answer was
-  `# project`, so AGENTS.md loaded), `result`, `total_cost_usd`, `duration_ms`, `usage`
-  (`input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens`),
-  `modelUsage` keyed by model. `/compact` gives a result with `num_turns` 0. New under
-  `home/.claude` after the calls: `.claude.json`, `.last-cleanup`, `backups`, `policy-limits.json`
-  and its stamp, `projects`, `remote-settings.json`, `session-env`, `sessions`; the real
-  `~/.claude/projects` and `~/.claude.json` named no practice folder. Streams kept in the
-  scratchpad `probe-out/`; to commit, trim them to those fields (no personal data was found in
-  them; the init's `messaging_socket_path` is the child's own pipe).
-- Update, context 85%: committed `9164790` (T2+T3) and `9302730` (T4+T5), each through a green gate.
-  T6 written (both journey steps, `host-loads` with its stream reader held to
-  `scripts/fixtures/host-call*.jsonl`, `--no-host`, `--only`, the record's `host` and `left`;
-  101 tests in `scripts/practice-lib.test.mjs` and `scripts/practice-host.test.mjs`) and sent as
-  background task `blw3n9s3v`: its commit through the gate, then `js-harness gate -- node
-  scripts/practice.mjs run --root D:\js-harness-practice` (try 2 of 3). Next: read that output.
-  If the journey failed on a fault of the step, fix it test first and use try 3; if it passed,
-  mark T2 to T6 done here and T5 in `odd/tasks/practice-project.md`, then the README and roadmap
-  lines (the lead cleared them), merge `origin/main` once (`c99abbc` or later), the Codex review
-  of the code commits (`js-harness codex-review --plan` first, within 1.05 times the allowance),
-  push, the pull request, and the SPEC notes to the lead (T7).
-- Run 2 (`ed24609`, 2026-10-14): 9 of 13 steps passed; `project-uninstall` failed because the
-  practice project had committed the AGENTS.md template of an earlier candidate and the second
-  `init` wrote this candidate's (with the new clause). The host step was skipped, so no model was
-  spent and the host allowance still has two runs. Fixed test first in `secondInitProblem`
-  (`scripts/practice-lib.mjs`); the practice AGENTS.md was left as the last `init` wrote it (its
-  hash matches the project manifest). Run 3 is background task `bk86xf7of`.
-- PAUSED 2026-10-14 01:10 by his order (the lead's transcript `ffe99ebf`, line 1647, read with
-  `sessions --quote`: "si pero la idea es pausar todo precisamente para hacer unicamente esta
-  mejora implementarla y ahi si seguir con lo siguiente"; only the faster check goes on, JH 8 and
-  JH 10). The queued turn (the fix's commit, then run 3) was cancelled before it took the lock.
-  Uncommitted in the worktree and green (95 tests in `scripts/practice-lib.test.mjs`): the fix
-  `secondInitProblem` in `scripts/practice-lib.mjs`, its test, and its use in
-  `scripts/practice.mjs` (`project-uninstall`), plus `import { agentsTemplate }` there. The
-  practice project's AGENTS.md is as the last `init` wrote it (hash equal to the project
-  manifest), uncommitted there; the next run's `commit-passes` commits it. On resume: commit the
-  fix through the gate, then `js-harness gate -- node scripts/practice.mjs run --root
-  D:\js-harness-practice` (the host allowance still has two runs: run 2 never reached the host).
+## Next step
+The Codex review of `origin/main..HEAD` (`js-harness codex-review --base origin/main`, its
+`--plan` first, within the allowance), then push, the pull request, one line to the lead, and
+T7: the SPEC notes to the lead.

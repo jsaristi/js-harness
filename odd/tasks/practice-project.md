@@ -362,14 +362,17 @@ run itself.
 - [x] T3c Accepted follow-ups of the review of T3b, test first: `R3-non-error-throw-detail`, `R3-report-throw-aborts-walk`, `R3-recordline-foreign-ids`, `R3-setup-wiring-unproved` — route: inline (three small changes in the library, one call changed in the command, four tests)
 - [x] T3d The three findings of the Codex review, test first: the ceiling of git's search kept in the child environment, a root resolved before it is judged, a hook of the machine taken for the one `init` wrote — route: inline (the library, its test, two places of the command)
 - [x] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
-- [ ] T5 A step of the journey proves that a host loads what was installed. Added on
+- [x] T5 A step of the journey proves that a host loads what was installed. Added on
   2026-10-13, a gap in shipped behaviour that had no task (`docs/ROADMAP.md`, "Next", the
   defects read on that day, item f). Read on `main` at `f98f478`: the eleven steps of `JOURNEY`
   (`scripts/practice-lib.mjs:450-461`) install, adopt, commit, uninstall and run the pause
   hook's command, and none starts a Claude Code or a Codex session in the practice project;
   the roadmap says so itself ("What the run does not prove"). Such a step spends a model, so
   what it runs and how often is his to approve when it is designed. Designed under "T5: the step
-  `host-loads`"; his allowance of the run is quoted there
+  `host-loads`"; his allowance of the run is quoted there. Done on 2026-10-14, built on the branch
+  `feat/project-rules` (`ed24609`, `1659801`): the run of `1659801` passed its 13 steps, the
+  third of his three tries; the tries and their costs are in `odd/tasks/project-rules.md`, L7.
+  Codex is not proven
 
 ## Progress
 - 2026-10-10: session opened by Sebastián's paste of the orchestrator's opening prompt. Worktree
