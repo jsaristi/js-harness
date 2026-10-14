@@ -7,9 +7,11 @@ Branch: `feat/on-demand-functions`, in the linked worktree
 (app session `local_11c45a36-0115-4c92-b865-f1dc3f68c3c1`) · Runner: `node --test` · Delivery:
 ask-on-risk
 
-State 2026-10-14 04:43 (this machine's clock): slice 1 is on main (pull request 111). Slice 2 is written and
-its first commit is on branch `feat/on-demand-functions-2` (this worktree, `main` merged in at `a86c7e0`);
-what it holds is L17. Next: its gentle-ai assessment and Codex review, the pull request, then slice 3.
+State 2026-10-14 06:04 (this machine's clock): slice 1 is on main (pull request 111). Slice 2 is pull
+request 131, open (branch `feat/on-demand-functions-2`, head `f9c0482` with `main` at `2a29285` merged in; the
+Codex review covers both code commits; L17 to L19). Next: slice 3, in a branch of its own stacked on this one
+("The order of the build"): the `bin/check.mjs` rows, `codex-review` reading the switch, the S9 review row,
+`doctor`'s codegraph row (T6's rest), then the texts (T8) and the first push (S10).
 
 ## Goal
 A project chooses which of the harness's functions it runs: what serves only programming is off
@@ -852,3 +854,7 @@ What the code already gives, so the slice stays call sites and one new module
      real-path containment `uninstall` checks runs first, and such a hook is kept ("moved outside").
   Runs: `node --test bin/lib/project-apply.test.mjs` 19 of 19, `bin/functions.test.mjs` 15 of 15,
   `bin/lib/project-switches.test.mjs` 19 of 19.
+- **L19** (2026-10-14 05:52 to 06:04) Codex over the fixes (`02e898f..31889aa`): "the patch is correct",
+  92,385 input tokens. `main` at `2a29285` merged in as `f9c0482` (its check passed). Pushed; the pre-push check
+  said "2 code commits since origin/main, all covered by a Codex review record". Pull request 131 opened, the
+  orchestrator told, with the notes for `docs/SPEC.md`. Context at 75 percent: cut here, at the slice's end.
