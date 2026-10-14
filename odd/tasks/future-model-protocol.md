@@ -236,7 +236,8 @@ and of the gaps' order (G5+G6, G3, G2, then G1, G4, G7), not yet answered. A sli
 session: a message to the lead gave the context share as "about 30%" without reading it;
 `get_usage` read 42%, corrected in the next message; the same class as the register's
 `hours-guessed` (a figure in a message not read in the step before), told to the lead for the
-register. The design of G5, G6 and G3 written above, by a planner; it found five places where
+register. It happened again at 03:00 ("45%", read next as 46%): twice, so the control proposed to
+the lead is that the channel between sessions adds the sender's context share itself. The design of G5, G6 and G3 written above, by a planner; it found five places where
 version 2 did not match the code, taken into the procedure: the A/B arms keep no `listCost`, so
 Step 1's cost check prices `modelUsage` as a range; base and arms in one invocation share one
 template, so G6 matters across invocations (a resume after a cap, pooling); a plain hash would
