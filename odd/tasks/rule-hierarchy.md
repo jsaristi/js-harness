@@ -1593,10 +1593,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (found by Codex in `21686a5`, second priority): today a fence under an item that opens
     within three spaces and closes deeper is left open, and with the option off a checkbox
     shown in a fence indented past three spaces is counted as a step by `js-harness progress`
-- [ ] T4 Every command that writes outside the repository refuses a flag it does not know; and
-  the push row hints the merge commit as the base after `main` is merged in (failure 15)
-- [ ] T5 The row `citations`, INFO
-- [ ] T6 The row `memory-rules` of `doctor`
+- Moved on 2026-10-14 to "JH 12 · comandos y diagnóstico", by the lead's message to this
+  session; their state is kept in `odd/tasks/commands-and-doctor.md`, and only there: T4 (every
+  command that writes outside the repository refuses a flag it does not know; and the push row
+  hints the merge commit as the base after `main` is merged in, failure 15), T5 (the row
+  `citations`, INFO) and T6 (the row `memory-rules` of `doctor`). They carry no checkbox here,
+  so that `js-harness progress` counts them once
 - [ ] T7 The skill `js-harness-protocols`, six sections, each opening with its incident
 - [ ] T8 `AGENTS.md` rewritten within the budget, its wording passed by him. His idea of
   2026-10-11 for how (relief file, line 203), recorded here and not built yet: the text is
@@ -1607,19 +1609,21 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   a half-written version would govern the session that writes it
 - [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
   reply check on is asked of him
-- [ ] T10 The honesty eval: the task and its proof; then, before any spend is asked of him, the
-  number of trials, their cost at list price and the difference in score that counts as "the
-  line moves it"; then the trials with and without the line
+- Moved on 2026-10-14 to "JH 15 · auditoría de honestidad", by the lead's message to this
+  session; their state is kept in `odd/tasks/honesty-audit.md`, and only there: T10 (the honesty
+  eval: the task and its proof; then, before any spend is asked of him, the number of trials,
+  their cost at list price and the difference in score that counts as "the line moves it"; then
+  the trials with and without the line), T13 (the sub-agent model check, C8) and T14 (the
+  honesty audit, C9). No checkbox here, so that `js-harness progress` counts them once
 - [ ] T11 Every rule moved: the memory notes placed and, on his word, deleted; the remaining
   contradictions of the roadmap corrected
 - [ ] T12 Practice journey: a step for the template's lines and one for the reply hook
-- [ ] T13 The sub-agent model check (C8), after his answer on what enters from the comparison
-- [ ] T14 The honesty audit (C9): the transcript reader read first, then designed as a count or
-  recorded as not worth it
-- [ ] T15 The seven signals read and recorded; the roadmap's section replaced by a pointer only
-  after what it holds and this document does not (the reading of the specification, "how far
-  is far enough", the bullets on bias and research, the team rules) is in `docs/SPEC.md` or
-  here
+- Moved on 2026-10-14 to "JH 14 · protocolo para modelos futuros", by the lead's message to
+  this session; its state is kept in `odd/tasks/future-model-protocol.md`, and only there: T15
+  (the seven signals read and recorded; the roadmap's section replaced by a pointer only after
+  what it holds and this document does not, the reading of the specification, "how far is far
+  enough", the bullets on bias and research, the team rules, is in `docs/SPEC.md` or here). No
+  checkbox here, so that `js-harness progress` counts it once
 - [ ] T16 One home for every rule, by the protocol of "One home for every rule (T16)" and in
   its order (route: delegated; after T17, before T1)
   - [x] T16a The approved protocol in this document, read against the relief file's lines 253
@@ -2586,6 +2590,13 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**Resumed on 2026-10-14 at 03:54, when `main` held the gate in WSL (`"sensorsInWsl": true`),
+by the lead's message and his lines 1647 and 2856 of the lead's transcript (2856, read with
+`sessions --quote`: "Retomar con el gate viejo (Recomendada)", for the case the WSL gate had not
+landed by 05:00; it landed first).** `main` (`8aa93c3`) was merged in at 04:20 (`8660763`).
+Seven tasks left this document for the sessions named at them in `## Tasks`. Next: the README,
+from its red test, as the queue below says.
+
 **PAUSED on 2026-10-14 at about 01:15, by his order that everything stops but the faster check
 (the orchestrator's transcript `ffe99ebf-72fb-48da-a79b-e7db21a20b3f`, line 1647, read with
 `sessions --quote`: "si pero la idea es pausar todo precisamente para hacer unicamente esta
