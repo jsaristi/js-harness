@@ -11,6 +11,7 @@ import {
 } from './codex-review.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
+import { rangeDiff } from './lib/codex-review-coverage.mjs';
 import { numstatFiles } from './lib/codex-review-parts.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
@@ -5156,6 +5157,21 @@ test('a merge of the default branch that resolved a conflict is reviewed by what
   assert.equal(lines[0], mergeReviewSaid({ head, side: main, branch: 'origin/main' }));
   const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', head)).reduce((sum, file) => sum + file.changedLines, 0);
   assert.deepEqual(lines.slice(1), planned(root, mine, head, [{ files: ['m.txt'], changedLines }]));
+});
+
+test('a merge already covered by a record is not reviewed again: the run says the range is covered, as without merge mode (Codex, 2026-10-14)', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  appendCodexReview(root, reviewedRecord(mine, head));
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('remerge'), result.out);
+  assert.match(result.out, /a Codex review record already covers all of them/);
+});
+
+test('the diff of a merge review shows no signature, whatever the configuration says (Codex, 2026-10-14)', () => {
+  const args = rangeDiff({ from: 'a'.repeat(40), head: 'b'.repeat(40), merge: { side: 'c'.repeat(40), branch: 'origin/main' } }, ['--numstat']);
+  assert.deepEqual(args.slice(0, 4), ['show', '--remerge-diff', '--no-show-signature', '--format=']);
 });
 
 test('a merge of a branch the default branch does not hold is reviewed as before: from the merged branch, the whole branch', async () => {

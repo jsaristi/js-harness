@@ -384,7 +384,9 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
 export function rangeDiff({ from, head, merge = null }, shape = [], files = null) {
   const paths = files === null ? [] : ['--', ...files];
   if (merge === null) return ['diff', ...shape, '--no-renames', from, head, ...paths];
-  return ['show', '--remerge-diff', '--format=', ...shape, '--no-renames', head, ...paths];
+  // `--no-show-signature`, as `writtenInMerge` has it: under `log.showSignature` git writes what checked the
+  // signature of a signed merge before its diff, on the same output (Codex, 2026-10-14).
+  return ['show', '--remerge-diff', '--no-show-signature', '--format=', ...shape, '--no-renames', head, ...paths];
 }
 
 /** Where the review of `given..head` starts when it is that of a merge of the remote's default branch, read
@@ -415,5 +417,9 @@ export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, re
     const before = reviewCoverage(cwd, { from: given, tip: first, spawn, where });
     if (before.unknown !== undefined || before.uncovered.length > 0) return null;
   }
+  // A merge a record already covers is no review to start: the range is then read as without this, and the
+  // records say it is covered, instead of a second paid review of the same merge (Codex, 2026-10-14).
+  const atMerge = reviewCoverage(cwd, { from: first, tip: head, spawn, where });
+  if (atMerge.unknown !== undefined || atMerge.covers.some(({ covered }) => covered.has(head))) return null;
   return { from: first, side, branch: branch.label };
 }
