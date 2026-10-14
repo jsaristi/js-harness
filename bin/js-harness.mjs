@@ -17,7 +17,7 @@ Commands:
   upgrade     Install the newer release of --source <dir>, then sync. With no source it installs nothing and exits 1: no package registry is ever asked.
   doctor      Report the stack's tools: installed, configured, up to date.
   progress    Show roadmap and feature progress from their checkboxes.
-  contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
+  contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition), modes (each task's effort and sub-agent models).
   failures    The register of what went wrong, docs/FAILURES.md: the totals, the count by class and one line per failure, the most seen first, with its state. failures <id> prints one entry whole; failures check runs the gate's row alone and exits 1 when the register is refused, and with --settled also while a failure is not settled (repeated with no control, a control owed that is stale, a control lost, or seen again). Read-only: only an editor writes the register.
   rules       Show the declared rules of the harness, each with its value or its home (rules <id> prints one with its source and who reads it). rules check exits 1 when a declaration, its source, a reader or docs/RULES.md is wrong; rules render writes docs/RULES.md.
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).

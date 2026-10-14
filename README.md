@@ -210,7 +210,9 @@ Features  295/349  85%
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
 validates every contract, `run` runs a contract's done-when commands, and `goal` prints the
-`/goal` condition that runs them.
+`/goal` condition that runs them. Each task names its kind of work, `(kind: design | build |
+verify | docs)`; `modes` prints the effort and sub-agent models each open task calls for, from
+the project's rules, and `goal` prints the same lines on stderr.
 
 ```console
 $ js-harness contract template

@@ -322,8 +322,12 @@ questions listed.
   missing); version 2 and the questions sent to the orchestrator (route: inline). Version 1
   2a735ec, version 2 4840f89, pushed; sent to the orchestrator 2026-10-14 02:54 with question 1
   and the three file requests
-- [ ] T2 (kind: build) The kind of a task, `contract modes`, the modes on `goal`'s stderr, the
-  template and help (S1)
+- [x] T2 (kind: build) The kind of a task, `contract modes`, the modes on `goal`'s stderr, the
+  template and help (S1). Branch `feat/effort-by-task`; RED observed (missing exports, then the
+  five command tests), GREEN: `node --test bin/contract.test.mjs bin/lib/contract.test.mjs
+  bin/readme.test.mjs bin/js-harness.test.mjs` 120 pass; `contract modes` on this document prints
+  T2-T6; `contract check` passes all 20 contracts. Three old tests changed with the spec: `##
+  Effort` no longer required, the template ends with a task line
 - [ ] T3 (kind: build) The mode line of `resume --hook` (S2, the half without a lead)
 - [ ] T4 (kind: build) `js-harness subagents` (S3)
 - [ ] T5 (kind: docs) The paragraph for JH 5's skill and the js-harness skill, `taskModes` for
@@ -357,3 +361,15 @@ questions listed.
 - L6 (2026-10-14, JH 15's message, a claim): the interface fits its INFO row as given; it uses
   `roleOf` and `launchesOf`, and `taskModes` only if the row compares per task, and builds after
   T2 and T4 land. The signatures above are therefore fixed: a change goes to JH 15 first.
+- L7 (2026-10-14 13:58, the orchestrator): the WSL gate has been on `main` since 03:52; merged
+  `origin/main` (c33b7bf) as 555a373, build branch `feat/effort-by-task`. Its rule from his order
+  (ffe99ebf line 5141, as the orchestrator quotes it): never end a turn waiting for a message;
+  arm a declared background wait and keep working.
+- L8 (2026-10-14): read in 206 sub-agent `.meta.json` files of the last three days: this engine
+  writes `agentType`, `description`, `toolUseId`, `effort` always, and `model` when asked (52 have
+  none). The reader's "meta holds only agentType" was an older fixture. So T4 takes role, verb and
+  asked model from the meta file; whether the effort was asked or inherited needs the parent's
+  Agent call, found by `toolUseId` in the same pass that sums the day's tokens. `launchesOf` takes
+  per-launch records `{ session, agentId, meta, entries }`; its output is unchanged for JH 15.
+- L9 (2026-10-14): `README.md` (JH 7's) gained one additive sentence on `modes`, as AGENTS.md asks
+  of a new command; told to the orchestrator with the pull request.
