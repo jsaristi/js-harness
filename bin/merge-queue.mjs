@@ -84,6 +84,36 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
   const local = suite(place);
+  if (!local.ok && merged.length > 1) {
+    // Bisected (S8): the candidate of the first k pull requests is the commit after the k-th merge, so the
+    // shortest red prefix names the pull request that turns it red. It leaves, the ones after it are merged
+    // again on the green prefix, and that candidate is landed as any other.
+    let [low, high] = [1, merged.length];
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      gitIn(place, 'reset', '--quiet', '--hard', merged[mid - 1].merge);
+      if (suite(place).ok) low = mid + 1;
+      else high = mid;
+    }
+    const culprit = merged[low - 1];
+    stdout(`PR ${culprit.number} is left out: the candidate turns red on this machine when it is merged (${local.said}).`);
+    gitIn(place, 'reset', '--quiet', '--hard', low > 1 ? merged[low - 2].merge : main);
+    const kept = merged.slice(0, low - 1);
+    for (const pr of merged.slice(low)) {
+      const again = gitIn(place, 'merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid);
+      if (!again.ok) {
+        gitIn(place, 'merge', '--abort');
+        stdout(`PR ${pr.number} is left out: it does not merge into the candidate without PR ${culprit.number}.`);
+        continue;
+      }
+      kept.push({ ...pr, merge: gitIn(place, 'rev-parse', 'HEAD').out.trim() });
+    }
+    if (kept.length === 0) {
+      stdout('No pull request is left to land: nothing was pushed.');
+      return 4;
+    }
+    return landCandidate({ run, gitIn, place, main, merged: kept, suite, sleep, stdout, fail });
+  }
   if (!local.ok) {
     stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
     return 4;
@@ -197,7 +227,8 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
       // and was then refused, and read as a conflict.
       const done = answer(run, 'git', ['merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid], place);
       if (done.ok) {
-        merged.push(pr);
+        // The commit after each merge: the candidate of the pull requests up to this one, which bisection tests.
+        merged.push({ ...pr, merge: gitIn(place, 'rev-parse', 'HEAD').out.trim() });
         continue;
       }
       const conflicted = gitIn(place, 'diff', '--name-only', '--diff-filter=U').out.split('\n').map((line) => line.trim()).filter(Boolean);

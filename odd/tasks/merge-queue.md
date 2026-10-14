@@ -46,7 +46,7 @@ high
 ## Tasks
 - [x] T1 (S4, S5, S10): the candidate, built and printed. Route: inline. RED: bin/merge-queue.test.mjs failed on the missing module, then on the two hook cases (L4); GREEN 6 of 6. Real run, 2026-10-14: "Candidate: main eb6abf7 with 2 pull requests merged in order: PR 137 (docs/gate-turn-guards-followups), PR 146 (fix/codegraph-home-files)."
 - [x] T2 (S6, S7): `--land`: the local suite under the lock, the CircleCI run of a `queue/*` branch (L5), the push of main by fast-forward leased on the main it was built from. Route: inline. RED: the four `--land` tests of bin/merge-queue.test.mjs; GREEN 10 of 10. Not yet run for real: it needs the CircleCI project (ci/circleci).
-- [ ] T3 (S8): bisection. Route: inline.
+- [x] T3 (S8): bisection on a red local suite: the shortest red prefix of the candidate's merges names the pull request; it leaves, the rest are merged again on the green prefix and landed. Route: inline. RED then GREEN: "a candidate red on this machine is bisected..." (suites seen: red, green, green); 11 of 11. A candidate green here and red on CircleCI is not bisected: it is reported, and main is not pushed.
 - [ ] T4 (S9): the pre-push refusal. Route: inline. High risk (a guard): independent verifier.
 - [ ] T5: help, README, the keeper script retired. Route: inline.
 

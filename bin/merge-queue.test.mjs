@@ -202,3 +202,23 @@ test('--land: a main that moved while the candidate was tested is not overwritte
   assert.equal(git(origin, 'log', '-1', '--format=%s', 'main'), 'main moved');
   assert.match(out.at(-1), /^Main moved while the candidate was tested: nothing was pushed to main; run the queue again\.$/);
 });
+
+test('--land: a candidate red on this machine is bisected, the pull request that turns it red leaves, and the rest lands', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const seen = [];
+  // Red whenever feat/b's change is in the tree under test.
+  const suite = (dir) => {
+    const red = fs.readFileSync(path.join(dir, 'b.txt'), 'utf8').includes('B from b');
+    seen.push(red ? 'red' : 'green');
+    return red ? { ok: false, said: 'FAIL  tests' } : { ok: true };
+  };
+  const prs = [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])];
+  const { code, out } = await land(root, prs, { suite });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(seen, ['red', 'green', 'green'], 'the whole candidate, its first half, then the candidate without PR 2');
+  assert.ok(out.includes('PR 2 is left out: the candidate turns red on this machine when it is merged (FAIL  tests).'), out.join('\n'));
+  const landed = git(origin, 'rev-parse', 'main');
+  assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', heads['feat/a'], landed], { cwd: origin }).status, 0);
+  assert.notEqual(spawnSync('git', ['merge-base', '--is-ancestor', heads['feat/b'], landed], { cwd: origin }).status, 0, 'PR 2 is not in main');
+  assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1.`);
+});
