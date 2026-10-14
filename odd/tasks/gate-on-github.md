@@ -316,6 +316,37 @@ Nothing yet: the readers (T4) have not read the design.
   GitHub's public pages only: no run, no push, no setting, no scope added. It went to the
   orchestrator with the recommendation above and one question for him (a payment method).
   Risk: none (a document).
+- 2026-10-13 · **His two answers, carried by the orchestrator and read here with `js-harness
+  sessions --quote`** (the orchestrator's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`).
+  Line 12461, typed: "no tiene tarjeta, dejémosla sin tarjeta". So no payment method is on
+  file on the account `jsaristi` and none will be: the bill cannot pass zero, a month that
+  outruns the 2,000 minutes stops the runs on GitHub until the next one, and the roads compare
+  by minutes, not dollars. Line 12491, tapped: "En cada PR con código (Recomendada)" to "¿Cuándo
+  corre la comprobación en GitHub (Linux, sin tarjeta, máximo 2.000 minutos por mes)?", among
+  "En cada PR con código (Recomendada) | En todos los PR | Una vez por PR, al final | Esperar
+  el diseño". That is option A' of the figure.
+  What his yes covers, by the orchestrator's account of what it told him before the question
+  (its claim): a workflow that runs the suite on GitHub's Linux runner at each push to a pull
+  request that touches code, the file reaching `main` by a pull request the orchestrator
+  merges, and the runs that follow. Not covered, still his: a check made required, any setting
+  of the account or the repository, Windows on GitHub, a run on merges to `main`, any local
+  gate retired or skipped because GitHub's is green, anything shipped to an installed project.
+  The order it set: (1) the Linux failures fixed, test first, through the local gate, with
+  their reviews; (2) the workflow, with what the run and a session do when the quota ends, the
+  local gate standing alone, no tree pushed that is not a commit, the pre-push rule on Codex
+  records not gone round; (3) the pull request, the orchestrator told before the first push
+  that starts a run; (4) the design of the exchange (R1), with two readers, to it for him. The
+  minutes of each run are counted in this document.
+- 2026-10-13 · **The seven are five.** `main` holds two fixed since the trial (`2f81a63`:
+  `exists` of `evals/paths.mjs`, and the expectation of `bin/lib/project.test.mjs:1919`). What
+  remains, read in JH 8's `t9-ubuntu.log` and in the code at `46eec34`:
+  `bin/lib/payload.test.mjs:197` and `:212` (a Windows absolute path fed on every system; the
+  test's own), `evals/codex-isolation-probe.test.mjs:301` ("HOMEDRIVE is what the sandbox
+  set", which `sandboxEnv` sets on Windows alone, `evals/configs.mjs:139`; the test's own), and
+  `evals/ports.test.mjs:307` with `evals/isolation-probe.test.mjs:1704` (`ps -o comm=` of
+  `evals/ports.mjs:168` answered `MainThread` for a Node process, so the listener is "not
+  engram: left alone"). The orchestrator was asked whether any of those files is another
+  session's before they are edited.
 
 ## Next
 T3, which no answer of his can undo: read the 7 Linux failures in JH 8's logs and in the
