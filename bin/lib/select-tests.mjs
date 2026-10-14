@@ -1,15 +1,16 @@
 // The selection of exact test selection (odd/tasks/exact-tests.md, T2): which test files a gate runs, read
 // from the traces of their last passing runs (./trace-reads.cjs). A test is skipped only when its trace is of
-// a passing run, under this node and this tracer, and every path it recorded is as it was then; the whole
-// suite runs when `package.json` changed. Anything else runs, with the reason it does.
+// a passing run, under this node, this tracer, this system and the same allowlisted variables (S5), and every
+// path it recorded is as it was then; the whole suite runs when `package.json` changed. Anything else runs,
+// with the reason it does.
 import fs from 'node:fs';
 import path from 'node:path';
-import { hashOf, TRACE_PRELOAD } from './trace-reads.mjs';
+import { hashOf, TRACE_ENV, TRACE_PRELOAD, traceEnvOf } from './trace-reads.mjs';
 
 /** Which of `tests` run and which are skipped: `{ run, skipped, why, full }`, `why` a map from each test that
  * runs to the reason, `full` the reason the whole suite runs or `null`. `readTrace(test)` gives a test's trace
  * or `null`; `stateOf(key)` what a recorded path is now, as the tracer would record it. */
-export function selectTests({ tests, readTrace, stateOf, node = process.version, tracerHash = hashOf(TRACE_PRELOAD) }) {
+export function selectTests({ tests, readTrace, stateOf, node = process.version, os = process.platform, env = traceEnvOf(process.env), tracerHash = hashOf(TRACE_PRELOAD) }) {
   const why = new Map();
   const skipped = [];
   const states = new Map();
@@ -24,13 +25,21 @@ export function selectTests({ tests, readTrace, stateOf, node = process.version,
       : trace.untraced ? `untraced: ${trace.untraced}`
         : trace.node !== node ? `traced under node ${trace.node}, not ${node}`
           : trace.tracerHash !== tracerHash ? 'traced by another version of the tracer'
-            : changedRead(trace.reads, now);
+            : trace.os !== os ? `traced on ${trace.os}, not ${os}`
+              : changedVariable(trace.env, env) ?? changedRead(trace.reads, now);
     if (trace !== null && 'package.json' in trace.reads && now('package.json') !== trace.reads['package.json']) full ??= 'package.json changed';
     if (reason === null) skipped.push(test);
     else why.set(test, reason);
   }
   if (full !== null) return { run: [...tests], skipped: [], why: new Map(tests.map((test) => [test, full])), full };
   return { run: tests.filter((test) => why.has(test)), skipped, why, full };
+}
+
+/** The first allowlisted variable whose value is not the trace's, said as `traced with A=x, not A=y`. */
+function changedVariable(then, now) {
+  const shown = (name, value) => (value === null || value === undefined ? `${name} unset` : `${name}=${value}`);
+  for (const name of TRACE_ENV) if ((then?.[name] ?? null) !== (now?.[name] ?? null)) return `traced with ${shown(name, then?.[name])}, not ${shown(name, now?.[name])}`;
+  return null;
 }
 
 /** The first recorded read that is not as it was, said as `<path> changed`, or `null` when none is. */

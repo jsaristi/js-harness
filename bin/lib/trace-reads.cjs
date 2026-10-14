@@ -16,6 +16,13 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const TRACER_VERSION = 'js-harness.trace-reads/v1';
+
+// The variables of a run's environment that are part of the key of its traces (S5): a test can read them, and
+// a change of one is a run of another kind. Each is kept as its value, or `null` when it is not set.
+const TRACE_ENV = ['TZ', 'LANG', 'LC_ALL', 'CI', 'NODE_ENV', 'FORCE_COLOR', 'NO_COLOR'];
+
+/** The allowlisted variables of `env`, as a trace keeps them. */
+const traceEnvOf = (env) => Object.fromEntries(TRACE_ENV.map((name) => [name, env[name] ?? null]));
 const INSTALLED = Symbol.for('js-harness.trace-reads.installed');
 
 // What the tracer reads with, taken before anything is wrapped: its own reads are never recorded.
@@ -67,7 +74,7 @@ function stateOf(root, key) {
 /** The file a test's trace is kept in, under `dir`. */
 const traceName = (test) => `${encodeURIComponent(test)}.json`;
 
-module.exports = { TRACER_VERSION, hashOf, listingOf, stateOf, traceName };
+module.exports = { TRACER_VERSION, TRACE_ENV, traceEnvOf, hashOf, listingOf, stateOf, traceName };
 
 const env = process.env;
 if (env.JS_HARNESS_TRACE_DIR && env.JS_HARNESS_TRACE_ROOT && !globalThis[INSTALLED] && !process.execArgv.includes('--test')) install();
@@ -107,9 +114,22 @@ function install() {
     if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
     return rel.split(path.sep).join('/');
   }
+  // Outside the repository a read is nothing to the trace, unless it is of the home (outside the temporary
+  // folder, which is under the home on Windows): that is a world no hash of the repository holds (S5).
+  const os = require('node:os');
+  const temp = path.resolve(os.tmpdir());
+  const home = path.resolve(os.homedir());
+  const within = (child, parent) => {
+    const rel = path.relative(parent, child);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
   const record = (target, listed = false) => {
     const rel = relative(target);
-    if (rel === null) return;
+    if (rel === null) {
+      const full = typeof target === 'string' ? path.resolve(target) : null;
+      if (full !== null && !within(full, temp) && within(full, home)) untraced ??= `it reads the home: ${full}`;
+      return;
+    }
     reads.add(listed ? `${rel === '' ? '.' : rel}/` : rel || '.');
   };
 
@@ -212,6 +232,14 @@ function install() {
   };
   nodeModule.syncBuiltinESMExports();
 
+  // A connection is a world no trace sees (S5): every client of `net`, `http` and `tls` comes through here.
+  const net = require('node:net');
+  const connect = net.Socket.prototype.connect;
+  net.Socket.prototype.connect = function (...args) {
+    untraced ??= 'it opens a network connection';
+    return connect.apply(this, args);
+  };
+
   const parts = path.join(dir, 'parts', run);
   process.on('exit', (code) => {
     try {
@@ -246,7 +274,7 @@ function install() {
       if (real.statSync(path.join(root, 'package.json'), { throwIfNoEntry: false })) reads.add('package.json');
       const states = {};
       for (const key of [...reads].sort()) states[key] = stateOf(root, key);
-      const trace = { v: 1, test, tracer: TRACER_VERSION, tracerHash: hashOf(__filename), node: process.version, untraced, reads: states };
+      const trace = { v: 1, test, tracer: TRACER_VERSION, tracerHash: hashOf(__filename), node: process.version, os: process.platform, env: traceEnvOf(env), untraced, reads: states };
       real.mkdirSync(dir, { recursive: true });
       const temp = `${file}.${process.pid}.tmp`;
       real.writeFileSync(temp, `${JSON.stringify(trace)}\n`);

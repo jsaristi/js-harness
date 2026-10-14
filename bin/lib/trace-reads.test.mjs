@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { hashOf, readTrace, TRACE_PRELOAD, TRACER_VERSION, traceEnv } from './trace-reads.mjs';
+import { hashOf, readTrace, TRACE_ENV, TRACE_PRELOAD, TRACER_VERSION, traceEnv } from './trace-reads.mjs';
 
 // The tracer of exact test selection (odd/tasks/exact-tests.md, T1): a preload carried in NODE_OPTIONS that
 // records what each test file really read, and writes it when the file passed.
@@ -71,6 +71,88 @@ test('a test file that passed leaves its trace: what it read, probed, listed and
     assert.ok(Object.keys(reads).every((one) => !path.isAbsolute(one) && !one.startsWith('..')), Object.keys(reads).join(', '));
   } finally {
     done();
+  }
+});
+
+test('each seam is seen: fs.promises, a dynamic import, a stat through fs/promises, and an opendir', () => {
+  const { root, traces, done } = project({
+    'package.json': '{"type":"module"}',
+    'test/seams.test.mjs': [
+      "import { test } from 'node:test';",
+      "import { readFile, stat, opendir } from 'node:fs/promises';",
+      "test('seams', async () => {",
+      "  await readFile('fixtures/p.txt');",
+      "  await stat('fixtures/s.txt');",
+      "  const dir = await opendir('more'); await dir.close();",
+      "  const { three } = await import('../lib/three.mjs');",
+      "  if (three() !== 3) throw new Error('import failed');",
+      "});",
+    ].join('\n'),
+    'lib/three.mjs': 'export const three = () => 3;\n',
+    'fixtures/p.txt': 'p',
+    'fixtures/s.txt': 's',
+    'more/x.txt': 'x',
+  });
+  try {
+    const result = runTests(root, traces, ['test/seams.test.mjs']);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const { reads } = readTrace(traces, 'test/seams.test.mjs');
+    assert.equal(reads['fixtures/p.txt'], hashOf(path.join(root, 'fixtures/p.txt')), 'fs.promises.readFile');
+    assert.equal(reads['fixtures/s.txt'], hashOf(path.join(root, 'fixtures/s.txt')), 'fs.promises.stat');
+    assert.match(reads['more/'], /^listing:/, 'fs.promises.opendir');
+    assert.equal(reads['lib/three.mjs'], hashOf(path.join(root, 'lib/three.mjs')), 'a dynamic import');
+  } finally {
+    done();
+  }
+});
+
+test('the key of a trace holds the system and the allowlisted variables of its run', () => {
+  const { root, traces, done } = project({ 'package.json': '{"type":"module"}', 'test/a.test.mjs': "import { test } from 'node:test';\ntest('a', () => {});\n" });
+  try {
+    const env = { ...process.env, ...traceEnv({ root, dir: traces }), TZ: 'UTC', NOT_ALLOWED: 'x' };
+    delete env.NODE_TEST_CONTEXT;
+    assert.equal(spawnSync(process.execPath, ['--test', 'test/a.test.mjs'], { cwd: root, env, encoding: 'utf8' }).status, 0);
+    const trace = readTrace(traces, 'test/a.test.mjs');
+    assert.equal(trace.os, process.platform);
+    assert.equal(trace.env.TZ, 'UTC');
+    assert.equal('NOT_ALLOWED' in trace.env, false);
+    assert.deepEqual(Object.keys(trace.env).sort(), [...TRACE_ENV].sort());
+  } finally {
+    done();
+  }
+});
+
+test('a test that reads the home outside the temporary folder, or opens a network connection, is untraced', () => {
+  const { root, traces, done } = project({
+    'package.json': '{"type":"module"}',
+    'test/home.test.mjs': "import { test } from 'node:test';\nimport fs from 'node:fs';\nimport os from 'node:os';\nimport path from 'node:path';\ntest('home', () => { fs.existsSync(path.join(os.homedir(), 'settings.json')); });\n",
+    'test/net.test.mjs': [
+      "import { test } from 'node:test';",
+      "import net from 'node:net';",
+      "test('net', async () => {",
+      "  const server = net.createServer((socket) => socket.end()).listen(0, '127.0.0.1');",
+      "  await new Promise((resolve) => server.once('listening', resolve));",
+      "  await new Promise((resolve, reject) => net.connect(server.address().port, '127.0.0.1').on('close', resolve).on('error', reject));",
+      "  server.close();",
+      "});",
+    ].join('\n'),
+  });
+  // A home of its own, and a temporary folder beside it, not around it: on Windows the real one is under the home.
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
+  const home = path.join(base, 'home');
+  const temp = path.join(base, 'temp');
+  fs.mkdirSync(home);
+  fs.mkdirSync(temp);
+  try {
+    const env = { ...process.env, ...traceEnv({ root, dir: traces }), HOME: home, USERPROFILE: home, TMPDIR: temp, TEMP: temp, TMP: temp };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, ['--test', 'test/home.test.mjs', 'test/net.test.mjs'], { cwd: root, env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(readTrace(traces, 'test/home.test.mjs').untraced ?? '', /reads the home/);
+    assert.match(readTrace(traces, 'test/net.test.mjs').untraced ?? '', /network/);
+  } finally {
+    done();
+    fs.rmSync(base, { recursive: true, force: true });
   }
 });
 

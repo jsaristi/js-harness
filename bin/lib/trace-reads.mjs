@@ -15,6 +15,10 @@ export const TRACE_PRELOAD = path.join(path.dirname(fileURLToPath(import.meta.ur
 /** The version of what a trace records; a trace of another version is no trace. */
 export const TRACER_VERSION = tracer.TRACER_VERSION;
 
+/** The variables of a run's environment a trace keeps in its key (S5), and their values in `env`. */
+export const TRACE_ENV = tracer.TRACE_ENV;
+export const traceEnvOf = tracer.traceEnvOf;
+
 /** The hash of a file's content, as a trace keeps it, or `null`. */
 export const hashOf = tracer.hashOf;
 

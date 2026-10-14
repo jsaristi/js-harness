@@ -55,6 +55,14 @@ Nothing planned.
   the right tracer, say what is and why."
 - **S4** — The order of the queue (the lead): "finish Codex out of the lock and the orphan-gate guard
   first, then step 1", then steps 2, 4 and 5 (`parallel-gate.md` lines 23, 25, 26).
+- **S5** — The lead, 2026-10-14, approving the Node preload: "(1) The key of a trace also holds the Node
+  version, the OS and an allowlist of env vars, and a test that reads the clock, the network, the home or
+  a non-node child's world is marked untraced and always runs."
+- **S6** — The same message: "(2) Soundness is proven, not assumed: before selection decides any commit,
+  run it in shadow for a stretch (the gate still runs the whole suite, and records which tests selection
+  would have skipped); the proof is a count read from the log: zero failing tests that selection would
+  have skipped, over at least 30 gates, plus one test per seam (fs.promises, sync fs, a missing-file
+  probe, readdir, a dynamic import, a node child). Only then does it skip."
 
 ## The tracer (S3's question)
 `strace` is not installed in the WSL2 Ubuntu (`command -v strace` found none, 2026-10-14), and installing
@@ -78,10 +86,12 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
-| T1 | S2 | inline | written, not committed | `bin/lib/trace-reads.{cjs,mjs}`; RED (module missing), GREEN 5/5 |
-| T2 | S2 | inline | written, not committed | `bin/lib/select-tests.mjs`; RED (module missing), GREEN 5/5 |
-| T3 | S2 | inline | pending | `check`'s `tests` sensor runs the selection, in Windows and in WSL2 |
-| T4 | S2, S3 | inline | pending | gate time and wait, before and after, from the gate log |
+| T1 | S2 | inline | done, `850cc9f` | `bin/lib/trace-reads.{cjs,mjs}`; RED (module missing), GREEN 5/5 on Windows and WSL2 |
+| T2 | S2 | inline | done, `850cc9f` | `bin/lib/select-tests.mjs`; RED (module missing), GREEN 5/5 on Windows and WSL2 |
+| T2b | S5 | inline | written, not committed | the key holds `os` and `env` (`TRACE_ENV`: TZ, LANG, LC_ALL, CI, NODE_ENV, FORCE_COLOR, NO_COLOR); a read of the home outside the temporary folder, or a `net` connection, marks a test untraced; the clock is marked by hand (`// js-harness: untraced (...)`), since `node:test` itself uses timers and any detection would mark every test. RED: the import of `TRACE_ENV`, and the selection's case; GREEN 8/8 and 6/6 |
+| T2c | S6 | inline | written, not committed | one test per seam: sync fs, a missing-file probe, readdir and a node child (the first test), fs.promises `readFile`/`stat`/`opendir` and a dynamic import (the seams test). The seams test passed with no change to the tracer: its RED was only the missing import of the file |
+| T3 | S2, S6 | inline | pending | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed |
+| T4 | S2, S3, S6 | inline | pending | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
 - **L1** (2026-10-14): S1 to S4, verbatim. The lead's order of the queue puts this after Codex out of the
@@ -98,9 +108,14 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 ## Resume here (2026-10-14 17:0x, JH 8)
 - Next is T3: where the selection plugs in. `check`'s sensors are a project's own commands
   (`discoverSensors`, `bin/check.mjs:159`: `npm run test`). The design: opt-in by `harness.json`
-  `"exactTests": true`, honoured only when the `test` script is exactly `node --test`. Then the `tests`
-  sensor runs `node --test <selected files>` under `traceEnv`, or nothing when every file is skipped, and
-  its row says "N of M test files ran, K skipped by their traces" and the first reasons.
+  `"exactTests": "shadow"`, honoured only when the `test` script is exactly `node --test` (S6: shadow
+  first). In shadow the `tests` sensor runs the whole suite under `traceEnv`, asks the selection before
+  it, and its row and the gate log's end line say which files selection would have skipped and which of
+  those failed (from the failing names, `failingTests`). `"exactTests": "skip"` is the switch that later
+  runs `node --test <selected files>`, and it is honoured only when the count of S6 holds (T4).
+- Before T3: T2b (S5's key: the OS and an env allowlist next to the Node version; reads under the home
+  outside the temporary folder, `Date`/timers left aside as a marked case, and `net`/`http` connections
+  mark a test untraced) and T2c (S6's seams, one test each).
 - The traces live under the worktree's git dir, `js-harness/traces/<place>/`, where `<place>` is
   `windows` or `wsl-<distro>`: a trace from WSL2 proves nothing for Windows, as the tree key says. In WSL2
   the sensor runs in the mirror, so `JS_HARNESS_TRACE_ROOT` is the mirror's path and

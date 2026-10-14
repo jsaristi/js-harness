@@ -4,13 +4,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { selectTests, testFilesOf } from './select-tests.mjs';
-import { TRACE_PRELOAD, TRACER_VERSION, hashOf } from './trace-reads.mjs';
+import { TRACE_PRELOAD, TRACER_VERSION, hashOf, traceEnvOf } from './trace-reads.mjs';
 
 // The selection of exact test selection (odd/tasks/exact-tests.md, T2): which test files a gate runs, from
 // the traces of their last passing runs, and the whole suite whenever a trace cannot be trusted.
 
 /** A trace as the tracer writes one, for `test`, with `reads` (path to state) and what else it is given. */
-const traceOf = (test, reads, over = {}) => ({ v: 1, test, tracer: TRACER_VERSION, tracerHash: hashOf(TRACE_PRELOAD), node: process.version, untraced: null, reads, ...over });
+const traceOf = (test, reads, over = {}) => ({ v: 1, test, tracer: TRACER_VERSION, tracerHash: hashOf(TRACE_PRELOAD), node: process.version, os: process.platform, env: traceEnvOf(process.env), untraced: null, reads, ...over });
 
 /** A store of traces, and the states the tree has now, as `selectTests` asks them. */
 function select(tests, traces, now) {
@@ -58,6 +58,17 @@ test('a test with no trace, an untraced one, or one traced by another node or an
     assert.deepEqual(chosen.run, ['t.test.mjs'], said);
     assert.equal(chosen.why.get('t.test.mjs'), said);
   }
+});
+
+test('a test traced on another system, or with another value of an allowlisted variable, runs', () => {
+  const now = { 't.test.mjs': 'h' };
+  const reads = { 't.test.mjs': 'h' };
+  const env = traceEnvOf({ TZ: 'UTC' });
+  const traces = (over) => new Map([['t.test.mjs', traceOf('t.test.mjs', reads, { os: 'linux', env, ...over })]]);
+  const ask = (over, run = {}) => selectTests({ tests: ['t.test.mjs'], readTrace: (one) => traces(over).get(one) ?? null, stateOf: (key) => now[key] ?? 'absent', os: 'linux', env, ...run });
+  assert.deepEqual(ask({}).skipped, ['t.test.mjs']);
+  assert.equal(ask({ os: 'win32' }).why.get('t.test.mjs'), 'traced on win32, not linux');
+  assert.equal(ask({}, { env: traceEnvOf({ TZ: 'America/Bogota' }) }).why.get('t.test.mjs'), 'traced with TZ=UTC, not TZ=America/Bogota');
 });
 
 test('a changed package.json is the whole suite, whatever the traces say', () => {
