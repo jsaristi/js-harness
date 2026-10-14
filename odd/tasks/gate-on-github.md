@@ -613,16 +613,19 @@ the real runs once they exist (Done when), so the month's use is read and not gu
   purpose: any push to it is a new run.
 
 ## Next
-T6, what is left: the pull request, its first run on GitHub quoted with its minutes, and one
-run seen red (on a branch of its own, never merged, if the first run is not red by itself).
-Then T7, the design of the exchange, which he asked to be told of.
+1. The cut output of a failed `check` on Linux (Progress, the first run): the orchestrator was
+   asked whether the fix in `bin/check.mjs` (JH 8's) is made here; with its yes, test first
+   (a child `check` that fails with a large output through a pipe delivers all of it), the
+   local gate, both reviews, one push to pull request 109, and the run read: its failures
+   fixed the same way, until a run is green. Each push is a run of about 4 minutes.
+2. T7: the two readers of "The exchange" were running; take their findings into the design,
+   then send the exchange to the orchestrator for him ("avísame cuando llegue el diseño del
+   canje"), with its one question.
 
 ## Resume here
-Worktree `D:/js-harness-worktrees/github-gate`, branch `feat/gate-on-github`. T1 to T5 are
-done; T6 is committed (`83876f0`) and both reviews of `75b0ceb..83876f0` passed. The
-orchestrator was told before the first push. If no pull request of this branch exists (`gh pr
-list --head feat/gate-on-github`): merge `origin/main` (documents only), push, open it with
-what the orchestrator asked to read in it (the two code commits, each review's range and
-outcome, the run's link and billed minutes, the state of the head). If it exists: read its
-run (`gh run list --workflow gate --branch feat/gate-on-github`), write the run in Progress,
-and go on to T7.
+Worktree `D:/js-harness-worktrees/github-gate`, branch `feat/gate-on-github`, pushed at
+`82aa048`; local commits after it are documents only (`fffbcd4`, `2d58d88`) and are not
+pushed on purpose (a push is a run). Pull request 109 is open, bound to this session, red, its
+body says do not merge. T1 to T5 done; T6 is built and reviewed, waiting on its first green
+run; T7 is written (fffbcd4) and was with two readers. Scratchpad logs: `t5-turn.log`,
+`t6-review-turn.log`, `run1-full.log`. Read the orchestrator's answers first, then Next.
