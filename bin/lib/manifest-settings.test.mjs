@@ -136,13 +136,33 @@ test('a settings file that cannot be written is skipped with the reason, and not
   const m = machine();
   try {
     m.write('{"model":"opus"}');
-    fs.chmodSync(m.settings, 0o444);
-    const result = acceptSessionMessages(m.home);
-    fs.chmodSync(m.settings, 0o644);
-    assert.equal(result.status, 'skipped');
-    assert.match(result.reason, /^not writable \(E[A-Z]+\)$/);
+    // Injected, not a read-only mode, which a root user writes through (Codex's finding of 2026-10-14).
+    const writeFile = () => {
+      throw Object.assign(new Error('denied'), { code: 'EPERM' });
+    };
+    const result = acceptSessionMessages(m.home, { writeFile });
+    assert.deepEqual(result, { status: 'skipped', path: m.settings, reason: 'not writable (EPERM)' });
     assert.equal(m.read(), '{"model":"opus"}');
     assert.equal(readManifest(m.home)?.settings, undefined);
+  } finally {
+    m.done();
+  }
+});
+
+// Codex's finding of 2026-10-14: a setting written and then not recorded could never be put back.
+test('when the record cannot be written, the settings file goes back to its bytes, or away when this made it', () => {
+  const m = machine();
+  try {
+    const record = () => {
+      throw Object.assign(new Error('full'), { code: 'ENOSPC' });
+    };
+    m.write('{\r\n  "model": "opus"\r\n}\r\n');
+    const kept = acceptSessionMessages(m.home, { record });
+    assert.deepEqual(kept, { status: 'skipped', path: m.settings, reason: 'not recorded in the manifest (ENOSPC), so the file was put back' });
+    assert.equal(m.read(), '{\r\n  "model": "opus"\r\n}\r\n');
+    fs.rmSync(m.settings);
+    assert.equal(acceptSessionMessages(m.home, { record }).status, 'skipped');
+    assert.equal(fs.existsSync(m.settings), false);
   } finally {
     m.done();
   }

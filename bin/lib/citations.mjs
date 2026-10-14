@@ -65,7 +65,8 @@ export function resolveCitations(added, { lineCount, commitExists }) {
       } else {
         const count = lineCount(citation.path);
         if (count === null) why = 'no such file';
-        else if (citation.end > count || citation.line > count) why = `the file has ${count} lines`;
+        else if (citation.line < 1 || citation.end < citation.line) why = 'no such line or range';
+        else if (citation.end > count) why = `the file has ${count} lines`;
       }
       if (why !== null) unresolved.push({ file, line, citation: citation.text, why });
     }

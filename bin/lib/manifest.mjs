@@ -633,7 +633,7 @@ function readSettings(target) {
     throw new Error('malformed JSON');
   }
   if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Error('not a JSON object');
-  return { data, existed, style: { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: existed ? detectIndent(raw) : 2 } };
+  return { data, existed, raw, style: { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: existed ? detectIndent(raw) : 2 } };
 }
 
 /** Sets `SESSION_MESSAGES` in the user settings and records it in the manifest's `settings` array as `{ path, key,
@@ -643,7 +643,7 @@ function readSettings(target) {
  * (recorded all the same, so `uninstall` knows to leave it); `skipped` with a `reason` when the file cannot be
  * read, is no JSON object or cannot be written, and then nothing is written or recorded. A second call keeps the first record, which holds what the user had. Like the other records kept on
  * request, `install` and `sync` carry it forward and `uninstall` puts the value back (`restoreSettings`). */
-export function acceptSessionMessages(home) {
+export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord } = {}) {
   const target = userSettingsPath(home);
   const { key, value } = SESSION_MESSAGES;
   let settings;
@@ -658,7 +658,7 @@ export function acceptSessionMessages(home) {
   // Recorded only once the file holds the value: a write that fails leaves no record that would later have
   // `uninstall` take a value the user set by hand for one this command wrote.
   const keep = () => {
-    if (!readManifest(home)?.settings?.some(matches)) keepRecord(home, 'settings', record, matches);
+    if (!readManifest(home)?.settings?.some(matches)) recordIt(home, 'settings', record, matches);
   };
   if (data[key] === value) {
     keep();
@@ -666,11 +666,19 @@ export function acceptSessionMessages(home) {
   }
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, serializeJson({ ...data, [key]: value }, style), 'utf8');
+    writeFile(target, serializeJson({ ...data, [key]: value }, style), 'utf8');
   } catch (err) {
     return { status: 'skipped', path: target, reason: `not writable (${err.code ?? err.message})` };
   }
-  keep();
+  // A setting nothing records could never be put back (Codex's finding of 2026-10-14): when the record cannot
+  // be written, the file goes back to the bytes it had, or away when this made it.
+  try {
+    keep();
+  } catch (err) {
+    if (existed) fs.writeFileSync(target, settings.raw, 'utf8');
+    else fs.rmSync(target, { force: true });
+    return { status: 'skipped', path: target, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was put back` };
+  }
   return { status: 'written', path: target, was: record.previous };
 }
 

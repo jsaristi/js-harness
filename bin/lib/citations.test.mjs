@@ -48,12 +48,16 @@ test('each citation resolves, or says why not: no such file, past its end, no su
   const added = [
     { file: 'odd/tasks/a.md', line: 4, text: '`bin/check.mjs:1176-1202` and `bin/lib/stack.mjs:701`' },
     { file: 'odd/tasks/a.md', line: 5, text: 'on `d3f6ac1`, and `bin/gone.mjs:3` from `abc1234`' },
+    // Codex's finding of 2026-10-14: a line 0 and a range that runs backwards are no lines of a file.
+    { file: 'odd/tasks/a.md', line: 6, text: '`bin/check.mjs:0` and `bin/check.mjs:10-2`' },
   ];
   const result = resolveCitations(added, { lineCount: (p) => files.get(p) ?? null, commitExists: (id) => id === 'd3f6ac1' });
-  assert.equal(result.checked, 5);
+  assert.equal(result.checked, 7);
   assert.deepEqual(result.unresolved, [
     { file: 'odd/tasks/a.md', line: 4, citation: 'bin/lib/stack.mjs:701', why: 'the file has 700 lines' },
     { file: 'odd/tasks/a.md', line: 5, citation: 'bin/gone.mjs:3', why: 'no such file' },
     { file: 'odd/tasks/a.md', line: 5, citation: 'abc1234', why: 'no such commit' },
+    { file: 'odd/tasks/a.md', line: 6, citation: 'bin/check.mjs:0', why: 'no such line or range' },
+    { file: 'odd/tasks/a.md', line: 6, citation: 'bin/check.mjs:10-2', why: 'no such line or range' },
   ]);
 });

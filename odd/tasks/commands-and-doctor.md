@@ -233,8 +233,23 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   Pending for each: gentle-ai's assessment of its commit and Codex's review (AGENTS.md), then the
   push and the pull request.
 
+- L8 — 2026-10-14, afternoon. The lead's order (his words, `ffe99ebf` line 5906): finish shipping,
+  then pause. gentle-ai assessed `573158c..cc65b79` as medium, review not due (`under_budget`, 1,399
+  lines); `gentle-ai review assess` takes no head ref, so the four commits were assessed as one
+  range. `origin/main` `c33b7bf` merged (`6aba93e`): five conflicts, the row lists (main renamed the
+  row `codex-plugin` to `codex`) and `docs/todo.md` (main's text, which already records the move);
+  its first gate failed one test not of this branch, `evals/suite.test.mjs:749` (a pid still alive
+  in WSL2; it passes twice on Windows), sent to JH 11 by the lead; the second passed. The push row's
+  new hint named `--base origin/main`, and its range `40db00f..6aba93e` held this branch's 1,372 lines
+  alone: T2 seen working on its own branch. Codex reviewed it (5 parts, 905,778 input tokens, inside
+  the 1,646,400 allowance): three P2 findings, all fixed in the next commit with their tests:
+  citations take a line 0 or a backwards range as unresolved; a setting written and then not
+  recorded is put back (file bytes restored, or the file removed when this made it); the write
+  failure is injected in the test instead of a read-only mode a root user writes through.
+
 ## Next step
-Assess each work-unit commit with gentle-ai (`--base-ref` the last reviewed boundary,
+Codex review of the fix commit (`--base` the push row names), push, pull request, tell the lead,
+then pause (his order). Older text, kept: Assess each work-unit commit with gentle-ai (`--base-ref` the last reviewed boundary,
 `--committed-only`), review what is due, then `js-harness codex-review --base <boundary>` within the
 rate (`--plan` first), push, open the pull request and tell the orchestrator. Older text, kept:
 When `origin/main` holds the WSL gate: merge it, run the gate, commit T1, T4 and T5 as three work
