@@ -626,3 +626,46 @@ test('the seed of the current arm runs after the shared preparation and seeds th
   await trialWithFakeAgent(currentConfig({ ...OPTIONS, seed: seedFromTemplate(templateDir, { runInit }) }));
   assert.deepEqual(order, [{ claudeJson: true, repo: true }]);
 });
+
+// ---- the fingerprint of the setup (G6 of odd/tasks/future-model-protocol.md) ---------------------------
+
+/** A template built from `realHome` after `change(realHome)`, and its fingerprint. */
+function fingerprintAfter(change = () => {}) {
+  const realHome = makeRealHome();
+  change(realHome);
+  return buildTemplate({ realHome, templateDir: path.join(tmp('template'), 'tpl') }).fingerprint;
+}
+
+test('the fingerprint of a template is the same for the same setup, built twice', () => {
+  const first = fingerprintAfter();
+  assert.match(first.sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(fingerprintAfter(), first);
+  assert.deepEqual(Object.keys(first.items).sort(), [
+    '.claude/.claude.json', '.claude/CLAUDE.md', '.claude/agents', '.claude/commands', '.claude/hooks', '.claude/output-styles', '.claude/plugins', '.claude/settings.json', '.claude/skills', '.gentle-ai/state.json',
+  ]);
+});
+
+test('the fingerprint leaves out what a day of sessions changes: the counters of .claude.json and the timestamps of gentle-ai', () => {
+  const base = fingerprintAfter();
+  const busy = fingerprintAfter((home) => {
+    const file = path.join(home, '.claude.json');
+    const json = readJson(file);
+    write(file, JSON.stringify({ ...json, numStartups: 99, tipsHistory: { a: 4 }, skillUsage: { demo: 2 }, cachedGrowthBookFeatures: { x: true } }, null, 2));
+    write(path.join(home, '.gentle-ai', 'state.json'), '{"rdd_mode":"on","last_update_check":"2026-10-14T01:00:00Z","last_synced_at":"2026-10-14T02:00:00Z","rdd_mode_recorded_at":"2026-10-14T03:00:00Z"}\n');
+  });
+  assert.deepEqual(busy, base);
+});
+
+test('the fingerprint moves when the setup moves, and names the item that did', () => {
+  const base = fingerprintAfter();
+  const edited = fingerprintAfter((home) => write(path.join(home, '.claude', 'CLAUDE.md'), '# global instructions, edited\n'));
+  assert.notEqual(edited.sha256, base.sha256);
+  assert.deepEqual(Object.keys(edited.items).filter((item) => edited.items[item] !== base.items[item]), ['.claude/CLAUDE.md']);
+  const servers = fingerprintAfter((home) => {
+    const file = path.join(home, '.claude.json');
+    write(file, JSON.stringify({ ...readJson(file), mcpServers: { engram: { command: 'engram', args: ['mcp'] } } }, null, 2));
+  });
+  assert.deepEqual(Object.keys(servers.items).filter((item) => servers.items[item] !== base.items[item]), ['.claude/.claude.json'], 'an MCP server removed is a change');
+  const rdd = fingerprintAfter((home) => write(path.join(home, '.gentle-ai', 'state.json'), '{"rdd_mode":"off"}\n'));
+  assert.deepEqual(Object.keys(rdd.items).filter((item) => rdd.items[item] !== base.items[item]), ['.gentle-ai/state.json'], 'a setting of gentle-ai is a change, its timestamps are not');
+});

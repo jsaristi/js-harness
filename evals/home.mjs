@@ -11,6 +11,7 @@
 //    shared directory), and a link found in a template is an error.
 //  - Frozen. The real home is read once, by `buildTemplate`; every trial then copies the template, so a
 //    config edit in the middle of a run cannot change one arm halfway.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -250,8 +251,46 @@ function writeTemplate({ realHome, templateDir, claude, copyFile }) {
 export function sealTemplate(templateDir, { kind, warnings, ...extra }) {
   const files = inventory(path.join(templateDir, PAYLOAD));
   const bytes = files.reduce((total, file) => total + file.size, 0);
-  fs.writeFileSync(path.join(templateDir, MARKER), `${JSON.stringify({ kind, version: 1, builtAt: new Date().toISOString(), files, bytes, warnings, ...extra }, null, 2)}\n`);
-  return { templateDir, files: files.length, bytes, warnings };
+  const fingerprint = fingerprintOf(path.join(templateDir, PAYLOAD), files);
+  fs.writeFileSync(path.join(templateDir, MARKER), `${JSON.stringify({ kind, version: 1, builtAt: new Date().toISOString(), files, bytes, warnings, fingerprint, ...extra }, null, 2)}\n`);
+  return { templateDir, files: files.length, bytes, warnings, fingerprint };
+}
+
+// What a day of sessions changes in a file of the template without changing the setup an arm runs on (G6 of
+// `odd/tasks/future-model-protocol.md`): left out of the fingerprint, or every run resumed the next day would be
+// refused. `.claude.json` keeps Claude Code's counters and caches beside the MCP servers, which alone are setup;
+// gentle-ai's state keeps three timestamps beside its settings; Codex's `config.toml` keeps a table per project
+// and the notices it has shown beside its configuration.
+const STATE_TIMESTAMPS = ['last_update_check', 'last_synced_at', 'rdd_mode_recorded_at'];
+const TOML_HEADER = /^\s*\[/;
+const TOML_SESSION_TABLE = /^\s*\[(projects\.|notice(\]|\.))/;
+const SETTLED = {
+  '.claude/.claude.json': (text) => JSON.stringify(JSON.parse(text).mcpServers ?? null),
+  '.gentle-ai/state.json': (text) => JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(text)).filter(([key]) => !STATE_TIMESTAMPS.includes(key)))),
+  '.codex/config.toml': (text) => {
+    let skipping = false;
+    return text.split(/\r?\n/).filter((line) => {
+      if (TOML_HEADER.test(line)) skipping = TOML_SESSION_TABLE.test(line);
+      return !skipping;
+    }).join('\n');
+  },
+};
+
+const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
+
+/** The fingerprint of the payload in `root`, whose `files` are its inventory: one sha256 per item (the first two
+ * segments of a path, such as `.claude/skills`) over its files' paths and settled contents, and one over the items.
+ * Two templates of the same setup have the same fingerprint; the items say which part of a setup moved. */
+export function fingerprintOf(root, files = inventory(root)) {
+  const lines = new Map();
+  for (const { path: rel } of files) {
+    const item = rel.split('/').slice(0, 2).join('/');
+    const raw = fs.readFileSync(path.join(root, ...rel.split('/')));
+    const settled = Object.hasOwn(SETTLED, rel) ? SETTLED[rel](raw.toString('utf8')) : raw;
+    lines.set(item, [...(lines.get(item) ?? []), `${rel}\0${sha256(settled)}\n`]);
+  }
+  const items = Object.fromEntries([...lines].sort(([a], [b]) => (a < b ? -1 : 1)).map(([item, entries]) => [item, sha256(entries.join(''))]));
+  return { sha256: sha256(Object.entries(items).map(([item, hash]) => `${item}\0${hash}\n`).join('')), items };
 }
 
 /** The marker of the template in `templateDir`; an error when the directory is not one of `kind`, which
