@@ -231,7 +231,9 @@ const PLAIN_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?$/;
 /** Why the `js-harness` on the path may not run the sync after an upgrade to `version`, or `null` when it
  * may (T8): it is asked its version through the same shell the sync would run it through, and only the
  * version just installed passes. A copy that fails, is not found or does not know `--version` (one older
- * than this) is not the upgraded one either. Nothing is written by the question. */
+ * than this) is not the upgraded one either. Nothing is written by the question. The one way out it names
+ * is the sync itself, run with the upgraded copy: a second `upgrade` is no way out, since the install
+ * already happened and that run would find nothing newer, say "up to date" and sync nothing. */
 function pathCopyRefusal(spawn, version) {
   const asked = spawn('js-harness', ['--version'], { shell: true, encoding: 'utf8' });
   const answered = asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
@@ -240,8 +242,9 @@ function pathCopyRefusal(spawn, version) {
     ? `the js-harness on the path is ${answered}, not the upgraded ${version}`
     : `the js-harness on the path did not answer --version, so it is not the upgraded ${version}`;
   return (
-    `${found}: nothing was synced. Run \`js-harness sync --global\` with the upgraded copy, ` +
-    'or run the upgrade again with --prefix naming where the package manager installs it.'
+    `${found}: ${version} was installed and nothing was synced. ` +
+    'Run `js-harness sync --global` with the copy that was just installed, by its own path: ' +
+    'the one the shell finds first is another.'
   );
 }
 

@@ -289,8 +289,10 @@ Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it c
   `upgrade` runs `js-harness --version` through the same shell; only when the answer is
   exactly the version it just installed does it run that copy's `sync`. Any other answer, no
   answer, or a failure: nothing is synced, exit 1, and the line says what the copy on the path
-  answered, what was installed, and the two ways out (run `js-harness sync --global` with the
-  upgraded copy, or name where it was installed with `--prefix`).
+  answered, what was installed, and the one way out: run `js-harness sync --global` with the
+  copy that was just installed. (The first version of this line also offered a second
+  `upgrade` with `--prefix`; Codex found, rightly, that such a run finds nothing newer, says
+  "up to date" and syncs nothing. Removed in the correction.)
 - **`js-harness --version`** is new: it prints the running version, one line, exit 0. An older
   copy on the path does not know it and answers "Unknown command", exit 2, which is a refusal
   here, and rightly: a copy that cannot say its version is not the one just installed.

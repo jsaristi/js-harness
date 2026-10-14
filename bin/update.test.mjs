@@ -504,9 +504,11 @@ for (const [label, answer, said] of [
       assert.equal(calls.length, 2, 'the install and the question: no sync is started');
       assert.equal(calls.some((call) => call.args.includes('sync')), false);
       assert.match(err, said);
-      assert.match(err, /nothing was synced/);
+      assert.match(err, /0\.9\.0 was installed and nothing was synced/);
       assert.match(err, /js-harness sync --global/);
-      assert.match(err, /--prefix/);
+      // The install already happened: a second upgrade would say "up to date" and sync nothing, so it is
+      // not offered as a way out (Codex's finding on the first version of this line).
+      assert.doesNotMatch(err, /upgrade again|--prefix/);
       assert.doesNotMatch(`${out}${err}`, /\u001b|rm -rf|ENOENT|Unknown command/, 'none of the copy\'s own bytes are printed');
       assert.doesNotMatch(out, /upgraded to/);
     } finally {
