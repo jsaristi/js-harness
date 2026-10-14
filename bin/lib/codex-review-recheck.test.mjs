@@ -96,6 +96,9 @@ test('the recheck prompt keeps the review prompt and lists each earlier finding 
   assert.ok(text.startsWith('Review the range a..b.\n\n## A recheck of earlier findings\n'), text);
   for (const mark of [NOT_FIXED, FOLLOW_UP, BLOCKS]) assert.ok(text.includes(`"${mark}"`), mark);
   assert.ok(text.includes('could make a failing check pass, or that exposes data'), text);
+  // The review prompt says to report nothing of code the diff leaves as it was; an earlier finding still
+  // open may be on such code, so the recheck says that rule does not hold for it.
+  assert.ok(text.includes('An earlier finding that is still open is reported even when this range leaves its lines as they were'), text);
   assert.ok(text.includes('1. bin/x.mjs:3-4 P2 [P2] Drops a record\n   The last line is lost.'), text);
   assert.ok(text.includes('2. lib/y.mjs:9 Slow\n   Two\n   lines.'), text);
   assert.ok(text.endsWith('\n') && !text.endsWith('\n\n'), 'one final newline');
@@ -124,7 +127,9 @@ test('the marks are read however the answer writes them, and a title with none i
   };
   for (const title of ['[NOT FIXED] x', '[P1][Not Fixed] x', '**[not fixed]** x', '[not-fixed] x', 'Not fixed: x', 'Still drops the last record (not fixed)']) assert.deepEqual(as(title), ['notFixed'], title);
   for (const title of ['[P1] [blocks] x', '[blocking] x', '[Blocks] x']) assert.deepEqual(as(title), ['blocking'], title);
-  for (const title of ['[follow-up] x', '[Follow up] x', '[P3] [followup] x']) assert.deepEqual(as(title), ['followUps'], title);
+  for (const title of ['[follow-up] x', '[Follow up] x', '[P3] [followup] x', 'Follow-up: x']) assert.deepEqual(as(title), ['followUps'], title);
+  // A word in a title is no mark: only a mark in brackets, or one the title starts with, is.
+  for (const title of ['[P1] Preserve follow-up tasks when saving the record', 'Unblocks the queue', 'Writes a [blocks] list']) assert.deepEqual(as(title), ['unmarked'], title);
   const unmarked = classifyRecheck({ findings: [finding('Drops a record')] }, 2);
   assert.deepEqual(unmarked.counts, { findings: 2, fixed: 0, notFixed: 0, followUps: 0, blocking: 0, unmarked: 1 });
   assert.deepEqual(unmarked.status, ['not said', 'not said'], 'which earlier finding it is cannot be told');

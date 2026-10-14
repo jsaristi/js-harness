@@ -208,7 +208,20 @@ commits would count the same task once on the branch and again in its merge.
   so, and "not said" is counted on the line. Tests: 445 of 445 in the codex-review files before
   that last change, then 12 of 12 unit and 10 of 10 recheck tests after it.
 
+- 2026-10-14 · **T0 committed and reviewed.** `10e30e1` passed the gate; gentle-ai rated it
+  medium, review not due (under budget). Risk, by this session: item 2, since it decides when a
+  Codex review reads less, which is why the verifier ran. `main` was merged once (`24cb517`; the
+  gate's tests ran in WSL2). Codex reviewed `8aa93c3..24cb517` in 2 parts: 466,240 input tokens
+  against a plan of 460,000 and an allowance of 847,200. It found three P2s, two defects:
+  - the recheck prompt kept the review prompt's "report nothing of code the diff leaves as it
+    was", so an open finding on untouched lines could go unreported and count as fixed;
+  - "follow-up" read anywhere in a title made an ordinary title a follow-up.
+
+  One correction, test first (RED in 2 unit tests): the prompt now says that rule does not hold
+  for the earlier findings; a follow-up or blocking mark counts only in brackets or as the title's
+  first word. Its review is the first real recheck: a range that starts at `24cb517`.
+
 ## Next
-0. T0: commit through the gate, merge `main` once (PR 121 is merged), gentle-ai assessment,
-   Codex review, push, its pull request; tell the orchestrator.
+0. T0: commit the correction, recheck it with Codex (`--base origin/main`; the records move it
+   to `24cb517`), push, its pull request; tell the orchestrator.
 1. T2: take both readers' findings into the design, then the design to the orchestrator.

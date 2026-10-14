@@ -138,6 +138,7 @@ export function recheckPrompt(text, findings) {
     'This range corrects the findings an earlier review of this branch made, listed below. Check each of them: does this range fix it?',
     `- For each finding this range does not fix, report one finding whose title starts with "${NOT_FIXED}", then the number the finding has in the list below, then its title, and say what is still missing.`,
     '- A finding that is fixed needs nothing: do not report it.',
+    '- An earlier finding that is still open is reported even when this range leaves its lines as they were, or changes another file: for these findings, the rule above to report nothing of code the diff leaves as it was does not hold.',
     `- Anything else you notice is a follow-up: its title starts with "${FOLLOW_UP}". It does not block, so report it once and briefly.`,
     `- Except a new finding that could make a failing check pass, or that exposes data (a secret, a credential, or a person's data): its title starts with "${BLOCKS}".`,
     'Every finding you report starts with one of these three marks.',
@@ -149,12 +150,15 @@ export function recheckPrompt(text, findings) {
   return `${text.replace(/\n+$/, '')}\n\n${recheck.join('\n')}\n`;
 }
 
-// The marks as the answer may write them, in any case, with or without the brackets, with a space or a
-// hyphen, inside Markdown emphasis.
+// The marks as the answer may write them, in any case, with a space or a hyphen, inside Markdown emphasis.
+// "Not fixed" counts anywhere in the start of a title, since reading it where it is no mark only keeps a
+// finding open. A follow-up or a blocking mark counts only in brackets, or as the word the title starts with:
+// read anywhere, an ordinary title ("Preserve follow-up tasks") would pass as a follow-up, and a follow-up
+// does not keep the recheck open.
 const MARKS = [
   ['notFixed', /not[\s-]?fixed/],
-  ['blocking', /\[\s*block(?:s|ing)?\s*\]|^block(?:s|ing)?\b/],
-  ['followUp', /follow[\s-]?ups?/],
+  ['blocking', /^\[\s*block(?:s|ing)?\s*\]|^block(?:s|ing)?\b/],
+  ['followUp', /^\[\s*follow[\s-]?ups?\s*\]|^follow[\s-]?ups?\b/],
 ];
 
 /** The mark a finding's title carries in its first 60 characters, the one that comes first, with the number
