@@ -2375,6 +2375,12 @@ function senderWords(from, { quoted = false } = {}) {
   return typeof from?.id === 'string' ? `session ${from.id.slice(0, 8)}` : 'a sender the host does not name';
 }
 
+/** The share of its context a notice's sender held, as the channel says it after the sender's name: ` (<percent>%
+ * of its context)`, or nothing when the notice carries none. */
+function shareWords(from) {
+  return Number.isFinite(from?.context?.percent) ? ` (${from.context.percent}% of its context)` : '';
+}
+
 /** The notices for the orchestrator that the record gained between two boards, one line each: the kind,
  * who wrote it and its text. The record only grows, so those are its last ones, as many as the count
  * rose by (`channelOf`); when it rose by more than a board holds, the rest are said by their number,
@@ -2875,7 +2881,7 @@ function channelLines(channel, now) {
   for (const notice of channel.notices) {
     const to = notice.to.role === 'orchestrator' ? 'orchestrator' : `work ${notice.to.number}`;
     const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (the user's words: transcript ${notice.transcript}, line ${notice.line})` : '';
-    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
+    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)}${shareWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
   }
   if (channel.skipped > 0) lines.push(`  ${channel.skipped} line${channel.skipped === 1 ? ' of the record is' : 's of the record are'} neither a notice nor a reading: skipped`);
   if (channel.messageCount > 0) lines.push(`  ${plural(channel.messageCount, 'message')} between sessions in the transcripts of the window${lastOf(channel.messageCount, channel.messages.length)}:`);

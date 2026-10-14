@@ -395,7 +395,11 @@ export async function notifyMain(
     : notice.kind === 'answer' && notice.question !== undefined ? `answer to question ${notice.question}`
       : notice.kind === 'withdrawn' ? `withdrawn question ${notice.question}`
         : notice.kind;
-  stdout(`js-harness notify: recorded ${what} for ${role} at ${at} from ${senderWords(from)} in ${file}`);
+  // The hour is read from this clock at the instant `at` names, and the share from the sender's transcript: nobody types either.
+  const clock = new Date(at);
+  const hour = `${String(clock.getHours()).padStart(2, '0')}:${String(clock.getMinutes()).padStart(2, '0')}`;
+  const holding = from.context ? `, holding ${from.context.percent}% of its context` : '';
+  stdout(`js-harness notify: recorded ${what} for ${role} at ${hour} local (${at}) from ${senderWords(from)}${holding} in ${file}`);
   if (notice.copy) {
     for (const one of notice.copy.answers) stdout(`the user's answer, ${one.how}: ${one.answer.length > SHOWN ? `${one.answer.slice(0, SHOWN)}…` : one.answer}`);
   }

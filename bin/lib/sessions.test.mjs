@@ -2756,7 +2756,7 @@ const channelSection = (parts) => {
 test('renderBoard prints the channel after the roster: the last notices of the record, who to whom, then the last messages between sessions', () => {
   const notices = [
     noticeOf(900, FROM_TWO, 'orchestrator', 'opened', 'session board, T4'),
-    noticeOf(800, { id: A, title: 'JH ORQ · proj' }, 2, 'answer', 'A, as automatic as possible', { transcript: '1d16beeb', line: 406 }),
+    noticeOf(800, { id: A, title: 'JH ORQ · proj', context: { tokens: 200000, percent: 40 } }, 2, 'answer', 'A, as automatic as possible', { transcript: '1d16beeb', line: 406 }),
     noticeOf(400, {}, 'orchestrator', 'note', 'y'.repeat(200)),
     noticeOf(300, { id: C }, 5, 'closed', 'delivered'),
   ];
@@ -2765,7 +2765,7 @@ test('renderBoard prints the channel after the roster: the last notices of the r
   assert.deepEqual(channelSection(board), [
     'Channel',
     '  H:\\.js-harness\\channel\\D--proj.jsonl  4 notices, the last 3:',
-    '  | 13m ago  JH ORQ · proj to work 2  answer  A, as automatic as possible  (the user\'s words: transcript 1d16beeb, line 406)',
+    '  | 13m ago  JH ORQ · proj (40% of its context) to work 2  answer  A, as automatic as possible  (the user\'s words: transcript 1d16beeb, line 406)',
     `  | 6m ago  a sender the host does not name to orchestrator  note  ${'y'.repeat(159)}…`,
     '  | 5m ago  session cccccccc to work 5  closed  delivered',
     '  1 line of the record is neither a notice nor a reading: skipped',

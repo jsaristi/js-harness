@@ -373,7 +373,7 @@ test('notify dispatches: it records one notice under a temp home and exits 0 wit
     const lines = fs.readFileSync(path.join(channel, records[0]), 'utf8').trimEnd().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(lines.map((notice) => [notice.schema, notice.to, notice.kind, notice.text, notice.cwd]), [['js-harness.channel-notice/v1', { role: 'work', number: 9 }, 'note', 'probe', cwd]]);
     const [recorded, address] = result.stdout.trimEnd().split('\n');
-    assert.match(recorded, /^js-harness notify: recorded note for work session 9 at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z from /);
+    assert.match(recorded, /^js-harness notify: recorded note for work session 9 at \d\d:\d\d local \(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\) from /);
     assert.ok(recorded.endsWith(` in ${path.join(channel, records[0])}`), recorded);
     assert.ok(address.startsWith('address of work session 9: no single one now (sessions --address exit 1): no sessions folder for '), address);
   } finally {
