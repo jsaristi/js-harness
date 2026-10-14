@@ -1,0 +1,158 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { applySettingsKey, undoSettingsKey } from './settings-key.mjs';
+
+const PASTE = ['env', 'CODEGRAPH_NO_PROMPT_HOOK'];
+const PLUGIN = ['enabledPlugins', 'typescript-lsp@claude-plugins-official'];
+
+function project(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-settings-key-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+const settingsFile = (root) => path.join(root, '.claude', 'settings.local.json');
+
+function withSettings(t, text) {
+  const root = project(t);
+  fs.mkdirSync(path.join(root, '.claude'));
+  fs.writeFileSync(settingsFile(root), text);
+  return root;
+}
+
+test('a key in a file that does not exist creates the folder and the file, and records both', (t) => {
+  const root = project(t);
+  const applied = applySettingsKey(settingsFile(root), PASTE, '1');
+  assert.deepEqual(applied, {
+    state: 'written',
+    record: { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 },
+  });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "env": {\n    "CODEGRAPH_NO_PROMPT_HOOK": "1"\n  }\n}\n');
+});
+
+test('a key in a file that exists is merged beside what is there, in the file own indent and line endings', (t) => {
+  const root = withSettings(t, '{\r\n\t"effortLevel": "high"\r\n}\r\n');
+  const applied = applySettingsKey(settingsFile(root), PLUGIN, false);
+  assert.deepEqual(applied, {
+    state: 'written',
+    record: { pointer: PLUGIN, value: false, createdFile: false, createdDir: false, createdContainers: 1 },
+  });
+  assert.equal(
+    fs.readFileSync(settingsFile(root), 'utf8'),
+    '{\r\n\t"effortLevel": "high",\r\n\t"enabledPlugins": {\r\n\t\t"typescript-lsp@claude-plugins-official": false\r\n\t}\r\n}\r\n',
+  );
+});
+
+test('a key under an object that is already there creates no container', (t) => {
+  const root = withSettings(t, '{\n  "env": {\n    "OTHER": "x"\n  }\n}');
+  const applied = applySettingsKey(settingsFile(root), PASTE, '1');
+  assert.equal(applied.record.createdContainers, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile(root), 'utf8')), {
+    env: { OTHER: 'x', CODEGRAPH_NO_PROMPT_HOOK: '1' },
+  });
+  assert.ok(!fs.readFileSync(settingsFile(root), 'utf8').endsWith('\n'), 'no newline is added at the end');
+});
+
+test('a key that already holds the value is kept and nothing is written or recorded', (t) => {
+  const text = '{ "env": { "CODEGRAPH_NO_PROMPT_HOOK": "1" } }';
+  const root = withSettings(t, text);
+  assert.deepEqual(applySettingsKey(settingsFile(root), PASTE, '1'), { state: 'kept' });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), text);
+});
+
+test('a key that holds another value is never overwritten: it is a conflict that says what it holds', (t) => {
+  const text = '{\n  "enabledPlugins": {\n    "typescript-lsp@claude-plugins-official": true\n  }\n}\n';
+  const root = withSettings(t, text);
+  assert.deepEqual(applySettingsKey(settingsFile(root), PLUGIN, false), { state: 'conflict', holds: true });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), text);
+});
+
+test('a file that is not JSON, not an object, or holds something else where an object must be is a problem', (t) => {
+  for (const [text, reason] of [
+    ['{ not json', /is not valid JSON/],
+    ['["env"]', /must hold a JSON object/],
+    ['{ "env": "all" }', /"env" is not an object/],
+  ]) {
+    const root = withSettings(t, text);
+    const applied = applySettingsKey(settingsFile(root), PASTE, '1');
+    assert.equal(applied.state, 'problem');
+    assert.match(applied.reason, reason);
+    assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), text, 'a file that cannot be read is left as it is');
+  }
+});
+
+test('undo of a key written into a new file leaves no file and no folder', (t) => {
+  const root = project(t);
+  const { record } = applySettingsKey(settingsFile(root), PASTE, '1');
+  assert.deepEqual(undoSettingsKey(settingsFile(root), record), { state: 'removed' });
+  assert.equal(fs.existsSync(path.join(root, '.claude')), false);
+});
+
+test('undo of a key written into a file that existed puts the file back byte for byte', (t) => {
+  const before = '{\r\n\t"effortLevel": "high"\r\n}\r\n';
+  const root = withSettings(t, before);
+  const { record } = applySettingsKey(settingsFile(root), PLUGIN, false);
+  assert.deepEqual(undoSettingsKey(settingsFile(root), record), { state: 'removed' });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), before);
+});
+
+test('undo keeps a container the harness made when someone has put another key in it since', (t) => {
+  const root = project(t);
+  const { record } = applySettingsKey(settingsFile(root), PASTE, '1');
+  const data = JSON.parse(fs.readFileSync(settingsFile(root), 'utf8'));
+  data.env.MINE = 'yes';
+  fs.writeFileSync(settingsFile(root), JSON.stringify(data, null, 2));
+  assert.deepEqual(undoSettingsKey(settingsFile(root), record), { state: 'removed' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile(root), 'utf8')), { env: { MINE: 'yes' } });
+});
+
+test('undo keeps a file the harness made when someone has put another key in it since', (t) => {
+  const root = project(t);
+  const { record } = applySettingsKey(settingsFile(root), PASTE, '1');
+  fs.writeFileSync(settingsFile(root), '{"env":{"CODEGRAPH_NO_PROMPT_HOOK":"1"},"effortLevel":"high"}');
+  assert.deepEqual(undoSettingsKey(settingsFile(root), record), { state: 'removed' });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{"effortLevel":"high"}');
+});
+
+test('undo of a key someone changed since keeps it and says what it holds now', (t) => {
+  const root = project(t);
+  const { record } = applySettingsKey(settingsFile(root), PLUGIN, false);
+  const changed = '{\n  "enabledPlugins": {\n    "typescript-lsp@claude-plugins-official": true\n  }\n}\n';
+  fs.writeFileSync(settingsFile(root), changed);
+  assert.deepEqual(undoSettingsKey(settingsFile(root), record), { state: 'changed', holds: true });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), changed);
+});
+
+test('undo of a key that is gone, or whose file is gone, has nothing to do and says so', (t) => {
+  const root = project(t);
+  const { record } = applySettingsKey(settingsFile(root), PASTE, '1');
+  fs.writeFileSync(settingsFile(root), '{}');
+  assert.deepEqual(undoSettingsKey(settingsFile(root), record), { state: 'gone' });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{}');
+  fs.rmSync(settingsFile(root));
+  assert.deepEqual(undoSettingsKey(settingsFile(root), record), { state: 'gone' });
+});
+
+test('undo of a file that can no longer be read is a problem and leaves it as it is', (t) => {
+  const root = project(t);
+  const { record } = applySettingsKey(settingsFile(root), PASTE, '1');
+  fs.writeFileSync(settingsFile(root), '{ broken');
+  const undone = undoSettingsKey(settingsFile(root), record);
+  assert.equal(undone.state, 'problem');
+  assert.match(undone.reason, /is not valid JSON/);
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{ broken');
+});
+
+test('two keys in one new file: the file goes with the last of them to be undone', (t) => {
+  const root = project(t);
+  const paste = applySettingsKey(settingsFile(root), PASTE, '1').record;
+  const plugin = applySettingsKey(settingsFile(root), PLUGIN, false).record;
+  assert.deepEqual(plugin, { pointer: PLUGIN, value: false, createdFile: false, createdDir: false, createdContainers: 1 });
+  assert.deepEqual(undoSettingsKey(settingsFile(root), plugin), { state: 'removed' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile(root), 'utf8')), { env: { CODEGRAPH_NO_PROMPT_HOOK: '1' } });
+  assert.deepEqual(undoSettingsKey(settingsFile(root), paste), { state: 'removed' });
+  assert.equal(fs.existsSync(path.join(root, '.claude')), false);
+});

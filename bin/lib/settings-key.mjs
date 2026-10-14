@@ -1,0 +1,130 @@
+// One key inside a JSON settings file the harness does not own (a clone's `.claude/settings.local.json`):
+// written beside what is there, recorded so it can be undone exactly, and never written over a value
+// somebody else put there. The machine manifest's entries (bin/lib/manifest.mjs) append to arrays; a switch
+// of a project (odd/tasks/on-demand-functions.md) is a key of an object, which is this module.
+import fs from 'node:fs';
+import path from 'node:path';
+
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** The indent a file already uses, so a rewrite keeps it: `null` for JSON on one line, a tab, or a count
+ * of spaces; 2 where no line is indented. The same reading the machine manifest makes of a host's file. */
+function indentOf(raw) {
+  const body = raw.replace(/\r?\n$/, '');
+  if (!body.includes('\n')) return null;
+  const match = /\n([\t ]+)\S/.exec(body);
+  if (!match) return 2;
+  return match[1].includes('\t') ? '\t' : match[1].length;
+}
+
+/** `data` as the text of a file that looked like `raw`: its indent, its line endings, and a newline at the
+ * end only if it had one. */
+function textLike(raw, data) {
+  const indent = indentOf(raw);
+  let text = indent === null ? JSON.stringify(data) : JSON.stringify(data, null, indent);
+  if (/\n$/.test(raw)) text += '\n';
+  return raw.includes('\r\n') ? text.replace(/\n/g, '\r\n') : text;
+}
+
+/** The file as `{ raw, data }`, `{ absent: true }`, or `{ reason }` when it is not a JSON object. */
+function readObject(file) {
+  if (!fs.existsSync(file)) return { absent: true };
+  const raw = fs.readFileSync(file, 'utf8');
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    return { reason: `${file} is not valid JSON: ${err.message}` };
+  }
+  if (!isObject(data)) return { reason: `${file} must hold a JSON object` };
+  return { raw, data };
+}
+
+/** The object that holds the pointer's last key, as `{ holder }`, walking down from `data`; `{ missing }`,
+ * the count of objects of the path that are not there; or `{ reason }` when something that is no object
+ * stands where one must be. With `create`, the missing ones are made on the way. */
+function holderOf(file, data, pointer, create) {
+  let holder = data;
+  let missing = 0;
+  for (const key of pointer.slice(0, -1)) {
+    if (!(key in holder)) {
+      if (!create) return { missing: true };
+      holder[key] = {};
+      missing += 1;
+    } else if (!isObject(holder[key])) {
+      return { reason: `${file}: "${key}" is not an object, so no key can be written under it` };
+    }
+    holder = holder[key];
+  }
+  return { holder, missing };
+}
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Writes `value` at `pointer` (the keys from the root down) of the JSON object in `file`:
+ * - `{ state: 'written', record }`: the key was not there. `record` is what `undoSettingsKey` needs: the
+ *   pointer, the value, whether the file and its folder were made here, and how many objects of the path;
+ * - `{ state: 'kept' }`: the key already holds the value. Nothing is written and there is no record: a
+ *   key the harness did not write is not the harness's to remove;
+ * - `{ state: 'conflict', holds }`: the key holds another value, which is never overwritten;
+ * - `{ state: 'problem', reason }`: the file cannot be read as a JSON object. It is left as it is. */
+export function applySettingsKey(file, pointer, value) {
+  const read = readObject(file);
+  if (read.reason) return { state: 'problem', reason: read.reason };
+  const data = read.absent ? {} : read.data;
+
+  const found = holderOf(file, data, pointer, true);
+  if (found.reason) return { state: 'problem', reason: found.reason };
+  const leaf = pointer.at(-1);
+  if (leaf in found.holder) {
+    return same(found.holder[leaf], value) ? { state: 'kept' } : { state: 'conflict', holds: found.holder[leaf] };
+  }
+  found.holder[leaf] = value;
+
+  const createdDir = !fs.existsSync(path.dirname(file));
+  if (createdDir) fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, read.absent ? `${JSON.stringify(data, null, 2)}\n` : textLike(read.raw, data));
+  return {
+    state: 'written',
+    record: { pointer, value, createdFile: Boolean(read.absent), createdDir, createdContainers: found.missing },
+  };
+}
+
+/** Undoes one `record` of `applySettingsKey` in `file`:
+ * - `{ state: 'removed' }`: the key still held what was written and is gone, with each object of its path
+ *   that was made here and is empty again; a file made here that holds nothing more is deleted, and its
+ *   folder if that was made here and is empty;
+ * - `{ state: 'changed', holds }`: someone changed the key since. It is theirs now and is kept;
+ * - `{ state: 'gone' }`: the key or the file is no longer there. Nothing to do;
+ * - `{ state: 'problem', reason }`: the file can no longer be read. It is left as it is. */
+export function undoSettingsKey(file, record) {
+  const read = readObject(file);
+  if (read.absent) return { state: 'gone' };
+  if (read.reason) return { state: 'problem', reason: read.reason };
+
+  const { pointer } = record;
+  const found = holderOf(file, read.data, pointer, false);
+  if (found.reason) return { state: 'problem', reason: found.reason };
+  const leaf = pointer.at(-1);
+  if (found.missing || !(leaf in found.holder)) return { state: 'gone' };
+  if (!same(found.holder[leaf], record.value)) return { state: 'changed', holds: found.holder[leaf] };
+  delete found.holder[leaf];
+
+  // The objects made here, from the deepest up: one that holds something of somebody else stays, and so
+  // does everything above it.
+  for (let made = 0, depth = pointer.length - 1; made < record.createdContainers && depth > 0; made += 1, depth -= 1) {
+    const parent = pointer.slice(0, depth - 1).reduce((object, key) => object[key], read.data);
+    const key = pointer[depth - 1];
+    if (Object.keys(parent[key]).length > 0) break;
+    delete parent[key];
+  }
+
+  if (record.createdFile && Object.keys(read.data).length === 0) {
+    fs.rmSync(file);
+    const dir = path.dirname(file);
+    if (record.createdDir && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+  } else {
+    fs.writeFileSync(file, textLike(read.raw, read.data));
+  }
+  return { state: 'removed' };
+}
