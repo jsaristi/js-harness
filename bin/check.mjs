@@ -623,6 +623,26 @@ export const GATE_HELD_ENV = 'JS_HARNESS_GATE_HELD';
  * With `wsl` (`{ distro, node }`, the machine's switch file) on Windows, the command runs in that WSL2
  * distribution from a mirror of the tree (`./lib/gate-wsl.mjs`), and the row carries `ranIn: 'wsl'`; one
  * that never reached the mirror runs here, and its row says why. `wslPath` stands in for `toWslPath`. */
+/** How many names of failing tests a gate's end line keeps for one sensor, and how long each may be. */
+const FAILING_KEPT = 20;
+const FAILING_NAME_MAX = 200;
+
+/** The names of the tests that failed, read from what a `node --test` printed: the lines under its
+ * `✖ failing tests:` (the spec reporter, a run's default when its output is no terminal), each without
+ * the time after it, or else the top-level `not ok <n> - <name>` of the tap reporter. Colours are taken
+ * off, each name is kept once, twenty at most and two hundred characters each. None for an output of any
+ * other kind: the gate keeps what it can read, and a sensor's own report stays where it is. A WSL2 run's
+ * output lives only in the mirror and the report, and on 2026-10-14 the name of a failing test could not be
+ * had back once the report was gone (odd/tasks/gate-log-failing-tests.md). */
+export function failingTests(output) {
+  const lines = String(output ?? '').replace(/\u001b\[[0-9;]*m/g, '').split(/\r?\n/);
+  const under = lines.findIndex((line) => line.trim() === '✖ failing tests:');
+  const names = under === -1
+    ? lines.map((line) => /^not ok \d+ - (.+)$/.exec(line)?.[1]).filter(Boolean)
+    : lines.slice(under + 1).map((line) => /^✖ (.+?)(?: \([\d.]+m?s\))?$/.exec(line)?.[1]).filter(Boolean);
+  return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
+}
+
 export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
@@ -1137,7 +1157,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
       if (result === 'pass' && key !== null && ranWhereKeyed && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
-      record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut, ranIn }) => ({ name, seconds, pass, timedOut, ...(ranIn && { ranIn }) })), code });
+      // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
+      const failing = ({ pass, output }) => (pass ? [] : failingTests(output));
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
