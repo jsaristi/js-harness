@@ -6,9 +6,11 @@ Locator: `odd/tasks/gate-on-github.md` · Engram mirror: `odd/gate-on-github/tas
 `JH ORQ · js-harness` (app session `local_11c45a36-0115-4c92-b865-f1dc3f68c3c1`)
 
 State 2026-10-13: opened by this session from the orchestrator's opening (`js-harness sessions
---opening "JH 10 · comprobación en GitHub"`). The figure is read and sent to the orchestrator;
-nothing has run on GitHub, nothing is pushed, and no design is written yet. Only the
-orchestrator asks him.
+--opening "JH 10 · comprobación en GitHub"`). The figure went to the orchestrator and he
+answered the same evening: no payment method on the account, and the run on GitHub's Linux at
+each pull request with code (option A'). Three readers read the figure and the design, and
+"What the readers changed" says what moved. Nothing has run on GitHub and nothing is pushed.
+Only the orchestrator asks him.
 
 ## Goal
 He decides, on a cost read at its source, whether GitHub runs the gate on a pull request and on
@@ -48,6 +50,11 @@ local check, with what it leaves unproven on his machine said beside it.
 - After his yes on a road, and only then: the road is built, each code commit through the
   local gate, gentle-ai's assessment and a Codex record, and the pull request is open for the
   orchestrator to merge
+- Progress quotes the first run of the workflow on that pull request: its URL, its result, each
+  job's billed minutes from the jobs' times, and the tests it skipped against the 132 of the
+  trial; and one run made red on purpose, seen red
+- Progress says how the workflow is undone (one file deleted on `main`), and a test holds the
+  paths the workflow ignores equal to the `documents` of `harness.json`
 
 ## In scope / Out of scope
 - In: this document; the reads of GitHub that change nothing (`gh api` GET calls, GitHub's
@@ -85,8 +92,12 @@ high
   secrets, runners; a wider scope on the `gh` token.
 - A push that starts a run, paid or included.
 - Any change to the machine (a runner installed as a service, WSL).
-- Running the whole Windows suite less often than at every code commit: the trade he passed
-  over on 2026-10-12 (`odd/tasks/gate-wait.md`, "What he already said").
+- Running the whole Windows suite less often than at every code commit, or any local gate
+  retired or skipped because a run on GitHub is green: never put to him as a question (What
+  the readers changed); it reaches him as the design of the exchange (T7).
+- Whether `init` writes a workflow into a project that installs the harness, and whether a
+  command that refuses a merge whose head has no green run ships: product choices.
+- A required check, Windows on GitHub, a run on merges to `main`: not covered by his yes.
 
 ## Design
 
@@ -170,8 +181,8 @@ high
   what is given up is the gate on GitHub for the rest of a month that outruns the quota.
 
 **What the figure does not say.** A run on GitHub raises the number of sessions that can
-build only if a local gate is retired in exchange for it; on Linux alone that exchange is the
-trade he passed over on 2026-10-12, made smaller (`odd/tasks/gate-wait.md`, road 3). Which
+build only if a local gate is retired in exchange for it; on Linux alone that exchange gives
+up Windows for whatever it replaces (`odd/tasks/gate-wait.md`, road 3). Which
 local gate a green run may stand in for is the design (T3), not this figure.
 
 **Mine, for the orchestrator.** Option A', on Linux alone: zero dollars in a normal month
@@ -209,27 +220,30 @@ possible defect of the harness on Linux (`evals/ports.mjs:168-169`); JH 8's read
 project does not have, on a product that ships to machines that are not his.
 
 **What it can stand in for: the local gates, counted** (`git log --all --since="14 days ago"`,
-read 2026-10-13: every commit the pre-commit and pre-merge-commit hooks gate with the suite).
+read 2026-10-13: commits by kind. Not every one ran a gate when it was made: the hook of a
+merge is of 2026-10-12 and the documents rule of 2026-10-11; What the readers changed).
 
 | Local gate | 14 days | Last 24 hours | A Linux run in its place loses |
 |---|---|---|---|
-| A commit with code | 290 | 33 | Windows for that commit: the trade he passed over on 2026-10-12 |
+| A commit with code | 290 | 33 | Windows for that commit |
 | A merge of `main` into a branch (`.githooks/pre-merge-commit`) | 62 | 14 | Windows for the combination of two trees, each proven on Windows by itself |
 | A commit of Markdown alone (no suite, no lock) | 335 | 57 | nothing: no suite runs for it today |
 
 - **R0 · In place of nothing.** A second witness on every pull request with code. It frees no
   minute of the lock. No trade; the spend of option A' (zero in a normal month).
-- **R1 · In place of the gate of a merge of `main`.** At most 62 of 352 whole gates in 14 days
-  (17.6 percent; 14 of 47 in the last 24 hours), about ten minutes of lock each. A session no
-  longer merges `main` into its branch to be read: the run on GitHub tests the head merged
-  with `main`, and when `main` moved after it the pull request is run again against the new
-  `main` (the branch updated on GitHub's side, or a run asked for by hand: a choice for the
-  build). A merge with a conflict is still made and gated on his machine. What is lost: the
-  combination is proven on Linux alone. It is his, as a smaller form of the trade; it also
-  changes the orchestrator's rule that a pull request is read only when its head contains
-  `main`, which is the orchestrator's to change.
-- **R2 · In place of the gate of a commit with code.** The trade he passed over, whole. His;
-  not proposed here.
+- **R1 · In place of the gate of a merge of `main`.** About a third of the whole
+  gates under today's rule: 22 merges of `main` against 43 commits with code since the hook
+  that gates a merge exists (`97703f9`, 28.9 hours), and 14 of 47 in the last 24 hours; about
+  ten minutes of lock each. The run on
+  GitHub tests the head merged with `main` as `main` was at that push. **Not designed (T7):**
+  how the pull request is tested again once `main` has moved. A re-run tests the old merge;
+  the branch updated on GitHub's side is a merge commit no hook gates, and a session with
+  local commits then merges locally after all or rebases and orphans its Codex records; a pull
+  request with a conflict gets no run at all. Its runs are in no row of the figure. What is
+  lost in any form of it: the combination is proven on Linux alone. It is his, and it changes
+  the orchestrator's rule that a pull request is read only when its head contains `main`.
+- **R2 · In place of the gate of a commit with code.** The whole exchange, never asked of him
+  as a question. His; not proposed here.
 - **R3 · The Windows suite on GitHub as well** (option D of the figure). The one road that
   could take gates off the machine with no loss of system: about $55 to $65 in a normal month
   at each push to a pull request, or nothing in a public repository. It needs the 124 fixed
@@ -246,8 +260,16 @@ it ships is a product choice of his, with whether `init` writes the workflow. A 
 by GitHub itself needs Pro or a public repository, both his.
 
 **The workflow, when a road is his yes.**
-- `on: pull_request` (opened, synchronize, reopened), with the paths of Markdown ignored: a
-  branch pushed with no pull request spends nothing, and neither does a change of documents.
+- `on: pull_request` (opened, synchronize, reopened), ignoring exactly the paths the local gate
+  calls documents (`harness.json` "documents": `docs/` and `odd/tasks/`), held equal by a
+  test. A branch pushed with no pull request spends nothing. A pull request of documents alone
+  runs nothing and shows no check; one that holds code runs at every push, a push of documents
+  included; one with a conflict runs nothing until the conflict is gone.
+- What a session and the orchestrator read before a merge, since no check can be required: one
+  of four states for the head being merged: green; red; no run because only documents changed
+  (nothing was owed); no run or a run that never started (a conflict, the quota ended, GitHub
+  down), where the local gate stands alone exactly as it does today. Nothing local waits for
+  GitHub in this feature, so the day the quota ends changes nothing on his machine.
 - One job on `ubuntu-latest`, Node 24, `fetch-depth: 0`, `node bin/check.mjs`. `permissions:
   contents: read`, no secret, the two actions pinned by commit, `timeout-minutes: 15` (so a
   run that hangs costs 15 minutes at most), `concurrency` by pull request with
@@ -278,16 +300,123 @@ that installed the harness, the same file would run that project's `check` on it
 minutes: it is written by `init` only if he says so, and never pushed or enabled by the
 harness itself.
 
-**Mine.** R0 now, on option A': it costs nothing in a normal month, it is the only Linux the
-product has, and it is the ground for R1. R1 is brought to him as its own question with the
-count above, once two weeks of runs say how often GitHub was red where his machine was green
-and the reverse. Said plainly, since the opening calls this the thing that raises the ceiling:
-on Linux alone and with no trade it frees nothing; with R1 it frees at most about a sixth of
-the whole gates; the rest of the line is commits with code, and only the trade he passed over
-or a paid or public Windows takes those off the machine.
+**Mine.** R0 now, on option A', which is his yes of 2026-10-13: it costs nothing, it is the
+only Linux the product has, and it is the ground for R1. R1 is brought to him as its own
+design (T7), with the count above and its own minutes. Said plainly, since the opening calls
+this the thing that raises the ceiling: on Linux alone and with nothing exchanged it frees
+nothing; with R1 it frees about a third of the whole gates; the rest of the line is
+commits with code, and only an exchange he has not been asked about, or a Windows on GitHub
+(paid, or free the day the repository is public, which he once said it will be) takes those
+off the machine.
 
 ## What the readers changed
-Nothing yet: the readers (T4) have not read the design.
+Three readers that did not write the design, all read-only, on 2026-10-13: one searched his
+earlier words in the 59 transcripts of the project, one looked for what the design left out,
+one attacked the figure and the facts. What each moved:
+
+**The search of his words** (each line confirmed with `js-harness sessions --quote`).
+- **The trade was never put to him as a question.** "He passed over" is the sessions' wording
+  (`odd/tasks/gate-wait.md`, and this document until now). His words are "hagamos mas rapido la
+  bateria osea la opcion 3" (the orchestrator's transcript, line 1384), "osea la idea es que
+  quiero mas potencia en las otras opciones me das antes quitar potencia, o dime que otra nos
+  da mas potencia y rapides?" (line 1441) and "La opción C" (line 1504), where A, B and C all
+  left option 1 out. So the exchange reaches him as a first question, not as one reopened.
+  Changed here: "Ask me before" and R1 and R2 no longer say he refused it.
+- His standing on quality, which any exchange is judged by: "siempre priorizamos la calidad
+  sobre el tiempo aunque la rapidez tambien es importante" (transcript `0f993107`, line 168),
+  and "que realmente nos de ahorro osea no siemplemente desmejorar la calidad" (`130317af`,
+  line 1728).
+- On visibility, his one statement: "cual es la mejor opcion sobretodo ahora que esta privado y
+  despues va a ser publico" (transcript `2c923152`, line 72, 2026-09-26). No date and no later
+  word. It matters to the figure: in a public repository the standard runners are free, Windows
+  too, and a check can be required. Added to R3 and to what is brought to him.
+- After his yes on the road: "listo, sigue y avísame cuando llegue el diseño del canje" (line
+  12524). The exchange (R1) is owed to him as its own design.
+- Not found, with the patterns run over his own entries: nothing of his on a required check or
+  branch protection, on a runner of his own, WSL, Linux or a rented machine, or on whether
+  `init` writes a workflow. Those stay open and his.
+
+**The reader of what is missing** (ten gaps; taken unless said).
+1. *R1's "run again" does not exist as written.* A re-run reuses the first run's commit and
+   ref, so it tests the old merge; the only fresh merge is the branch updated on GitHub's side,
+   a merge commit no hook gates, after which a session with local commits merges locally (the
+   gate R1 meant to retire) or rebases (which orphans its Codex records). And R1's runs are in
+   no row of the figure. Taken: R1 below is marked not designed; its mechanism and its minutes
+   are T7.
+2. *"Green" has three states that are not green and look alike:* no check at all (the paths
+   were ignored), no run because the pull request has a conflict (GitHub starts none), and a
+   run blocked by the quota or by GitHub being down. Taken: the merge rule names the four
+   states, and merges the head it read (`gh pr merge --match-head-commit`).
+3. *"Markdown ignored" is not the local rule.* Locally a document is a path under `docs/` or
+   `odd/tasks/` (`harness.json`); `AGENTS.md` and the Markdown fixtures of `evals/` are code to
+   the gate. Taken: the workflow ignores exactly the `documents` of `harness.json`, and a test
+   holds the two lists together. His tapped "con código" is read as the local rule's code.
+4. *A pull request runs its own copy of the workflow,* so a branch can widen it (a Windows job,
+   a longer timeout) and spend what the file on `main` does not. Taken: `timeout-minutes` and
+   the quota bound a run whatever a branch writes; the merge rule compares the head's workflow
+   with `main`'s; a row of `check` that refuses a changed workflow is named for the build.
+5. *The quota is the account's:* a month that outruns it stops Actions in all his private
+   repositories. Taken; sent to the orchestrator for him the same hour.
+6. *`check` never ran on Linux nor on a pull request's checkout* (the trial ran `npm test` on a
+   branch push). Taken: "Done when" now asks for the first run seen green with its URL and
+   billed minutes, one deliberate red seen red, and the count of skipped tests against 132.
+7. *The two-week comparison could not measure R1:* a red local gate leaves no commit, and the
+   gate log does not tell a merge gate from a commit gate. Taken: dropped from "Mine"; what
+   R1's evidence would be is part of T7, and it needs a field in JH 8's gate log.
+8. *An installed project's runner cannot get the harness:* it installs from this private
+   repository with the machine's credentials, so a runner would need a secret. Taken under
+   "Twice judged": nothing ships to an installed project in this feature.
+9. *Roads missing:* Codespaces (a Linux included in the Free plan, to prove the fixes before
+   any workflow; it needs a wider scope on the token, his) and GitHub Pro (protected branches
+   on a private repository; its price is not read). Named under the roads; not proposed, since
+   his yes on A' brings a real Linux run at no cost.
+10. *The contract:* "Ask me before" lacked the two product choices and "Done when" an undo.
+    Taken.
+
+**The reader of the figure and the facts.** Every cell's arithmetic, the prices, the rounding,
+the included minutes, the counts on GitHub and the code references were redone and hold. What
+does not:
+1. *The mean is no forecast, and "the last day" is not the peak.* Pull requests opened plus
+   branch pushes by day, 09-30 to 10-13: 5, 4, 0, 12, 6, 7, 7, 1, 0, 8, 9, 21, 32, 32: 41 in
+   the first seven days, 103 in the last seven. The busiest 24 hours of the window hold 47
+   events, not 32. Taken: "The figure after its readers", below.
+2. *"Later pushes to a branch, 55" overcounts what fires.* 25 of them came before the pull
+   request existed and one matches none; 29 came while it was open. So 118 events really fire
+   in the 14 days (253 a month) and 25 in the last 24 hours (750 a month). "At most" held as a
+   bound; the smaller numbers are the ones to use. Taken.
+3. *R1 is about a third of the whole gates, not a sixth.* `.githooks/pre-merge-commit` dates
+   from `97703f9` (2026-10-12 14:20), so 40 of the 62 merges ran no gate. Since the hook: 22
+   merges of `main` against 43 commits with code, 34 percent; the last 24 hours, 14 of 47, 30
+   percent. Taken: R1 and "Mine".
+4. *The counts of commits are not the counts of gates.* The documents rule dates from `74e473c`
+   (2026-10-11), so 140 of the 335 commits of Markdown alone ran the whole suite when they were
+   made; and the rule is by path (`docs/`, `odd/tasks/`; `bin/check.mjs:273`), so 12 commits of
+   Markdown outside those folders are code: 302 commits with code, not 290. Taken: the table of
+   local gates says it is a count of commits by kind, and R1 is sized by the window since the
+   hook.
+5. *Windows under `check` has a second cause of red:* its suite took 1,258.2 s on GitHub, over
+   the 1,200 s a sensor is given (`bin/check.mjs:80`). And if included minutes are used up by
+   list price, as the 2026 prices page says of runners, a Windows minute weighs 1.67 and
+   option D ends the quota on day 5 and day 2, not 8 and 3. Taken into R3; no decision hangs
+   on it, since Windows on GitHub is not his yes.
+6. *The path filter reads the whole pull request* (a three-dot diff), so a push of documents to
+   a pull request that holds code runs the suite. Taken in the workflow's description.
+- Could not be read anywhere, and so is not relied on: whether a cancelled or a queued job is
+  billed (what `cancel-in-progress` saves is unknown), and which copy of the workflow a
+  `pull_request` run uses (the build reads it from the first run).
+
+### The figure after its readers, in minutes (no card: only the day the quota ends matters)
+
+| Pace | Runs of A' a month | Minutes at 4 a run | The 2,000 end |
+|---|---|---|---|
+| The 14-day mean (118 events that fire, three in four with code) | about 190 | about 760 | not reached |
+| The last 24 hours (25 events) | about 615 | about 2,460 | about day 25 |
+| The busiest 24 hours of the window (47 events, the wider count) | about 1,060 | about 4,250 | about day 15 |
+
+So at the mean the month fits with room; a whole month as busy as these last days ends the
+quota between day 15 and day 25, and from that day to the month's end no run starts on
+GitHub, in this repository or in any other private one of his. The minutes are counted from
+the real runs once they exist (Done when), so the month's use is read and not guessed.
 
 ## Tasks
 - [x] T1 · This document, opened with the task contract, on its own branch and worktree,
@@ -301,12 +430,22 @@ Nothing yet: the readers (T4) have not read the design.
       change for the orchestrator's merge; with a search of his earlier words. Route: inline.
       Evidence: "What a run on GitHub proves"; first version, the search of his words and the
       readers still out.
-- [ ] T4 · Two independent readers attack the design (opus, effort high); their findings
+- [x] T4 · Two independent readers attack the design (opus, effort high); their findings
       taken or answered under "What the readers changed". Route: delegated, read-only.
-- [ ] T5 · The fixes that make the suite pass on Linux, the ones T3 names, test first, each
-      through the local gate. Route: set in T3.
-- [ ] T6 · After his yes on a road: build it; gentle-ai's assessment and a Codex record for
-      each slice with code; a pull request for the orchestrator. Route: set after his answer.
+- [ ] T5 · The five failures of Linux that `main` still holds, test first, through the local
+      gate, with gentle-ai's assessment and a Codex record: `evals/ports.mjs` names a process
+      by its image (`/proc/<pid>/exe`), and three tests stop expecting Windows' answers
+      (`bin/lib/payload.test.mjs`, `evals/codex-isolation-probe.test.mjs`). Route: inline (one
+      understood change; no writer reason). Risk: item 2, the name is what `killByPort` may
+      kill by.
+- [ ] T6 · The workflow of option A', his yes of 2026-10-13 (Design, "The workflow"): the
+      file, the test that holds its ignored paths equal to `documents`, the pull request, the
+      orchestrator told before the first push that starts a run; the first run and one red run
+      quoted with their minutes. Route: inline.
+- [ ] T7 · The design of the exchange (R1): how a pull request is tested again once `main`
+      moved, its minutes against 2,000, what it loses, what the gate log must record to
+      measure it; two readers; to the orchestrator for him ("avísame cuando llegue el diseño
+      del canje"). Route: inline, then delegated readers.
 
 ## Progress
 - 2026-10-13 · T1, T2. The opening read and the orchestrator told (title, hour, context 23
@@ -349,10 +488,17 @@ Nothing yet: the readers (T4) have not read the design.
   session's before they are edited.
 
 ## Next
-T3, which no answer of his can undo: read the 7 Linux failures in JH 8's logs and in the
-code, list what `check` does beyond the suite, and write the design; then T4.
+In the order the orchestrator set after his yes: T5 (the five failures of Linux), then T6 (the
+workflow and its first runs), then T7 (the design of the exchange, which he asked to be told
+of). The orchestrator is told before the first push that starts a run.
 
 ## Resume here
-Worktree `D:/js-harness-worktrees/github-gate`, branch `feat/gate-on-github`. T1 and T2 are
-done; the figure is with the orchestrator and his answer has not come back. Nothing runs on
-GitHub until it does. Start T3.
+Worktree `D:/js-harness-worktrees/github-gate`, branch `feat/gate-on-github`, replayed on
+`main` at `75b0ceb`. T1 to T4 are done. T5 is in the working tree, not committed: the new
+tests of `evals/ports.test.mjs` are written and their RED run waits for its turn at the gate
+(`node bin/js-harness.mjs gate -- node --test evals/ports.test.mjs`); `evals/ports.mjs` is
+not changed yet (the design is in T5 and in the tests: the name of a process on Linux is the
+basename of `/proc/<pid>/exe`, `ps` and `ss` kept when the link cannot be read, through an
+injected `readlink`); `bin/lib/payload.test.mjs` and `evals/codex-isolation-probe.test.mjs`
+hold their test-only fixes. Then one commit through the gate, gentle-ai's assessment and
+`js-harness codex-review --base <boundary>` inside the rate, and T6.
