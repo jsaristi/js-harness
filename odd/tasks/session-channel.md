@@ -1210,6 +1210,10 @@ reader, and that table names this feature as their owner.
   guarded against was proven. The rule's wording above is the lead's. The mechanism, the
   lead's candidate: `resume --hook` and the board list each session's live background tasks
   with their declared purpose, so one left behind is seen after a compaction. After slice (c)
+- [ ] T19 `notify` stamps the sender's hour and context share from its own reading, so a
+  notice carries both read, never typed: JH 14 typed its share unread twice on 2026-10-14, and
+  JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
+  wording). After T18
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -2869,7 +2873,23 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-14 04:30, THE NEWEST OF ALL: resumed at 03:54 (Progress, 04:25). `main`
+      AT 06:05: the doctor row is written (the writer: 102 tool calls, test first, 27 of 118
+      failed before; after, stack 118, doctor 58, hook 11, latest 22, tui 76, dispatcher 33
+      passed; stack 118 rerun by this session) and is the commit that carries this text, on
+      `feat/doctor-codex-cli`; its pull request waits behind T18 and T19, in the lead's order.
+      `doctor`, its hook and the TUI now read the project's switches once a run, one `git
+      ls-files` more each.
+      STATE AT 2026-10-14 05:40, THE NEWEST OF ALL: slice (c) is pull request 127, MERGED
+      (`2a29285`, the lead's message). The branch now is `feat/doctor-codex-cli`, cut from
+      `feat/question-texts`; one writer on Haiku 5.5 builds the row `codex` in place of
+      `codex-plugin` there (launched 05:35, before the lead's new order; its diff is parked on
+      that branch). THE LEAD'S ORDER of 05:37: T18, then T19, then the doctor row. A first
+      look at T18, not yet a design: the board already prints each open piece of background
+      work with its call's `description` (`workLine`), so the purpose is mostly recorded; what
+      no transcript holds is the condition that ends it and who stops it, and the resume hook
+      does not list a session's own open work. Next after a cut: read T18 again from here,
+      write its design, then build it test first on its own branch from `main`.
+      STATE AT 2026-10-14 04:30 (the state before the one above): resumed at 03:54 (Progress, 04:25). `main`
       merged as `caa443f`; the commit that carries this text holds the opening's peek fix,
       `notify --opening`'s block, the pointers of T7 and T13 to T15, and T18. NEXT: its
       reviews, then `check --push`, push, the pull request of slice (c) with

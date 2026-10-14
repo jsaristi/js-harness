@@ -206,19 +206,23 @@ test('run from the pre-commit hook of a linked worktree, this file leaves the re
 
 // R3-002 (accepted T1 review follow-up): this must not depend on the host's real binaries or on
 // network access (T2 adds a real latest-version fetch) — a temp `--home`, a temp `--cwd` outside
-// any repo, and `--offline` keep it hermetic, while `--json` parsing to the six known ids is what
+// any repo, and `--offline` keep it hermetic, while `--json` parsing to the known ids is what
 // actually proves dispatch reached `doctorMain`, not just that *something* printed.
 test('doctor dispatches to a temp home and exits 0, hermetically (no host binaries or network)', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-cwd-'));
   try {
+    // The project declares codexReview off, so the codex row is left out whatever the host has installed. Left
+    // undeclared, a temp folder outside git reads `auto` as on (its files cannot be listed), and the row would
+    // depend on whether this machine has the Codex CLI.
+    fs.writeFileSync(path.join(cwd, 'harness.json'), JSON.stringify({ functions: { codexReview: 'off' } }), 'utf8');
     const result = run(['doctor', '--home', home, '--cwd', cwd, '--offline', '--json']);
     assert.equal(result.status, 0);
     const rows = JSON.parse(result.stdout);
     assert.deepEqual(
       rows.map((r) => r.id),
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account', 'remote-server', 'hook-commands'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'claude-account', 'remote-server', 'hook-commands'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

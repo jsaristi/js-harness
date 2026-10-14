@@ -67,6 +67,9 @@ matters, who holds it, and where it was seen.
   orchestrator's transcript `ffe99ebf`, line 4215). Each one declares what it is for, what ends
   it and who stops it, and the board and the resume list the live ones. JH 5, the channel:
   `odd/tasks/session-channel.md`, T18, after slice (c).
+- Hours and context shares typed by hand in notices drift (JH 14 typed its share unread twice on
+  2026-10-14). `js-harness notify` could stamp both from its own reading. JH 5, the channel:
+  `odd/tasks/session-channel.md`, T19, after T18.
 
 ## Owed and not yet placed
 

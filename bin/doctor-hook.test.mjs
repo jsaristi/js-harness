@@ -45,25 +45,26 @@ function seedHealthyHome(home, project) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'codex@openai-codex': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: {
-      'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }],
-      'codex@openai-codex': [{ version: '1.0.6' }],
-    },
+    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
   });
   fs.mkdirSync(path.join(project, '.codegraph'), { recursive: true });
 }
 
-function healthySpawn(project) {
+/** A healthy spawn: every tool answers its version, the Codex CLI is installed and logged in. `codexCli: false` has no
+ * Codex CLI at all (`codex --version` and the login probe find no binary). */
+function healthySpawn(project, { codexCli = true } = {}) {
   return (cmd, args) => {
     if (cmd === 'git' && args[0] === 'rev-parse') return { status: 0, stdout: `${project}\n`, stderr: '' };
+    const line = [cmd, ...args].join(' ');
+    if (codexCli && line === 'codex --version') return { status: 0, stdout: 'codex-cli 0.130.0\n', stderr: '' };
+    // The Codex login probe (`codex login status`): logged in.
+    if (codexCli && line === 'codex login status') return { status: 0, stdout: 'Logged in\n', stderr: '' };
     // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
     const binary = cmd.split(' ')[0];
     if (['gentle-ai', 'engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
-    // The Codex plugin's login probe (`codex login status`): logged in.
-    if ([cmd, ...args].join(' ') === 'codex login status') return { status: 0, stdout: 'Logged in\n', stderr: '' };
     return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
   };
 }
@@ -279,17 +280,13 @@ test('doctor --hook notifies once when a recorded launcher\'s server is down, an
 });
 
 // R3-001 (accepted T6b review follow-up): a fix may be a list of commands, and the hook must not
-// care — its message only counts gaps, so one report carrying two list fixes (codex-plugin
-// `installed`, gentle-ai `upToDate`) is still exactly one well-formed count line.
+// care — its message only counts gaps, so one report carrying a list fix (gentle-ai `upToDate`, a major
+// behind) and a one-step fix (codex `installed`, no Codex CLI) is still exactly one well-formed count line.
 test('doctor --hook prints one well-formed count line for a report whose gaps have list fixes', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     seedHealthyHome(home, project);
-    // Only the Codex plugin goes missing (a list `installed` fix); typescript-lsp stays installed.
-    writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-      plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
-    });
     const fetchImpl = async (url) => ({
       ok: true,
       json: async () =>
@@ -301,7 +298,7 @@ test('doctor --hook prints one well-formed count line for a report whose gaps ha
     const { code, stdout, stderr } = await runHook(
       ['--hook', '--home', home, '--cwd', project],
       {},
-      { spawn: healthySpawn(project), fetch: fetchImpl },
+      { spawn: healthySpawn(project, { codexCli: false }), fetch: fetchImpl },
     );
 
     assert.equal(code, 0);
