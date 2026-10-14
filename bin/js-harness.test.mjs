@@ -425,7 +425,14 @@ test('notify --opening reads the opening from the real standard input of the dis
     assert.equal(files.length, 1);
     const stored = JSON.parse(fs.readFileSync(path.join(openings, project, files[0]), 'utf8'));
     assert.deepEqual([stored.schema, stored.title, stored.text, stored.from.id], ['js-harness.channel-opening/v1', 'JH 9 · una prueba', text, null]);
-    assert.equal(result.stdout.trimEnd(), `js-harness notify: opening for "JH 9 · una prueba" written in ${path.join(openings, project, files[0])} (2 lines, ${text.length} characters)`);
+    assert.deepEqual(result.stdout.trimEnd().split(/\r?\n/), [
+      `js-harness notify: opening for "JH 9 · una prueba" written in ${path.join(openings, project, files[0])} (2 lines, ${text.length} characters)`,
+      // The new session's first message, as a block the user copies.
+      'The first message of the session "JH 9 · una prueba", to send in it as it is:',
+      '```',
+      "You are the session \"JH 9 · una prueba\". Read your opening with js-harness sessions --opening 'JH 9 · una prueba' and follow it.",
+      '```',
+    ]);
     assert.match(result.stderr, /^js-harness notify: the sender is not known: /);
   } finally {
     for (const dir of [cwd, home, claudeHome]) fs.rmSync(dir, { recursive: true, force: true });

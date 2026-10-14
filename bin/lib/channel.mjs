@@ -115,7 +115,7 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (kind !== 'question' && (id !== undefined || options !== undefined || waits !== undefined)) throw new ChannelInputError('only a question takes id, options and waits');
   if (kind !== 'answer' && kind !== 'withdrawn' && question !== undefined) throw new ChannelInputError('only an answer or a withdrawal takes --question');
   if (kind !== 'answer' && (verified !== undefined || copy !== undefined)) throw new ChannelInputError('only an answer with a question takes verified and copy');
-  if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks him: --to orchestrator');
+  if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks the user: --to orchestrator');
   const asked = kind === 'question' ? checkedQuestion({ text, options, waits }) : null;
   const notice = { schema: NOTICE_SCHEMA, at, from, to: role, kind, text: asked === null ? oneLine(text, NOTICE_TEXT_MAX, 'the text of a notice') : asked.text, cwd, worktree, branch };
   if (kind === 'question') return { ...notice, id: oneLine(id, QUESTION_ID_MAX, 'the id of a question'), options: asked.options, waits: asked.waits };
@@ -124,7 +124,7 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
     return { ...notice, question: questionNumberOf(question) };
   }
   if (kind !== 'answer') return notice;
-  if (transcript === undefined || line === undefined) throw new ChannelInputError('an answer says where his words are read: --transcript <file or session id> and --line <n>');
+  if (transcript === undefined || line === undefined) throw new ChannelInputError('an answer says where the user\'s words are read: --transcript <file or session id> and --line <n>');
   if (!Number.isSafeInteger(line) || line < 1) throw new ChannelInputError('--line takes the number of a line of the transcript, from 1');
   const answer = { ...notice, transcript: oneLine(transcript, 1000, 'the value of --transcript'), line };
   if (question === undefined) {
@@ -132,7 +132,7 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
     return answer;
   }
   const number = questionNumberOf(question);
-  if (typeof verified !== 'boolean') throw new ChannelInputError('verified takes true or false: whether the line of his words was read');
+  if (typeof verified !== 'boolean') throw new ChannelInputError('verified takes true or false: whether the line of the user\'s words was read');
   if (verified) {
     if (!isObject(copy)) throw new ChannelInputError('a verified answer takes copy, what its line holds (answerCopyOf)');
     return { ...answer, question: number, verified, copy: answerCopyOf(copy) };
@@ -463,6 +463,23 @@ export function openingTextOf(text) {
 
 // `<code> <role>`, which is how a title starts and how the line that opens a session names it (`JH 5`).
 const CODE_AND_ROLE = /^(\S+) (\S+)$/;
+
+// A title the command that prints its opening can be written for: letters, digits, blanks and the marks
+// below, after a first letter or digit. The session that reads the line may run it in PowerShell or in a
+// POSIX shell, through the batch file or the script a package manager puts before the command, and only
+// such a title reaches the command the same by every one of them. Single quotes are what the two shells
+// share: inside them neither expands a `$`. A single quote has no spelling both take; Windows PowerShell
+// drops a double quote on the way to a program; a batch file expands `%NAME%` and cuts at `&`; and a title
+// that begins with `--` needs a lone `--` before it, which PowerShell takes away from a script. A list of
+// what is safe, not of what is not, so a mark nobody thought of gets the words and not a wrong command.
+export const PLAIN_TITLE = /^[\p{L}\p{N}][\p{L}\p{N} ·.,:()#+$/_-]*$/u;
+
+/** The command that prints the opening of `title`, its title between single quotes, or `null` for a title
+ * shells read each its own way (`PLAIN_TITLE`): a command that asks for another title is worse than none. */
+export function openingCommand(title) {
+  const asked = title.trim();
+  return PLAIN_TITLE.test(asked) ? `js-harness sessions --opening '${asked}'` : null;
+}
 
 /** The openings of the project `slug` under `home` that `wanted` names: `{ dir, openings, unreadable }`,
  * each opening as `{ path, title, at, from, text }`, the latest first. `wanted` is a whole title, or the
