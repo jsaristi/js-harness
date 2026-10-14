@@ -67,3 +67,6 @@ Nothing planned.
   the warning saw nothing, since the run was inside a quoted string. It now looks through `wsl.exe ... --`
   (and `-e`), a shell's `-c` and the keywords of `if`/`for`/`while`, counts a file named by a variable as
   several (it may expand to none), and counts no redirection as a file. RED, then GREEN 5/5.
+- **L5** (2026-10-14): commit `730a401`, gate passed. Codex (94,417 input tokens): three P2, fixed test first
+  (RED, then GREEN 5/5): a descriptor redirection (`2>&1`) ends no command; a shell's `-c` counts among its
+  options only, before a script or `--`; and within a cluster such as `-cl`.

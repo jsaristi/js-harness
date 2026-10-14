@@ -59,6 +59,13 @@ test('testRunWarning sees a run inside wsl.exe and sh -c, and a file named by a 
   // A redirection is no file.
   assert.equal(testRunFiles('node --test a.mjs 2>&1'), 1);
   assert.equal(testRunFiles('node --test a.mjs > out.txt'), 1);
+  // Codex, 2026-10-14: a descriptor redirection ends no command; `-c` is read among the shell's options only,
+  // and within a cluster of them.
+  assert.equal(testRunFiles('node --test 2>&1 a.mjs'), 1);
+  assert.equal(testRunFiles("bash script.sh -c 'node --test a.mjs b.mjs'"), null);
+  assert.equal(testRunFiles("bash -- script.sh -c 'node --test a.mjs b.mjs'"), null);
+  assert.equal(testRunFiles("bash -cl 'node --test a.mjs b.mjs'"), 2);
+  assert.equal(testRunFiles("bash -e -c 'node --test a.mjs b.mjs'"), 2);
   // A script is not read, and a shell that runs no test is no run.
   assert.equal(testRunFiles('wsl.exe -d Ubuntu -- sh /mnt/c/x/wsl-one-test.sh /mnt/d/w bin/a.test.mjs'), null);
   assert.equal(testRunFiles('wsl.exe -d Ubuntu -- sh -c "ls"'), null);

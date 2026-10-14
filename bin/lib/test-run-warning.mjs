@@ -34,6 +34,10 @@ export function commandsOf(text) {
       word ??= { text: '', globbed: false };
       word.text += inside;
       i = close === -1 ? source.length : close;
+    } else if (char === '&' && (source[i - 1] === '>' || source[i - 1] === '<' || source[i + 1] === '>')) {
+      // `2>&1`, `<&0`, `&>out`: a descriptor redirection ends no command (Codex, 2026-10-14).
+      word ??= { text: '', globbed: false };
+      word.text += char;
     } else if (/[;&|()\n]/.test(char)) {
       endCommand();
     } else if (/\s/.test(char)) {
@@ -98,7 +102,12 @@ function scan(words, depth = 0) {
     return split === -1 ? null : scan(rest.slice(split + 1), depth + 1);
   }
   if (SHELL.test(rest[0].text)) {
-    const flag = rest.findIndex((word, index) => index > 0 && /^-[a-z]*c$/.test(word.text));
+    // `-c` counts among the shell's options only, before a script or a `--`, and within a cluster such as
+    // `-cl` (Codex, 2026-10-14).
+    let flag = -1;
+    for (let index = 1; index < rest.length && /^-[a-zA-Z]+$/.test(rest[index].text); index += 1) {
+      if (rest[index].text.includes('c')) flag = index;
+    }
     if (flag === -1 || rest[flag + 1] === undefined) return null;
     for (const inner of commandsOf(rest[flag + 1].text)) {
       const found = scan(inner, depth + 1);
