@@ -1793,6 +1793,11 @@ test('the orchestrator skill carries its fixed opening prompt as its one fenced 
   assert.doesNotMatch(text, /Sebasti/);
 });
 
+test('the orchestrator skill says the opening of a new work session comes back as a block the user copies', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes("it prints the session's first message as a block of its own"));
+});
+
 // Every question of the project reaches the user in one place, the orchestrator's chat, through the host's
 // question tool; it is recorded before it is asked and its answer after, so a compaction loses neither.
 test('the orchestrator skill says how a question reaches the user: recorded, asked in one place, answered and carried', () => {

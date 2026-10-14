@@ -62,6 +62,11 @@ matters, who holds it, and where it was seen.
   nothing ran; the command hung and was stopped). JH 12, 2026-10-14. The same family as the memory
   note that a heredoc eats backslashes: text with backticks or backslashes goes through the editor's
   Write and Edit, never a shell string. A candidate for a check or a protocol line; unassigned.
+- A background timer, watcher or wake loop left running after what it guarded resolved: the
+  orchestrator's 05:00 timer outlived the Linux gate it waited for (his correction, the
+  orchestrator's transcript `ffe99ebf`, line 4215). Each one declares what it is for, what ends
+  it and who stops it, and the board and the resume list the live ones. JH 5, the channel:
+  `odd/tasks/session-channel.md`, T18, after slice (c).
 
 ## Owed and not yet placed
 

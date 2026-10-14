@@ -1716,18 +1716,36 @@ test('--opening records no reading for the session that wrote the opening, which
 }));
 
 // Review of ce8bdf7, finding 9: what the readings of one session, and of two, make of the roster.
-test('an untitled session that reads two openings has the title of the last one it read', withMachine(async (machine) => {
+// A session reads another's opening to see what it does (JH 15 did, 2026-10-14, and the board gave it that title):
+// the first opening a session reads is its own, and a later one of another title is printed and not recorded.
+test('an untitled session keeps the title of the first opening it read: a later one of another title is printed, not recorded, and that is said', withMachine(async (machine) => {
   writeRoster(machine);
   writeUntitled(machine, SESSION_D, 30);
   storeOpening(machine);
   storeOpening(machine, 'JH 7 · la segunda', 'Sos JH 7.\n', 200);
   const asD = { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } };
   assert.equal((await runSessions(machine, ['--opening', 'JH 6'], asD)).code, 0);
-  assert.equal((await runSessions(machine, ['--opening', 'JH 7'], { ...asD, now: () => NOW + 60000 })).code, 0);
-  const seven = await runSessions(machine, ['--address', '7']);
-  assert.deepEqual([seven.code, seven.stdout, (await runSessions(machine, ['--address', '6'])).code], [0, 'JH 7 · la segunda', 1]);
+  const other = await runSessions(machine, ['--opening', 'JH 7'], { ...asD, now: () => NOW + 60000 });
+  assert.deepEqual([other.code, other.stdout], [0, 'Sos JH 7.']);
+  assert.equal(other.stderr, `js-harness sessions: the opening was read, and no reading was recorded: this session already read the opening of ${JSON.stringify(OPENING_TITLE)}, which stays its title (--peek reads an opening and records nothing)`);
+  assert.deepEqual(recordOf(machine).readings.map((reading) => reading.title), [OPENING_TITLE]);
+  // Its own again is recorded as before: the same title changes nothing.
+  assert.equal((await runSessions(machine, ['--opening', 'JH 6'], { ...asD, now: () => NOW + 120000 })).code, 0);
+  assert.deepEqual(recordOf(machine).readings.map((reading) => reading.title), [OPENING_TITLE, OPENING_TITLE]);
+  const six = await runSessions(machine, ['--address', '6']);
+  assert.deepEqual([six.code, six.stdout, (await runSessions(machine, ['--address', '7'])).code], [0, OPENING_TITLE, 1]);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
-  assert.deepEqual(board.sessions.filter((session) => session.id === SESSION_D).map((session) => [session.title, session.titleSource]), [['JH 7 · la segunda', 'reading']]);
+  assert.deepEqual(board.sessions.filter((session) => session.id === SESSION_D).map((session) => [session.title, session.titleSource]), [[OPENING_TITLE, 'reading']]);
+}));
+
+test('--peek prints an opening and records no reading, even as the first a session reads; it goes only with --opening', withMachine(async (machine) => {
+  writeUntitled(machine, SESSION_D, 30);
+  storeOpening(machine);
+  const peek = await runSessions(machine, ['--opening', 'JH 6', '--peek'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } });
+  assert.deepEqual([peek.code, peek.stdout, peek.stderr, fs.existsSync(recordOf(machine).path)], [0, OPENING_TEXT.trimEnd(), '', false]);
+  const alone = await runSessions(machine, ['--peek']);
+  assert.equal(alone.code, 2);
+  assert.match(alone.stderr, /--peek goes only with --opening/);
 }));
 
 // A row of the roster is a title (`rosterOf`): two sessions that read one opening carry one title, as two
@@ -1742,9 +1760,11 @@ test('two untitled sessions that read one opening are one row of its title, and 
   assert.deepEqual([one.code, one.stdout, one.stderr], [0, OPENING_TITLE, '']);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
   assert.deepEqual(board.roster.rows.filter((item) => item.number === 6).map((item) => [item.title, item.transcripts.map((transcript) => transcript.id)]), [[OPENING_TITLE, [SESSION_E, SESSION_D]]]);
-  // The second session reads another opening of the same role: now two titles hold it.
+  // A third session reads another opening of the same role: now two titles hold it. (The second one reading
+  // it would not count: a session keeps the title of the first opening it read.)
   storeOpening(machine, 'JH 6 · otra redacción', 'Otra.\n', 100);
-  assert.equal((await runSessions(machine, ['--opening', 'JH 6 · otra redacción'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_E }, now: () => NOW + 60000 })).code, 0);
+  writeUntitled(machine, SESSION_C, 10);
+  assert.equal((await runSessions(machine, ['--opening', 'JH 6 · otra redacción'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_C }, now: () => NOW + 60000 })).code, 0);
   const two = await runSessions(machine, ['--address', '6']);
   assert.deepEqual([two.code, two.stdout.split('\n'), two.stderr], [2, ['JH 6 · otra redacción', OPENING_TITLE], 'js-harness sessions: 2 sessions carry the title of work session 6: a message to it has no single address']);
 }));

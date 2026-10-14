@@ -73,7 +73,7 @@ What you run:
 What you may do:
 - You read. What you write is your relief file and notices (\`js-harness notify\`).
 - You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last.
-- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared.
+- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is.
 - Before a pull request is merged, check that its gate proved the tree the merge will produce: the head contains the default branch, or \`git merge-tree\` of the default branch and the head gives the head's own tree. Failing both, it is merged only when every commit of the default branch the head lacks touches only documentation and none of the files the pull request changes.
 
 When the user asks for something, place it with the roadmap and the board:

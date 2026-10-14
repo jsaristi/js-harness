@@ -44,7 +44,7 @@ const USAGE = [
   '    local date and time of the clock.',
   `  --opening stores the opening of the session with that title (one line, ${OPENING_TITLE_MAX} characters at most):`,
   `    its text is read from standard input as UTF-8, ${OPENING_TEXT_MAX} characters at most, and the same title`,
-  '    again replaces it.',
+  '    again replaces it. It then prints the session\'s first message as a block to copy.',
   '  A text, a line or a title that begins with -- goes after a lone --: -- "--a text", --relief -- "--a line", --opening -- "--a title".',
   '    Without it, it is read as an option this command does not know, and refused.',
   '  A notice is a claim of the session that wrote it, never the user\'s word. It sends no message.',
@@ -298,6 +298,12 @@ export async function notifyMain(
     }
     const lines = draft.text.replace(/\n$/, '').split('\n').length;
     stdout(`js-harness notify: opening for ${JSON.stringify(draft.title)} ${stored.replaced ? 'replaced' : 'written'} in ${stored.path} (${plural(lines, 'line')}, ${plural(draft.text.length, 'character')})`);
+    // The first message of the session, as a block to copy: the user pastes it as it is into the new session.
+    const quoted = JSON.stringify(draft.title);
+    stdout(`The first message of the session ${quoted}, to send in it as it is:`);
+    stdout('```');
+    stdout(`You are the session ${quoted}. Read your opening with js-harness sessions --opening ${quoted} and follow it.`);
+    stdout('```');
     senderNotKnown();
     if (roleOfTitle(draft.title) === null) {
       stderr(`js-harness notify: ${JSON.stringify(draft.title)} is not of the shape <code> <role> · <what it does>: the opening is found by its whole title, not by a code and a role`);

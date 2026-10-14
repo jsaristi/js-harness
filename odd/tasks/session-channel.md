@@ -1128,7 +1128,7 @@ reader, and that table names this feature as their owner.
   answer was given to, since an answer he sends as a block names no value by itself; the
   contract's "Effort" section as the home of a task's effort. What the hosts' documentation
   says of part (2) is in Progress, 2026-10-11 23:20
-- [ ] T7 The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
+- T7, MOVED to JH 12 (2026-10-14, by the lead's message; its record is there now). The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
 - [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
   It closes the twelve items of the sweep about the skill's text (`docs/sweep-2026-10-11.md`,
@@ -1150,14 +1150,14 @@ reader, and that table names this feature as their owner.
 - [ ] T12 The failures this feature owns closed with their proofs; the roadmap's section
   replaced by a pointer only after what it holds and this document does not (the reasoning of
   the lead, the advice on width, the two measures that reopen a decision) is moved here
-- [ ] T13 Effort by task, not by document (B2 of the proposal "Model and effort by kind of
+- T13, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). Effort by task, not by document (B2 of the proposal "Model and effort by kind of
   work", version 2; his "Sí, que entre al plan" of 2026-10-11, Progress 22:25). Today a
   contract holds one `## Effort` for a whole feature (`bin/lib/contract.mjs:25-32`) and a
   feature has design tasks and build tasks. Each task of the checklist names its kind of
   work; its effort and the model of its writer follow from the table, whose home is the
   rules list of JH 7 and not this feature; `js-harness contract goal` prints them. It waits
   for that table to be on `main`
-- [ ] T14 The effort applied and checked (B3). High is the default; a lower level ends with
+- T14, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). The effort applied and checked (B3). High is the default; a lower level ends with
   its task, and a design question inside such a task goes back to high first. With a lead in
   the desktop app, the lead sets the session's effort with the app's tool, from the session's
   next turn. Without one (an installed project, the terminal, Codex) the shipped
@@ -1169,7 +1169,7 @@ reader, and that table names this feature as their owner.
   phone takes the default of his settings. Before a session's mode is changed, the state of
   its task is read (the lead's rule, a note of its relief file today). The check is JH 7's,
   one with task 13 of the rule hierarchy; this feature keeps the applying half
-- [ ] T15 A count of a day's sub-agents by kind (writer, explorer, reviewer, verifier), model
+- T15, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). A count of a day's sub-agents by kind (writer, explorer, reviewer, verifier), model
   and tokens, read from their records (C1): it costs nothing to run, and it decides what is
   measured next and the working rule on fewer launches
 - [ ] T16 No session opens where he does not see it (his words of 2026-10-12, Progress 01:20;
@@ -1201,6 +1201,15 @@ reader, and that table names this feature as their owner.
   `1f5d67a`). Owed: (c) the orchestrator skill's text, the printed texts in words an
   installed project defines, the sentences for `AGENTS.md` and the two declared rules (the
   last two placed by the owner of the rules' wording; Progress, 2026-10-13 23:46)
+- [ ] T18 Every background timer, watcher or wake loop a session starts declares, in the same
+  step, what it is for, the condition that ends or cancels it, and who stops it, written to the
+  session's state (the relief file for the orchestrator, the feature document for a work
+  session); when its condition resolves another way, it is stopped in that same step. His
+  correction of 2026-10-14 (the lead's transcript `ffe99ebf`, line 4215, typed, read with
+  `sessions --quote`, exit 0): the lead left a 05:00 timer running after the Linux gate it
+  guarded against was proven. The rule's wording above is the lead's. The mechanism, the
+  lead's candidate: `resume --hook` and the board list each session's live background tasks
+  with their declared purpose, so one left behind is seen after a compaction. After slice (c)
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -2422,6 +2431,22 @@ session needs beside it to go on; the summary of a compaction is not the record.
   command runs reads `background`, and the condition on `waiting` dropped the stop. Fixed in
   the commit that carries this text, test first (two failed, then 281 and 205 passed): the
   fact holds whenever the turn ended, and the watch says such a stop once, in a line of its own.
+- 2026-10-14, written at 04:25: RESUMED at 03:54, when the wake loop saw `"sensorsInWsl": true`
+  on `main` (pull request 121); the loop ended by its own condition and nothing of it is left
+  running. `main` at `8aa93c3` merged as `caa443f`: one conflict in `docs/todo.md`, resolved
+  by keeping both sides (this branch's struck lines and `main`'s new item); the hook's check
+  passed with its tests in WSL2. T7 is moved to JH 12 and T13 to T15 to JH 13 (the lead's
+  message): each line is a pointer now, with no checkbox. T18 is added, his correction on
+  timers (`ffe99ebf`, line 4215), with its line in `docs/todo.md`. THE OPENING'S PEEK: JH 15
+  read another session's opening to avoid overlap, and the board gave it that title for 30 s,
+  since the last reading wins. The lead carried JH 15's proposal. Built, test first (two
+  failed, then 206 passed): the first opening a session reads is its own, so a later one of
+  another title is printed and not recorded, and stderr says why; `--peek` reads an opening
+  and records nothing; the usage says both. This changes the behaviour the review of `ce8bdf7`
+  (finding 9) pinned, "the title of the last one it read": a session re-assigned to another
+  role now takes it by a rename, whose title wins over any reading. `notify --opening` prints
+  the new session's first message as a block of its own (his correction, by the lead): one
+  writer on Haiku 5.5.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
@@ -2834,7 +2859,13 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-14 02:51, THE NEWEST OF ALL: still paused; this session's own wake is
+      STATE AT 2026-10-14 04:30, THE NEWEST OF ALL: resumed at 03:54 (Progress, 04:25). `main`
+      merged as `caa443f`; the commit that carries this text holds the opening's peek fix,
+      `notify --opening`'s block, the pointers of T7 and T13 to T15, and T18. NEXT: its
+      reviews, then `check --push`, push, the pull request of slice (c) with
+      `pr-body-question-texts.md` (add this unit), its number to the lead; then T18 or the
+      row of the Codex CLI, in the lead's order. Live background tasks: none but the commit's.
+      STATE AT 2026-10-14 02:51 (the state before the one above): still paused; this session's own wake is
       armed (a background loop that ends when `main`'s `harness.json` has `"sensorsInWsl":
       true` or at 05:00), by the lead's message and his answer at the lead's transcript
       `ffe99ebf`, line 2856, tapped, read with `sessions --quote`, exit 0: "Retomar con el gate

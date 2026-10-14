@@ -173,6 +173,7 @@ test('the usage names the six kinds, what an answer takes and every bound', asyn
   assert.match(usage, /120\s+characters/);
   assert.match(usage, /100000\s+characters/);
   assert.match(usage, /never the user's word/);
+  assert.match(usage, /prints the session's first message as a block to copy/);
   assert.match(usage, /begins with -- goes after a lone --: -- "--a text", --relief -- "--a line", --opening -- "--a title"/);
 });
 
@@ -544,14 +545,14 @@ test('--opening stores the text of standard input under the title, and the same 
   const file = path.join(openingsDir(machine.home, machine.slug), openingFileName(SENDER_TITLE));
   const first = await runNotify(machine, ['--opening', SENDER_TITLE], { readStdin: () => Buffer.from(OPENING, 'utf8') });
   assert.deepEqual([first.code, first.err], [0, []]);
-  assert.deepEqual(first.out, [`js-harness notify: opening for "${SENDER_TITLE}" written in ${file} (2 lines, ${OPENING.length} characters)`]);
+  assert.deepEqual(first.out, [`js-harness notify: opening for "${SENDER_TITLE}" written in ${file} (2 lines, ${OPENING.length} characters)`, ...firstMessageBlock(SENDER_TITLE)]);
   assert.deepEqual(findOpenings(machine.home, machine.slug, 'JH 5').openings, [
     { path: file, title: SENDER_TITLE, at: '2026-01-01T12:00:00.000Z', from: { host: 'claude-code', id: SENDER, source: 'environment', title: ORCHESTRATOR_TITLE, permissionMode: 'bypassPermissions' }, text: OPENING },
   ]);
 
   const second = await runNotify(machine, ['--opening', SENDER_TITLE], { readStdin: () => 'One line.', now: () => NOW + 60000 });
   assert.equal(second.code, 0);
-  assert.deepEqual(second.out, [`js-harness notify: opening for "${SENDER_TITLE}" replaced in ${file} (1 line, 9 characters)`]);
+  assert.deepEqual(second.out, [`js-harness notify: opening for "${SENDER_TITLE}" replaced in ${file} (1 line, 9 characters)`, ...firstMessageBlock(SENDER_TITLE)]);
   assert.deepEqual(findOpenings(machine.home, machine.slug, SENDER_TITLE).openings.map((one) => [one.at, one.text]), [['2026-01-01T12:01:00.000Z', 'One line.']]);
   assert.equal(fs.existsSync(machine.record), false, 'an opening is no notice');
 }));
@@ -591,6 +592,44 @@ test('standard input that cannot be read is exit 1 with the reason', withMachine
   const { code, err } = await runNotify(machine, ['--opening', SENDER_TITLE], { readStdin });
   assert.equal(code, 1);
   assert.deepEqual(err, ['js-harness notify: could not read the opening from standard input (EISDIR)']);
+}));
+
+// The first message of a new session is printed as a block of its own, ready to copy: the user pastes it as
+// the first message, so it names the session and says where its opening is read.
+function firstMessageBlock(title) {
+  const quoted = JSON.stringify(title);
+  return [
+    `The first message of the session ${quoted}, to send in it as it is:`,
+    '```',
+    `You are the session ${quoted}. Read your opening with js-harness sessions --opening ${quoted} and follow it.`,
+    '```',
+  ];
+}
+
+test('a stored opening prints, after its line, the first message of the session as a block to copy', withMachine(async (machine) => {
+  const title = 'JH 6 · la primera';
+  const file = path.join(openingsDir(machine.home, machine.slug), openingFileName(title));
+  const { code, out } = await runNotify(machine, ['--opening', title], { readStdin: () => OPENING });
+  assert.equal(code, 0);
+  assert.deepEqual(out, [`js-harness notify: opening for "${title}" written in ${file} (2 lines, ${OPENING.length} characters)`, ...firstMessageBlock(title)]);
+}));
+
+test('a replaced opening prints the first message of the session as a block to copy too', withMachine(async (machine) => {
+  const title = 'JH 6 · la primera';
+  const file = path.join(openingsDir(machine.home, machine.slug), openingFileName(title));
+  await runNotify(machine, ['--opening', title], { readStdin: () => OPENING });
+  const { code, out } = await runNotify(machine, ['--opening', title], { readStdin: () => 'One line.', now: () => NOW + 60000 });
+  assert.equal(code, 0);
+  assert.deepEqual(out, [`js-harness notify: opening for "${title}" replaced in ${file} (1 line, 9 characters)`, ...firstMessageBlock(title)]);
+}));
+
+test('an opening that cannot be written prints no block', withMachine(async (machine) => {
+  // A file where the harness home should be: the opening cannot be written under it.
+  fs.writeFileSync(machine.home, 'not a folder', 'utf8');
+  const { code, out, err } = await runNotify(machine, ['--opening', 'JH 6 · la primera'], { readStdin: () => OPENING });
+  assert.equal(code, 1);
+  assert.deepEqual(out, []);
+  assert.equal(err.length, 1);
 }));
 
 // --- questions, and their answers and withdrawals ---
