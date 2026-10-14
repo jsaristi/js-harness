@@ -2586,6 +2586,17 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**PAUSED on 2026-10-14 at about 01:15, by his order that everything stops but the faster check
+(the orchestrator's transcript `ffe99ebf-72fb-48da-a79b-e7db21a20b3f`, line 1647, read with
+`sessions --quote`: "si pero la idea es pausar todo precisamente para hacer unicamente esta
+mejora implementarla y ahi si seguir con lo siguiente").** Resume only on the lead's word. At
+the pause: a merge of `main` (`3f59bb2`) was waiting in the gate's line and was taken out before
+it began, so nothing was merged; the README's red test is not in the worktree but in this
+session's scratchpad as `readme.test.mjs.hold`, set aside so that a gate of this branch would
+not run it; put it back at `bin/readme.test.mjs` on resume. After `uninstall --global` in an
+empty temporary home, the two folders left are `.claude/` and `.codex/`, empty: the README says
+so. Then the queue below, from the README.
+
 **State for a resume, 2026-10-14 at 00:07 (`date`), at 91 percent before a compaction.** He
 rejected a commit of this session at about 17:50 of the 13th (its message file was outside the
 scratchpad); the session waited six hours in silence, and his answer is to go on with the queue
