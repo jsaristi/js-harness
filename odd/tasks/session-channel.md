@@ -2873,7 +2873,12 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      AT 06:05: the doctor row is written (the writer: 102 tool calls, test first, 27 of 118
+      AT 06:00, BEFORE A CUT: the doctor row is `ca75816` on `feat/doctor-codex-cli` (gate
+      PASS; gentle-ai not due; Codex in 4 parts, 478,911 input tokens, all "correct", 0.90 to
+      0.99, no finding); not pushed, its pull request after T18 and T19. NO background task
+      runs. NEXT, after the cut: T18 (read its line in Tasks and the first look below), its
+      design written here, then built test first on a branch of its own from `main`.
+      AT 05:50: the doctor row is written (the writer: 102 tool calls, test first, 27 of 118
       failed before; after, stack 118, doctor 58, hook 11, latest 22, tui 76, dispatcher 33
       passed; stack 118 rerun by this session) and is the commit that carries this text, on
       `feat/doctor-codex-cli`; its pull request waits behind T18 and T19, in the lead's order.
