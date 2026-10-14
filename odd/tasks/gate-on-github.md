@@ -309,69 +309,130 @@ commits with code, and only an exchange he has not been asked about, or a Window
 (paid, or free the day the repository is public, which he once said it will be) takes those
 off the machine.
 
-### The exchange, R1 (T7, first version, before its readers)
+### The exchange, R1 (T7, second version, after its two readers; 2026-10-14)
 
 **What is exchanged.** Today a pull request is read only when its head contains `main`, so
 each time `main` moves every open branch merges it and that merge runs a whole local gate
-(`.githooks/pre-merge-commit`, since `97703f9`). This branch paid one tonight: `82aa048`,
-asked about 21:18, committed after its turn, the whole suite. The exchange: a branch no longer
-merges `main` to be read; the pull request is merged when a run on GitHub tested its head
-merged with the `main` it will land on, and was green.
+(`.githooks/pre-merge-commit`, since `97703f9`). The exchange: a branch no longer merges `main`
+to be read; the orchestrator merges a pull request when a run on GitHub tested its head merged
+with the `main` it lands on, and was green. For this repository only: no merge rule ships
+(`bin/lib/manifest.mjs:30,51,59`), and an installed project's runner could not fetch the
+private harness anyway.
 
 **What it frees.** 22 of 65 whole gates since the hook (34 percent), 14 of 47 in the last 24
-hours; each 9 minutes on a quiet machine and 13 to 19 tonight (the orchestrator's measure). A
-merge with a conflict still merges and gates on the machine, as today.
+hours, each 9 minutes on a quiet machine and 13 to 19 on a busy night (the orchestrator's
+measure). It frees nothing on the review side: a clean merge needs no Codex record today either
+(`--diff-merges=combined`, `bin/lib/codex-review-coverage.mjs:204-210`). A merge with a conflict
+still merges and gates on the machine, as today, and GitHub starts no run while the conflict
+stands.
 
 **What it gives up.** The combination of the branch and the new `main` is proven on Linux
-alone: the 132 tests Linux skips and Windows itself are no longer run on it. Each side was
-proven on Windows by itself. How often a local merge gate is red where both parents were green
-is not known: a red gate leaves no commit and the gate log does not tell a merge gate from a
-commit gate. Measuring it needs one field in JH 8's gate log; until then the loss is named, not
-sized.
+alone: the 132 tests Linux skips, and Windows itself, no longer run on it. Each side was proven
+on Windows by itself. Where it lands: the next session that branches from `main` meets a
+Windows-only break in its own pre-commit gate, on code it never touched. The concrete case is
+`main` changing one of the 132 Windows-only tests that exercises code the branch also changed.
+The token budget is no such case: the runner measures it too (1,477 of 1,500 there, 1,499 here,
+on the same `AGENTS.md`). How often a local merge gate is red where both parents were green is
+not known: a red gate leaves no commit, and the gate log does not tell a merge gate from a
+commit gate. Measuring it needs that one field in JH 8's gate log. Until then the loss is named,
+not sized.
 
-**How the run meets the new `main`** (the readers' finding: a re-run tests the old merge).
-- *A, recommended:* the orchestrator closes and reopens the pull request just before its merge,
-  when `main` moved since the last run. A reopen is an event of the workflow, and GitHub tests
-  the head merged with the base as it is then. No commit, so no local gate and no Codex record.
-  Not proven: that a reopen recomputes the merge against the new base; the first test of it is
-  one reopen of a pull request, one run, about 4 minutes.
-- *B:* the branch updated on GitHub's side. Its merge commit is gated by no hook, and a session
-  with local commits must then merge or rebase anyway: it does not free the gate it was for.
-- Then the merge itself: `gh pr merge --match-head-commit <sha>`, and only while `main` is still
-  the one the green run merged with; if `main` moved in between, the run is asked again.
+**Which `main` a green run tested.** The checks do not say. A run's `head_sha` is the pull
+request's head. The base shows only in the checkout step ("HEAD is now at eb6a57e Merge 56e0138
+into d3f6ac1", run 38526382784), as the first parent of the commit the runner tested. Under the
+exchange the workflow would print `git rev-parse HEAD^1` in its "What the runner is" step (it
+does not yet; one line, built after his yes), and the orchestrator merges only when that line
+equals `origin/main` at the moment of the merge.
+`gh pr merge --match-head-commit` holds the head only, never the base. So that comparison is
+the rule's own check, done in the same step as the merge, and no setting enforces it: there is
+no branch protection on the free plan, and `allow_auto_merge` is false.
 
-**The month, in minutes, with R1** (a run is 4 billed minutes; A' is "The figure after its
-readers"). R1 adds at most one run a pull request, the one before its merge, when `main`
-moved: at most one for each pull request with code, about 144 a month at the mean (1,336
-minutes with A', inside 2,000) and about 540 at the pace of the last 24 hours (4,620 minutes:
-the quota ends about day 13). The run that matters is the one
-before the merge. If only that one ran (no run at each push), a month at the mean is about 576
-minutes and one like the last 24 hours about 2,160 (the quota ends about day 28).
+**How the run meets a `main` that moved.** A re-run reuses the old merge commit.
+- *A, recommended:* the orchestrator closes and reopens the pull request. `reopened` is a
+  default type of the workflow; `closed` is not, so the close starts no run. Not proven: GitHub
+  makes the test merge commit in a background job, and nothing documents that a run after a
+  reopen waits for it. The proof is one reopen, one run of about 4 minutes, whose printed
+  `HEAD^1` equals the current `main`; a green result alone proves nothing. While it is closed,
+  the board does not show the pull request (it reads open ones, `bin/lib/sessions.mjs:1061`).
+- *Fallback, if a reopen does not recompute:* the branch is updated on GitHub's side. Its merge
+  commit runs no hook, and a session with local commits must then pull it. That gives back part
+  of what the exchange frees.
+- *Several pull requests ready at once:* one at a time, in the order they were ready. Each one
+  after the first needs its own run, so N ready means N-1 runs in a row, about 4 minutes each,
+  plus the queue. A pull request that then conflicts goes back to today's rule.
 
-**The day the quota ends.** No run starts on GitHub until the month turns, in any private
-repository of his. Every pull request is then in the fourth state ("no run that should
-exist"), and the orchestrator goes back to today's rule for it: the branch merges `main` and
-its local gate runs. Nothing else changes on the machine. A session can see that day coming
-only by a count of its own (next).
+**A cheaper road, not taken.** The orchestrator already runs `git merge-tree` of each open
+branch against the new `main` (relief file, line 276). The road: merge without the local merge
+gate when `merge-tree` is clean and the branch and the new `main` changed no code file in
+common. It costs no minutes and no reopen. It gives up more: two code files that interact
+without overlapping, a case no run catches, where the exchange still catches it on Linux. It
+frees only part of the same gates. Recommended against, because the exchange's run costs about
+84 minutes a month at the mean pace (next).
 
-**A count of minutes a session can read.** The billing page needs the `user` scope, which is
-not on the token. What can be read with `repo`: every run of the month in his private
-repositories that have a workflow (four, by the orchestrator), and each job's start and end;
-each job rounded up to the minute and summed is the month's use, an estimate GitHub's own
-figure may differ from. A command that prints it is the harness's way; a cap of our own
-(the orchestrator stops relying on GitHub at, say, 1,800) reads that count. Neither is built.
+**The month, in minutes** (a run bills 3 or 4 minutes: run 38511223058 lasted 2:36, so 3; run
+38526382784 lasted 3:35, so 4; A' is "The figure after its readers"). The exchange adds a run
+only when `main` moved after a pull request's last run. That happened to 10 of 70 code pull
+requests in 14 days, and to 2 of 18 in the last 24 hours (reader A; the median pull request
+with code is open 4 minutes). So it adds about 21 runs a month at the mean pace, and about 60 at
+the pace of the last 24 hours. It also removes runs A' counts: 3 of the 25 local merges of
+`main` since `97703f9` were pushed to an open pull request. With A', a month comes to about 844
+minutes at the mean pace, and about 2,700 at the busiest pace, where the quota ends about day
+22 of the billing cycle.
 
-**A shorter run.** 204 s is 4 billed minutes; 180 s or less is 3, a third more runs a month.
-The suite took 183.7 s of it, one file at a time on two processors. What would bring it under:
-two files at once on the runner (the runner's `node --test` runs one, since it keeps a
-processor free), which only a measure on GitHub can size; and JH 8's road 1, fewer process
-starts in the four longest files. Whether `node --test` can stop at the first failure was not
-read; a red run costs as much as a green one until it is.
+**The day the quota ends.** It ends for the whole account, in every private repository of his.
+A run blocked by billing looks red, not absent: GitHub's troubleshooting page speaks of
+"workflows failing due to billing", as a failure or a startup failure, with the cause in the
+job's annotation. So before reading a red as the code's, the orchestrator reads that
+annotation. From that day until the billing cycle turns (the cycle, not the calendar month),
+every pull request goes back to today's rule by itself: the branch merges `main` and its local
+gate runs. Nothing else changes on the machine. A count of the month's minutes a session can
+read is still not built (Design, "A count of minutes").
+
+**A red only on Linux.** No merge under the exchange. The session fixes it, or merges `main`
+locally, and then today's rule applies. The cause goes into `docs/FAILURES.md` either way.
+
+**Who repairs a red `main`.** The first Windows proof of a merged tree is the next session's
+first code commit. Its gate goes red there for a cause not its own.
+- *How the session tells:* it runs the failing test in a scratch worktree of `origin/main`.
+  If the test is red there, the red is `main`'s.
+- *Who fixes it:* the session tells the orchestrator. The orchestrator merges no more pull
+  requests under the exchange until `main` is green again. The fix is one small pull request
+  off `main`, written by the session whose merge brought the cause, or by whoever the
+  orchestrator names when that session is closed.
+
+**A session's side.** A session merges `main` only on a conflict, or when it needs code from
+`main`. The rule goes into the orchestrator's relief file in place of "or the session merges
+main in and gates the result first" (line 276), and to each session in its opening.
+
+**Going back is one decision.** Each merge made on a GitHub run writes the run's URL, its
+tested base and its head into the merge commit's body. On a return, every open branch that did
+not merge `main` merges it once and gates once. Nothing else is left to undo.
 
 **For him, one question:** whether a pull request may be merged on a green run on GitHub
 against the `main` it lands on, without the branch merging `main` and running the whole local
-gate; giving up the Windows proof of that combination, freeing about a third of the whole
-gates, at about 144 more runs a month (540 at the pace of the last 24 hours).
+gate.
+- It gives up the Windows proof of that combination, and frees about a third of the whole
+  gates.
+- It costs about 21 more runs a month, about 84 minutes (about 60 runs at the busiest pace).
+- The 2,000 minutes are the whole account's: at the busiest pace they end about day 22, for
+  every private repository. From then until the cycle turns, every pull request goes back to
+  today's rule by itself.
+- Before relying on it, one reopen is proven (about 4 minutes).
+
+**What its two readers changed** (2026-10-13, read-only, opus at high effort).
+- Reader A corrected the month: from 144 extra runs (540 at the busiest pace) to about 21 (60).
+  It also found that:
+  - a run blocked by the quota looks red;
+  - the tested base can be read only from the checkout or `HEAD^1`;
+  - `--match-head-commit` holds the head only;
+  - the reopen is unproven on its key point;
+  - the loss lands on the next session's gate;
+  - the exchange frees nothing on the review side.
+- Reader B found what the first version left out: a session's side, who repairs a red `main`,
+  several pull requests ready at once, a red only on Linux, going back as one decision, this
+  repository only, and the cheaper `merge-tree` road. It also asked that the question name the
+  account-wide stop and the automatic fallback. Its "about day 9" rested on the first version's
+  540; with reader A's figure the busiest pace ends about day 22.
 
 ## What the readers changed
 Three readers that did not write the design, all read-only, on 2026-10-13: one searched his
@@ -526,11 +587,11 @@ version).**
       (`bin/lib/payload.test.mjs`, `evals/codex-isolation-probe.test.mjs`). Route: inline (one
       understood change; no writer reason). Risk: item 2, the name is what `killByPort` may
       kill by.
-- [ ] T6 · The workflow of option A', his yes of 2026-10-13 (Design, "The workflow"): the
+- [x] T6 · The workflow of option A', his yes of 2026-10-13 (Design, "The workflow"): the
       file, the test that holds its ignored paths equal to `documents`, the pull request, the
       orchestrator told before the first push that starts a run; the first run and one red run
       quoted with their minutes. Route: inline.
-- [ ] T7 · The design of the exchange (R1): how a pull request is tested again once `main`
+- [x] T7 · The design of the exchange (R1): how a pull request is tested again once `main`
       moved, its minutes against 2,000, what it loses, what the gate log must record to
       measure it; two readers; to the orchestrator for him ("avísame cuando llegue el diseño
       del canje"). Route: inline, then delegated readers.
@@ -655,26 +716,33 @@ version).**
   them", at `:164`: 425 lines where 401 were expected, so four writers of 100 appends each tore
   lines on Linux. A real defect of `appendCodexReview` (`bin/lib/codex-reviews.mjs`) on Linux,
   not of the test: its own comment says a tear needs the scheduler to interleave two writes.
-  The orchestrator is asked whose file it is before it is edited. Minutes of the run: read
-  them from its jobs when it is written up.
+  The orchestrator gave the file (`bin/lib/codex-reviews.mjs` is free). Minutes of the run: 2:36,
+  so 3 billed.
+
+- 2026-10-14 · **The torn append was blank lines, and the third run is green.** Each record was
+  already one write (`appendJsonLine`, one `appendFileSync`). The race is `endsUnterminated`: an
+  append sees the tail while another is still being written and starts on a fresh line, which
+  leaves a blank line, and every reader skips one. The test now counts the non-blank lines and
+  still parses each, in each writer's order. Pull request 117 (`b0aabb6`, off `main` `3f59bb2`):
+  local gate green, gentle-ai under budget (not due), Codex "correct" (0.97, 56,983 input
+  tokens). The orchestrator merged it (`main` `d3f6ac1`). `main` was merged into 109 once
+  (`56e0138`, local gate green, budget 1,499 of 1,500) and pushed at 07:07Z. Run
+  `38526382784`: green, 3:35, so 4 billed; budget 1,477 of 1,500 on the runner; tested
+  "Merge 56e0138 into d3f6ac1". The orchestrator merged 109 (`main` `9546fb7`, 02:36). The
+  gate on GitHub is live: T6 done.
+- 2026-10-14 · **T7, second version** ("The exchange, R1", on `docs/gate-on-github-exchange` off
+  `main` `9546fb7`). Both readers' findings were taken in, and the version says what each one
+  changed. It went to the orchestrator for him, with one question.
 
 ## Next
-0. IN PROGRESS 2026-10-14 01:10: worktree D:/js-harness-worktrees/codex-reviews-append, branch fix/codex-reviews-whole-lines off main 3f59bb2. Reading: each record is already one write (appendJsonLine, appendFileSync); the race is endsUnterminated seeing a tail mid-write and prefixing a newline, so the extra lines are blank (hypothesis, the next Linux run shows it). Change: the test counts non-blank lines and still parses each; commit asked in the gate's line (scratchpad append-commit.log); then Codex review, push, its PR, tell the orchestrator the number. GO from the orchestrator (about 23:35): `bin/lib/codex-reviews.mjs` is free; its own small PR off main like 112; one write per record preferred over a lock if it holds on Linux and Windows; local gate, both reviews, tell it the PR number; after its merge, merge main into 109 once and push. The torn append (Progress, the second run): with the
-   orchestrator's word on the file, fix it test first (one write per record, or a lock), local
-   gate, reviews, own pull request or on 109 as it says; then one push to 109.
-1. Done: pull request 112 (`fix/check-output-on-exit`, `945e31b`: `check` exits once its output is
-   written; gentle-ai not due, Codex "correct" 57,594 tokens) is open for the orchestrator. Once
-   it is on `main`: merge `main` into 109 once (its local gate), push: one run of about 4
-   minutes, the first whose red can be read; fix its failures test first until a run is green;
-   write each run's minutes and the PR body's state.
-2. Send the orchestrator the three SPEC notes (scratchpad `spec-notes.md`; its order of
-   2026-10-13, his tapped "Que me lo manden a mí", its transcript line 14050).
-3. T7: redo "The exchange" with both readers' findings (listed under "What the readers
-   changed"), then send it to the orchestrator for him.
+1. Wait for his answer on the exchange, through the orchestrator. On a yes, the first step is
+   one reopen of a pull request with code, and one run whose printed `HEAD^1` equals the current
+   `main`. That needs the one line in the workflow first, through its own pull request. Then the
+   relief file's line 276 and the session openings. On a no, close T7 as recorded.
+2. Spec notes for any further capability go to the orchestrator at the feature's close (his
+   "Que me lo manden a mí"); the three so far were sent.
+
 ## Resume here
-Worktree `D:/js-harness-worktrees/github-gate`, branch `feat/gate-on-github`, pushed at
-`82aa048`; local commits after it are documents only (`fffbcd4`, `2d58d88`) and are not
-pushed on purpose (a push is a run). Pull request 109 is open, bound to this session, red, its
-body says do not merge. T1 to T5 done; T6 is built and reviewed, waiting on its first green
-run; T7 is written (fffbcd4) and was with two readers. Scratchpad logs: `t5-turn.log`,
-`t6-review-turn.log`, `run1-full.log`. Read the orchestrator's answers first, then Next.
+Feature document on `docs/gate-on-github-exchange` (worktree `D:/js-harness-worktrees/github-gate`),
+off `main` `9546fb7`. T1 to T6 are done and on `main`. T7's second version is sent and waits on
+his answer. Read the orchestrator's answers first, then Next.
