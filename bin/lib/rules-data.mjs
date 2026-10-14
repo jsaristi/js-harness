@@ -66,6 +66,17 @@ export const RULES = [
     "unit": "minutes"
   },
   {
+    "id": "questions-one-place",
+    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked",
+    "owner": "sebastian",
+    "since": "2026-10-14",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Every question of the project reaches the user in one place",
+      "Ask the user nothing while an orchestrator holds its role"
+    ]
+  },
+  {
     "id": "review-effort",
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",

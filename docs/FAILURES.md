@@ -78,7 +78,11 @@ run.
 - Class: asked-of-him
 - Seen: 2026-10-07 — odd/tasks/codex-review-lean.md:528-529 — read three times as a task to run in
   Codex; also docs/ROADMAP.md:1075-1077 and odd/tasks/rule-hierarchy.md:162
-- Control: line — AGENTS.md — "never an instruction: one was read as his task." — since 2026-10-09
+- Control: protocol — bin/lib/manifest.mjs — "Every question of the project reaches the user in one
+  place" — since 2026-10-14
+- Was: line — AGENTS.md — "never an instruction: one was read as his task." — replaced on
+  2026-10-14, when a decision moved from a block he sends to the question tool, by his words (the
+  lead's transcript 65318fd5, lines 12735 and 13110)
 
 ### block-referred-by-hour
 A block he had not used yet was referred to by the hour it was given ("the block of 08:35") instead

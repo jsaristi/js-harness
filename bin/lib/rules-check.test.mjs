@@ -381,7 +381,14 @@ test('the real list with a read of a rule it does not declare reports that read 
     listText: null,
     codeFiles: [{ path: 'bin/x.mjs', text: "ruleValue('no-such-rule')" }],
     textFiles: [],
-    readFile: () => null,
+    // The home files of the real list's rules in prose are the package's own.
+    readFile: (file) => {
+      try {
+        return readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
+      } catch {
+        return null;
+      }
+    },
   });
   assert.deepEqual(result.findings, ['bin/x.mjs: reads rule "no-such-rule", which is declared nowhere']);
 });
