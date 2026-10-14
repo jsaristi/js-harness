@@ -25,8 +25,8 @@ the minimal one for the same score.
   that showed it
 
 ## In scope / Out of scope
-- In: `docs/future-model.md` (new), this document; the gaps G1 to G4 once he or the lead clears
-  them as tasks of this feature (`evals/`, a payload command).
+- In: `docs/future-model.md` (new), this document; the gaps G1 to G7 once he or the lead clears
+  them as tasks of this feature (`evals/`, a payload command, a check row).
 - Out: `docs/ROADMAP.md` and `odd/tasks/rule-hierarchy.md`, which are JH 7's (what changes there
   goes through the lead); running any eval, which is spend and his.
 
