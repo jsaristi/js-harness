@@ -55,13 +55,15 @@ const mixedOnDisk = (line) => /(^|\s)w\/mixed(\s|$)/.test(line.split('\t')[1] ??
  * of this repository and that it runs at its top.
  *
  * `sensors` are the ones the gate would run, `[{ name, command }]`: another command is another key, since
- * the same files under another suite proved another thing. `runtime` is what runs them.
+ * the same files under another suite proved another thing. `runtime` is what runs them, and `place`, where
+ * the sensors run elsewhere (a WSL2 distribution and its node, `../check.mjs`), says where: a pass there
+ * proves nothing for a run here.
  *
  * `null`, which is "run the sensors", for every one of: git that does not answer; a folder that is not the
  * index (an unstaged change, an untracked file, an unmerged path); an entry git would report unchanged
  * whatever its file holds; a file whose line ends are mixed in the folder; an index with nothing in it. Two
  * processes of git. */
-export function treeKey(git, { sensors, runtime = RUNTIME } = {}) {
+export function treeKey(git, { sensors, runtime = RUNTIME, place } = {}) {
   if (typeof git !== 'function' || !Array.isArray(sensors) || sensors.length === 0) return null;
   const status = git(STATUS);
   if (typeof status !== 'string' || status.split('\0').filter(Boolean).some(differs)) return null;
@@ -74,6 +76,9 @@ export function treeKey(git, { sensors, runtime = RUNTIME } = {}) {
     lines,
     sensors.map(({ name, command }) => [name, command]),
     [runtime.version, runtime.platform, runtime.arch],
+    // Only where the sensors run elsewhere than this process, so every key of a gate that names no place
+    // is the key it was.
+    ...(place === undefined ? [] : [place]),
   ]);
   return createHash('sha256').update(hashed).digest('hex');
 }
