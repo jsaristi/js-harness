@@ -2597,6 +2597,23 @@ landed by 05:00; it landed first).** `main` (`8aa93c3`) was merged in at 04:20 (
 Seven tasks left this document for the sessions named at them in `## Tasks`. Next: the README,
 from its red test, as the queue below says.
 
+**The README, written on 2026-10-14 at about 04:40.** Its test, put back at
+`bin/readme.test.mjs`, was seen red again on the merged tree (1 passes, 3 fail on the missing
+file); the dispatcher now lists 20 commands, `functions` added. `README.md` holds what the
+harness is, `## Install`, `## Remove` and one section for each command with an example from a
+run made for it on the merged tree: in a temporary home and a temporary git project
+(`readme-runs-2/` in this session's scratchpad, made by `readme-journey.sh` there, which sets
+`JS_HARNESS_HOME`, `HOME` and `USERPROFILE` to the temporary home and unsets
+`CLAUDE_CONFIG_DIR` and `CODEX_HOME`), and the read-only ones in this repository. A fifth test
+was added when the first draft failed: the contract template shown as an example opens with
+`## Goal`, which the test read as a heading of the page, so the test now reads headings only
+outside fenced blocks. Then 5 pass. **Found by the runs, for the lead:** after `uninstall
+--global` the temporary home kept, beside the empty `.claude/` and `.codex/` and an empty
+`AppData/Roaming/`, the folder `.codegraph/` with `telemetry-queue.jsonl` and `telemetry.json`,
+which codegraph writes when `init` runs `codegraph init`; no manifest records them, so nothing
+removes them. The README says so as it is. Next: the commit through the gate, gentle-ai's
+assessment, the Codex review of the test, the pull request, its number to the lead.
+
 **PAUSED on 2026-10-14 at about 01:15, by his order that everything stops but the faster check
 (the orchestrator's transcript `ffe99ebf-72fb-48da-a79b-e7db21a20b3f`, line 1647, read with
 `sessions --quote`: "si pero la idea es pausar todo precisamente para hacer unicamente esta
