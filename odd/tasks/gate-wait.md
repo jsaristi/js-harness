@@ -2769,6 +2769,59 @@ antivirus spends on each (his).
 
 ## Resume here
 
+**State of the session "JH 8" at 20:13 on 2026-10-13, at 78% of its context (the app
+compacts it at 93%). Read this first; it is newer than the rest of this section.**
+
+- **In flight: the correction of install-update T8.** Worktree
+  `D:\js-harness-worktrees\upgrade-sync-path`, branch `fix/upgrade-sync-from-path`, head
+  `0cca602` (T8: after `upgrade --source` with no `--prefix` the copy on the path says its
+  version, with a new `js-harness --version`, before it is let to sync; design `6d09c57` in
+  `odd/tasks/install-update.md`, "T8 design"). Codex on `6d09c57..0cca602`: one P2, true (the
+  refusal offered a second `upgrade` with `--prefix`, which would say "up to date" and sync
+  nothing), 125,690 input tokens (plan 76,000, allowance 300,000). The correction is applied
+  in that tree, not committed (`bin/update.mjs`, `bin/update.test.mjs`,
+  `odd/tasks/install-update.md`), and its turn waits in the line of the lock since 20:03:
+  `t8b-turn.sh` (red with `bin/update.mjs` at HEAD, green, the commit with the message
+  `t8b-msg.txt`, then the Codex plan); its log is `t8b-turn.log`. **Then:** Codex once on
+  `0cca602..<the correction>` (`codex-turn.sh <worktree> 0cca602 <short head> 315000 t8b`,
+  only if the printed plan is inside the allowance); the record in
+  `odd/tasks/install-update.md` (T8 checked, Progress with both turns and both reviews,
+  "Next step"); merge `origin/main` in (`clean-merge-turn.sh <worktree>`: the branch is
+  stacked on `6dd2480`, and `main` `75b0ceb` holds it by a merge commit); push; pull request
+  with no AI attribution; the head to the orchestrator. The session "JH 9" adds two lines to
+  `bin/js-harness.mjs` only after T8 is on `main`.
+- **Done by this session on 2026-10-13 after its compaction of 17:55:** install-update T6
+  (`243794e`, pull request 103, merged), T7 (`5502d54`, pull request 104, merged), T8's first
+  commit; the measure of the slower check (Progress above; pull request 105, documents only,
+  this branch). Codex since that compaction: 135,381 (T6), 74,849 (T7), 125,690 (T8). No
+  sub-agent.
+- **Waiting on others:** his answer on `PcaSvc` (through the orchestrator), then one measured
+  check; the orchestrator's word on T19 and on the one text for the rule about small runs
+  beside a gate (my proposal: beside a gate, a quote and one test file of under half a minute
+  are free; a whole run, a measure, a board read and a reviewer are not; `bin/gate.mjs:4`
+  changes to match).
+- **Next after T8, by the orchestrator's order:** T19 if it orders it; then the guard of the
+  Codex review outside the lock (one slice at most, with a reader; one probe granted, 100,000
+  input tokens at most, medium effort, in a scratch folder, recorded here). The design I
+  would write first: `codex-review` builds Codex's environment in one place
+  (`bin/codex-review.mjs`, `childEnv` and `leanEnv`); outside a turn of the lock it adds a
+  `NODE_OPTIONS` preload that ends any `node` started with `--test` with one line, so a
+  review beside a gate cannot run a second copy of the tests; the probe is whether Codex
+  hands that variable to the commands it starts (else Codex's own
+  `shell_environment_policy.set`). The sandbox is no guard: seven of this session's reviews
+  ran `node --test`. If it comes out larger than one slice or needs anything of his: a
+  candidate with its number (43 minutes of lock a day, up to 42 of waits) and on to "Next".
+- **Worktrees of this session now:** `upgrade-sync-path` (T8, in flight);
+  `gate-wait-run-load` (this branch, pull request 105); `package-contents` and
+  `status-no-pin` (merged: to remove); `gate-wait-count` (the counting tool, `fc70dc3`, not
+  pushed); `gate-on-github` (JH 10 reads it; leave it).
+- **Scripts of this evening in the scratchpad:** `t6-turn.sh` and `t8-turn.sh` (the model of a
+  turn with several code files), `codex-turn.sh`, `m1h-turn.sh` with `m1-table.cjs` (the whole
+  suite by file against M1g), `checks-load.cjs`, `svchost-since.cjs`, `codex-in-lock.cjs`,
+  `cpu-sample.ps1`, `cpu-speed-log.ps1`, `two-pids.ps1`, `svchost-who.ps1`.
+- **Engram refuses this session's saves** ("Claude host session already ended"), so nothing
+  of this evening is in memory: the feature documents are the record.
+
 - **This document** is on `feat/gate-wait-two-halves` (worktree
   `D:\js-harness-worktrees\gate-wait-two-halves`) until its pull request is merged,
   then on `main`. A new slice starts on a branch off `main` and carries the document.
