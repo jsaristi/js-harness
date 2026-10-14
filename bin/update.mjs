@@ -113,12 +113,12 @@ function reportProjectStatus(location, version) {
   console.log(`project: ${path.normalize(location.root)}`);
   console.log(`pinned version: ${pinned ? location.pin : 'none'}`);
   console.log(`running version: ${version}`);
-  const notSetUp = pinned
-    ? 'this clone: not set up; js-harness sync sets it up'
-    : 'this clone: not set up; js-harness sync sets it up once a version is pinned';
-  console.log(
-    location.manifestPresent ? `this clone: set up (manifest: ${path.normalize(location.manifestPath)})` : notSetUp,
-  );
+  const syncSetsUp = pinned ? 'js-harness sync sets it up' : 'js-harness sync sets it up once a version is pinned';
+  const manifestAt = `(manifest: ${path.normalize(location.manifestPath)})`;
+  // A manifest `functions apply` wrote holds the switches and no gate, so the clone is not set up by it.
+  if (!location.manifestPresent) console.log(`this clone: not set up; ${syncSetsUp}`);
+  else if (location.functionsOnly) console.log(`this clone: only its switches applied ${manifestAt}; ${syncSetsUp}`);
+  else console.log(`this clone: set up ${manifestAt}`);
   if (!pinned) {
     console.log(`to pin this project: ${howToPinClause(version)}`);
     return;

@@ -14,6 +14,14 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { sha256 } from './manifest.mjs';
 import { tools } from './stack.mjs';
+import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
+import { applySettings, isValidSettingsRecord, planFunctions } from './project-apply.mjs';
+
+/** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what a
+ * copy older than the switches cannot undo (its `settings`); such a copy deletes a manifest it does not
+ * understand and leaves the keys behind, which is why a copy that reads a format greater than its own
+ * undoes nothing. A copy already installed that knows no format cannot be made to refuse. */
+export const MANIFEST_FORMAT = 1;
 
 /** Resolves the git top-level of `cwd`, or `null` outside a git repository (missing `git`, a
  * non-zero exit, or any thrown spawn error all count as "not a repo" here). Callers must check
@@ -343,11 +351,12 @@ export function agentsTemplate(root) {
 <what this project does, and who it is for, in one or two lines>
 
 ## How it works
-<where the code lives>. The single command that checks a change: \`<command>\`.
+<where the work lives: the code, the data, the documents>. The single command that checks a change:
+\`<command>\`.
 
 ## What good looks like
-A behavior change arrives with the test that proves it, written first. A claim about this
-project carries its evidence.
+A behavior change arrives with the test that proves it, written first; a finding, with the
+evidence that proves it. A claim about this project carries its evidence.
 
 ## Constraints
 - <a real constraint> — <the reason behind it>
@@ -360,6 +369,28 @@ const SEMVER =
 
 const PRE_COMMIT_HOOK =
   '#!/bin/sh\n# Written by js-harness init; js-harness uninstall removes it.\nexec js-harness check\n';
+
+/** The push check, where the Codex review is on (odd/tasks/on-demand-functions.md, S6): one `check --push`
+ * a pushed ref, as this repository's own `.githooks/pre-push` runs it; a delete pushes nothing. */
+const PRE_PUSH_HOOK = [
+  '#!/bin/sh',
+  '# Written by js-harness; js-harness uninstall removes it. Refuses a push whose code commits no Codex',
+  '# review record covers, where the project has the review on (harness.json "functions").',
+  'status=0',
+  'while read -r local_ref local_sha remote_ref remote_sha; do',
+  '  case "$local_sha" in *[!0]*) ;; *) continue ;; esac',
+  '  js-harness check --push --remote "$1" --head "$local_sha" < /dev/null || status=1',
+  'done',
+  'exit $status',
+  '',
+].join('\n');
+
+/** The two hooks the harness writes: the name under the hooks path, the text, and what to add by hand to a
+ * hook of that name it does not write. */
+const HOOKS = {
+  preCommit: { name: 'pre-commit', content: PRE_COMMIT_HOOK, command: '`js-harness check`' },
+  prePush: { name: 'pre-push', content: PRE_PUSH_HOOK, command: '`js-harness check --push` for each pushed ref' },
+};
 
 /** codegraph's own fix command, reused from `stack.mjs`'s tool table (never `codegraph upgrade` —
  * user rule) instead of a second copy of it living here. */
@@ -624,7 +655,7 @@ function rollback(root, createdPaths, createdDirs, rm = fs.rmSync) {
  * design: "the way `init` would — the pre-commit gate ... under the same containment rules"). Appends to
  * `state` (the run's `createdPaths`/`createdDirs`/`reportedDirs`/`files`/`actions`) exactly what the
  * inline block it was extracted from did; a failure here throws and the caller rolls back. */
-function writeHookGate(root, spawn, writeFile, state) {
+function writeHookGate(root, spawn, writeFile, state, hook = HOOKS.preCommit) {
   const { createdPaths, createdDirs, reportedDirs, files, actions } = state;
   // Pre-commit gate: wherever `core.hooksPath` (or the default `.git/hooks`) resolves it to.
   // Never touches git config itself — see "T2 design": setting `core.hooksPath` would silently
@@ -632,9 +663,9 @@ function writeHookGate(root, spawn, writeFile, state) {
   // tree *and* the real git dir/common git dir (T2e item 4): a linked worktree or a submodule
   // keeps its shared hooks directory outside the working tree, and that is still this run's to
   // write, recorded by its absolute path with `gitDir: true` rather than a repo-relative one.
-  const hookPath = resolveGitPath(root, 'hooks/pre-commit', spawn);
+  const hookPath = resolveGitPath(root, `hooks/${hook.name}`, spawn);
   if (!hookPath) {
-    actions.push({ kind: 'skip', path: 'hooks/pre-commit', reason: 'could not resolve the git hooks path' });
+    actions.push({ kind: 'skip', path: `hooks/${hook.name}`, reason: 'could not resolve the git hooks path' });
   } else {
     const gitBases = gitDirs(root, spawn);
     const {
@@ -653,13 +684,13 @@ function writeHookGate(root, spawn, writeFile, state) {
       // location itself was lexically contained — never when the configured path (or default)
       // is simply outside from the start (T2e item 7).
       const reason = hookViaLink
-        ? 'a link sends the hooks path outside the repository; add `js-harness check` to its pre-commit yourself'
-        : 'hooks path is outside the repository (core.hooksPath); add `js-harness check` to its pre-commit yourself';
+        ? `a link sends the hooks path outside the repository; add ${hook.command} to its ${hook.name} yourself`
+        : `hooks path is outside the repository (core.hooksPath); add ${hook.command} to its ${hook.name} yourself`;
       actions.push(kept(toForwardSlashes(realHookPath), reason, true));
     } else {
       const hookRel = pathShapeFor(root, hookPath, hookIsWorkingTree);
       if (hookOccupied) {
-        actions.push(kept(hookRel, 'exists; add `js-harness check` to it', false, !hookIsWorkingTree));
+        actions.push(kept(hookRel, `exists; add ${hook.command} to it`, false, !hookIsWorkingTree));
       } else {
         // T2f item 2: bounded by `hookBase` (the git dir or common git dir, for a worktree or a
         // submodule), not always `root` — otherwise the climb stops before it starts whenever the
@@ -667,9 +698,9 @@ function writeHookGate(root, spawn, writeFile, state) {
         const hookDirShallow = mkdirTracked(path.dirname(hookPath), hookBase, createdDirs);
         if (hookDirShallow) reportedDirs.push({ absolute: hookDirShallow, isWorkingTree: hookIsWorkingTree });
         createdPaths.push(hookPath);
-        writeFile(hookPath, PRE_COMMIT_HOOK, 'utf8');
+        writeFile(hookPath, hook.content, 'utf8');
         fs.chmodSync(hookPath, 0o755);
-        const hash = sha256(PRE_COMMIT_HOOK);
+        const hash = sha256(hook.content);
         files.push(manifestEntry(root, hookPath, hookIsWorkingTree, hash));
         actions.push(wrote(hookRel, hash, !hookIsWorkingTree));
       }
@@ -691,6 +722,35 @@ function codegraphStep(root, spawn, platform, actions) {
   const { manifest, reason } = initCodegraph(root, spawn, platform);
   actions.push(reason ? { kind: 'problem', path: 'codegraph init', reason } : { kind: 'ran', path: 'codegraph init' });
   return { manifest, createdThisRun: manifest.createdDir === true };
+}
+
+/** What the switches of the project at `root` ask of this clone (bin/lib/project-apply.mjs), read from its
+ * working tree: `{ resolved, plan }`, or `{ errors }` when `harness.json` or its `"functions"` cannot be
+ * read, which applies nothing. */
+function functionsPlan(root, spawn) {
+  const { errors, resolved } = functionsOf(harnessOfTree(root), workingTree(gitIn(root, spawn)));
+  if (errors.length > 0) return { errors };
+  return { resolved, plan: planFunctions(resolved, { indexPresent: fs.existsSync(codegraphDirPath(root)) }) };
+}
+
+function functionsProblem(errors) {
+  return { kind: 'problem', path: 'harness.json "functions"', reason: `${errors.join('; ')}; no switch was applied` };
+}
+
+/** The manifest's `codegraph` when no index was asked for and none is there. */
+const NO_INDEX = { createdDir: false, status: 'off' };
+
+/** `codegraphStep` where the code map asks for an index or one is already there to record; otherwise the
+ * reason none is made. */
+function codegraphWhereWanted(root, spawn, platform, actions, functions) {
+  if (functions.plan?.index === 'make' || fs.existsSync(codegraphDirPath(root))) {
+    return codegraphStep(root, spawn, platform, actions);
+  }
+  if (functions.plan) {
+    const { value, because } = functions.resolved.codeMap;
+    actions.push({ kind: 'skip', path: 'codegraph init', reason: `the code map is ${value}: ${because}` });
+  }
+  return { manifest: { ...NO_INDEX }, createdThisRun: false };
 }
 
 /** The write phase for a project with no `harness.json` yet and no project manifest yet either
@@ -716,10 +776,14 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
   const createdDirs = [];
   const reportedDirs = [];
   let codegraphCreatedThisRun = false;
+  let settingsRecords = [];
 
   try {
     const actions = [];
     const files = [];
+    // The switches are read before anything is written, from the project as it stands.
+    const functions = functionsPlan(root, spawn);
+    if (functions.errors) actions.push(functionsProblem(functions.errors));
 
     // harness.json: the pin — computed now (its content never depends on anything written after
     // it), but not written until the very end (T2e item 1).
@@ -758,9 +822,19 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     // fresh clone's `sync` runs too. `codegraphCreatedThisRun` lets the rollback below know whether it
     // owns `.codegraph/` (T2e item 2).
     writeHookGate(root, spawn, writeFile, { createdPaths, createdDirs, reportedDirs, files, actions });
-    const codegraph = codegraphStep(root, spawn, platform, actions);
+    if (functions.plan?.prePush) {
+      writeHookGate(root, spawn, writeFile, { createdPaths, createdDirs, reportedDirs, files, actions }, HOOKS.prePush);
+    }
+    const codegraph = codegraphWhereWanted(root, spawn, platform, actions, functions);
     const codegraphManifest = codegraph.manifest;
     codegraphCreatedThisRun = codegraph.createdThisRun;
+
+    // The keys of this clone's Claude settings the switches ask for (bin/lib/project-apply.mjs).
+    if (functions.plan) {
+      const applied = applySettings(root, [], functions.plan.settings);
+      settingsRecords = applied.records;
+      actions.push(...applied.actions);
+    }
 
     const dirs = reportedDirs.map(({ absolute, isWorkingTree }) => manifestEntry(root, absolute, isWorkingTree));
 
@@ -778,6 +852,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       codegraph: codegraphManifest,
       dirs,
     };
+    if (settingsRecords.length > 0) Object.assign(manifest, { format: MANIFEST_FORMAT, settings: settingsRecords });
 
     // T2c Codex P1 + R3-rollback-deletes-preexisting-manifest: `manifestFilePath` is guaranteed
     // absent here — `initProject` already refused to reach `writeProject` at all when it exists
@@ -810,7 +885,16 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
         notRemoved.push(toRepoRelative(root, codegraphDirPath(root)));
       }
     }
+    undoSettingsOnRollback(root, settingsRecords, notRemoved);
     throw new InitWriteError(err.message, notRemoved);
+  }
+}
+
+/** A failed run takes back the keys it wrote, since no manifest that records them reaches the disk. */
+function undoSettingsOnRollback(root, records, notRemoved) {
+  if (records.length === 0) return;
+  for (const action of applySettings(root, records, []).actions) {
+    if (action.kind === 'failed') notRemoved.push(action.path);
   }
 }
 
@@ -1024,7 +1108,33 @@ function isValidManifestShape(manifest, root, gitBases) {
     if (typeof manifest.codegraph !== 'object' || manifest.codegraph === null) return false;
     if (manifest.codegraph.createdDir !== undefined && typeof manifest.codegraph.createdDir !== 'boolean') return false;
   }
+  // The keys of the switches come with the format that says a copy knows them (`MANIFEST_FORMAT`).
+  if (manifest.format !== undefined && !(Number.isInteger(manifest.format) && manifest.format >= 1)) return false;
+  if (manifest.scope !== undefined && manifest.scope !== 'functions') return false;
+  if (manifest.settings !== undefined) {
+    if (manifest.format === undefined || !Array.isArray(manifest.settings)) return false;
+    if (!manifest.settings.every(isValidSettingsRecord)) return false;
+  }
   return true;
+}
+
+/** A manifest written in a format greater than this copy's: `{ code: 1, newerManifest: true, ... }`, for
+ * `uninstall` and `sync` to refuse with before they touch anything; `null` for one this copy can read. */
+function newerManifest(manifest, manifestPath) {
+  const format = manifest?.format;
+  if (!Number.isInteger(format) || format <= MANIFEST_FORMAT) return null;
+  // The version reaches the terminal, so only a semver one is carried (the reason `readPin` gives).
+  const version = typeof manifest.version === 'string' && SEMVER.test(manifest.version) ? manifest.version : null;
+  return { code: 1, newerManifest: true, manifestPath, format, version };
+}
+
+/** The refusal of a manifest written in a format greater than this copy's (`newerManifest`). */
+export function newerManifestMessage({ manifestPath, format, version }) {
+  return (
+    `the project manifest at ${manifestPath} was written by js-harness ${version ?? '(version not recorded)'} ` +
+    `in format ${format}, and this copy reads format ${MANIFEST_FORMAT}: it undoes nothing it cannot read; ` +
+    'run that version of js-harness'
+  );
 }
 
 /** Every directory `init` actually created, deepest first — derived purely from the manifest's own
@@ -1176,6 +1286,8 @@ export function uninstallProject(cwd, deps = {}) {
   // T2e item 4's bases, recomputed here (never threaded from `initProject`: uninstall may run in a
   // whole separate process, possibly long after init did) — used both to validate the manifest's own
   // shape below and, per file, to re-check real containment (T3b items 1 and 5).
+  const newer = newerManifest(manifest, manifestFilePath);
+  if (newer) return newer;
   const gitBases = gitDirs(root, spawn);
   if (!isValidManifestShape(manifest, root, gitBases)) {
     return { code: 1, malformedManifest: true, manifestPath: manifestFilePath };
@@ -1241,6 +1353,13 @@ export function uninstallProject(cwd, deps = {}) {
   for (const dirEntry of directoriesToPrune(manifest)) {
     const bases = dirEntry.gitDir ? realGitDirBases : [realRoot];
     removeDirectoryIfEmpty(root, dirEntry, bases, rm, readdir, notRemoved, actions);
+  }
+
+  // Each key of this clone's settings goes back to what was there, if it still holds what was written.
+  const settings = applySettings(root, manifest.settings ?? [], []);
+  for (const action of settings.actions) {
+    if (action.kind === 'failed') notRemoved.push(action.path);
+    actions.push(action);
   }
 
   if (manifest.codegraph?.createdDir === true) {
@@ -1319,8 +1438,8 @@ export function cleanupClause(err) {
  * written through. A directory this has to create is recorded in `manifest.dirs` (like `init` does) so
  * `uninstall` still restores the repository as it was when sync started. Mutates `manifest` (the
  * `dirs`/`sha256` it now records) and the run's `createdPaths`/`createdDirs`/`actions`. */
-function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, createdDirs, actions) {
-  const entry = manifest.files.find((f) => f.path.split('/').pop() === 'pre-commit');
+function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, createdDirs, actions, hook = HOOKS.preCommit) {
+  const entry = recordedHook(manifest, hook);
   if (!entry) return;
   const abs = resolveManifestEntryPath(root, entry);
   if (fs.existsSync(abs)) return; // present, whatever its content: never overwritten
@@ -1348,9 +1467,9 @@ function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, 
     }
   }
   createdPaths.push(abs);
-  writeFile(abs, PRE_COMMIT_HOOK, 'utf8');
+  writeFile(abs, hook.content, 'utf8');
   fs.chmodSync(abs, 0o755);
-  entry.sha256 = sha256(PRE_COMMIT_HOOK);
+  entry.sha256 = sha256(hook.content);
   actions.push(wrote(label, entry.sha256, !isWorkingTree));
 }
 
@@ -1362,42 +1481,85 @@ function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, 
  * every file, directory and `.codegraph/` this run created, so what is on disk and what the manifest
  * says never disagree. */
 function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps) {
+  const read = readRecorded(root, manifestFilePath, spawn);
+  if (read.code) return read;
+  const steps = { sync: true, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps };
+  return updateRecorded(root, read.manifest, read.gitBases, steps);
+}
+
+/** The project manifest at `manifestFilePath`, validated before anything is touched: `{ manifest, gitBases }`,
+ * or the refusal (`malformedManifest`, `newerManifest`) to return as it is. */
+function readRecorded(root, manifestFilePath, spawn) {
   let manifest;
   try {
     manifest = JSON.parse(fs.readFileSync(manifestFilePath, 'utf8'));
   } catch (err) {
     return { code: 1, malformedManifest: true, manifestPath: manifestFilePath, reason: err.message };
   }
+  const newer = newerManifest(manifest, manifestFilePath);
+  if (newer) return newer;
   const gitBases = gitDirs(root, spawn);
   if (!isValidManifestShape(manifest, root, gitBases)) {
     return { code: 1, malformedManifest: true, manifestPath: manifestFilePath };
   }
+  return { manifest, gitBases };
+}
 
+/** What `sync` and `functions apply` change in a clone, recorded in `manifest`: with `sync`, the version
+ * that ran and a recorded pre-commit gate that is gone; for both, what the switches ask (the push check, the
+ * index, the keys of the settings). */
+function updateRecorded(root, manifest, gitBases, steps) {
+  const { sync, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps } = steps;
   const next = JSON.parse(JSON.stringify(manifest));
   const actions = [];
   const createdPaths = [];
   const createdDirs = [];
   let codegraphCreatedThisRun = false;
   let manifestChanged = false;
+  let writtenSettings = [];
 
   try {
-    if (next.version !== version) {
+    if (sync && next.version !== version) {
       actions.push({ kind: 'versionRecorded', from: next.version, to: version });
       next.version = version;
     }
-    restoreRecordedHook(root, next, gitBases, writeFile, createdPaths, createdDirs, actions);
-    if (!fs.existsSync(codegraphDirPath(root))) {
+    if (sync && next.scope === 'functions') {
+      // A manifest `functions apply` wrote holds no gate: sync sets the clone up the rest of the way.
+      writeHookInto(root, next, HOOKS.preCommit, { spawn, writeFile, createdPaths, createdDirs, actions });
+      delete next.scope;
+    } else if (sync) {
+      restoreRecordedHook(root, next, gitBases, writeFile, createdPaths, createdDirs, actions);
+    }
+    const functions = functionsPlan(root, spawn);
+    if (functions.errors) actions.push(functionsProblem(functions.errors));
+    if (functions.plan) {
+      syncPrePush(root, next, gitBases, functions.plan.prePush, { spawn, writeFile, rm, createdPaths, createdDirs, actions });
+    }
+    if (functions.plan?.index === 'make') {
       const { manifest: codegraphManifest, reason } = initCodegraph(root, spawn, platform);
       next.codegraph = codegraphManifest;
       codegraphCreatedThisRun = codegraphManifest.createdDir === true;
       actions.push(
         reason ? { kind: 'problem', path: 'codegraph init', reason } : { kind: 'ran', path: 'codegraph init' },
       );
+    } else if (functions.plan?.index === 'remove') {
+      removeRecordedIndex(root, next, rm, actions);
+    }
+    if (functions.plan) {
+      const before = next.settings ?? [];
+      const applied = applySettings(root, before, functions.plan.settings);
+      writtenSettings = applied.records.filter((record) => !before.includes(record));
+      actions.push(...applied.actions);
+      setSettings(next, applied.records);
     }
     manifestChanged = JSON.stringify(next) !== JSON.stringify(manifest);
-    if (manifestChanged) writeManifestAtomic(manifestFilePath, next, manifestDeps);
+    if (manifestChanged) {
+      mkdirTracked(path.dirname(manifestFilePath), root, createdDirs);
+      writeManifestAtomic(manifestFilePath, next, manifestDeps);
+    }
   } catch (err) {
     const notRemoved = rollback(root, createdPaths, createdDirs, rm);
+    undoSettingsOnRollback(root, writtenSettings, notRemoved);
     // codegraph only runs when `.codegraph/` is absent, so one it made is this run's alone, whatever
     // the old manifest says about an earlier directory (T4b, Codex P2).
     if (codegraphCreatedThisRun) {
@@ -1414,6 +1576,68 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
   // reports (T4b, R2-uptodate-conflates-reported-with-changed).
   const upToDate = !manifestChanged && createdPaths.length === 0 && !codegraphCreatedThisRun;
   return { code: 0, root, manifestPath: manifestFilePath, actions, manifest: next, version, upToDate };
+}
+
+/** The manifest's entry of the hook `hook`, found by its name under the hooks path. */
+function recordedHook(manifest, hook) {
+  return manifest.files.find((f) => f.path.split('/').pop() === hook.name);
+}
+
+/** `writeHookGate` for a clone that has its manifest: the hook and any folder made for it are recorded in
+ * `manifest` itself. */
+function writeHookInto(root, manifest, hook, { spawn, writeFile, createdPaths, createdDirs, actions }) {
+  const reportedDirs = [];
+  writeHookGate(root, spawn, writeFile, { createdPaths, createdDirs, reportedDirs, files: manifest.files, actions }, hook);
+  for (const { absolute, isWorkingTree } of reportedDirs) {
+    const dirEntry = manifestEntry(root, absolute, isWorkingTree);
+    manifest.dirs = manifest.dirs ?? [];
+    if (!manifest.dirs.some((d) => d.path === dirEntry.path && !!d.gitDir === !!dirEntry.gitDir)) manifest.dirs.push(dirEntry);
+  }
+}
+
+/** The push check of a clone that has its manifest: written where the Codex review is on and no record of it
+ * is there, written again where its record is and the file is gone (`restoreRecordedHook`), and taken away
+ * where the review is off, only while it holds what was written; a hook somebody changed is theirs. */
+function syncPrePush(root, manifest, gitBases, wanted, { spawn, writeFile, rm, createdPaths, createdDirs, actions }) {
+  const entry = recordedHook(manifest, HOOKS.prePush);
+  if (wanted && entry) {
+    restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, createdDirs, actions, HOOKS.prePush);
+  } else if (wanted) {
+    writeHookInto(root, manifest, HOOKS.prePush, { spawn, writeFile, createdPaths, createdDirs, actions });
+  } else if (entry) {
+    const abs = resolveManifestEntryPath(root, entry);
+    const there = fs.existsSync(abs);
+    if (there && !(fs.lstatSync(abs).isFile() && matchesRecordedHash(fs.readFileSync(abs, 'utf8'), entry.sha256))) {
+      actions.push(kept(entry.path, 'changed since it was written; the Codex review is off here, so remove it yourself'));
+      return;
+    }
+    if (there) rm(abs, { force: true });
+    manifest.files = manifest.files.filter((f) => f !== entry);
+    actions.push(there ? { kind: 'removed', path: entry.path } : { kind: 'alreadyGone', path: entry.path });
+  }
+}
+
+/** The manifest's `settings`, with the format that a copy reading them must know; both go when no key is
+ * left, so a manifest with nothing of the switches stays one that any copy reads. */
+function setSettings(manifest, records) {
+  if (records.length > 0) {
+    manifest.format = MANIFEST_FORMAT;
+    manifest.settings = records;
+  } else {
+    delete manifest.format;
+    delete manifest.settings;
+  }
+}
+
+/** A declared `off` takes the index away, only when the manifest says the harness made it. */
+function removeRecordedIndex(root, manifest, rm, actions) {
+  if (manifest.codegraph?.createdDir !== true) {
+    actions.push({ kind: 'kept', path: '.codegraph', reason: 'the code map is declared off, but js-harness did not make this index' });
+    return;
+  }
+  rm(codegraphDirPath(root), { recursive: true, force: true });
+  manifest.codegraph = { ...NO_INDEX };
+  actions.push({ kind: 'removed', path: '.codegraph' });
 }
 
 /** Where a repository keeps what `init` leaves: the committed `harness.json` and this clone's project
@@ -1461,15 +1685,26 @@ function readPin(harnessJsonPath) {
   return { pin };
 }
 
+/** Whether the project manifest at `manifestPath` is one `functions apply` wrote, holding the switches and no
+ * gate (its `scope`). A manifest that cannot be read is not: `sync` and `uninstall` say what is wrong with it. */
+function holdsFunctionsOnly(manifestPath) {
+  try {
+    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'))?.scope === 'functions';
+  } catch {
+    return false;
+  }
+}
+
 /** Where a folder stands, read-only (T5 design): what the TUI's menu and `status` both branch on. Writes
  * nothing, ever, and takes only `deps.spawn` (for `git`). One of:
  * - `{ kind: 'noSuchDirectory', cwd }`
  * - `{ kind: 'notGit' }` — outside any git repository.
  * - `{ kind: 'notInitialized', root }` — a repository `init` never touched (no `harness.json`, no manifest).
- * - `{ kind: 'initialized', root, pin, harnessJsonPath, manifestPath, manifestPresent }` — `manifestPresent`
- *   is false in a fresh clone of an initialized project, until `sync` sets it up.
+ * - `{ kind: 'initialized', root, pin, harnessJsonPath, manifestPath, manifestPresent, functionsOnly }` —
+ *   `manifestPresent` is false in a fresh clone of an initialized project, until `sync` sets it up;
+ *   `functionsOnly` is true where the manifest holds only what `functions apply` wrote.
  * - `{ kind: 'staleManifest', root, manifestPath }` — a manifest survives without `harness.json`.
- * - `{ kind: 'noPin', root, harnessJsonPath, manifestPath, manifestPresent }` — `harness.json` is an object
+ * - `{ kind: 'noPin', root, harnessJsonPath, manifestPath, manifestPresent, functionsOnly }` — `harness.json` is an object
  *   with no `version`: a project with no pin.
  * - `{ kind: 'invalidHarnessJson', root, harnessJsonPath, reason }` — the pin is unusable, for the same
  *   reasons `syncProject` gives. */
@@ -1486,8 +1721,9 @@ export function projectLocation(cwd, deps = {}) {
 
   const pinned = readPin(harnessJsonPath);
   if (pinned.invalid) return { kind: 'invalidHarnessJson', root, harnessJsonPath, reason: pinned.invalid };
-  if (pinned.noPin) return { kind: 'noPin', root, harnessJsonPath, manifestPath: manifestFilePath, manifestPresent };
-  return { kind: 'initialized', root, pin: pinned.pin, harnessJsonPath, manifestPath: manifestFilePath, manifestPresent };
+  const manifest = { manifestPath: manifestFilePath, manifestPresent, functionsOnly: manifestPresent && holdsFunctionsOnly(manifestFilePath) };
+  if (pinned.noPin) return { kind: 'noPin', root, harnessJsonPath, ...manifest };
+  return { kind: 'initialized', root, pin: pinned.pin, harnessJsonPath, ...manifest };
 }
 
 /** Runs `js-harness sync` against the git repository at `cwd`'s top-level: moves the project to the
@@ -1539,4 +1775,42 @@ export function syncProject(cwd, version, deps = {}) {
     return { ...result, version, setUp: true };
   }
   return syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps);
+}
+
+/** Runs `js-harness functions apply` against the git repository at `cwd`'s top-level: makes this clone what
+ * the switches of its `harness.json` ask (odd/tasks/on-demand-functions.md), with no pin needed, so a project
+ * whose `harness.json` holds no `version` (this repository's) can apply them too. It writes nothing else of
+ * `init` or `sync`: no gate is written again and no version is recorded. Returns one of:
+ * - `{ code: 1, noSuchDirectory: true, cwd }` / `{ code: 1, notGitRepo: true }` — as `initProject`;
+ * - `{ code: 1, notInitialized: true, root }` — no `harness.json`, so no switch to apply;
+ * - `{ code: 1, malformedManifest | newerManifest ... }` — as `syncProject`;
+ * - `{ code: 0, root, actions, manifest, manifestPath, upToDate }`. Where no project manifest exists, one is
+ *   written that holds only what was applied (its `files` empty), and only when something was; `uninstall`
+ *   then undoes that and never touches a `harness.json` it did not write.
+ * Throws `InitWriteError` when a write step fails, as `syncProject` does. */
+export function applyProjectFunctions(cwd, version, deps = {}) {
+  const spawn = deps.spawn ?? spawnSync;
+  const platform = deps.platform ?? process.platform;
+  const writeFile = deps.writeFile ?? fs.writeFileSync;
+  const rm = deps.rm ?? fs.rmSync;
+  const manifestDeps = { open: deps.open, write: deps.write, close: deps.close };
+
+  if (!fs.existsSync(cwd)) return { code: 1, noSuchDirectory: true, cwd };
+  const root = gitTopLevel(cwd, spawn);
+  if (!root) return { code: 1, notGitRepo: true };
+
+  const { manifestFilePath, harnessJsonPresent, manifestPresent } = projectFiles(root, spawn);
+  if (!harnessJsonPresent) return { code: 1, notInitialized: true, root };
+
+  const steps = { sync: false, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps };
+  if (manifestPresent) {
+    const read = readRecorded(root, manifestFilePath, spawn);
+    if (read.code) return read;
+    return updateRecorded(root, read.manifest, read.gitBases, steps);
+  }
+  const indexThere = fs.existsSync(codegraphDirPath(root));
+  // `scope` says this manifest holds the switches alone, no gate: `status` says so and `sync` sets the rest up.
+  const codegraph = indexThere ? { createdDir: false, status: 'exists' } : { ...NO_INDEX };
+  const empty = { version, scope: 'functions', files: [], kept: [], codegraph, dirs: [] };
+  return updateRecorded(root, empty, gitDirs(root, spawn), steps);
 }

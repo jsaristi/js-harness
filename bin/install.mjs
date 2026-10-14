@@ -13,6 +13,7 @@ import {
   InitWriteError,
   cleanupClause,
   staleManifestMessage,
+  newerManifestMessage,
   invalidHarnessJsonMessage,
   howToPinClause,
 } from './lib/project.mjs';
@@ -119,6 +120,10 @@ function reportUninstallProject(result) {
     );
     return 1;
   }
+  if (result.newerManifest) {
+    console.error(newerManifestMessage(result));
+    return 1;
+  }
   if (result.malformedManifest) {
     console.error(
       `project manifest at ${result.manifestPath} is malformed` + (result.reason ? `: ${result.reason}` : ''),
@@ -197,6 +202,9 @@ function logSyncProjectAction(action) {
     case 'ran':
       console.log(`ran ${action.path}`);
       break;
+    case 'removed':
+      console.log(`removed ${action.path}`);
+      break;
     case 'versionRecorded':
       console.log(`recorded ${action.to} in the manifest (was ${action.from ?? 'unrecorded'})`);
       break;
@@ -235,6 +243,10 @@ function reportSyncProject(result) {
   }
   if (result.staleManifest) {
     console.error(staleManifestMessage(result.manifestPath));
+    return 1;
+  }
+  if (result.newerManifest) {
+    console.error(newerManifestMessage(result));
     return 1;
   }
   if (result.malformedManifest) {

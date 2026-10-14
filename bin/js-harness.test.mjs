@@ -82,6 +82,7 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
 
 test('functions is listed in --help and wired through the dispatcher', () => {
   assert.match(run(['--help']).stdout, /functions {3}Show each function this project can turn off and on/);
+  assert.match(run(['--help']).stdout, /functions apply makes this clone what they ask.*functions set <name> <value>/);
   const result = run(['functions', '--no-such-flag']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown argument: --no-such-flag/);
