@@ -514,3 +514,34 @@ L11 (2026-10-14) The lead's message of 06:03, a claim of the lead: do not stop f
 merged, merge `origin/main` into PR 130 once, pass the gate, push and tell the lead; the owed
 checks become tasks (T10, T11). Done: T10 to T12 added; PR 124 merged at 06:06; `origin/main`
 merged as `5b37fac` in a gate turn (tests passed in WSL2); G2 designed (section above), next C1.
+
+L12 (2026-10-14) State at the context pause (87 percent by get_usage). PR #130
+(`feat/eval-model-per-run`, G5, G6, G3 and the fix) holds main and is MERGEABLE, waiting for the
+lead. G2 goes on `feat/eval-arms`, cut from it at `258bf6e`: C1 `fa39244` (`evals/arms.mjs`,
+`parseArm`, `armNames`, `ArmError`), C2 (`--configs` takes arms beside their base, a run naming an
+arm stops with exit 2 until the filters exist, `--plan` states them) committing under the gate.
+Next: C3a, the template filters of paths and JSON keys (`seedFromTemplate(dir, { without })` and
+its Codex twin, after the seed; each component removes exactly its pieces, the rest byte-equal; a
+component absent from the template refused), then C3b (marker blocks of the global CLAUDE.md and
+Codex AGENTS.md with a depth counter; TOML tables), C4 (wiring, `doc.arms` pins, the exit-2 stop
+lifted, G6's `config === 'current'` checks widened to every template-built config), C5 (report arms
+section, F5/F6 output byte-identical first), C6 (probe, `minimal-with` beyond MCP), C7 (documents).
+No branch for G2 is pushed yet; push it with a pull request after C4 at the latest. Owed: T10,
+T11; Codex review of the G2 slice before its push.
+
+L13 (2026-10-14) The lead at 13:58, a claim: work on without waiting for a compaction, never end a
+turn waiting for a message (arm a background wait), merge main into #130 again, then G2's review,
+push and PR. Done at 14:15: `origin/main` `c33b7bf` merged into #130 as `d2367dc` in a gate turn,
+pushed. The lead at 14:21, citing his decision (the lead's transcript ffe99ebf, line 5394, not read
+here): a code pull request now merges on a green GitHub run against the main it lands on; main is
+not merged into #130 again, only on a conflict or when its code is needed. G2's Codex review
+(`258bf6e..`, about 130,000 input tokens estimated, allowance 300,000) runs in a gate turn.
+
+L14 (2026-10-14, 14:44 by `date`) PAUSED by the lead's message of 14:45, citing his order (the
+lead's transcript ffe99ebf, lines 5906 and 5853, not read here): everything pauses for the
+corrections; G2 is pushed with its pull request if committed and reviewed, else parked. At the
+pause: C1 `fa39244` and C2 `21a06bf` committed; their Codex review was running in a gate turn,
+chained to push `feat/eval-arms` and open its pull request (based on #130) only with a review
+record and no P0 to P2 finding. Resume when origin/main's `docs/todo.md` holds "JH 14 resume"
+(the wait armed at the pause); then read this Log to its end, check the review's outcome and the
+pull request, and go on with C3a.

@@ -7,14 +7,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, mergeReviewSaid, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
+import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { rangeDiff } from './lib/codex-review-coverage.mjs';
 import { numstatFiles } from './lib/codex-review-parts.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
-import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
 import * as reviewRuns from './lib/codex-review-runs.mjs';
 import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
@@ -329,11 +330,15 @@ function fakeCodex(stdout, answer = {}, probe = PROBE_OK, said = NO_FINDINGS) {
 
 const RUN_ID = '00000000-0000-4000-8000-000000000001';
 
+/** The environment of a turn of the gate lock, the one a test runs the command in unless it says otherwise. */
+const IN_TURN = Object.freeze({ JS_HARNESS_GATE_HELD: '1' });
+
 /** Runs the command with output captured; `now`, the monotonic clock and the run's id are fixed so
  * the record is comparable, and the platform is fixed to linux unless a test says otherwise. The OS
  * home is the file's fake one unless a test gives its own `homedir`. `shown` is what the review passed
- * through to the user, `out` what the command itself logged. */
-async function run(argv, extra = {}, env = {}) {
+ * through to the user, `out` what the command itself logged. The environment is that of a turn of the gate
+ * lock (`IN_TURN`), where reviews are run, unless a test gives its own: then it is out of one. */
+async function run(argv, extra = {}, env = IN_TURN) {
   const out = [];
   const err = [];
   const shown = [];
@@ -523,21 +528,113 @@ test('on Windows the child PATH drops the WindowsApps entries and keeps the rest
   const { root, base } = makeRepo();
   for (const [flags, added] of sessionEnvs()) {
     const fake = fakeCodex(reviewed(root, base));
-    const env = { Path: 'C:\\Windows;C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\;D:\\bin', SystemRoot: 'C:\\Windows' };
+    const env = { Path: 'C:\\Windows;C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\;D:\\bin', SystemRoot: 'C:\\Windows', ...IN_TURN };
     await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], { ...fake, platform: 'win32' }, env);
-    assert.deepEqual(fake.calls[0].opts.env, { Path: 'C:\\Windows;D:\\bin', SystemRoot: 'C:\\Windows', ...added }, flags.join(' '));
+    assert.deepEqual(fake.calls[0].opts.env, { Path: 'C:\\Windows;D:\\bin', SystemRoot: 'C:\\Windows', ...IN_TURN, ...added }, flags.join(' '));
     assert.equal(env.Path.includes('WindowsApps'), true, 'the caller\'s environment is not mutated');
   }
 });
 
-test('off Windows the environment is passed through untouched, but for the home of the run', async () => {
+test('off Windows, in a turn of the gate lock, the environment is passed through untouched, but for the home of the run', async () => {
   const { root, base } = makeRepo();
   for (const [flags, added] of sessionEnvs()) {
     const fake = fakeCodex(reviewed(root, base));
-    const env = { PATH: '/usr/bin:/x/Microsoft/WindowsApps' };
+    const env = { PATH: '/usr/bin:/x/Microsoft/WindowsApps', ...IN_TURN };
     await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake, env);
     assert.deepEqual(fake.calls[0].opts.env, { ...env, ...added }, flags.join(' '));
-    assert.deepEqual(env, { PATH: '/usr/bin:/x/Microsoft/WindowsApps' }, 'the caller\'s environment is not mutated');
+    assert.deepEqual(env, { PATH: '/usr/bin:/x/Microsoft/WindowsApps', ...IN_TURN }, 'the caller\'s environment is not mutated');
+  }
+});
+
+// Out of a turn of the gate lock (odd/tasks/faster-check.md, part 2): the gate already ran the suite on the
+// range, so Codex's own `node --test` is refused by a preload, and the review is asked with this command's own
+// prompt, which says so.
+
+test('out of a turn of the gate lock Codex runs with the preload that refuses node --test, after the NODE_OPTIONS it was given, and is asked with the own prompt that says the suite ran', async () => {
+  const { root, base } = makeRepo();
+  for (const [platform, env, key] of [['linux', { PATH: '/usr/bin', NODE_OPTIONS: '--max-old-space-size=4096' }, 'NODE_OPTIONS'], ['win32', { Path: 'C:\\Windows', Node_Options: '--max-old-space-size=4096' }, 'NODE_OPTIONS']]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fake, platform }, env);
+    assert.equal(result.code, 0, result.err);
+    const { opts, child } = fake.calls[0];
+    assert.equal(opts.env[key], noTestNodeOptions('--max-old-space-size=4096'), platform);
+    // On Windows a name is one in any case: the one Codex gets replaces the one given.
+    assert.deepEqual(Object.keys(opts.env).filter((name) => /^node_options$/i.test(name)), [key], platform);
+    assert.equal(opts.stdio[0], 'pipe', 'the own prompt goes on stdin');
+    assert.ok(child.received.text.includes(SUITE_RAN), child.received.text);
+    assert.equal(readCodexReviewRuns(root).at(-1).prompt, 'own');
+  }
+});
+
+test('out of a turn a review asked for with --prompt codex is asked with the own prompt all the same, and says so', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--prompt', 'codex', '--cwd', root], fake, { PATH: '/usr/bin' });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls[0].opts.stdio[0], 'pipe');
+  assert.ok(result.out.split('\n').includes(OWN_OUT_OF_TURN), result.out);
+});
+
+test('in a turn of the gate lock nothing of that is added: no preload, the prompt that was asked for, and no line about it', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake, { PATH: '/usr/bin', ...IN_TURN });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls[0].opts.env.NODE_OPTIONS, undefined);
+  assert.equal(fake.calls[0].opts.stdio[0], 'ignore');
+  assert.equal(result.out.includes(OWN_OUT_OF_TURN), false, result.out);
+  // With the own prompt asked for in a turn, the sentence is not in it: there a test can run.
+  const own = fakeCodex(reviewed(root, base));
+  assert.equal((await run(['--base', 'HEAD~1', '--again', '--prompt', 'own', '--cwd', root], own)).code, 0);
+  assert.equal(own.calls[0].child.received.text.includes(SUITE_RAN), false);
+});
+
+/** A `node --test` Codex ran out of a turn, as the preload ends it. */
+const REFUSED = cmd('node --test bin', NO_TEST_EXIT, `${NO_TEST_LINE}\n`);
+
+/** An answer that calls the patch incorrect and finds nothing of P0 to P2: what a review says of a range whose
+ * tests it could not run. */
+const ONLY_THE_REFUSAL = {
+  findings: [],
+  overall_correctness: 'patch is incorrect',
+  overall_explanation: 'The tests could not be run, so the change is not shown to work.',
+  overall_confidence_score: 0.4,
+};
+
+test('out of a turn a review whose only complaint is the refused node --test owes no correction: the run line says why, the record marks it, and the next range is a review as any other', async () => {
+  const { root, base, head } = makeRepo();
+  const events = jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), REFUSED, msg(FINDINGS), done);
+  const result = await run(['--base', base, '--cwd', root], fakeCodex(events, {}, PROBE_OK, ONLY_THE_REFUSAL), { PATH: '/usr/bin' });
+  assert.equal(result.code, 0, result.err);
+  assert.ok(result.out.split('\n').includes(EXCUSED_LINE), result.out);
+  assert.equal(readCodexReviews(root).at(-1).excused, 'refused-tests');
+  const line = readCodexReviewRuns(root).at(-1);
+  assert.equal(line.answer.excused, 'refused-tests');
+  assert.equal(line.answer.verdict, 'incorrect', 'the verdict is kept as Codex gave it');
+  // The count of reviews let through this way, read from the records.
+  assert.equal(readCodexReviews(root).filter((one) => one.excused === 'refused-tests').length, 1);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'three', 'utf8');
+  git(root, 'commit', '-am', 'three');
+  const next = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head)), randomUUID: () => '00000000-0000-4000-8000-000000000002' }, { PATH: '/usr/bin' });
+  assert.equal(next.code, 0, next.err);
+  assert.equal(next.out.includes('is a recheck'), false, next.out);
+  assert.equal(readCodexReviews(root).at(-1).recheckOf, undefined);
+});
+
+test('the refusal excuses nothing beside another failed command, a finding of P0 to P2, or in a turn of the gate lock', async () => {
+  const cases = [
+    ['another command failed', (root, base) => jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), REFUSED, cmd('rg missing', 2), msg(FINDINGS), done), ONLY_THE_REFUSAL, { PATH: '/usr/bin' }],
+    ['a finding blocks', (root, base) => jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), REFUSED, msg(FINDINGS), done), null, { PATH: '/usr/bin' }],
+    ['in a turn', (root, base) => jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), REFUSED, msg(FINDINGS), done), ONLY_THE_REFUSAL, IN_TURN],
+  ];
+  for (const [what, events, said, env] of cases) {
+    const { root, base } = makeRepo();
+    const answer = said ?? { ...answerWith(root), overall_correctness: 'patch is incorrect' };
+    const result = await run(['--base', base, '--cwd', root], fakeCodex(events(root, base), {}, PROBE_OK, answer), env);
+    assert.equal(result.code, 0, `${what}: ${result.err}`);
+    assert.equal(result.out.includes(EXCUSED_LINE), false, what);
+    assert.equal(readCodexReviews(root).at(-1).excused, undefined, what);
+    assert.equal(readCodexReviewRuns(root).at(-1).answer.excused, undefined, what);
   }
 });
 
@@ -1230,7 +1327,7 @@ test('codexArgs: the lean argv, token by token, on Windows and elsewhere', () =>
 test('--session lean spawns Codex with the lean argv, from the repository root, in the same environment but for its home', async () => {
   const { root, base } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
-  const env = { PATH: '/x', HOME: '/home/x' };
+  const env = { PATH: '/x', HOME: '/home/x', ...IN_TURN };
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fake, env);
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 1);
@@ -1239,7 +1336,7 @@ test('--session lean spawns Codex with the lean argv, from the repository root, 
   assert.equal(fs.realpathSync(fake.calls[0].opts.cwd), fs.realpathSync(root));
   // A home of its own, named after the run, and nothing else added or taken away.
   assert.deepEqual(fake.calls[0].opts.env, { ...env, CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) });
-  assert.deepEqual(env, { PATH: '/x', HOME: '/home/x' }, 'the caller\'s environment is not mutated');
+  assert.deepEqual(env, { PATH: '/x', HOME: '/home/x', ...IN_TURN }, 'the caller\'s environment is not mutated');
   // The probe asks only for the version, which no home changes, so it runs before one is made.
   assert.deepEqual(fake.probes[0].args, ['--version']);
   assert.deepEqual(fake.probes[0].opts.env, env);
@@ -1248,7 +1345,7 @@ test('--session lean spawns Codex with the lean argv, from the repository root, 
 test('without --session the review runs in the lean session: the lean argv, in a Codex home of the run\'s own, and the run line says so', async () => {
   const { root, base, head } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
-  const env = { PATH: '/x', HOME: '/home/x' };
+  const env = { PATH: '/x', HOME: '/home/x', ...IN_TURN };
   const seen = [];
   const result = await run(['--base', 'HEAD~1', '--cwd', root], watching(fake, (home) => seen.push(fs.existsSync(path.join(home, 'auth.json')))), env);
   assert.equal(result.code, 0, result.err);
@@ -1273,7 +1370,7 @@ test('`--session lean` is still read and means what no flag means: the same argv
     const once = async (flags) => {
       const during = {};
       const fake = watching(fakeCodex(reviewed(root, base)), (home) => Object.assign(during, { home, entries: listed(home), links: fs.statSync(mine.auth).nlink }));
-      const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--home', state, '--cwd', root], { ...fake, platform, homedir: mine.homedir }, { PATH: '/x' });
+      const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--home', state, '--cwd', root], { ...fake, platform, homedir: mine.homedir }, { PATH: '/x', ...IN_TURN });
       const { command, args, opts } = fake.calls[0];
       return { code: result.code, err: result.err, out: result.out, shown: result.shown, command, args, env: opts.env, stdio: opts.stdio, shell: opts.shell, during, left: [listed(state), fs.statSync(mine.auth).nlink] };
     };
@@ -1542,7 +1639,7 @@ test('a CODEX_HOME the user set is where the login is taken from, and the child 
   const fake = watching(fakeCodex(reviewed(root, base)), () => {
     links = fs.statSync(path.join(elsewhere, 'auth.json')).nlink;
   });
-  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir }, { CODEX_HOME: elsewhere });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir }, { CODEX_HOME: elsewhere, ...IN_TURN });
   assert.equal(result.code, 0, result.err);
   assert.equal(links, 2, 'the login of the home the user named');
   assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(mine.homes, RUN_ID));
@@ -1567,10 +1664,10 @@ test('on Windows a CODEX_HOME spelled in another case is the home whose login is
   const fake = watching(fakeCodex(reviewed(root, base)), () => {
     links = { named: fs.statSync(other).nlink, default: fs.statSync(mine.auth).nlink };
   });
-  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform: 'win32', homedir: mine.homedir }, { Codex_Home: elsewhere, SystemRoot: 'C:\\Windows' });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform: 'win32', homedir: mine.homedir }, { Codex_Home: elsewhere, SystemRoot: 'C:\\Windows', ...IN_TURN });
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(links, { named: 2, default: 1 }, 'the login of the home the variable names, not the one under the OS home');
-  assert.deepEqual(fake.calls[0].opts.env, { SystemRoot: 'C:\\Windows', CODEX_HOME: path.join(mine.homes, RUN_ID) });
+  assert.deepEqual(fake.calls[0].opts.env, { SystemRoot: 'C:\\Windows', ...IN_TURN, CODEX_HOME: path.join(mine.homes, RUN_ID) });
   assert.equal(fs.statSync(other).nlink, 1);
 });
 
@@ -1584,10 +1681,10 @@ test('off Windows a variable spelled in another case is another variable: the lo
     const fake = watching(fakeCodex(reviewed(root, base)), () => {
       links = { named: fs.statSync(other).nlink, default: fs.statSync(mine.auth).nlink };
     });
-    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fake, platform, homedir: mine.homedir }, { Codex_Home: elsewhere });
+    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fake, platform, homedir: mine.homedir }, { Codex_Home: elsewhere, ...IN_TURN });
     assert.equal(result.code, 0, `${platform}: ${result.err}`);
     assert.deepEqual(links, { named: 1, default: 2 }, platform);
-    assert.deepEqual(fake.calls[0].opts.env, { Codex_Home: elsewhere, CODEX_HOME: path.join(mine.homes, RUN_ID) }, platform);
+    assert.deepEqual(fake.calls[0].opts.env, { Codex_Home: elsewhere, ...IN_TURN, CODEX_HOME: path.join(mine.homes, RUN_ID) }, platform);
     assert.equal(fake.calls[0].command, 'codex', `${platform}: launched as off Windows, with no shell`);
     assert.equal(fs.statSync(mine.auth).nlink, 1, platform);
   }
@@ -1608,7 +1705,7 @@ test('where the lean homes go: --home, else JS_HARNESS_HOME, else the OS home; t
     const fake = watching(fakeCodex(reviewed(root, base)), () => {
       links = fs.statSync(mine.auth).nlink;
     });
-    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
+    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, { ...env, ...IN_TURN });
     assert.equal(result.code, 0, result.err);
     assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(leanHomesDir(expected), RUN_ID));
     assert.equal(links, 2, 'the login of the real Codex home, wherever the state dir is');
@@ -1666,7 +1763,7 @@ test('an empty --home or JS_HARNESS_HOME counts as unset: the next source is use
     ];
     for (const [flags, env, expected] of cases) {
       const fake = fakeCodex(reviewed(root, base));
-      const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
+      const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, { ...env, ...IN_TURN });
       const name = JSON.stringify([flags, env]);
       assert.equal(result.code, 0, `${name}: ${result.err}`);
       assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(leanHomesDir(expected), RUN_ID), name);
@@ -2539,7 +2636,7 @@ test('the answer is read from the home of the run and from no other: what the us
   writeRollouts(named, reviewSession(answerWith(root)));
   for (const env of [{}, { CODEX_HOME: named }]) {
     // This review found nothing, and says so in the home of its own run.
-    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir }, env);
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir }, { ...env, ...IN_TURN });
     assert.equal(result.code, 0, result.err);
     assert.match(result.out, /^Codex's verdict: the patch is correct/m);
     assert.equal(result.out.split('\n').some((line) => FINDING_LINE.test(line)), false, result.out);
@@ -2742,7 +2839,7 @@ test('what a review spent and ran on is read from the home of the run and from n
   for (const env of [{}, { CODEX_HOME: named }]) {
     // The home of this run holds the answer of one request and no total: nothing is known of what it spent,
     // and that is what is said.
-    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent)), homedir: mine.homedir }, env);
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent)), homedir: mine.homedir }, { ...env, ...IN_TURN });
     assert.deepEqual([result.code, result.err], [0, '']);
     const logged = readCodexReviewRuns(root).at(-1);
     assert.deepEqual(logged.usage, UNKNOWN_USAGE);
@@ -2780,7 +2877,7 @@ test('a run line says which model and effort its session really ran with, read f
 // --- one model: a review whose session ran on anything but what the command passed does not stand ---
 
 // What a refusal over the model or the effort ends with, after the two it names.
-const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nRerun the review in a turn of the gate lock: `js-harness gate -- js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
+const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nRerun the review: `js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
 
 /** A lean review of `root` that showed the whole patch, rendered `FINDINGS` and answered with three
  * findings, in a session whose own rollout file says it ran with `ran` (a `turnContext`, or none). */
@@ -2851,7 +2948,7 @@ test('a lean review whose session names no model does not stand: a review that c
     assert.equal(
       result.err,
       `Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n` +
-        'Rerun the review in a turn of the gate lock: `js-harness gate -- js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.',
+        'Rerun the review: `js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.',
     );
     // Nothing of the answer, as for a session that ran on another model: nobody can say whose review it is.
     assert.equal(result.shown, '', 'what Codex rendered is not passed through');
@@ -3675,6 +3772,30 @@ test('a range that failed at its last part is run again from that part: the part
   assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(4), runs: [idOf(1), idOf(2), idOf(4)] }]);
 });
 
+test('out of a turn, a part whose incorrect was excused and that is kept for the next run of its range keeps the mark: the record of the range still says excused', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ids = runIds();
+  const outOfTurn = { PATH: '/usr/bin' };
+  // Part 1 ran `git diff` of its file and a `node --test` the preload refused, and blamed only the refusal.
+  const refusedPart = jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- a.txt`, 0, partDiff(root, base, head, 'a.txt')), REFUSED, msg(FINDINGS), done);
+  const failed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], {
+    ...fakeCodexInParts(
+      { stdout: refusedPart, said: ONLY_THE_REFUSAL },
+      { stdout: partShown(root, base, head, 'b.txt') },
+      { stdout: partShown(root, base, head, 'c.txt'), answer: { status: 9 } },
+    ),
+    platform: process.platform,
+    randomUUID: ids,
+  }, outOfTurn);
+  assert.equal(failed.code, 9, failed.err);
+  assert.equal(readCodexReviews(root).length, 0);
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'c.txt') });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids }, outOfTurn);
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1, 'parts 1 and 2 were kept');
+  assert.equal(readCodexReviews(root).at(-1).excused, 'refused-tests');
+});
+
 test('a part that passed while a tracked file was not as the range is not kept, and the parts after it are not started: the next run of the range asks every part', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ids = runIds();
@@ -4127,6 +4248,21 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   const refused = await run(['--base', 'HEAD~1', '--again', '--fresh', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...other, randomUUID: runIds() });
   assert.equal(refused.code, 1);
   assert.match(refused.err, /showed 0 of 2 changed lines of part 2 of 3/);
+});
+
+// T1 of odd/tasks/commands-and-doctor.md: before it, `--base X --bogus` ran a whole review.
+test('a flag it does not know is a usage error that names it, in a repository with a range to review, and nothing runs', async () => {
+  const { root, base } = makeRepo();
+  for (const flags of [['--bogus'], ['--plan', '--help'], ['--session', 'lean', '-x']]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 2, flags.join(' '));
+    assert.match(result.err, new RegExp(`^unknown argument: ${flags.at(-1)}\\n`), flags.join(' '));
+    assert.match(result.err, /Usage: js-harness codex-review /);
+    assert.deepEqual([fake.calls.length, fake.probes.length], [0, 0]);
+  }
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
 });
 
 test('--part-lines takes a positive integer: anything else is a usage error, and nothing runs', async () => {
@@ -4864,12 +5000,13 @@ test('an injected `everyFile` makes the run read every file of its range, as eve
   const inParts = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '2', ...all.home, '--cwd', root], { ...all.deps, everyFile: true });
   assert.equal(inParts.out.split('\n')[0], `Plan of the Codex review of ${short}: ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, 4 parts, 10 changed lines in 4 files.`);
   // It is injected, for the comparison of the configurations, whose cells stay what they measured. Nothing
-  // on the command line is it: the usage names no such flag, and one spelled after it changes nothing.
+  // on the command line is it: the usage names no such flag, and one spelled after it is refused.
   assert.doesNotMatch((await run(['--cwd', root])).err, /every.?file/i);
   for (const flag of ['--every-file', '--everyFile', '--read-every-file']) {
     const nothing = startsNothing(root);
+    // Refused since T1 of odd/tasks/commands-and-doctor.md, where it was taken and dropped: no plan is printed.
     const plan = await run(['--base', 'HEAD~1', '--again', '--plan', flag, ...nothing.home, '--cwd', root], nothing.deps);
-    assert.deepEqual([plan.code, plan.out.split('\n')[0], plan.out.split('\n')[2]], [0, `Plan of the Codex review of ${short}: ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, 1 part, 4 changed lines in 2 files.`, LEFT_OUT_LINE], flag);
+    assert.deepEqual([plan.code, plan.out, plan.err.split('\n')[0]], [2, '', `unknown argument: ${flag}`], flag);
   }
 });
 
@@ -5750,7 +5887,7 @@ test('injected extra configuration is added to the argv, before what is reviewed
   assert.equal(windows.calls[0].command, windowsCommandLine('codex', [...leanArgv(base, 'win32').slice(0, -2), ...asFlags(CODEGRAPH_CONFIG), '--base', base]));
 });
 
-test('no flag reaches what is injected: the usage names none of the seams, and a flag named after one changes nothing', async () => {
+test('no flag reaches what is injected: the usage names none of the seams, and a flag named after one is refused', async () => {
   const { root, base } = makeRepo();
   const usage = await run(['--cwd', root], fakeCodex(''));
   assert.equal(usage.code, 2);
@@ -5766,11 +5903,14 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
     STARTS_WHERE_RECORDS_END,
   ]);
   const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
+  // Since T1 of odd/tasks/commands-and-doctor.md a flag named after a seam is refused before anything starts,
+  // where it was taken and dropped.
   for (const flags of [[], ['--session', 'lean']]) {
     const lean = fakeCodex(reviewed(root, base));
-    assert.equal((await run(['--base', 'HEAD~1', '--again', ...flags, ...seams, '--cwd', root], lean)).code, 0, flags.join(' '));
-    assert.deepEqual(lean.calls[0].args, leanArgv(base), flags.join(' '));
-    assert.equal(readCodexReviewRuns(root).at(-1).effort, REVIEW_EFFORT, flags.join(' '));
+    const refused = await run(['--base', 'HEAD~1', '--again', ...flags, ...seams, '--cwd', root], lean);
+    assert.equal(refused.code, 2, flags.join(' '));
+    assert.match(refused.err, /^unknown argument: --effort\n/, flags.join(' '));
+    assert.deepEqual([lean.calls.length, lean.probes.length], [0, 0], flags.join(' '));
   }
   // The seam that ran the removed session in a seeded copy of the Codex home is gone with it: a caller that
   // still hands it over gets the one session there is, in a home that holds the login and nothing else.
@@ -5786,7 +5926,9 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   assert.equal(readCodexReviewRuns(root).at(-1).session, 'lean');
 });
 
-test('nothing on the command line selects another model or effort: the usage names no flag for either, and one spelled as Codex spells it is not passed on', async () => {
+// Since T1 of odd/tasks/commands-and-doctor.md each try is refused before anything starts, where it was
+// taken and dropped: the run that would have carried it never begins.
+test('nothing on the command line selects another model or effort: the usage names no flag for either, and one spelled as Codex spells it is refused before Codex starts', async () => {
   const { root, base } = makeRepo();
   const usage = await run(['--cwd', root], fakeCodex(''));
   assert.doesNotMatch(usage.err.split('\n').find((line) => line.startsWith('Usage: ')), /model|effort|-m\b|-c\b/);
@@ -5801,14 +5943,12 @@ test('nothing on the command line selects another model or effort: the usage nam
       const fake = fakeCodex(reviewed(root, base));
       const result = await run(['--base', 'HEAD~1', '--again', ...session, ...flags, '--cwd', root], fake);
       const which = [...session, ...flags].join(' ');
-      assert.equal(result.code, 0, `${which}: ${result.err}`);
-      assert.deepEqual(fake.calls[0].args, leanArgv(base), which);
-      assert.deepEqual(modelAndEffort(fake.calls[0].args), { models: [REVIEW_MODEL], efforts: [`model_reasoning_effort="${REVIEW_EFFORT}"`] }, which);
-      assert.equal(fake.calls[0].args.some((token) => /astra|low/.test(token)), false, which);
-      const logged = readCodexReviewRuns(root).at(-1);
-      assert.deepEqual([logged.model, logged.effort], [REVIEW_MODEL, REVIEW_EFFORT], which);
+      assert.equal(result.code, 2, `${which}: ${result.err}`);
+      assert.match(result.err, new RegExp(`^unknown argument: ${flags[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n`), which);
+      assert.deepEqual([fake.calls.length, fake.probes.length], [0, 0], which);
     }
   }
+  assert.equal(readCodexReviewRuns(root).length, 0, 'no run was started, so none was logged');
 });
 
 test('onResult is handed every attempt that launched Codex: its run line, whether it was logged, and the answer as data', async () => {
@@ -5951,7 +6091,7 @@ test('reviewEvidence: inspected needs a completed turn, a final message and ever
   assert.equal(evidence.inspected, true);
   assert.equal(evidence.completed, true);
   assert.equal(evidence.review, FINDINGS);
-  assert.deepEqual(evidence.commands, [{ command: 'git diff', exitCode: 0 }]);
+  assert.deepEqual(evidence.commands, [{ command: 'git diff', exitCode: 0, refused: false }]);
   assert.deepEqual(evidence.coverage, { seen: 2, total: 2 });
   assert.deepEqual(evidence.missing, []);
   assert.deepEqual(evidence.errors, []);

@@ -26,6 +26,7 @@
 // by its files too, also when they fit in one part: that one part is asked with the text of a part, which
 // then says nothing of parts. Which files were left out, and how many, is not in the prompt.
 import { parseContract } from './contract.mjs';
+import { NO_TEST_EXIT, NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 // The version of the text `reviewPrompt` writes, kept in the run line of every review that used it, so that
 // two reviews are only compared knowing whether they were asked the same thing. Any change to the wording
@@ -162,8 +163,24 @@ function scope(from, head, part, leftOut, merge = false) {
  *
  * `merge` is for the review of a merge of the default branch, `head` the merge and `from` its first parent:
  * the command of each part is then `git show --remerge-diff` of the merge, what was written in it, and a
- * merge is always asked by its files, one part of one included. */
-export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = false }) {
+ * merge is always asked by its files, one part of one included.
+ *
+ * `suiteRan`, for a review out of a turn of the gate lock, ends the text with `SUITE_RAN`: there the gate has
+ * already run the suite on the range, and a `node --test` Codex starts is refused. */
+export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = false, suiteRan = false }) {
+  const text = promptText({ from, head, intent, part, leftOut, merge });
+  return suiteRan ? `${text}\n${SUITE_RAN}\n` : text;
+}
+
+/** What a review out of a turn of the gate lock is told of the tests (`reviewPrompt`'s `suiteRan`): a review
+ * that took the refusal for a failure called patches incorrect for it (odd/tasks/faster-check.md, part 2). */
+export const SUITE_RAN = [
+  '## The tests',
+  'The gate already ran the whole test suite on this range, in a turn of the machine\'s gate lock, before this review.',
+  `Here a \`node --test\` is refused at once, with exit ${NO_TEST_EXIT} and the line \`${NO_TEST_LINE}\`: that refusal is expected and is not a finding, nor a reason to call the patch incorrect. Read the tests instead of running them.`,
+].join('\n');
+
+function promptText({ from, head, intent, part, leftOut, merge }) {
   for (const id of [from, head]) {
     if (typeof id !== 'string' || !COMMIT_ID.test(id)) throw new Error(`The review prompt names its range by full commit id, got ${JSON.stringify(id)}.`);
   }

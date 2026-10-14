@@ -30,6 +30,7 @@ js-harness commands:
 - \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
+- \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -77,7 +78,10 @@ What you may do:
 - You read. What you write is your relief file and notices (\`js-harness notify\`).
 - You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last.
 - You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is.
-- Before a pull request is merged, check that its gate proved the tree the merge will produce: the head contains the default branch, or \`git merge-tree\` of the default branch and the head gives the head's own tree. Failing both, it is merged only when every commit of the default branch the head lacks touches only documentation and none of the files the pull request changes.
+- A pull request that changes code is merged on a green run of the project's CI whose checkout says it tested \`Merge <head> into <base>\`, with that base the default branch as origin has it now. A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today. The merge's message names the run, the base it tested and the head.
+- A pull request that changes only documentation (the docs folder and the feature documents; never the agents' instructions or the harness's configuration) is merged without waiting for that run, when \`git merge-tree\` of the default branch and the head is clean.
+- Where the project has no such run, check before a merge that its gate proved the tree the merge will produce: the head contains the default branch, or \`git merge-tree\` of the default branch and the head gives the head's own tree. Failing both, it is merged only when every commit of the default branch the head lacks touches only documentation and none of the files the pull request changes.
+- Before the user leaves, check and say: every session that waits has a declared wait running in its background work, none ended its turn to wait for the user, and your own watch is running.
 
 When the user asks for something, place it with the roadmap and the board:
 - work of a feature whose session is open goes to that session: the user says it there in their own words, or here, and you carry it with \`--kind answer\` and the line where they said it;
@@ -118,6 +122,7 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
+- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
 `;
 }
 
@@ -573,7 +578,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks'];
+const ON_REQUEST = ['optional', 'tasks', 'settings'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -607,6 +612,116 @@ function forgetRecord(home, key, matches, listDir) {
     writeManifest(home, rest);
   }
   return true;
+}
+
+// ---- settings ---------------------------------------------------------------------------------------------------------
+
+/** Claude Code's setting for messages between sessions, and the value `install --accept-session-messages` gives it:
+ * with `accept`, a message from a session of another permission class arrives instead of being held (his choice of
+ * 2026-10-11, and his answer of 2026-10-14 that `install` writes it on an explicit flag; T5 of
+ * odd/tasks/commands-and-doctor.md). It is a security setting, so nothing writes it without that flag. */
+export const SESSION_MESSAGES = { key: 'crossSessionInbound', value: 'accept' };
+
+/** The user settings of Claude Code under `home`, where `SESSION_MESSAGES` is read. */
+export function userSettingsPath(home) {
+  return path.join(home, '.claude', 'settings.json');
+}
+
+/** Reads a JSON settings file as `{ data, style }`, `style` being what `serializeJson` needs to write it back as it
+ * was; a missing file is an empty object written with two spaces. Throws with the reason a file cannot be taken. */
+function readSettings(target) {
+  const existed = fs.existsSync(target);
+  const raw = existed ? fs.readFileSync(target, 'utf8') : '{}';
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error('malformed JSON');
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Error('not a JSON object');
+  return { data, existed, raw, style: { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: existed ? detectIndent(raw) : 2 } };
+}
+
+/** Sets `SESSION_MESSAGES` in the user settings and records it in the manifest's `settings` array as `{ path, key,
+ * value, had, previous, createdFile }`, what was there before (`had: false` when the key was not, `createdFile` when
+ * the file was not). Returns `{ status, path }`:
+ * `written`, with `was`, the value it replaced (`null` for none); `already` when it already holds the value
+ * (recorded all the same, so `uninstall` knows to leave it); `skipped` with a `reason` when the file cannot be
+ * read, is no JSON object or cannot be written, and then nothing is written or recorded. A second call keeps the first record, which holds what the user had. Like the other records kept on
+ * request, `install` and `sync` carry it forward and `uninstall` puts the value back (`restoreSettings`). */
+export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord } = {}) {
+  const target = userSettingsPath(home);
+  const { key, value } = SESSION_MESSAGES;
+  let settings;
+  try {
+    settings = readSettings(target);
+  } catch (err) {
+    return { status: 'skipped', path: target, reason: err.message };
+  }
+  const { data, existed, style } = settings;
+  const matches = (entry) => entry.path === target && entry.key === key;
+  const record = { path: target, key, value, had: Object.hasOwn(data, key), previous: data[key] ?? null, createdFile: !existed };
+  // Recorded only once the file holds the value: a write that fails leaves no record that would later have
+  // `uninstall` take a value the user set by hand for one this command wrote.
+  const keep = () => {
+    if (!readManifest(home)?.settings?.some(matches)) recordIt(home, 'settings', record, matches);
+  };
+  if (data[key] === value) {
+    keep();
+    return { status: 'already', path: target };
+  }
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    writeFile(target, serializeJson({ ...data, [key]: value }, style), 'utf8');
+  } catch (err) {
+    return { status: 'skipped', path: target, reason: `not writable (${err.code ?? err.message})` };
+  }
+  // A setting nothing records could never be put back (Codex's finding of 2026-10-14): when the record cannot
+  // be written, the file goes back to the bytes it had, or away when this made it.
+  try {
+    keep();
+  } catch (err) {
+    if (existed) fs.writeFileSync(target, settings.raw, 'utf8');
+    else fs.rmSync(target, { force: true });
+    return { status: 'skipped', path: target, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was put back` };
+  }
+  return { status: 'written', path: target, was: record.previous };
+}
+
+/** Puts back each setting the manifest records, as `{ restored, kept }` (paths): a value still the one recorded is
+ * set back to what was there before, or its key removed when there was none, and a file left holding nothing it did
+ * not hold before is removed (`createdFile`, and nothing else in it), with the folders it leaves empty; a value the
+ * user changed since is theirs and is kept, and so is a file that cannot be read. A record whose value was already
+ * there before is left with nothing to do. */
+function restoreSettings(manifest, home, listDir) {
+  const restored = [];
+  const kept = [];
+  for (const record of manifest.settings ?? []) {
+    if (record.had && record.previous === record.value) continue;
+    let settings;
+    try {
+      settings = readSettings(record.path);
+    } catch {
+      kept.push(record.path);
+      continue;
+    }
+    const { data, existed, style } = settings;
+    if (!existed) continue;
+    if (data[record.key] !== record.value) {
+      kept.push(record.path);
+      continue;
+    }
+    if (record.had) data[record.key] = record.previous;
+    else delete data[record.key];
+    if (record.createdFile && Object.keys(data).length === 0) {
+      fs.rmSync(record.path);
+      removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
+    } else {
+      fs.writeFileSync(record.path, serializeJson(data, style), 'utf8');
+    }
+    restored.push(record.path);
+  }
+  return { restored, kept };
 }
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
@@ -969,6 +1084,10 @@ export function uninstall(home, deps = {}) {
     keptOptional.push({ path: file.path, ...why });
   }
 
+  // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
+  // are taken out: a settings file install made is then removed with its last entry, as without the setting.
+  const settings = restoreSettings(manifest, home, listDir);
+
   const entriesRemoved = [];
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {
@@ -1009,7 +1128,9 @@ export function uninstall(home, deps = {}) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+  // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
+  const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

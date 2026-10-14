@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './codex-review-prompt.mjs';
+import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt, SUITE_RAN } from './codex-review-prompt.mjs';
+import { NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 const FROM = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
@@ -36,6 +37,20 @@ test('reviewPrompt names the committed range and the command that shows it', () 
   assert.equal(prompt, reviewPrompt({ from: FROM, head: HEAD }), 'the same range gives the same text');
   assert.equal(prompt.endsWith('\n'), true);
   assert.equal(prompt.includes('\r'), false);
+});
+
+test('reviewPrompt out of a turn of the gate lock says the suite already ran and a refused node --test is no finding, with or without an intent', () => {
+  for (const intent of [null, { goal: 'A goal.', doneWhen: '- it holds' }]) {
+    const plain = reviewPrompt({ from: FROM, head: HEAD, intent });
+    const out = reviewPrompt({ from: FROM, head: HEAD, intent, suiteRan: true });
+    assert.equal(plain.includes(SUITE_RAN), false, plain);
+    assert.ok(out.includes(`\n\n${SUITE_RAN}\n`), out);
+    assert.ok(out.startsWith(plain.trimEnd()), 'the sentence follows what the prompt says without it');
+  }
+  assert.match(SUITE_RAN, /already ran the whole test suite on this range/);
+  assert.match(SUITE_RAN, /exit 97/);
+  assert.ok(SUITE_RAN.includes(NO_TEST_LINE), SUITE_RAN);
+  assert.match(SUITE_RAN, /not a finding/);
 });
 
 test('reviewPrompt asks for findings only inside that diff', () => {

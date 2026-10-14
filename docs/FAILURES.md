@@ -69,8 +69,8 @@ commits of `main` and answer with a range many times too large.
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — `main` had moved without being merged
   in, and an assessment asked with `--base-ref origin/main` counted 2,552 lines that were not the
   branch's; the branch point as the base gave the real range
-- Control: owed — odd/tasks/commands-and-doctor.md — "The push row hints the merge commit as the base
-  after `main`"
+- Control: check — bin/check-codex-reviews.test.mjs — "after main is merged in, the push row hints
+  the base the plain row sizes" — since 2026-10-14
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
@@ -212,8 +212,8 @@ A session ran a command it did not know, to read its help, and the command acted
   installed four files and a hook entry on his machine
 - Seen: 2026-10-12 — relief file, line 409 — JH 8 ran `check --help` and it started a gate, which
   went to wait and was stopped before it ran anything (claimed)
-- Control: owed — odd/tasks/commands-and-doctor.md — "The five lenient commands above refuse an
-  unknown"
+- Control: check — bin/writing-flags.test.mjs — "exits 2, names the flag and writes nothing" — since
+  2026-10-14
 
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at
@@ -274,8 +274,8 @@ session can neither be told nor tell, and each notice becomes his paste.
   (given at line 134, pasted at line 143)
 - Seen: 2026-10-13 — relief file, line 550 — three messages of JH 7, written between 00:52 and
   01:10, reached the lead after 04:20, held by the host
-- Control: owed — odd/tasks/session-channel.md — "The row `session-classes` of `doctor`, with the
-  exact fix in its line"
+- Control: check — bin/doctor.test.mjs — "as the session-classes gap, whose fix is the install
+  flag" — since 2026-10-14
 - Proof: a practice step: a notice read with no message sent (owed: nothing prints it yet)
 
 ### design-not-faithful
@@ -284,7 +284,8 @@ his and named files that do not exist.
 - Class: delivery
 - Seen: 2026-10-10 — relief file, line 181 — four blocking items found by a reader that did not
   write it; also odd/tasks/rule-hierarchy.md:768
-- Control: owed — odd/tasks/commands-and-doctor.md — "The row `citations`, INFO"
+- Control: check — bin/check-citations.test.mjs — "each unresolved citation is a line" — since
+  2026-10-14
 
 ### diagnostic-whole-gate
 A retry command ran a whole gate as a diagnostic after a failed commit, twenty minutes of the
@@ -459,6 +460,8 @@ exactly.
   `.codegraph/telemetry.json`, beside the empty `.claude/`, `.codex/` and `AppData/Roaming/`; the
   fix (record what `codegraph init` creates, or remove those two files on uninstall) is JH 9's, in
   docs/todo.md
+- Control: check — bin/lib/project.test.mjs — "runCodegraphInit runs codegraph with DO_NOT_TRACK=1, so it
+  writes nothing under the home, on every platform" — since 2026-10-14
 
 ### installed-copy-stale
 The command on PATH was an old copy with no way to tell: the version reads 0.1.0 before and after,
@@ -539,6 +542,10 @@ review covers everything the merge brought, code that already had its review.
   the rule that makes such a merge a code commit is `bin/lib/codex-review-coverage.mjs:207-215`.
   Narrowing the review to the lines written in the merge changes what a review covers, which is
   his to decide
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 16:20 (claimed) — in JH 12's pull request 144, a
+  merge of `main` with a one-line conflict resolved in `bin/check.mjs` (fbad613) made the push row
+  ask a review of the whole branch, 1,405 lines, about 1,030,000 Codex input tokens; the fix owed is
+  JH 10's review of a merge's conflict hunks, with a record for each commit (no task line yet)
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he
@@ -765,8 +772,9 @@ it or did not follow it.
   odd/tasks/rule-hierarchy.md:15-18
 - Seen: 2026-10-10 — relief file, line 137 — a rule changed in a memory note; a session with the new
   note loaded still proposed the cut (line 138)
-- Control: owed — odd/tasks/commands-and-doctor.md — "The row `memory-rules` of `doctor`"
-- Proof: `doctor`: no `memory-rules` gap (owed: nothing prints it yet)
+- Control: check — bin/doctor.test.mjs — "reports the rule notes of the project memory as the
+  memory-rules gap" — since 2026-10-14
+- Proof: `doctor`: no `memory-rules` gap
 
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken
@@ -888,6 +896,23 @@ an untracked path makes the review assessment answer "unassessable".
   `Microsoft/` in the worktree `failures-register`, and the review row could not assess for it
 - Seen: 2026-10-11 — relief file, line 292 — in a worktree of JH 5 during a gate; which test starts
   PowerShell with a stripped environment is not known, and nobody owns finding it (claimed)
+
+### taskstop-leaves-work-alive
+Stopping a background task of the host ends its shell and not what that shell started, so the work
+went on, and a stop was taken for done without the process list confirming it.
+- Class: tool
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), first case — the lead's keeper,
+  version 1, merged pull requests 141 and 143 after its stop
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), second case — the lead's old
+  heartbeat
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), third case — the lead's monitor
+  tail
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), fourth case — JH 5's queued
+  gate wait, whose node would have committed a half-edited tree
+- Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a — after both of its queued gate turns
+  were stopped at about 14:50, their node waiters, pids 20948 and 19624, were still in the gate's
+  queue; read in the process list by pid and stopped by pid. The fix owed is JH 8's: the gate refuses
+  a turn whose starter is dead; until then every stop is confirmed in the process list
 
 ### temp-folders-left
 A test run killed at the gate's bound never removes its temporary folders; 2,357 of them were on his
