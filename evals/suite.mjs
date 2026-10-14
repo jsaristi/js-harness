@@ -35,6 +35,7 @@ import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, cod
 import { SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, minimalConfig, subagentConfig, subagentPin } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
+import { ArmError, parseArm } from './arms.mjs';
 import { cellBasis, planLines, runPlan } from './plan.mjs';
 import { LIST_PRICES } from './prices.mjs';
 import { CODEX_LIST_PRICES } from './report.mjs';
@@ -117,6 +118,8 @@ export const USAGE = [
   `                            ${CODEX_EVAL_MODEL}); a Claude model by its full id, never an alias. A recorded run continues only on its model`,
   '  --plan                    with a run: print the trials it would run and their agent time and list cost, estimated from',
   '                            the recorded results of the same model, "unknown" where there are none, and start nothing',
+  '  --configs also takes the arms of one component, each beside its base: current-without-<id>, a sorted pair',
+  '                            current-without-<id>_<id>, minimal-with-<id> (the ids and what minimal takes: evals/arms.mjs)',
   '  --summary                 print the summary of a recorded run and run nothing',
   `  --subagents               with --summary: read the run from evals/results/${SUBAGENTS_DIR}/, where a run of subagent configs is recorded;`,
   `                            without it a summary reads evals/results/ (evals/results/${CODEX_DIR}/ with --agent codex) and looks nowhere else`,
@@ -168,6 +171,26 @@ function listOf(flag, value, allowed, what) {
   const twice = items.find((item, index) => items.indexOf(item) !== index);
   if (twice !== undefined) throw new UsageError(`${flag}: ${JSON.stringify(twice)} is listed twice`);
   return items;
+}
+
+/** The configs of `--configs` for `agent`: the ones its command line takes, and the arms of one component
+ * (`evals/arms.mjs`, G2 of `odd/tasks/future-model-protocol.md`), each beside its base, since an arm is measured
+ * against it and alone it would be compared with nothing. */
+function configsOf(agent, value, allowed) {
+  const arms = value.split(',').filter((name) => {
+    try {
+      return !allowed.includes(name) && parseArm(name, agent) !== null;
+    } catch (err) {
+      if (err instanceof ArmError) throw new UsageError(`--configs: ${err.message}`);
+      throw err;
+    }
+  });
+  const configs = listOf('--configs', value, [...allowed, ...arms], 'configs');
+  for (const name of arms) {
+    const { base } = parseArm(name, agent);
+    if (!configs.includes(base)) throw new UsageError(`--configs: ${name} is compared with ${base}, which the run does not name`);
+  }
+  return configs;
 }
 
 /** The command line as `{ mode: 'run', claude, configs, efforts, repeats, tasks, permissionMode, name, workRoot }`
@@ -266,7 +289,7 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
   if (workRoot !== null && !path.isAbsolute(workRoot)) throw new UsageError(`--work-root must be an absolute path, got ${JSON.stringify(workRoot)}`);
   checkName(given.get('--name'));
   const cells = {
-    configs: listOf('--configs', given.get('--configs'), line.configs, 'configs'),
+    configs: configsOf(agent, given.get('--configs'), line.configs),
     efforts: listOf('--efforts', given.get('--efforts'), line.efforts, 'efforts'),
     repeats: Number(repeats),
     tasks,
@@ -721,6 +744,14 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       warn(`${err.message}\n`);
       return 1;
     }
+  }
+
+  // The arms of one component are named and planned, but their homes are not built yet (G2, the template filters):
+  // run as they are they would be the minimal arm under another name, so a run that names one stops here.
+  const unbuilt = args.configs.filter((name) => parseArm(name, agentOf(args)) !== null);
+  if (unbuilt.length > 0) {
+    warn(`${unbuilt.join(', ')}: the arms of one component are not built yet, so no trial of them can run; --plan states what they would cost.\n`);
+    return 2;
   }
 
   const binaryFlag = COMMAND_LINES[agentOf(args)].binary;
