@@ -57,3 +57,8 @@ Nothing planned: the order is the lead's.
 - **L1** (2026-10-14): the lead's order, S1, verbatim.
 - **L2** (2026-10-14): one existing test pins the git questions of a gate that stops (`a failing static
   row stops nothing…`); it now lists the four questions of which side there is to compare with.
+- **L3** (2026-10-14): commit `5c5028c`, gate passed in WSL2. Codex over `c33b7bf..5c5028c` (130,045 input
+  tokens) found one P2 that could make a failing run pass: with nothing staged (a check run by hand), the
+  index differs from its own branch in nothing and from the trunk in the branch's documents, so the
+  sensors were skipped over code edits not staged. Fixed test first: nothing staged asks no other side.
+  RED: the new test failed; GREEN: `bin/check.test.mjs` 200/200.

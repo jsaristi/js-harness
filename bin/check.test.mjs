@@ -2264,6 +2264,29 @@ test("a commit of documents alone runs the sensors of documents, in their order 
   }
 });
 
+// Codex, 2026-10-14: with nothing staged there is no commit to guard, and a check run by hand on a branch
+// whose commits differ from the trunk in documents alone must still run its sensors over the code edits it
+// has not staged. The other side is asked only of an index that holds a change.
+test('a check with nothing staged runs the sensors even where the branch differs from the trunk in documents alone', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    const git = (program, args) => {
+      git.asked.push(args.join(' '));
+      if (args[0] === 'rev-parse') return ok(args.includes('--show-prefix') ? '\n' : 'abc123\n');
+      // Nothing staged against its own branch; against the trunk, documents alone.
+      return ok(args.at(-1) === '-z' ? '' : 'docs/guide.md\0');
+    };
+    git.asked = [];
+    const spawn = recordedSensors();
+    await checkSensors(dir, { spawn, git });
+    assert.deepEqual(spawn.ran.map(([command]) => command), ['run-tests']);
+    assert.ok(!git.asked.some((asked) => asked.startsWith('diff') && asked.endsWith('origin/HEAD')), JSON.stringify(git.asked));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a commit that holds anything that is no document runs the project's sensors and none of the sensors of documents", async () => {
   const dir = makeTmpDir();
   try {

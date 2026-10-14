@@ -278,19 +278,21 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   if (git === null) return null;
   const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
-  /** The paths the index changes against `against` (its own branch when none), when all are documents. */
-  const documentsAgainst = (...against) => {
-    const listed = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against]);
-    const paths = listed?.split('\0').filter(Boolean) ?? [];
-    return paths.length > 0 && paths.every(isDocument) ? paths : null;
-  };
-  const own = documentsAgainst();
+  /** The paths the index changes against `against` (its own branch when none). */
+  const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
+  /** `paths` when there are some and all are documents, else `null`. */
+  const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
+  const staged = changed();
+  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
+  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14).
+  if (staged.length === 0) return null;
+  const own = documentsOnly(staged);
   if (own) return { paths: own };
   /** Whether `ref` names a commit here. */
   const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
   const trunk = ['origin/HEAD', 'origin/main', 'origin/master'].find(named);
   for (const side of [...(named('MERGE_HEAD') ? ['MERGE_HEAD'] : []), ...(trunk ? [trunk] : [])]) {
-    const paths = documentsAgainst(side);
+    const paths = documentsOnly(changed(side));
     if (paths) return { paths, side };
   }
   return null;
