@@ -4356,13 +4356,13 @@ test('a run prints its plan before its first session starts, and the estimate of
   assert.ok(first.onScreen[0].findIndex((line) => line.startsWith('Codex is reviewing part 1 of 2')) >= none.length, 'and before the session is announced');
   assert.equal(first.out.filter((line) => line.startsWith('Plan of the Codex review')).length, 1, 'once a run, not once a part');
   // Its two parts are in the run log now, 6 and 2 changed lines at 297,479 input tokens each, and the plan
-  // is made from them: the median of 49,580 and 148,740 a changed line, and no part under 297,479.
+  // is made from them: two parts that cost the same whatever their lines are a fixed cost of 297,479 a part.
   const measured = planned(root, base, head, AS_TWO);
-  assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 590,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
-  // Both ran on the model and at the effort of a review, so nothing is said of another effort. The whole is
-  // a range: its high figure puts both parts at the 148,740 a changed line of the dearer one, 890,000 and 300,000.
-  assert.ok(measured[3].startsWith(`Estimate: about 890,000 to 1,190,000 input tokens in all. It rests on 2 parts this machine's run log measured on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort: `), measured[3]);
-  assert.ok(measured[3].endsWith(' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: how far a session looks into the code moves what it costs more than the size of its part does.'), measured[3]);
+  assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 300,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
+  // Both ran on the model and at the effort of a review, so nothing is said of another effort. Both cost what
+  // the fit says, so the whole is one figure.
+  assert.ok(measured[3].startsWith(`Estimate: about 600,000 input tokens in all. It rests on 2 parts this machine's run log measured on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort: `), measured[3]);
+  assert.ok(measured[3].endsWith(': a part is put at about 300,000 input tokens and about 0 more a changed line, a fit by least squares to the most recent 20 of them at most.'), measured[3]);
   const nothing = startsNothing(root);
   const plan = await run(['--base', 'HEAD~1', '--again', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(plan.code, 0, plan.err);
@@ -4389,7 +4389,7 @@ test('a run log that cannot be read is one that measured nothing: the plan says 
   // A run that leaves two measured parts in the log, so that there is an estimate to lose.
   const first = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...twoSessions(), randomUUID: runIds() });
   assert.equal(first.code, 0, first.err);
-  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 890,000 to 1,190,000 input tokens/);
+  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 600,000 input tokens/);
   const none = planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts: AS_TWO }));
   assert.match(none.at(-1), /^No estimate: the run log of this machine holds no part /);
   /** `spawn`, but the first two times git is asked where the common dir is, which is how the run log is
