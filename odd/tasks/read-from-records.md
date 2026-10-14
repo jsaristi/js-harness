@@ -159,7 +159,7 @@ counts from. 116 of the 692 commits that touch `odd/tasks` are on it; a feature 
 commits would count the same task once on the branch and again in its merge.
 
 ## Tasks
-- [ ] T0 · S7 to S11, the recheck, test first, its own pull request; his order of 2026-10-14,
+- [x] T0 · S7 to S11, the recheck, test first, its own pull request; his order of 2026-10-14,
       first in the queue. Route: inline (one understood change; no writer reason). Risk to name
       at its close.
 - [ ] T1 · This document, opened with the task contract, mirrored in engram. Route: inline.
@@ -221,7 +221,14 @@ commits would count the same task once on the branch and again in its merge.
   for the earlier findings; a follow-up or blocking mark counts only in brackets or as the title's
   first word. Its review is the first real recheck: a range that starts at `24cb517`.
 
+- 2026-10-14 · **T0 done: the first real recheck, and pull request 128.** `ab1073d` (the
+  correction) passed the gate (tests in WSL2); gentle-ai rated it medium, review not due. Its
+  `--plan` said "A run of this range is a recheck of the 3 findings of the review that ended at
+  24cb517", and the run, through this very code, answered "3 fixed, 0 not fixed", verdict
+  correct (0.98), at 91,800 input tokens. Pushed; pull request 128 is open for the orchestrator.
+  `main` moved after the merge (`2a29285`, code), so the head does not hold it; the orchestrator
+  was asked whether to merge it once more.
+
 ## Next
-0. T0: commit the correction, recheck it with Codex (`--base origin/main`; the records move it
-   to `24cb517`), push, its pull request; tell the orchestrator.
+0. T0: the orchestrator's word (05:43): wait for PR 124 to be MERGED, then merge `origin/main` once, gate, push, tell it.
 1. T2: take both readers' findings into the design, then the design to the orchestrator.
