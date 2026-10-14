@@ -27,6 +27,11 @@
 // no answer of his, read from the same transcripts (odd/tasks/session-channel.md, point 15): one he closed
 // without answering, one still on his screen. A call the host copied into several files is one question,
 // and one asked again and answered then is not listed. A watch returns for a question he closes.
+// The list also joins the questions the channel's record holds (`notify --kind question`), by the number at
+// the head of their text: recorded and not shown to him yet, on his screen, closed by him, or answered in a
+// transcript and not carried to the asker yet. A question answered in the asker's own transcript is closed.
+// A session's row says a tool call that has had no result for fifteen minutes, since the host may be holding
+// it for approval or it hangs, and a watch returns for it once and again each time its age doubles (point 15).
 // A session's row says the context it holds, the room left before the host compacts it and what its last
 // task cost (odd/tasks/session-channel.md, "Context"): what a session needs at the context pause to judge
 // whether what is left fits. A watch returns once when a session reaches the pause. The share of the window
@@ -42,8 +47,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
-import { appendReading, findOpenings, newReading, readNotices, recordPath, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, hasTitle, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -170,7 +175,7 @@ function parseArgs(argv) {
     } else if (token === '--quote') {
       const transcript = requireValue(argv, i, token);
       // A file is named by a path; anything else is a session id, or the start of one as `--self` takes it.
-      const file = /[\\/]/.test(transcript) || transcript.endsWith('.jsonl');
+      const file = namesAFile(transcript);
       if (!file && transcript.length < 8) throw new SessionsArgError('--quote takes a transcript: its file, or a session id or its first eight characters or more');
       const line = plainNumber(argv[i + 2] ?? '', { decimals: false });
       if (!(Number.isSafeInteger(line) && line >= 1)) throw new SessionsArgError('--quote takes the number of a line of the transcript, from 1, after the transcript');
@@ -485,8 +490,9 @@ export async function sessionsMain(
       // first, the transcripts hold the second, and this command writes neither.
       channel: channelOf(record, sessions),
       // The questions put to the user that have no answer of his, read from the same transcripts: nothing
-      // a session remembers is in this list.
-      questions: openQuestionsOf(sessions, { hours: parsed.hours }),
+      // a session remembers is in this list. The questions the channel's record holds join it by their number,
+      // when the record was read; one that could not be read gives the list of the transcripts alone.
+      questions: openQuestionsOf(sessions, { hours: parsed.hours, ...(record.unavailable === undefined && { record: questionRecordOf(recordedQuestions(record)) }) }),
       worktrees,
       gates,
       gateLock,
@@ -573,39 +579,26 @@ export async function sessionsMain(
   if (parsed.quote) {
     const { transcript, line } = parsed.quote;
     const notKnown = `js-harness sessions: not known whose words line ${line} holds`;
-    let file;
-    if (parsed.quote.file) {
-      file = path.resolve(defaultCwd, transcript);
-      // Only a transcript of this project's sessions folder, directly in it, as the board reads them. This
-      // is the check a session runs before it takes carried words as the user's, and a session can write
-      // a file anywhere with a line marked as a person's; a subagent's transcript, in a folder of this
-      // one, holds what its parent session wrote to it. What this does not stop: a file written into the
-      // folder itself, which is the host's to keep.
-      const inside = path.relative(projectDir, file);
-      if (inside === '' || /[\\/]/.test(inside) || path.isAbsolute(inside) || !inside.endsWith('.jsonl')) {
-        stderr(`js-harness sessions: not quoted: ${file} is not a transcript of this project's sessions folder, ${projectDir}. Only the transcripts the board reads there are quoted: a session can write a file anywhere else and mark a line of it as the user's`);
-        return 2;
-      }
-    } else {
-      let names;
-      try {
-        names = readdir(projectDir);
-      } catch (err) {
-        const code = err.code ?? err.message;
-        stderr(code === 'ENOENT' ? noFolder(code) : `${notKnown}: the sessions folder ${projectDir} could not be listed (${code})`);
-        return code === 'ENOENT' ? 1 : 2;
-      }
-      const ids = names.filter((name) => name.endsWith('.jsonl')).map((name) => name.slice(0, -'.jsonl'.length)).filter((id) => isSelf(id, transcript));
-      if (ids.length === 0) {
-        stderr(`js-harness sessions: no transcript of this project is named by ${JSON.stringify(transcript)} in ${projectDir}`);
-        return 1;
-      }
-      if (ids.length > 1) {
-        stderr(`js-harness sessions: ${ids.length} transcripts of this project are named by ${JSON.stringify(transcript)}: give more of the id, or the file`);
-        return 2;
-      }
-      file = path.join(projectDir, `${ids[0]}.jsonl`);
+    // Which file that is, and that it is a transcript of this project's sessions folder, directly in it, as
+    // the board reads them: `transcriptNamed`, which says why only those are quoted.
+    const named = transcriptNamed(projectDir, transcript, { cwd: defaultCwd, readdir });
+    if (named.not === 'outside') {
+      stderr(`js-harness sessions: not quoted: ${named.file} is not a transcript of this project's sessions folder, ${projectDir}. Only the transcripts the board reads there are quoted: a session can write a file anywhere else and mark a line of it as the user's`);
+      return 2;
     }
+    if (named.not === 'unlisted') {
+      stderr(named.code === 'ENOENT' ? noFolder(named.code) : `${notKnown}: the sessions folder ${projectDir} could not be listed (${named.code})`);
+      return named.code === 'ENOENT' ? 1 : 2;
+    }
+    if (named.not === 'none' || named.not === 'short') {
+      stderr(`js-harness sessions: no transcript of this project is named by ${JSON.stringify(transcript)} in ${projectDir}`);
+      return 1;
+    }
+    if (named.not === 'several') {
+      stderr(`js-harness sessions: ${named.count} transcripts of this project are named by ${JSON.stringify(transcript)}: give more of the id, or the file`);
+      return 2;
+    }
+    const { file } = named;
     let text;
     try {
       text = readFile(file);
