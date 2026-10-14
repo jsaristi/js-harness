@@ -15,6 +15,21 @@ const KEYS = new Set([
   'path', 'phrases',
   'retired', 'successors',
   'patterns', 'row', 'failure', 'differs', 'review',
+  'sensor',
+]);
+// The keys only the harness's own list holds, each refused in a project's list with the reason a person reads
+// (odd/tasks/project-rules.md, "What a project can declare").
+const NOT_FOR_A_VALUE = 'a value needs a reader, and the project code cannot import the harness; write the rule in prose';
+const NOT_FOR_A_PATTERN = 'a rule about the code names its sensor';
+const HARNESS_ONLY = new Map([
+  ['scope', 'the list is the project by where it is'],
+  ['alias', 'only the harness speaks to a host'],
+  ['flag', 'only a command of the harness parses one'],
+  ['value', NOT_FOR_A_VALUE],
+  ['unit', NOT_FOR_A_VALUE],
+  ['was', NOT_FOR_A_VALUE],
+  ['patterns', NOT_FOR_A_PATTERN],
+  ['row', NOT_FOR_A_PATTERN],
 ]);
 // Lower-case words joined by hyphens, each word starting with a letter, so no id is a number.
 const ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$/;
@@ -186,10 +201,12 @@ function optionalFaults({ patterns, row, failure, differs, review }) {
 
 /** The faults of one rule that is a plain object, in the order the file reads them. The id and the
  * order of ids are checked by `readRules`, which owns the whole list. */
-function ruleFaults(rule, { minPhrase, declared }) {
+function ruleFaults(rule, { minPhrase, declared, project }) {
+  if (project) return projectRuleFaults(rule, { minPhrase, declared });
   const faults = [];
   for (const key of Object.keys(rule)) {
     if (!KEYS.has(key)) faults.push(`unknown key "${key}"`);
+    else if (key === 'sensor') faults.push('a sensor body is for a project list');
   }
   if (!isText(rule.subject) || rule.subject.trim() === '') faults.push('the subject is missing');
   else if (DIGIT.test(rule.subject)) {
@@ -229,11 +246,44 @@ function ruleFaults(rule, { minPhrase, declared }) {
   return faults;
 }
 
+/** The faults of one rule of a project's own list (`docs/rules.json`): the keys only the harness's list holds
+ * are refused with their reason, the owner is the project's or absent, and the body is prose, a sensor that
+ * enforces the rule, or a retirement. */
+function projectRuleFaults(rule, { minPhrase, declared }) {
+  const faults = [];
+  for (const key of Object.keys(rule)) {
+    if (HARNESS_ONLY.has(key)) faults.push(`${key} is not for a project list: ${HARNESS_ONLY.get(key)}`);
+    else if (!KEYS.has(key)) faults.push(`unknown key "${key}"`);
+  }
+  if (!isText(rule.subject) || rule.subject.trim() === '') faults.push('the subject is missing');
+  if (rule.owner !== undefined && rule.owner !== 'project') {
+    faults.push(`the owner is "${show(rule.owner)}": in a project list the owner is project, or it is absent`);
+  }
+  if (!isDay(rule.since)) faults.push('since is not a day written YYYY-MM-DD');
+
+  const bodies = [];
+  if (Object.hasOwn(rule, 'path') || Object.hasOwn(rule, 'phrases')) bodies.push('text');
+  if (Object.hasOwn(rule, 'sensor')) bodies.push('sensor');
+  if (Object.hasOwn(rule, 'retired')) bodies.push('retired');
+  const kinds = 'a rule of a project is in prose (a path with phrases), names its sensor, or is retired';
+  if (bodies.length === 0) faults.push(`no body: ${kinds}`);
+  else if (bodies.length > 1) faults.push(`more than one body: ${kinds}`);
+  const body = bodies.length === 1 ? bodies[0] : null;
+
+  if (body === 'text') faults.push(...textFaults(rule, minPhrase));
+  if (body === 'sensor' && !isText(rule.sensor)) faults.push('the sensor is not the name of a sensor');
+  if (body === 'retired') faults.push(...retiredFaults(rule, declared));
+  if (rule.successors !== undefined && body !== 'retired') faults.push('successors go with a retired rule');
+  const { failure, differs, review } = rule;
+  faults.push(...optionalFaults({ failure, differs, review }));
+  return faults;
+}
+
 /** The faults that make `list` unreadable, one line each, every fault of every rule in list order;
  * an empty result means the list is readable. It never throws, and it says every fault it finds,
  * because a list that is read one fault at a time takes one round per fault to repair. The shortest
  * phrase is itself a declared rule, read here when no other bound is given. */
-export function readRules(list, { minPhrase, declared = RULES } = {}) {
+export function readRules(list, { minPhrase, declared = RULES, project = false } = {}) {
   if (!Array.isArray(list)) return ['the rules are not a list'];
   const faults = [];
   // The shortest phrase, read from `declared` when no bound is given. When it cannot be read, that is the first
@@ -275,7 +325,7 @@ export function readRules(list, { minPhrase, declared = RULES } = {}) {
       }
       seen.add(id);
     }
-    for (const message of ruleFaults(rule, { minPhrase: bound, declared: ids })) faults.push(who + message);
+    for (const message of ruleFaults(rule, { minPhrase: bound, declared: ids, project })) faults.push(who + message);
     previous = usable ? id : null;
   }
   return faults;

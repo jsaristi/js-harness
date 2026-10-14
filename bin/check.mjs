@@ -8,6 +8,8 @@ import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
+import { readProjectRules } from './lib/project-rules-read.mjs';
+import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
@@ -18,6 +20,7 @@ import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
+import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
@@ -160,7 +163,32 @@ export function discoverSensors(cwd) {
   return { sensors, source: 'package.json' };
 }
 
-const DOCUMENTS_SHAPE = 'harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
+/** The row of a project's own rules (odd/tasks/project-rules.md, "How it is checked"): it acts only when the project
+ * keeps a list, docs/rules.json, and never in the harness's own repository, whose list the rule hierarchy's row will
+ * hold (its T16d extends this row). It fails on any finding of `js-harness rules check`: a phrase gone from its
+ * file, a sensor no longer declared, a rule deleted since HEAD, or a list that cannot be read. A list that cannot be
+ * read fails this row only: no other row reads it, so the gate still prints every row before it stops. */
+export function checkOwnRules(cwd) {
+  if (fs.existsSync(path.join(cwd, 'bin', 'lib', 'rules-data.mjs'))) return [];
+  const found = discoverSensors(cwd);
+  let read;
+  try {
+    read = readProjectRules(cwd, { sensors: found.error ? null : found.sensors.map((sensor) => sensor.name) });
+  } catch (err) {
+    return [{ name: 'rules', pass: false, detail: `${PROJECT_RULES_PATH} cannot be read: ${err.message}` }];
+  }
+  if (!read.present) return [];
+  const notes = read.notes.map((note) => `note: ${note}`);
+  if (read.findings.length === 0) {
+    const n = read.rules.length;
+    const detail = `${n} ${n === 1 ? 'rule' : 'rules'} of the project ${n === 1 ? 'holds' : 'hold'} (${PROJECT_RULES_PATH})`;
+    return [{ name: 'rules', pass: true, detail, ...(notes.length > 0 && { lines: notes }) }];
+  }
+  const count = read.findings.length;
+  return [{ name: 'rules', pass: false, detail: `${count} ${count === 1 ? 'finding' : 'findings'} in ${PROJECT_RULES_PATH}`, lines: [...read.findings, ...notes] }];
+}
+
+const DOCUMENTS_SHAPE ='harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
 
 /** What keeps `entry` out of the `documents` of harness.json, as the end of a sentence about it, or
  * `null` when it is taken. */
@@ -265,14 +293,56 @@ function sameFolder(one, other) {
  * named from the top of the repository, so a gate that checks a folder below it skips nothing; under a
  * binding that is asked without it, since git takes the folder a `GIT_DIR` command runs in for the top.
  * With no commit yet git compares the index with nothing, and lists all that is staged.
+ *
+ * The answer is `{ paths }`, or `{ paths, side }` for an index that differs from its own branch in more
+ * than documents and from `side` in documents alone: the trunk merged into a branch of documents, whose
+ * code is then the trunk's, which passed its own gates. That merge held the lock 10 minutes for nothing on
+ * 2026-10-14 (odd/tasks/merge-documents-skip.md). `side` is `MERGE_HEAD` where git wrote one (`git
+ * commit` after `git merge --no-commit`), and the trunk as origin names it (`origin/HEAD`, else
+ * `origin/main`, else `origin/master`): the hook of a merge git commits by itself is run before git
+ * writes `MERGE_HEAD`, so there the trunk is the side it can know (seen with git 2.54, 2026-10-14).
  * `spawn` stands in for `spawnSync`. */
 function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   if (git === null) return null;
-  const listed = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z']);
-  const paths = listed?.split('\0').filter(Boolean) ?? [];
   const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
-  return paths.length > 0 && paths.every(isDocument) ? paths : null;
+  /** The paths the index changes against `against` (its own branch when none). */
+  const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
+  /** `paths` when there are some and all are documents, else `null`. */
+  const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
+  const staged = changed();
+  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
+  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14).
+  if (staged.length === 0) return null;
+  const own = documentsOnly(staged);
+  if (own) return { paths: own };
+  /** Whether `ref` names a commit here. */
+  const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
+  const trunk = ['origin/HEAD', 'origin/main', 'origin/master'].find(named);
+  for (const side of [...(named('MERGE_HEAD') ? ['MERGE_HEAD'] : []), ...(trunk ? [trunk] : [])]) {
+    const paths = documentsOnly(changed(side));
+    if (paths) return { paths, side };
+  }
+  return null;
+}
+
+/** The row `citations` (T3 of odd/tasks/commands-and-doctor.md): the lines the staged change adds to the feature
+ * documents (`odd/tasks/`), each code span that cites a `path:line` or a commit resolved against the folder and the
+ * repository (`bin/lib/citations.mjs`), with one line for each that does not. It is INFO and stops nothing: documents
+ * cite other branches and removed files on purpose, so it becomes a failure only once its false alarms have been
+ * none over twenty commits. No row when no feature document is staged, or git does not answer. */
+export function checkCitations(cwd, spawn = spawnSync) {
+  const git = hookGit(cwd, spawn);
+  const diff = git?.(['diff', '--cached', '-U0', '--no-renames', '--no-relative', '--no-color', '--', 'odd/tasks/']);
+  if (!diff) return [];
+  // The cited file as this commit will hold it, from the index: the working tree may differ from it.
+  // A file that ends in a newline has no line after it.
+  const lineCount = (file) => git(['show', `:${file}`])?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
+  const commitExists = (id) => git(['cat-file', '-e', `${id}^{commit}`]) !== null;
+  const { checked, unresolved } = resolveCitations(addedLines(diff), { lineCount, commitExists });
+  const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;
+  const row = { name: 'citations', pass: true, info: true, detail: `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}` };
+  return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
 }
 
 /** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
@@ -371,8 +441,10 @@ function namedPaths(paths) {
  * alone: which did not run, and for which staged `paths` (`namedPaths`). With `quick`, the sensors of
  * documents that ran in their place (`discoverDocumentSensors`), it names those as well, and says that
  * no gate lock was taken for them; their own rows follow this one. */
-function documentsRow(sensors, paths, quick = []) {
-  const staged = paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`;
+function documentsRow(sensors, { paths, side }, quick = []) {
+  const staged = side
+    ? (paths.length === 1 ? `the one path this commit changes against ${side} is a document` : `all ${paths.length} paths this commit changes against ${side} are documents`)
+    : (paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`);
   const declared = `${staged} declared in harness.json "documents"`;
   const names = (list) => list.map((sensor) => sensor.name).join(', ');
   let detail = `no sensor ran (${names(sensors)}): ${declared}`;
@@ -596,6 +668,26 @@ export const GATE_HELD_ENV = 'JS_HARNESS_GATE_HELD';
  * With `wsl` (`{ distro, node }`, the machine's switch file) on Windows, the command runs in that WSL2
  * distribution from a mirror of the tree (`./lib/gate-wsl.mjs`), and the row carries `ranIn: 'wsl'`; one
  * that never reached the mirror runs here, and its row says why. `wslPath` stands in for `toWslPath`. */
+/** How many names of failing tests a gate's end line keeps for one sensor, and how long each may be. */
+const FAILING_KEPT = 20;
+const FAILING_NAME_MAX = 200;
+
+/** The names of the tests that failed, read from what a `node --test` printed: the lines under its
+ * `✖ failing tests:` (the spec reporter, a run's default when its output is no terminal), each without
+ * the time after it, or else the top-level `not ok <n> - <name>` of the tap reporter. Colours are taken
+ * off, each name is kept once, twenty at most and two hundred characters each. None for an output of any
+ * other kind: the gate keeps what it can read, and a sensor's own report stays where it is. A WSL2 run's
+ * output lives only in the mirror and the report, and on 2026-10-14 the name of a failing test could not be
+ * had back once the report was gone (odd/tasks/gate-log-failing-tests.md). */
+export function failingTests(output) {
+  const lines = String(output ?? '').replace(/\u001b\[[0-9;]*m/g, '').split(/\r?\n/);
+  const under = lines.findIndex((line) => line.trim() === '✖ failing tests:');
+  const names = under === -1
+    ? lines.map((line) => /^not ok \d+ - (.+)$/.exec(line)?.[1]).filter(Boolean)
+    : lines.slice(under + 1).map((line) => /^✖ (.+?)(?: \([\d.]+m?s\))?$/.exec(line)?.[1]).filter(Boolean);
+  return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
+}
+
 export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
@@ -1110,7 +1202,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
       if (result === 'pass' && key !== null && ranWhereKeyed && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
-      record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut, ranIn }) => ({ name, seconds, pass, timedOut, ...(ranIn && { ranIn }) })), code });
+      // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
+      const failing = ({ pass, output }) => (pass ? [] : failingTests(output));
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
@@ -1273,7 +1367,7 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
   const state = codexReviewCoverage(cwd, head, { spawn, remote });
   if (state.unknown) return fail(state.unknown.detail, state.unknown.lines);
-  const { base, codeCommits, covers, uncovered, note } = state;
+  const { tip, baseRef, base, codeCommits, covers, uncovered, note } = state;
   if (uncovered.length) {
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
     const oldest = uncovered[uncovered.length - 1];
@@ -1282,9 +1376,16 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     // not "the review": over a range with nothing to review it records that, and starts no review.
     // A merge is no root commit: its `<id>^` is the first of its parents, and the range from there holds
     // the merge and all it changed against that parent, what was written in it included.
+    // The base is the one the plain row sizes (`checkCodexReviewDebt`): the parent of the oldest uncovered
+    // commit only where a review can start there (`reviewStart`), else the default branch. Named as
+    // `<oldest>^` alone, it was the `main` a branch left once `main` had been merged in after that commit,
+    // and the range read again all `main` gained since (failure 15, 41 parts where 6 were due). With the
+    // commits before the merge covered, that parent is the merge commit itself.
+    const range = rangeStart(cwd, { base: baseRef, tip, spawn });
+    const { before } = range.unknown ? { before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
     const hint = oldest.isRoot
       ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
-      : `make the record with: js-harness codex-review --base ${oldest.shortId}^`;
+      : `make the record with: js-harness codex-review --base ${before === null ? base : `${before.shortId}^`}`;
     const lines = [...uncoveredNames(uncovered), hint];
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
@@ -1493,7 +1594,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.

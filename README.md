@@ -287,6 +287,21 @@ Left out of the review: 5 Markdown documents, 818 changed lines.
 Allowance of this plan: 872,400 input tokens, the larger of 300,000 a review and 1,200 a changed line, for the 727 changed lines it reads. Its estimate, about 470,000, is inside it. …
 ```
 
+### js-harness merge-ready
+
+Says whether a pull request may be merged on its GitHub run, and merges nothing: open, not a
+draft, mergeable, on main, a gentle-ai line in its body, the latest run of its head green, and
+the base that run tested (from its checkout log) is today's main, or behind it only by documents
+with a clean merge. Exit 0 ready, 3 stale, 4 run missing, pending or red, 1 otherwise. A stale
+pull request gets a fresh run by closing and reopening it, once GitHub has recomputed its merge
+against main, which it says.
+
+```console
+$ js-harness merge-ready 137
+PR 137: run 38632863631 tested base 028d658; main c0364f8 has moved since by 6 paths that are not documents (bin/check.mjs, bin/check.test.mjs, evals/arms.mjs, ...): stale.
+PR 137: refs/pull/137/merge still has 028d658 as its first parent, not main c0364f8: wait before reopening.
+```
+
 ### js-harness functions
 
 Shows each function the project can turn off and on in `harness.json` under `"functions"`: its

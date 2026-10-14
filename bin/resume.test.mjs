@@ -498,8 +498,11 @@ test('the hook never fails a session: whatever throws, it prints nothing and exi
   const odd = await runHook(machine, hookInput(machine, { session_id: '..\\..\\secrets', transcript_path: '' }), { readFile });
   assert.equal(odd.lines[1], 'Session: title not known (the host gave the hook none and no session id a transcript could be found by)');
   assert.deepEqual(read.filter((file) => file.includes('secrets')), []);
-  // Extra arguments do not turn the hook into something that can fail.
-  assert.deepEqual((await runHook(machine, hookInput(machine), { argv: ['--hook', '--bogus'] })).code, 0);
+  // An extra argument is refused before anything is read (T1 of odd/tasks/commands-and-doctor.md): the
+  // entry `install` writes carries `--hook` alone.
+  const extra = await runHook(machine, hookInput(machine), { argv: ['--hook', '--bogus'] });
+  assert.deepEqual([extra.code, extra.lines], [2, []]);
+  assert.match(extra.stderr, /^unknown argument: --bogus\n/);
 }));
 
 test('when the disk cannot be read the hook prints what it still knows, and says what it could not look at', withMachine(async (machine) => {

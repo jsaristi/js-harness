@@ -17,8 +17,12 @@ import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf } f
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
-  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem,
+  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
+  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
 } from './practice-lib.mjs';
+import { agentsTemplate } from '../bin/lib/project.mjs';
+import { classifyAgentFailure } from '../evals/agent-output.mjs';
+import { killByPath } from '../evals/runner.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
 // commit whose hook runs `check`, which runs the project's tests and asks gentle-ai twice. On Windows the
@@ -235,6 +239,131 @@ const hasRow = (output, status, name) => checkRows(output).some((line) => line.s
 
 const snapshot = (files) => Object.fromEntries(files.map((file) => [file, contentHash(readIfThere(file))]));
 
+// ---- the host session ------------------------------------------------------------------------------------------------
+// The step `host-loads` (odd/tasks/practice-project.md, "T5: the step host-loads"): three calls of a real Claude Code in
+// the practice project, with the practice home as its config and a scratch home for everything else.
+
+const HOST_TIMEOUT_MS = 2 * 60 * 1000;
+const HOST_COMMON = ['--model', 'claude-haiku-5-5', '--output-format', 'stream-json', '--verbose', '--include-hook-events', '--max-budget-usd', '0.5'];
+// The folders the host's scratch home needs, as `hostEnv` names them.
+const HOST_DIRS = [['AppData', 'Roaming'], ['AppData', 'Local'], ['tmp'], ['.config'], ['.local', 'share'], ['.local', 'state'], ['.cache']];
+
+/** The `claude` the machine runs, by full path, so the record says which binary was proven against. */
+function claudeBinary() {
+  const found = run(process.platform === 'win32' ? 'where.exe' : 'which', ['claude'], { encoding: 'utf8', windowsHide: true });
+  const first = String(found.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  assertThat(!found.error && found.status === 0 && first, 'no claude command on the PATH: the host session needs Claude Code');
+  return first;
+}
+
+/** The practice project folders his real `.claude` holds under `projects`, and the practice paths his `.claude.json`
+ * names as projects: by name only, since his live sessions rewrite that file all the time. */
+function realHostTraces(realHome) {
+  const mark = 'js-harness-practice';
+  const folders = (() => {
+    try {
+      return fs.readdirSync(path.join(realHome, '.claude', 'projects')).filter((name) => name.toLowerCase().includes(mark));
+    } catch {
+      return [];
+    }
+  })();
+  let keys = [];
+  try {
+    keys = Object.keys(JSON.parse(fs.readFileSync(path.join(realHome, '.claude.json'), 'utf8')).projects ?? {}).filter((key) => key.toLowerCase().includes(mark));
+  } catch {
+    // No such file, or one being rewritten: nothing named.
+  }
+  return [...folders, ...keys].sort();
+}
+
+/** The three calls and what they prove; returns the evidence, or throws with every problem found. A host that could
+ * not answer (its plan's cap, its login, a timeout) is said to be unavailable, never taken for a fault of the harness. */
+function hostLoads(ctx, token) {
+  const { project, home, hostHome, root, prefix } = ctx.layout;
+  assertThat(porcelain(ctx, '--', 'AGENTS.md') === '', `${path.join(project, 'AGENTS.md')} differs from its last commit, so a run killed before it was restored left its word there: restore it with git checkout`);
+  const claude = claudeBinary();
+  const version = expectOk(withOutput(run(claude, ['--version'], { encoding: 'utf8', windowsHide: true })), 'claude --version').stdout.trim();
+  const config = path.join(home, '.claude');
+  const kept = [path.join(config, 'settings.json'), path.join(home, '.codex', 'hooks.json')];
+  const keptBefore = kept.map((file) => contentHash(readIfThere(file)));
+  const configBefore = new Set(fs.readdirSync(config));
+  const tracesBefore = realHostTraces(ctx.realHome);
+  const doctorFile = path.join(home, '.js-harness', 'doctor.json');
+  const startedAt = Date.now();
+
+  fs.rmSync(hostHome, { recursive: true, force: true });
+  for (const parts of HOST_DIRS) fs.mkdirSync(path.join(hostHome, ...parts), { recursive: true });
+  const env = hostEnv(ctx.layout, process.env, token);
+
+  // Which js-harness a hook finds: the host runs hooks in a shell of its own, and every copy says the same version.
+  const found = run('bash', ['-lc', 'command -v js-harness'], { cwd: project, env, encoding: 'utf8', windowsHide: true });
+  const resolved = String(found.stdout ?? '').trim();
+  const expected = process.platform === 'win32' ? `/${prefix[0].toLowerCase()}${prefix.slice(2).replace(/\\/g, '/')}` : prefix;
+  assertThat(resolved.toLowerCase().startsWith(expected.toLowerCase()), `the host's shell finds js-harness at ${resolved || '(nothing)'}, not under ${expected}: a hook would run another copy`);
+
+  const agents = path.join(project, 'AGENTS.md');
+  const original = fs.readFileSync(agents);
+  const word = randomUUID().replace(/-/g, '').slice(0, 12);
+  const streams = [];
+  const call = (kind, args) => {
+    const result = run(claude, [...args, ...HOST_COMMON], { cwd: project, env, encoding: 'utf8', timeout: HOST_TIMEOUT_MS, maxBuffer: CHILD_OUTPUT_LIMIT, windowsHide: true });
+    const stream = readHostStream(result.stdout);
+    streams.push(stream);
+    // The spend is kept as each call ends, so a run that fails at a later call still records what the earlier spent.
+    ctx.host = { ...hostCost(streams), binary: claude, version };
+    const timedOut = result.error?.code === 'ETIMEDOUT';
+    const failure = classifyAgentFailure({ stdout: stream.result ? JSON.stringify(stream.result) : String(result.stdout ?? ''), stderr: String(result.stderr ?? ''), exitCode: result.status, timedOut });
+    if (failure || timedOut || result.error) {
+      // What the session may have left running: the folders it ran in and from, each strictly inside the practice
+      // root, which `killByPath` refuses to sweep whole. A sweep that fails is told after the reason, never in its place.
+      let swept = '';
+      try {
+        killByPath([project, hostHome, home, prefix], { within: root });
+      } catch (err) {
+        swept = `; the sweep of what it left running failed: ${err.message}`;
+      }
+      throw new Error(`host unavailable (${failure?.kind ?? (timedOut ? 'timeout' : 'spawn')}): the ${kind} call ${failure?.message ?? result.error?.message ?? ''}${swept}`.trim());
+    }
+    const problems = hostCallProblems(kind, stream, { word });
+    assertThat(problems.length === 0, `the ${kind} call:\n${problems.join('\n')}\n${tail(String(result.stdout ?? ''), 4)}`);
+    return stream;
+  };
+  let detail;
+  let session;
+  try {
+    fs.appendFileSync(agents, `\nThe word of this run is ${word}.\n`);
+    const load = call('load', ['-p', 'Reply with the word of this run that your project instructions name, and nothing else.', '--tools', '']);
+    session = load.init.session_id;
+    fs.writeFileSync(agents, original);
+    call('skill', ['-p', 'Invoke the js-harness skill, then quote its line that starts with `js-harness check --push`, and nothing else.', '--resume', session, '--tools', 'Skill', '--allowedTools', 'Skill']);
+    call('compact', ['-p', '/compact', '--resume', session]);
+    ctx.host = { ...hostCost(streams), binary: claude, version };
+    const cost = ctx.host;
+    detail = `${version} (${claude}), ${cost.model}: three calls, ${cost.inputTokens} input, ${cost.cacheTokens} cache and ${cost.outputTokens} output tokens, ${cost.costUsd.toFixed(4)} dollars, ${cost.durationMs} ms`;
+  } finally {
+    fs.writeFileSync(agents, original);
+  }
+
+  // What the session left: the host's own files in the practice config are removed, the files the harness wrote there
+  // are as they were, the project is as it was, and the real home names no practice project.
+  // The proof the sandbox held is this session's own transcript in the practice config, not a new `projects` folder:
+  // one left by an earlier session (the probe of 2026-10-13) already stands there (run 4, 2026-10-14).
+  const projects = path.join(config, 'projects');
+  const transcripts = (fs.existsSync(projects) ? fs.readdirSync(projects) : []).map((dir) => path.join(projects, dir, `${session}.jsonl`)).filter((file) => fs.existsSync(file));
+  assertThat(transcripts.length > 0, `the session ${session} wrote no transcript under ${projects}, so the sandbox may not have held`);
+  const added = fs.readdirSync(config).filter((name) => !configBefore.has(name));
+  for (const name of added) fs.rmSync(path.join(config, name), { recursive: true, force: true });
+  for (const file of transcripts) fs.rmSync(file, { force: true });
+  kept.forEach((file, i) => assertThat(contentHash(readIfThere(file)) === keptBefore[i], `${file} changed during the host session`));
+  const differs = porcelain(ctx, '--untracked-files=no');
+  assertThat(differs === '', `tracked files of the project differ after the host session:\n${differs}`);
+  const traces = realHostTraces(ctx.realHome).filter((name) => !tracesBefore.includes(name));
+  assertThat(traces.length === 0, `the real home names the practice project after the host session: ${traces.join(', ')}`);
+  const doctorAt = fs.statSync(doctorFile, { throwIfNoEntry: false })?.mtimeMs ?? 0;
+  assertThat(doctorAt >= startedAt - 1000, `${doctorFile} was not written during the session, so js-harness doctor --hook did not run`);
+  return `${detail}\nthe hooks ran js-harness from ${resolved}; the transcript ${transcripts.map((file) => path.relative(config, file)).join(', ')} and ${added.length > 0 ? added.join(', ') : 'nothing new'} removed from ${config}; the real home names no practice project`;
+}
+
 // ---- the steps of the journey ----------------------------------------------------------------------------------------
 // One function per id of `JOURNEY`. Each returns its evidence as text, or throws with the reason it failed.
 
@@ -349,6 +478,64 @@ const STEPS = {
     return `git commit exited ${result.status} and HEAD stayed at ${short(before)}; the hook printed:\n${checkRows(result.output).join('\n')}\n${MODULE} restored, no tracked file differs`;
   },
 
+  'project-rules': (ctx) => {
+    const { project } = ctx.layout;
+    const files = practiceRuleFiles();
+    const paths = Object.keys(files);
+    const said = [];
+    // The list and the home of its rule in prose, committed once: a run after the first finds them as they are. Git
+    // decides what is stale, not the bytes on disk: a restore by `git checkout` under core.autocrlf leaves them CRLF,
+    // which differs from what the step writes and from nothing git holds (run 3, 2026-10-14).
+    for (const file of paths) {
+      fs.mkdirSync(path.dirname(path.join(project, file)), { recursive: true });
+      fs.writeFileSync(path.join(project, file), files[file]);
+    }
+    expectOk(git(ctx, project, 'add', '--', ...paths), 'git add');
+    const stale = paths.filter((file) => porcelain(ctx, '--', file) !== '');
+    if (stale.length > 0) {
+      const committed = git(ctx, project, 'commit', '-m', "practice: the project's own rules");
+      assertThat(!committed.error && committed.status === 0, `the commit of the project's own rules did not pass: ${ended(committed)}`);
+      assertThat(hasRow(committed.output, 'PASS', 'rules'), `the commit of the project's own rules passed, but its output shows no PASS rules row:\n${tail(committed.output)}`);
+      said.push(`committed ${stale.join(', ')}; the hook printed:\n${checkRows(committed.output).join('\n')}`);
+    } else {
+      said.push(`${paths.join(' and ')} already committed as the step writes them`);
+    }
+
+    const listed = expectOk(harness(ctx, 'rules'), 'js-harness rules').stdout;
+    for (const id of [PRACTICE_RULES.prose, PRACTICE_RULES.sensor]) {
+      assertThat(listed.split(/\r?\n/).some((line) => line.startsWith(`${id}  `)), `js-harness rules does not list the project's rule ${id}:\n${tail(listed)}`);
+    }
+    const checked = expectOk(harness(ctx, 'rules', 'check'), 'js-harness rules check').stdout.trim();
+
+    // Two commits that must be refused by the rules row: one drops the phrase from its home, one deletes the rule from
+    // the list instead of retiring it. Each is restored from the commit the step stands on, whatever happened.
+    const before = head(ctx);
+    const refusals = [
+      { file: 'docs/conventions.md', text: files['docs/conventions.md'].replace(PRACTICE_RULES.phrase, 'Deploy the practice project as you like'), what: 'drops the phrase of its rule' },
+      { file: 'docs/rules.json', text: listWithout(files['docs/rules.json'], PRACTICE_RULES.prose), what: `deletes the rule ${PRACTICE_RULES.prose}` },
+    ];
+    for (const { file, text, what } of refusals) {
+      let result;
+      let restored;
+      try {
+        fs.writeFileSync(path.join(project, file), text);
+        expectOk(git(ctx, project, 'add', '--', file), 'git add');
+        result = git(ctx, project, 'commit', '-m', `practice: a commit that ${what}`);
+      } finally {
+        restored = git(ctx, project, 'checkout', before, '--', file);
+      }
+      expectOk(restored, `restoring ${file} from ${short(before)}`);
+      assertThat(!result.error, `git commit could not run: ${ended(result)}`);
+      assertThat(result.status !== 0 && head(ctx) === before, `a commit that ${what} passed:\n${tail(result.output)}`);
+      assertThat(hasRow(result.output, 'FAIL', 'rules'), `a commit that ${what} was refused, but not by the rules row:\n${tail(result.output)}`);
+      said.push(`a commit that ${what} was refused (exit ${result.status}): ${checkRows(result.output).find((line) => line.startsWith('FAIL  rules  '))}`);
+    }
+    const differs = porcelain(ctx, '--untracked-files=no');
+    assertThat(differs === '', `tracked files differ after the refused commits were restored:\n${differs}`);
+    ctx.ruleFiles = Object.fromEntries(paths.map((file) => [file, contentHash(readIfThere(path.join(project, file)))]));
+    return [...said, `js-harness rules lists ${PRACTICE_RULES.prose} and ${PRACTICE_RULES.sensor}; js-harness rules check: ${checked}`].join('\n');
+  },
+
   'project-uninstall': (ctx) => {
     const { project } = ctx.layout;
     const hook = gitPath(ctx, 'hooks/pre-commit');
@@ -367,11 +554,27 @@ const STEPS = {
       `after js-harness uninstall, git status should show only what init wrote as removed:\n${expected.join('\n')}\nit shows:\n${after.join('\n') || '(clean)'}`,
     );
 
+    // The project's own rules are the project's: no command of the harness wrote them, and uninstall leaves them byte for byte.
+    for (const [file, hash] of Object.entries(ctx.ruleFiles ?? {})) {
+      assertThat(contentHash(readIfThere(path.join(project, file))) === hash, `${file}, the project's own, is not as it was after js-harness uninstall`);
+    }
+
     expectOk(harness(ctx, 'init', '--cwd', project), 'js-harness init, again');
     assertThat(fs.existsSync(hook), `${hook} is missing after the second js-harness init`);
     const differs = porcelain(ctx, '--untracked-files=no');
-    assertThat(differs === '', `tracked files differ after the second js-harness init:\n${differs}`);
-    return `uninstall removed the hook, the project manifest, harness.json, AGENTS.md and .codegraph, and git status showed:\n${after.join('\n')}\ninit again: the hook is back and no tracked file differs`;
+    const agentsText = readIfThere(path.join(project, 'AGENTS.md'))?.toString('utf8');
+    const problem = secondInitProblem(differs, agentsText, agentsTemplate(project));
+    assertThat(problem === null, problem);
+    // The one change accepted, AGENTS.md rewritten to this candidate's template, is committed as its owner would, so
+    // the steps after this one find the project clean (the host step refuses an AGENTS.md that differs from HEAD).
+    let templated = '';
+    if (differs !== '') {
+      expectOk(git(ctx, project, 'add', '--', 'AGENTS.md'), 'git add AGENTS.md');
+      const committed = git(ctx, project, 'commit', '-m', "practice: AGENTS.md of the candidate's template");
+      assertThat(!committed.error && committed.status === 0, `the commit of the candidate's AGENTS.md template did not pass: ${ended(committed)}\n${tail(committed.output)}`);
+      templated = `; AGENTS.md took this candidate's template and was committed as ${short(head(ctx))}`;
+    }
+    return `uninstall removed the hook, the project manifest, harness.json, AGENTS.md and .codegraph, and git status showed:\n${after.join('\n')}\ninit again: the hook is back and no tracked file differs${templated}`;
   },
 
   'global-uninstall': (ctx) => {
@@ -416,6 +619,20 @@ const STEPS = {
     return `the first run printed one PostToolUse notice of ${first.stdout.trim().length} characters; the second run printed nothing, and so did the run from ${outside}, where no harness.json lies above; all three exited 0`;
   },
 
+  'host-loads': (ctx) => {
+    // The login is read here and set on the host's environment only; every text the step hands on is redacted of it.
+    const token = process.env.JS_HARNESS_EVAL_OAUTH_TOKEN;
+    assertThat(typeof token === 'string' && token !== '', 'no JS_HARNESS_EVAL_OAUTH_TOKEN: `claude setup-token` makes a token, set as that variable; this step spends a model, and `run --no-host` leaves it out');
+    try {
+      return redacted(hostLoads(ctx, token), token);
+    } catch (err) {
+      throw new Error(redacted(err.message, token));
+    } finally {
+      // The scratch home is the host's alone.
+      fs.rmSync(ctx.layout.hostHome, { recursive: true, force: true });
+    }
+  },
+
   'real-home-after': (ctx) => {
     assertThat(ctx.before !== undefined, 'no snapshot was taken before the run, so there is nothing to compare with');
     ctx.differences = compareSnapshots(ctx.before, snapshot(ctx.homeFiles));
@@ -427,7 +644,7 @@ const STEPS = {
   record: (ctx) => {
     // This step's own result goes into the line it writes: if the append fails, no line says it passed.
     const own = { id: 'record', ok: true, detail: ctx.layout.record };
-    const line = recordLine({ date: ctx.date, candidate: ctx.candidate, steps: [...ctx.results, own], node: process.version, platform: process.platform });
+    const line = recordLine({ date: ctx.date, candidate: ctx.candidate, steps: [...ctx.results, own], node: process.version, platform: process.platform, left: ctx.left, host: ctx.host });
     fs.appendFileSync(ctx.layout.record, `${line}\n`);
     return own.detail;
   },
@@ -446,7 +663,7 @@ function printStep({ status, title, detail, failed }) {
 /** `run --root <dir>`: the journey, one PASS or FAIL per step. The pure part walks it (`walkJourney`): after
  * the first failure the remaining steps are skipped, except the two that always run. Returns 0 only when
  * every step passed, which includes the one that compares the real home. */
-function journey(root) {
+function journey(root, { noHost = false, only } = {}) {
   const layout = practiceLayout(root);
   if (!ownsFolder(readIfThere(layout.marker)?.toString('utf8'))) {
     console.error(`practice run refused: ${root} has no marker of this command (${layout.marker}), and run deletes and rewrites inside its folder. Create one with setup.`);
@@ -463,13 +680,26 @@ function journey(root) {
   const ctx = { layout, env: childEnv(layout, process.env), npmCli, realHome: os.homedir(), date: new Date().toISOString(), results: [] };
   ctx.candidate = candidateOf(ctx);
 
-  const { ok, passed, unreported } = walkJourney({ journey: JOURNEY, steps: STEPS, ctx, report: printStep });
+  // `--no-host` leaves out the one step that spends a model; `--only` runs one step between the two looks at the real
+  // home and the record, on a folder a whole journey already prepared. Either way the record names what was left out.
+  let walked = JOURNEY;
+  if (noHost) walked = JOURNEY.filter(({ id }) => id !== HOST_STEP);
+  if (only !== undefined) {
+    const prepared = fs.existsSync(installedBin(layout.prefix)) && fs.existsSync(path.join(layout.project, 'harness.json'));
+    if (!prepared) {
+      console.error(`practice run --only refused: ${root} holds no finished journey (an installed candidate and an initialized project); run the whole journey first`);
+      return 1;
+    }
+    walked = JOURNEY.filter(({ id }) => id === only || id === 'real-home-before' || ALWAYS_RUN.includes(id));
+  }
+  ctx.left = JOURNEY.filter((step) => !walked.includes(step)).map(({ id }) => id);
+  const { ok, passed, unreported } = walkJourney({ journey: walked, steps: STEPS, ctx, report: printStep });
 
   let realHome = 'not compared';
   if (ctx.differences?.length === 0) realHome = 'unchanged';
   else if (ctx.differences) realHome = ctx.differences.map(({ path: file, change }) => `${change} ${file}`).join(', ');
   const { branch, commit, dirty } = ctx.candidate;
-  console.log(`\ncandidate ${branch} ${commit} (${dirty ? 'dirty' : 'clean'}): ${passed} of ${JOURNEY.length} steps passed; real home: ${realHome}`);
+  console.log(`\ncandidate ${branch} ${commit} (${dirty ? 'dirty' : 'clean'}): ${passed} of ${walked.length} steps passed${ctx.left.length > 0 ? ` (left out: ${ctx.left.join(', ')})` : ''}; real home: ${realHome}`);
   // A run whose lines could not all be printed did not tell what it found: its record line stands, and it
   // does not exit 0.
   if (unreported !== undefined) console.error(`practice run could not print every line of the journey: ${unreported}`);
@@ -545,7 +775,7 @@ export function main(argv = process.argv.slice(2)) {
   }
   try {
     const root = throughLinks(parsed.root);
-    return parsed.command === 'setup' ? setup(root) : journey(root);
+    return parsed.command === 'setup' ? setup(root) : journey(root, parsed);
   } catch (err) {
     console.error(`practice ${parsed.command} failed: ${err.message}`);
     return 1;

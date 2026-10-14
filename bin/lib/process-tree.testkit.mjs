@@ -10,10 +10,23 @@
 //    createdAt }`, when it is learned, and is killed with `killProcesses`, which checks the creation time again.
 //    A pid that was not running then, or started before `since`, has no identity and is never killed.
 // POSIX: the module has no creation-time lookup there, so a learned pid is signalled by its number, as before.
+import fs from 'node:fs';
 import { spawnSync as spawnChildSync } from 'node:child_process';
 import {
   CLOCK_TOLERANCE_MS, identifyProcesses, killProcesses, killSurvivors, resolveRoot, selectDescendants, takeSnapshot,
 } from './process-tree.mjs';
+
+/** The state letter Linux gives the process `pid` in /proc/<pid>/stat (`R`, `S`, `Z` for a zombie...), or `null` where
+ * there is no such file to read: another POSIX system, or a process gone since it answered. The name in parentheses
+ * can hold spaces and parentheses, so the state is read after the last `)`. */
+function readProcState(pid) {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[0] || null;
+  } catch {
+    return null;
+  }
+}
 
 const createdOn = (ms) => (Number.isFinite(ms) ? `created ${new Date(ms).toISOString()}` : 'whose creation time Windows does not give');
 // How many snapshots a look takes at most while a recorded pid answers under a row with no creation time: a process in
@@ -47,7 +60,7 @@ function describeLook(pid, recorded, row, rows) {
  * row with no creation time is looked at again, the whole look taken anew, three snapshots in all, and only then
  * thrown: a process in the middle of its exit can be listed so for an instant. Thrown, its identity cannot be told,
  * so it is neither alive nor gone. POSIX: the answer to the number stands. Nothing is ever signalled by a look. */
-export function createReaper({ platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill } = {}) {
+export function createReaper({ platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill, procState = readProcState } = {}) {
   const children = new Set();
   const learned = new Map(); // pid -> identity
 
@@ -99,7 +112,15 @@ export function createReaper({ platform = process.platform, spawnSync: sync = sp
     look(pids) {
       let answering = new Set(pids.filter(answers));
       if (platform !== 'win32') {
-        return pids.map((pid) => ({ pid, alive: answering.has(pid), found: answering.has(pid) ? `pid ${pid} answers (no creation time is read on POSIX, so the number is all there is)` : null }));
+        return pids.map((pid) => {
+          if (!answering.has(pid)) return { pid, alive: false, found: null };
+          // A number answers for a zombie too: a process killed with its group, reparented, waiting for init to reap
+          // it. It is dead, and Linux says so in /proc.
+          const state = procState(pid);
+          if (state === 'Z') return { pid, alive: false, found: `pid ${pid} answers, and /proc says it is a zombie (Z): dead, waiting to be reaped` };
+          if (state === 'X') return { pid, alive: false, found: `pid ${pid} answers, and /proc says it is dead (X)` };
+          return { pid, alive: true, found: `pid ${pid} answers (${state ? `state ${state}; ` : ''}no creation time is read on POSIX, so the number is all there is)` };
+        });
       }
       for (let snapshot = 1; ; snapshot += 1) {
         const rows = new Map(answering.size === 0 ? [] : takeSnapshot({ spawnSync: sync }).map((row) => [row.pid, row]));

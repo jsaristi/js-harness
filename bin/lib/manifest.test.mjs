@@ -1832,6 +1832,20 @@ test('the orchestrator skill says what may run beside a running gate, and what a
   assert.ok(text.includes('touches only documentation and none of the files the pull request changes'));
 });
 
+test('the orchestrator skill merges code on a green run of the merge with the current default branch, and documents on a clean merge-tree', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('- A pull request that changes code is merged on a green run of the project\'s CI whose checkout says it tested `Merge <head> into <base>`, with that base the default branch as origin has it now.'));
+  assert.ok(text.includes('A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today.'));
+  assert.ok(text.includes('The merge\'s message names the run, the base it tested and the head.'));
+  assert.ok(text.includes('- A pull request that changes only documentation (the docs folder and the feature documents; never the agents\' instructions or the harness\'s configuration) is merged without waiting for that run, when `git merge-tree` of the default branch and the head is clean.'));
+  assert.ok(text.includes('- Where the project has no such run,'), 'the gate rule stays for a project without CI');
+});
+
+test('the orchestrator skill lists what is checked before the user leaves', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('- Before the user leaves, check and say: every session that waits has a declared wait running in its background work, none ended its turn to wait for the user, and your own watch is running.'));
+});
+
 test('the js-harness skill names the command that writes a notice between sessions', () => {
   const text = components[0].content('0.1.0');
   assert.ok(text.includes('- `js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"`'));
