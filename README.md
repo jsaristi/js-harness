@@ -42,8 +42,8 @@ only those files, and all of them. Measured on Windows with an empty home and an
 
 - the project is left as it was: `git status` shows nothing;
 - the home keeps the empty folders `.claude/` and `.codex/`, and an empty `AppData/Roaming/`;
-- the home also keeps `.codegraph/`, two telemetry files that codegraph writes itself when
-  `init` runs `codegraph init`. js-harness did not write them, so it does not remove them.
+- the home keeps no `.codegraph/`: `init` runs `codegraph init` with `DO_NOT_TRACK=1`, so codegraph
+  writes no telemetry there (measured on codegraph 1.6.0).
 
 ## Commands
 
