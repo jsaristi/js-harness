@@ -40,12 +40,12 @@ First request of a one-word prompt, estimated tokens:
 
 | Area | Decision |
 |------|----------|
-| Name, home | `js-harness`, `D:\js-harness`, `github.com/jsaristi/js-harness` (private) |
+| Name, home | `js-harness`, `D:\js-harness`, `github.com/jsaristi/js-harness`, private, and it stays private: asked when he means to make it public, he tapped "Se queda privado" (the lead's transcript `65318fd5`, line 13033, 2026-10-13, read with `sessions --quote`), which changes his words of 2026-09-26 that it would become public (transcript `2c923152`, line 72) |
 | Hosts | Claude Code and Codex (CLI + desktop) now; Antigravity later, once its model is worth adopting |
 | Stack | gentle-ai 4 (ODD, RDD review, test-first by default), engram 3 (the binary, and its Claude plugin since `gentle-ai sync` installs it: hooks and one skill, no second MCP server), codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` on every turn — Claude Code reads it natively; the skills `install` writes for each host (`js-harness`, `js-harness-orchestrator`) load on demand |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
-| Release source | Decided and not built: git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: until the first tag `update`, `upgrade` and `status` say that no release is tagged yet, and `upgrade` installs only the newer tarball of a folder named with `--source` (2026-10-13, `odd/tasks/install-update.md`, T5). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
+| Release source | Decided and not built: git tags in the private repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it stays private (Name, home), so that step has no date. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: until the first tag `update`, `upgrade` and `status` say that no release is tagged yet, and `upgrade` installs only the newer tarball of a folder named with `--source` (2026-10-13, `odd/tasks/install-update.md`, T5). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`). A project may declare `"sameTree": "skip"`: a gate whose tree, file for file, with the same sensors on the same Node, is the one a gate already ran every sensor on and passed, by a line of the gate log, runs no sensor and takes no lock, and says in its row which gate is the proof; off unless declared, since the key of a tree holds no file git ignores; this repository declares it (his decision of 2026-10-12, the lead's transcript, line 3913; built 2026-10-13, `odd/tasks/gate-wait.md`, T12) |
@@ -85,7 +85,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián on 2026-10-06, closed by him on 13 of its 15 trials on 2026-10-12, and brought to `main` on 2026-10-13 from a branch cut from it (see "F6 result") |
-| F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
+| F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | Procedure written 2026-10-14: [future-model.md](future-model.md), version 2 after one reader (`odd/tasks/future-model-protocol.md`); it cannot run on a new model until its gaps are built: G5, G6, G3 and G2 cleared for that feature, G1, G4 and G7 later |
 
 ## Checklist
 
@@ -132,7 +132,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] `uninstall` in a project restores it exactly
 - [x] `sync` moves a project to its pinned version
 - [x] The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and the machine commands outside one
-- [x] `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged in, with its fix command
+- [x] `doctor` reports the Codex CLI (installed and logged in) when the project's codexReview switch is on, with its fix command
 - [x] The Codex review of each approved code slice leaves a record a check verifies, so a skipped review is caught
 
 ### F3 Task contract
@@ -177,7 +177,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] Differences measured and written down
 
 ### F7 Future-model protocol
-- [ ] Written procedure: measure payload, run evals, strip one component at a time
+- [x] Written procedure: measure payload, run evals, strip one component at a time ([future-model.md](future-model.md))
 
 ## F5 result
 
@@ -508,7 +508,9 @@ stack already says is not repeated: on this machine the global `CLAUDE.md` holds
 technical claims before stating them" (checked); whether gentle-ai writes that line on
 every machine is not known and is looked up before the line is worded. And the line has to earn its tokens like any other piece (principle 2): an eval task
 whose honest answer is "this could not be verified", scored with and without the line. If
-the score does not move, the sensors stay and the sentence goes.
+the score does not move, the sensors stay and the sentence goes. (Since 2026-10-14 this eval is
+T10 of "JH 15 · auditoría de honestidad", `odd/tasks/honesty-audit.md` on `feat/honesty-audit`,
+moved there from rule-hierarchy's T10 by the lead.)
 
 Working as a team, asked and accepted the same day. His words: always pass clear information
 between sessions and agents, verified, without hiding what matters. The reading: a message
@@ -533,7 +535,9 @@ Three things he had not named, proposed and accepted with the rest:
 - An honesty audit: the reader of transcripts built for the session board could take a
   session's final report and check what can be checked (the paths and commits exist, the
   test count is the one that ran). That it can be built cheaply on that reader is an
-  assumption, to be confirmed by reading the code before it is promised.
+  assumption, to be confirmed by reading the code before it is promised. (Since 2026-10-14 this
+  audit, C9, is T14 of JH 15's `odd/tasks/honesty-audit.md`, moved there from rule-hierarchy's
+  T14 by the lead.)
 - Reversible by default: what cannot be undone asks first, the rest records how it is
   undone. The harness already does this for what it installs.
 
@@ -1158,6 +1162,18 @@ recommended; everything keeps entering as today; everything is noted, his too), 
 same way). So an improvement that appears becomes a task of the first version, not a note for
 after it.
 
+**`docs/SPEC.md` is written last**, when everything else of the first version is finished and
+the code is still, before the practice run and the tag; it stays rule-hierarchy's (T1). Asked
+who writes it, he tapped "Al final, con el código quieto" (the lead's transcript `65318fd5`,
+line 13982, 2026-10-13, read with `sessions --quote`), among a seventh session (the one
+recommended) and this session after the README. His reason, in the message that asked for it
+(line 13936): "necesitamos hacer la documentacion muy bien para que se pueda hacer perfecto solo
+con ese documento". Its design is in "Rule hierarchy" above. Meanwhile each feature, at its
+close, sends the lead one note per capability it built in the document's five parts, which the
+lead keeps for whoever writes it. That is the lead's reading of his answer to how the sessions
+leave those notes (line 14050, tapped "Que me lo manden a mí", among a section in each document,
+the one recommended, and a file for each capability).
+
 **Defects in shipped behaviour that had no task, read in the code on 2026-10-13** (`main` at
 `f98f478`). They came as claims of the lead's readers and of the session-channel session;
 each was read by the rule-hierarchy session before it was written here, and all six are true.
@@ -1333,7 +1349,10 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
 
 1. Disconnecting the unused Magnific connector (the largest single per-turn item).
 2. Permission mode: currently `bypassPermissions`; the documented alternative is auto mode. He changes it himself.
-3. Whether the Gentleman persona stays part of the stack.
+3. **Answered on 2026-10-13: the Gentleman persona stays part of the stack.** Whether it stays.
+   His words, typed (the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 12096,
+   read with `sessions --quote`): "Si al estilo de Gentlema y listo dame para abrir las 2
+   sesiones". He answered it as it stood, before the cost of each option was read.
 4. The codegraph `UserPromptSubmit` hook: keep, narrow or drop it. Replaying this project's 55
    real prompts, it fired on 33; 16 of those injected a full ~4k-token code exploration, often
    for prompts with no code intent — ~1.2k tokens per prompt on average, kept in the history
@@ -1387,16 +1406,35 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    When: after JH 8's cut of the review command is on `main`; not assigned. A third sample of
    the switch, the lead's claim: his prompt of line 8250 carries no attachment of the hook,
    where the one of line 8161 had one at line 8163.
+   **Held by "JH 9 · funciones a demanda y revisión de Codex opcional"** since 2026-10-13, by his
+   answer to how many sessions open ("Dos nuevas: cinco (Recomendada)", the same transcript, line
+   12000). Its design is JH 9's document, `odd/tasks/on-demand-functions.md`, which closes this
+   decision; his four answers to it, each read with `sessions --quote` in the same transcript:
+   where the Codex review is on, it is demanded before a push, in an installed project too
+   ("Sí, se exige (Recomendada)", line 12777; today it is demanded only in js-harness and is
+   advice elsewhere); in a new project it starts by itself ("Sola (Recomendada)", line 12795);
+   installed projects turn the paste of the code map, and a TypeScript server they do not need,
+   off at their update, and say so ("Sí, y avisa (Recomendada)", line 12814); with the Codex
+   review off, gentle-ai reviews high and medium risk ("Riesgo alto y medio (Recomendada)", line
+   12828).
 5. Whether the Codex review stays at `high` at what it costs (the number is in "Codex review
    cost result").
 6. What the harness turns on by default in a project from the sub-agent models result
    ("Subagent models result", the recommendation). For this repository's way of working it is
    decided (2026-10-11): the writing sub-agent on Haiku 5.5.
 7. The gate run by GitHub on every pull request: the repository is private, so its runs spend
-   the account's minutes ("Session channel", the order, item 2).
+   the account's minutes ("Session channel", the order, item 2). **Answered on 2026-10-13, held
+   by "JH 10 · comprobación en GitHub"** (by line 12000 above), each line read with `sessions
+   --quote` in the lead's transcript `65318fd5`: no payment method on the GitHub account, now or
+   later ("no tiene tarjeta, dejémosla sin tarjeta", line 12461); the gate on GitHub runs on
+   Linux at each push to a pull request with code ("En cada PR con código (Recomendada)", line
+   12491). JH 10's `odd/tasks/gate-on-github.md` holds the design.
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks
    (`odd/tasks/codex-review-lean.md`, "Proposal for the Codex plugin").
-9. What the README holds (Next, the defects read on 2026-10-13, item b). Options: what the
+9. **Answered on 2026-10-13: one page and each command** ("Una página y cada comando", question
+   22, the lead's transcript `65318fd5`, line 10979, read with `sessions --quote`); built on
+   2026-10-14 (pull request 123), with a test that holds its commands to the dispatcher's.
+   What the README holds (Next, the defects read on 2026-10-13, item b). Options: what the
    harness is and how to install and remove it, in one page; that and each command with an
    example; or none until the first version, with the roadmap as the only description.
 10. **Answered on 2026-10-13: `bin/` without its tests and no `AGENTS.md`** ("Solo los comandos",
@@ -1406,7 +1444,10 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
     `AGENTS.md`; or as today.
 
 Closed: the F5 spend ceiling (none; see Decided, Eval spend). F6's missing trials: closed
-without them, on 13 of 15, by his answer of 2026-10-12 (Next, item 1, with its line).
+without them, on 13 of 15, by his answer of 2026-10-12 (Next, item 1, with its line). Whether
+`init` writes a version into a `harness.json` that has none: it does not, as today ("Dejarlo
+como hoy (Recomendada)", the lead's transcript `65318fd5`, line 12059, 2026-10-13, read with
+`sessions --quote`; JH 8's `odd/tasks/install-update.md` holds it).
 
 ## Risks
 

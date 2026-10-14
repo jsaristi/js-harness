@@ -30,6 +30,19 @@ In the evidence, "relief file" is the orchestrator's relief file,
 marks what a record only reports from a session's message. One `- Seen:` line is one occurrence;
 other places that record the same occurrence are named in its note.
 
+### answer-line-wrong-entry
+The line of his answer was found by a text search and taken from the wrong entry, then written to
+the record and sent to sessions without the line being read, in a command where the append did not
+depend on `sessions --quote` exiting 0.
+- Class: wrong-information
+- Seen: 2026-10-13 — relief file, line 615 — lines 9780 and 9799 of the lead's transcript, early
+  that day
+- Seen: 2026-10-13 — the lead's message to JH 7 at 19:54 (claimed; the lead's own) — that evening,
+  lines 12783, 12805, 12818 and 12838 were sent to four sessions for his answers at 12777, 12795,
+  12814 and 12828 (each of the four read here with `sessions --quote`)
+- Control: check — bin/notify.test.mjs — "an answer to a question-tool call is verified when the call
+  was asked after its question, and answers it only by its prefix" — since 2026-10-13
+
 ### asked-yes-not-his
 A session stopped and asked him for a yes on a step that was not one of the things that are his.
 - Class: asked-of-him
@@ -56,8 +69,8 @@ commits of `main` and answer with a range many times too large.
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — `main` had moved without being merged
   in, and an assessment asked with `--base-ref origin/main` counted 2,552 lines that were not the
   branch's; the branch point as the base gave the real range
-- Control: owed — odd/tasks/rule-hierarchy.md — "the push row hints the merge commit as the base
-  after `main` is merged in"
+- Control: owed — odd/tasks/commands-and-doctor.md — "The push row hints the merge commit as the base
+  after `main`"
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
@@ -195,8 +208,8 @@ A session ran a command it did not know, to read its help, and the command acted
   installed four files and a hook entry on his machine
 - Seen: 2026-10-12 — relief file, line 409 — JH 8 ran `check --help` and it started a gate, which
   went to wait and was stopped before it ran anything (claimed)
-- Control: owed — odd/tasks/rule-hierarchy.md — "Every command that writes outside the repository
-  refuses a flag it does not know"
+- Control: owed — odd/tasks/commands-and-doctor.md — "The five lenient commands above refuse an
+  unknown"
 
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at
@@ -255,6 +268,8 @@ session can neither be told nor tell, and each notice becomes his paste.
   told the order
 - Seen: 2026-10-10 — relief file, line 140 — a finished feature waited six hours for his paste
   (given at line 134, pasted at line 143)
+- Seen: 2026-10-13 — relief file, line 550 — three messages of JH 7, written between 00:52 and
+  01:10, reached the lead after 04:20, held by the host
 - Control: owed — odd/tasks/session-channel.md — "The row `session-classes` of `doctor`, with the
   exact fix in its line"
 - Proof: a practice step: a notice read with no message sent (owed: nothing prints it yet)
@@ -265,7 +280,7 @@ his and named files that do not exist.
 - Class: delivery
 - Seen: 2026-10-10 — relief file, line 181 — four blocking items found by a reader that did not
   write it; also odd/tasks/rule-hierarchy.md:768
-- Control: owed — odd/tasks/rule-hierarchy.md — "The row `citations`, INFO"
+- Control: owed — odd/tasks/commands-and-doctor.md — "The row `citations`, INFO"
 
 ### diagnostic-whole-gate
 A retry command ran a whole gate as a diagnostic after a failed commit, twenty minutes of the
@@ -304,6 +319,12 @@ on it.
   estimates and not marked
 - Seen: 2026-10-11 — relief file, line 220 — the roadmap says "some fifty thousand git processes"
   (docs/ROADMAP.md:767); counted, 15,467 (claimed by JH 6)
+- Seen: 2026-10-13 — relief file, line 615 — "62 of 352, modest", the figure of JH 10's first
+  version of a design, was told to him before its readers had read it; its readers made it about a
+  third. A figure reaches him only from the version after the readers
+- Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
+  06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
+  the first read after 26 percent at about 04:30
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
@@ -402,8 +423,29 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-12 — relief file, line 436 — a message of JH 7 stamped 14:58 was sent at 14:53;
   a second one the same day said 16:47 for 16:45 (odd/tasks/rule-hierarchy.md, Progress of that
   day)
+- Seen: 2026-10-12 — the orchestrator's transcript 65318fd5, line 4959 — a message of the lead
+  stamped "14:46 local by date" was sent at 14:44; found by JH 15's reader
+  (odd/tasks/honesty-audit.md, Log), the time read again here from the line's timestamp
+- Seen: 2026-10-12 — the orchestrator's transcript 65318fd5, line 5409 — "15:47 local by date" was
+  sent at 15:41; found by the same reader, read again here the same way
+- Seen: 2026-10-13 — the lead's message to JH 7 at 20:17 (claimed; the lead's own) — the hours of
+  its messages "by date" ran about seven minutes ahead, carried from an earlier read
+- Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
+  05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
+  relief line, not a feature document
 - Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
   of the clock, and says the command wrote it" — since 2026-10-11
+
+### init-leaves-codegraph-files
+`init` runs `codegraph init`, which writes files under the home that no manifest records, so
+`uninstall --global` leaves them: what the harness writes outside the repository is not undone
+exactly.
+- Class: tool
+- Seen: 2026-10-14 — README.md, "## Remove" — after `install`, `init`, `uninstall` and `uninstall
+  --global` in an empty temporary home, the home kept `.codegraph/telemetry-queue.jsonl` and
+  `.codegraph/telemetry.json`, beside the empty `.claude/`, `.codex/` and `AppData/Roaming/`; the
+  fix (record what `codegraph init` creates, or remove those two files on uninstall) is JH 9's, in
+  docs/todo.md
 
 ### installed-copy-stale
 The command on PATH was an old copy with no way to tell: the version reads 0.1.0 before and after,
@@ -550,6 +592,29 @@ stops nothing.
 - Seen: 2026-10-11 — relief file, line 194 — Chrome with a video open six and a half hours and
   nobody saw it
 
+### permission-prompt-unseen
+A tool call of a work session waited on its permission prompt for almost seven hours: he was not
+asked through the lead, and the session could neither go on nor tell anyone, since the messages sent
+to it were delivered only after the prompt was answered.
+- Class: unseen-state
+- Seen: 2026-10-13 — this session's (JH 7) transcript 9265156a, lines 16871 and 16883 — the call
+  that committed with its message file outside the scratchpad was made at 17:02, and its result,
+  "User rejected tool use", is written at 23:47; the lead's messages sent to the session meanwhile
+  were delivered at 23:47 too (lines 16885 to 16900). His words, the lead's transcript ca93c7ef, line 957, read with `sessions --quote`: "pero
+  no entiendo por que no me pasa la pregunta para aca como ya habiamos quedado y cementado". The
+  lead's question to him said the command was refused at 17:50 (line 953); the transcript's times
+  do not show that
+- Control: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool
+  and through the orchestrator"
+
+### pnpm-pack-refuses-crlf
+pnpm's own pack refuses this checkout on Windows, where `bin/js-harness.mjs` is checked out with
+CRLF; whether an install by pnpm from the repository meets it is not measured.
+- Class: tool
+- Seen: 2026-10-13 — the lead's message to JH 7 at 19:02 (claimed; JH 8's) — `ERR_PNPM_BIN_CRLF`
+  from pnpm's pack; the lead's install of that day from GitHub with `pnpm add -g` did complete; a
+  `.gitattributes` line with `eol=lf` for `bin/` would be the fix if an install meets it
+
 ### pnpm-update-leaves-lock
 The only road to update the installed command exits 1 on this machine and leaves a lock folder that
 makes the next try wait five minutes and fail.
@@ -559,6 +624,13 @@ makes the next try wait five minutes and fail.
   found on 2026-10-11 was dated 2026-10-09 17:40
 - Seen: 2026-10-11 — relief file, line 201 — two tries, both exit 1; the lock folder left again,
   removed by hand twice
+
+### probe-end-hook-flake
+A gate failed on `evals/codex-isolation-probe.test.mjs` as a whole, with no test of it red, and the
+failure did not come back on the next run.
+- Class: tool
+- Seen: 2026-10-13 — relief file, line 561 — the first gate of the merge c05e1c6 failed in 470.9 s;
+  JH 8's inference (claimed): the end hook's removal of its folder
 
 ### process-left-after-stop
 Stopping a task from the app or with `pkill` ended what the app tracks and left the process under it
@@ -575,6 +647,16 @@ The board counted the few seconds of a push's check as a second gate.
 - Class: unseen-state
 - Seen: 2026-10-07 — odd/tasks/session-board.md:978-984 — "gate started ... while another runs" for
   a pre-push hook
+
+### question-tool-holds-asker
+The question tool holds the session that asks until he answers, so a question asked while he was
+away held the lead, and the merges it owed, for seven hours.
+- Class: tool
+- Seen: 2026-10-13 — relief file, line 560 — asked at about 05:57 when his last word was of 04:2x,
+  answered at about 13:05; pull request 98 waited from 06:30, 99 from 07:16, 100 from 07:32, and
+  JH 8 had nothing to do from 07:32
+- Control: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool
+  and through the orchestrator"
 
 ### record-states-wrong-fact
 A record held a fact that was not true when written or stopped being true, and was read later as it
@@ -633,7 +715,7 @@ it or did not follow it.
   odd/tasks/rule-hierarchy.md:15-18
 - Seen: 2026-10-10 — relief file, line 137 — a rule changed in a memory note; a session with the new
   note loaded still proposed the cut (line 138)
-- Control: owed — odd/tasks/rule-hierarchy.md — "The row `memory-rules` of `doctor`"
+- Control: owed — odd/tasks/commands-and-doctor.md — "The row `memory-rules` of `doctor`"
 - Proof: `doctor`: no `memory-rules` gap (owed: nothing prints it yet)
 
 ### script-ate-backslashes
@@ -698,6 +780,14 @@ already stale.
 - Seen: 2026-10-07 — docs/ROADMAP.md:1067-1069 — "sent stale prompts twice"; the day is that of his
   request, the days of the two sends are not stated
 - Control: line — AGENTS.md — "End each reply with one state" — since 2026-10-09
+
+### stop-read-as-refusal
+The app words a turn stopped by another session as his refusal of a tool call, so the stopped
+session believed he had rejected it and asked for his word.
+- Class: unseen-state
+- Seen: 2026-10-13 — relief file, line 565 — JH 5 asked the lead to put to him whether it goes on;
+  he had rejected nothing: the lead had stopped that turn, and the app listed the session as running
+  at 13:08 and at 14:10, which it would not after a refusal at 07:00
 
 ### stopped-work-shown-live
 A task stopped by hand, and a session that was archived, are printed by the board as live.
@@ -778,6 +868,15 @@ was not so.
   four times that JH 8's cut was pending after he had sent both blocks: a notice between sessions
   carried forward as a present fact; the stopgap is one line to the lead as a session's first act
   after a compaction
+- Seen: 2026-10-13 — the lead's message to JH 7 at 19:54 (claimed; the lead's own) — he was told
+  "that exchange is the one you did not take on the 12th", the sessions' wording repeated without
+  reading his lines, 1384 and 1441, which say otherwise; corrected to him. A statement that he
+  decided something is made only after his line is read with `sessions --quote`
+- Seen: 2026-10-13 — the lead's message to JH 7 at 20:17 (claimed; the lead's own) — for an hour
+  he was told the check had slowed because sessions were added, and a search was ordered on that
+  reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
+  taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
+  a gate now names the processes that spent the processor before its command
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 

@@ -298,6 +298,21 @@ function turnOf(entry) {
   return blocks.some((block) => isText(block) && block.text.startsWith('[Request interrupted')) ? 'ended' : 'working';
 }
 
+/** How an interruption ended a turn: `'refused'` when a tool call was refused, `'interrupted'` when the turn was
+ * stopped, `null` for an entry that is no interruption. The host writes the same text when another session stops
+ * this one, so it says how the turn ended and never who ended it. */
+function stopOf(entry) {
+  if (entry.type !== 'user') return null;
+  const text = blocksOf(entry).find((block) => isText(block) && block.text.startsWith('[Request interrupted'))?.text;
+  if (text === undefined) return null;
+  return text.startsWith('[Request interrupted by user for tool use]') ? 'refused' : 'interrupted';
+}
+
+/** The words of a stop (`stopOf`), for the board and the watch. */
+const STOP_WORDS = { refused: 'a tool call of it was refused', interrupted: 'its turn was interrupted' };
+const STOPPED_BY = "by the user or by another session's stop";
+const stopWords = (stopped) => `${STOP_WORDS[stopped.how]}, ${STOPPED_BY}`;
+
 /** Whether `entry` is a reply of the session itself: an assistant entry that is no side chain's and that
  * the harness did not write in the session's place (model `<synthetic>`). It is what answers an
  * instruction (`sessionFacts`, `lastTask`), whether or not it records what it was sent with (`contextOf`). */
@@ -496,6 +511,7 @@ export function sessionFacts(
   let gitBranch = null;
   let turn = null;
   let turnEndedAt = null;
+  let stoppedHow = null;
   let lastReply = null;
   let context = null;
 
@@ -560,6 +576,7 @@ export function sessionFacts(
     if (said !== null) {
       turn = said;
       turnEndedAt = said === 'ended' ? (entry.timestamp ?? null) : null;
+      stoppedHow = said === 'ended' ? stopOf(entry) : null;
     }
 
     for (const { task, toolUse, status } of notificationsOf(entry)) {
@@ -690,6 +707,9 @@ export function sessionFacts(
     lastTaskFits: room === null || lastTask.unavailable !== undefined ? null : lastTask.tokens <= room,
     state,
     turnEndedAt,
+    // A turn the person refused or stopped, while the session has not acted since: it waits for them.
+    // Work it launched may still run (state `background`): the turn is stopped all the same.
+    stopped: turn === 'ended' && stoppedHow !== null ? { how: stoppedHow, at: turnEndedAt } : null,
     work,
     pendingCall,
     tail: tail > 0 && lastReply !== null ? lastReply.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() !== '').slice(-tail) : [],
@@ -2236,10 +2256,13 @@ function sessionChanges(before, after, self) {
     else if (session.state === 'waiting' && was.state !== 'waiting') {
       const open = was.work.filter((work) => !work.ended).length;
       const how = was.state === 'background' ? `: the ${pieces(open)} it had open ended` : '';
-      lines.push(`${sessionLabel(session)} is waiting${how} (was ${was.state})`);
+      lines.push(`${sessionLabel(session)} is waiting${how} (was ${was.state})${session.stopped ? `: stopped: ${stopWords(session.stopped)}` : ''}`);
     } else if (session.state === 'waiting' && session.turnEndedAt !== was.turnEndedAt) {
       // Waiting at both looks, but not at the same point: it was given something and finished it.
-      lines.push(`${sessionLabel(session)} finished another turn and is waiting`);
+      lines.push(`${sessionLabel(session)} finished another turn and is waiting${session.stopped ? `: stopped: ${stopWords(session.stopped)}` : ''}`);
+    } else if (session.state === 'background' && session.stopped && session.stopped.at !== was.stopped?.at) {
+      // Stopped while work it launched runs on: no line above says it, so it is said once, here.
+      lines.push(`${sessionLabel(session)} stopped: ${stopWords(session.stopped)} (its open work runs on)`);
     }
     // Once, when the host or the person compacted it since the last look. A board from before the field was
     // kept has none to compare with (`undefined`), so nothing is said of the compactions it already had.
@@ -2352,6 +2375,12 @@ function senderWords(from, { quoted = false } = {}) {
   return typeof from?.id === 'string' ? `session ${from.id.slice(0, 8)}` : 'a sender the host does not name';
 }
 
+/** The share of its context a notice's sender held, as the channel says it after the sender's name: ` (<percent>%
+ * of its context)`, or nothing when the notice carries none. */
+function shareWords(from) {
+  return Number.isFinite(from?.context?.percent) ? ` (${from.context.percent}% of its context)` : '';
+}
+
 /** The notices for the orchestrator that the record gained between two boards, one line each: the kind,
  * who wrote it and its text. The record only grows, so those are its last ones, as many as the count
  * rose by (`channelOf`); when it rose by more than a board holds, the rest are said by their number,
@@ -2419,7 +2448,7 @@ function questionChanges(before, after) {
   for (const question of view.recorded) {
     if (was.get(question.number) === question.state) continue;
     if (question.state === 'answered-not-carried') lines.push(`question ${question.number} answered at ${question.answered.session.slice(0, 8)}:${question.answered.line}: not carried to ${senderWords(question.asker)} yet`);
-    else if (question.state === 'closed') lines.push(`question ${question.number} closed by him without an answer: ${clipped(question.question)}`);
+    else if (question.state === 'closed') lines.push(`question ${question.number} closed by the user without an answer: ${clipped(question.question)}`);
   }
   return lines;
 }
@@ -2621,11 +2650,11 @@ function durationOf(seconds) {
 export function askingRule(personAt, now, { waiting = 1 } = {}) {
   const waits = waiting === 1 ? '1 question waits' : `${waiting} questions wait`;
   const at = typeof personAt === 'string' ? Date.parse(personAt) : NaN;
-  if (Number.isNaN(at)) return `when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+  if (Number.isNaN(at)) return `when the user last wrote here is not known: call the question tool in the reply to a message of the user's; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
   const elapsed = Math.max(0, now - at);
   const since = durationOf(Math.round(elapsed / 1000));
-  if (elapsed < PERSON_PRESENT_MS) return `he wrote here ${since} ago: put it to him now with the question tool`;
-  return `he last wrote here ${since} ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+  if (elapsed < PERSON_PRESENT_MS) return `the user wrote here ${since} ago: put it to them now with the question tool`;
+  return `the user last wrote here ${since} ago: the question tool would hold this session until the user answers, so call it in the reply to the user's next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
 }
 
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */
@@ -2676,6 +2705,8 @@ function sessionLines(session, now, sizes, ended) {
   const state = ended ? `${ended.kind} ${ago(ended.at, now)} by its own notice (its transcript: ${read})` : read;
   const lines = [`${id}  ${state}  ${session.title ?? '(no title)'}  last entry ${ago(session.lastEntryAt, now)}${self}`];
   const recorded = (value) => value ?? 'unavailable: no entry records it';
+  // A session the person refused or stopped may wait in silence: it is said here, under its first line.
+  if (session.stopped && !ended) lines.push(`  stopped ${ago(session.stopped.at, now)}: ${stopWords(session.stopped)}: it waits for the user, and tells the orchestrator what it needs`);
   lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}`);
   // A line of its own: it is the one read to judge whether what is left of a task fits.
   lines.push(`  ${contextText(session, sizes)}`);
@@ -2849,8 +2880,8 @@ function channelLines(channel, now) {
   else if (channel.skipped > 0) lines.push(`  ${channel.path}  no notice`);
   for (const notice of channel.notices) {
     const to = notice.to.role === 'orchestrator' ? 'orchestrator' : `work ${notice.to.number}`;
-    const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (his words: transcript ${notice.transcript}, line ${notice.line})` : '';
-    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
+    const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (the user's words: transcript ${notice.transcript}, line ${notice.line})` : '';
+    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)}${shareWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
   }
   if (channel.skipped > 0) lines.push(`  ${channel.skipped} line${channel.skipped === 1 ? ' of the record is' : 's of the record are'} neither a notice nor a reading: skipped`);
   if (channel.messageCount > 0) lines.push(`  ${plural(channel.messageCount, 'message')} between sessions in the transcripts of the window${lastOf(channel.messageCount, channel.messages.length)}:`);
@@ -2948,7 +2979,7 @@ function gateLines(board, now) {
   return ['Gates', ...lines, ''];
 }
 
-const QUESTION_STATE_WORDS = { closed: 'closed by him without an answer', pending: 'on his screen, no answer yet', unanswered: 'no answer in its result' };
+const QUESTION_STATE_WORDS = { closed: 'closed by the user without an answer', pending: 'on the user\'s screen, no answer yet', unanswered: 'no answer in its result' };
 
 /** The text of an open question as a line carries it: the first one its call asked, cut to a line's
  * width, and how many more the same call asked. */
@@ -2957,7 +2988,7 @@ const questionWords = ({ question, more }) => `${clipped(question)}${more > 0 ? 
 /** A recorded question's state in words: a question that is not shown yet, or one answered and not carried yet, says
  * where the answer is; the others are said as a line of the transcripts says them. */
 function recordedStateWords({ state, answered }) {
-  if (state === 'not-shown') return 'recorded, not shown to him yet';
+  if (state === 'not-shown') return 'recorded, not shown to the user yet';
   if (state === 'answered-not-carried') return `answered at ${answered.session.slice(0, 8)}:${answered.line}, not carried yet`;
   return QUESTION_STATE_WORDS[state];
 }

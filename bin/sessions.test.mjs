@@ -215,7 +215,7 @@ test('the usage says what --opening and --quote take, what each prints and what 
   const usage = err.join('\n');
   assert.match(usage, /--opening \[--\] "<title>"\|"<code> <role>"[\s\S]*prints the opening stored for that session[\s\S]*records in the channel which session read it[\s\S]*exit 0 for one,\s+1 for none,\s+2 for several or when it cannot tell/);
   assert.match(usage, /--quote <transcript file or session id> <line>[\s\S]*only when the user sent it, with its time[\s\S]*exit 1[\s\S]*another session's message, a task notification, a meta or assistant entry,\s+or no such line[\s\S]*2 when it cannot look/);
-  assert.match(usage, /his answer to a question the session asked with the host's question tool is his too[\s\S]*the question, the options shown and whether he tapped one or typed his own[\s\S]*a question he closed without answering is exit 1/);
+  assert.match(usage, /the user's answer to a question the session asked with the host's question tool is the user's too[\s\S]*the question, the options shown and whether they tapped one or typed their own[\s\S]*a question the user closed without answering is exit 1/);
 });
 
 // --- where the sessions are ---
@@ -1716,18 +1716,50 @@ test('--opening records no reading for the session that wrote the opening, which
 }));
 
 // Review of ce8bdf7, finding 9: what the readings of one session, and of two, make of the roster.
-test('an untitled session that reads two openings has the title of the last one it read', withMachine(async (machine) => {
+// A session reads another's opening to see what it does (JH 15 did, 2026-10-14, and the board gave it that title):
+// the first opening a session reads is its own, and a later one of another title is printed and not recorded.
+test('an untitled session keeps the title of the first opening it read: a later one of another title is printed, not recorded, and that is said', withMachine(async (machine) => {
   writeRoster(machine);
   writeUntitled(machine, SESSION_D, 30);
   storeOpening(machine);
   storeOpening(machine, 'JH 7 · la segunda', 'Sos JH 7.\n', 200);
   const asD = { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } };
   assert.equal((await runSessions(machine, ['--opening', 'JH 6'], asD)).code, 0);
-  assert.equal((await runSessions(machine, ['--opening', 'JH 7'], { ...asD, now: () => NOW + 60000 })).code, 0);
-  const seven = await runSessions(machine, ['--address', '7']);
-  assert.deepEqual([seven.code, seven.stdout, (await runSessions(machine, ['--address', '6'])).code], [0, 'JH 7 · la segunda', 1]);
+  const other = await runSessions(machine, ['--opening', 'JH 7'], { ...asD, now: () => NOW + 60000 });
+  assert.deepEqual([other.code, other.stdout], [0, 'Sos JH 7.']);
+  assert.equal(other.stderr, `js-harness sessions: the opening was read, and no reading was recorded: this session already read the opening of ${JSON.stringify(OPENING_TITLE)}, which stays its title (--peek reads an opening and records nothing)`);
+  assert.deepEqual(recordOf(machine).readings.map((reading) => reading.title), [OPENING_TITLE]);
+  // Its own again is recorded as before: the same title changes nothing.
+  assert.equal((await runSessions(machine, ['--opening', 'JH 6'], { ...asD, now: () => NOW + 120000 })).code, 0);
+  assert.deepEqual(recordOf(machine).readings.map((reading) => reading.title), [OPENING_TITLE, OPENING_TITLE]);
+  const six = await runSessions(machine, ['--address', '6']);
+  assert.deepEqual([six.code, six.stdout, (await runSessions(machine, ['--address', '7'])).code], [0, OPENING_TITLE, 1]);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
-  assert.deepEqual(board.sessions.filter((session) => session.id === SESSION_D).map((session) => [session.title, session.titleSource]), [['JH 7 · la segunda', 'reading']]);
+  assert.deepEqual(board.sessions.filter((session) => session.id === SESSION_D).map((session) => [session.title, session.titleSource]), [[OPENING_TITLE, 'reading']]);
+}));
+
+// Codex on 51d869d: a reading recorded under the whole id, and a later one under its start (`--self`, with no
+// transcript to complete it), are the same session's.
+test('a session that read its opening under its whole id keeps its title when it reads another under the start of its id', withMachine(async (machine) => {
+  writeUntitled(machine, SESSION_D, 30);
+  storeOpening(machine);
+  storeOpening(machine, 'JH 7 · la segunda', 'Sos JH 7.\n', 200);
+  assert.equal((await runSessions(machine, ['--opening', 'JH 6'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } })).code, 0);
+  fs.rmSync(transcriptOf(machine, SESSION_D));
+  const short = await runSessions(machine, ['--opening', 'JH 7', '--self', SESSION_D.slice(0, 8)], { env: {}, now: () => NOW + 60000 });
+  assert.equal(short.code, 0);
+  assert.match(short.stderr, /no reading was recorded: this session already read the opening of /);
+  assert.deepEqual(recordOf(machine).readings.map((reading) => reading.title), [OPENING_TITLE]);
+}));
+
+test('--peek prints an opening and records no reading, even as the first a session reads; it goes only with --opening', withMachine(async (machine) => {
+  writeUntitled(machine, SESSION_D, 30);
+  storeOpening(machine);
+  const peek = await runSessions(machine, ['--opening', 'JH 6', '--peek'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } });
+  assert.deepEqual([peek.code, peek.stdout, peek.stderr, fs.existsSync(recordOf(machine).path)], [0, OPENING_TEXT.trimEnd(), '', false]);
+  const alone = await runSessions(machine, ['--peek']);
+  assert.equal(alone.code, 2);
+  assert.match(alone.stderr, /--peek goes only with --opening/);
 }));
 
 // A row of the roster is a title (`rosterOf`): two sessions that read one opening carry one title, as two
@@ -1742,9 +1774,11 @@ test('two untitled sessions that read one opening are one row of its title, and 
   assert.deepEqual([one.code, one.stdout, one.stderr], [0, OPENING_TITLE, '']);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
   assert.deepEqual(board.roster.rows.filter((item) => item.number === 6).map((item) => [item.title, item.transcripts.map((transcript) => transcript.id)]), [[OPENING_TITLE, [SESSION_E, SESSION_D]]]);
-  // The second session reads another opening of the same role: now two titles hold it.
+  // A third session reads another opening of the same role: now two titles hold it. (The second one reading
+  // it would not count: a session keeps the title of the first opening it read.)
   storeOpening(machine, 'JH 6 · otra redacción', 'Otra.\n', 100);
-  assert.equal((await runSessions(machine, ['--opening', 'JH 6 · otra redacción'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_E }, now: () => NOW + 60000 })).code, 0);
+  writeUntitled(machine, SESSION_C, 10);
+  assert.equal((await runSessions(machine, ['--opening', 'JH 6 · otra redacción'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_C }, now: () => NOW + 60000 })).code, 0);
   const two = await runSessions(machine, ['--address', '6']);
   assert.deepEqual([two.code, two.stdout.split('\n'), two.stderr], [2, ['JH 6 · otra redacción', OPENING_TITLE], 'js-harness sessions: 2 sessions carry the title of work session 6: a message to it has no single address']);
 }));
@@ -1831,7 +1865,7 @@ test('--quote warns on stderr when the user\'s entry is only pasted content, and
   const { code, stdout, stderr } = await runSessions(machine, ['--quote', 'aaaaaaaa', '3']);
   assert.equal(code, 0);
   assert.deepEqual(stdout.split('\n').slice(1), ['<pasted_content id="be4a">', 'Sos JH 5.', 'Leé el documento.', '</pasted_content id="be4a">']);
-  assert.equal(stderr, 'js-harness sessions: line 3 is only pasted content: nothing was typed with it, and a paste alone is not his word');
+  assert.equal(stderr, 'js-harness sessions: line 3 is only pasted content: nothing was typed with it, and a paste alone is not the user\'s word');
   assert.equal((await runSessions(machine, ['--quote', 'aaaaaaaa', '2'])).stderr, '');
 }));
 
@@ -1862,7 +1896,7 @@ test('--quote takes a message the user sent while the session worked, and says t
   // A typed entry is said as before, and a queued paste alone is warned of like any other.
   assert.equal((await runSessions(machine, ['--quote', 'aaaaaaaa', '2'])).stdout.split('\n')[0], `${file}, line 2, ${before(100).toISOString()}, sent by the user:`);
   const pasted = await runSessions(machine, ['--quote', 'aaaaaaaa', '4']);
-  assert.deepEqual([pasted.code, pasted.stdout.split('\n').length, pasted.stderr], [0, 4, 'js-harness sessions: line 4 is only pasted content: nothing was typed with it, and a paste alone is not his word']);
+  assert.deepEqual([pasted.code, pasted.stdout.split('\n').length, pasted.stderr], [0, 4, 'js-harness sessions: line 4 is only pasted content: nothing was typed with it, and a paste alone is not the user\'s word']);
   // What the host queues for anyone else, and every other attachment, stays "not his words", each named.
   const not = (line, what) => [1, '', `js-harness sessions: not the user's words: line ${line} of ${file} is ${what}`];
   const said = async (line) => {
@@ -1873,7 +1907,7 @@ test('--quote takes a message the user sent while the session worked, and says t
   assert.deepEqual(await said(6), not(6, 'a queued task notification'));
   assert.deepEqual(await said(7), not(7, 'a queued message of origin "human" that the host does not mark as a turn of the person'));
   assert.deepEqual(await said(8), not(8, 'an attachment of type "hook_success": the host wrote it, not the person'));
-  assert.match((await runSessions(machine, ['--nope'])).stderr, /a message the user sent while the session worked \(the host queues it\) is his too, and is said so/, 'the usage says so');
+  assert.match((await runSessions(machine, ['--nope'])).stderr, /a message the user sent while the session worked \(the host queues it\) is the user's too, and is said so/, 'the usage says so');
 }));
 
 test('--quote prints his answer to a question the session asked, with the question, the options shown and whether he tapped or typed it', withMachine(async (machine) => {
@@ -1954,8 +1988,8 @@ test('the board lists the questions put to the user that have no answer, read fr
   const { stdout } = await runSessions(machine, []);
   const section = sectionOf(stdout, 'Open questions', 'Worktrees');
   assert.equal(section.length, 5, section.join('\n'));
-  assert.match(section[1], /^ {2}\S+ ago {2}.* {2}closed by him without an answer {2}Pregunta 21: ¿seguimos con la lista\?$/);
-  assert.match(section[2], /^ {2}\S+ ago {2}.* {2}on his screen, no answer yet {2}Pregunta 22: ¿y esta\?$/);
+  assert.match(section[1], /^ {2}\S+ ago {2}.* {2}closed by the user without an answer {2}Pregunta 21: ¿seguimos con la lista\?$/);
+  assert.match(section[2], /^ {2}\S+ ago {2}.* {2}on the user's screen, no answer yet {2}Pregunta 22: ¿y esta\?$/);
   assert.match(section[3], /^ {2}read in \d+ transcripts? changed in the last \d+h, each read whole$/);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
   assert.deepEqual(board.questions.open.map(({ id, state }) => [id, state]), [['toolu_q1', 'closed'], ['toolu_q2', 'pending']]);
@@ -1972,7 +2006,7 @@ test('a question the record holds that was never asked shows as recorded, not sh
 
   const { code, stdout, stderr } = await runSessions(machine, []);
   assert.equal(code, 0, stderr);
-  assert.deepEqual(sectionOf(stdout, 'Open questions', 'Worktrees').slice(0, 2), ['Open questions', `  Pregunta 1  2m ago  ${WORKER}  recorded, not shown to him yet  ${text}`]);
+  assert.deepEqual(sectionOf(stdout, 'Open questions', 'Worktrees').slice(0, 2), ['Open questions', `  Pregunta 1  2m ago  ${WORKER}  recorded, not shown to the user yet  ${text}`]);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
   assert.deepEqual(board.questions.record, [{ number: 1, at: before(120).toISOString(), from: { id: SESSION_B, title: WORKER }, text, waits: 'the board', closed: false }]);
   assert.deepEqual(board.questions.recorded.map(({ number, state, call, question }) => [number, state, call, question]), [[1, 'not-shown', null, text]]);

@@ -22,14 +22,22 @@ import path from 'node:path';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
 // `--wait` is not a bound on the whole of a wait.
 const USAGE = [
-  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]',
+  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
   GATE_WAIT_USAGE,
+  '       --max <minutes>: how long the command may run before it is stopped with every process it started (30 when not given)',
 ].join('\n');
+
+/** The minutes a command may run when `--max` does not say. A turn holds the lock for every session on the
+ * machine, and on 2026-10-14 a measure that waited for its own sampler held it 24 minutes after its work had
+ * ended (odd/tasks/gate-turn-guards.md, S2). The longest turn in the gate log of the two days before took
+ * 974 s, so 30 minutes stops a hung command and no turn that works. */
+export const GATE_MAX_MINUTES = 30;
 
 /** How many gates `gate log` prints when `--last` does not say. */
 const GATE_LOG_LAST = 20;
@@ -106,19 +114,21 @@ function parseArgs(argv, env, defaultCwd) {
   const given = new Set();
   for (let i = 0; i < own.length; i++) {
     const token = own[i];
-    if (!['--no-wait', '--wait', '--home', '--cwd'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
+    if (!['--no-wait', '--wait', '--max', '--home', '--cwd'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
     if (given.has(token)) throw new GateArgError(`${token} given twice`);
     given.add(token);
     if (token === '--no-wait') continue;
     const value = own[i + 1];
     if (value === undefined || value.startsWith('--')) throw new GateArgError(`${token} requires a value`);
+    if (token === '--max' && !(/^\d+(\.\d+)?$/.test(value) && Number(value) > 0)) throw new GateArgError(`--max takes a number of minutes above zero, not "${value}"`);
     if (token !== '--wait') paths[token.slice(2)] = value;
     i += 1; // consume the value too, so it is never re-read as its own token
   }
   const { noWait, waitMinutes } = parseGateWait(own);
   const command = argv.slice(split + 1);
   if (command.length === 0) throw new GateArgError('no command after --');
-  return { cwd: paths.cwd ?? defaultCwd, home: paths.home ?? env.JS_HARNESS_HOME ?? os.homedir(), noWait, waitMinutes, command };
+  const maxMinutes = paths.max === undefined ? GATE_MAX_MINUTES : Number(paths.max);
+  return { cwd: paths.cwd ?? defaultCwd, home: paths.home ?? env.JS_HARNESS_HOME ?? os.homedir(), noWait, waitMinutes, maxMinutes, command };
 }
 
 /** What comes after `gate log`, walked as `parseArgs` walks what comes before `--`: `{ home, last }`. */
@@ -242,11 +252,15 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     console.error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const { cwd, home, noWait, waitMinutes } = parsed;
+  const { cwd, home, noWait, waitMinutes, maxMinutes } = parsed;
   /** Runs the command: `{ code, result }`, the exit code of this gate and how the command ended, as the
    * log says it. */
   const run = async (given) => {
-    const result = await (deps.spawn ?? runSensor)(commandLine, { cwd, env: given, timeout: 0, inherit: true });
+    const result = await (deps.spawn ?? runSensor)(commandLine, { cwd, env: given, timeout: maxMinutes * 60_000, inherit: true });
+    if (result.error?.code === 'ETIMEDOUT') {
+      console.error(`gate: ${commandLine} ran past its bound of ${maxMinutes} minutes and was stopped with every process it started; --max <minutes> sets another bound`);
+      return { code: 1, result: 'timed out' };
+    }
     if (result.error) {
       console.error(`gate: ${commandLine} could not run: ${result.error.message}`);
       return { code: 1, result: 'error' };
@@ -298,6 +312,17 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     // of its own, started once by a person or a script and not once per test, and its command starts
     // now. The figure holds what that process itself is doing, which is the load this command meets.
     return logged({ lock: 'parent', waitedMs: 0, waitedFor: [] }, env);
+  }
+
+  // A push that waits goes first: it needs no turn, and a merge waits for it (S1). Asked only here, where a
+  // turn would be taken: inside a gate or in the turn of its starter no turn is waited for.
+  const waiting = isPushOrMerge(commandLine) ? null : (deps.pushWaiting ?? pushWaiting)(path.resolve(cwd), { gh: deps.gh });
+  if (waiting) {
+    const { branch, count, pullRequest } = waiting;
+    console.error(`gate: nothing ran: ${branch} has ${count} commit${count === 1 ? '' : 's'} that a push takes now (${count === 1 ? 'its gate' : 'their gate'} passed and the pre-push check of the Codex records accepts the head), and pull request #${pullRequest} is open: push in the same step the last check passed, then ask for a turn`);
+    console.error(`gate: ${waiting.command}`);
+    record?.refused({ reason: 'push waits', waitedMs: 0, waitedFor: [] });
+    return GATE_NOT_RUN;
   }
 
   const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null }, deps.takeGateLock);
