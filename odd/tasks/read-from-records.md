@@ -43,6 +43,51 @@ high
 ## Ask me before
 Spend outside the Codex plan's allowance; changing the allowance; anything on GitHub that starts a run outside a pull request.
 
+## The recheck: a correction is checked against its findings, once (first in the queue)
+
+His order, typed (orchestrator transcript `ffe99ebf`, line 3607, 08:21:33Z, read with `sessions
+--quote`): "lo de que codex entrega bordes cada vez mas finos corrgielo ya". The defect: each
+Codex review of a correction finds a new, smaller edge, and each round costs a fix, a gate turn
+and a review (JH 8, PR 121, a third round on one timeout mark). The rule, one correction batch
+and one recheck limited to those findings, is prose, so it is lost under momentum.
+
+What the code holds today (explorer's map, 2026-10-14): the verdict never sets the exit code
+(`bin/codex-review.mjs:1701`, test `codex-review.test.mjs:2388-2414`); a review record holds no
+findings and a run line only their counts; finding texts survive only in `kept.review` of a
+multi-part review's part (`:1410`, `:1581`); a record with an outcome other than `reviewed`,
+`unavailable` or `nothing-to-review` covers nothing and fails the push (`codex-reviews.test.mjs:335`).
+
+- **S7, findings kept.** Every reviewed run line keeps its normalized answer (the findings with
+  file, lines, severity, title and body; the verdict) in a field `answer`. Old lines without it
+  still read; a review recorded before this change cannot be rechecked and is reviewed as today.
+- **S8, when a review is a recheck.** Decided by the code, not by a flag, so momentum cannot skip
+  it: after the range's start is moved past what records cover (`startingAt`), the range starts
+  exactly at the head of a `reviewed` record whose run lines kept findings (one or more), and that
+  head is an ancestor of `HEAD`. A recheck is reviewed in one part; a correction over one part's
+  bound is refused before it runs, exit 1, nothing recorded, with a message to commit the
+  correction alone or record a follow-up task.
+- **S9, its prompt.** It lists each prior finding (file, lines, title, body) and asks, for each,
+  whether the range fixes it. Its answer, in Codex's own rubric: a finding titled `[not fixed]`
+  for each prior finding still open; anything new titled `[follow-up]`, which does not block;
+  except a new finding that could make a failing check pass, or that exposes data, titled
+  `[blocks]`. Its own prompt version.
+- **S10, its record.** `outcome` stays `reviewed`, so the commits are covered and the pre-push
+  hook needs no change. The record gains `recheckOf: <the prior head>`; the run line gains
+  `recheck: {of, findings, fixed, notFixed, followUps, blocking}`. The command prints one line a
+  prior finding (fixed or not), then the follow-ups apart, marked as not blocking. The exit code
+  stays as today.
+- **S11, no second recheck.** A range that starts at the head of a recheck that left a finding
+  not fixed or blocking is refused before it runs, exit 1, nothing recorded: "a second recheck of
+  the same findings is not run: record a follow-up task for what is still open, then record this
+  range with `codex-review --base <base> --unavailable \"second recheck refused: <task>\"`". A
+  recheck that fixed every finding and blocks nothing leaves the next range a normal review.
+- **Its limit, named.** New code committed in the same range as a correction is read as a
+  follow-up, not as a review; only `[blocks]` stops it. A session that wants new work reviewed
+  fully commits the correction first.
+- Touches no flag (`parseArgs`, `:223-280`, is JH 12's), so JH 12 is told which lines move:
+  the flow after `startingAt` (`:1198-1290`), `logRun` (`:1527-1599`), the record (`:1815-1827`);
+  the rest is a new `bin/lib/codex-review-recheck.mjs`.
+
 ## Design (first version, before its readers)
 
 ### (a) The estimate, from what parts cost
@@ -106,6 +151,9 @@ counts from. 116 of the 692 commits that touch `odd/tasks` are on it; a feature 
 commits would count the same task once on the branch and again in its merge.
 
 ## Tasks
+- [ ] T0 · S7 to S11, the recheck, test first, its own pull request; his order of 2026-10-14,
+      first in the queue. Route: inline (one understood change; no writer reason). Risk to name
+      at its close.
 - [ ] T1 · This document, opened with the task contract, mirrored in engram. Route: inline.
 - [ ] T2 · Two readers attack the design (opus, high, read-only); what they changed written
       under the design; the design to the orchestrator. Route: delegated, read-only.
@@ -119,5 +167,24 @@ commits would count the same task once on the branch and again in its merge.
   wrong today" and S6's reading of the history; one spot check: `inputEstimator` at
   `bin/lib/codex-review-plan.mjs:108-128` is as it said.
 
+- 2026-10-14 · T2's two readers returned (reader A on the numbers and the model, reader B on the
+  gaps); their findings are not yet taken into the design (scratchpad `rfr-reader-a.md`,
+  `rfr-reader-b.md`; to be written under the design when (a) and (b) resume). Headlines: least
+  squares on the last 20 measured parts of the pair is the best replayed method (median absolute
+  log error 0.27 against today's 0.45); `progress --pace` must count a task that arrives checked in
+  a merge as added and closed, and match tasks by their `T#` ID.
+- 2026-10-14 · **T0, the recheck, built.** RED first in `codex-review`: the 4 tests of S7, S8, S10
+  and S11 failed before the change, the fifth (the next range after a recheck that closed
+  everything) held already. The module `bin/lib/codex-review-recheck.mjs` was written before its
+  own 8 tests, which then passed: not test first for that file. GREEN: 436 of 436 in
+  `bin/codex-review.test.mjs`, `bin/codex-review.second.test.mjs`, `bin/lib/codex-review-recheck.test.mjs`,
+  `bin/lib/codex-reviews.test.mjs`, `bin/lib/codex-review-runs.test.mjs`, `bin/check-codex-reviews.test.mjs`.
+  Three old tests changed with it: every run line now has `answer` (`null` when there is no answer),
+  and the run log is read once for the plan and the recheck. JH 12 was told the lines; its parser
+  hunks do not overlap. An independent verifier is reading it. No gate turn yet: JH 8's WSL gate
+  (PR 121) is still open.
+
 ## Next
-1. T2: two readers on the design, then the design to the orchestrator.
+0. T0: the verifier's verdict, then, once PR 121 is on `main`, merge `main`, commit through the
+   gate, gentle-ai assessment, Codex review, push, its pull request; tell the orchestrator.
+1. T2: take both readers' findings into the design, then the design to the orchestrator.
