@@ -42,6 +42,10 @@ export const DEFAULT_CONTEXT_COMPACTION_PERCENT = 93;
  * context pause") or read from this constant, and its value is written nowhere but in its declaration. */
 export const DEFAULT_CONTEXT_PAUSE_PERCENT = ruleValue('context-pause', 'percent of the context window');
 
+/** The last notice before the host compacts, as a whole share of the window: three points under the compaction, a
+ * last turn to write the state and the resume prompt. Read from the compaction, so it moves with it. */
+export const DEFAULT_CONTEXT_LAST_PERCENT = DEFAULT_CONTEXT_COMPACTION_PERCENT - 3;
+
 /** `percent` of `window`, in whole tokens: half of 500,000 is 250,000. */
 export function shareOf(window, percent) {
   return Math.round((window * percent) / 100);
@@ -406,6 +410,20 @@ function end(work, at, status) {
   work.status = status;
 }
 
+/** When the person last wrote in `entries` (parsed transcript lines), a transcript's time, or `null`: by `quoteOf`'s
+ * rule, with the answers to the session's question calls counted as theirs. The newest by its time, not the last in
+ * the file: a resumed session writes older entries again after the newer ones, and an equal time keeps the later
+ * entry. An entry with no time is not counted. It is what `askingRule` and `cutRule` read. */
+export function personAtOf(entries) {
+  const questionCalls = questionCallsOf(entries);
+  let personAt = null;
+  for (const entry of entries) {
+    const quote = quoteEntry(entry, questionCalls);
+    if (quote.person && typeof quote.at === 'string' && (personAt === null || quote.at >= personAt)) personAt = quote.at;
+  }
+  return personAt;
+}
+
 /** One session's facts from its transcript's text: `title` and where it came from, `lastEntryAt`, the
  * `cwd` and `gitBranch` its last entry records, its background `work` with each recorded end, the `state`
  * derived from those, the `tail` of its last reply (`tail` lines, default 3) and the lines skipped.
@@ -673,15 +691,7 @@ export function sessionFacts(
   const state = turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting';
   const compactsAt = measured === null ? { tokens: contextCompactionDefault, measured: false, at: null } : { tokens: measured.tokens, measured: true, at: measured.at };
   const room = context === null ? null : compactsAt.tokens - context.tokens;
-  // When he last wrote here, for the rule that says how to ask him a question (`askingRule`). The newest by its
-  // time, not the last in the file: a resumed session writes older entries again after the newer ones, and an
-  // equal time keeps the later entry. An entry with no time is not counted.
-  const questionCalls = questionCallsOf(entries);
-  let personAt = null;
-  for (const entry of entries) {
-    const quote = quoteEntry(entry, questionCalls);
-    if (quote.person && typeof quote.at === 'string' && (personAt === null || quote.at >= personAt)) personAt = quote.at;
-  }
+  const personAt = personAtOf(entries);
   let lastTask;
   if (stretch === null) lastTask = { unavailable: 'the transcript holds no prompt of a person and no message from another session' };
   else if (state === 'waiting') lastTask = taskOf(stretch);
@@ -2655,6 +2665,20 @@ export function askingRule(personAt, now, { waiting = 1 } = {}) {
   const since = durationOf(Math.round(elapsed / 1000));
   if (elapsed < PERSON_PRESENT_MS) return `the user wrote here ${since} ago: put it to them now with the question tool`;
   return `the user last wrote here ${since} ago: the question tool would hold this session until the user answers, so call it in the reply to the user's next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+}
+
+/** The sentence that tells a session at the context pause whether to hand the user the cut, given when the user last
+ * wrote in the transcript (`personAt`, as `askingRule` takes it) and `now` in ms. Only while the user is present, by
+ * the same `PERSON_PRESENT_MS`: a session that stops for a /compact nobody sends waits for hours, and the host
+ * compacts a session inside a turn anyway. */
+export function cutRule(personAt, now) {
+  const at = typeof personAt === 'string' ? Date.parse(personAt) : NaN;
+  const keep = 'do not stop and give them nothing to send: the host compacts this session inside a turn, and your state is read after it';
+  if (Number.isNaN(at)) return `when the user last wrote here is not known: ${keep}`;
+  const elapsed = Math.max(0, now - at);
+  const since = durationOf(Math.round(elapsed / 1000));
+  if (elapsed < PERSON_PRESENT_MS) return `the user wrote here ${since} ago: give them, in your next reply, what they send to compact this session and the prompt that resumes it after`;
+  return `the user last wrote here ${since} ago: ${keep}`;
 }
 
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */
