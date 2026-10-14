@@ -1004,9 +1004,11 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
       Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
       before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
-- [ ] T19 · A gate keeps who spent the processor over its run (candidate, 2026-10-13, from
-      the measure of the slower check in Progress; not ordered yet). Route: inline, with a
-      reader for the design.
+- [ ] T19 · A gate keeps who spent the processor over its run (2026-10-13, from the measure of
+      the slower check in Progress; ordered by the orchestrator at 20:13, after the stretch of
+      "JH 9" on `bin/check.mjs` is on `main`). With it, the comment at the head of
+      `bin/gate.mjs` says the whole rule for runs beside a gate. Route: inline, with a reader
+      for the design.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2706,6 +2708,32 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     43 minutes of lock a day and 42 of waits. The orchestrator put its guard behind this
     measure, bounded it to one slice and granted one probe of 100,000 input tokens at most
     (a `NODE_OPTIONS` preload that ends a `node --test` Codex starts); not started.
+- 2026-10-13 · **After the measure** (written at 20:16; each line is the orchestrator's
+  message unless it says otherwise).
+  - *A second dated change in the gap, the orchestrator's own:* at 16:56 to 16:57 it updated
+    the installed copy (`pnpm add -g github:jsaristi/js-harness`, a new folder in pnpm's
+    global store, the old one left) and ran `js-harness install`. So two things changed
+    between the last fast check (14:13) and the first slow one (17:01): the desktop app's
+    restart and that install. Which of them, if either, set `PcaSvc` going is not proven.
+  - *The orchestrator's own read at 20:08*, a gate running, three reads of the performance
+    counters: the svchost of `PcaSvc` 76 to 97% of a processor, MsMpEng 86 to 138%.
+  - *His answer*, tapped, read by me (`js-harness sessions --quote
+    65318fd5-80e7-4bb8-92b5-06737140185b 13354`, 2026-10-14T01:12:32Z): "Lo reinicio yo ahora
+    (Recomendada)", to "El servicio de Windows "Asistente de compatibilidad" (PcaSvc) está
+    usando un núcleo entero y alarga cada comprobación de 9 a 13 minutos. ¿Qué hacemos?"
+    (the others: "Reinicio la máquina", "No tocar nada"). He restarts the service himself;
+    nobody else touches the machine. **Owed here:** the seconds of the first whole check in
+    the gate log after the service's pid changes (it was 8936), set beside 700 to 1,132 s
+    before; no extra run unless the log cannot tell.
+  - *The rule beside a gate, the orchestrator's ruling on my text:* beside a gate, a quote
+    and one test file of under half a minute are free; a whole run, a measure, a board read
+    and a reviewer are not. The comment at the head of `bin/gate.mjs` already says the
+    first half ("One test file run alone during a task stays free; this is for what takes
+    minutes"); its sentence is made whole in T19's commit, which edits that file, so that
+    one line of comment does not cost the line a whole gate of its own.
+  - *T19 is ordered:* after the stretch of the session "JH 9" on `bin/check.mjs` is on
+    `main`. The antivirus is his and nothing is recommended there: the numbers are 1,139
+    processor-seconds in a run of 805 s, 859 in one of 533.
 
 ## Next
 
