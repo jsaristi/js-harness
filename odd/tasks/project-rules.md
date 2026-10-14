@@ -315,3 +315,49 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
   any journey run.
 - Then: the full journey inside `js-harness gate --` (tries 2 and 3), the README and roadmap
   lines (T5 docs), the SPEC notes to the lead (T7).
+- Probe done (2026-10-14, try 1 of 3, Haiku 5.5, 0.0069 dollars over three calls, Claude Code
+  2.1.296). The stream as it is, for the reader of `host-loads`: `system/init` has `skills` (both
+  of ours listed), `tools` (`[]` with `--tools ""`), `model`, `claude_code_version`, `cwd`;
+  `system/hook_response` has `hook_name` (`SessionStart:startup`, `SessionStart:resume`,
+  `SessionStart:compact`, `PostToolUse:Skill`), `exit_code`, `outcome` (`success`), `stdout`,
+  and NO command: the seeded hook prints `unrelated-claude-hook`, ours is told by its output
+  (`doctor --hook` printed a `{"systemMessage":"js-harness: ...` line only because its gaps
+  changed, so its proof is `home/.js-harness/doctor.json` rewritten; `resume --hook` on compact
+  prints `js-harness resume: this session was just compacted...`; `PostToolUse:Skill` is ours
+  alone). `result/success` has `is_error`, `num_turns` (1 with no tools; the call-1 answer was
+  `# project`, so AGENTS.md loaded), `result`, `total_cost_usd`, `duration_ms`, `usage`
+  (`input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens`),
+  `modelUsage` keyed by model. `/compact` gives a result with `num_turns` 0. New under
+  `home/.claude` after the calls: `.claude.json`, `.last-cleanup`, `backups`, `policy-limits.json`
+  and its stamp, `projects`, `remote-settings.json`, `session-env`, `sessions`; the real
+  `~/.claude/projects` and `~/.claude.json` named no practice folder. Streams kept in the
+  scratchpad `probe-out/`; to commit, trim them to those fields (no personal data was found in
+  them; the init's `messaging_socket_path` is the child's own pipe).
+- Update, context 85%: committed `9164790` (T2+T3) and `9302730` (T4+T5), each through a green gate.
+  T6 written (both journey steps, `host-loads` with its stream reader held to
+  `scripts/fixtures/host-call*.jsonl`, `--no-host`, `--only`, the record's `host` and `left`;
+  101 tests in `scripts/practice-lib.test.mjs` and `scripts/practice-host.test.mjs`) and sent as
+  background task `blw3n9s3v`: its commit through the gate, then `js-harness gate -- node
+  scripts/practice.mjs run --root D:\js-harness-practice` (try 2 of 3). Next: read that output.
+  If the journey failed on a fault of the step, fix it test first and use try 3; if it passed,
+  mark T2 to T6 done here and T5 in `odd/tasks/practice-project.md`, then the README and roadmap
+  lines (the lead cleared them), merge `origin/main` once (`c99abbc` or later), the Codex review
+  of the code commits (`js-harness codex-review --plan` first, within 1.05 times the allowance),
+  push, the pull request, and the SPEC notes to the lead (T7).
+- Run 2 (`ed24609`, 2026-10-14): 9 of 13 steps passed; `project-uninstall` failed because the
+  practice project had committed the AGENTS.md template of an earlier candidate and the second
+  `init` wrote this candidate's (with the new clause). The host step was skipped, so no model was
+  spent and the host allowance still has two runs. Fixed test first in `secondInitProblem`
+  (`scripts/practice-lib.mjs`); the practice AGENTS.md was left as the last `init` wrote it (its
+  hash matches the project manifest). Run 3 is background task `bk86xf7of`.
+- PAUSED 2026-10-14 01:10 by his order (the lead's transcript `ffe99ebf`, line 1647, read with
+  `sessions --quote`: "si pero la idea es pausar todo precisamente para hacer unicamente esta
+  mejora implementarla y ahi si seguir con lo siguiente"; only the faster check goes on, JH 8 and
+  JH 10). The queued turn (the fix's commit, then run 3) was cancelled before it took the lock.
+  Uncommitted in the worktree and green (95 tests in `scripts/practice-lib.test.mjs`): the fix
+  `secondInitProblem` in `scripts/practice-lib.mjs`, its test, and its use in
+  `scripts/practice.mjs` (`project-uninstall`), plus `import { agentsTemplate }` there. The
+  practice project's AGENTS.md is as the last `init` wrote it (hash equal to the project
+  manifest), uncommitted there; the next run's `commit-passes` commits it. On resume: commit the
+  fix through the gate, then `js-harness gate -- node scripts/practice.mjs run --root
+  D:\js-harness-practice` (the host allowance still has two runs: run 2 never reached the host).
