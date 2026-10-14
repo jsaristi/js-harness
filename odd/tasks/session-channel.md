@@ -2416,7 +2416,12 @@ session needs beside it to go on; the summary of a compaction is not the record.
   the words say "by the user or by another session's stop" and never who. Count over the
   project's transcripts (`rg -c`): 18 refused results, 9 interruptions for a tool use, 15
   plain. In `docs/todo.md`, the line of the reply check is struck with its pointer, and the
-  line of a session that waits unseen says which half is built.
+  line of a session that waits unseen says which half is built. That unit is `cb09dc0` (gate
+  PASS 00:31; gentle-ai: medium, 95 lines, not due); Codex on `4cd0eca..cb09dc0`: 178,290 input
+  tokens, "incorrect (0.94)", one P2, true: a turn stopped while an agent or a background
+  command runs reads `background`, and the condition on `waiting` dropped the stop. Fixed in
+  the commit that carries this text, test first (two failed, then 281 and 205 passed): the
+  fact holds whenever the turn ended, and the watch says such a stop once, in a line of its own.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is

@@ -226,6 +226,9 @@ test('a turn that ends refused or interrupted is said as stopped, until the sess
   const answered = lib.sessionFacts(transcript(prompt('go', 1), call('toolu_1', 'Edit', {}, 2), stop('[Request interrupted by user for tool use]', 3), prompt('go on', 5), reply('done', 6)));
   assert.deepEqual([answered.state, answered.stopped], ['waiting', null]);
   assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2))).stopped, null);
+  // Stopped with work still open (an agent or a background command): the state is background, and it is stopped all the same.
+  const withWork = lib.sessionFacts(transcript(prompt('go', 1), ...asyncAgent('toolu_a', 'a1', 2), stop('[Request interrupted by user]', 3)));
+  assert.deepEqual([withWork.state, withWork.stopped], ['background', { how: 'interrupted', at: at(3) }]);
 });
 
 test('the board marks a stopped session as waiting for the user, and the watch says it once', () => {
@@ -240,6 +243,11 @@ test('the board marks a stopped session as waiting for the user, and the watch s
   assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [plain] }), [
     'session aaaaaaaa "title a" is waiting (was working): stopped: its turn was interrupted, by the user or by another session\'s stop',
   ]);
+  // Stopped while work it launched is still open: no "is waiting" line, so the stop is a line of its own, once.
+  const busy = seen(A, 'background', { work: [open('b1')], stopped: { how: 'interrupted', at: before(600) } });
+  const said = 'session aaaaaaaa "title a" stopped: its turn was interrupted, by the user or by another session\'s stop (its open work runs on)';
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [busy] }), [said]);
+  assert.deepEqual(changes({ sessions: [busy] }, { sessions: [busy] }), []);
   // A session that waits as it should is no news of this kind.
   assert.equal(lib.renderBoard({ ...BOARD, sessions: [seen(A, 'waiting')] }, { now: NOW }).some((line) => line.includes('stopped')), false);
 });

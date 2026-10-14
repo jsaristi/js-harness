@@ -708,7 +708,8 @@ export function sessionFacts(
     state,
     turnEndedAt,
     // A turn the person refused or stopped, while the session has not acted since: it waits for them.
-    stopped: state === 'waiting' && stoppedHow !== null ? { how: stoppedHow, at: turnEndedAt } : null,
+    // Work it launched may still run (state `background`): the turn is stopped all the same.
+    stopped: turn === 'ended' && stoppedHow !== null ? { how: stoppedHow, at: turnEndedAt } : null,
     work,
     pendingCall,
     tail: tail > 0 && lastReply !== null ? lastReply.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() !== '').slice(-tail) : [],
@@ -2259,6 +2260,9 @@ function sessionChanges(before, after, self) {
     } else if (session.state === 'waiting' && session.turnEndedAt !== was.turnEndedAt) {
       // Waiting at both looks, but not at the same point: it was given something and finished it.
       lines.push(`${sessionLabel(session)} finished another turn and is waiting${session.stopped ? `: stopped: ${stopWords(session.stopped)}` : ''}`);
+    } else if (session.state === 'background' && session.stopped && session.stopped.at !== was.stopped?.at) {
+      // Stopped while work it launched runs on: no line above says it, so it is said once, here.
+      lines.push(`${sessionLabel(session)} stopped: ${stopWords(session.stopped)} (its open work runs on)`);
     }
     // Once, when the host or the person compacted it since the last look. A board from before the field was
     // kept has none to compare with (`undefined`), so nothing is said of the compactions it already had.
