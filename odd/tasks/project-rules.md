@@ -310,6 +310,17 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
   is about 0.019 dollars (0.0069, 0.0068 and 0.0049). The repository has no README, so T5's README part had no file; the
   roadmap took the capability ("Rule hierarchy", "A project's own rules") and the journey's
   thirteen steps, with "Codex loads its hooks.json and its skills" named as not proven.
+- L8. 2026-10-14, the Codex review of `origin/main..5e230e5` (5 parts, 1,255,150 input tokens,
+  inside the allowance of 1,753,200), recorded. Its six P2 findings were all true and all fixed,
+  the first two test first (seen failing): deleting `docs/rules.json` whole skipped the check of
+  rules gone since `HEAD` (the list is now read as empty when `HEAD` holds it); the harness
+  repository's second list was looked for in the package, not the checkout (`eb61c3e`); the
+  accepted template of the second init was left uncommitted, so the host step would refuse it;
+  a failed host call swept the practice root itself, which `killByPath` refuses; a failed later
+  call lost the host spend (`01f2db1`). The template commit has no unit test: it was proven by a
+  run with `--no-host` against an `AGENTS.md` set by hand to an older template whose hash the
+  project manifest held (`9e6a807` in the practice project): 12 of 12, the template committed
+  as `78b7dfb`, no tracked file differing. No host try was spent; the three are used.
 
 ## Next step
 The Codex review of `origin/main..HEAD` (`js-harness codex-review --base origin/main`, its
