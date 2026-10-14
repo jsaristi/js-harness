@@ -32,7 +32,7 @@ import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
-import { inboxNotice } from './lib/inbox.mjs';
+import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { pauseNotice, toldBetween } from './lib/pause.mjs';
 import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
@@ -907,7 +907,7 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
   const home = env.JS_HARNESS_HOME || homedir();
   const notice = pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) });
   // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
-  const inbox = inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckout(run, folder)) });
+  const inbox = inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder)) });
   const said = [notice?.text, inbox?.text].filter((text) => typeof text === 'string');
   if (said.length === 0) return null;
   // Another entry (a `Stop` hook, later) runs this command too, so the event is the input's own when it names one.

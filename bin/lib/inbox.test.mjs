@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { inboxNotice, inboxStatePath } from './inbox.mjs';
-import { appendNotice, newNotice } from './channel.mjs';
+import { inboxNotice, inboxStatePath, mainCheckoutByFiles } from './inbox.mjs';
+import { appendNotice, appendReading, newNotice, newReading } from './channel.mjs';
 
 // Every test writes under a home of its own in the temp folder, with a synthetic transcript and record: nothing here
 // reads or writes the real home.
@@ -74,6 +74,41 @@ test('a session with no title in the end it reads uses the title it saw before, 
   assert.equal(look(home, transcriptOf(home, 'JH 5 · canal entre sesiones')).count, 1);
   note(home, { minutes: 1, text: 'later' });
   assert.match(look(home, transcriptOf(home, null)).text, /later$/, 'the title seen before still names the session');
+}));
+
+test('the main checkout is found from the files, with no git: the folder up that holds .git, or the main a worktree points to', inHome((home) => {
+  const main = path.join(home, 'proj');
+  const nested = path.join(main, 'bin', 'lib');
+  fs.mkdirSync(path.join(main, '.git', 'worktrees', 'feat'), { recursive: true });
+  fs.mkdirSync(nested, { recursive: true });
+  const tree = path.join(home, 'proj-worktrees', 'feat');
+  fs.mkdirSync(path.join(tree, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(tree, '.git'), `gitdir: ${path.join(main, '.git', 'worktrees', 'feat')}\n`);
+  const outside = path.join(home, 'loose');
+  fs.mkdirSync(outside);
+  assert.equal(mainCheckoutByFiles(nested), main);
+  assert.equal(mainCheckoutByFiles(path.join(tree, 'src')), main);
+  assert.equal(mainCheckoutByFiles(outside), outside, 'no repository up: the folder itself');
+}));
+
+// Codex's two P2s on c930ccc.
+test('a session opened from the phone, with no title in its transcript, is named by the opening it read', inHome((home) => {
+  appendReading(home, SLUG, newReading({ at: ago(20), reader: { host: 'claude', id: SESSION }, title: 'JH 5 · canal entre sesiones' }));
+  note(home, { text: 'for the phone session' });
+  const said = look(home, transcriptOf(home, null));
+  assert.ok(said !== null, 'the reading names the session');
+  assert.match(said.text, /for the phone session$/);
+}));
+
+test('a notice appended after a newer one, with an older time, is still said: the record\'s order counts, not the times', inHome((home) => {
+  const transcript = transcriptOf(home, 'JH 5 · canal entre sesiones');
+  note(home, { minutes: 1, text: 'stamped last, appended first' });
+  assert.equal(look(home, transcript).count, 1);
+  note(home, { minutes: 3, text: 'stamped first, appended last' });
+  const said = look(home, transcript);
+  assert.ok(said !== null, 'the late append is not skipped');
+  assert.match(said.text, /stamped first, appended last$/);
+  assert.equal(look(home, transcript), null);
 }));
 
 test('the first look says only the notes of the last hour; older ones are taken as read', inHome((home) => {
