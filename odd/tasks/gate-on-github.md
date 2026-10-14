@@ -597,6 +597,21 @@ the real runs once they exist (Done when), so the month's use is read and not gu
   was told to him (ten private repositories, four with workflows) and he did not change his
   answer.
 
+- 2026-10-13 · **Pull request 109, and its first run on GitHub: red.** Pushed 22:00:27 after
+  `check --push` passed; head `82aa048` (the merge of `main` at `9b227df`, whose local gate
+  passed). Run `38504042140`, job "check on Linux", 03:00:54 to 03:04:10 UTC: 196 s, 4 billed
+  minutes. Rows: `failures`, `budget` (1,477 tokens there against 1,499 here: the checkout's
+  line endings) and `contracts` PASS; `FAIL  tests  npm run test exited 1`; `review` "gentle-ai
+  was not found"; `codex-review` informed. **Which tests failed cannot be read from it:** the
+  suite's output in the log (`gh run view --log`, 898 lines) stops mid-line after 523 passing
+  tests, with no failure and no summary. My reading, not proven: `bin/check.mjs:1450` ends
+  with `process.exit(code)` right after printing that output, and a write to a pipe that is
+  not yet done when the process exits is lost; `bin/js-harness.mjs:95` already sets
+  `process.exitCode` for a like reason. `bin/check.mjs` is JH 8's: the orchestrator is asked
+  before it is touched. So "red seen red" holds (Done when), and the first green waits for the
+  output to be readable. The pull request's body says red, do not merge. Not pushed since, on
+  purpose: any push to it is a new run.
+
 ## Next
 T6, what is left: the pull request, its first run on GitHub quoted with its minutes, and one
 run seen red (on a branch of its own, never merged, if the first run is not red by itself).
