@@ -104,6 +104,57 @@ Missing:
    shared plan); what looks wrong is said, with its evidence, before it is done; reversible by
    default (what cannot be undone asks first, the rest records how it is undone) (`:513-539`).
 
+## Design of G5, G6 and G3 (2026-10-14, read-only, not built)
+
+By one planner on opus at high, from the code; the parent checked `evals/suite.test.mjs:75`,
+`evals/codex-configs.mjs:80`, `evals/runner.mjs:515` and `evals/transcript-usage.mjs:300-315`.
+Order of commits: G5, G6a, G6b, G3. Every results file stays readable: fields are only added,
+`FORMAT` stays 1.
+
+G5, `--model <id>` on `evals/suite.mjs`. `parseArgs` takes it as optional and adds it to the
+parsed shape only when given; a Claude id must be a full `claude-…` id (the rule of
+`evals/configs.mjs:281`); `--summary` refuses it. `model = args.model ?? (codex ? CODEX_EVAL_MODEL
+: EVAL_MODEL)` replaces the constants where they are used (`:747`, `:749`, `:782`, `:785`), which
+carry it to Claude's `--model` (`evals/configs.mjs:218`) and Codex's `-m`; the constants stay
+exported as defaults. It is recorded as today's top-level `doc.model`; `runChanges` (`:306`) and
+`checkRuns` (`evals/report.mjs:317`) already compare it, so a resume on another model, or without
+the flag of a run recorded on another, is refused with the file untouched, and the message names
+`--model <recorded>`. A model with no price row is warned about, not refused. The plan line names
+the model. RED: parsed and absent shapes; alias, empty and `--summary` refused; Claude args and
+`doc.model`; Codex `-m`; both refusals with unchanged bytes; both warnings; with no flag
+`doc.model` is `EVAL_MODEL`. `evals/suite.test.mjs:75` asserts `--model` is unknown: it changes to
+another unknown flag in the same commit. About 35 lines of source, 90 of tests.
+
+G6a, the fingerprint. `sealTemplate` (`evals/home.mjs:250`) returns `fingerprint: { sha256, items
+}`, sha256 over the sorted `path\0sha256(normalized bytes)` lines, taken before seeding so no
+trial path is in it. Left out or normalized: the marker (`builtAt`, `warnings`); `.claude.json`
+reduced to `mcpServers`; `.gentle-ai/state.json` without `last_update_check`, `last_synced_at`,
+`rdd_mode_recorded_at`; Codex `config.toml` without `[projects.*]` and `[notice*]`
+(`[hooks.state.*]` is trust, kept, to be checked first). Before trusting it: build the template
+twice, hours apart, and diff the fingerprints (free). Also recorded: codegraph's version (missing
+from `STACK_FIELDS`, `evals/suite.mjs:273`) and the js-harness commit of the workspace
+(`evals/home.mjs:312`).
+
+G6b, the refusal. Stored as top-level `setup`, not under `stack` (under it the report would refuse
+to pool F5's minimal-only file with its current one). The suite compares it after `buildTemplate`
+(`:774`) when `current` is in the run, as a new change kind `setup`, naming the items that
+changed; exit 1, nothing written. `checkRuns` compares `setup` among runs holding `current`
+trials; a missing one is "missing", so the F5 files still pool. RED: volatile keys leave it
+unchanged and a `CLAUDE.md` change moves it; a resume on a changed setup refused with no runner
+call; a minimal-only run records none; `checkRuns` refuses differing setups and still pools the
+old fixtures; the build warnings at `evals/home.test.mjs:140` unchanged. About 110 and 190 lines;
+hashing reads about 94 MB of the Codex plugin cache per invocation.
+
+G3, `--plan`. A pure `evals/plan.mjs` on the pattern of `bin/lib/codex-review-plan.mjs`; the branch
+runs after the results file is read, needs no token, login, stack probe or template, writes
+nothing, exits 0. Per cell (task, config, effort, model, agent), the newest results file holding
+it gives the mean `wallMs` and the cost (`costUsd` for Claude, `estimateCodexCost` for Codex); a
+cell with no trial on this model is "unknown", never borrowed from another model or effort; the
+cap line always says unknown; the source line names each file and date and says the time is
+agent time without setup and the cost is list, not billed. RED: a known cell; an empty cell; other
+models ignored; newest file wins; the cap line; no `runTrial`, stack read, template or file, and
+no token; without `--plan` the plan line unchanged. About 140 and 160 lines.
+
 ## Tasks
 
 - [x] T1 `docs/future-model.md`, version 1: the procedure, its cost table and its gaps (S1; route:
@@ -179,3 +230,15 @@ every one:
   Codex's `current` sessions end on gentle-ai's questions.
 - Not checked by the reader: the pricing pages, the carry list of S2. Next: T4 and the gaps,
   through the lead.
+
+L6 (2026-10-14) PR jsaristi/js-harness#120 opened; the lead told of it, of T4, of the carry list
+and of the gaps' order (G5+G6, G3, G2, then G1, G4, G7), not yet answered. A slip of this
+session: a message to the lead gave the context share as "about 30%" without reading it;
+`get_usage` read 42%, corrected in the next message; the same class as the register's
+`hours-guessed` (a figure in a message not read in the step before), told to the lead for the
+register. The design of G5, G6 and G3 written above, by a planner; it found five places where
+version 2 did not match the code, taken into the procedure: the A/B arms keep no `listCost`, so
+Step 1's cost check prices `modelUsage` as a range; base and arms in one invocation share one
+template, so G6 matters across invocations (a resume after a cap, pooling); a plain hash would
+refuse every resume; codegraph and the js-harness commit are not recorded; no results file
+records a cap stop, so G3 leaves cap windows unknown.

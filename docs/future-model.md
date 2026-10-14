@@ -36,9 +36,11 @@ smallest first: two smoke trials, then one arm, then the rest (the order F6 used
 The setup is frozen for the whole run, from Step 4's first trial to the last trial of Step 6: no
 update of Claude Code, Codex, gentle-ai, engram or codegraph, and no edit of the global
 `CLAUDE.md`, the output style or the settings. The suite builds the `current` arm from the live
-home at every invocation (`evals/home.mjs`) and records only the versions of Claude Code,
-gentle-ai, engram and its plugin, so any other change would go unseen (F6 held the same rule,
-`odd/tasks/codex-parity.md`, Constraints).
+home once per invocation (`evals/home.mjs`), so arms run in one invocation share one setup; but a
+run is resumed by a new invocation after a cap stops it, and the suite records only the versions
+of Claude Code, gentle-ai, engram and its plugin, not codegraph's nor the js-harness commit the
+workspace is initialized from, so any other change between invocations would go unseen (F6 held
+the same rule, `odd/tasks/codex-parity.md`, Constraints; gap G6).
 
 ## Step 1. Preconditions (no spend)
 
@@ -48,8 +50,12 @@ gentle-ai, engram and its plugin, so any other change would go unseen (F6 held t
   `evals/prices.mjs` (the list table; `listCost` returns `null` for a model it does not list) and,
   for a Codex model, into `CODEX_LIST_PRICES` of `evals/report.mjs`. The Claude report's cost is
   Claude Code's own `costUsd` (`evals/report.mjs`, `buildCells`), which the CLI computes at a
-  wrong rate for a model it does not know (`evals/prices.mjs`, its header): after the smoke trials,
-  compare each trial's `costUsd` with its `listCost` before any verdict rests on cost.
+  wrong rate for a model it does not know (`evals/prices.mjs`, its header). After the smoke trials,
+  price each trial's recorded `modelUsage` at the list table and compare it with its `costUsd`
+  before any verdict rests on cost. The A/B arms keep no `listCost` (only the subagent configs
+  do, `evals/runner.mjs`), and pricing `modelUsage` alone gives a range, since the lifetime of a
+  cache write is not in it (`evals/transcript-usage.mjs`): a `costUsd` outside that range is
+  told to him before the run goes on.
 - Logins: `JS_HARNESS_EVAL_OAUTH_TOKEN` set (`claude setup-token`); the Codex login with at least
   12 hours left (`evals/suite.mjs`, usage).
 - Isolation on a new engine: `node evals/isolation-probe.mjs` (no spend) before any Claude trial;
@@ -194,12 +200,15 @@ Each one is a task of `odd/tasks/future-model-protocol.md`.
   component, without a commit.
 - G2. Arms of one component: `minimal` plus one and `current` minus one, run in one invocation
   with their base and accepted by the report.
-- G3. A cost statement before a run: the suite prints the trials, the cap windows, the wall time
-  and the list cost from the last results, and starts nothing (the precedent is `js-harness
-  codex-review --plan`). Until then the table above is the estimate, by hand.
+- G3. A cost statement before a run: the suite prints the trials, the agent time and the list
+  cost from the last results on the same model, "unknown" for a cell with none, and starts
+  nothing (the precedent is `js-harness codex-review --plan`). The cap windows stay unknown: no
+  results file records where a cap stopped a run, and the agent time leaves out each trial's
+  setup. Until then the table above is the estimate, by hand.
 - G4. The whole first request (tools, MCP, skills list) measured by a committed script.
 - G5. The eval model chosen for a run and recorded with it, in place of the constants.
-- G6. The setup recorded with a run: a fingerprint of the home template beside the versions, so a
-  change between the base and its arms is refused, not unseen.
+- G6. The setup recorded with a run: a fingerprint of the home template beside the versions,
+  leaving out the counters and timestamps a day of sessions changes, so a run resumed on another
+  setup, or two runs pooled across setups, are refused, not unseen.
 - G7. A new model noticed: a row that compares the model of the session with the eval model and
   the review model, and says when they differ.
