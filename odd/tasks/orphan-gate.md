@@ -71,3 +71,10 @@ Nothing planned.
   look also asks whether `process.ppid` is still the first launcher, and the test's made-up pids are no
   parent of the test. The cases that are not about adoption now pass `ppid: null`; 5/5 on Windows and in
   WSL2 (its node, `/home/oficina/.local/node/bin/node`), the real kill test included.
+- **L6** (2026-10-14): commit `6029616`, gate passed in WSL2. Codex over `eb6abf7..6029616` (156,348 input
+  tokens): two P2, fixed in one batch, test first (RED, then GREEN). The last look moved into `logged`,
+  after the sample of the load (a second) and just before the command starts; and where the launchers are
+  cheap to read (Linux) they are read as the gate starts, since there a shell whose parent ended is adopted
+  and a chain read later would end at its adopter. `gate.test.mjs` 61/61 on Windows. In WSL2 run from
+  `/mnt/d` three "real gate" tests time out on main too (`4edfa0e`, same three), so they are of that place,
+  not of this change; the gate runs them from its mirror.

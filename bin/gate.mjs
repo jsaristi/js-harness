@@ -300,8 +300,15 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     : gateRecord({ home, cwd: path.resolve(cwd), command, ...deps.gateLog, onFailure: (why) => console.error(`gate: the gate log ${why}`) });
   /** The command between the two lines of its record: the load is read, the start written, and the end
    * on every way out. `turn` is the state of the lock, and whom this gate waited for. */
-  const logged = async (turn, given, afterGate = false) => {
+  // `goneAtTurn`, after a wait: the last look at what started this gate, made after the sample of the load
+  // (a second, and a look at the busiest processes) and just before the command starts (Codex, 2026-10-14).
+  const logged = async (turn, given, afterGate = false, goneAtTurn = () => false) => {
     const load = await sayLoad(afterGate);
+    if (goneAtTurn()) {
+      console.error('gate: nothing ran: the process that started this gate ended while it waited, so it gave up its turn as it came');
+      record?.refused({ reason: 'launcher gone', waitedMs: turn.waitedMs, waitedFor: turn.waitedFor });
+      return GATE_NOT_RUN;
+    }
     record?.start({ ...turn, load });
     let result = 'error';
     try {
@@ -334,9 +341,11 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   // What started this gate, asked at every look of its wait (odd/tasks/orphan-gate.md): a gate whose launcher
   // ended is an orphan, and its turn would run a script nobody waits for. The first look is not asked, the
   // launcher having started this gate a moment ago, so a turn taken at once reads nothing; the launchers are
-  // read at the second, once this gate waits, from the parent this process had when it started.
-  const launcher = deps.launchers ?? { read: () => readLaunchers({ ppid: STARTED_BY }), alive: launchersAlive };
-  let launchers = null;
+  // read at the second, once this gate waits, from the parent this process had when it started. Where they
+  // are cheap to read (Linux, `/proc`) they are read now, before any wait: there a shell whose parent ended is
+  // adopted, and a chain read later would end at its adopter and hide the one that ended (Codex, 2026-10-14).
+  const launcher = deps.launchers ?? { read: () => readLaunchers({ ppid: STARTED_BY }), alive: launchersAlive, eager: process.platform !== 'win32' };
+  let launchers = launcher.eager ? launcher.read() : null;
   let looks = 0;
   const stillWanted = () => {
     looks += 1;
@@ -356,17 +365,9 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return logged({ lock: 'none', waitedMs, waitedFor }, env);
   }
   const { lock } = turn;
-  // The last look before the command starts, after a wait: the launchers' start times read again, so a pid
-  // given since to another process is not taken for the launcher (`launchersAlive`, `full`).
-  if (launchers !== null && !launcher.alive(launchers, { full: true })) {
-    lock.release();
-    console.error('gate: nothing ran: the process that started this gate ended while it waited, so it gave up its turn as it came');
-    record?.refused({ reason: 'launcher gone', waitedMs, waitedFor });
-    return GATE_NOT_RUN;
-  }
   let lost = false;
   try {
-    return await logged({ lock: 'own', waitedMs, waitedFor }, { ...env, [GATE_HELD_ENV]: '1' }, waitedMs >= GATE_WAIT_SAID_MS);
+    return await logged({ lock: 'own', waitedMs, waitedFor }, { ...env, [GATE_HELD_ENV]: '1' }, waitedMs >= GATE_WAIT_SAID_MS, () => launchers !== null && !launcher.alive(launchers, { full: true }));
   } finally {
     // Asked before the release, after which there is no lock to have lost.
     lost = lock.lost();

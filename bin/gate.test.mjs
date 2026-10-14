@@ -261,12 +261,14 @@ test('gate --no-wait runs nothing against a held lock, says so in one line and e
 
 /** Launchers for a test: `alive(full)` answers each look, `full` true for the one before the command starts.
  * Counts what was asked of them. */
-function launchersThat(alive) {
-  const asked = { reads: 0, looks: [] };
+function launchersThat(alive, { eager = false } = {}) {
+  const asked = { reads: 0, looks: [], order: [] };
   return {
     asked,
+    eager,
     read: () => {
       asked.reads += 1;
+      asked.order.push('read');
       return [{ pid: 30, name: 'sh.exe', start: 300 }];
     },
     alive: (launchers, { full = false } = {}) => {
@@ -315,6 +317,50 @@ test('gate whose launcher ended as its turn came gives the turn up: nothing runs
   assert.equal(readGateHolder(home, { now: clock.now }), null);
   const [gate] = gatesOf(readGateLog(home).events);
   assert.equal(gate.refused?.reason, 'launcher gone', JSON.stringify(gate));
+}));
+
+test('gate whose launcher ends while the load is sampled, after its wait, still runs nothing: the last look is just before the command', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 2) other.release();
+  };
+  let dead = false;
+  const launchers = launchersThat((full) => !(full && dead));
+  const spawned = ranWith(0);
+  const sampleLoad = async () => {
+    dead = true;
+    return QUIET_LOAD;
+  };
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: clock.take, launchers, sampleLoad });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.equal(spawned.asked.length, 0);
+  assert.equal(said.at(-1), GONE_AT_TURN);
+  assert.equal(readGateHolder(home, { now: clock.now }), null);
+}));
+
+test('where reading the launchers is cheap (Linux) they are read as the gate starts, before any look: an adopted chain would hide the one that ended', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  clock.onSleep = () => other.beat();
+  const launchers = launchersThat((full, look) => look < 2, { eager: true });
+  const alive = launchers.alive;
+  launchers.alive = (...args) => {
+    launchers.asked.order.push('look');
+    return alive(...args);
+  };
+  const take = (options) => {
+    launchers.asked.order.push('take');
+    return clock.take(options);
+  };
+  const { code } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: ranWith(0), takeGateLock: take, launchers });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.equal(launchers.asked.reads, 1);
+  assert.deepEqual(launchers.asked.order.slice(0, 2), ['read', 'take'], launchers.asked.order.join(' '));
+  other.release();
 }));
 
 test('gate that takes the lock at once asks nothing of its launchers, so a turn with no wait costs nothing more', withHome(async (home, dir) => {
