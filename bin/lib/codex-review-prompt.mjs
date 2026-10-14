@@ -26,6 +26,7 @@
 // by its files too, also when they fit in one part: that one part is asked with the text of a part, which
 // then says nothing of parts. Which files were left out, and how many, is not in the prompt.
 import { parseContract } from './contract.mjs';
+import { NO_TEST_EXIT, NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 // The version of the text `reviewPrompt` writes, kept in the run line of every review that used it, so that
 // two reviews are only compared knowing whether they were asked the same thing. Any change to the wording
@@ -137,8 +138,24 @@ function scope(from, head, part, leftOut) {
  * `leftOut` is how many files the range leaves out of the review (`./codex-review-scope.mjs`), 0 when none.
  * A range that leaves some out has no prompt as a whole, since that prompt's command shows every file: it
  * is asked in parts, each of which then says the other files are in the other parts or left out, and when
- * its files fit in one part that part is `{ index: 1, of: 1, files }`, whose text speaks of no part. */
-export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0 }) {
+ * its files fit in one part that part is `{ index: 1, of: 1, files }`, whose text speaks of no part.
+ *
+ * `suiteRan`, for a review out of a turn of the gate lock, ends the text with `SUITE_RAN`: there the gate has
+ * already run the suite on the range, and a `node --test` Codex starts is refused. */
+export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, suiteRan = false }) {
+  const text = promptText({ from, head, intent, part, leftOut });
+  return suiteRan ? `${text}\n${SUITE_RAN}\n` : text;
+}
+
+/** What a review out of a turn of the gate lock is told of the tests (`reviewPrompt`'s `suiteRan`): a review
+ * that took the refusal for a failure called patches incorrect for it (odd/tasks/faster-check.md, part 2). */
+export const SUITE_RAN = [
+  '## The tests',
+  'The gate already ran the whole test suite on this range, in a turn of the machine\'s gate lock, before this review.',
+  `Here a \`node --test\` is refused at once, with exit ${NO_TEST_EXIT} and the line \`${NO_TEST_LINE}\`: that refusal is expected and is not a finding, nor a reason to call the patch incorrect. Read the tests instead of running them.`,
+].join('\n');
+
+function promptText({ from, head, intent, part, leftOut }) {
   for (const id of [from, head]) {
     if (typeof id !== 'string' || !COMMIT_ID.test(id)) throw new Error(`The review prompt names its range by full commit id, got ${JSON.stringify(id)}.`);
   }
