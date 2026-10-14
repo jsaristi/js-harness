@@ -75,6 +75,33 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "person-present": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
+  },
+  "questions-one-place": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "siempre hazme las preguntas como te pedi que me la dieras SIEMPRE tienes que cementarlo en el harnes",
+        "date": "2026-10-13",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 12735
+      },
+      {
+        "quote": "Te dije que todas las preguntas de todas las sesiones me las haces aca y eso debe quedar cementado osea te pasa la pregunta aca y yo te la respondo aqui y le pasas la informacion. SIEMPRE debe ser asi ya habiamos quedado en eso.",
+        "date": "2026-10-13",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 13110
+      }
+    ],
+    "reading": "Every question of every session is put to him in the orchestrator's chat, and only there; he answers there and the orchestrator carries the answer back. His first line asks that the questions come as he asked for them, which is the question tool (the orchestrator skill, \"Questions to the user\"). Both read with sessions --quote; written in the skill by JH 5 (pull request 127).",
+    "accepted": "Not put to him as a reading: the skill text that carries it is JH 5's, merged by the lead, and his to correct.",
+    "checked": {
+      "date": "2026-10-14",
+      "by": "session"
+    }
+  },
   "review-effort": {
     "kind": "words",
     "quotes": [
