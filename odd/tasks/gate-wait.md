@@ -2738,6 +2738,16 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     first half ("One test file run alone during a task stays free; this is for what takes
     minutes"); its sentence is made whole in T19's commit, which edits that file, so that
     one line of comment does not cost the line a whole gate of its own.
+  - *After his restart* (written at 22:24). He restarted `PcaSvc` himself at about 22:07:
+    `Restart-Service` hung at "Stop Pending", so he ended its svchost (pid 8936, which held
+    `PcaSvc` alone, read by the orchestrator) and started the service again; new pid 56312.
+    Read beside two gates (`two-pids.ps1`, 20 s each): **`PcaSvc` 0 s at 22:09 and at 22:16**,
+    against 21 s in 21 s at 20:06; MsMpEng 34.3 and 47.2 s, against 39.8. **The first whole
+    check that started after it** (`after-restart.cjs`, the gate log): 22:14:10, the worktree
+    `session-channel`, **576 s, pass**, against 641 to 844 s for the eleven between 20:00 and
+    22:00 and 474 to 590 s in the morning. One check, so one reading inside a spread, not a
+    proof; it agrees with the measure. Whether the service climbs again after an app restart
+    or an install is not known: the gate log's samples will show it if it does.
   - *T19 is ordered:* after the stretch of the session "JH 9" on `bin/check.mjs` is on
     `main`. The antivirus is his and nothing is recommended there: the numbers are 1,139
     processor-seconds in a run of 805 s, 859 in one of 533.
@@ -2813,7 +2823,8 @@ This paragraph is the newest; where the state below it says "in flight", it is d
   second correct (0.98). The session "JH 9" adds its two lines to `bin/js-harness.mjs` after
   it is on `main`. Its worktree `upgrade-sync-path` goes once it is merged, with
   `package-contents` and `status-no-pin`.
-- **Owed, waiting on him:** he answered that he restarts `PcaSvc` himself (Progress); at
+- **Done at 22:24:** the measure after his restart is in Progress (576 s, `PcaSvc` at 0 s).
+- **Was owed, waiting on him:** he answered that he restarts `PcaSvc` himself (Progress); at
   21:10 it still had pid 8936 and the whole checks of the ninety minutes before read 641 to
   815 s. When the orchestrator says the pid changed: the seconds of the first whole check in
   the gate log after it (`checks-load.cjs <log> 2`), and one read of 20 s beside it
