@@ -1,0 +1,49 @@
+# The gate, run by GitHub on a pull request that holds code: `node bin/check.mjs` on Linux, a system the
+# machine every session shares cannot run. It stands in for no local check: the gate of a commit and the
+# pre-push rule on review records stay on the machine, and nothing there waits for this run
+# (odd/tasks/gate-on-github.md).
+#
+# The repository is private and its account has no payment method, so a run spends the 2,000 minutes a month
+# the account includes for all its private repositories, and when they end GitHub starts no run until the
+# month turns. What bounds a run is in this file and is held by scripts/gate-workflow.test.mjs: one job on
+# Linux, fifteen minutes at most, no run for a pull request of documents alone, and none for a branch with no
+# pull request. A job is billed by the whole minute.
+name: gate
+
+on:
+  pull_request:
+    # The paths the local gate calls documents (harness.json "documents"): a pull request that changes
+    # nothing else runs nothing here, as its commits run no suite there. The filter reads the whole pull
+    # request, so one that holds code runs at every push.
+    paths-ignore:
+      - 'docs/**'
+      - 'odd/tasks/**'
+
+# The token reads the repository and writes nothing; the job uses no secret.
+permissions:
+  contents: read
+
+# A second push to a pull request stops the run of the first.
+concurrency:
+  group: gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Both actions are pinned to a commit: a tag can be moved to other code, a commit cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, as the clone on the machine has it: tests read the repository's own commits,
+          # and `check` compares the head with the default branch.
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: What the runner is
+        run: node -e "const os = require('node:os'); console.log(process.version, os.platform(), os.release(), os.availableParallelism() + ' logical processors', Math.round(os.totalmem() / 2 ** 30) + ' GB')"
+      - name: The gate
+        run: node bin/check.mjs
