@@ -194,6 +194,11 @@ test('a model_instructions_file key under a [table] header is ignored', () => {
   });
 });
 
+// A Windows path is absolute on Windows alone. Elsewhere it is one relative name, resolved like any other
+// against the folder of the config.toml that names it: the first run of this suite on Linux expected the
+// Windows answer there.
+const asThisSystemReads = (home, value) => (path.isAbsolute(value) ? value : path.resolve(path.join(home, '.codex'), value));
+
 test('a top-level model_instructions_file key before any table header is used, and TOML backslash escapes are unescaped', () => {
   withFixture((home, cwd) => {
     write(
@@ -204,7 +209,7 @@ test('a top-level model_instructions_file key before any table header is used, a
     );
     const { hosts } = measurePayload({ home, cwd });
     const source = findSource(hosts[1], 'model instructions');
-    assert.equal(source.path, 'C:\\Users\\test\\engram-instructions.md');
+    assert.equal(source.path, asThisSystemReads(home, 'C:\\Users\\test\\engram-instructions.md'));
     assert.equal(source.tokens, null); // the unescaped path doesn't exist on disk
   });
 });
@@ -212,7 +217,11 @@ test('a top-level model_instructions_file key before any table header is used, a
 test('a TOML literal string and a trailing comment are both read', () => {
   withFixture((home, cwd) => {
     write(path.join(home, '.codex', 'config.toml'), "model_instructions_file = 'C:\\Users\\test\\a.md'\n");
-    assert.equal(findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path, 'C:\\Users\\test\\a.md');
+    assert.equal(findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path, asThisSystemReads(home, 'C:\\Users\\test\\a.md'));
+    // A path that is absolute on this system is taken as it is, whichever system this is.
+    const absolute = path.resolve(home, 'elsewhere', 'a.md');
+    write(path.join(home, '.codex', 'config.toml'), `model_instructions_file = '${absolute}'\n`);
+    assert.equal(findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path, absolute);
     write(path.join(home, '.codex', 'config.toml'), 'model_instructions_file = "b.md" # engram\n');
     // A relative value resolves against <home>/.codex, the directory of the config.toml that defines it.
     assert.equal(
