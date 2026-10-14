@@ -10,6 +10,7 @@ import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
+import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -4399,3 +4400,221 @@ test('a real gate in a real repository names the files its sensor left in the wo
     fs.rmSync(repo, { recursive: true, force: true });
   }
 });
+
+// --- the sensors of a gate's turn in WSL2, on a Windows machine whose switch file says so (`./lib/gate-wsl.mjs`) ---
+// The real distribution never runs here: `deps.spawn` stands in for it, `deps.platform` for Windows, and
+// `deps.wslPath` for the drive letters a temporary folder of a POSIX runner has none of.
+
+/** A stand-in for the mount of a path: any absolute path, as WSL would mount it. */
+const mountedAt = (where) => `/mnt/x/${where.replaceAll('\\', '/').replace(/^[A-Za-z]:\//, '').replace(/^\//, '')}`;
+/** What a sensor answers that reached the mirror, synced in `ms`. */
+const reachedMirror = (status, ms = 1200) => ({ status, signal: null, stdout: 'suite\n', stderr: `${SYNCED_MARK}${ms} ms\n` });
+/** A `deps.spawn` that answers from `answers` in turn, keeps each command, and reads the runner script at the time of the call. */
+function spawnsInTurn(...answers) {
+  const spawn = (command, options) => {
+    const runner = /--exec bash "(.*)"$/.exec(command);
+    spawn.calls.push({ command, cwd: options.cwd, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
+    return answers[spawn.calls.length - 1] ?? sensorRan();
+  };
+  spawn.calls = [];
+  spawn.files = new Map();
+  return spawn;
+}
+/** `deps` of a gate on Windows whose paths the stand-in mount translates; it records each path it mounts, so a test can read the runner by it. */
+function wslDeps(spawn, over = {}) {
+  const wslPath = (where) => {
+    const mounted = mountedAt(where);
+    spawn.files.set(mounted, where);
+    return mounted;
+  };
+  return gateDeps({ takeGateLock: lockTakenAtOnce(), spawn, platform: 'win32', wslPath, ...over });
+}
+const UBUNTU = { distro: 'Ubuntu', node: '/home/a/.local/node/bin' };
+/** The project of `dir` says its sensors may run in WSL2 (`harness.json` "sensorsInWsl"). */
+function optIn(dir) {
+  writeJson(dir, 'harness.json', { ...JSON.parse(fs.readFileSync(path.join(dir, 'harness.json'), 'utf8')), sensorsInWsl: true });
+}
+/** The machine of `home` runs sensors in Ubuntu, and the project of `dir` lets it. */
+function switchOn(dir, home) {
+  fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+  optIn(dir);
+}
+
+test('a gate on a machine whose switch file names a distribution runs its sensor there, from a mirror of its tree, and says so in its row and in its log', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn(reachedMirror(0));
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.equal(spawn.calls.length, 1);
+  assert.match(spawn.calls[0].command, /^wsl\.exe -d Ubuntu --exec bash "\/mnt\/x\/.*gate-wsl\.sh"$/);
+  const { script } = spawn.calls[0];
+  assert.ok(script.includes(`source='${mountedAt(path.resolve(dir))}'`), script);
+  assert.match(script, /bash -c 'npm run test'/);
+  assert.match(script, /PATH='\/home\/a\/\.local\/node\/bin'/);
+  assert.match(script, /JS_HARNESS_GATE_HELD=1 /, 'the gate holds the lock, so its sensor is given the mark');
+  assert.match(output, /^PASS {2}tests {2}npm run test passed in WSL2 \(Ubuntu, its mirror synced in 1\.2 s\)$/m);
+  const ends = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.deepEqual(ends.map((end) => end.sensors.map(({ name, ranIn }) => ({ name, ranIn }))), [[{ name: 'tests', ranIn: 'wsl' }]]);
+}));
+
+test('a sensor that fails in WSL2 fails the gate there, and is not run again on Windows', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn(reachedMirror(1));
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 1);
+  assert.equal(spawn.calls.length, 1);
+  assert.match(output, /^FAIL {2}tests {2}npm run test exited 1 in WSL2 \(Ubuntu\)$/m);
+}));
+
+test('a sensor that never reached the mirror runs on Windows, and its row says why', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn({ status: 4294967295, signal: null, stdout: 'There is no distribution with the supplied name.\n', stderr: '' }, sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command, cwd }) => [command.startsWith('wsl.exe'), cwd]), [[true, dir], [false, dir]]);
+  assert.equal(spawn.calls[1].command, 'npm run test');
+  assert.match(output, /^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \(There is no distribution with the supplied name\.\)$/m);
+  const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.equal(end.sensors[0].ranIn, undefined);
+}));
+
+test('a tree on no drive letter runs on Windows, and its row says why', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn(sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn, { wslPath: () => null }));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command }) => command), ['npm run test']);
+  assert.match(output, /^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \(.* is on no drive letter WSL mounts\)$/m);
+}));
+
+test('a gate runs on Windows as it always did with no switch file, with the variable set to 0, on a system that is not Windows, or for a project that does not opt in, and the variable says where its temporary files went', async () => {
+  const said = { variable: / on Windows \(JS_HARNESS_GATE_WSL=0\), its temporary files under \S/ };
+  for (const [label, file, env, platform, opted = true] of [['no file', false, {}, 'win32'], ['variable', true, { JS_HARNESS_GATE_WSL: '0' }, 'win32'], ['linux', true, {}, 'linux'], ['variable, no file', false, { JS_HARNESS_GATE_WSL: '0' }, 'win32'], ['project not opted in', true, {}, 'win32', false]]) {
+    await withGate({ tests: 'npm run test' }, async (dir, home) => {
+      if (file) {
+        fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+        fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+      }
+      if (opted) optIn(dir);
+      const spawn = spawnsInTurn(sensorRan());
+      const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, wslDeps(spawn, { platform }));
+      assert.equal(code, 0, `${label}: ${output}`);
+      assert.deepEqual(spawn.calls.map(({ command }) => command), ['npm run test'], label);
+      assert.match(output, said[label] ? new RegExp(`^PASS {2}tests {2}npm run test passed${said[label].source}`, 'm') : /^PASS {2}tests {2}npm run test passed$/m, label);
+    });
+  }
+});
+
+test('a switch file that cannot be taken fails the gate in one row named wsl, before any sensor runs', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  optIn(dir);
+  fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), '{ "distro": "Ubuntu" }');
+  const spawn = spawnsInTurn(sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 1);
+  assert.equal(spawn.calls.length, 0);
+  assert.match(output, /^FAIL {2}wsl {2}.*gate-wsl\.json needs "node"/m);
+}));
+
+// Found by two readers on 2026-10-14: the key of a tree did not say where its sensors ran, so a pass in WSL2
+// proved the tree for the run on Windows that is there to catch what WSL2 cannot, and that run ran nothing.
+test('a pass in WSL2 proves a tree for WSL2 alone: the run on Windows of that same tree runs its sensors, and a second run in WSL2 does not', async () => {
+  const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+    const spawn = spawnsInTurn(reachedMirror(0), sensorRan(), reachedMirror(0));
+    const deps = wslDeps(spawn, { git: undefined, takeGateLock: undefined });
+    const gate = (env) => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off', ...env }, deps);
+    const inWsl = await gate({});
+    assert.equal(inWsl.code, 0, inWsl.output);
+    assert.equal(spawn.calls.length, 1);
+    const onWindows = await gate({ JS_HARNESS_GATE_WSL: '0' });
+    assert.equal(onWindows.code, 0, onWindows.output);
+    assert.equal(spawn.calls.length, 2, 'the run on Windows ran no sensor: a pass in WSL2 proved its tree');
+    assert.equal(spawn.calls[1].command, 'run-tests');
+    const again = await gate({});
+    assert.equal(again.code, 0, again.output);
+    assert.equal(spawn.calls.length, 2, 'a second run in WSL2 of a tree WSL2 passed ran its sensors again');
+    assert.match(sensorsRow(again.output)[0], NO_SENSOR_SAME_TREE);
+    const codes = events().filter((event) => event.event === 'end').map((end) => end.code);
+    assert.equal(codes.length, 2);
+    assert.notEqual(codes[0], codes[1], 'the two places proved one key');
+  } finally {
+    remove();
+  }
+});
+
+test('a sensor sent to WSL2 that came back on Windows proves no tree, since its key was of WSL2', async () => {
+  const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+    const spawn = spawnsInTurn({ status: 1, signal: null, stdout: 'no such distribution\n', stderr: '' }, sensorRan());
+    const { code, output } = await runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off' }, wslDeps(spawn, { git: undefined, takeGateLock: undefined }));
+    assert.equal(code, 0, output);
+    const [end] = events().filter((event) => event.event === 'end');
+    assert.equal(end.result, 'pass');
+    assert.equal(end.code, undefined);
+  } finally {
+    remove();
+  }
+});
+
+test('the files a test left in the WSL2 mirror are named in a tree row, as the ones it leaves in the Windows tree are', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const left = { status: 0, signal: null, stdout: 'suite\n', stderr: `${SYNCED_MARK}900 ms\n${LEFT_MARK}scratch/out.txt\n${LEFT_MARK}tmp-dir/\n` };
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawnsInTurn(left)));
+  assert.equal(code, 0, output);
+  assert.match(output, /^INFO {2}tree {2}2 paths appeared in the WSL2 mirror while the sensors ran \(a test may have written them\)$/m);
+  assert.match(output, /^ {6}scratch\/out\.txt$/m);
+  assert.match(output, /^ {6}tmp-dir\/$/m);
+}));
+
+test('a sensorsInWsl that is not true or false fails the gate in one row named sensors', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  writeJson(dir, 'harness.json', { sensors: { tests: 'npm run test' }, sensorsInWsl: 'yes' });
+  const spawn = spawnsInTurn(sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 1);
+  assert.equal(spawn.calls.length, 0);
+  assert.match(output, /^FAIL {2}sensors {2}harness\.json "sensorsInWsl" must be true or false/m);
+}));
+
+// Codex, 2026-10-14, on 3f59bb2..adae7c8: a time that ran out inside the distribution was an ordinary
+// failure, and one that ran out before the mirror was synced kept the sensor in WSL2.
+test('a sensor whose time ran out inside WSL2 is a timeout in its row and in the gate log, not an ordinary failure', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn({ status: 124, signal: null, stdout: '', stderr: `${SYNCED_MARK}800 ms\n${TIMED_OUT_MARK}\n` });
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 1);
+  assert.equal(spawn.calls.length, 1);
+  assert.match(output, /^FAIL {2}tests {2}npm run test timed out after \d+ s in WSL2 \(Ubuntu\)$/m);
+  const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.equal(end.result, 'timeout');
+  assert.deepEqual(end.sensors.map(({ timedOut, ranIn }) => ({ timedOut, ranIn })), [{ timedOut: true, ranIn: 'wsl' }]);
+}));
+
+test('a sensor whose time ran out before WSL2 synced its mirror runs on Windows, and its row says why', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn({ status: null, signal: null, stdout: '', stderr: '', error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }) }, sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command }) => command.startsWith('wsl.exe')), [true, false]);
+  assert.match(output, /^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \(its time ran out before the mirror was synced\)$/m);
+  const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.equal(end.sensors[0].ranIn, undefined);
+}));
+
+// Codex, 2026-10-14, on adae7c8..f5cbaf4: the mark alone turned a sensor that passed into a timeout.
+test('the mark of a time that ran out counts only beside the exit status of timeout, alone on its line', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const printed = `${SYNCED_MARK}800 ms\na test printed: ${TIMED_OUT_MARK}\n${TIMED_OUT_MARK}\n`;
+  const spawn = spawnsInTurn({ status: 0, signal: null, stdout: '', stderr: printed }, { status: 1, signal: null, stdout: '', stderr: printed });
+  const passed = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(passed.code, 0, passed.output);
+  assert.match(passed.output, /^PASS {2}tests {2}npm run test passed in WSL2 /m);
+  const failed = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(failed.code, 1);
+  assert.match(failed.output, /^FAIL {2}tests {2}npm run test exited 1 in WSL2 \(Ubuntu\)$/m);
+}));

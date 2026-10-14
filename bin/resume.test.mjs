@@ -157,9 +157,9 @@ const askedAt = (m, id, question) => ({ type: 'assistant', timestamp: minute(m),
 /** Its result at minute `m`: his `answer`, or none at all when `answer` is undefined (no answer of his). */
 const resultAt = (m, id, question, answer) => ({ type: 'user', timestamp: minute(m), ...(answer === undefined ? {} : { toolUseResult: { answers: { [question]: answer } } }), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'made up' }] } });
 /** How to ask him when no entry of his is read in the transcript, for `waits` questions: the rule's sentence for a time that is not known. */
-const UNKNOWN_WHEN = (count) => `when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that ${count === 1 ? '1 question waits' : `${count} questions wait`} and about what, and never writes the options out as text`;
+const UNKNOWN_WHEN = (count) => `when the user last wrote here is not known: call the question tool in the reply to a message of the user's; until then a reply says in one line that ${count === 1 ? '1 question waits' : `${count} questions wait`} and about what, and never writes the options out as text`;
 /** The same rule for a time that is known: `ago` is how long before the test's clock his newest words were. */
-const KNOWN_WHEN = (ago, count) => `he last wrote here ${ago} ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that ${count === 1 ? '1 question waits' : `${count} questions wait`} and about what, and never writes the options out as text`;
+const KNOWN_WHEN = (ago, count) => `the user last wrote here ${ago} ago: the question tool would hold this session until the user answers, so call it in the reply to the user's next message; until then a reply says in one line that ${count === 1 ? '1 question waits' : `${count} questions wait`} and about what, and never writes the options out as text`;
 /** The lines the questions step prints: from the first that starts with "Questions" to the line after them, which is the
  * deadline's, the notify line, or the end. `null` when the hook printed none. */
 function questionLinesOf(lines) {
@@ -1140,6 +1140,9 @@ test('the block names the pieces of work the transcript leaves in flight when th
   ]);
   const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
   assert.deepEqual(lines.filter((line) => line.startsWith('  In flight')), ['  In flight when it was compacted, by the transcript: 2 (Agent (no id yet) (general-purpose) "Review the hook", Bash (no id yet) "Run the tests").']);
+  // A timer left running after what it waited for resolved (his correction, 2026-10-14): each piece is judged now.
+  const after = lines.findIndex((line) => line.startsWith('  In flight'));
+  assert.equal(lines[after + 1], '  Each says in its description what it is for and what ends it. Stop now (TaskStop) one whose condition resolved another way, or that says neither; write what stays running, and who stops it, to this session\'s state.');
 }));
 
 test('the block says when a turn at the machine\'s gate is held from the worktree of the feature document, or waits from it; a gate of another folder says nothing', withMachine(async (machine) => {
@@ -1386,15 +1389,15 @@ test('an orchestrator is given every question no notice closed, each with what i
   assert.deepEqual(questionLinesOf(lines), [
     'Questions with no answer in the record (5 of 7 recorded), with what this transcript holds of each:',
     '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Which branch?',
-    '    asked at line 2 of this transcript, with no answer in it: it may be on his screen; look (js-harness sessions) before asking again',
+    '    asked at line 2 of this transcript, with no answer in it: it may be on the user\'s screen; look (js-harness sessions) before asking again',
     '  Pregunta 2  recorded 2h ago by "JH 5 · the channel"  waits: the board  Merge now?',
-    `    he ANSWERED it at line 4 of this transcript: do not ask it again. Read it: js-harness sessions --quote ${SESSION} 4  Then record it: js-harness notify --to 5 --kind answer --question 2 --transcript ${SESSION} --line 4 "<his answer in one line>"`,
+    `    the user ANSWERED it at line 4 of this transcript: do not ask it again. Read it: js-harness sessions --quote ${SESSION} 4  Then record it: js-harness notify --to 5 --kind answer --question 2 --transcript ${SESSION} --line 4 "<the user's answer in one line>"`,
     '  Pregunta 3  recorded 2h ago by "JH 5 · the channel"  waits: the board  Ship it?',
-    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${KNOWN_WHEN('1h 57m', 5)}. Its text is headed by "Pregunta 3: "`,
+    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had the user's answer; if it is open there: ${KNOWN_WHEN('1h 57m', 5)}. Its text is headed by "Pregunta 3: "`,
     '  Pregunta 6  recorded 2h ago by "JH 5 · the channel"  waits: the board  Dismissed?',
-    `    he closed it without answering (asked at line 5): ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
+    `    the user closed it without answering (asked at line 5): ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
     '  Pregunta 7  recorded 2h ago by "JH 5 · the channel"  waits: the board  Unanswered?',
-    `    asked at line 7, and its result is no answer of his: ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
+    `    asked at line 7, and its result is no answer of the user's: ask it again: ${KNOWN_WHEN('1h 57m', 5)}`,
     'The board lists the questions of every session: js-harness sessions',
   ]);
 }));
@@ -1407,7 +1410,7 @@ test('an orchestrator told that a question has no call here is sent to look on t
   assert.deepEqual(questionLinesOf(lines), [
     'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
     '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Asked elsewhere?',
-    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${KNOWN_WHEN('1h 59m', 1)}. Its text is headed by "Pregunta 1: "`,
+    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had the user's answer; if it is open there: ${KNOWN_WHEN('1h 59m', 1)}. Its text is headed by "Pregunta 1: "`,
     'The board lists the questions of every session: js-harness sessions',
   ]);
 }));
@@ -1423,7 +1426,7 @@ test('an orchestrator is told an answer in a transcript outside this project\'s 
   assert.deepEqual(questionLinesOf(lines), [
     'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
     '  Pregunta 1  recorded 2h ago by "JH 5 · the channel"  waits: the board  Which branch?',
-    `    he ANSWERED it at line 3 of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so the harness cannot read that line: record it as the sender's claim with js-harness notify --to 5 --kind answer --question 1 --transcript outside-the-project-folder --line 3 "<his answer in one line>", which keeps it unverified`,
+    `    the user ANSWERED it at line 3 of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so the harness cannot read that line: record it as the sender's claim with js-harness notify --to 5 --kind answer --question 1 --transcript outside-the-project-folder --line 3 "<the user's answer in one line>", which keeps it unverified`,
     'The board lists the questions of every session: js-harness sessions',
   ]);
   assert.equal(lines.some((line) => line.includes(`--quote ${SESSION}`)), false, lines.join('\n'));
@@ -1445,7 +1448,7 @@ test('a work session is given the questions it recorded itself: its open ones wi
   assert.deepEqual(questionLinesOf(lines), [
     'Questions this session recorded (4):',
     '  Pregunta 1  recorded 2h ago by "JH 5 · the channel"  waits: the board  Own?',
-    '    recorded, no answer yet: the orchestrator shows it to him; go on with what does not wait on it (js-harness sessions lists it)',
+    '    recorded, no answer yet: the orchestrator shows it to the user; go on with what does not wait on it (js-harness sessions lists it)',
     `  Pregunta 3  ANSWERED, read at ${SESSION}:9: No`,
     `  Pregunta 4  answered by the claim of "JH 5 · the channel", NOT VERIFIED (${SESSION}:10): Yes, made up`,
     '  Pregunta 5  withdrawn by "JH 5 · the channel": no longer needed',
@@ -1460,7 +1463,7 @@ test('a work session is given none of the questions another session recorded, an
   assert.deepEqual(questionLinesOf((await runHook(machine, hookInput(machine, { session_title: ORQ }))).lines), [
     'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
     '  Pregunta 1  recorded 2h ago by session bbbbbbbb  waits: the board  Not mine?',
-    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${UNKNOWN_WHEN(1)}. Its text is headed by "Pregunta 1: "`,
+    `    not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had the user's answer; if it is open there: ${UNKNOWN_WHEN(1)}. Its text is headed by "Pregunta 1: "`,
     'The board lists the questions of every session: js-harness sessions',
   ]);
 }));

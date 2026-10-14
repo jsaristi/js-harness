@@ -185,9 +185,22 @@ the orchestrator's role as defaults (they are this setup's).
 - [x] T1 · S1-S4 · this design attacked by two Opus readers (effort high); the version after them to
       the orchestrator with what each changed · version 2, "What the readers changed"
 - [ ] T2 · S3 · the priority of the gate, test first (after T1)
+- [x] T3 · two guards on a turn of `js-harness gate`, `odd/tasks/gate-turn-guards.md`: a turn is refused
+      while a push waits on a branch with an open pull request, and a command is stopped at 30 minutes
+      (`--max`). Checked in the branch that builds it, so it is done when that pull request merges.
 
 ## Log
 - L1 · S1, verbatim above.
 - L2 · 2026-10-14, the numbers of the table: the session "JH 8"'s measure turn of `3f59bb2`
   (`odd/tasks/gate-wsl.md`, L3 and L5), and the sum of each run's top-level test times from the two
   logs.
+- L3 · 2026-10-14, two WSL gates at once, measured by the session "JH 8" (one lock turn from 03:32:27,
+  main at `16a6b30`, the whole suite from two mirrors): alone 107.6 s, peak memory 1,144 MB of 3,917;
+  pair 1: 238.8 s and 242.7 s, slower than the two in a row (215 s). Pairs 2 and 3 never ran: the
+  script's bare `wait` also waited for its endless memory sampler and held the lock to 03:56:31, when
+  the lead killed it. The lead's decision (03:58): the lock keeps one slot, since the WSL sensors are
+  bound by the processor and memory is not the limit; the pairs are not run again.
+- L4 · 2026-10-14, the lead's two orders after that day's two waits for nothing (his words, `ffe99ebf`
+  line 3977: "ese problema de esperar una medicion que no la necesibata hay que corregirlo para que no
+  vuelva a pasar"): a push that waits goes before any turn, and a scripted turn has a bound of wall
+  time. Built as T3, in `feat/gate-turn-guards`.

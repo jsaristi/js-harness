@@ -37,6 +37,17 @@ test('treeKey: a folder that is its index has a key of 64 lowercase hex characte
   assert.ok(git.asked[1].includes('--eol') && git.asked[1].includes('-s') && git.asked[1].includes('-v'));
 });
 
+// Found by two readers on 2026-10-14: a pass in WSL2 proved the tree for the Windows run meant to catch
+// what WSL2 cannot, which then ran no sensor.
+test('treeKey: where the sensors run is part of the key, and a gate that names no place keeps the key it had', () => {
+  const plain = treeKey(gitOf(), { sensors: SENSORS });
+  assert.equal(treeKey(gitOf(), { sensors: SENSORS, place: undefined }), plain);
+  const wsl = treeKey(gitOf(), { sensors: SENSORS, place: 'wsl Ubuntu /home/a/.local/node/bin' });
+  assert.match(wsl, /^[0-9a-f]{64}$/);
+  assert.notEqual(wsl, plain);
+  assert.notEqual(treeKey(gitOf(), { sensors: SENSORS, place: 'wsl Debian /home/a/.local/node/bin' }), wsl);
+});
+
 test('treeKey: what is staged and nothing else is still a folder that is its index', () => {
   const staged = treeKey(gitOf({ status: ['M  a.js', 'A  new.js', 'D  gone.js'] }), { sensors: SENSORS });
   assert.equal(staged, treeKey(gitOf(), { sensors: SENSORS }));

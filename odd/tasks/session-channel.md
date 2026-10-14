@@ -1128,7 +1128,7 @@ reader, and that table names this feature as their owner.
   answer was given to, since an answer he sends as a block names no value by itself; the
   contract's "Effort" section as the home of a task's effort. What the hosts' documentation
   says of part (2) is in Progress, 2026-10-11 23:20
-- [ ] T7 The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
+- T7, MOVED to JH 12 (2026-10-14, by the lead's message; its record is there now). The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
 - [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
   It closes the twelve items of the sweep about the skill's text (`docs/sweep-2026-10-11.md`,
@@ -1150,14 +1150,14 @@ reader, and that table names this feature as their owner.
 - [ ] T12 The failures this feature owns closed with their proofs; the roadmap's section
   replaced by a pointer only after what it holds and this document does not (the reasoning of
   the lead, the advice on width, the two measures that reopen a decision) is moved here
-- [ ] T13 Effort by task, not by document (B2 of the proposal "Model and effort by kind of
+- T13, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). Effort by task, not by document (B2 of the proposal "Model and effort by kind of
   work", version 2; his "Sí, que entre al plan" of 2026-10-11, Progress 22:25). Today a
   contract holds one `## Effort` for a whole feature (`bin/lib/contract.mjs:25-32`) and a
   feature has design tasks and build tasks. Each task of the checklist names its kind of
   work; its effort and the model of its writer follow from the table, whose home is the
   rules list of JH 7 and not this feature; `js-harness contract goal` prints them. It waits
   for that table to be on `main`
-- [ ] T14 The effort applied and checked (B3). High is the default; a lower level ends with
+- T14, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). The effort applied and checked (B3). High is the default; a lower level ends with
   its task, and a design question inside such a task goes back to high first. With a lead in
   the desktop app, the lead sets the session's effort with the app's tool, from the session's
   next turn. Without one (an installed project, the terminal, Codex) the shipped
@@ -1169,7 +1169,7 @@ reader, and that table names this feature as their owner.
   phone takes the default of his settings. Before a session's mode is changed, the state of
   its task is read (the lead's rule, a note of its relief file today). The check is JH 7's,
   one with task 13 of the rule hierarchy; this feature keeps the applying half
-- [ ] T15 A count of a day's sub-agents by kind (writer, explorer, reviewer, verifier), model
+- T15, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). A count of a day's sub-agents by kind (writer, explorer, reviewer, verifier), model
   and tokens, read from their records (C1): it costs nothing to run, and it decides what is
   measured next and the working rule on fewer launches
 - [ ] T16 No session opens where he does not see it (his words of 2026-10-12, Progress 01:20;
@@ -1196,9 +1196,24 @@ reader, and that table names this feature as their owner.
   (b1), built: "Open questions" on the board, computed from the question-tool calls of the
   transcripts, each call once, and a watch that returns for a question he closes (Progress,
   2026-10-13 04:48); the number in the tool's text is a sentence of the skill and goes with
-  (c). Owed: (b2) the `question` notice with fields, the answer with its number and copy,
-  the withdrawal, the resume's half; (c) the orchestrator skill's text, the sentences for
-  `AGENTS.md` and the two declared rules
+  (c). Slice (b2), built: the `question` notice with fields, the answer with its number and
+  copy, the withdrawal, the resume's half, the asking rule (pull request 113, head
+  `1f5d67a`). Owed: (c) the orchestrator skill's text, the printed texts in words an
+  installed project defines, the sentences for `AGENTS.md` and the two declared rules (the
+  last two placed by the owner of the rules' wording; Progress, 2026-10-13 23:46)
+- [x] T18 Every background timer, watcher or wake loop a session starts declares, in the same
+  step, what it is for, the condition that ends or cancels it, and who stops it, written to the
+  session's state (the relief file for the orchestrator, the feature document for a work
+  session); when its condition resolves another way, it is stopped in that same step. His
+  correction of 2026-10-14 (the lead's transcript `ffe99ebf`, line 4215, typed, read with
+  `sessions --quote`, exit 0): the lead left a 05:00 timer running after the Linux gate it
+  guarded against was proven. The rule's wording above is the lead's. The mechanism, the
+  lead's candidate: `resume --hook` and the board list each session's live background tasks
+  with their declared purpose, so one left behind is seen after a compaction. After slice (c). BUILT (Progress, 2026-10-14 06:10): the skill's rule, and the resume's line under the work in flight; the board already prints each open piece with its description
+- [x] T19 `notify` stamps the sender's hour and context share from its own reading, so a
+  notice carries both read, never typed: JH 14 typed its share unread twice on 2026-10-14, and
+  JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
+  wording). After T18
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -2367,6 +2382,85 @@ session needs beside it to go on; the summary of a compaction is not the record.
   a defect of the code (a capital letter in three; a queued message of his that counts for
   `personAt`; five older tests of the resume that gained the new step; one that had no time for
   his tapped answer); corrected, the four files passed, 684.
+- 2026-10-13, written at 23:46: SLICE (b2) IS PULL
+  REQUEST 113 (`feat/question-notice`, head `1f5d67a`, the merge of `main` at `677c27d`; `check
+  --push` exit 0; every code commit under a Codex record, the last "correct (0.94)"). The
+  host compacted this session at 23:04, after the last fix was committed; the lead was told.
+  Eight notes for the SPEC, one a capability, went to the lead by his order (the lead's
+  transcript `65318fd5`, line 14050, "Que me lo manden a mí", read with `sessions --quote`,
+  exit 0). SLICE (c) began on `feat/question-texts`, cut from `feat/question-notice`: (1) the
+  orchestrator skill (`orchestratorSkillContent`) gains "Questions to the user" (one place, the
+  question tool, recorded before and after, the asking rule), the work session's line that
+  asks the user nothing while an orchestrator holds the role, what may run beside a gate (the
+  lead's ruling of 20:17), and the merge check (the gate proved the tree the merge produces,
+  or the commits it lacks touch only documentation and none of the pull request's files);
+  the `js-harness` skill names `notify`. Test first: three tests failed, then the file passed,
+  125. (2) The printed texts of the channel's commands said "he", "his" and "him", and the
+  pause's notice "the two blocks of a cut": terms an installed project never defines. One
+  writer on Haiku 5.5 replaces them with "the user". (3) For the owner of the rules' wording,
+  sent to the lead: the sentence of `AGENTS.md` that replaces the block's, and two declared
+  rules (`questions-one-place` in prose, `person-present` of 15 minutes). (4) His decision on
+  a check of a reply, measured first by one reader over 60 transcripts: a detector of a
+  question with option lines and no question-tool call is right in 6 of its 9 hits and finds
+  about a fifth of such questions, most of which are written in prose, so no blocking hook is
+  recommended; sent to the lead. THE LEAD'S DECISION, not his: no blocking hook, taken under
+  his answer that the lead decides what is reversible with the recommended option while he
+  is away (the lead's transcript `65318fd5`, line 15820, "Decidí vos lo reversible
+  (Recomendada)", tapped, read with `sessions --quote`, exit 0), and recorded for his
+  confirmation on his return. (5) The writer's six files and their tests pass one by one
+  (pause 41, channel 50, notify 125, resume 77, sessions 205 and one skipped, the library
+  279); the pause's new wording gained its own assertion, which fails without it (40 and 1).
+  That unit is `13b07b5` (gate PASS 00:09; gentle-ai: medium, 271 lines, not due; Codex on
+  `1f5d67a..13b07b5`: 182,704 input tokens, "correct (0.93)", no finding). Pull request 113 was
+  merged, and 114, the inbox `docs/todo.md` the lead drafted and this session copied byte for
+  byte (his ask: the lead's transcript `65318fd5`, line 13776, read with `sessions --quote`);
+  `main` at `20988bd` is merged into this branch as `4cd0eca`.
+- 2026-10-14, written at 00:15: THE SECOND UNIT OF SLICE (c), from his words of this night (the
+  lead's transcript `ca93c7ef`, line 957, sent while it worked, read with `sessions --quote`,
+  exit 0: "pero no entiendo por que no me pasa la pregunta para aca como ya habiamos quedado y
+  cementado"). THE LEAD'S READING, not his words: a session whose tool call he refuses, or that
+  he stops, first tells the orchestrator what it needs, so the question reaches him there; JH 7
+  waited six hours in silence. Built, test first (three assertions failed, then passed): the
+  work session's line in the skill; `stopped` in a session's facts (`stopOf` in the library:
+  the turn ended by "[Request interrupted by user for tool use]", refused, or by another
+  "[Request interrupted", interrupted, while the session has not acted since); the board's line
+  under such a session, and the watch's line when it starts waiting so. The host writes the
+  same refusal when another session stops one (this session's own, Progress of 2026-10-13), so
+  the words say "by the user or by another session's stop" and never who. Count over the
+  project's transcripts (`rg -c`): 18 refused results, 9 interruptions for a tool use, 15
+  plain. In `docs/todo.md`, the line of the reply check is struck with its pointer, and the
+  line of a session that waits unseen says which half is built. That unit is `cb09dc0` (gate
+  PASS 00:31; gentle-ai: medium, 95 lines, not due); Codex on `4cd0eca..cb09dc0`: 178,290 input
+  tokens, "incorrect (0.94)", one P2, true: a turn stopped while an agent or a background
+  command runs reads `background`, and the condition on `waiting` dropped the stop. Fixed in
+  the commit that carries this text, test first (two failed, then 281 and 205 passed): the
+  fact holds whenever the turn ended, and the watch says such a stop once, in a line of its own.
+- 2026-10-14, written at 04:25: RESUMED at 03:54, when the wake loop saw `"sensorsInWsl": true`
+  on `main` (pull request 121); the loop ended by its own condition and nothing of it is left
+  running. `main` at `8aa93c3` merged as `caa443f`: one conflict in `docs/todo.md`, resolved
+  by keeping both sides (this branch's struck lines and `main`'s new item); the hook's check
+  passed with its tests in WSL2. T7 is moved to JH 12 and T13 to T15 to JH 13 (the lead's
+  message): each line is a pointer now, with no checkbox. T18 is added, his correction on
+  timers (`ffe99ebf`, line 4215), with its line in `docs/todo.md`. THE OPENING'S PEEK: JH 15
+  read another session's opening to avoid overlap, and the board gave it that title for 30 s,
+  since the last reading wins. The lead carried JH 15's proposal. Built, test first (two
+  failed, then 206 passed): the first opening a session reads is its own, so a later one of
+  another title is printed and not recorded, and stderr says why; `--peek` reads an opening
+  and records nothing; the usage says both. This changes the behaviour the review of `ce8bdf7`
+  (finding 9) pinned, "the title of the last one it read": a session re-assigned to another
+  role now takes it by a rename, whose title wins over any reading. `notify --opening` prints
+  the new session's first message as a block of its own (his correction, by the lead): one
+  writer on Haiku 5.5. That unit is `51d869d` (its first gate failed on one test of
+  `bin/js-harness.test.mjs` that pins `notify --opening`'s output, which the writer's brief did
+  not name; fixed, then gate PASS; gentle-ai: medium, not due). Codex on `caa443f..51d869d`:
+  178,910 input tokens, "incorrect (0.98)", three P2, all true: the block's command quoted the
+  title with double quotes, which shells expand or drop; a title that begins with `--` needed a
+  lone `--`; and the guard missed a reading under the whole id when the reader gave the start
+  of it. Fixed in the commit that carries this text, test first (four failed, then 129, 207,
+  77 and 50 passed): the rule of a title every shell reads alike (`PLAIN_TITLE`) moves from
+  `bin/resume.mjs` to the channel library with `openingCommand`, which both use; such a title
+  gets its command between single quotes, and any other the request in words; the guard
+  matches ids either way (`sameSession`).
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
@@ -2779,7 +2873,95 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 22:50, THE NEWEST OF ALL. The P2 left open below is fixed in the
+      AT 06:31: T19 is built on `feat/notify-stamp` by one writer on Haiku 5.5, test first (6, 11, 1 and 1 failed; then channel 51, notify 131, the library 281, the dispatcher 33 passed; resume 77 and sessions 207 untouched and passing; notify 131 rerun by this session): `senderOf` returns the sender's context (tokens and share), a notice records it in `from`, the confirmation of `notify` says the local hour and the share read, and the board's channel section prints the share. Not done: the watch's line for a notice to the orchestrator does not print the share yet. It is the commit that carries this text; then its reviews, push and pull request.
+      AT 06:22, AT THE CONTEXT PAUSE: pull request 132 (the doctor row) is MERGED; T18 is
+      pull request 133 (`0f8527e`, `check --push` exit 0 at 06:22, Codex "correct", 0.91). The
+      branch now is `feat/notify-stamp`, cut from `feat/background-purpose`, for T19; nothing
+      of it is written yet and no background task runs. T19, a first reading: a notice already
+      records the clock (`at`, UTC); what it lacks is the sender's context share, and what a
+      reader sees is the hour as the board prints it. So: `notify` reads the sender's context
+      from its transcript (the facts `senderOf` already reads) and records it in the notice
+      (`from.context`, tokens and share of the window), the board's channel section prints
+      each notice with its local hour and that share, and `notify`'s confirmation line says
+      both, so a session copies them into its message instead of typing them. Test first, on
+      `bin/lib/channel.mjs`, `bin/notify.mjs`, `bin/lib/sessions.mjs` and their tests.
+      AT 06:10: the doctor row is pull request 132 (`9e6f523`, `check --push` exit 0 at
+      06:08), pushed by the lead's correction of 06:01 (finished, gated, reviewed work never
+      waits unpushed; an idle session is never compacted, so the work goes on in this turn).
+      T18 is built on `feat/background-purpose`, cut from that branch, test first (one failed
+      in each file, then manifest 126 and resume 77 passed): the orchestrator skill's shared
+      part says that a background task declares in its description what it is for and what
+      ends it, is written to the session's state with who stops it, and is stopped in the step
+      its condition resolves another way; the resume, under the work in flight, says to judge
+      each piece at once and stop one that resolved or says neither. The board already prints
+      each open piece with its description (`workLine`), which is the purpose. Next: commit,
+      reviews, push, pull request; then T19.
+      AT 06:00, BEFORE A CUT: the doctor row is `ca75816` on `feat/doctor-codex-cli` (gate
+      PASS; gentle-ai not due; Codex in 4 parts, 478,911 input tokens, all "correct", 0.90 to
+      0.99, no finding); not pushed, its pull request after T18 and T19. NO background task
+      runs. NEXT, after the cut: T18 (read its line in Tasks and the first look below), its
+      design written here, then built test first on a branch of its own from `main`.
+      AT 05:50: the doctor row is written (the writer: 102 tool calls, test first, 27 of 118
+      failed before; after, stack 118, doctor 58, hook 11, latest 22, tui 76, dispatcher 33
+      passed; stack 118 rerun by this session) and is the commit that carries this text, on
+      `feat/doctor-codex-cli`; its pull request waits behind T18 and T19, in the lead's order.
+      `doctor`, its hook and the TUI now read the project's switches once a run, one `git
+      ls-files` more each.
+      STATE AT 2026-10-14 05:40, THE NEWEST OF ALL: slice (c) is pull request 127, MERGED
+      (`2a29285`, the lead's message). The branch now is `feat/doctor-codex-cli`, cut from
+      `feat/question-texts`; one writer on Haiku 5.5 builds the row `codex` in place of
+      `codex-plugin` there (launched 05:35, before the lead's new order; its diff is parked on
+      that branch). THE LEAD'S ORDER of 05:37: T18, then T19, then the doctor row. A first
+      look at T18, not yet a design: the board already prints each open piece of background
+      work with its call's `description` (`workLine`), so the purpose is mostly recorded; what
+      no transcript holds is the condition that ends it and who stops it, and the resume hook
+      does not list a session's own open work. Next after a cut: read T18 again from here,
+      write its design, then build it test first on its own branch from `main`.
+      STATE AT 2026-10-14 04:30 (the state before the one above): resumed at 03:54 (Progress, 04:25). `main`
+      merged as `caa443f`; the commit that carries this text holds the opening's peek fix,
+      `notify --opening`'s block, the pointers of T7 and T13 to T15, and T18. NEXT: its
+      reviews, then `check --push`, push, the pull request of slice (c) with
+      `pr-body-question-texts.md` (add this unit), its number to the lead; then T18 or the
+      row of the Codex CLI, in the lead's order. Live background tasks: none but the commit's.
+      STATE AT 2026-10-14 02:51 (the state before the one above): still paused; this session's own wake is
+      armed (a background loop that ends when `main`'s `harness.json` has `"sensorsInWsl":
+      true` or at 05:00), by the lead's message and his answer at the lead's transcript
+      `ffe99ebf`, line 2856, tapped, read with `sessions --quote`, exit 0: "Retomar con el gate
+      viejo (Recomendada)". ON WAKE, in the lead's order: merge `origin/main` before the first
+      gate; pointers for T7 (moved to JH 12) and T13 to T15 (moved to JH 13); the `--opening`
+      defect JH 15 found (reading another session's opening with `--self` retitles the
+      reader); `notify --opening` prints the first message ready to paste (his correction, by
+      the lead); then slice (c)'s pull request, and its number to the lead.
+      STATE AT 2026-10-14 01:10 (the state before the one above): PAUSED, by his order (the lead's
+      transcript `ffe99ebf`, line 1647, sent while it worked, read with `sessions --quote`, exit
+      0: "si pero la idea es pausar todo precisamente para hacer unicamente esta mejora
+      implementarla y ahi si seguir con lo siguiente"); only the faster check goes on (JH 8 and
+      JH 10), by the lead's message. Slice (c) is three commits on `feat/question-texts`, each
+      reviewed: `13b07b5` (Codex "correct", 0.93), `cb09dc0` (one P2, true), `db4c44e` its fix
+      (Codex "correct", 0.95); the tree is clean and nothing is pushed. The merge of `main`
+      (`3f59bb2` at 01:04) and `check --push` were queued at the gate, lost to the machine's
+      reboot, queued again and cancelled for the pause, with the gate's waiting process
+      stopped. ON RESUME: queue that turn again (`queue-merge.sh` in this session's
+      scratchpad), and on its exit 0 with a clean tree push, open the pull request with the
+      body `pr-body-question-texts.md` there, and send its number to the lead; then the row of
+      the Codex CLI in `doctor`.
+      STATE AT 2026-10-14 00:15 (the state before the one above). Slice (c) on `feat/question-texts`: the
+      first unit is `13b07b5`, `main` merged as `4cd0eca`; the second unit (a stopped session,
+      Progress 00:15) is the commit that carries this text. NEXT: `check --push`, push, pull
+      request, its number to the lead; then the row of the Codex CLI in `doctor` (planned, the
+      lead has no objection), its own slice cut from `main`.
+      STATE AT 2026-10-13 23:46 (the state before the one above). (b2) is pull request 113, for the lead to
+      merge; the SPEC's notes are with the lead. SLICE (c) on `feat/question-texts` (Progress,
+      the entry of 23:46): the skill's text is in the tree with its tests (125 pass); one
+      writer replaces "he", "his", "him" and "the two blocks of a cut" in the printed texts.
+      NEXT: read the writer's diff against its six files and their tests, run each test file
+      it touched, commit the slice through the gate (gentle-ai assess, Codex inside the
+      rate), merge `main` once 113 is on it, `check --push`, push, pull request, its number
+      to the lead. Then, in the lead's order: the row of the Codex CLI in `doctor` (read JH
+      9's `codexReview` switch first; tell the lead when it is planned), the pause's window,
+      what a session pays for the pause entry. `person-present` read with `ruleValue` once
+      the owner of the rules' wording places it.
+      STATE AT 2026-10-13 22:50 (the state before the one above). The P2 left open below is fixed in the
       commit that carries this text, test first (1 failed, then 77 passed): the command names
       `--transcript outside-the-project-folder`, which no transcript resolves to, so `notify`
       records the answer unverified. NEXT: the merge of `main`, `check --push`, the push, the
