@@ -378,13 +378,37 @@ function openLog(logPath) {
   }
 }
 
+/** Whether the log at `logPath` ends inside a line: on Linux a SIGKILL can cut the server's last write short, and
+ * a note glued onto that piece is a line `remote status` no longer reads as a note. Best effort: a log that cannot
+ * be read is taken as ending a line. */
+function endsInsideLine(logPath) {
+  let fd;
+  try {
+    fd = fs.openSync(logPath, 'r');
+    const size = fs.fstatSync(fd).size;
+    if (size === 0) return false;
+    const last = Buffer.alloc(1);
+    fs.readSync(fd, last, 0, 1, size - 1);
+    return last[0] !== 0x0a;
+  } catch {
+    return false;
+  } finally {
+    try {
+      if (fd !== undefined) fs.closeSync(fd);
+    } catch {
+      // a handle that would not close costs nothing else
+    }
+  }
+}
+
 /** Adds one `[js-harness remote] ...` line to the log, best effort: the supervisor has nowhere else to say that
- * its log cannot be written, and must keep the server up all the same. */
+ * its log cannot be written, and must keep the server up all the same. The note starts a line of its own, also
+ * after a last line the server left without its end (`endsInsideLine`). */
 export function logNote(logPath, text) {
   const fd = openLog(logPath);
   if (fd === null) return;
   try {
-    fs.appendFileSync(fd, `[js-harness remote] ${text}\n`);
+    fs.appendFileSync(fd, `${endsInsideLine(logPath) ? '\n' : ''}[js-harness remote] ${text}\n`);
   } catch {
     // an unwritable log loses the line, nothing else
   } finally {
