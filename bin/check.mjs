@@ -292,14 +292,37 @@ function sameFolder(one, other) {
  * named from the top of the repository, so a gate that checks a folder below it skips nothing; under a
  * binding that is asked without it, since git takes the folder a `GIT_DIR` command runs in for the top.
  * With no commit yet git compares the index with nothing, and lists all that is staged.
+ *
+ * The answer is `{ paths }`, or `{ paths, side }` for an index that differs from its own branch in more
+ * than documents and from `side` in documents alone: the trunk merged into a branch of documents, whose
+ * code is then the trunk's, which passed its own gates. That merge held the lock 10 minutes for nothing on
+ * 2026-10-14 (odd/tasks/merge-documents-skip.md). `side` is `MERGE_HEAD` where git wrote one (`git
+ * commit` after `git merge --no-commit`), and the trunk as origin names it (`origin/HEAD`, else
+ * `origin/main`, else `origin/master`): the hook of a merge git commits by itself is run before git
+ * writes `MERGE_HEAD`, so there the trunk is the side it can know (seen with git 2.54, 2026-10-14).
  * `spawn` stands in for `spawnSync`. */
 function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   if (git === null) return null;
-  const listed = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z']);
-  const paths = listed?.split('\0').filter(Boolean) ?? [];
   const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
-  return paths.length > 0 && paths.every(isDocument) ? paths : null;
+  /** The paths the index changes against `against` (its own branch when none). */
+  const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
+  /** `paths` when there are some and all are documents, else `null`. */
+  const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
+  const staged = changed();
+  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
+  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14).
+  if (staged.length === 0) return null;
+  const own = documentsOnly(staged);
+  if (own) return { paths: own };
+  /** Whether `ref` names a commit here. */
+  const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
+  const trunk = ['origin/HEAD', 'origin/main', 'origin/master'].find(named);
+  for (const side of [...(named('MERGE_HEAD') ? ['MERGE_HEAD'] : []), ...(trunk ? [trunk] : [])]) {
+    const paths = documentsOnly(changed(side));
+    if (paths) return { paths, side };
+  }
+  return null;
 }
 
 /** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
@@ -398,8 +421,10 @@ function namedPaths(paths) {
  * alone: which did not run, and for which staged `paths` (`namedPaths`). With `quick`, the sensors of
  * documents that ran in their place (`discoverDocumentSensors`), it names those as well, and says that
  * no gate lock was taken for them; their own rows follow this one. */
-function documentsRow(sensors, paths, quick = []) {
-  const staged = paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`;
+function documentsRow(sensors, { paths, side }, quick = []) {
+  const staged = side
+    ? (paths.length === 1 ? `the one path this commit changes against ${side} is a document` : `all ${paths.length} paths this commit changes against ${side} are documents`)
+    : (paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`);
   const declared = `${staged} declared in harness.json "documents"`;
   const names = (list) => list.map((sensor) => sensor.name).join(', ');
   let detail = `no sensor ran (${names(sensors)}): ${declared}`;
