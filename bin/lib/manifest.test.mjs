@@ -1832,19 +1832,6 @@ test('the orchestrator skill says what may run beside a running gate, and what a
   assert.ok(text.includes('touches only documentation and none of the files the pull request changes'));
 });
 
-// T20 (session channel): a session waits in the background for what it waits on, and never ends a turn waiting.
-test('the js-harness skill names js-harness wait: what it ends on, and that it runs in the background', () => {
-  const text = components[0].content('0.1.0');
-  assert.ok(text.includes('- `js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)`'));
-  assert.ok(text.includes('ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role'));
-  assert.ok(text.includes('run it in the background and stop it with TaskStop'));
-});
-
-test('the orchestrator skill tells a work session never to end a turn waiting for a message, a compact or an event', () => {
-  const text = components[2].content('0.1.0');
-  assert.ok(text.includes("- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn."));
-});
-
 test('the js-harness skill names the command that writes a notice between sessions', () => {
   const text = components[0].content('0.1.0');
   assert.ok(text.includes('- `js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"`'));
@@ -2814,4 +2801,17 @@ test('a task the user edited still loses its record when there is no remote fold
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// T20 (session channel): a session waits in the background for what it waits on, and never ends a turn waiting.
+test('the js-harness skill names js-harness wait: what it ends on, and that it runs in the background', () => {
+  const text = components[0].content('0.1.0');
+  assert.ok(text.includes('- `js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)`'));
+  assert.ok(text.includes('ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role'));
+  assert.ok(text.includes('run it in the background and stop it with TaskStop'));
+});
+
+test('the orchestrator skill tells a work session never to end a turn waiting for a message, a compact or an event', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes("- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn."));
 });
