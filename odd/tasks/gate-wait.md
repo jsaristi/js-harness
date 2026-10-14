@@ -1004,6 +1004,9 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
       Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
       before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
+- [ ] T19 · A gate keeps who spent the processor over its run (candidate, 2026-10-13, from
+      the measure of the slower check in Progress; not ordered yet). Route: inline, with a
+      reader for the design.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2645,8 +2648,75 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   - **Not known:** how often a gate here finds its proof. The log's lines of kind `same`
     will say; nobody has counted the cases (a commit amended in its message, a clean
     merge of an already proven tree, a pick that lands on the same files).
+- 2026-10-13 · **Why the whole check got slower from 17:00: two Windows services, not the
+  sessions** (the orchestrator's order of 19:35, after its reading of the gate log: 481 to
+  557 s in the morning, 654 s in the 17 hour, 767 s in the 18 hour, one of 1,132 s). Written
+  at 20:10. Nothing was changed on the machine.
+  - *The gate log, 24 hours* (`checks-load.cjs`, 50 whole checks): 474 to 590 s from 04:23 to
+    14:13; 597 to 735 s from 17:01 to 17:54; then 722, 700, 962, 1,132 and 774 s. **The
+    one-second sample a gate takes at its start does not tell them apart**: the check of
+    962 s started at 2.3 of 8 processors busy.
+  - *The measured run* (`m1h-turn.sh`, 19:49:27 to 20:02:58, alone in the lock, tree
+    `0cca602`, 84 test files under `measure-run.mjs` and `count-git.mjs`), against the same
+    run of 01:19 (M1g): **wall 805 s against 533** (+51%). Busy 6,310 processor-seconds of
+    6,438 (98%) against 4,030 of 4,265 (94%): the same suite, 2,280 more seconds of work.
+  - *Not the suite.* 13,452 git starts against 13,043; 1,153 other children against 1,231;
+    every file grew alike (`bin/codex-review.test.mjs` 421 to 577 s, `evals/runner.test.mjs`
+    335 to 563, `bin/check-codex-reviews.test.mjs` 305 to 431, `evals/configs.test.mjs` 205 to
+    365, `evals/suite.test.mjs` 151 to 293). The same git starts cost 2,444 s against 1,709:
+    a start is 39% dearer. The start probes agree: `git --version` 101 ms before the run
+    against 62, 322 inside against 264; `node -e ""` 188 against 96, 518 against 376.
+  - *Where the 2,280 went*, by the processes that lived through the run: **the svchost of
+    pid 8936, 773 s against 29 for all eighty svchost** (+745); MsMpEng 1,139 against 859
+    (+280); the desktop app's twenty `claude` processes 389 against 190 (+199); System 254
+    against 88 (+167); dwm 123 against 56 (+67). Lived-through in all 2,912 against 1,357;
+    the rest, 3,398 against 2,673 (+725), is the short-lived ones, the suite's own among
+    them, paying more a start.
+  - *pid 8936 is `PcaSvc`*, the Program Compatibility Assistant (`Win32_Service`; started
+    with the machine on 2026-10-08, 29,758 processor-seconds since). Beside a running check
+    at 20:06 it spent 21 s in 21 s, one processor whole, and MsMpEng 39.8 s (`two-pids.ps1`,
+    which reads `Win32_Process`: `Get-Process` cannot read a system service's time). In the
+    gate log's 321 start samples since 2026-10-11 it is among the busiest in 19, **all 19
+    from 17:00 on 2026-10-13, never before** (`svchost-since.cjs`). No whole check ran
+    between 14:13 (497 s) and 17:01 (735 s); twelve of the app's processes were started in
+    the 15 hour and five at 16:57. That restart of the app is the only change that can be
+    dated; that it is why `PcaSvc` began is not proven. Its registry store holds 56
+    programs, so no list of its own grew.
+  - *Ruled out with numbers.* The processor's speed: an i5-1035G1 of 15 W; the performance
+    counter read every 20 s through the run is 154% of nominal on average under load,
+    lowest 140, no sag (`cpu-speed-log.ps1`; no reading of the morning to set beside it).
+    Memory: 9.0 to 9.4 GB free through the run, 10.3 in M1g. The runs beside a gate that
+    two sessions reported that evening (about 40 and 80 processor-seconds): at eight
+    processors that is 5 to 15 s of a check's wall, against 270 found.
+  - *What would hold the check near 520 s.* No rule for the sessions and no limit on how
+    many build: the check was alone in the lock in both runs. It is the machine's, so his:
+    restart the `PcaSvc` service once (an elevated `Restart-Service PcaSvc`) or the machine,
+    and measure the next check; and the antivirus exclusion for the test folders, already
+    his, is 1.9 processors while a check runs. Sent to the orchestrator between 20:06 and 20:08.
+  - *What the gate log lacks.* The busy share over the run would not have told either (94
+    and 98%): what tells is who spent the processor over the run. A candidate task, T19
+    below: a gate keeps the processes' times it reads at its start, reads them once more at
+    its end, and the heaviest that lived through the run are kept with the gate, in a file
+    of their own beside the log, so that no reader of the log's lines meets a new field.
+  - *The Codex review's share of the lock* (the orchestrator's question of 19:01;
+    `codex-in-lock.cjs`, the gate log joined with the run log of `codex-review`, 24 hours at
+    19:10): 102 turns held the lock 624.3 minutes; 47 Codex parts, all inside a turn, 42.9
+    minutes, **6.9% of the lock held**. 14 turns were the review alone: 19.8 minutes held,
+    42.5 waited (four waited 509 to 850 s). So a Codex review outside the lock gives at most
+    43 minutes of lock a day and 42 of waits. The orchestrator put its guard behind this
+    measure, bounded it to one slice and granted one probe of 100,000 input tokens at most
+    (a `NODE_OPTIONS` preload that ends a `node --test` Codex starts); not started.
 
 ## Next
+
+**At 20:10 on 2026-10-13, before the list below:** the gate on GitHub is no longer this
+session's. The orchestrator gave it to a new session, "JH 10", at 18:40, in its own document
+`odd/tasks/gate-on-github.md`; all this session knows of the trial is in Part 3 and in the
+entries of T9 in Progress (the worktree `gate-on-github` and the branch
+`trial/gate-on-github` stay as they are; no second push without telling the orchestrator).
+First in line here now: his answer on `PcaSvc` and the measure of the check after it; then
+T19 if the orchestrator orders it; then the guard of the Codex review (one slice, one probe);
+then the list below.
 
 Written on 2026-10-13 at the close of T17. The order is the orchestrator's (inside his
 "option 3", a faster suite on his machine); the last entries of Progress hold the proof
