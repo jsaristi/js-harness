@@ -659,7 +659,7 @@ version).**
   them from its jobs when it is written up.
 
 ## Next
-0. The torn append of `bin/lib/codex-reviews.mjs` on Linux (Progress, the second run): with the
+0. GO from the orchestrator (about 23:35): `bin/lib/codex-reviews.mjs` is free; its own small PR off main like 112; one write per record preferred over a lock if it holds on Linux and Windows; local gate, both reviews, tell it the PR number; after its merge, merge main into 109 once and push. The torn append (Progress, the second run): with the
    orchestrator's word on the file, fix it test first (one write per record, or a lock), local
    gate, reviews, own pull request or on 109 as it says; then one push to 109.
 1. Done: pull request 112 (`fix/check-output-on-exit`, `945e31b`: `check` exits once its output is
