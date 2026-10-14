@@ -105,7 +105,16 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   process; rename it when that file is next touched). A real run of the tracer over `bin/progress.test.mjs`
   recorded its four reads (`bin/lib/progress.mjs`, `bin/progress.mjs`, itself, `package.json`).
 
-## Resume here (2026-10-14 17:0x, JH 8)
+## Resume here (2026-10-14 17:3x, JH 8)
+- Done and committed on `feat/exact-tests`: T1 and T2 (`850cc9f`), T2b and T2c (`bb3331f`); every test
+  file of them green on Windows and in WSL2 (run alone, one file each). Not pushed, no pull request, no
+  Codex review yet: the slice is reviewed with T3, from `c98b12d`.
+- An untracked `eval-relroot-40620-194/` sits at this worktree's root: a test of the suite left it during a
+  gate (not this branch's files). Find which test writes `eval-relroot-*` in the repository root and make
+  it write under the temporary folder; until then leave the folder out of every `git add`.
+- WSL2 runs of one file go through a script that refuses an empty name (2026-10-14: an empty variable in
+  `wsl.exe -- sh -c` ran the whole suite outside a turn): `sh <scratchpad>/wsl-one-test.sh <worktree on
+  /mnt> <file>`, with `MSYS_NO_PATHCONV=1`, node at `/home/oficina/.local/node/bin/node`.
 - Next is T3: where the selection plugs in. `check`'s sensors are a project's own commands
   (`discoverSensors`, `bin/check.mjs:159`: `npm run test`). The design: opt-in by `harness.json`
   `"exactTests": "shadow"`, honoured only when the `test` script is exactly `node --test` (S6: shadow
