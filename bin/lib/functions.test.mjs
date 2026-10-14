@@ -138,3 +138,13 @@ test('a declared off holds even when the files could not be read', () => {
   const resolved = resolveFunctions({ ...DEFAULTS, codexReview: 'off' }, { unknown: 'git failed' });
   assert.deepEqual(resolved.codexReview, { value: 'off', declared: 'off', because: 'declared in harness.json' });
 });
+
+test('a name every object inherits is no switch either: an error, never a crash', () => {
+  for (const name of ['constructor', 'toString', '__proto__']) {
+    const read = readFunctions(JSON.parse(`{ "functions": { "${name}": "off" } }`));
+    assert.deepEqual(read.errors, [
+      `harness.json "functions" holds "${name}", which is no switch; the switches are "codeMap", "languageServer", "codexReview"`,
+    ]);
+    assert.deepEqual(read.values, DEFAULTS);
+  }
+});

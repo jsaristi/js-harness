@@ -29,7 +29,12 @@ function textLike(raw, data) {
 /** The file as `{ raw, data }`, `{ absent: true }`, or `{ reason }` when it is not a JSON object. */
 function readObject(file) {
   if (!fs.existsSync(file)) return { absent: true };
-  const raw = fs.readFileSync(file, 'utf8');
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    return { reason: `${file} could not be read: ${err.message}` };
+  }
   let data;
   try {
     data = JSON.parse(raw);
@@ -67,8 +72,12 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  * - `{ state: 'kept' }`: the key already holds the value. Nothing is written and there is no record: a
  *   key the harness did not write is not the harness's to remove;
  * - `{ state: 'conflict', holds }`: the key holds another value, which is never overwritten;
- * - `{ state: 'problem', reason }`: the file cannot be read as a JSON object. It is left as it is. */
-export function applySettingsKey(file, pointer, value) {
+ * - `{ state: 'problem', reason }`: the file cannot be read as a JSON object. It is left as it is.
+ *
+ * `earlier` holds the records of the keys the harness already wrote into this same file. What one of them
+ * made (the file, its folder, an object of the path) is the harness's for this key too, so the keys can be
+ * undone in any order: whichever goes last takes with it what is then empty. */
+export function applySettingsKey(file, pointer, value, earlier = []) {
   const read = readObject(file);
   if (read.reason) return { state: 'problem', reason: read.reason };
   const data = read.absent ? {} : read.data;
@@ -81,13 +90,36 @@ export function applySettingsKey(file, pointer, value) {
   }
   found.holder[leaf] = value;
 
-  const createdDir = !fs.existsSync(path.dirname(file));
-  if (createdDir) fs.mkdirSync(path.dirname(file), { recursive: true });
+  // The objects of this key's path that are the harness's, counted from the deepest up: one made just now,
+  // or one an earlier key of the harness made. The count stops at the first that was somebody else's.
+  const ours = new Set(earlier.flatMap((record) => madeObjects(record)));
+  let createdContainers = 0;
+  for (let depth = pointer.length - 1; depth >= 1; depth -= 1) {
+    const madeNow = pointer.length - 1 - depth < found.missing;
+    if (!madeNow && !ours.has(JSON.stringify(pointer.slice(0, depth)))) break;
+    createdContainers += 1;
+  }
+
+  const madeDir = !fs.existsSync(path.dirname(file));
+  if (madeDir) fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, read.absent ? `${JSON.stringify(data, null, 2)}\n` : textLike(read.raw, data));
   return {
     state: 'written',
-    record: { pointer, value, createdFile: Boolean(read.absent), createdDir, createdContainers: found.missing },
+    record: {
+      pointer,
+      value,
+      createdFile: Boolean(read.absent) || earlier.some((record) => record.createdFile),
+      createdDir: madeDir || earlier.some((record) => record.createdDir),
+      createdContainers,
+    },
   };
+}
+
+/** The objects a record says the harness made, each as the JSON of its keys from the root: the last
+ * `createdContainers` objects of the record's path. */
+function madeObjects(record) {
+  const last = record.pointer.length - 1;
+  return Array.from({ length: record.createdContainers }, (_, index) => JSON.stringify(record.pointer.slice(0, last - index)));
 }
 
 /** Undoes one `record` of `applySettingsKey` in `file`:

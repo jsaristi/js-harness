@@ -142,3 +142,9 @@ test('the functions of a project whose harness.json cannot be read: the error, a
     { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on' },
   );
 });
+
+test('a harness.json that is there and cannot be read is an error, not a throw and not a project that declares nothing', (t) => {
+  const root = folder(t);
+  fs.mkdirSync(path.join(root, 'harness.json'));
+  assert.match(harnessOfTree(root).error, /harness\.json could not be read/);
+});

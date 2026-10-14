@@ -751,3 +751,23 @@ What the code already gives, so the slice stays call sites and one new module
   the tree is not clean, and `gate` could run a command's cheap refusal before the wait, as the
   check stops on a failing static row before it waits. A candidate for the register of failures,
   told to the orchestrator.
+- **L14** (2026-10-13 21:13) The Codex review of `82761e8..d24c510` ran in 3 parts and is
+  recorded: 385,202 input tokens (277,120 cached) in 148 s, inside its allowance. Each part's
+  verdict was "the patch is incorrect"; four findings, all P2, all true, all fixed in the commit
+  that carries this entry, each with a test written first:
+  1. `bin/lib/functions.mjs`: a name under `functions` that every object inherits
+     (`constructor`, `toString`, `__proto__`) was looked up as a switch and crashed the reading.
+     Now only own names of the table are switches. Red, then green.
+  2. `bin/lib/project-functions.mjs`: a `harness.json` that is there and cannot be read (a
+     folder of that name, no permission) threw. Now it is an error like one that is not JSON.
+     Its test passes; its red was not seen, the fix having been typed before the run.
+  3. `bin/lib/settings-key.mjs`: a settings path that cannot be read threw from both functions.
+     Now a `problem`. Red, then green.
+  4. `bin/lib/settings-key.mjs`: two keys written into one new file could only be undone in
+     reverse order; in the order written, an empty file was left, and the same for two keys
+     under one object the harness made. `applySettingsKey` now takes the records of the keys
+     already written into that file, and what one of them made is this key's too, so whichever
+     is undone last takes the empty object, file and folder with it. Red, then green.
+  Run: `node --test bin/lib/functions.test.mjs bin/lib/settings-key.test.mjs`, 40 of 40; the
+  two tests of `project-functions.test.mjs` that match "cannot be read", 2 of 2. No existing
+  command or option is touched. Risk: none (the modules have no caller yet).

@@ -57,10 +57,19 @@ function parsed(text) {
 }
 
 /** `harness.json` of the folder `root`: `{ declared }`, with `undefined` where there is no such file, which
- * is a project that declares nothing and no error; or `{ error }`. */
+ * is a project that declares nothing and no error; or `{ error }`. A file that is there and cannot be read
+ * (no permission, a folder of that name) is an error like one that is not JSON: only a file that is not
+ * there declares nothing. */
 export function harnessOfTree(root) {
   const file = path.join(root, HARNESS);
-  return fs.existsSync(file) ? parsed(fs.readFileSync(file, 'utf8')) : { declared: undefined };
+  if (!fs.existsSync(file)) return { declared: undefined };
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    return { error: `${HARNESS} could not be read: ${err.message}` };
+  }
+  return parsed(text);
 }
 
 /** `harness.json` of the commit `rev`, with the same answers. A commit git cannot read is an error and

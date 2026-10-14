@@ -38,7 +38,9 @@ export function readFunctions(harness) {
   }
 
   for (const [name, value] of Object.entries(functions)) {
-    const known = SWITCHES[name];
+    // Own names only: `constructor` or `__proto__` written as a switch is a name like any other that is
+    // no switch, not the property every object inherits.
+    const known = Object.hasOwn(SWITCHES, name) ? SWITCHES[name] : undefined;
     if (!known) {
       errors.push(
         `harness.json "functions" holds "${name}", which is no switch; the switches are ${quoted(Object.keys(SWITCHES))}`,

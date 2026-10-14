@@ -156,3 +156,44 @@ test('two keys in one new file: the file goes with the last of them to be undone
   assert.deepEqual(undoSettingsKey(settingsFile(root), paste), { state: 'removed' });
   assert.equal(fs.existsSync(path.join(root, '.claude')), false);
 });
+
+test('a settings path that is there and cannot be read is a problem for both, not a throw', (t) => {
+  const root = project(t);
+  fs.mkdirSync(settingsFile(root), { recursive: true });
+  const applied = applySettingsKey(settingsFile(root), PASTE, '1');
+  assert.equal(applied.state, 'problem');
+  assert.match(applied.reason, /could not be read/);
+  const record = { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 };
+  assert.equal(undoSettingsKey(settingsFile(root), record).state, 'problem');
+});
+
+test('two keys in one new file, undone in the order they were written: no file and no folder is left', (t) => {
+  const root = project(t);
+  const paste = applySettingsKey(settingsFile(root), PASTE, '1').record;
+  const plugin = applySettingsKey(settingsFile(root), PLUGIN, false, [paste]).record;
+  assert.deepEqual(plugin, { pointer: PLUGIN, value: false, createdFile: true, createdDir: true, createdContainers: 1 });
+  assert.deepEqual(undoSettingsKey(settingsFile(root), paste), { state: 'removed' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile(root), 'utf8')), {
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': false },
+  });
+  assert.deepEqual(undoSettingsKey(settingsFile(root), plugin), { state: 'removed' });
+  assert.equal(fs.existsSync(path.join(root, '.claude')), false);
+});
+
+test('two keys under one object the harness made, undone in the order they were written: the object goes with the last', (t) => {
+  const root = withSettings(t, '{\n  "effortLevel": "high"\n}\n');
+  const first = applySettingsKey(settingsFile(root), ['env', 'A'], '1').record;
+  const second = applySettingsKey(settingsFile(root), ['env', 'B'], '2', [first]).record;
+  assert.equal(second.createdContainers, 1, 'the object an earlier key of the harness made is the harness own');
+  assert.deepEqual(undoSettingsKey(settingsFile(root), first), { state: 'removed' });
+  assert.deepEqual(undoSettingsKey(settingsFile(root), second), { state: 'removed' });
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "effortLevel": "high"\n}\n');
+});
+
+test('a key beside one somebody else wrote under an object the harness did not make owns no object', (t) => {
+  const root = withSettings(t, '{ "env": { "THEIRS": "x" } }');
+  const first = applySettingsKey(settingsFile(root), ['env', 'A'], '1').record;
+  const second = applySettingsKey(settingsFile(root), ['env', 'B'], '2', [first]).record;
+  assert.equal(second.createdContainers, 0);
+  assert.equal(second.createdFile, false);
+});
