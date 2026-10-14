@@ -253,8 +253,8 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
 - [x] T5 How it reaches an agent: the skill sentence, the template clause, the help line; README
   and roadmap (S5; route: inline; files of JH 8, JH 9 and JH 7, agreed through the lead first; 9302730 and the roadmap commit)
 - [x] T6 The practice journey's step for a project's own rule (S5; route: inline; ed24609, bf3a8d5, bb7d53d, 1659801)
-- [ ] T7 At the close: one note per capability built, in the five parts of the SPEC
-  (`docs/ROADMAP.md` 605-633), sent to the lead, who appends it (S6; route: inline)
+- [x] T7 At the close: one note per capability built, in the five parts of the SPEC
+  (`docs/ROADMAP.md` 605-633), sent to the lead, who appends it (S6; route: inline; sent 2026-10-14, two notes)
 
 ## Log
 - L1. 2026-10-13, the opening the lead wrote for this session (a claim, not his words; read with
@@ -323,6 +323,6 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
   as `78b7dfb`, no tracked file differing. No host try was spent; the three are used.
 
 ## Next step
-The Codex review of `origin/main..HEAD` (`js-harness codex-review --base origin/main`, its
-`--plan` first, within the allowance), then push, the pull request, one line to the lead, and
-T7: the SPEC notes to the lead.
+Nothing is left to build. Pull request 134 waits for the lead: a code merge is his. The two SPEC
+notes (a project's own rules; a host loads what was installed) were sent to the lead, who
+appends them. Not proven: that Codex loads its hooks.json and its skills.
