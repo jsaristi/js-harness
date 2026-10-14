@@ -468,14 +468,16 @@ const STEPS = {
     const files = practiceRuleFiles();
     const paths = Object.keys(files);
     const said = [];
-    // The list and the home of its rule in prose, committed once: a run after the first finds them as they are.
-    const stale = paths.filter((file) => readIfThere(path.join(project, file))?.toString('utf8') !== files[file]);
+    // The list and the home of its rule in prose, committed once: a run after the first finds them as they are. Git
+    // decides what is stale, not the bytes on disk: a restore by `git checkout` under core.autocrlf leaves them CRLF,
+    // which differs from what the step writes and from nothing git holds (run 3, 2026-10-14).
+    for (const file of paths) {
+      fs.mkdirSync(path.dirname(path.join(project, file)), { recursive: true });
+      fs.writeFileSync(path.join(project, file), files[file]);
+    }
+    expectOk(git(ctx, project, 'add', '--', ...paths), 'git add');
+    const stale = paths.filter((file) => porcelain(ctx, '--', file) !== '');
     if (stale.length > 0) {
-      for (const file of stale) {
-        fs.mkdirSync(path.dirname(path.join(project, file)), { recursive: true });
-        fs.writeFileSync(path.join(project, file), files[file]);
-      }
-      expectOk(git(ctx, project, 'add', '--', ...paths), 'git add');
       const committed = git(ctx, project, 'commit', '-m', "practice: the project's own rules");
       assertThat(!committed.error && committed.status === 0, `the commit of the project's own rules did not pass: ${ended(committed)}`);
       assertThat(hasRow(committed.output, 'PASS', 'rules'), `the commit of the project's own rules passed, but its output shows no PASS rules row:\n${tail(committed.output)}`);
