@@ -110,3 +110,8 @@ push and the pull request only when Codex has no P0 to P2; the body gets the gen
 4. Codex out of the lock: probe 2 (at most 150,000 input tokens), queued by a background chain after (b).
 5. PR 137 (124's documents) waits for its green GitHub run; a background wait watches it.
 6. Then this ticket, after all of the above are merged.
+- 15:48 by `date`: item 1 merged as PR 143 (`c0364f8`). Item 4 answered: probe 2 through `codex exec review`
+  with codex-review's own arguments showed NODE_OPTIONS reaching Codex's commands and the preload ending its
+  `node --test` (exit 1, "no `node --test` outside a turn of the gate lock"); its usage event read 0 input
+  tokens. Part 2 of faster-check (Codex out of the lock) is buildable; reported to the lead, who says whether
+  it is built at once or designed first.
