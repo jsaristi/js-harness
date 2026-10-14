@@ -50,6 +50,14 @@ function makeTmpRepo(prefix = 'js-harness-project-') {
   return dir;
 }
 
+/** A repository that holds a program, where the code map resolves on (`codeMap` auto, odd/tasks/on-demand-functions.md):
+ * the fixture of every test that expects `codegraph init` to run. An empty repository holds none, so there no index is made. */
+function makeCodeRepo(prefix) {
+  const dir = makeTmpRepo(prefix);
+  fs.writeFileSync(path.join(dir, 'index.js'), '', 'utf8');
+  return dir;
+}
+
 function makeTmpDir(prefix = 'js-harness-project-nongit-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
@@ -111,7 +119,7 @@ test('initProject outside a git repository writes nothing and reports notGitRepo
 // --- fresh repo: all four actions ---
 
 test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit hook, and runs codegraph init', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const spawn = makeSpawn({ status: 0, stdout: 'ok', stderr: '' });
     const result = initProject(root, '0.1.0', { spawn, platform: 'linux' });
@@ -139,14 +147,23 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
 
     assert.equal(spawn.codegraphCalls.length, 1);
 
+    // Three files, the push check of a project with code (its Codex review is on), and the two keys of this
+    // clone's settings a project of JavaScript with no TypeScript asks for.
     const wroteActions = result.actions.filter((a) => a.kind === 'wrote');
     const ranActions = result.actions.filter((a) => a.kind === 'ran');
-    assert.equal(wroteActions.length, 3);
+    assert.equal(wroteActions.length, 6);
+    assert.deepEqual(wroteActions.slice(3).map((a) => a.path), [
+      '.git/hooks/pre-push',
+      '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
+      '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
+    ]);
     assert.equal(ranActions.length, 1);
 
     // Manifest contents and hashes.
     assert.equal(result.manifest.version, '0.1.0');
-    assert.equal(result.manifest.files.length, 3);
+    assert.equal(result.manifest.format, 1);
+    assert.deepEqual(result.manifest.settings.map((record) => record.key), ['paste', 'languageServer']);
+    assert.equal(result.manifest.files.length, 4);
     for (const file of result.manifest.files) {
       const abs = path.join(root, ...file.path.split('/'));
       assert.equal(sha256(fs.readFileSync(abs, 'utf8')), file.sha256);
@@ -320,7 +337,7 @@ test('initProject does not spawn codegraph when .codegraph already exists', () =
 // --- codegraph spawn failure: reported, exit 0 ---
 
 test('initProject reports a codegraph init failure and still exits 0', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const spawn = makeSpawn({ status: 1, stdout: '', stderr: 'codegraph: boom' });
 
@@ -338,7 +355,7 @@ test('initProject reports a codegraph init failure and still exits 0', () => {
 });
 
 test('initProject reports a codegraph spawn error (missing binary) and still exits 0', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const spawn = makeSpawn({ status: null, error: Object.assign(new Error('spawn codegraph ENOENT'), { code: 'ENOENT' }) });
 
@@ -869,7 +886,7 @@ test('initProject rolls back a failed manifest write, including .codegraph it cr
 // T2e item 2 / R3-cleanup-clause-partial-branches-untested: when the ordinary rollback also fails
 // to remove something, and .codegraph/ removal fails too, both show up in `notRemoved`.
 test('initProject reports both an ordinary removal failure and a failed .codegraph removal', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const open = (tmp) => {
       throw new Error('ENOSPC: no space left on device');
@@ -931,7 +948,7 @@ test('initProject reports only the ordinary removal failure when .codegraph neve
 // --- T2b item 2: codegraph createdDir is observed, not assumed ---
 
 test('initProject records codegraph createdDir as observed on disk, not assumed from a successful exit', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     // Reports success but never actually creates .codegraph — createdDir must reflect reality.
     const spawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 0, stdout: '', stderr: '' });
@@ -946,7 +963,7 @@ test('initProject records codegraph createdDir as observed on disk, not assumed 
 
 // T2d Codex P2 codegraph ownership: createdDir is observed on failure too, not hardcoded false.
 test('initProject records codegraph createdDir as observed even when the run itself failed', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     // Fails, but not before partially creating .codegraph/ — createdDir must reflect that.
     const spawn = (cmd, args, opts) => {
@@ -966,7 +983,7 @@ test('initProject records codegraph createdDir as observed even when the run its
 // --- T2b item 2: codegraph retry on an already-initialized project ---
 
 test('initProject retries only codegraph when harness.json exists, the manifest says codegraph failed, and .codegraph is still absent', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const first = initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
     assert.deepEqual(first.manifest.codegraph, { createdDir: false, status: 'failed' });
@@ -998,7 +1015,7 @@ test('initProject retries only codegraph when harness.json exists, the manifest 
 // T2d Codex P2 codegraph ownership: retry even when .codegraph exists now, if the failed run
 // itself is what created it.
 test('initProject retries codegraph even when .codegraph exists, if the failed run itself created it', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     // First run: codegraph fails, but not before partially creating .codegraph/.
     const failCreatingSpawn = (cmd, args, opts) => {
@@ -1030,7 +1047,7 @@ test('initProject retries codegraph even when .codegraph exists, if the failed r
 
 // T2c R3-retry-manifest-write-unguarded + T2d Codex P2 atomic manifest writes
 test('initProject throws InitWriteError when the codegraph-retry manifest update fails, removing .codegraph it created this retry, leaving the original manifest byte-identical', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     // The first run's codegraph fails without creating .codegraph/ at all (status 1, and makeSpawn
     // only creates the directory on a successful exit) — so it did not exist before the retry below.
@@ -1079,7 +1096,7 @@ test('initProject throws InitWriteError when the codegraph-retry manifest update
 // because the stale, still-intact manifest already recorded `createdDir: true` from an earlier
 // failed run — a failed retry rewrite leaves it alone: that older manifest still truthfully owns it.
 test('initProject leaves .codegraph alone when the codegraph-retry manifest update fails but the directory already existed before the retry', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const failCreatingSpawn = (cmd, args, opts) => {
       if (cmd === 'git') return spawnSync('git', args, opts);
@@ -1115,7 +1132,7 @@ test('initProject leaves .codegraph alone when the codegraph-retry manifest upda
 });
 
 test('initProject reports a second codegraph retry failure and still exits 0', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
 
@@ -1771,6 +1788,14 @@ test('agentsTemplate titles the doc with the folder name and stays short', () =>
   assert.ok(template.length < 1200, `template is ${template.length} chars`);
 });
 
+// One text for a project with code and one without (odd/tasks/on-demand-functions.md, slice 2): what proves
+// a change is a test where there is code to test, and the evidence where the work is a finding.
+test('agentsTemplate serves a project with code and one without', () => {
+  const template = agentsTemplate('project');
+  assert.match(template, /<where the work lives: the code, the data, the documents>/);
+  assert.match(template, /A behavior change arrives with the test that proves it, written first; a finding, with the\nevidence that proves it\./);
+});
+
 // --- runCodegraphInit spawn shape ---
 // T2b Codex P2 (shell expansion): the root path is never embedded in the command line — it is
 // passed as the child's own `cwd`, with the command always the literal `.` — so a root containing
@@ -2051,7 +2076,7 @@ test('uninstallProject prunes empty directories bottom-up but leaves one with re
 });
 
 test("uninstallProject removes .codegraph/ when this project's own init created it", () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);
@@ -2534,8 +2559,9 @@ const HOOK_CONTENT = '#!/bin/sh\n# Written by js-harness init; js-harness uninst
 /** A fresh clone of an initialized project: `harness.json` (and, unless `agents` is false,
  * `AGENTS.md`) are committed files already in the working tree, but nothing local exists yet — no
  * hook, no `.codegraph/`, no manifest. */
-function makeClone({ version = '0.1.0', agents = true } = {}) {
+function makeClone({ version = '0.1.0', agents = true, code = false } = {}) {
   const root = makeTmpRepo('js-harness-project-clone-');
+  if (code) fs.writeFileSync(path.join(root, 'index.js'), '', 'utf8');
   fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify({ version }, null, 2) + '\n', 'utf8');
   if (agents) fs.writeFileSync(path.join(root, 'AGENTS.md'), '# committed by the team\n', 'utf8');
   return root;
@@ -2676,7 +2702,7 @@ test('syncProject refuses a stale manifest (harness.json gone) and writes nothin
 });
 
 test('syncProject with a pin different from the running version writes nothing, manifest and tree byte-identical', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     assert.equal(initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).code, 0);
     // Remove things a matching-version sync would put back, so a wrongly-acting sync would show.
@@ -2718,7 +2744,7 @@ test('syncProject with a pin mismatch in a fresh clone sets nothing up', () => {
 // --- a fresh clone: no manifest yet ---
 
 test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest recording harness.json and AGENTS.md as kept', () => {
-  const root = makeClone();
+  const root = makeClone({ code: true });
   try {
     const harnessBefore = fs.readFileSync(path.join(root, 'harness.json'), 'utf8');
     const agentsBefore = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
@@ -2737,16 +2763,23 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), harnessBefore);
     assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsBefore);
 
+    // The two hooks, and the two keys of this clone's own settings (a clone applies its switches for itself).
     assert.deepEqual(
       result.actions.filter((a) => a.kind === 'wrote').map((a) => a.path),
-      ['.git/hooks/pre-commit'],
+      [
+        '.git/hooks/pre-commit',
+        '.git/hooks/pre-push',
+        '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
+        '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
+      ],
     );
     assert.ok(result.actions.some((a) => a.kind === 'ran' && a.path === 'codegraph init'));
 
     const onDisk = JSON.parse(fs.readFileSync(path.join(root, ...MANIFEST_REL), 'utf8'));
     assert.deepEqual(onDisk, result.manifest);
     assert.equal(onDisk.version, '0.1.0');
-    assert.deepEqual(onDisk.files, [{ path: '.git/hooks/pre-commit', sha256: sha256(HOOK_CONTENT) }]);
+    assert.deepEqual(onDisk.files.map((f) => f.path), ['.git/hooks/pre-commit', '.git/hooks/pre-push']);
+    assert.deepEqual(onDisk.files[0], { path: '.git/hooks/pre-commit', sha256: sha256(HOOK_CONTENT) });
     assert.deepEqual(onDisk.kept, [
       { path: 'harness.json', reason: 'committed' },
       { path: 'AGENTS.md', reason: 'committed' },
@@ -2850,7 +2883,7 @@ test('syncProject leaves .codegraph alone in a fresh clone that already has it',
 });
 
 test('syncProject reports a codegraph failure in a fresh clone and still exits 0, recording it for a later sync', () => {
-  const root = makeClone();
+  const root = makeClone({ code: true });
   try {
     const spawn = makeSpawn({ status: 1, stdout: '', stderr: 'codegraph exploded' });
 
@@ -3048,7 +3081,7 @@ test('syncProject keeps a gone hook whose directory a junction now sends outside
 });
 
 test('syncProject creates a deleted .codegraph again and keeps the manifest as init recorded it', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);
@@ -3069,7 +3102,7 @@ test('syncProject creates a deleted .codegraph again and keeps the manifest as i
 });
 
 test('syncProject records createdDir as observed when it creates a .codegraph init had found already there', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     fs.mkdirSync(path.join(root, '.codegraph'));
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
@@ -3089,7 +3122,7 @@ test('syncProject records createdDir as observed when it creates a .codegraph in
 });
 
 test('syncProject reports a codegraph failure on a deleted .codegraph and exits 0', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);
@@ -3107,7 +3140,7 @@ test('syncProject reports a codegraph failure on a deleted .codegraph and exits 
 });
 
 test('syncProject rolls back the .codegraph it created when the manifest that would record it cannot be written', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     fs.mkdirSync(path.join(root, '.codegraph'));
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
@@ -3136,7 +3169,7 @@ test('syncProject rolls back the .codegraph it created when the manifest that wo
 });
 
 test('syncProject rolls back a .codegraph it recreated even when the manifest already records it as created (T4b, Codex P2)', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.deepEqual(initResult.manifest.codegraph, { createdDir: true, status: 'ok' });
@@ -3179,7 +3212,7 @@ test('syncProject is up to date on a repeat run that only reports a hook a junct
 });
 
 test('syncProject is up to date on a repeat run whose codegraph init fails again and writes nothing (T4b)', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     fs.rmSync(path.join(root, '.codegraph'), { recursive: true });
@@ -3236,7 +3269,7 @@ test('syncProject reports malformedManifest and writes nothing when the manifest
 });
 
 test('syncProject reports malformedManifest when an entry escapes the working tree, before acting on anything', () => {
-  const root = makeTmpRepo();
+  const root = makeCodeRepo();
   try {
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);

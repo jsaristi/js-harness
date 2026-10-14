@@ -827,6 +827,28 @@ test('status exits 0 in a project whose harness.json holds no version: no pin, h
   }
 });
 
+// A manifest `functions apply` wrote holds the switches and no gate (odd/tasks/on-demand-functions.md, slice 2).
+test('status says a clone whose manifest holds only its switches is not set up', async () => {
+  const root = makeProject({ manifest: true });
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(root, '.git', 'js-harness', 'manifest.json'), '{ "scope": "functions", "files": [] }\n', 'utf8');
+
+    const { code, out } = await runStatus(['--cwd', root, '--home', home], {}, noPackageManager);
+
+    assert.equal(code, 0);
+    assert.match(
+      out,
+      /^this clone: only its switches applied \(manifest: .*manifest\.json\); js-harness sync sets it up once a version is pinned$/m,
+    );
+    assert.doesNotMatch(out, /this clone: set up/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('status in a project with no pin says so in a clone that is set up too', async () => {
   const root = makeProject({ manifest: true });
   const home = makeTmpDir('js-harness-status-home-');

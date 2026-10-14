@@ -548,6 +548,9 @@ function stubCodegraphDir() {
 
 test('the real js-harness init, run by initWorkspace under the sandbox, writes the project layer into the workspace', async () => {
   const { home, workspace } = preparedTrial();
+  // A program in the workspace, as a task's fixture has: init makes the index only where there is code
+  // (odd/tasks/on-demand-functions.md).
+  write(path.join(workspace, 'index.js'), '');
   const stub = stubCodegraphDir();
   await initWorkspace({ home, workspace, engramPort: PORT, env: { PATH: `${stub}${path.delimiter}${process.env.PATH ?? process.env.Path}` } });
   for (const rel of ['harness.json', 'AGENTS.md', '.codegraph']) assert.ok(fs.existsSync(path.join(workspace, rel)), rel);

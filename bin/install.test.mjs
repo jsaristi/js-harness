@@ -32,6 +32,13 @@ after(() => {
   fs.rmSync(configDir, { recursive: true, force: true });
 });
 
+/** A program in the repository at `dir`, so the code map resolves on and `codegraph init` runs
+ * (odd/tasks/on-demand-functions.md: an empty repository holds no code). */
+function withProgram(dir) {
+  fs.writeFileSync(path.join(dir, 'index.js'), '', 'utf8');
+  return dir;
+}
+
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-home-'));
 }
@@ -846,7 +853,7 @@ test('uninstallMain rejects --global combined with --cwd, exit 2', async () => {
 });
 
 test('uninstallMain --cwd undoes the project and prints its own report', async () => {
-  const root = makeTmpProjectRepo();
+  const root = withProgram(makeTmpProjectRepo());
   try {
     const initResult = initProject(root, '0.1.0', { spawn: fakeCodegraphSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);
@@ -1048,7 +1055,7 @@ test('syncMain rejects --global combined with --cwd, exit 2', async () => {
 });
 
 test('syncMain --cwd sets a fresh clone up, prints what it wrote, and a second run says up to date', async () => {
-  const root = makeTmpClone();
+  const root = withProgram(makeTmpClone());
   try {
     const first = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
 
@@ -1100,7 +1107,7 @@ test('syncMain --cwd restores a gone hook and prints it', async () => {
 });
 
 test('syncMain --cwd reports a codegraph failure on stderr and still exits 0', async () => {
-  const root = makeTmpClone();
+  const root = withProgram(makeTmpClone());
   try {
     const failing = (cmd, args, opts) =>
       cmd === 'git' ? spawnSync('git', args, opts) : { status: 1, stdout: '', stderr: 'codegraph exploded' };
@@ -1206,6 +1213,30 @@ test('syncMain --cwd reports a malformed manifest, exit 1', async () => {
 
     assert.equal(code, 1);
     assert.ok(errLines.some((l) => l.includes('is malformed')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// A manifest written by a newer copy holds what this one cannot undo (odd/tasks/on-demand-functions.md, slice 2):
+// both commands refuse, say which copy wrote it, and touch nothing.
+test('syncMain and uninstallMain --cwd refuse a project manifest of a newer format, exit 1', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    const initResult = initProject(root, currentVersion(), projectDeps());
+    const written = JSON.stringify({ ...initResult.manifest, format: 99 });
+    fs.writeFileSync(initResult.manifestPath, written, 'utf8');
+
+    for (const main of [() => syncMain(['--cwd', root], process.env, projectDeps()), () => uninstallMain(['--cwd', root])]) {
+      const { code, errLines } = await captureConsole(main);
+      assert.equal(code, 1);
+      assert.ok(
+        errLines.some((l) => l.includes('in format 99, and this copy reads format 1') && l.includes('run that version of js-harness')),
+        errLines.join('\n'),
+      );
+    }
+    assert.equal(fs.readFileSync(initResult.manifestPath, 'utf8'), written);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
