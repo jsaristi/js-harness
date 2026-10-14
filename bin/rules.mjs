@@ -6,6 +6,9 @@
 // `applied` reads only under the package: it never reads the working directory, and writes one file,
 // docs/RULES.md, only when asked to render. `applied` reads the records Claude Code keeps for the project it is run
 // in, and that project's own bin/lib/rules-data.mjs, and writes nothing. The checks are in bin/lib/rules-check.mjs.
+// All of that is in the harness's own repository. In a project that installs the harness (its git top holds no
+// bin/lib/rules-data.mjs), `rules`, `rules <id>` and `rules check` are about that project's own list, docs/rules.json,
+// beside the rules of the harness in force there, and `render` is refused (bin/lib/project-rules.mjs).
 // Zero dependencies.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,6 +21,8 @@ import { renderList, rulesHash, ruleHere, ruleOf } from './lib/rules.mjs';
 import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
 import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { readProjectRules } from './lib/project-rules-read.mjs';
+import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
@@ -139,6 +144,7 @@ const countLine = () => `${RULES.length} rules, hash ${rulesHash(RULES)}`;
 /** What a rule is, on the listing's line: its value and unit, its prose, or the day it was retired. */
 function describeRule(rule) {
   if (Object.hasOwn(rule, 'retired')) return `retired ${rule.retired}`;
+  if (Object.hasOwn(rule, 'sensor')) return `sensor ${rule.sensor}`;
   if (Object.hasOwn(rule, 'value')) return rule.unit === undefined ? `${rule.value}` : `${rule.value} ${rule.unit}`;
   return `prose, ${rule.path}`;
 }
@@ -162,6 +168,81 @@ function showRule(id, { sources, readers }, stdout, stderr) {
   stdout(`Read by: ${paths.length === 0 ? 'none' : paths.join(', ')}`);
   const source = sources !== null && typeof sources === 'object' && Object.hasOwn(sources, id) ? sources[id] : undefined;
   stdout(source === undefined ? 'Source: none recorded' : `Source: ${JSON.stringify(source, null, 2)}`);
+  return 0;
+}
+
+/** `n` rules of the project, in words: "1 rule of the project", "2 rules of the project". */
+const projectCount = (n) => `${n} ${n === 1 ? 'rule' : 'rules'} of the project`;
+
+/** The forms of `rules` in a project that installs the harness, whose git top is `top`: its own list, docs/rules.json,
+ * beside the rules of the harness in force there (odd/tasks/project-rules.md, "How it is checked"). The list is held to
+ * the sensors `check` runs in the project; when its `harness.json` does not parse they cannot be known, and the sensor
+ * rules are left unchecked (the gate's sensors row reports that file). It writes nothing: `render` is the harness's. */
+async function projectForm(parsed, top, { run, stdout, stderr }) {
+  if (parsed.command === 'render') {
+    stderr("rules render writes the harness's docs/RULES.md and runs only in the harness's own repository; a project's list is printed by `js-harness rules`");
+    return 1;
+  }
+  let read;
+  try {
+    const { discoverSensors } = await import('./check.mjs');
+    const found = discoverSensors(top);
+    read = readProjectRules(top, { sensors: found.error ? null : found.sensors.map((sensor) => sensor.name), run });
+  } catch (err) {
+    stderr(err.message);
+    return 1;
+  }
+
+  if (parsed.command === 'check') {
+    if (!read.present) {
+      stdout(`PASS  rules  no ${PROJECT_RULES_PATH}: this project declares no rules of its own`);
+      return 0;
+    }
+    if (read.findings.length === 0) {
+      const n = read.rules.length;
+      stdout(`PASS  rules  ${projectCount(n)} ${n === 1 ? 'holds' : 'hold'}`);
+    } else {
+      stdout(`FAIL  rules  ${read.findings.length} ${read.findings.length === 1 ? 'finding' : 'findings'}`);
+      for (const finding of read.findings) stdout(`      ${finding}`);
+    }
+    for (const note of read.notes) stdout(`note: ${note}`);
+    return read.findings.length === 0 ? 0 : 1;
+  }
+
+  // The listing and one rule need a list that reads; one that does not is told, as `check` tells it.
+  if (read.present && !read.readable) {
+    for (const finding of read.findings) stderr(finding);
+    return 1;
+  }
+  const own = read.present ? read.rules : [];
+
+  if (parsed.command === 'id') {
+    const harness = RULES.find((rule) => rule.id === parsed.id);
+    const mine = own.find((rule) => rule.id === parsed.id);
+    if (harness === undefined && mine === undefined) {
+      stderr(`no rule "${parsed.id}" is declared, by the harness or by this project`);
+      return 1;
+    }
+    if (harness !== undefined) {
+      stdout("The harness's rule:");
+      stdout(JSON.stringify(harness, null, 2));
+    }
+    if (mine !== undefined) {
+      stdout(`This project's rule (${PROJECT_RULES_PATH}):`);
+      stdout(JSON.stringify(mine, null, 2));
+    }
+    return 0;
+  }
+
+  stdout('The rules of the harness in force here:');
+  for (const rule of RULES.filter((item) => item.scope === undefined)) stdout(`${rule.id}  ${describeRule(rule)}  ${rule.owner}`);
+  if (!read.present) {
+    stdout(`This project declares no rules of its own: they would be in ${PROJECT_RULES_PATH}`);
+    return 0;
+  }
+  stdout(`This project's own rules (${PROJECT_RULES_PATH}):`);
+  for (const rule of own) stdout(`${rule.id}  ${describeRule(rule)}  ${rule.owner ?? 'project'}`);
+  stdout(projectCount(own.length));
   return 0;
 }
 
@@ -288,6 +369,20 @@ export async function rulesMain(argv, {
     return 2;
   }
 
+  // In a project that installs the harness, every form but `applied` is about that project's own list. The harness's
+  // own repository is the one whose git top holds bin/lib/rules-data.mjs, as `applied` and `ruleHere` decide.
+  if (parsed.command !== 'applied') {
+    const top = projectOf(run, cwd);
+    let harnessRepository;
+    try {
+      harnessRepository = readOptional(top, 'bin/lib/rules-data.mjs') !== null;
+    } catch (err) {
+      stderr(err.message);
+      return 1;
+    }
+    if (!harnessRepository) return projectForm(parsed, top, { run, stdout, stderr });
+  }
+
   // The plain listing needs only the declarations, so a file it does not read cannot stop it.
   if (parsed.command === 'list') return listRules(stdout);
 
@@ -317,6 +412,12 @@ export async function rulesMain(argv, {
   } catch (err) {
     stderr(err.message);
     return 1;
+  }
+
+  // The shipped list is this repository's one home for its rules (rule hierarchy, letter B): a project's list here
+  // would be a second.
+  if (readOptional(root, PROJECT_RULES_PATH) !== null) {
+    result.findings.push(`${PROJECT_RULES_PATH} is a project's list: in the harness's own repository the rules live in bin/lib/rules-data.mjs`);
   }
 
   if (parsed.command === 'id') return showRule(parsed.id, { sources: read.sources, readers: result.readers }, stdout, stderr);
