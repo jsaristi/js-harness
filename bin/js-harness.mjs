@@ -28,6 +28,7 @@ Commands:
   notify      Append one notice to the project's channel record under the home (.js-harness/channel/<project>.jsonl), with the time of the clock, the sender's session and the worktree and branch it ran in: js-harness notify --to orchestrator|<number> --kind opened|waiting|closed|note|answer|relieved "<one line>" (an answer also takes --transcript and --line, where the user's words are read). It then prints the address of the role, as sessions --address gives it, so the sender can ring it; it sends no message, and its exit is 0 once the notice is recorded. --relief "<one line>" appends a line stamped by the clock to the orchestrator's relief file; --opening "<title>" stores the opening of a session, read from standard input. A notice is a claim of the session that wrote it, never the user's word.
   wait        Wait in the background until one condition holds, and print the one line that says so: js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>) [--every <seconds>] [--for <minutes>]. It checks at once, then every --every seconds (120), and ends after --for minutes (480) with exit 1; a pull request closed without merging ends it too. It says what it waits for and when it ends, so run it in the background and stop it with TaskStop when it is no longer needed.
   resume      The SessionStart hook that runs after a compaction (matcher compact), which install registers for Claude Code and Codex: js-harness resume --hook reads the hook input from standard input and prints the title of the session, the opening stored for it, the feature document it works on and what to read there, so nobody pastes a resume prompt. It speaks only in a project with a harness.json, writes nothing and always exits 0. js-harness resume --pause is the PostToolUse hook of the context pause, which prints its notice once a stretch of work passes the pause.
+  guard       The PreToolUse hook that install registers for Claude Code: js-harness guard --hook reads the hook input from standard input and refuses, with the hooks contract's deny and its reason, an Agent call on a model the project's rules do not give a sub-agent (only where the rules are in force; a project that installs the harness turns nothing on by default), a message to another session whose opening hour is more than a minute off the clock, a Bash command with backticks inside double quotes (bash runs them as commands), and a node --test of several files outside a gate turn while another gate holds the machine's lock. It writes nothing and always exits 0.
 
 js-harness --version prints the version of this copy, alone on one line.
 
@@ -59,6 +60,7 @@ const COMMANDS = {
   notify: async () => (await import('./notify.mjs')).notifyMain,
   resume: async () => (await import('./resume.mjs')).resumeMain,
   wait: async () => (await import('./wait.mjs')).waitMain,
+  guard: async () => (await import('./guard.mjs')).guardMain,
 };
 
 async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui, commands = COMMANDS } = {}) {
