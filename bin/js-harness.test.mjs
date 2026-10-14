@@ -51,6 +51,16 @@ test('--help prints usage listing check and exits 0', () => {
   assert.match(result.stdout, /check/);
 });
 
+// install-update T8: `upgrade` asks the copy on the path which version it is before it lets it sync.
+test('--version prints the version of this copy, alone on one line, and exits 0; the help names it', () => {
+  const result = run(['--version']);
+  const { version } = JSON.parse(fs.readFileSync(path.join(path.dirname(dispatcher), '..', 'package.json'), 'utf8'));
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, `${version}\n`);
+  assert.equal(result.stderr, '');
+  assert.match(run(['--help']).stdout, /^js-harness --version /m);
+});
+
 test('unknown command exits 2', () => {
   const result = run(['bogus']);
   assert.equal(result.status, 2);

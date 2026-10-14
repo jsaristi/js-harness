@@ -74,6 +74,15 @@ function noProcess() {
   throw new Error('no process may be started here');
 }
 
+/** A stand-in for every process `upgrade` starts, in which the copy of js-harness on the path answers
+ * `--version` with `version` (install-update T8). Each start is recorded in `calls`. */
+function pathCopyAnswers(version, calls = []) {
+  return (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    return { status: 0, stdout: args.includes('--version') ? `${version}\n` : '', stderr: '' };
+  };
+}
+
 /** A source folder that holds one tarball of `version`. */
 function makeSource(version) {
   const dir = makeTmpDir('js-harness-src-');
@@ -292,7 +301,7 @@ test('upgradeMain says not installed, not null, when the manifest it finds only 
     console.error = (line) => lines.push(String(line));
     let code;
     try {
-      code = await upgradeMain(['--source', source, '--home', home], {}, () => ({ status: 0, stdout: '', stderr: '' }));
+      code = await upgradeMain(['--source', source, '--home', home], {}, pathCopyAnswers('0.9.0'));
     } finally {
       console.error = original;
     }
@@ -316,7 +325,7 @@ test('statusMain and upgradeMain say not installed for a manifest that only reco
     console.log = (line) => lines.push(String(line));
     console.error = (line) => lines.push(String(line));
     await statusMain(['--global', '--home', home], {}, noProcess);
-    const code = await upgradeMain(['--source', source, '--home', home], {}, () => ({ status: 0, stdout: '', stderr: '' }));
+    const code = await upgradeMain(['--source', source, '--home', home], {}, pathCopyAnswers('0.9.0'));
     assert.equal(code, 1);
     assert.match(lines.join('\n'), /manifest version: \(not installed\)/);
     assert.match(lines.join('\n'), /reports \(not installed\), not 0\.9\.0/);
@@ -429,33 +438,85 @@ test('upgradeMain uses the POSIX --prefix layout (lib/node_modules) for the sync
   }
 });
 
-test('upgradeMain spawns the PATH js-harness sync via a shell when no --prefix is given', async () => {
+// install-update T8: with no --prefix the sync is run by whatever js-harness the shell finds, so that
+// copy says its version first, and only the version just installed is let to sync.
+test('upgradeMain asks the js-harness on the path its version, then runs its sync, both via a shell, when no --prefix is given', async () => {
   const home = makeTmpDir('js-harness-upgrade-home2-');
   const source = makeTmpDir('js-harness-upgrade-src2-');
   try {
     fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
-    // The mocked spawn never actually runs sync, so seed the manifest it would have written.
+    // The stand-in never actually runs sync, so seed the manifest it would have written.
     install(home, '0.9.0');
     const calls = [];
-    const spawn = (cmd, args, opts) => {
-      calls.push({ cmd, args, opts });
-      return { status: 0, stdout: '', stderr: '' };
-    };
-    const code = await upgradeMain(['--source', source, '--home', home], {}, spawn);
+    const code = await upgradeMain(['--source', source, '--home', home], {}, pathCopyAnswers('0.9.0', calls));
     assert.equal(code, 0);
-    assert.equal(calls.length, 2, 'expected one install call and one sync call');
-    assert.equal(calls[1].cmd, 'js-harness');
-    assert.equal(calls[1].args[0], 'sync');
-    assert.equal(calls[1].args[1], '--home');
+    assert.equal(calls.length, 3, 'one install, one question, one sync');
+    assert.deepEqual([calls[1].cmd, calls[1].args], ['js-harness', ['--version']]);
+    assert.equal(calls[1].opts.shell, true, 'the question goes to the same copy the sync will run');
+    assert.equal(calls[2].cmd, 'js-harness');
+    assert.equal(calls[2].args[0], 'sync');
+    assert.equal(calls[2].args[1], '--home');
     const expectedHome = process.platform === 'win32' ? `"${home}"` : `'${home}'`;
-    assert.equal(calls[1].args[2], expectedHome, 'the home path must be quoted for the shell');
-    assert.equal(calls[1].args[3], '--global');
-    assert.equal(calls[1].opts.shell, true, 'shell is required so .cmd shims resolve on Windows');
+    assert.equal(calls[2].args[2], expectedHome, 'the home path must be quoted for the shell');
+    assert.equal(calls[2].args[3], '--global');
+    assert.equal(calls[2].opts.shell, true, 'shell is required so .cmd shims resolve on Windows');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(source, { recursive: true, force: true });
   }
 });
+
+for (const [label, answer, said] of [
+  [
+    'answers another version',
+    { status: 0, stdout: '0.1.0\n', stderr: '' },
+    /the js-harness on the path is 0\.1\.0, not the upgraded 0\.9\.0/,
+  ],
+  [
+    'does not know --version',
+    { status: 2, stdout: '', stderr: 'Unknown command: --version\n\u001b[2J' },
+    /the js-harness on the path did not answer --version, so it is not the upgraded 0\.9\.0/,
+  ],
+  [
+    'answers something that is no version',
+    { status: 0, stdout: '\u001b[2J0.9.0; rm -rf x\n', stderr: '' },
+    /the js-harness on the path did not answer --version/,
+  ],
+  [
+    'is not found',
+    { status: null, error: new Error('spawn js-harness ENOENT'), stdout: '', stderr: '' },
+    /the js-harness on the path did not answer --version/,
+  ],
+]) {
+  test(`upgradeMain syncs nothing and exits 1 when the js-harness on the path ${label}`, async () => {
+    const home = makeTmpDir('js-harness-upgrade-home-probe-');
+    const source = makeSource('0.9.0');
+    try {
+      const calls = [];
+      const spawn = (cmd, args, opts) => {
+        calls.push({ cmd, args, opts });
+        return args.includes('--version') ? answer : { status: 0, stdout: '', stderr: '' };
+      };
+
+      const { code, out, err } = await runCommand(upgradeMain, ['--source', source, '--home', home], {}, spawn);
+
+      assert.equal(code, 1);
+      assert.equal(calls.length, 2, 'the install and the question: no sync is started');
+      assert.equal(calls.some((call) => call.args.includes('sync')), false);
+      assert.match(err, said);
+      assert.match(err, /0\.9\.0 was installed and nothing was synced/);
+      assert.match(err, /js-harness sync --global/);
+      // The install already happened: a second upgrade would say "up to date" and sync nothing, so it is
+      // not offered as a way out (Codex's finding on the first version of this line).
+      assert.doesNotMatch(err, /upgrade again|--prefix/);
+      assert.doesNotMatch(`${out}${err}`, /\u001b|rm -rf|ENOENT|Unknown command/, 'none of the copy\'s own bytes are printed');
+      assert.doesNotMatch(out, /upgraded to/);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(source, { recursive: true, force: true });
+    }
+  });
+}
 
 test('statusMain resolves home and source from JS_HARNESS_HOME / JS_HARNESS_SOURCE when the flags are absent', async () => {
   const home = makeTmpDir('js-harness-status-envhome-');
@@ -521,12 +582,9 @@ test('upgradeMain reports a mismatch and returns 1 when the synced manifest is n
   const source = makeTmpDir('js-harness-upgrade-src-mismatch-');
   try {
     fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
-    // No manifest written under home: simulates sync silently running some other js-harness.
-    const calls = [];
-    const spawn = (cmd, args) => {
-      calls.push({ cmd, args });
-      return { status: 0, stdout: '', stderr: '' };
-    };
+    // No manifest written under home: the copy on the path said the right version, and its sync still
+    // left another manifest. The check after the sync is the second proof.
+    const spawn = pathCopyAnswers('0.9.0');
     const lines = [];
     const original = console.error;
     console.error = (line) => lines.push(String(line));
