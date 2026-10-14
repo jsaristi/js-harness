@@ -62,6 +62,21 @@ test('a rule committed at HEAD and deleted from the list since is a finding', (t
   ]);
 });
 
+test('a list committed at HEAD and deleted whole is a finding for each of its rules, as if each were deleted', (t) => {
+  const root = project(t, { 'docs/rules.json': listOf([prose, sensed]), 'AGENTS.md': '- Never deploy by hand.\n' }, { commit: true });
+  fs.rmSync(path.join(root, 'docs', 'rules.json'));
+  const result = readProjectRules(root, { sensors: ['secrets'] });
+  assert.equal(result.present, true);
+  assert.deepEqual(result.findings, [
+    'rule "no-direct-deploy" is in the list of HEAD and gone from docs/rules.json: retire it (retired, successors) instead of deleting it',
+    'rule "no-secrets" is in the list of HEAD and gone from docs/rules.json: retire it (retired, successors) instead of deleting it',
+  ]);
+});
+
+test('a project whose HEAD has no list either still keeps no list', (t) => {
+  assert.deepEqual(readProjectRules(project(t, { 'AGENTS.md': '# x\n' }, { commit: true })), { present: false });
+});
+
 test('the sensors named by the caller and the register of the project are what a rule is held to', (t) => {
   const root = project(t, { 'docs/rules.json': listOf([sensed]), 'docs/FAILURES.md': REGISTER });
   assert.deepEqual(readProjectRules(root, { sensors: ['secrets'] }).findings, []);

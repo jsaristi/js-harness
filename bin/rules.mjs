@@ -371,8 +371,9 @@ export async function rulesMain(argv, {
 
   // In a project that installs the harness, every form but `applied` is about that project's own list. The harness's
   // own repository is the one whose git top holds bin/lib/rules-data.mjs, as `applied` and `ruleHere` decide.
+  let top = null;
   if (parsed.command !== 'applied') {
-    const top = projectOf(run, cwd);
+    top = projectOf(run, cwd);
     let harnessRepository;
     try {
       harnessRepository = readOptional(top, 'bin/lib/rules-data.mjs') !== null;
@@ -415,8 +416,8 @@ export async function rulesMain(argv, {
   }
 
   // The shipped list is this repository's one home for its rules (rule hierarchy, letter B): a project's list here
-  // would be a second.
-  if (readOptional(root, PROJECT_RULES_PATH) !== null) {
+  // would be a second. It is looked for in the checkout the command runs in, not in the package it runs from.
+  if (top !== null && readOptional(top, PROJECT_RULES_PATH) !== null) {
     result.findings.push(`${PROJECT_RULES_PATH} is a project's list: in the harness's own repository the rules live in bin/lib/rules-data.mjs`);
   }
 

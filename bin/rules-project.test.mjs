@@ -108,10 +108,22 @@ test('a list that cannot be read fails the check with its fault, and the listing
   assert.match(listed.err[0], /^docs\/rules\.json is not JSON: /);
 });
 
+const SECOND_LIST = '      docs/rules.json is a project\'s list: in the harness\'s own repository the rules live in bin/lib/rules-data.mjs';
+
 test('in the harness repository, a docs/rules.json is a finding: the shipped list is its one home', async (t) => {
-  const root = project(t, { 'docs/rules.json': listOf([]) });
+  // The checkout the command runs in holds the second list; the package it runs from (this one) does not, as when the
+  // installed command is run inside a harness checkout.
+  const cwd = project(t, { 'bin/lib/rules-data.mjs': 'export const RULES = [];\n', 'docs/rules.json': listOf([]) });
   const out = [];
-  const code = await rulesMain(['check'], { root, stdout: (line) => out.push(line), stderr: () => {} });
+  const code = await rulesMain(['check'], { cwd, stdout: (line) => out.push(line), stderr: () => {} });
   assert.equal(code, 1);
-  assert.ok(out.includes('      docs/rules.json is a project\'s list: in the harness\'s own repository the rules live in bin/lib/rules-data.mjs'), out.join('\n'));
+  assert.ok(out.includes(SECOND_LIST), out.join('\n'));
+});
+
+test('in the harness repository, a docs/rules.json of the package it runs from is not the checkout\'s finding', async (t) => {
+  const root = project(t, { 'docs/rules.json': listOf([]) });
+  const cwd = project(t, { 'bin/lib/rules-data.mjs': 'export const RULES = [];\n' });
+  const out = [];
+  await rulesMain(['check'], { root, cwd, stdout: (line) => out.push(line), stderr: () => {} });
+  assert.ok(!out.includes(SECOND_LIST), out.join('\n'));
 });

@@ -26,12 +26,14 @@ const gitShow = (command, args, options) => spawnSync(command, args, { ...option
  * otherwise `{ present: true, rules, findings, notes }`. `sensors` are the names of the sensors `check` runs there.
  * The list at `HEAD` is read with git; when git cannot give it (no commit yet, or the list is new) nothing is
  * compared. The register's ids are read only when it parses with no error: a register that does not parse is the
- * `failures` row's to report. */
+ * `failures` row's to report. A list deleted whole since `HEAD` is read as an empty list, so each of its rules is
+ * the finding a rule deleted from it would be: deleting the file is no way around retiring them. */
 export function readProjectRules(root, { sensors = [], run = gitShow } = {}) {
-  const text = readOptional(root, PROJECT_RULES_PATH);
-  if (text === null) return { present: false };
+  const current = readOptional(root, PROJECT_RULES_PATH);
   const head = run('git', ['show', `HEAD:${PROJECT_RULES_PATH}`], { cwd: root });
   const headText = !head.error && head.status === 0 ? String(head.stdout ?? '') : null;
+  if (current === null && headText === null) return { present: false };
+  const text = current ?? JSON.stringify({ format: 1, rules: [] });
   const register = readOptional(root, REGISTER);
   let failureIds = null;
   if (register !== null) {
