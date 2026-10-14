@@ -307,8 +307,9 @@ PR 137: refs/pull/137/merge still has 028d658 as its first parent, not main c036
 Builds the candidate main would be: origin/main with each ready pull request merged into it in
 order of number, and names each one it leaves out and why. Ready means what `merge-ready` checks
 of the pull request itself, a Codex review record for every code commit, and no conflict with the
-candidate so far. `--dry-run` is the only mode for now: it tests and pushes nothing, and removes
-the candidate before it ends (odd/tasks/merge-queue.md).
+candidate so far. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
+green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
 
 ```console
 $ js-harness merge-queue --dry-run

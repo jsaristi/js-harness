@@ -3,29 +3,33 @@
 // The candidate is origin/main with each ready pull request merged into it in order of number, built in a
 // worktree of its own under the git directory and removed before the command ends. A pull request is ready
 // when nothing of its own keeps it from merging (`pullRequestProblems`), every code commit of it has a Codex
-// review record (`checkCodexReviews`), and it merges into the candidate so far with no conflict. For now the
-// command only builds and prints the candidate (`--dry-run`): testing it, its GitHub run and the push of main
-// come next (T2), and until then it pushes nothing.
+// review record (`checkCodexReviews`), and it merges into the candidate so far with no conflict. `--dry-run`
+// builds and prints the candidate; `--land` tests it and moves main to it (`landCandidate`).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkCodexReviews } from './check.mjs';
 import { pullRequestProblems } from './lib/merge-ready.mjs';
 
-export const USAGE = `Usage: js-harness merge-queue --dry-run [--cwd <path>]
+export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
 number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
 review record for every code commit, and no conflict with the candidate so far. It names each pull
-request it leaves out and why. --dry-run is the only mode for now: it tests and pushes nothing, and
-removes the candidate before it ends.`;
+request it leaves out and why.
+
+--dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
+--land tests the candidate: the whole suite on this machine under the gate lock, then CircleCI's run
+of a queue/* branch pushed for it and removed after. When both are green, main is pushed as the
+candidate, by fast-forward from the main it was built from. Exit 0 landed or nothing to land, 4 red,
+3 main moved meanwhile (nothing pushed), 1 anything else.`;
 
 const TIMEOUT_MS = 60_000;
 
-function answer(run, command, args, cwd) {
+function answer(run, command, args, cwd, timeout = TIMEOUT_MS) {
   let result;
   try {
-    result = run(command, args, { cwd, encoding: 'utf8', windowsHide: true, timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 });
+    result = run(command, args, { cwd, encoding: 'utf8', windowsHide: true, timeout, maxBuffer: 64 * 1024 * 1024 });
   } catch (err) {
     return { ok: false, out: '', err: err.message };
   }
@@ -33,22 +37,107 @@ function answer(run, command, args, cwd) {
 }
 
 function parseArgs(argv) {
-  const args = { dryRun: false, cwd: process.cwd() };
+  const args = { dryRun: false, land: false, cwd: process.cwd() };
   for (let at = 0; at < argv.length; at += 1) {
     if (argv[at] === '--dry-run') args.dryRun = true;
+    else if (argv[at] === '--land') args.land = true;
     else if (argv[at] === '--cwd' && at + 1 < argv.length) args.cwd = argv[(at += 1)];
     else return null;
   }
-  return args;
+  // One mode, named: a run that pushes main is never what a bare command does.
+  return args.dryRun === args.land ? null : args;
 }
 
-export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawnSync, covered = null, stdout = console.log, stderr = console.error } = {}) {
+/** How long the queue waits for CircleCI's result on a candidate, and how often it asks. */
+const CI_WAIT_MS = 30 * 60_000;
+const CI_POLL_MS = 30_000;
+const RED = new Set(['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale']);
+
+/** CircleCI's result on the commit `sha`, from GitHub: its check runs (the CircleCI GitHub app) and its
+ * statuses (`ci/circleci...`, the OAuth integration). `{ state: 'green' | 'red' | 'pending', name, conclusion,
+ * url }`; pending while it has posted nothing or something is still running. */
+export function circleciState(checkRuns, statuses) {
+  const runs = (checkRuns ?? []).filter((one) => /circleci/i.test(one?.app?.slug ?? ''));
+  const posted = (statuses ?? []).filter((one) => /^ci\/circleci/i.test(one?.context ?? ''));
+  const redRun = runs.find((one) => one.status === 'completed' && RED.has(one.conclusion));
+  if (redRun) return { state: 'red', name: redRun.name, conclusion: redRun.conclusion, url: redRun.html_url };
+  const redStatus = posted.find((one) => one.state === 'failure' || one.state === 'error');
+  if (redStatus) return { state: 'red', name: redStatus.context, conclusion: redStatus.state, url: redStatus.target_url };
+  const all = runs.length + posted.length;
+  const done = runs.every((one) => one.status === 'completed' && ['success', 'neutral', 'skipped'].includes(one.conclusion)) && posted.every((one) => one.state === 'success');
+  return { state: all > 0 && done ? 'green' : 'pending' };
+}
+
+/** The whole suite on the candidate at `place`, under the gate lock, by the candidate's own commands. */
+function localSuite(run, place) {
+  const bin = path.join(place, 'bin', 'js-harness.mjs');
+  const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
+  const last = `${done.out}\n${done.err}`.split('\n').map((line) => line.trim()).filter((line) => /^FAIL /.test(line));
+  return { ok: done.ok, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
+}
+
+/** `--land`: the candidate at `place`, built on `main`, tested on this machine and then on CircleCI, and main
+ * moved to it when both are green (S6, S7). Its CircleCI run is that of a `queue/*` branch pushed for it and
+ * removed afterwards, whatever the result. Main moves by fast-forward only, leased on the `main` the candidate
+ * was built from: a main that moved in between is left as it is (exit 3). Red anywhere is exit 4. */
+async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, stdout, fail }) {
+  const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
+  if (!candidate) return fail('could not read the candidate.');
+  const local = suite(place);
+  if (!local.ok) {
+    stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
+    return 4;
+  }
+  stdout(`The candidate ${candidate.slice(0, 7)} is green on this machine.`);
+  // `--no-verify`: the branch is the candidate's run on CircleCI, and no hook judges it; main's push is judged.
+  const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
+  if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
+  let ci = { state: 'pending' };
+  try {
+    for (let waited = 0; waited <= CI_WAIT_MS; waited += CI_POLL_MS) {
+      const read = (what) => {
+        try {
+          return JSON.parse(answer(run, 'gh', ['api', `repos/{owner}/{repo}/commits/${candidate}/${what}`], place).out);
+        } catch {
+          return null;
+        }
+      };
+      ci = circleciState(read('check-runs')?.check_runs, read('status')?.statuses);
+      if (ci.state !== 'pending') break;
+      await sleep(CI_POLL_MS);
+    }
+  } finally {
+    gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
+  }
+  if (ci.state === 'red') {
+    stdout(`The candidate is red on CircleCI (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
+    return 4;
+  }
+  if (ci.state !== 'green') {
+    stdout(`CircleCI gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
+    return 4;
+  }
+  stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
+  const pushed = gitIn(place, 'push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`);
+  if (!pushed.ok) {
+    const now = gitIn(place, 'ls-remote', 'origin', 'refs/heads/main').out.split('\t')[0];
+    if (now && now !== main) {
+      stdout('Main moved while the candidate was tested: nothing was pushed to main; run the queue again.');
+      return 3;
+    }
+    return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
+  }
+  stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
+  return 0;
+}
+
+export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawnSync, covered = null, suite = null, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout = console.log, stderr = console.error } = {}) {
   if (argv.includes('--help') || argv.includes('-h')) {
     stdout(USAGE);
     return 0;
   }
   const args = parseArgs(argv);
-  if (args === null || !args.dryRun) {
+  if (args === null) {
     stderr(USAGE);
     return 2;
   }
@@ -122,8 +211,11 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
     }
     const list = merged.map((pr) => `PR ${pr.number} (${pr.headRefName})`).join(', ');
     stdout(`Candidate: main ${main.slice(0, 7)} with ${merged.length} pull request${merged.length === 1 ? '' : 's'} merged in order: ${list}.`);
-    stdout('Dry run: nothing was tested or pushed, and the candidate was removed.');
-    return 0;
+    if (args.dryRun) {
+      stdout('Dry run: nothing was tested or pushed, and the candidate was removed.');
+      return 0;
+    }
+    return await landCandidate({ run, gitIn, place, main, merged, suite: suite ?? ((dir) => localSuite(run, dir)), sleep, stdout, fail });
   } finally {
     gitIn(cwd, 'worktree', 'remove', '--force', place);
   }

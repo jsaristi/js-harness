@@ -122,3 +122,83 @@ test('merge-queue without --dry-run refuses for now, and a usage error is exit 2
   assert.equal(await mergeQueueMain(['--dry-run', '--bogus'], io), 2);
   assert.match(out.join('\n'), /^Usage: js-harness merge-queue --dry-run/m);
 });
+
+/** A runner for `--land`: git for real, `gh pr list` from `prs`, and the check runs of a commit from `checks`,
+ * one answer a call (the last repeats); `onChecks(call)` runs before each answer. */
+function landRunner(prs, checks, onChecks = () => {}) {
+  const base = runner(prs);
+  let asked = 0;
+  const run = (command, args, options) => {
+    if (command === 'gh' && args[0] === 'api' && /\/check-runs$/.test(args[1])) {
+      base.calls.push([command, ...args].join(' '));
+      onChecks(asked);
+      const answer = checks[Math.min(asked, checks.length - 1)];
+      asked += 1;
+      return { status: 0, stdout: JSON.stringify({ check_runs: answer }) };
+    }
+    if (command === 'gh' && args[0] === 'api' && /\/status$/.test(args[1])) return { status: 0, stdout: JSON.stringify({ statuses: [] }) };
+    return base.run(command, args, options);
+  };
+  return { run, calls: base.calls };
+}
+
+const circle = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'circleci-checks' }, html_url: 'https://app.circleci.com/x' });
+
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks } = {}) {
+  const { run, calls } = landRunner(prs, checks, onChecks);
+  const out = [];
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run, covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  return { code, out, calls };
+}
+
+const remoteBranches = (origin) => git(origin, 'for-each-ref', '--format=%(refname:short)', 'refs/heads').split('\n').filter(Boolean).sort();
+
+test('--land: the candidate green locally and on CircleCI becomes main, by fast-forward, and its queue branch is removed', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { checks: [[circle('in_progress')], [circle('completed', 'success')]] });
+  assert.equal(code, 0, out.join('\n'));
+  const landed = git(origin, 'rev-parse', 'main');
+  assert.notEqual(landed, main);
+  assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', main, landed], { cwd: origin }).status, 0, 'a fast-forward of the main it was built from');
+  for (const head of [heads['feat/a'], heads['feat/b']]) assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', head, landed], { cwd: origin }).status, 0, 'each pull request is in main');
+  assert.ok(!remoteBranches(origin).some((name) => name.startsWith('queue/')), 'the queue branch is gone');
+  assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1, PR 2.`);
+});
+
+test('--land: a candidate red locally pushes nothing, not even its queue branch', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, said: 'npm run test exited 1' }) });
+  assert.equal(code, 4, out.join('\n'));
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.ok(!calls.some((line) => line.startsWith('git push')));
+  assert.match(out.at(-1), /^The candidate is red on this machine \(npm run test exited 1\): nothing was pushed\.$/);
+});
+
+test('--land: a candidate red on CircleCI leaves main as it was', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[circle('completed', 'failure')]] });
+  assert.equal(code, 4, out.join('\n'));
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.ok(!remoteBranches(origin).some((name) => name.startsWith('queue/')));
+  assert.match(out.at(-1), /^The candidate is red on CircleCI \(check: failure, https:\/\/app\.circleci\.com\/x\): main was not pushed\.$/);
+});
+
+test('--land: a main that moved while the candidate was tested is not overwritten', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const other = path.join(path.dirname(origin), 'other');
+  const moveMain = (call) => {
+    if (call !== 0) return;
+    git(path.dirname(origin), 'clone', '--quiet', origin, other);
+    git(other, 'config', 'user.email', 'js-harness-test@example.invalid');
+    git(other, 'config', 'user.name', 'js-harness test');
+    fs.writeFileSync(path.join(other, 'z.txt'), 'z\n', 'utf8');
+    git(other, 'add', '.');
+    git(other, 'commit', '--quiet', '-m', 'main moved');
+    git(other, 'push', '--quiet', 'origin', 'HEAD:main');
+  };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { onChecks: moveMain });
+  assert.equal(code, 3, out.join('\n'));
+  assert.notEqual(git(origin, 'rev-parse', 'main'), main, 'the other push stands');
+  assert.equal(git(origin, 'log', '-1', '--format=%s', 'main'), 'main moved');
+  assert.match(out.at(-1), /^Main moved while the candidate was tested: nothing was pushed to main; run the queue again\.$/);
+});

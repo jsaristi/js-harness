@@ -18,7 +18,7 @@ is one run for a batch instead of one for each pull request after each merge.
 
 ## In scope / Out of scope
 - In: bin/merge-queue.mjs, bin/lib/merge-queue.mjs, their tests, bin/js-harness.mjs, README.md, the pre-push hook's refusal of a push to main from anywhere but the queue, this document.
-- Out: .github/workflows/gate.yml, unless he says yes to a trigger for queue branches (Log, L3); the lead's keeper script, which this replaces once it lands.
+- Out: .github/workflows/gate.yml (L5: the candidate's CI run is CircleCI's); the lead's keeper script, which this replaces once it lands.
 
 ## Constraints
 - It is the only pusher to main — because a second pusher makes the tested candidate a tree main never was.
@@ -29,7 +29,7 @@ is one run for a batch instead of one for each pull request after each merge.
 high
 
 ## Ask me before
-- The trigger of the GitHub run on a queue branch (L3).
+- Nothing beyond the repository's rules: the first `--land` that pushes main is run by the orchestrator, after the CircleCI project exists (L5).
 
 ## Specs
 - S1. His ask, typed (transcript b878a67f, line 3974, 2026-10-14T21:18:29Z): "quiero es que podamos hacer en paralelo y como hacemos para no perder funcionalidades y tampoco calidad para que no se rompa nada, si quieres investiga muy bien en internet y dame una mejor solucion."
@@ -45,7 +45,7 @@ high
 
 ## Tasks
 - [x] T1 (S4, S5, S10): the candidate, built and printed. Route: inline. RED: bin/merge-queue.test.mjs failed on the missing module, then on the two hook cases (L4); GREEN 6 of 6. Real run, 2026-10-14: "Candidate: main eb6abf7 with 2 pull requests merged in order: PR 137 (docs/gate-turn-guards-followups), PR 146 (fix/codegraph-home-files)."
-- [ ] T2 (S6, S7): the local suite, the GitHub run (after L3), the push. Route: inline.
+- [x] T2 (S6, S7): `--land`: the local suite under the lock, the CircleCI run of a `queue/*` branch (L5), the push of main by fast-forward leased on the main it was built from. Route: inline. RED: the four `--land` tests of bin/merge-queue.test.mjs; GREEN 10 of 10. Not yet run for real: it needs the CircleCI project (ci/circleci).
 - [ ] T3 (S8): bisection. Route: inline.
 - [ ] T4 (S9): the pre-push refusal. Route: inline. High risk (a guard): independent verifier.
 - [ ] T5: help, README, the keeper script retired. Route: inline.
@@ -54,4 +54,5 @@ high
 - L1. 2026-10-14 16:26, the orchestrator's order to JH 10 (cross-session message): "Yours is step 3 ... Order: merge-ready first as planned, then the queue, then the conflict-hunk review. Specs in your document with his words from the file, test first." His words in S1 and S2 were read with `js-harness sessions --quote`.
 - L2. 2026-10-14, measured by the orchestrator (parallel-gate.md): 46 gates in 109 min, median wait for a turn 30 min; GitHub run median 214 s, billed 4 min; about 227 Actions minutes this month, 205 of them on 2026-10-14.
 - L3. 2026-10-14 16:28, open, for him through the orchestrator: gate.yml runs on `pull_request` only, and scripts/gate-workflow.test.mjs holds that no branch without a pull request runs. The candidate can get its GitHub run without touching the workflow by opening a draft pull request of its queue branch (its merge into main is the candidate itself, since main is its ancestor), or the workflow can gain a `push` trigger for `queue/**`, which is a workflow change on main. Recommended: the draft pull request, since it changes no workflow and keeps one kind of run.
+- L5. 2026-10-14, L3 settled by his choice of CircleCI (tapped "Sí, ya", b878a67f line 4267, to "¿Sumamos CircleCI gratis como segundo sistema de pruebas para las corridas completas de la cola de fusión? Vos creás la cuenta y autorizás su app en GitHub; JH 10 lo conecta y mide."; and typed, line 4404: "ahh ok listo entonces ya cree la cuenta, ya puedes continua con eso cierto?"). CircleCI builds branches, so a pushed `queue/*` branch gets its full run with no pull request and no change to gate.yml; .circleci/config.yml (branch ci/circleci) runs only for `queue/*`. S6's GitHub run is that CircleCI run, read from the commit's check runs and statuses. CircleCI bills by the second, then the whole credit ("First we round up to the nearest second, and then up to the nearest credit", https://circleci.com/docs/reference/faq/). Pushing main is `--land`, a mode of its own: a run that changes main is never the default.
 - L4. 2026-10-14, found by the first real dry run: every pull request read as "conflicts with the candidate so far", with no file named. The repository's pre-merge-commit hook runs the gate on every `git merge`; in the candidate it waited for a turn and then refused. The candidate's merges now run with `--no-verify`, since the queue runs the suite once on the whole candidate (S6), and a merge that fails with no conflicted file says what git said.
