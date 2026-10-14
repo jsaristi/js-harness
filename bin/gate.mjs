@@ -22,6 +22,7 @@ import path from 'node:path';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { launchersAlive, readLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
@@ -47,6 +48,10 @@ const GATE_LOG_LAST = 20;
  * sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
  * a caller can tell "did not run" from "ran and failed". A usage error is 2, as everywhere here. */
 export const GATE_NOT_RUN = 75;
+
+// The parent this process had when it started, read as the module loads: on Linux an orphan is adopted, and
+// `process.ppid` read later would name its adopter (./lib/launcher.mjs).
+const STARTED_BY = process.ppid;
 
 class GateArgError extends Error {}
 
@@ -236,7 +241,8 @@ function gateLogMain(argv, env) {
  * The lock is released on every way out of the command, a throw included. Killed, this process leaves
  * its holder's file, which the next gate takes over a minute after its last beat, as with `check`.
  * `deps.takeGateLock`, `deps.spawn` (for `runSensor`), `deps.sampleLoad` (for the sampler of the load),
- * `deps.busiest` (for the look for what loads the machine), `deps.gateLog` (for what the record is
+ * `deps.busiest` (for the look for what loads the machine), `deps.launchers` (`{ read, alive }`, for the look
+ * at what started this gate, ./lib/launcher.mjs), `deps.gateLog` (for what the record is
  * written with: `{ append, now, id }`, each optional) and `deps.cwd` are replaceable, and so is
  * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
  * line of another system and stands in for what would run it. */
@@ -325,7 +331,20 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return GATE_NOT_RUN;
   }
 
-  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null }, deps.takeGateLock);
+  // What started this gate, asked at every look of its wait (odd/tasks/orphan-gate.md): a gate whose launcher
+  // ended is an orphan, and its turn would run a script nobody waits for. The first look is not asked, the
+  // launcher having started this gate a moment ago, so a turn taken at once reads nothing; the launchers are
+  // read at the second, once this gate waits, from the parent this process had when it started.
+  const launcher = deps.launchers ?? { read: () => readLaunchers({ ppid: STARTED_BY }), alive: launchersAlive };
+  let launchers = null;
+  let looks = 0;
+  const stillWanted = () => {
+    looks += 1;
+    if (looks === 1) return true;
+    launchers ??= launcher.read();
+    return launcher.alive(launchers);
+  };
+  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, stillWanted }, deps.takeGateLock);
   const { waitedMs, waitedFor } = turn;
   if (turn.refused) {
     console.error(`gate: nothing ran: ${turn.refused}`);
@@ -337,6 +356,14 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return logged({ lock: 'none', waitedMs, waitedFor }, env);
   }
   const { lock } = turn;
+  // The last look before the command starts, after a wait: the launchers' start times read again, so a pid
+  // given since to another process is not taken for the launcher (`launchersAlive`, `full`).
+  if (launchers !== null && !launcher.alive(launchers, { full: true })) {
+    lock.release();
+    console.error('gate: nothing ran: the process that started this gate ended while it waited, so it gave up its turn as it came');
+    record?.refused({ reason: 'launcher gone', waitedMs, waitedFor });
+    return GATE_NOT_RUN;
+  }
   let lost = false;
   try {
     return await logged({ lock: 'own', waitedMs, waitedFor }, { ...env, [GATE_HELD_ENV]: '1' }, waitedMs >= GATE_WAIT_SAID_MS);

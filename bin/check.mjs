@@ -815,6 +815,8 @@ export const GATE_WAIT_USAGE =
  * longer than its bound. */
 function refusalSaid({ refused, holder, line, waitedMs, stillMs, besideOlder }, waitMinutes) {
   if (refused === 'held') return `${gateOf(holder)} holds the machine's gate lock, and --no-wait was given`;
+  // Its launcher ended (./lib/launcher.mjs, odd/tasks/orphan-gate.md): nobody waits for what it would run.
+  if (refused === 'launcher gone') return 'the process that started this gate ended while it waited, so it gave up its place in the line';
   if (refused === 'ahead') {
     return `${waitingGateOf(line?.head)} waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`;
   }
@@ -887,7 +889,7 @@ export const GATE_WAIT_SAID_MS = 1000;
  * pass what their environment says (`CLAUDE_CODE_SESSION_ID`).
  * `take` stands in for `takeGateLock`, so a test stands in for the lock or runs the real one on its own
  * clock. */
-export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null }, take = takeGateLock) {
+export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null, stillWanted }, take = takeGateLock) {
   const waitMs = waitMinutes * 60_000;
   const met = new Map();
   // One entry for each token, to which a later telling adds what the entry does not have yet: a holder's
@@ -919,7 +921,8 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
   let lock;
   const askedAt = Date.now();
   try {
-    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait });
+    // `stillWanted`, from `js-harness gate` alone: whether its launcher lives (`takeGateLock`).
+    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait, ...(stillWanted ? { stillWanted } : {}) });
   } catch (err) {
     return { without: `the machine's gate lock, which could not be taken (${err instanceof Error ? err.message : String(err)})`, waitedMs: Date.now() - askedAt, waitedFor: waitedFor() };
   }
