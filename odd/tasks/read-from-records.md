@@ -293,5 +293,9 @@ What each change counts as:
   was asked whether to merge it once more.
 
 ## Next
-0. T0: the orchestrator's word (05:43): wait for PR 124 to be MERGED, then merge `origin/main` once, gate, push, tell it.
-1. T2: both readers' findings are in the design (second version); send it to the orchestrator, then T3 test first.
+0. PR 128 (T0, the recheck): pushed at 95a3294 with main f819d0b merged; the orchestrator merges it. If main moves with code before that, it asks for one more merge of main.
+1. T3, S1 to S3, test first, on its own branch: off main once 128 is merged, or stacked on feat/read-from-records if the orchestrator wants it sooner. Read "Design (second version)" first; reader A's replay numbers are there. Merge main before any gate on bin/codex-review.mjs (JH 12 is changing its flag parser).
+2. T4 (S4), then T5 (S5, S6).
+
+## Resume here
+Worktree D:/js-harness-worktrees/read-from-records, branch feat/read-from-records, pushed at 95a3294 (PR 128). T0 is done; T1 and T2 are written (the design's second version, 0eaf5d0); T3 to T5 are not started. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design. The session was cut at 76 percent of context after T0 closed.
