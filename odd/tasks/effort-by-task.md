@@ -269,6 +269,20 @@ be read.
 - `odd/tasks/session-channel.md` T13-T15 are still open boxes there: the orchestrator tells JH 5
   they moved here.
 
+## The paragraph handed over (T5)
+
+For the orchestrator skill (JH 5's T8) and, its last two sentences, the js-harness skill text
+(`bin/lib/manifest.mjs:20-33`):
+
+> Before a work session starts a task, read the task's state, then run `js-harness contract
+> modes <document> --task <id>` and set the session's effort to the level it prints with the
+> app's effort tool; it applies from the session's next turn. A level below high ends with its
+> task: set it back to high when the task's box is checked, and first, before answering, when a
+> design question appears inside it. Name the session's mode and why in every recap. Every
+> sub-agent call names its `model` and its `effort`: a call without them inherits the session's,
+> so a reviewer launched from a medium session runs at medium. `js-harness contract modes` says
+> which model each role takes.
+
 ## What the readers changed
 
 The reader that attacked: the table is read with `ruleHere`, not a change to `ruleValue`; the
@@ -285,8 +299,10 @@ questions listed.
 
 ## Tasks
 
-- [ ] T1 (kind: design) Design read by two readers (one attacks it, one looks for what is
-  missing); version 2 and the questions sent to the orchestrator (route: inline)
+- [x] T1 (kind: design) Design read by two readers (one attacks it, one looks for what is
+  missing); version 2 and the questions sent to the orchestrator (route: inline). Version 1
+  2a735ec, version 2 4840f89, pushed; sent to the orchestrator 2026-10-14 02:54 with question 1
+  and the three file requests
 - [ ] T2 (kind: build) The kind of a task, `contract modes`, the modes on `goal`'s stderr, the
   template and help (S1)
 - [ ] T3 (kind: build) The mode line of `resume --hook` (S2, the half without a lead)
