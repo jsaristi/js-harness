@@ -11,6 +11,10 @@ matters, who holds it, and where it was seen.
 
 ## Faster
 
+- ~~A push that waits behind a turn it does not need (pull request 121, 16 minutes behind a measure),
+  and a scripted turn that hangs with the lock (the pair measure, 24 minutes).~~ Placed: JH 8,
+  `odd/tasks/gate-turn-guards.md`: `gate` refuses a turn while a push waits, and stops a command at
+  30 minutes (`--max`); done when its pull request merges.
 - The antivirus (MsMpEng) takes one to two of the eight processors while a check runs (124 to 189
   percent of one processor, read 2026-10-13 22:07). His: nothing is changed without his word. JH 8
   measures what an exclusion of the suite's temporary folders would give before anything reaches him.
