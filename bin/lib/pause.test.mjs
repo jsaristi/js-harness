@@ -177,6 +177,9 @@ test('the crossing: the first call at the pause says the share, the room and the
   assert.ok(notice.text.includes(`holds ${notice.share}% of its context window`), notice.text);
   assert.ok(notice.text.includes(`compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%`), notice.text);
   assert.ok(notice.text.includes(`about ${SAID(notice.room)} tokens are left`), notice.text);
+  // It ships to installed projects: it names what the user sends, not a convention of this repository.
+  assert.ok(notice.text.includes('with what they send to compact this session and the prompt that resumes it after'), notice.text);
+  assert.doesNotMatch(notice.text, /two blocks of a cut|\b(he|his|him)\b/);
   assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
   assert.equal(stateOf(home).armed, false);
   assert.deepEqual(stateOf(home).told, [{ at: new Date(NOW).toISOString(), tokens: OVER }]);

@@ -28,6 +28,7 @@ js-harness commands:
 - \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after 30 minutes (\`--max <minutes>\`), and its exit code is the command's.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
+- \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -50,8 +51,17 @@ Two kinds of session. A work session owns one feature: its worktree, its feature
 A change does not exist until it is in a file. Where each thing lives:
 - the project's plan (the order of the features, the decisions): the roadmap on the default branch, changed through small documentation pull requests;
 - a feature's plan (tasks, progress, next step): its feature document on its branch, written only by the session that owns the feature;
-- what is in flight between sessions and in neither file yet (the user's decisions, open questions, notices not yet delivered, what each session is for): the orchestrator's relief file;
-- the facts (who works, what runs, gates, branches, context sizes): stored nowhere, computed by \`js-harness sessions\`.
+- the notices between sessions (a session opened, waits, closed; a question to the user and its answer): the project's record, appended with \`js-harness notify\` and read on the board;
+- what is in flight between sessions and in neither of those yet (the user's decisions, what each session is for): the orchestrator's relief file;
+- the facts (who works, what runs, gates, branches, context sizes, the questions still open): stored nowhere, computed by \`js-harness sessions\`.
+
+## Questions to the user
+
+Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first. Only where the host has no question tool is a question written out with its options.
+- A question is recorded before it is asked: \`js-harness notify --to orchestrator --kind question\`, with its fields (\`text\`, \`options\`, \`waits\`) as JSON on standard input. It prints the question's number and the words its text is headed by in the tool: that heading is how the answer is joined to its question.
+- The question tool holds the session that calls it until the user answers. So it is called at once only when the user wrote in that session a short while ago; otherwise in the reply to their next message, and until then a reply says in one line how many questions wait. \`notify\`, the board (\`to ask:\`) and the resume after a compaction print this rule for the moment.
+- The answer is recorded once given: \`--kind answer --question <n>\`, with \`--transcript\` and \`--line\` naming where the user's words are, and the session that asked is rung. \`--kind withdrawn --question <n> "<why>"\` closes one that no longer needs an answer.
+- The board lists every question still open, and whether it is recorded and not shown yet, on the user's screen, closed without an answer, or answered and not carried yet.
 
 ## The orchestrator
 
@@ -61,17 +71,18 @@ What you run:
 - \`js-harness progress\` — the map: the roadmap's phases and the features, from their checkboxes.
 
 What you may do:
-- You read. The only file you write is your relief file.
-- You never implement, never commit, never write in a worktree and never answer for the user. Reading code, running tests and discussing a design are what fill a context, and yours has to last.
-- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared.
+- You read. What you write is your relief file and notices (\`js-harness notify\`).
+- You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last.
+- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is.
+- Before a pull request is merged, check that its gate proved the tree the merge will produce: the head contains the default branch, or \`git merge-tree\` of the default branch and the head gives the head's own tree. Failing both, it is merged only when every commit of the default branch the head lacks touches only documentation and none of the files the pull request changes.
 
 When the user asks for something, place it with the roadmap and the board:
-- work of a feature whose session is open goes to that session, and the user says it there in their own words;
+- work of a feature whose session is open goes to that session: the user says it there in their own words, or here, and you carry it with \`--kind answer\` and the line where they said it;
 - new work gets the opening prompt of a new work session; a design conversation is a session of its own too;
 - note in the relief file what was asked and where it went, and go back to waiting.
 
 Write to the user only when:
-1. a session starts waiting on them;
+1. a question waits for them (Questions to the user, above);
 2. a session finished with nothing running behind it;
 3. two gates run at once (a gate that waits for its turn is not one of them);
 4. a prompt they hold became stale;
@@ -98,6 +109,9 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
 - Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too.
 - Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, \`js-harness gate\` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (\`--cwd <worktree>\`).
+- While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a reviewer wait for the gate to end.
+- Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
+- When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.

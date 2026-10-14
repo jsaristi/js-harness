@@ -54,24 +54,34 @@ matters, who holds it, and where it was seen.
   about 17:50; JH 7 rightly waited for his word, showed as running, and every message to it queued
   unread for six hours, and the orchestrator did not see it before he left. The board
   (`js-harness sessions`) could mark a session that waits for his word (a rejected tool, an open
-  prompt) or writes nothing for 30 minutes. JH 5, the channel.
-- A check of a reply: a question with options and no question-tool call. JH 5 measures it over the
-  transcripts first; a blocking hook is his decision.
+  prompt) or writes nothing for 30 minutes. JH 5, the channel. The first half is built: the board
+  marks a session whose tool call was refused or whose turn was stopped (`odd/tasks/session-channel.md`,
+  Progress, 2026-10-14 00:15); the 30 minutes of silence are not.
+- ~~A check of a reply: a question with options and no question-tool call. JH 5 measures it over the
+  transcripts first; a blocking hook is his decision.~~ Measured (about 67 percent precision, 20 to
+  25 percent recall over 572 replies); no blocking hook, decided by the orchestrator under his line
+  15820 and kept for his confirmation: `odd/tasks/session-channel.md`, Progress, 2026-10-13 23:46.
 - Text with backticks went through a shell string: a `node -e "..."` in Bash carrying Markdown code
   spans inside double quotes ran each span as a command substitution (nothing it named existed, so
   nothing ran; the command hung and was stopped). JH 12, 2026-10-14. The same family as the memory
   note that a heredoc eats backslashes: text with backticks or backslashes goes through the editor's
   Write and Edit, never a shell string. A candidate for a check or a protocol line; unassigned.
+- A background timer, watcher or wake loop left running after what it guarded resolved: the
+  orchestrator's 05:00 timer outlived the Linux gate it waited for (his correction, the
+  orchestrator's transcript `ffe99ebf`, line 4215). Each one declares what it is for, what ends
+  it and who stops it, and the board and the resume list the live ones. JH 5, the channel:
+  `odd/tasks/session-channel.md`, T18, after slice (c).
 
 ## Owed and not yet placed
 
-- The practice run with a real host session (practice-project T5): needed before 1.0.0, no session
-  holds it. The orchestrator places it.
+- The practice run with a real host session (practice-project T5): needed before 1.0.0. Held by
+  "JH 11 · reglas del proyecto y prueba final" since 2026-10-13, by his answer "Una sexta sesión
+  (Recomendada)" (the lead's transcript `65318fd5`, line 13854, read with `sessions --quote`).
 - Every writing command refuses an unknown flag: the one task a first user would meet; its order is
   not set. Moved on 2026-10-14 from rule-hierarchy T4 to JH 12's `odd/tasks/commands-and-doctor.md`
   (T1), not on `main` yet.
-- An installed project's own rules: the last item he ordered that has no design; it waits behind the
-  README in JH 7's queue and is on the path to the date. The orchestrator decides who takes it.
+- An installed project's own rules: held by JH 11 with the practice run, by the same answer (line
+  13854); it left JH 7's queue.
 - Which model the native gentle-ai review used (his answer of 2026-10-12, line 9776): read it from JH
   10's review of 2026-10-13 (lineage review-5ba00685b483e51f). The orchestrator.
 - ~~pnpm's pack refuses this checkout on Windows (ERR_PNPM_BIN_CRLF, `bin/js-harness.mjs` checked
