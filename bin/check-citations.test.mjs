@@ -71,3 +71,24 @@ test('with no feature document staged there is no row, and with nothing unresolv
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a citation resolves against the staged file, not the working tree', () => {
+  const root = repo();
+  try {
+    fs.writeFileSync(path.join(root, 'bin', 'b.mjs'), 'one\n');
+    fs.appendFileSync(path.join(root, 'odd', 'tasks', 'f.md'), 'See `bin/b.mjs:1` and `bin/a.mjs:5`.\n');
+    git(root, 'add', '.');
+    // Unstaged: the staged target is deleted, and lines that the staged file lacks are added.
+    fs.rmSync(path.join(root, 'bin', 'b.mjs'));
+    fs.appendFileSync(path.join(root, 'bin', 'a.mjs'), 'four\nfive\n');
+    assert.deepEqual(checkCitations(root), [{
+      name: 'citations',
+      pass: true,
+      info: true,
+      detail: '2 citations in the lines this change adds to feature documents, 1 of them not resolved',
+      lines: ['odd/tasks/f.md:2 `bin/a.mjs:5`: the file has 3 lines'],
+    }]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

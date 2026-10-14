@@ -335,14 +335,9 @@ export function checkCitations(cwd, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   const diff = git?.(['diff', '--cached', '-U0', '--no-renames', '--no-relative', '--no-color', '--', 'odd/tasks/']);
   if (!diff) return [];
-  const lineCount = (file) => {
-    try {
-      // A file that ends in a newline has no line after it.
-      return fs.readFileSync(path.join(cwd, file), 'utf8').replace(/\r?\n$/, '').split(/\r?\n/).length;
-    } catch {
-      return null;
-    }
-  };
+  // The cited file as this commit will hold it, from the index: the working tree may differ from it.
+  // A file that ends in a newline has no line after it.
+  const lineCount = (file) => git(['show', `:${file}`])?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
   const commitExists = (id) => git(['cat-file', '-e', `${id}^{commit}`]) !== null;
   const { checked, unresolved } = resolveCitations(addedLines(diff), { lineCount, commitExists });
   const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;

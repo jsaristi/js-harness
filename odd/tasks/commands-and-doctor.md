@@ -246,10 +246,17 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   citations take a line 0 or a backwards range as unresolved; a setting written and then not
   recorded is put back (file bytes restored, or the file removed when this made it); the write
   failure is injected in the test instead of a read-only mode a root user writes through.
+- L9 — 2026-10-14 16:25 HPS: PR 144 conflicted with main in bin/check.mjs and the lead asked for a merge; the
+  conflict in bin/check.mjs was resolved by joining both sides on one line (fbad613), and the whole
+  gate passed. The pre-push hook still asked for a Codex record of the merge, so Codex reviewed
+  b98c22b..fbad613 (5 parts, 614,709 input tokens, inside the 1,686,000 allowance). One P2: the row
+  citations counted the lines of a cited file in the working tree, not in the index the commit holds,
+  so an unstaged deletion read as no such file and unstaged lines hid a bad citation. Fixed with its
+  test: the line count reads the staged blob (git show :path).
 
 ## Next step
-Codex review of the fix commit (`--base` the push row names), push, pull request, tell the lead,
-then pause (his order). Older text, kept: Assess each work-unit commit with gentle-ai (`--base-ref` the last reviewed boundary,
+Codex review of the index fix (`--base fbad613`), push to update PR 144, tell the lead, then pause
+(his order). The keeper merges 144 on a green run. Older text, kept: Assess each work-unit commit with gentle-ai (`--base-ref` the last reviewed boundary,
 `--committed-only`), review what is due, then `js-harness codex-review --base <boundary>` within the
 rate (`--plan` first), push, open the pull request and tell the orchestrator. Older text, kept:
 When `origin/main` holds the WSL gate: merge it, run the gate, commit T1, T4 and T5 as three work
