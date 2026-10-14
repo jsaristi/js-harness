@@ -539,6 +539,10 @@ review covers everything the merge brought, code that already had its review.
   the rule that makes such a merge a code commit is `bin/lib/codex-review-coverage.mjs:207-215`.
   Narrowing the review to the lines written in the merge changes what a review covers, which is
   his to decide
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 16:20 (claimed) — in JH 12's pull request 144, a
+  merge of `main` with a one-line conflict resolved in `bin/check.mjs` (fbad613) made the push row
+  ask a review of the whole branch, 1,405 lines, about 1,030,000 Codex input tokens; the fix owed is
+  JH 10's review of a merge's conflict hunks, with a record for each commit (no task line yet)
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he
