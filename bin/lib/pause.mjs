@@ -254,7 +254,9 @@ function writeStateFile(file, state, fileSystem) {
  * different size is measured against its own compaction and not against the default. Whether the user is handed the
  * cut is `cutRule`'s, from when they last wrote (`personAt`) and `now`. `stage` is `pause` at the pause and `last` just
  * before the host compacts: from the pause on the state is kept current after every step and the session stores the
- * prompt that resumes it, so a compaction in the middle of a task resumes from what was written minutes before it. */
+ * prompt that resumes it, so a compaction in the middle of a task resumes from what was written minutes before it. The
+ * last notice never says to stop: the host compacts with the session's next requests, so a session that waits for it
+ * waits for good. */
 function noticeOf(tokens, compaction, personAt, now, stage) {
   const window = (compaction * 100) / DEFAULT_CONTEXT_COMPACTION_PERCENT;
   const whole = Math.round(tokens);
@@ -264,7 +266,7 @@ function noticeOf(tokens, compaction, personAt, now, stage) {
   const where = 'the "Next step" of the session\'s feature document; the relief file for an orchestrator';
   const opening = 'js-harness notify --opening "<this session\'s title>" (its text on standard input: the feature document, the task, the branch and worktree, any question still open; it is what a new session under that title reads too)';
   const text = stage === 'last'
-    ? `${head} The host compacts this session in a moment: write your state and store your resume prompt now, and start nothing new before it. The state goes where it is read after a compaction (${where}); the prompt with ${opening}. The cut: ${cutRule(personAt, now)}.`
+    ? `${head} The host compacts this session in a moment: write your state and store your resume prompt now, before anything else, then go on with the task: the compaction comes with your next requests, and never by waiting for it. The state goes where it is read after a compaction (${where}); the prompt with ${opening}. The cut: ${cutRule(personAt, now)}.`
     : `${head} This is the context pause. From now on keep your state where it is read after a compaction (${where}): write it after every step you finish, not once, and commit it with your next commit. Store the prompt that resumes you with ${opening}, and store it again when it changes. Say this share to the user in your next reply, once, and go on with the task. The cut: ${cutRule(personAt, now)}.`;
   return { tokens: whole, share, compactionShare: DEFAULT_CONTEXT_COMPACTION_PERCENT, room, stage, text };
 }

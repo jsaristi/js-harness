@@ -229,8 +229,9 @@ test('the last notice: past the last point after the pause, once, says the compa
   const last = pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 500)]) });
   assert.equal(last.stage, 'last');
   assert.ok(last.text.includes(`about ${SAID(COMPACTION - (LAST + 500))} tokens are left`), last.text);
-  assert.ok(last.text.includes('The host compacts this session in a moment: write your state and store your resume prompt now'), last.text);
-  assert.ok(last.text.includes('start nothing new before it'), last.text);
+  assert.ok(last.text.includes('The host compacts this session in a moment: write your state and store your resume prompt now, before anything else'), last.text);
+  assert.ok(last.text.includes('before anything else, then go on with the task: the compaction comes with your next requests, and never by waiting for it'), last.text);
+  assert.ok(!last.text.includes('start nothing new'), 'a session told to start nothing new can stop short of the compaction');
   assert.ok(last.text.includes(OPENING), last.text);
   assert.equal(pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 900)]) }), null, 'said once');
 }));
