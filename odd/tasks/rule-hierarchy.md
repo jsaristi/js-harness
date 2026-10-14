@@ -2586,6 +2586,22 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**State for a resume, 2026-10-14 at 00:07 (`date`), at 91 percent before a compaction.** He
+rejected a commit of this session at about 17:50 of the 13th (its message file was outside the
+scratchpad); the session waited six hours in silence, and his answer is to go on with the queue
+("Que siga con su cola (Recomendada)", the orchestrator's new transcript
+`ca93c7ef-90b4-48f3-879e-c51742f78f64`, line 971) and his correction that a rejection is first
+told to the lead (line 957: "pero no entiendo por que no me pasa la pregunta para aca como ya
+habiamos quedado y cementado"). The queue, in order: this commit is the rejected one, redone
+with its message in the scratchpad; then the README (below, item 1, with its runs); the register
+entries the lead sent on the night of the 13th, with this silence as one more (a rejection or a
+stop by him is told to the lead first); the roadmap lines in the lead's messages of 18:45 to
+22:29 (decisions 3, 4 and 7, the private repository, `docs/SPEC.md` written last), each read
+with `sessions --quote` first; the spec notes the lead asked for; JH 5's two rules
+(`slice-c-for-rules-owner.md` in its scratchpad) into `bin/lib/rules-data.mjs` and `AGENTS.md`.
+Not this session's any more: `docs/todo.md` (JH 5) and the design of an installed project's
+own rules (JH 11, told that nothing of it existed here).
+
 **State for a resume, written on 2026-10-13 at about 83 percent of this session's context,
 before a compaction and before any of the work below is started.** The stop below is over:
 he raised the plan and its week is back at 0 percent ("Listo ya tenemos la suscripcion de 20x
@@ -2615,6 +2631,17 @@ undoes exactly). The lead's order for this session, in this order, on the branch
    `install`, `init`, `sync`, `uninstall`, `upgrade`, `remote start` and `notify` write, so
    their examples come from the practice folder or a temporary home, never from his); then
    the test green, the commit through the gate, the reviews.
+   **Runs already made for the examples**, each saved whole with its command line and exit
+   code in this session's scratchpad, folder `readme-runs/` (session
+   `9265156a-3a86-4da5-80f9-aebe66cd887c`): in this repository `status` (exit 1, no pin),
+   `update`, `progress`, `failures`, `rules`, `contract check`, `codex-review --plan`; and in a
+   temporary home and a temporary git project made for it (`readme-runs/journey/`), in this
+   order, all exit 0: `install`, `init`, `status`, `sync`, `uninstall`, `uninstall --global`.
+   Their paths are long temporary ones and are shortened in the README to `~` and the project's
+   folder, said once. To check before the page says "leaving nothing": after `uninstall
+   --global` the temporary home still held 2 entries (`fd -H . readme-runs/journey/home`);
+   read which and say it as it is. Not run yet: `check`, `gate`, `doctor`, `upgrade`, `remote`,
+   `sessions`, `notify`, `resume`.
 2. **The roadmap**: open decisions 9 and 10 closed with their lines, both read: 9 by line
    10979; 10 by line 11146, "Solo los comandos (Recomendada)" (JH 8 builds it). Also read, for
    the task `install-update.md` T6: line 11166, "Vale, sin versión fijada (Recomendada)", to
