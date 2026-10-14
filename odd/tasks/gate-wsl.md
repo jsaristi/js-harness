@@ -42,11 +42,16 @@ high
 Anything on his Windows machine outside the js-harness home (`.wslconfig`, services, antivirus).
 
 ## Resume here
-- 02:59 · pull request 121 is open (head `d85d46f`, a clean merge of `main` `9546fb7` whose gate ran in
-  WSL2: T3). T2d, Codex's two P2 on `adae7c8..f5cbaf4` (L11), written with its tests, green, in its
-  commit turn; then Codex over `d85d46f..<T2d>` once, the push to 121, and the orchestrator merges.
-- Then: the second guard probe (`codex exec review`, at most 150,000 input tokens; the scripts are
-  in the scratchpad's `guard` folder of the session before its restart), then the ticket (part 3).
+- 03:31 · T2e committed `dfcb058` (gate in WSL2, passed). Next, in this order: (1) Codex over
+  `ea7baff..<head>` once (allowance 315,000) with `codex-turn.sh` of the scratchpad of the session before
+  its restart; by the orchestrator's bound (03:19) a NEW finding is not corrected in pull request 121: it
+  goes as a follow-up task here and in `docs/todo.md`; only a finding that can make a failing run pass
+  blocks the merge; push to 121 and tell the orchestrator. (2) The orchestrator's queue (its message
+  after 03:19), for his question (`ffe99ebf` line 3637, read: "listo como mejoramos lo del candado?"):
+  measure two whole gates in WSL2 at once, three pairs (`pair/pair-turn.sh` in this session's scratchpad,
+  ready), numbers to the orchestrator at once; then the documents-only skip of the hooks; then Codex out
+  of the lock (second probe granted, at most 150,000: `guard/probe2-turn.sh` in the old scratchpad);
+  then the priority ticket.
 
 ## Specs
 - S1 — His answer, `ffe99ebf-72fb-48da-a79b-e7db21a20b3f` line 1350 (2026-10-14T05:41Z): "Se instala
@@ -106,7 +111,7 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
       Codex over `adae7c8..f5cbaf4`: incorrect, two P2 (L11)
 - [x] T2d · S1 · Codex's two P2 (L11) · inline · test first · `ea7baff`, its gate in WSL2; Codex
       over `d85d46f..ea7baff`: incorrect, one P2 (L12)
-- [ ] T2e · S1 · Codex's P2 (L12) · inline · test first
+- [x] T2e · S1 · Codex's P2 (L12) · inline · test first · `dfcb058`, its gate in WSL2
 - [x] T3 · S2 · the switch file on this machine (after the orchestrator has it), one gate measured
       through it, docs
 - [ ] T4 · S2 · `.wslconfig` text to the orchestrator; the run per merged batch named where merges
