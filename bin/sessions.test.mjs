@@ -1738,6 +1738,20 @@ test('an untitled session keeps the title of the first opening it read: a later 
   assert.deepEqual(board.sessions.filter((session) => session.id === SESSION_D).map((session) => [session.title, session.titleSource]), [[OPENING_TITLE, 'reading']]);
 }));
 
+// Codex on 51d869d: a reading recorded under the whole id, and a later one under its start (`--self`, with no
+// transcript to complete it), are the same session's.
+test('a session that read its opening under its whole id keeps its title when it reads another under the start of its id', withMachine(async (machine) => {
+  writeUntitled(machine, SESSION_D, 30);
+  storeOpening(machine);
+  storeOpening(machine, 'JH 7 · la segunda', 'Sos JH 7.\n', 200);
+  assert.equal((await runSessions(machine, ['--opening', 'JH 6'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } })).code, 0);
+  fs.rmSync(transcriptOf(machine, SESSION_D));
+  const short = await runSessions(machine, ['--opening', 'JH 7', '--self', SESSION_D.slice(0, 8)], { env: {}, now: () => NOW + 60000 });
+  assert.equal(short.code, 0);
+  assert.match(short.stderr, /no reading was recorded: this session already read the opening of /);
+  assert.deepEqual(recordOf(machine).readings.map((reading) => reading.title), [OPENING_TITLE]);
+}));
+
 test('--peek prints an opening and records no reading, even as the first a session reads; it goes only with --opening', withMachine(async (machine) => {
   writeUntitled(machine, SESSION_D, 30);
   storeOpening(machine);

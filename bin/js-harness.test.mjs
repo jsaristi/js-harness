@@ -430,7 +430,7 @@ test('notify --opening reads the opening from the real standard input of the dis
       // The new session's first message, as a block the user copies.
       'The first message of the session "JH 9 · una prueba", to send in it as it is:',
       '```',
-      'You are the session "JH 9 · una prueba". Read your opening with js-harness sessions --opening "JH 9 · una prueba" and follow it.',
+      "You are the session \"JH 9 · una prueba\". Read your opening with js-harness sessions --opening 'JH 9 · una prueba' and follow it.",
       '```',
     ]);
     assert.match(result.stderr, /^js-harness notify: the sender is not known: /);

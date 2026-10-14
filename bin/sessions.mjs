@@ -48,7 +48,7 @@ import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titleRead, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -573,7 +573,9 @@ export async function sessionsMain(
     // later one of another title is another session's, read to see what it does, and recording it would give
     // this session that title on the board (JH 15, 2026-10-14). It is printed, and the reason it is not
     // recorded is said.
-    const held = titleRead(readNotices(harnessHome, slug, { readFile }).readings, reader.id);
+    // Either id may be the start of the other: a reading under the whole id and one under `--self`'s start,
+    // with no transcript to complete it, are the same session's (`sameSession`).
+    const held = readNotices(harnessHome, slug, { readFile }).readings.findLast((reading) => sameSession(reading.reader.id, reader.id))?.title ?? null;
     if (held !== null && held !== opening.title) {
       stderr(`js-harness sessions: the opening was read, and no reading was recorded: this session already read the opening of ${JSON.stringify(held)}, which stays its title (--peek reads an opening and records nothing)`);
       return 0;

@@ -596,15 +596,35 @@ test('standard input that cannot be read is exit 1 with the reason', withMachine
 
 // The first message of a new session is printed as a block of its own, ready to copy: the user pastes it as
 // the first message, so it names the session and says where its opening is read.
+// The command in it is between single quotes, which neither PowerShell nor a POSIX shell expands inside.
 function firstMessageBlock(title) {
   const quoted = JSON.stringify(title);
   return [
     `The first message of the session ${quoted}, to send in it as it is:`,
     '```',
-    `You are the session ${quoted}. Read your opening with js-harness sessions --opening ${quoted} and follow it.`,
+    `You are the session ${quoted}. Read your opening with js-harness sessions --opening '${title}' and follow it.`,
     '```',
   ];
 }
+
+// Codex on 51d869d: a title shells read each its own way (a `$`, a double quote, two leading dashes) got a
+// command that asks for another title, or that the parser refuses. Such a title gets the request in words.
+test('the first message of a session whose title shells read differently asks in words, and gives no command', withMachine(async (machine) => {
+  // A `$` is no such mark: between single quotes neither PowerShell nor a POSIX shell expands it.
+  const dollar = await runNotify(machine, ['--opening', 'JH 6 · $HOME'], { readStdin: () => OPENING });
+  assert.deepEqual(dollar.out.slice(1), firstMessageBlock('JH 6 · $HOME'));
+  for (const title of ['JH 6 "la primera"', '--a title']) {
+    const args = title.startsWith('--') ? ['--opening', '--', title] : ['--opening', title];
+    const { code, out } = await runNotify(machine, args, { readStdin: () => OPENING });
+    assert.equal(code, 0, title);
+    assert.deepEqual(out.slice(1), [
+      `The first message of the session ${JSON.stringify(title)}, to send in it as it is:`,
+      '```',
+      `You are the session ${JSON.stringify(title)}. Read your opening with js-harness sessions --opening, giving it your title as one argument, after a lone -- when it begins with --, and follow it.`,
+      '```',
+    ], title);
+  }
+}));
 
 test('a stored opening prints, after its line, the first message of the session as a block to copy', withMachine(async (machine) => {
   const title = 'JH 6 · la primera';

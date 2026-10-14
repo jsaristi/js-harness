@@ -2446,7 +2446,17 @@ session needs beside it to go on; the summary of a compaction is not the record.
   (finding 9) pinned, "the title of the last one it read": a session re-assigned to another
   role now takes it by a rename, whose title wins over any reading. `notify --opening` prints
   the new session's first message as a block of its own (his correction, by the lead): one
-  writer on Haiku 5.5.
+  writer on Haiku 5.5. That unit is `51d869d` (its first gate failed on one test of
+  `bin/js-harness.test.mjs` that pins `notify --opening`'s output, which the writer's brief did
+  not name; fixed, then gate PASS; gentle-ai: medium, not due). Codex on `caa443f..51d869d`:
+  178,910 input tokens, "incorrect (0.98)", three P2, all true: the block's command quoted the
+  title with double quotes, which shells expand or drop; a title that begins with `--` needed a
+  lone `--`; and the guard missed a reading under the whole id when the reader gave the start
+  of it. Fixed in the commit that carries this text, test first (four failed, then 129, 207,
+  77 and 50 passed): the rule of a title every shell reads alike (`PLAIN_TITLE`) moves from
+  `bin/resume.mjs` to the channel library with `openingCommand`, which both use; such a title
+  gets its command between single quotes, and any other the request in words; the guard
+  matches ids either way (`sameSession`).
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is

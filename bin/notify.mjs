@@ -17,7 +17,7 @@ import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
-import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
+import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
@@ -302,7 +302,11 @@ export async function notifyMain(
     const quoted = JSON.stringify(draft.title);
     stdout(`The first message of the session ${quoted}, to send in it as it is:`);
     stdout('```');
-    stdout(`You are the session ${quoted}. Read your opening with js-harness sessions --opening ${quoted} and follow it.`);
+    // The command only for a title every shell reads alike; for another, the request in words (`openingCommand`).
+    const command = openingCommand(draft.title);
+    stdout(command !== null
+      ? `You are the session ${quoted}. Read your opening with ${command} and follow it.`
+      : `You are the session ${quoted}. Read your opening with js-harness sessions --opening, giving it your title as one argument, after a lone -- when it begins with --, and follow it.`);
     stdout('```');
     senderNotKnown();
     if (roleOfTitle(draft.title) === null) {
