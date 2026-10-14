@@ -42,3 +42,15 @@ test('testRunWarning says nothing for one file, a free lock, a run under js-harn
   // The lock is not looked at for a command that needs no look.
   assert.equal(testRunWarning('git status', { env: {}, holder: () => assert.fail('the lock was looked at') }), null);
 });
+
+// Codex, 2026-10-14: a glob is many files, a quoted | or ; ends no command, and only the run that js-harness gate
+// wraps is in a turn.
+test('testRunWarning counts a glob as several files, reads quotes whole, and exempts only the run under js-harness gate', () => {
+  assert.equal(testRunWarning('node --test bin/lib/*.test.mjs', { env: {}, holder: held }), warned('several test files'));
+  assert.equal(testRunWarning('node --test --test-name-pattern="foo|bar" a.mjs', { env: {}, holder: held }), null);
+  assert.equal(testRunWarning("node --test --test-name-pattern 'a; b' a.mjs", { env: {}, holder: held }), null);
+  assert.equal(testRunWarning('js-harness gate -- echo done; node --test a.mjs b.mjs', { env: {}, holder: held }), warned('2 test files'));
+  assert.equal(testRunWarning('node --test --test-name-pattern="js-harness gate" a.mjs b.mjs', { env: {}, holder: held }), warned('2 test files'));
+  assert.equal(testRunWarning('js-harness gate -- "node --test a.mjs b.mjs"', { env: {}, holder: held }), null);
+  assert.equal(testRunWarning('js-harness gate --wait 240 -- node --test a.mjs b.mjs && echo ok', { env: {}, holder: held }), null);
+});

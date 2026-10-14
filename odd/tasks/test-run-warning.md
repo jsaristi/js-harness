@@ -54,3 +54,11 @@ Nothing planned.
 ## Log
 
 - **L1** (2026-10-14): the lead's two orders, S1 and S2, verbatim.
+- **L2** (2026-10-14): his decision, `ffe99ebf` line 5718 (19:38:04Z, tapped): "Rechazar con candado tomado
+  (Recomendada)": the guard refuses the Bash call with the line `testRunWarning` answers, only while another
+  gate holds the lock (JH 15 found that a PreToolUse warning reaches the agent only after the call ran).
+- **L3** (2026-10-14): commit `1b88b76`, gate passed in WSL2. Codex over `4fae01b..1b88b76` (118,200 input
+  tokens): three P2, fixed in one batch, test first: a wildcard counts as several files; a command ends at
+  an operator outside quotes only (`--test-name-pattern="foo|bar"`); only the run `js-harness gate --`
+  wraps is in a turn, not every command after a gate nor a quoted mention of one. RED: the new test
+  failed; GREEN: 4/4.
