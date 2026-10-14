@@ -125,6 +125,16 @@ outside the Codex review allowance. A file another session holds.
   (Recomendada)", to "En un proyecto con la revisión de Codex apagada, ¿qué cambios revisa
   gentle-ai? (Queda como regla escrita; nada frena una subida por esto.)"
 
+- **S10** The first push of a project to an empty repository passes and says so. His answer
+  (line 13159, tapped): "Pasa y avisa (Recomendada)", among "Pasa y avisa (Recomendada) | Pasa
+  sin revisar | Revisa todo desde el inicio", to "Con la revisión de Codex obligatoria, ¿qué
+  hace la primera subida de un proyecto a un repositorio vacío?" What the option said, by the
+  orchestrator's message (its text, not read here): the push passes, says how many lines went
+  unread and gives the command that reviews them when he chooses to pay; from then on
+  everything is reviewed. So: it applies only where the remote holds no branch at all; the line
+  counts what went unread; the command it names exists, is tested, and plans its cost before it
+  runs (`codex-review --plan`).
+
 Assumptions, not his words: "the switch reaches the push check" is the orchestrator's reading of
 S4 (the opening and `docs/ROADMAP.md`, item 4), and follows from it: a review that is off cannot
 be demanded.
@@ -484,7 +494,8 @@ two things told and not asked were told in the orchestrator's reply at line 1268
 transcript (read here from the transcript); he has not objected. So the design above is his,
 with `codexReview` `auto` as the default (S7).
 
-Open, his, and asked by the orchestrator when he next writes: **the first push of a project**.
+Answered since (S10, line 13159: it passes and says so). As it was asked: **the first push of
+a project**.
 With S6, a new project's first push meets a row that refuses when the remote has no default
 branch (`bin/check.mjs:1136-1141`). It arises only where the remote holds no branch at all. By
 the rule's numbers (`bin/lib/rules-data.mjs:13`, a floor of 300,000 input tokens a review;
@@ -593,6 +604,40 @@ the orchestrator's measure):
 Each later slice is written in a worktree of its own, stacked on the one before: a gate reads
 the working tree it guards, so nothing unfinished may sit in a tree whose commit waits in line.
 
+### Slice 2, read before it is written (`bin/lib/project.mjs` at `75b0ceb`)
+
+What the code already gives, so the slice stays call sites and one new module
+(`bin/lib/project-apply.mjs`, `applyFunctions(root, deps)`):
+
+- The manifest's path is `resolveGitPath(root, 'js-harness/manifest.json', spawn)`, with
+  `<root>/.git/js-harness/manifest.json` as the fallback (`:908-909`, the same two lines in
+  `uninstallProject`, `:1160-1161`). `resolveGitPath` and `runCodegraphInit` are exported;
+  `writeManifestAtomic` (`:451`), `initCodegraph` (`:409`) and `codegraphDirPath` (`:371`) are
+  not, and get an `export`.
+- `sync` copies the manifest, changes the copy and writes it only if it changed
+  (`:1376-1399`); its `codegraph init` at `:1387-1394` runs whenever `.codegraph` is absent and
+  becomes conditional on the map resolving on. `writeProject` calls `codegraphStep` at `:761`,
+  the same condition.
+- `isValidManifestShape` (`:1013-1027`) asks only for a `files` array, so a manifest that holds
+  settings alone (`files: []`) passes, and `uninstallProject` then removes no file: a
+  `harness.json` `init` did not write is in no `files` and is never touched. The settings are
+  undone before the manifest is removed (`:1263`), each as an action of its own.
+- The format number: `manifest.format`, absent in every manifest written so far. A copy that
+  reads a `format` greater than the one it knows refuses to undo and says which copy wrote it.
+  A copy already installed that knows no format cannot be made to refuse; that is said, not
+  hidden.
+- `writeHookGate` (`:627-677`) is written for `hooks/pre-commit` and its text
+  (`PRE_COMMIT_HOOK`); the pre-push hook is the same step with the name and the text as
+  arguments. Its text must do what `.githooks/pre-push` does: one `js-harness check --push
+  --remote "$1" --head <sha>` per pushed ref, a delete skipped.
+- What `apply` wants: the paste key when `codeMap` resolves `off` or `on-demand`; the plugin key
+  when `languageServer` resolves `off`; an index when `codeMap` resolves on and `.codegraph` is
+  absent; the pre-push hook when `codexReview` resolves on. What it takes back: a key or a hook
+  it recorded and no longer wants; an index only for a declared `off` and a recorded
+  `createdDir`. Errors in `functions` apply nothing.
+- The settings file is `.claude/settings.local.json` under the root; a record's `path` is
+  repository-relative, like a file's.
+
 ## Log
 
 - **L1** (2026-10-13, the request that opened the session, verbatim): "Sos la sesión "JH 9 ·
@@ -677,3 +722,32 @@ the working tree it guards, so nothing unfinished may sit in a tree whose commit
   problem); 14 tests. Decided in it: a record needs no earlier value, since a key that held
   one is a conflict and is never written. No existing command or option is touched. Risk: none
   (new files; no caller yet).
+- **L11** (2026-10-13 19:48 to 20:29) Slice 1 is two commits. T1 is `8e57dc4`: its check waited
+  13 min 27 s for the lock, `npm run test` passed, and "gentle-ai could not assess the pending
+  change". The rest is `b502494`: its check waited 29 min 50 s, `npm run test` passed, review
+  "medium risk, 7 paths, 849 lines: review not due (under_budget)". The assessment T1's check
+  could not make, run by hand over the slice: `gentle-ai review assess --cwd . --agent
+  claude-code --base-ref 75b0ceb --committed-only --json` answered `risk: medium`,
+  `executable_change` (`bin/functions.mjs`), 9 paths, 1,638 lines, `review_due: false`,
+  `under_budget`. So no gentle-ai review of this slice; it stays pending in the slice until a
+  later commit reaches the budget. His answer on the first push read at line 13159 and recorded
+  as S10 (the quote first queued in the lock's line and withdrawn on the orchestrator's word: a
+  quote is free beside a gate, its ruling of 20:17, which also frees one test file of under
+  half a minute and replaces L9's reading of the rule).
+- **L12** (2026-10-13 20:29) The Codex review of the slice. `codex-review --base 75b0ceb --plan`:
+  2 code commits, none covered; the run starts at `82761e8`; 3 parts, 959 changed lines in 8
+  files, 140 lines of Markdown left out; estimate about 500,000 input tokens, inside the
+  allowance of 1,150,800 (the larger of 300,000 a review and 1,200 a changed line); its higher
+  figure, 2,640,000, is over. By the rule (the estimate inside the allowance) it runs without
+  asking, inside a turn of the lock: `js-harness gate -- node bin/js-harness.mjs codex-review
+  --base 75b0ceb`. Its outcome is the next entry.
+- **L13** (2026-10-13 21:09) The first run of that review started nothing: it waited about 40
+  minutes in the lock's line (queued 20:29, its turn after 20:56) and then refused, "Tracked
+  files have uncommitted changes, but the record claims the committed range base..HEAD", because
+  this document had been edited after the commit. No token spent. The fault is this session's:
+  a command queued for a long wait without its cheap precondition looked at first. The fix now:
+  this document is committed before the review is queued again, and nothing in the tree is
+  edited while it waits. What would stop it in the harness: `codex-review --plan` could say that
+  the tree is not clean, and `gate` could run a command's cheap refusal before the wait, as the
+  check stops on a failing static row before it waits. A candidate for the register of failures,
+  told to the orchestrator.
