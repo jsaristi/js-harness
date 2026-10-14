@@ -627,6 +627,17 @@ version).**
   output to be readable. The pull request's body says red, do not merge. Not pushed since, on
   purpose: any push to it is a new run.
 
+- 2026-10-13 · **The fix of the cut output, on its own branch** (`fix/check-output-on-exit`, worktree
+  `D:/js-harness-worktrees/check-exit`, off `main` at `9b227df`, by the orchestrator's go).
+  `exitWhenWritten` in `bin/check.mjs`: the process exits once stdout and then stderr have
+  taken what was printed. Chosen over `process.exitCode`: the exit stays immediate, so a process
+  a sensor left running or a handle nobody closed never keeps a finished gate alive.
+  `bin/check-exit.test.mjs`: RED at 22:14:11 (the file fails, `exitWhenWritten` is not there);
+  GREEN at 22:14:32, 3 of 3 (the order of the writes and the exit, a stream whose reader is
+  gone, and a child `check` whose failed sensor prints about 2 MB through a pipe, its last line
+  read). The child test passes on this machine either way, since its pipes are written at once:
+  its proof is the next run on Linux. The commit went to the gate's line.
+
 ## Next
 1. The cut output of a failed `check` on Linux. The orchestrator's GO (22:12, its claim):
    `bin/check.mjs` is free tonight; make it here as a SMALL PULL REQUEST OF ITS OWN off `main`
