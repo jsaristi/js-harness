@@ -215,7 +215,24 @@ test('a recheck that left a finding not fixed is refused, naming the findings it
   assert.match(row.detail, new RegExp(`recheck that ended at ${short(root, fix)} left 1 finding open`));
   const lines = row.lines.join('\n');
   assert.ok(lines.includes(priorLine(left)), lines);
-  assert.ok(lines.includes(`js-harness codex-review --base ${short(root, fix)} --unavailable`), lines);
+  // A skip records no correction, so the push would still refuse after it: it is not offered as a way out.
+  assert.ok(!lines.includes('--unavailable'), lines);
+  assert.match(lines, /commit a correction of those findings as code and have Codex review it/);
+  assert.match(lines, /a disputed finding has no waiver yet: the user decides it/);
+});
+
+test('a code commit after a recheck that left a finding open, reviewed clean, passes', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, half fixed', 'fix: read the right field, once');
+  const left = { ...finding, title: '[not fixed] 1 The guard reads the wrong field' };
+  run(root, { id: 'run-2', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: head, findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const again = commit(root, 'b.js', 'two, fixed', 'fix: read the right field everywhere');
+  run(root, { id: 'run-3', answer: { verdict: 'correct', findings: [] } });
+  record(root, fix, again, { run: 'run-3' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /3 code commits since origin.main, all covered by a Codex review record/);
 });
 
 test('a review that found nothing, or a branch with no run log, passes as before', () => {

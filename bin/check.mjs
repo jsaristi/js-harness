@@ -1412,7 +1412,10 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
     detail: `the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(state.of)}`,
     lines: [
       ...open.map(priorLine),
-      `a second recheck is refused: record a follow-up task for what is open in the feature document, then record the range after the recheck as a skip: js-harness codex-review --base ${at} --unavailable "second recheck refused: <task>"`,
+      // No skip is offered: a skip records no correction, and the newest code commit would still be the
+      // recheck's, so the push would refuse again after it. What clears it is a later code commit whose own
+      // review owes nothing.
+      `a second recheck is not run: commit a correction of those findings as code and have Codex review it; a disputed finding has no waiver yet: the user decides it`,
     ],
   };
 }
