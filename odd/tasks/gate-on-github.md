@@ -757,6 +757,30 @@ version).**
     they need code from `main`.
 
 ## Next
+0. **His order, first** (ffe99ebf line 5906, 19:43:44Z: "Listo entonces quiero que pausemos todo e
+   implementemos las soluciones para que funcionemos con todas las soluciones y sin fallas"; line
+   5853: corrections first, "tiene que quedar funcionando como un reloj suizo"). As the
+   orchestrator relayed it (14:45 local), test first, in order:
+   - (1) `js-harness merge-ready <pr>`, the exchange as a command:
+     - checks: the pull request is open, not a draft, mergeable, its base is `main`, and its body
+       has the gentle-ai line;
+     - the run: it finds the run for the head and requires it green;
+     - the tested base: read from the checkout log ("HEAD is now at <m> Merge <head> into
+       <base>"); it must equal `origin/main`, or be behind it only by `docs/` and `odd/tasks/`
+       files, not `AGENTS.md`, with merge-tree clean;
+     - exit codes: 0 ready, 3 stale, 4 run pending or red, 1 otherwise;
+     - a stale reopen waits until `refs/pull/N/merge^1` equals `main`: a reopen right after a
+       merge tested the old base twice that day;
+     - read first the orchestrator's script,
+       `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\ffe99ebf-72fb-48da-a79b-e7db21a20b3f\scratchpad\merge-on-run.sh`.
+   - (2) Then the conflict-hunks Codex review (item 1 below).
+   - **T3 of `odd/tasks/read-from-records.md` is parked:** branch `feat/plan-from-records`
+     (worktree `D:/js-harness-worktrees/plan-from-records`), `f66a822` committed and gated, plus a
+     fix of its plan line (`atPair` counted over the whole log, not the window) committed through
+     the gate after it. Still to do: its Codex review (planned at about 220,000 input tokens,
+     allowance 451,200), push, its pull request.
+   - The session passed 88 percent of context at this point (91 percent), and the state is
+     written here.
 1. The exchange is taken (Progress, his decision at line 5394). What it still asks of the code
    is the orchestrator's to place; this session's queue holds the next item it gave: a resolved
    merge's Codex review covers its conflicted hunks only, not the whole branch again (pull
