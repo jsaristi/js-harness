@@ -253,7 +253,8 @@ be read.
 1. Which kinds of work may run below high, and at which level. Recommended: none yet; every
    kind runs at `session-effort` (high) until C2's comparison of the medium trial is brought to
    him, and then, if it passes, one row `session-effort-build` at medium. Nothing waits on the
-   answer: T2 reads an absent row as "the session's".
+   answer: T2 reads an absent row as "the session's". **Answered** (L4): "Ninguno todavía
+   (Recomendada)". No row `session-effort-build` is asked of JH 7; T2 still reads it when present.
 2. Already open at JH 7, not asked again: what an installed project gets by default
    (`rule-hierarchy.md:1001-1003`), and the effort of a Codex work session (`:1088-1090`).
 3. His machine, for him to change or keep: the settings default of medium and `remote` passing
@@ -268,6 +269,24 @@ be read.
   pointed at this document once it is built.
 - `odd/tasks/session-channel.md` T13-T15 are still open boxes there: the orchestrator tells JH 5
   they moved here.
+
+## The interface for JH 15's check (T5)
+
+JH 15 builds the INFO row of `check` (task 13 of the rule hierarchy) on these, and on no second
+classifier. Pure functions, no fs, built in T2 and T4:
+
+- `bin/lib/contract.mjs`: `TASK_KINDS` (`['design', 'build', 'verify', 'docs']`) and
+  `taskModes(markdown, readRule)` → one object per task of the checklist, done ones included so
+  that a past session can be matched: `{ id, kind, done, effort, writerModel, readerModel,
+  subagentEffort, off }`. `kind` is `null` for a task with none; `readRule(id)` is the caller's
+  `ruleHere` bound to the project's rules text; `off` is `null`, `'elsewhere'` or `'behind'`,
+  and when set the four values are `null`.
+- `bin/lib/subagent-count.mjs`: `roleOf({ subagentType, description, model })` → `'writer' |
+  'explorer' | 'reviewer' | 'verifier' | 'other'`; and `launchesOf(entries, { from, to,
+  offsetMinutes })` over parsed record entries → `{ agentId, session, role, verb, modelAsked,
+  effortAsked, inherited, modelRan, effortRan, usage: { input, cacheCreation, cacheRead, output },
+  start, end }`, where `verb` is the description's first word and nothing else of it is kept.
+  The reader of files, `readEntries(folders, { from })`, streams lines and is apart.
 
 ## The paragraph handed over (T5)
 
@@ -325,3 +344,13 @@ questions listed.
 - L3 (2026-10-14): version 1 committed (2a735ec); two readers on opus at high, one attacking and
   one looking for gaps, found five blockers between them, the same two in both (the table's
   scope, the startup line); version 2 above takes every finding.
+- L4 (2026-10-14): his answer to question 1, read with `js-harness sessions --quote
+  ffe99ebf-72fb-48da-a79b-e7db21a20b3f 3330` (2026-10-14T08:07:47Z, tapped): question "JH 13:
+  ¿qué tipos de trabajo pueden correr por debajo de esfuerzo high, y a qué nivel?", answer
+  "Ninguno todavía (Recomendada)". In the same line, to JH 15: an installed project gets
+  "Nada, que el proyecto elija (Recomendada)", which is what S1's `off: 'elsewhere'` prints.
+- L5 (2026-10-14, the orchestrator's message, a claim): cleared after the WSL gate and a merge of
+  `origin/main`: the one line of `bin/resume.mjs` (JH 12 also edits that file) and the one
+  sentence of `bin/lib/manifest.mjs`; keep the `taskId` copy in `contract.mjs`; JH 5 told that
+  T13-T15 moved; the INFO row of `check` is JH 15's, built on this feature's role classifier and
+  `taskModes`, whose interface goes to JH 15; the phone session at medium is noted for him.
