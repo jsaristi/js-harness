@@ -1423,10 +1423,12 @@ test('an orchestrator is told an answer in a transcript outside this project\'s 
   assert.deepEqual(questionLinesOf(lines), [
     'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
     '  Pregunta 1  recorded 2h ago by "JH 5 · the channel"  waits: the board  Which branch?',
-    `    he ANSWERED it at line 3 of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so its line cannot be quoted from there: record it with js-harness notify --to 5 --kind answer --question 1 --transcript ${SESSION} --line 3 "<his answer in one line>", which keeps it as unverified`,
+    `    he ANSWERED it at line 3 of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so the harness cannot read that line: record it as the sender's claim with js-harness notify --to 5 --kind answer --question 1 --transcript outside-the-project-folder --line 3 "<his answer in one line>", which keeps it unverified`,
     'The board lists the questions of every session: js-harness sessions',
   ]);
   assert.equal(lines.some((line) => line.includes(`--quote ${SESSION}`)), false, lines.join('\n'));
+  // The name of the transcript is no session id, so `notify` never checks the answer against a local transcript of this session.
+  assert.equal(lines.some((line) => line.includes(`--transcript ${SESSION}`)), false, lines.join('\n'));
 }));
 
 test('a work session is given the questions it recorded itself: its open ones with what its transcript holds, its last closed ones in one line each, and no others', withMachine(async (machine) => {

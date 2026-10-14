@@ -707,8 +707,10 @@ function callSaid(item, { ownWork, sessionId, read, ask, quoted }) {
   const to = role?.role === 'work' ? role.number : 'orchestrator';
   const id = sessionId ?? '<session id>';
   // `sessions --quote` reads only this project's sessions folder: a transcript filed elsewhere cannot be quoted from there,
-  // so its answer is recorded from the line, as unverified, and no quote command is named.
-  if (!quoted) return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so its line cannot be quoted from there: record it with js-harness notify --to ${to} --kind answer --question ${item.number} --transcript ${id} --line ${call.answeredLine} "<his answer in one line>", which keeps it as unverified`;
+  // so its answer is recorded from the line, as unverified, and no quote command is named. The transcript is named by the word
+  // `outside-the-project-folder`, which is no file and starts no transcript id: `transcriptNamed` resolves nothing from it, so
+  // `notify` cannot check the answer against another session's transcript in this project's folder.
+  if (!quoted) return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so the harness cannot read that line: record it as the sender's claim with js-harness notify --to ${to} --kind answer --question ${item.number} --transcript outside-the-project-folder --line ${call.answeredLine} "<his answer in one line>", which keeps it unverified`;
   return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. Read it: js-harness sessions --quote ${id} ${call.answeredLine}  Then record it: js-harness notify --to ${to} --kind answer --question ${item.number} --transcript ${id} --line ${call.answeredLine} "<his answer in one line>"`;
 }
 

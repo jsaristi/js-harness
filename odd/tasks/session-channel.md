@@ -2779,7 +2779,22 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 22:14, THE NEWEST OF ALL. Part 3 and the asking rule are `02343e6`
+      STATE AT 2026-10-13 22:50, THE NEWEST OF ALL. The P2 left open below is fixed in the
+      commit that carries this text, test first (1 failed, then 77 passed): the command names
+      `--transcript outside-the-project-folder`, which no transcript resolves to, so `notify`
+      records the answer unverified. NEXT: the merge of `main`, `check --push`, the push, the
+      pull request, its number to the lead; then one note a capability for the SPEC's draft,
+      sent to the lead (its order, its line 14050); then slice (c).
+      STATE AT 2026-10-13 22:26 (the state before the one above). The fix of the two findings is `55fd886`
+      (gate PASS). Codex on `02343e6..55fd886`: 194,633 input tokens, "incorrect (0.91)", ONE
+      P2, OPEN: for a transcript outside the project's folder the resume's answered line gives
+      `notify … --transcript <session id>`, and that id can resolve to a transcript of the
+      project's own folder, so the answer would be checked against another file. To decide
+      and fix BEFORE the merge of `main`: the line must name nothing `transcriptNamed` can
+      resolve to a local transcript (say it cannot be recorded from here and why, or a name
+      that resolves to none and so is recorded unverified). Then the merge, the push, the
+      pull request.
+      STATE AT 2026-10-13 22:14 (the state before the one above). Part 3 and the asking rule are `02343e6`
       (Codex: 718,613 input tokens, two P2 on the resume's block, both true); their fix,
       test first (4 failed, then 356 passed), is the commit that carries this text, or is in
       the tree (`git status`). NEXT: the merge of `main` (`turn-merge-push-check.sh` in the
