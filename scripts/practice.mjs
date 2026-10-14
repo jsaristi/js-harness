@@ -309,11 +309,20 @@ function hostLoads(ctx, token) {
     const result = run(claude, [...args, ...HOST_COMMON], { cwd: project, env, encoding: 'utf8', timeout: HOST_TIMEOUT_MS, maxBuffer: CHILD_OUTPUT_LIMIT, windowsHide: true });
     const stream = readHostStream(result.stdout);
     streams.push(stream);
+    // The spend is kept as each call ends, so a run that fails at a later call still records what the earlier spent.
+    ctx.host = { ...hostCost(streams), binary: claude, version };
     const timedOut = result.error?.code === 'ETIMEDOUT';
     const failure = classifyAgentFailure({ stdout: stream.result ? JSON.stringify(stream.result) : String(result.stdout ?? ''), stderr: String(result.stderr ?? ''), exitCode: result.status, timedOut });
     if (failure || timedOut || result.error) {
-      killByPath([root], { within: root });
-      throw new Error(`host unavailable (${failure?.kind ?? (timedOut ? 'timeout' : 'spawn')}): the ${kind} call ${failure?.message ?? result.error?.message ?? ''}`.trim());
+      // What the session may have left running: the folders it ran in and from, each strictly inside the practice
+      // root, which `killByPath` refuses to sweep whole. A sweep that fails is told after the reason, never in its place.
+      let swept = '';
+      try {
+        killByPath([project, hostHome, home, prefix], { within: root });
+      } catch (err) {
+        swept = `; the sweep of what it left running failed: ${err.message}`;
+      }
+      throw new Error(`host unavailable (${failure?.kind ?? (timedOut ? 'timeout' : 'spawn')}): the ${kind} call ${failure?.message ?? result.error?.message ?? ''}${swept}`.trim());
     }
     const problems = hostCallProblems(kind, stream, { word });
     assertThat(problems.length === 0, `the ${kind} call:\n${problems.join('\n')}\n${tail(String(result.stdout ?? ''), 4)}`);
@@ -556,7 +565,16 @@ const STEPS = {
     const agentsText = readIfThere(path.join(project, 'AGENTS.md'))?.toString('utf8');
     const problem = secondInitProblem(differs, agentsText, agentsTemplate(project));
     assertThat(problem === null, problem);
-    return `uninstall removed the hook, the project manifest, harness.json, AGENTS.md and .codegraph, and git status showed:\n${after.join('\n')}\ninit again: the hook is back and no tracked file differs`;
+    // The one change accepted, AGENTS.md rewritten to this candidate's template, is committed as its owner would, so
+    // the steps after this one find the project clean (the host step refuses an AGENTS.md that differs from HEAD).
+    let templated = '';
+    if (differs !== '') {
+      expectOk(git(ctx, project, 'add', '--', 'AGENTS.md'), 'git add AGENTS.md');
+      const committed = git(ctx, project, 'commit', '-m', "practice: AGENTS.md of the candidate's template");
+      assertThat(!committed.error && committed.status === 0, `the commit of the candidate's AGENTS.md template did not pass: ${ended(committed)}\n${tail(committed.output)}`);
+      templated = `; AGENTS.md took this candidate's template and was committed as ${short(head(ctx))}`;
+    }
+    return `uninstall removed the hook, the project manifest, harness.json, AGENTS.md and .codegraph, and git status showed:\n${after.join('\n')}\ninit again: the hook is back and no tracked file differs${templated}`;
   },
 
   'global-uninstall': (ctx) => {
