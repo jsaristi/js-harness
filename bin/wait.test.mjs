@@ -46,7 +46,7 @@ function noticeLine({ at, to, kind = 'note', text = 'a note', title = 'JH 5 · c
  * each sleep, so that a test can write the record while the wait waits. `record` is the channel's text, or `null`
  * for no file; `readError` is what reading the record fails with, when given. */
 function world({ answer = () => ok(), onSleep = () => {}, record = null, readError = null } = {}) {
-  const state = { clock: T0, sleeps: [], calls: [], outAtCall: [], out: [], err: [], record };
+  const state = { clock: T0, sleeps: [], calls: [], timeouts: [], outAtCall: [], out: [], err: [], record };
   const deps = {
     cwd: CWD,
     now: () => state.clock,
@@ -58,9 +58,10 @@ function world({ answer = () => ok(), onSleep = () => {}, record = null, readErr
     stdout: (line) => state.out.push(line),
     stderr: (line) => state.err.push(line),
     homedir: () => path.resolve('wait-test-unused-home'),
-    run: (command, commandArgs) => {
+    run: (command, commandArgs, options = {}) => {
       if (command === 'git' && commandArgs[0] === 'rev-parse') return ok('.git\n');
       state.calls.push([command, ...commandArgs].join(' '));
+      state.timeouts.push(options.timeout);
       state.outAtCall.push(state.out.length);
       return answer(command, commandArgs, state);
     },
@@ -109,6 +110,16 @@ test('the time runs out after --for minutes, with a last check at the deadline',
   assert.equal(state.out[0], start('the merge of pull request 136', 1));
   assert.match(state.out.at(-1), /^js-harness wait: the merge of pull request 136 did not hold after 1 minutes; the time ran out \(\d\d:\d\d\)$/);
   assert.deepEqual(state.err, []);
+});
+
+test('each check is bounded by the time the wait has left, and by two minutes at most', async () => {
+  const { state, deps } = world({ answer: () => ok('OPEN\n') });
+  assert.equal(await waitMain(args('--pr', '136', '--every', '45', '--for', '1'), {}, deps), 1);
+  assert.deepEqual(state.timeouts, [60000, 15000, 1000], 'the last check, at the deadline, still gets one second');
+
+  const long = world({ answer: () => ok() });
+  assert.equal(await waitMain(args('--main-has', 'abc1234', '--for', '480'), {}, long.deps), 0);
+  assert.deepEqual(long.state.timeouts, [120000, 120000], 'the fetch and the ancestor check get two minutes each');
 });
 
 test('a check that cannot run is said once on stderr, is retried at the next tick, and does not end the wait', async () => {

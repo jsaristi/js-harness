@@ -103,6 +103,9 @@ function hourOf(ms) {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** The longest one check of gh or git may take. */
+const CHECK_MS = 120000;
+
 const failed = (reason) => ({ state: 'failed', reason });
 const WAITING = { state: 'waiting' };
 
@@ -201,7 +204,7 @@ export async function waitMain(
     stderr = console.error,
     now = Date.now,
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 120000, maxBuffer: 64 * 1024 * 1024 }),
+    run = (command, args, options) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, timeout: CHECK_MS, maxBuffer: 64 * 1024 * 1024, ...options }),
     readFile = (file) => fs.readFileSync(file, 'utf8'),
     homedir = os.homedir,
   } = {},
@@ -220,7 +223,11 @@ export async function waitMain(
   const seconds = parsed.every ?? 120;
   const minutes = parsed.minutes ?? 480;
   const started = now();
-  const { phrase, check } = conditionOf(parsed.condition, { cwd, home, run, readFile, now, started });
+  const deadline = started + minutes * 60000;
+  // A hung gh or git must not hold the wait past its deadline: each check gets the time left, at least a second.
+  const bounded = (command, args, options = {}) =>
+    run(command, args, { ...options, timeout: Math.max(1000, Math.min(CHECK_MS, deadline - now())) });
+  const { phrase, check } = conditionOf(parsed.condition, { cwd, home, run: bounded, readFile, now, started });
   stdout(`js-harness wait: waits for ${phrase}; ends when it holds, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`);
 
   let lastReason = null;
@@ -243,7 +250,7 @@ export async function waitMain(
       lastReason = outcome.reason;
       stderr(`js-harness wait: a check did not run (${outcome.reason}); it is retried at the next tick`);
     }
-    const left = minutes * 60000 - (now() - started);
+    const left = deadline - now();
     if (left <= 0) {
       stdout(`js-harness wait: ${phrase} did not hold after ${minutes} minutes; the time ran out (${hourOf(now())})`);
       return 1;
