@@ -733,16 +733,26 @@ version).**
 - 2026-10-14 · **T7, second version** ("The exchange, R1", on `docs/gate-on-github-exchange` off
   `main` `9546fb7`). Both readers' findings were taken in, and the version says what each one
   changed. It went to the orchestrator for him, with one question.
+- 2026-10-14 · **His answer on the exchange: not for now.** First he typed, to the question
+  (orchestrator transcript `ffe99ebf`, line 3185, 08:02:18Z): "si combinamos el linux con el
+  github podriamos disminuir muchisimo mas el tiempo cierto?". The orchestrator answered no, by
+  its own reckoning: the exchange skips about a third of the local gates, and on the WSL gate
+  each one is about 2 minutes, so about 20 minutes of lock a night. Then he tapped (line 3200,
+  08:03:13Z): "No por ahora (Recomendada)". Both lines were read with `js-harness sessions
+  --quote`. T7 closes with the exchange not taken. Today's rule stands: each branch merges
+  `main` and passes its local gate.
+  **When to come back to it:** the orchestrator brings it back to him with measured numbers if
+  the lock stays saturated once the Linux gate runs locally (JH 8's WSL gate). The design above
+  is the starting point then: its month, its losses and the reopen still to prove.
 
 ## Next
-1. Wait for his answer on the exchange, through the orchestrator. On a yes, the first step is
-   one reopen of a pull request with code, and one run whose printed `HEAD^1` equals the current
-   `main`. That needs the one line in the workflow first, through its own pull request. Then the
-   relief file's line 276 and the session openings. On a no, close T7 as recorded.
+1. The exchange is not taken (Progress, his answer of 2026-10-14). Nothing to build for it
+   unless the orchestrator brings it back with measured lock numbers.
 2. Spec notes for any further capability go to the orchestrator at the feature's close (his
    "Que me lo manden a mí"); the three so far were sent.
 
 ## Resume here
 Feature document on `docs/gate-on-github-exchange` (worktree `D:/js-harness-worktrees/github-gate`),
-off `main` `9546fb7`. T1 to T6 are done and on `main`. T7's second version is sent and waits on
-his answer. Read the orchestrator's answers first, then Next.
+off `main` `9546fb7`. T1 to T6 are done and on `main`. T7 is closed: his answer was "No por
+ahora", with a condition to come back to it (Progress). Read the orchestrator's answers first,
+then Next.
