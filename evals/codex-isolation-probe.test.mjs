@@ -356,7 +356,10 @@ test('the command runs one trial per arm, minimal first, proves each wrote insid
     assert.deepEqual(arm.events.errors, []);
     assert.deepEqual(arm.controls, { agent: { ok: true }, envFile: { ok: true }, nonceFile: { ok: true } }, label);
     assert.equal(arm.env.file, 'present');
-    for (const name of ENV_NAMES.slice(0, -2)) assert.equal(arm.env.checks[name], 'same', `${label}: ${name} is what the sandbox set`);
+    // The names this system's sandbox sets: `HOMEDRIVE` and `HOMEPATH` are Windows' alone, and the first run of
+    // this suite on Linux was asked for them. The last two of the list are never set, only removed.
+    const set = ENV_NAMES.slice(0, -2).filter((name) => process.platform === 'win32' || (name !== 'HOMEDRIVE' && name !== 'HOMEPATH'));
+    for (const name of set) assert.equal(arm.env.checks[name], 'same', `${label}: ${name} is what the sandbox set`);
     assert.ok(arm.env.lines.CODEX_HOME.endsWith(path.join(arm.sandboxToken, 'home', '.codex')), 'CODEX_HOME is the trial\'s own');
     assert.equal(arm.env.lines.ENGRAM_PORT, String(arm.engram.port));
     assert.notEqual(arm.engram.port, REAL_ENGRAM_PORT);

@@ -8,7 +8,9 @@
 // Everything that starts a process takes its `spawnSync` (and `kill`, `connect`) as a parameter, so the
 // tests prove the commands and the parsing against fixtures and no test ever needs a real listener but one
 // of its own.
+import fs from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
 import { spawnSync as spawnChildSync } from 'node:child_process';
 import { killProcesses, selectDescendants, takeSnapshot } from '../bin/lib/process-tree.mjs';
 
@@ -139,11 +141,27 @@ function runPowerShell(script, env, sync, what) {
   return result;
 }
 
+/** The image process `pid` runs, as Linux says it: the name of the file `/proc/<pid>/exe` links to. `null` on
+ * any other system, and when the link cannot be read (a process of another user, one that is gone, a Linux
+ * with no `/proc`): the caller then keeps the name `ps` or `ss` printed. That name is the main thread's, which
+ * a program may set: Node v24 answers `MainThread`, so a Node process was no `node` to a lookup by name, and
+ * a process may give its thread any name it likes. A binary replaced on disk while it runs is still its image
+ * (the kernel marks the link ` (deleted)`). `readlink` is injectable. */
+function linuxImage(pid, platform, readlink) {
+  if (platform !== 'linux') return null;
+  try {
+    return path.posix.basename(String(readlink(`/proc/${pid}/exe`)).replace(/ \(deleted\)$/, '')) || null;
+  } catch {
+    return null;
+  }
+}
+
 /** The processes listening on TCP `port`, as `[{ pid, name }]` (a pid once, however many sockets it holds); empty
- * when the port is free. Windows: PowerShell. POSIX: `lsof`, then `ps` for each pid's name; `ss` when `lsof`
- * is not installed. A lookup that cannot run throws: an empty list must always mean "free", never "could not
- * ask". `port` goes through `assertTrialPort` first, so the real engram port is never looked at. */
-export function findListeners(port, { platform = process.platform, spawnSync: sync = spawnChildSync, protectedPorts } = {}) {
+ * when the port is free. Windows: PowerShell. POSIX: `lsof`, then each pid's name; `ss` when `lsof` is not
+ * installed. The name is the image on Linux (`linuxImage`) and what `ps` or `ss` prints where the image cannot
+ * be read. A lookup that cannot run throws: an empty list must always mean "free", never "could not ask".
+ * `port` goes through `assertTrialPort` first, so the real engram port is never looked at. */
+export function findListeners(port, { platform = process.platform, spawnSync: sync = spawnChildSync, readlink = fs.readlinkSync, protectedPorts } = {}) {
   assertTrialPort(port, protectedPorts && { protectedPorts });
   if (platform === 'win32') {
     const { stdout } = runPowerShell(LISTENERS_SCRIPT, { JS_HARNESS_PORT: String(port) }, sync, 'the lookup of the listener');
@@ -165,6 +183,8 @@ export function findListeners(port, { platform = process.platform, spawnSync: sy
     if (lsof.status !== 0 && !noMatch) throw new Error(`the lookup of the listener failed (lsof exit ${lsof.status}): ${String(lsof.stderr).trim()}`);
     const pids = [...new Set(lines(lsof.stdout).map((line) => /^p(\d+)$/.exec(line.trim())?.[1]).filter(Boolean).map(Number))];
     return pids.map((pid) => {
+      const image = linuxImage(pid, platform, readlink);
+      if (image !== null) return { pid, name: image };
       const ps = sync('ps', ['-o', 'comm=', '-p', String(pid)], { encoding: 'utf8', timeout: 30000 });
       return { pid, name: ps.error || ps.status !== 0 ? '' : String(ps.stdout).trim().split('/').pop() };
     });
@@ -178,7 +198,7 @@ export function findListeners(port, { platform = process.platform, spawnSync: sy
   for (const row of lines(ss.stdout).filter((line) => line.trim() !== '')) {
     const owners = [...row.matchAll(/\("([^"]*)",pid=(\d+)/g)];
     if (owners.length === 0) throw new Error(`ss shows a listener on port ${port} without an owner (${JSON.stringify(row.trim().slice(0, 120))}): cannot tell which process it is, so the lookup is inconclusive`);
-    for (const match of owners) found.set(Number(match[2]), match[1]);
+    for (const match of owners) found.set(Number(match[2]), linuxImage(Number(match[2]), platform, readlink) ?? match[1]);
   }
   return [...found].map(([pid, name]) => ({ pid, name }));
 }
@@ -202,9 +222,9 @@ const waitMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0,
  * process (its name no longer matches) is left alone and reported, and one whose creation time is unknown is
  * not killed. POSIX: `kill(pid, 'SIGKILL')`. `spawnSync`, `kill` and `sleep` are injectable. */
 export function killByPort(port, {
-  platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill, name = ENGRAM_PROCESS_NAME, label = 'engram', protectedPorts, retries = 10, delayMs = 100, sleep = waitMs,
+  platform = process.platform, spawnSync: sync = spawnChildSync, readlink = fs.readlinkSync, kill = process.kill, name = ENGRAM_PROCESS_NAME, label = 'engram', protectedPorts, retries = 10, delayMs = 100, sleep = waitMs,
 } = {}) {
-  const lookup = () => findListeners(port, { platform, spawnSync: sync, protectedPorts });
+  const lookup = () => findListeners(port, { platform, spawnSync: sync, readlink, protectedPorts });
   const listeners = lookup();
   if (listeners.length === 0) return { killed: [] };
   const strangers = listeners.filter((listener) => !name.test(listener.name));
@@ -243,9 +263,10 @@ export function killByPort(port, {
 
 /** Every process whose image is `name` (`engram` is `engram.exe` on Windows), as `[{ pid, command }]`. For the
  * probe's claim that a trial left no engram process behind: a list taken before the trial and one after it.
- * `name` is a plain image name (letters, digits, `.`, `_`, `-`) and travels as data. A listing that cannot run
- * throws, so an empty list always means "none". */
-export function findProcesses(name, { platform = process.platform, spawnSync: sync = spawnChildSync } = {}) {
+ * `name` is a plain image name (letters, digits, `.`, `_`, `-`) and travels as data. On Linux a process is
+ * judged by the image it runs (`linuxImage`), and by the name `ps` prints where that cannot be read. A listing
+ * that cannot run throws, so an empty list always means "none". */
+export function findProcesses(name, { platform = process.platform, spawnSync: sync = spawnChildSync, readlink = fs.readlinkSync } = {}) {
   if (typeof name !== 'string' || !/^[A-Za-z0-9._-]+$/.test(name)) throw new Error(`the process name ${JSON.stringify(name)} is not a plain image name`);
   if (platform === 'win32') {
     const { stdout } = runPowerShell(PROCESSES_SCRIPT, { JS_HARNESS_PROCESS_NAME: name }, sync, 'the process listing');
@@ -256,6 +277,6 @@ export function findProcesses(name, { platform = process.platform, spawnSync: sy
   if (ps.status !== 0) throw new Error(`the process listing failed (ps exit ${ps.status}): ${String(ps.stderr).trim()}`);
   return lines(ps.stdout)
     .map((line) => /^\s*(\d+)\s+(\S+)\s*(.*)$/.exec(line))
-    .filter((match) => match && match[2].split('/').pop() === name)
+    .filter((match) => match && (linuxImage(Number(match[1]), platform, readlink) ?? match[2].split('/').pop()) === name)
     .map((match) => ({ pid: Number(match[1]), command: match[3].trim() }));
 }
