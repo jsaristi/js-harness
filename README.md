@@ -382,3 +382,24 @@ Session: title not known (the host gave the hook none and no session id a transc
 …
 Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.
 ```
+
+### js-harness guard
+
+The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
+`PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
+session and on `Bash`. `guard --hook` reads the call on standard input and refuses four things:
+a sub-agent launched on a model the project's rules do not give; a message whose stamped hour is
+more than a minute off the clock; a shell command with backticks inside double quotes, which
+bash runs as commands; and a `node --test` of several files outside a gate turn while another
+gate holds the machine's lock. A refusal is printed as the hook's deny, with the reason and the
+right value; any other call runs as it was.
+
+It always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
+The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project
+that installs the harness has them off by default, so the model check applies only where the
+project sets them.
+
+```console
+$ js-harness guard --hook < send.json
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"js-harness guard: this message stamps 03:10, and the clock says 15:01. Stamp 15:01, or no hour: an hour in a message is read from the clock in the same step, or left out."}}
+```
