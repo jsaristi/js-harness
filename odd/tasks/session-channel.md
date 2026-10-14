@@ -2397,6 +2397,26 @@ session needs beside it to go on; the summary of a compaction is not the record.
   confirmation on his return. (5) The writer's six files and their tests pass one by one
   (pause 41, channel 50, notify 125, resume 77, sessions 205 and one skipped, the library
   279); the pause's new wording gained its own assertion, which fails without it (40 and 1).
+  That unit is `13b07b5` (gate PASS 00:09; gentle-ai: medium, 271 lines, not due; Codex on
+  `1f5d67a..13b07b5`: 182,704 input tokens, "correct (0.93)", no finding). Pull request 113 was
+  merged, and 114, the inbox `docs/todo.md` the lead drafted and this session copied byte for
+  byte (his ask: the lead's transcript `65318fd5`, line 13776, read with `sessions --quote`);
+  `main` at `20988bd` is merged into this branch as `4cd0eca`.
+- 2026-10-14, written at 00:15: THE SECOND UNIT OF SLICE (c), from his words of this night (the
+  lead's transcript `ca93c7ef`, line 957, sent while it worked, read with `sessions --quote`,
+  exit 0: "pero no entiendo por que no me pasa la pregunta para aca como ya habiamos quedado y
+  cementado"). THE LEAD'S READING, not his words: a session whose tool call he refuses, or that
+  he stops, first tells the orchestrator what it needs, so the question reaches him there; JH 7
+  waited six hours in silence. Built, test first (three assertions failed, then passed): the
+  work session's line in the skill; `stopped` in a session's facts (`stopOf` in the library:
+  the turn ended by "[Request interrupted by user for tool use]", refused, or by another
+  "[Request interrupted", interrupted, while the session has not acted since); the board's line
+  under such a session, and the watch's line when it starts waiting so. The host writes the
+  same refusal when another session stops one (this session's own, Progress of 2026-10-13), so
+  the words say "by the user or by another session's stop" and never who. Count over the
+  project's transcripts (`rg -c`): 18 refused results, 9 interruptions for a tool use, 15
+  plain. In `docs/todo.md`, the line of the reply check is struck with its pointer, and the
+  line of a session that waits unseen says which half is built.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
@@ -2809,7 +2829,12 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 23:46, THE NEWEST OF ALL. (b2) is pull request 113, for the lead to
+      STATE AT 2026-10-14 00:15, THE NEWEST OF ALL. Slice (c) on `feat/question-texts`: the
+      first unit is `13b07b5`, `main` merged as `4cd0eca`; the second unit (a stopped session,
+      Progress 00:15) is the commit that carries this text. NEXT: `check --push`, push, pull
+      request, its number to the lead; then the row of the Codex CLI in `doctor` (planned, the
+      lead has no objection), its own slice cut from `main`.
+      STATE AT 2026-10-13 23:46 (the state before the one above). (b2) is pull request 113, for the lead to
       merge; the SPEC's notes are with the lead. SLICE (c) on `feat/question-texts` (Progress,
       the entry of 23:46): the skill's text is in the tree with its tests (125 pass); one
       writer replaces "he", "his", "him" and "the two blocks of a cut" in the printed texts.

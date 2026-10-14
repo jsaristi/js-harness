@@ -50,9 +50,13 @@ matters, who holds it, and where it was seen.
   about 17:50; JH 7 rightly waited for his word, showed as running, and every message to it queued
   unread for six hours, and the orchestrator did not see it before he left. The board
   (`js-harness sessions`) could mark a session that waits for his word (a rejected tool, an open
-  prompt) or writes nothing for 30 minutes. JH 5, the channel.
-- A check of a reply: a question with options and no question-tool call. JH 5 measures it over the
-  transcripts first; a blocking hook is his decision.
+  prompt) or writes nothing for 30 minutes. JH 5, the channel. The first half is built: the board
+  marks a session whose tool call was refused or whose turn was stopped (`odd/tasks/session-channel.md`,
+  Progress, 2026-10-14 00:15); the 30 minutes of silence are not.
+- ~~A check of a reply: a question with options and no question-tool call. JH 5 measures it over the
+  transcripts first; a blocking hook is his decision.~~ Measured (about 67 percent precision, 20 to
+  25 percent recall over 572 replies); no blocking hook, decided by the orchestrator under his line
+  15820 and kept for his confirmation: `odd/tasks/session-channel.md`, Progress, 2026-10-13 23:46.
 
 ## Owed and not yet placed
 

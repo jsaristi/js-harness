@@ -298,6 +298,21 @@ function turnOf(entry) {
   return blocks.some((block) => isText(block) && block.text.startsWith('[Request interrupted')) ? 'ended' : 'working';
 }
 
+/** How an interruption ended a turn: `'refused'` when a tool call was refused, `'interrupted'` when the turn was
+ * stopped, `null` for an entry that is no interruption. The host writes the same text when another session stops
+ * this one, so it says how the turn ended and never who ended it. */
+function stopOf(entry) {
+  if (entry.type !== 'user') return null;
+  const text = blocksOf(entry).find((block) => isText(block) && block.text.startsWith('[Request interrupted'))?.text;
+  if (text === undefined) return null;
+  return text.startsWith('[Request interrupted by user for tool use]') ? 'refused' : 'interrupted';
+}
+
+/** The words of a stop (`stopOf`), for the board and the watch. */
+const STOP_WORDS = { refused: 'a tool call of it was refused', interrupted: 'its turn was interrupted' };
+const STOPPED_BY = "by the user or by another session's stop";
+const stopWords = (stopped) => `${STOP_WORDS[stopped.how]}, ${STOPPED_BY}`;
+
 /** Whether `entry` is a reply of the session itself: an assistant entry that is no side chain's and that
  * the harness did not write in the session's place (model `<synthetic>`). It is what answers an
  * instruction (`sessionFacts`, `lastTask`), whether or not it records what it was sent with (`contextOf`). */
@@ -496,6 +511,7 @@ export function sessionFacts(
   let gitBranch = null;
   let turn = null;
   let turnEndedAt = null;
+  let stoppedHow = null;
   let lastReply = null;
   let context = null;
 
@@ -560,6 +576,7 @@ export function sessionFacts(
     if (said !== null) {
       turn = said;
       turnEndedAt = said === 'ended' ? (entry.timestamp ?? null) : null;
+      stoppedHow = said === 'ended' ? stopOf(entry) : null;
     }
 
     for (const { task, toolUse, status } of notificationsOf(entry)) {
@@ -690,6 +707,8 @@ export function sessionFacts(
     lastTaskFits: room === null || lastTask.unavailable !== undefined ? null : lastTask.tokens <= room,
     state,
     turnEndedAt,
+    // A turn the person refused or stopped, while the session has not acted since: it waits for them.
+    stopped: state === 'waiting' && stoppedHow !== null ? { how: stoppedHow, at: turnEndedAt } : null,
     work,
     pendingCall,
     tail: tail > 0 && lastReply !== null ? lastReply.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() !== '').slice(-tail) : [],
@@ -2236,10 +2255,10 @@ function sessionChanges(before, after, self) {
     else if (session.state === 'waiting' && was.state !== 'waiting') {
       const open = was.work.filter((work) => !work.ended).length;
       const how = was.state === 'background' ? `: the ${pieces(open)} it had open ended` : '';
-      lines.push(`${sessionLabel(session)} is waiting${how} (was ${was.state})`);
+      lines.push(`${sessionLabel(session)} is waiting${how} (was ${was.state})${session.stopped ? `: stopped: ${stopWords(session.stopped)}` : ''}`);
     } else if (session.state === 'waiting' && session.turnEndedAt !== was.turnEndedAt) {
       // Waiting at both looks, but not at the same point: it was given something and finished it.
-      lines.push(`${sessionLabel(session)} finished another turn and is waiting`);
+      lines.push(`${sessionLabel(session)} finished another turn and is waiting${session.stopped ? `: stopped: ${stopWords(session.stopped)}` : ''}`);
     }
     // Once, when the host or the person compacted it since the last look. A board from before the field was
     // kept has none to compare with (`undefined`), so nothing is said of the compactions it already had.
@@ -2676,6 +2695,8 @@ function sessionLines(session, now, sizes, ended) {
   const state = ended ? `${ended.kind} ${ago(ended.at, now)} by its own notice (its transcript: ${read})` : read;
   const lines = [`${id}  ${state}  ${session.title ?? '(no title)'}  last entry ${ago(session.lastEntryAt, now)}${self}`];
   const recorded = (value) => value ?? 'unavailable: no entry records it';
+  // A session the person refused or stopped may wait in silence: it is said here, under its first line.
+  if (session.stopped && !ended) lines.push(`  stopped ${ago(session.stopped.at, now)}: ${stopWords(session.stopped)}: it waits for the user, and tells the orchestrator what it needs`);
   lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}`);
   // A line of its own: it is the one read to judge whether what is left of a task fits.
   lines.push(`  ${contextText(session, sizes)}`);

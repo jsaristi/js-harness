@@ -214,6 +214,36 @@ test('an interrupted turn and the output of a local command both end the turn', 
   assert.deepEqual(states, ['waiting', 'waiting', 'waiting']);
 });
 
+// A session whose tool call was refused, or whose turn was stopped, waits for the person and may say nothing:
+// one waited six hours so. The host writes the same refusal when another session stops it, so the fact says
+// how the turn ended, never who ended it.
+test('a turn that ends refused or interrupted is said as stopped, until the session acts again', () => {
+  const stop = (text, minute) => ({ type: 'user', ...base(minute), message: { role: 'user', content: [{ type: 'text', text }] } });
+  const refused = lib.sessionFacts(transcript(prompt('go', 1), call('toolu_1', 'Edit', {}, 2), stop('[Request interrupted by user for tool use]', 3)));
+  assert.deepEqual([refused.state, refused.stopped], ['waiting', { how: 'refused', at: at(3) }]);
+  const interrupted = lib.sessionFacts(transcript(prompt('go', 1), reply('reading', 2, 'tool_use'), stop('[Request interrupted by user]', 4)));
+  assert.deepEqual(interrupted.stopped, { how: 'interrupted', at: at(4) });
+  const answered = lib.sessionFacts(transcript(prompt('go', 1), call('toolu_1', 'Edit', {}, 2), stop('[Request interrupted by user for tool use]', 3), prompt('go on', 5), reply('done', 6)));
+  assert.deepEqual([answered.state, answered.stopped], ['waiting', null]);
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2))).stopped, null);
+});
+
+test('the board marks a stopped session as waiting for the user, and the watch says it once', () => {
+  const stopped = seen(A, 'waiting', { stopped: { how: 'refused', at: before(600) } });
+  const row = lib.renderBoard({ ...BOARD, sessions: [stopped] }, { now: NOW }).filter((line) => line.includes('stopped'));
+  assert.equal(row.length, 1, row.join('\n'));
+  assert.match(row[0], /^ {2}stopped \S+ ago: a tool call of it was refused, by the user or by another session's stop: it waits for the user, and tells the orchestrator what it needs$/);
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [stopped] }), [
+    'session aaaaaaaa "title a" is waiting (was working): stopped: a tool call of it was refused, by the user or by another session\'s stop',
+  ]);
+  const plain = seen(A, 'waiting', { stopped: { how: 'interrupted', at: before(600) } });
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [plain] }), [
+    'session aaaaaaaa "title a" is waiting (was working): stopped: its turn was interrupted, by the user or by another session\'s stop',
+  ]);
+  // A session that waits as it should is no news of this kind.
+  assert.equal(lib.renderBoard({ ...BOARD, sessions: [seen(A, 'waiting')] }, { now: NOW }).some((line) => line.includes('stopped')), false);
+});
+
 test('entries of a side chain and meta entries do not decide the state', () => {
   const side = { ...call('toolu_s', 'Read', {}, 6), isSidechain: true };
   const meta = { type: 'user', ...base(7), isMeta: true, message: { role: 'user', content: 'a reminder' } };
