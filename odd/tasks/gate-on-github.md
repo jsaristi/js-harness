@@ -744,15 +744,29 @@ version).**
   **When to come back to it:** the orchestrator brings it back to him with measured numbers if
   the lock stays saturated once the Linux gate runs locally (JH 8's WSL gate). The design above
   is the starting point then: its month, its losses and the reopen still to prove.
+- 2026-10-14 · **The exchange is taken.** Later the same day he typed (orchestrator transcript
+  `ffe99ebf`, line 5394, 19:15:14Z, read with `sessions --quote`): "Sí, tomemos el intercambio
+  con verde de GitHub". "The exchange, R1" (second version) is now the rule, with what the
+  orchestrator settled when it relayed the decision (14:21 local):
+  - **Reading the tested base:** from the run's checkout log, the line "HEAD is now at <merge>
+    Merge <head> into <base>". The design's own reading, the `HEAD^1` printed by the workflow, is
+    not built.
+  - **A stale base:** the orchestrator closes and reopens the pull request to get a fresh run. It
+    did so on pull request 128 at 14:18 local, which proves the reopen the design left unproven.
+  - **Sessions:** they stop merging `main` into their pull requests unless there is a conflict or
+    they need code from `main`.
 
 ## Next
-1. The exchange is not taken (Progress, his answer of 2026-10-14). Nothing to build for it
-   unless the orchestrator brings it back with measured lock numbers.
+1. The exchange is taken (Progress, his decision at line 5394). What it still asks of the code
+   is the orchestrator's to place; this session's queue holds the next item it gave: a resolved
+   merge's Codex review covers its conflicted hunks only, not the whole branch again (pull
+   request 124 paid 175,025 input tokens for that), test first, after T3 of
+   `odd/tasks/read-from-records.md`.
 2. Spec notes for any further capability go to the orchestrator at the feature's close (his
    "Que me lo manden a mí"); the three so far were sent.
 
 ## Resume here
 Feature document on `docs/gate-on-github-exchange` (worktree `D:/js-harness-worktrees/github-gate`),
-off `main` `9546fb7`. T1 to T6 are done and on `main`. T7 is closed: his answer was "No por
-ahora", with a condition to come back to it (Progress). Read the orchestrator's answers first,
-then Next.
+off `main` `9546fb7`. T1 to T6 are done and on `main`. T7 is closed and taken: he first answered
+"No por ahora", then, at line 5394, "Sí, tomemos el intercambio con verde de GitHub" (Progress).
+Read the orchestrator's answers first, then Next.
