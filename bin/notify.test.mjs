@@ -716,7 +716,7 @@ test('a recorded question is printed with its number and its prefix, and the lin
     `js-harness notify: recorded question 1 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`,
     'prefix: "Pregunta 1: "',
     `address of the orchestrator: ${ORCHESTRATOR_TITLE}`,
-    `question 1 is recorded for ${ORCHESTRATOR_TITLE} to show to him: ring it with the number, and go on with what does not wait on it`,
+    `question 1 is recorded for ${ORCHESTRATOR_TITLE} to show to the user: ring it with the number, and go on with what does not wait on it`,
   ]);
   const second = await askQuestion(machine, { newId: () => SECOND_ID });
   assert.equal(second.out[0], `js-harness notify: recorded question 2 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`);
@@ -728,7 +728,7 @@ test('a question the orchestrator records itself is told how to ask him, by when
   // `sessions --address` does not count the session that asks, so an orchestrator alone has no address to
   // ring: it is known by its own title, and told when to call the tool, which holds it until he answers.
   // The sender wrote a minute ago, so he is there: the question tool is called now.
-  const HOLDS = (number) => `you hold that role: he wrote here 1m ago: put it to him now with the question tool. Its text is headed by "Pregunta ${number}: "; until it is asked the question waits as this notice`;
+  const HOLDS = (number) => `you hold that role: the user wrote here 1m ago: put it to them now with the question tool. Its text is headed by "Pregunta ${number}: "; until it is asked the question waits as this notice`;
   writeSession(machine, SENDER, ORCHESTRATOR_TITLE);
   const alone = await askQuestion(machine);
   assert.equal(alone.code, 0);
@@ -743,7 +743,7 @@ test('a question the orchestrator records itself is told how to ask him, by when
   assert.deepEqual(beside.err, (await runAddress(machine, 'orchestrator')).err);
 }));
 
-const ANSWER_LINE = 'Then record his answer: js-harness notify --to orchestrator --kind answer --question 1 --transcript <session id> --line <n> "<his answer in one line>"';
+const ANSWER_LINE = 'Then record the user\'s answer: js-harness notify --to orchestrator --kind answer --question 1 --transcript <session id> --line <n> "<the user\'s answer in one line>"';
 
 test('a question with no orchestrator is to be asked by the sender itself, and the line says how to record his answer', withMachine(async (machine) => {
   // He wrote a minute ago, so the sender asks him now, with the question tool.
@@ -752,7 +752,7 @@ test('a question with no orchestrator is to be asked by the sender itself, and t
   assert.equal(code, 0);
   assert.deepEqual(err, []);
   assert.match(out[2], /^address of the orchestrator: no single one now \(sessions --address exit 1\): /);
-  assert.equal(out[3], `no orchestrator to show it: ask him yourself: he wrote here 1m ago: put it to him now with the question tool. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
+  assert.equal(out[3], `no orchestrator to show it: ask the user yourself: the user wrote here 1m ago: put it to them now with the question tool. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
   assert.equal(out.length, 4);
 }));
 
@@ -761,7 +761,7 @@ test('a question with no orchestrator, when he wrote longer ago, is to be asked 
   const { code, out, err } = await askQuestion(machine);
   assert.equal(code, 0);
   assert.deepEqual(err, []);
-  assert.equal(out[3], `no orchestrator to show it: ask him yourself: he last wrote here 1h 00m ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that 1 question waits and about what, and never writes the options out as text. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
+  assert.equal(out[3], `no orchestrator to show it: ask the user yourself: the user last wrote here 1h 00m ago: the question tool would hold this session until the user answers, so call it in the reply to the user's next message; until then a reply says in one line that 1 question waits and about what, and never writes the options out as text. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
   assert.equal(out.length, 4);
 }));
 
@@ -771,7 +771,7 @@ test('a question with no orchestrator, when the sender\'s transcript holds no wo
   const { code, out, err } = await askQuestion(machine);
   assert.equal(code, 0);
   assert.deepEqual(err, []);
-  assert.equal(out[3], `no orchestrator to show it: ask him yourself: when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that 1 question waits and about what, and never writes the options out as text. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
+  assert.equal(out[3], `no orchestrator to show it: ask the user yourself: when the user last wrote here is not known: call the question tool in the reply to a message of the user's; until then a reply says in one line that 1 question waits and about what, and never writes the options out as text. Its text is headed by "Pregunta 1: ". ${ANSWER_LINE}`);
   assert.equal(out.length, 4);
 }));
 
@@ -902,7 +902,7 @@ test('an answer typed in the chat after its question is verified, and its words 
   assert.deepEqual([code, err], [0, []]);
   assert.deepEqual(out.slice(0, 2), [
     `js-harness notify: recorded answer to question 1 for the orchestrator at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`,
-    'his answer, typed in the chat: Entonces la A',
+    'the user\'s answer, typed in the chat: Entonces la A',
   ]);
   const answer = recorded(machine).notices.at(-1);
   assert.deepEqual([answer.kind, answer.question, answer.verified, answer.transcript, answer.line], ['answer', 1, true, TRANSCRIPT_ID, 2]);
@@ -916,7 +916,7 @@ test('an answer typed in the chat is refused when it was sent before its questio
   const file = transcriptFile(machine);
   const refusals = [
     [[replied(30), typed('Entonces la A', -60)], `js-harness notify: not recorded: line 2 of ${file} was sent before question 1 was recorded`],
-    [[replied(30), typed('<pasted_content id="p1">una lista larga</pasted_content id="p1">', 60)], `js-harness notify: not recorded: line 2 of ${file} holds only pasted text: not his words typed in the chat`],
+    [[replied(30), typed('<pasted_content id="p1">una lista larga</pasted_content id="p1">', 60)], `js-harness notify: not recorded: line 2 of ${file} holds only pasted text: not the user's words typed in the chat`],
   ];
   for (const [entries, message] of refusals) {
     writeTranscript(machine, TRANSCRIPT, entries);
@@ -926,7 +926,7 @@ test('an answer typed in the chat is refused when it was sent before its questio
   writeTranscript(machine, TRANSCRIPT, [replied(30), replied(60)]);
   const notHis = await answerTo(machine);
   assert.deepEqual([notHis.code, notHis.out, notHis.err.length], [1, [], 1]);
-  assert.ok(notHis.err[0].startsWith(`js-harness notify: not recorded: line 2 of ${file} is `) && notHis.err[0].endsWith(': not his answer'), notHis.err[0]);
+  assert.ok(notHis.err[0].startsWith(`js-harness notify: not recorded: line 2 of ${file} is `) && notHis.err[0].endsWith(': not the user\'s answer'), notHis.err[0]);
   assert.equal(recordText(machine), unchanged);
 }));
 
@@ -937,7 +937,7 @@ test('an answer to a question-tool call is verified when the call was asked afte
   writeTranscript(machine, TRANSCRIPT, [asks(prefixed, 30), answering(prefixed, 'main', 60)]);
   const verified = await answerTo(machine);
   assert.deepEqual([verified.code, verified.err], [0, []]);
-  assert.equal(verified.out[1], 'his answer, tapped: main');
+  assert.equal(verified.out[1], 'the user\'s answer, tapped: main');
   assert.deepEqual(recorded(machine).notices.at(-1).copy, { tool: 'AskUserQuestion', answers: [{ question: prefixed, options: ['main', 'feat'], answer: 'main', how: 'tapped' }] });
 
   // A second question, whose calls are refused: asked before it was recorded, or asking another question.
@@ -983,7 +983,7 @@ test('an answer without --question is written as it was before: the same keys, a
   const { code, out, err } = await runNotify(machine, ['--to', '5', '--kind', 'answer', '--transcript', '1d16beeb', '--line', '406', 'Entonces la A']);
   assert.deepEqual([code, err], [0, []]);
   assert.equal(out[0], `js-harness notify: recorded answer for work session 5 at ${QUESTION_AT} from "${SENDER_TITLE}" in ${machine.record}`);
-  assert.deepEqual(out.filter((line) => line.startsWith('his answer') || line.startsWith('prefix')), []);
+  assert.deepEqual(out.filter((line) => line.startsWith('the user\'s answer') || line.startsWith('prefix')), []);
   const [line, ...rest] = fs.readFileSync(machine.record, 'utf8').split('\n');
   assert.deepEqual(rest, ['']);
   assert.deepEqual(Object.keys(JSON.parse(line)), ['schema', 'at', 'from', 'to', 'kind', 'text', 'cwd', 'worktree', 'branch', 'transcript', 'line']);

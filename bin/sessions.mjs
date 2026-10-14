@@ -69,10 +69,10 @@ const USAGE = [
   '         prints the entry at that line of the transcript only when the user sent it, with its time:',
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
   '         or no such line, saying which; 2 when it cannot look. It warns when the entry is only pasted content.',
-  '         a message the user sent while the session worked (the host queues it) is his too, and is said so',
-  '         his answer to a question the session asked with the host\'s question tool is his too: it prints',
-  '         the question, the options shown and whether he tapped one or typed his own; the result of any',
-  '         other tool is not, and a question he closed without answering is exit 1',
+  '         a message the user sent while the session worked (the host queues it) is the user\'s too, and is said so',
+  '         the user\'s answer to a question the session asked with the host\'s question tool is the user\'s too: it prints',
+  '         the question, the options shown and whether they tapped one or typed their own; the result of any',
+  '         other tool is not, and a question the user closed without answering is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
 ].join('\n');
 
@@ -629,7 +629,7 @@ export async function sessionsMain(
     const when = quote.queued ? ' while the session was working (the host queued it)' : '';
     stdout(`${file}, line ${line}, ${quote.at ?? 'no time recorded'}, sent by the user${when}${images}:`);
     stdout(quote.text);
-    if (quote.pastedOnly) stderr(`js-harness sessions: line ${line} is only pasted content: nothing was typed with it, and a paste alone is not his word`);
+    if (quote.pastedOnly) stderr(`js-harness sessions: line ${line} is only pasted content: nothing was typed with it, and a paste alone is not the user's word`);
     return 0;
   }
 

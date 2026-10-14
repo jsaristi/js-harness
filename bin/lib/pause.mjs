@@ -232,7 +232,7 @@ function noticeOf(tokens, compaction) {
   const whole = Math.round(tokens);
   const share = percentOf(whole, window);
   const room = Math.round(Math.max(0, compaction - tokens));
-  const text = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%: about ${thousands(room)} tokens are left. This is the context pause. Now write your state where it is read after a compaction (the "Next step" of the session's feature document, committed; the relief file for an orchestrator), say this share to the user in your next reply with the two blocks of a cut, once, and then go on with the task.`;
+  const text = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%: about ${thousands(room)} tokens are left. This is the context pause. Now write your state where it is read after a compaction (the "Next step" of the session's feature document, committed; the relief file for an orchestrator), say this share to the user in your next reply, once, with what they send to compact this session and the prompt that resumes it after, and then go on with the task.`;
   return { tokens: whole, share, compactionShare: DEFAULT_CONTEXT_COMPACTION_PERCENT, room, text };
 }
 

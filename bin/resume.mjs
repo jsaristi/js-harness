@@ -696,12 +696,12 @@ function callSaid(item, { ownWork, sessionId, read, ask, quoted }) {
   // answer notice yet, and only the board sees that, not this transcript.
   if (call === null) {
     return ownWork
-      ? 'recorded, no answer yet: the orchestrator shows it to him; go on with what does not wait on it (js-harness sessions lists it)'
-      : `not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had his answer; if it is open there: ${ask}. Its text is headed by "${questionPrefix(item.number)}"`;
+      ? 'recorded, no answer yet: the orchestrator shows it to the user; go on with what does not wait on it (js-harness sessions lists it)'
+      : `not asked in this transcript: look first (js-harness sessions), since another session may have asked it and had the user's answer; if it is open there: ${ask}. Its text is headed by "${questionPrefix(item.number)}"`;
   }
-  if (call.state === 'pending') return `asked at line ${call.line} of this transcript, with no answer in it: it may be on his screen; look (js-harness sessions) before asking again`;
-  if (call.state === 'closed') return `he closed it without answering (asked at line ${call.line}): ask it again: ${ask}`;
-  if (call.state === 'unanswered') return `asked at line ${call.line}, and its result is no answer of his: ask it again: ${ask}`;
+  if (call.state === 'pending') return `asked at line ${call.line} of this transcript, with no answer in it: it may be on the user's screen; look (js-harness sessions) before asking again`;
+  if (call.state === 'closed') return `the user closed it without answering (asked at line ${call.line}): ask it again: ${ask}`;
+  if (call.state === 'unanswered') return `asked at line ${call.line}, and its result is no answer of the user's: ask it again: ${ask}`;
   // Answered: the reply goes back to the asker's work session when its title names one, else to the orchestrator, which asks him.
   const role = roleOfTitle(item.from.title);
   const to = role?.role === 'work' ? role.number : 'orchestrator';
@@ -710,8 +710,8 @@ function callSaid(item, { ownWork, sessionId, read, ask, quoted }) {
   // so its answer is recorded from the line, as unverified, and no quote command is named. The transcript is named by the word
   // `outside-the-project-folder`, which is no file and starts no transcript id: `transcriptNamed` resolves nothing from it, so
   // `notify` cannot check the answer against another session's transcript in this project's folder.
-  if (!quoted) return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so the harness cannot read that line: record it as the sender's claim with js-harness notify --to ${to} --kind answer --question ${item.number} --transcript outside-the-project-folder --line ${call.answeredLine} "<his answer in one line>", which keeps it unverified`;
-  return `he ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. Read it: js-harness sessions --quote ${id} ${call.answeredLine}  Then record it: js-harness notify --to ${to} --kind answer --question ${item.number} --transcript ${id} --line ${call.answeredLine} "<his answer in one line>"`;
+  if (!quoted) return `the user ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. This transcript is not in this project's sessions folder, so the harness cannot read that line: record it as the sender's claim with js-harness notify --to ${to} --kind answer --question ${item.number} --transcript outside-the-project-folder --line ${call.answeredLine} "<the user's answer in one line>", which keeps it unverified`;
+  return `the user ANSWERED it at line ${call.answeredLine} of this transcript: do not ask it again. Read it: js-harness sessions --quote ${id} ${call.answeredLine}  Then record it: js-harness notify --to ${to} --kind answer --question ${item.number} --transcript ${id} --line ${call.answeredLine} "<the user's answer in one line>"`;
 }
 
 /** A question of the record that no notice closed, as two lines: the question with its asker, its age and what waits on it,

@@ -36,7 +36,7 @@ const USAGE = [
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
   '    keys text, options and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
-  '    The record numbers it, and the number is printed: he is asked with its text headed by',
+  '    The record numbers it, and the number is printed: the user is asked with its text headed by',
   '    "Pregunta <n>: ". An answer or a withdrawal names its question with --question <n>. A verified answer',
   '    is one read at its line of the transcript, and its copy is kept with it; with no transcript to read,',
   '    the answer is recorded unverified, and that is said.',
@@ -141,10 +141,10 @@ function parseArgs(argv) {
  * and holds a question that starts with the question's prefix: one call may ask several questions. */
 function copyOfAnswer(text, { line, file, number, asked }) {
   const quote = quoteOf(text, line);
-  if (!quote.person) return { refused: `line ${line} of ${file} is ${quote.what}: not his answer` };
+  if (!quote.person) return { refused: `line ${line} of ${file} is ${quote.what}: not the user's answer` };
   const recordedAt = Date.parse(asked.at);
   if (quote.answered === undefined) {
-    if (quote.pastedOnly) return { refused: `line ${line} of ${file} holds only pasted text: not his words typed in the chat` };
+    if (quote.pastedOnly) return { refused: `line ${line} of ${file} holds only pasted text: not the user's words typed in the chat` };
     if (quote.at === null) return { refused: `line ${line} of ${file} has no time, so it cannot be told to come after question ${number}` };
     if (!(Date.parse(quote.at) > recordedAt)) return { refused: `line ${line} of ${file} was sent before question ${number} was recorded` };
     return { copy: { tool: null, answers: [{ question: asked.text, options: [], answer: quote.text, how: 'typed in the chat' }] } };
@@ -387,7 +387,7 @@ export async function notifyMain(
         : notice.kind;
   stdout(`js-harness notify: recorded ${what} for ${role} at ${at} from ${senderWords(from)} in ${file}`);
   if (notice.copy) {
-    for (const one of notice.copy.answers) stdout(`his answer, ${one.how}: ${one.answer.length > SHOWN ? `${one.answer.slice(0, SHOWN)}…` : one.answer}`);
+    for (const one of notice.copy.answers) stdout(`the user's answer, ${one.how}: ${one.answer.length > SHOWN ? `${one.answer.slice(0, SHOWN)}…` : one.answer}`);
   }
   if (questionNumber !== null) stdout(`prefix: ${JSON.stringify(questionPrefix(questionNumber))}`);
   senderNotKnown();
@@ -416,8 +416,8 @@ export async function notifyMain(
     const ask = JSON.stringify(questionPrefix(questionNumber));
     const rule = () => askingRule(personAtOf(), now(), { waiting: questionsWaiting });
     if (roleOfTitle(from.title)?.role === 'orchestrator') stdout(`you hold that role: ${rule()}. Its text is headed by ${ask}; until it is asked the question waits as this notice`);
-    else if (address === null) stdout(`no orchestrator to show it: ask him yourself: ${rule()}. Its text is headed by ${ask}. Then record his answer: js-harness notify --to orchestrator --kind answer --question ${questionNumber} --transcript <session id> --line <n> "<his answer in one line>"`);
-    else stdout(`question ${questionNumber} is recorded for ${address} to show to him: ring it with the number, and go on with what does not wait on it`);
+    else if (address === null) stdout(`no orchestrator to show it: ask the user yourself: ${rule()}. Its text is headed by ${ask}. Then record the user's answer: js-harness notify --to orchestrator --kind answer --question ${questionNumber} --transcript <session id> --line <n> "<the user's answer in one line>"`);
+    else stdout(`question ${questionNumber} is recorded for ${address} to show to the user: ring it with the number, and go on with what does not wait on it`);
   };
 
   // The address of the role, so the sender can ring it: the answer of `sessions --address`, asked of the

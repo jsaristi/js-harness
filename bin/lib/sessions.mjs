@@ -2419,7 +2419,7 @@ function questionChanges(before, after) {
   for (const question of view.recorded) {
     if (was.get(question.number) === question.state) continue;
     if (question.state === 'answered-not-carried') lines.push(`question ${question.number} answered at ${question.answered.session.slice(0, 8)}:${question.answered.line}: not carried to ${senderWords(question.asker)} yet`);
-    else if (question.state === 'closed') lines.push(`question ${question.number} closed by him without an answer: ${clipped(question.question)}`);
+    else if (question.state === 'closed') lines.push(`question ${question.number} closed by the user without an answer: ${clipped(question.question)}`);
   }
   return lines;
 }
@@ -2621,11 +2621,11 @@ function durationOf(seconds) {
 export function askingRule(personAt, now, { waiting = 1 } = {}) {
   const waits = waiting === 1 ? '1 question waits' : `${waiting} questions wait`;
   const at = typeof personAt === 'string' ? Date.parse(personAt) : NaN;
-  if (Number.isNaN(at)) return `when he last wrote here is not known: call the question tool in the reply to a message of his; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+  if (Number.isNaN(at)) return `when the user last wrote here is not known: call the question tool in the reply to a message of the user's; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
   const elapsed = Math.max(0, now - at);
   const since = durationOf(Math.round(elapsed / 1000));
-  if (elapsed < PERSON_PRESENT_MS) return `he wrote here ${since} ago: put it to him now with the question tool`;
-  return `he last wrote here ${since} ago: the question tool would hold this session until he answers, so call it in the reply to his next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
+  if (elapsed < PERSON_PRESENT_MS) return `the user wrote here ${since} ago: put it to them now with the question tool`;
+  return `the user last wrote here ${since} ago: the question tool would hold this session until the user answers, so call it in the reply to the user's next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
 }
 
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */
@@ -2849,7 +2849,7 @@ function channelLines(channel, now) {
   else if (channel.skipped > 0) lines.push(`  ${channel.path}  no notice`);
   for (const notice of channel.notices) {
     const to = notice.to.role === 'orchestrator' ? 'orchestrator' : `work ${notice.to.number}`;
-    const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (his words: transcript ${notice.transcript}, line ${notice.line})` : '';
+    const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (the user's words: transcript ${notice.transcript}, line ${notice.line})` : '';
     lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
   }
   if (channel.skipped > 0) lines.push(`  ${channel.skipped} line${channel.skipped === 1 ? ' of the record is' : 's of the record are'} neither a notice nor a reading: skipped`);
@@ -2948,7 +2948,7 @@ function gateLines(board, now) {
   return ['Gates', ...lines, ''];
 }
 
-const QUESTION_STATE_WORDS = { closed: 'closed by him without an answer', pending: 'on his screen, no answer yet', unanswered: 'no answer in its result' };
+const QUESTION_STATE_WORDS = { closed: 'closed by the user without an answer', pending: 'on the user\'s screen, no answer yet', unanswered: 'no answer in its result' };
 
 /** The text of an open question as a line carries it: the first one its call asked, cut to a line's
  * width, and how many more the same call asked. */
@@ -2957,7 +2957,7 @@ const questionWords = ({ question, more }) => `${clipped(question)}${more > 0 ? 
 /** A recorded question's state in words: a question that is not shown yet, or one answered and not carried yet, says
  * where the answer is; the others are said as a line of the transcripts says them. */
 function recordedStateWords({ state, answered }) {
-  if (state === 'not-shown') return 'recorded, not shown to him yet';
+  if (state === 'not-shown') return 'recorded, not shown to the user yet';
   if (state === 'answered-not-carried') return `answered at ${answered.session.slice(0, 8)}:${answered.line}, not carried yet`;
   return QUESTION_STATE_WORDS[state];
 }

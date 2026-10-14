@@ -215,7 +215,7 @@ test('the usage says what --opening and --quote take, what each prints and what 
   const usage = err.join('\n');
   assert.match(usage, /--opening \[--\] "<title>"\|"<code> <role>"[\s\S]*prints the opening stored for that session[\s\S]*records in the channel which session read it[\s\S]*exit 0 for one,\s+1 for none,\s+2 for several or when it cannot tell/);
   assert.match(usage, /--quote <transcript file or session id> <line>[\s\S]*only when the user sent it, with its time[\s\S]*exit 1[\s\S]*another session's message, a task notification, a meta or assistant entry,\s+or no such line[\s\S]*2 when it cannot look/);
-  assert.match(usage, /his answer to a question the session asked with the host's question tool is his too[\s\S]*the question, the options shown and whether he tapped one or typed his own[\s\S]*a question he closed without answering is exit 1/);
+  assert.match(usage, /the user's answer to a question the session asked with the host's question tool is the user's too[\s\S]*the question, the options shown and whether they tapped one or typed their own[\s\S]*a question the user closed without answering is exit 1/);
 });
 
 // --- where the sessions are ---
@@ -1831,7 +1831,7 @@ test('--quote warns on stderr when the user\'s entry is only pasted content, and
   const { code, stdout, stderr } = await runSessions(machine, ['--quote', 'aaaaaaaa', '3']);
   assert.equal(code, 0);
   assert.deepEqual(stdout.split('\n').slice(1), ['<pasted_content id="be4a">', 'Sos JH 5.', 'Leé el documento.', '</pasted_content id="be4a">']);
-  assert.equal(stderr, 'js-harness sessions: line 3 is only pasted content: nothing was typed with it, and a paste alone is not his word');
+  assert.equal(stderr, 'js-harness sessions: line 3 is only pasted content: nothing was typed with it, and a paste alone is not the user\'s word');
   assert.equal((await runSessions(machine, ['--quote', 'aaaaaaaa', '2'])).stderr, '');
 }));
 
@@ -1862,7 +1862,7 @@ test('--quote takes a message the user sent while the session worked, and says t
   // A typed entry is said as before, and a queued paste alone is warned of like any other.
   assert.equal((await runSessions(machine, ['--quote', 'aaaaaaaa', '2'])).stdout.split('\n')[0], `${file}, line 2, ${before(100).toISOString()}, sent by the user:`);
   const pasted = await runSessions(machine, ['--quote', 'aaaaaaaa', '4']);
-  assert.deepEqual([pasted.code, pasted.stdout.split('\n').length, pasted.stderr], [0, 4, 'js-harness sessions: line 4 is only pasted content: nothing was typed with it, and a paste alone is not his word']);
+  assert.deepEqual([pasted.code, pasted.stdout.split('\n').length, pasted.stderr], [0, 4, 'js-harness sessions: line 4 is only pasted content: nothing was typed with it, and a paste alone is not the user\'s word']);
   // What the host queues for anyone else, and every other attachment, stays "not his words", each named.
   const not = (line, what) => [1, '', `js-harness sessions: not the user's words: line ${line} of ${file} is ${what}`];
   const said = async (line) => {
@@ -1873,7 +1873,7 @@ test('--quote takes a message the user sent while the session worked, and says t
   assert.deepEqual(await said(6), not(6, 'a queued task notification'));
   assert.deepEqual(await said(7), not(7, 'a queued message of origin "human" that the host does not mark as a turn of the person'));
   assert.deepEqual(await said(8), not(8, 'an attachment of type "hook_success": the host wrote it, not the person'));
-  assert.match((await runSessions(machine, ['--nope'])).stderr, /a message the user sent while the session worked \(the host queues it\) is his too, and is said so/, 'the usage says so');
+  assert.match((await runSessions(machine, ['--nope'])).stderr, /a message the user sent while the session worked \(the host queues it\) is the user's too, and is said so/, 'the usage says so');
 }));
 
 test('--quote prints his answer to a question the session asked, with the question, the options shown and whether he tapped or typed it', withMachine(async (machine) => {
@@ -1954,8 +1954,8 @@ test('the board lists the questions put to the user that have no answer, read fr
   const { stdout } = await runSessions(machine, []);
   const section = sectionOf(stdout, 'Open questions', 'Worktrees');
   assert.equal(section.length, 5, section.join('\n'));
-  assert.match(section[1], /^ {2}\S+ ago {2}.* {2}closed by him without an answer {2}Pregunta 21: ¿seguimos con la lista\?$/);
-  assert.match(section[2], /^ {2}\S+ ago {2}.* {2}on his screen, no answer yet {2}Pregunta 22: ¿y esta\?$/);
+  assert.match(section[1], /^ {2}\S+ ago {2}.* {2}closed by the user without an answer {2}Pregunta 21: ¿seguimos con la lista\?$/);
+  assert.match(section[2], /^ {2}\S+ ago {2}.* {2}on the user's screen, no answer yet {2}Pregunta 22: ¿y esta\?$/);
   assert.match(section[3], /^ {2}read in \d+ transcripts? changed in the last \d+h, each read whole$/);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
   assert.deepEqual(board.questions.open.map(({ id, state }) => [id, state]), [['toolu_q1', 'closed'], ['toolu_q2', 'pending']]);
@@ -1972,7 +1972,7 @@ test('a question the record holds that was never asked shows as recorded, not sh
 
   const { code, stdout, stderr } = await runSessions(machine, []);
   assert.equal(code, 0, stderr);
-  assert.deepEqual(sectionOf(stdout, 'Open questions', 'Worktrees').slice(0, 2), ['Open questions', `  Pregunta 1  2m ago  ${WORKER}  recorded, not shown to him yet  ${text}`]);
+  assert.deepEqual(sectionOf(stdout, 'Open questions', 'Worktrees').slice(0, 2), ['Open questions', `  Pregunta 1  2m ago  ${WORKER}  recorded, not shown to the user yet  ${text}`]);
   const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
   assert.deepEqual(board.questions.record, [{ number: 1, at: before(120).toISOString(), from: { id: SESSION_B, title: WORKER }, text, waits: 'the board', closed: false }]);
   assert.deepEqual(board.questions.recorded.map(({ number, state, call, question }) => [number, state, call, question]), [[1, 'not-shown', null, text]]);

@@ -1196,9 +1196,11 @@ reader, and that table names this feature as their owner.
   (b1), built: "Open questions" on the board, computed from the question-tool calls of the
   transcripts, each call once, and a watch that returns for a question he closes (Progress,
   2026-10-13 04:48); the number in the tool's text is a sentence of the skill and goes with
-  (c). Owed: (b2) the `question` notice with fields, the answer with its number and copy,
-  the withdrawal, the resume's half; (c) the orchestrator skill's text, the sentences for
-  `AGENTS.md` and the two declared rules
+  (c). Slice (b2), built: the `question` notice with fields, the answer with its number and
+  copy, the withdrawal, the resume's half, the asking rule (pull request 113, head
+  `1f5d67a`). Owed: (c) the orchestrator skill's text, the printed texts in words an
+  installed project defines, the sentences for `AGENTS.md` and the two declared rules (the
+  last two placed by the owner of the rules' wording; Progress, 2026-10-13 23:46)
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -2367,6 +2369,34 @@ session needs beside it to go on; the summary of a compaction is not the record.
   a defect of the code (a capital letter in three; a queued message of his that counts for
   `personAt`; five older tests of the resume that gained the new step; one that had no time for
   his tapped answer); corrected, the four files passed, 684.
+- 2026-10-13, written at 23:46: SLICE (b2) IS PULL
+  REQUEST 113 (`feat/question-notice`, head `1f5d67a`, the merge of `main` at `677c27d`; `check
+  --push` exit 0; every code commit under a Codex record, the last "correct (0.94)"). The
+  host compacted this session at 23:04, after the last fix was committed; the lead was told.
+  Eight notes for the SPEC, one a capability, went to the lead by his order (the lead's
+  transcript `65318fd5`, line 14050, "Que me lo manden a mí", read with `sessions --quote`,
+  exit 0). SLICE (c) began on `feat/question-texts`, cut from `feat/question-notice`: (1) the
+  orchestrator skill (`orchestratorSkillContent`) gains "Questions to the user" (one place, the
+  question tool, recorded before and after, the asking rule), the work session's line that
+  asks the user nothing while an orchestrator holds the role, what may run beside a gate (the
+  lead's ruling of 20:17), and the merge check (the gate proved the tree the merge produces,
+  or the commits it lacks touch only documentation and none of the pull request's files);
+  the `js-harness` skill names `notify`. Test first: three tests failed, then the file passed,
+  125. (2) The printed texts of the channel's commands said "he", "his" and "him", and the
+  pause's notice "the two blocks of a cut": terms an installed project never defines. One
+  writer on Haiku 5.5 replaces them with "the user". (3) For the owner of the rules' wording,
+  sent to the lead: the sentence of `AGENTS.md` that replaces the block's, and two declared
+  rules (`questions-one-place` in prose, `person-present` of 15 minutes). (4) His decision on
+  a check of a reply, measured first by one reader over 60 transcripts: a detector of a
+  question with option lines and no question-tool call is right in 6 of its 9 hits and finds
+  about a fifth of such questions, most of which are written in prose, so no blocking hook is
+  recommended; sent to the lead. THE LEAD'S DECISION, not his: no blocking hook, taken under
+  his answer that the lead decides what is reversible with the recommended option while he
+  is away (the lead's transcript `65318fd5`, line 15820, "Decidí vos lo reversible
+  (Recomendada)", tapped, read with `sessions --quote`, exit 0), and recorded for his
+  confirmation on his return. (5) The writer's six files and their tests pass one by one
+  (pause 41, channel 50, notify 125, resume 77, sessions 205 and one skipped, the library
+  279); the pause's new wording gained its own assertion, which fails without it (40 and 1).
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
@@ -2779,7 +2809,18 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-13 22:50, THE NEWEST OF ALL. The P2 left open below is fixed in the
+      STATE AT 2026-10-13 23:46, THE NEWEST OF ALL. (b2) is pull request 113, for the lead to
+      merge; the SPEC's notes are with the lead. SLICE (c) on `feat/question-texts` (Progress,
+      the entry of 23:46): the skill's text is in the tree with its tests (125 pass); one
+      writer replaces "he", "his", "him" and "the two blocks of a cut" in the printed texts.
+      NEXT: read the writer's diff against its six files and their tests, run each test file
+      it touched, commit the slice through the gate (gentle-ai assess, Codex inside the
+      rate), merge `main` once 113 is on it, `check --push`, push, pull request, its number
+      to the lead. Then, in the lead's order: the row of the Codex CLI in `doctor` (read JH
+      9's `codexReview` switch first; tell the lead when it is planned), the pause's window,
+      what a session pays for the pause entry. `person-present` read with `ruleValue` once
+      the owner of the rules' wording places it.
+      STATE AT 2026-10-13 22:50 (the state before the one above). The P2 left open below is fixed in the
       commit that carries this text, test first (1 failed, then 77 passed): the command names
       `--transcript outside-the-project-folder`, which no transcript resolves to, so `notify`
       records the answer unverified. NEXT: the merge of `main`, `check --push`, the push, the
