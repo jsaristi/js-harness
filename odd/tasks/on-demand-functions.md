@@ -7,10 +7,9 @@ Branch: `feat/on-demand-functions`, in the linked worktree
 (app session `local_11c45a36-0115-4c92-b865-f1dc3f68c3c1`) · Runner: `node --test` · Delivery:
 ask-on-risk
 
-State 2026-10-13 18:55 (this machine's clock): opened. The contract and the specs below are
-written; the design is owed and nothing is built. The design reaches Sebastián only through the
-orchestrator, after a search of his earlier words (done, "His earlier words") and two independent
-readers.
+State 2026-10-13 19:15 (this machine's clock): the design is in its second version, after its
+two readers; its four questions go to the orchestrator, which asks him. Nothing is built. While
+his answers are out, T1 is built: it is the one task no answer undoes.
 
 ## Goal
 A project chooses which of the harness's functions it runs: what serves only programming is off
@@ -59,10 +58,12 @@ prepares a function reading the same switch.
 - Zero dependencies, plain Node — because the commands run in any host without an install step.
 - Anything written outside this repository is recorded so `uninstall` undoes it exactly — the
   rule in `AGENTS.md`; a switch that changes a host's or a project's file is such a write.
-- With every switch at its default, a project that has code behaves as today — because the
-  first version holds everything he ordered (line 10519) and nothing he has is to be lost.
+- With every switch at its default, a project that has code behaves as today, with two
+  exceptions that are his to allow (Design, question 3): the code map's paste goes off, and the
+  TypeScript plugin goes off where there is no TypeScript — because the first version holds
+  everything he ordered (line 10519) and nothing he has is to be lost unseen.
 - A switch cannot be a way for a branch to exempt itself from a check without that being visible
-  — because the push check exists to stop exactly that.
+  — because a review that is skipped in silence is the failure the push check exists to stop.
 - No design reaches him before the search of his words and the two readers — his rule for a
   protocol or design change.
 
@@ -70,9 +71,10 @@ prepares a function reading the same switch.
 high
 
 ## Ask me before
-Product choices, each as a question with options through the orchestrator: which functions
-become switches and their defaults; what gentle-ai's review does when the Codex review is off;
-what happens to projects already installed. Anything installed or changed on his machine. Spend
+Product choices, each as a question with options through the orchestrator (Design, "What is his
+to decide"): whether the Codex review is demanded before a push where it is on; how it starts
+in a new project; what happens to projects already installed; what gentle-ai's review does when
+the Codex review is off. Anything installed or changed on his machine. Spend
 outside the Codex review allowance. A file another session holds.
 
 ## Specs
@@ -149,15 +151,20 @@ Nothing found that contradicts S1 to S5, and nothing that names a default.
 
 ## Design
 
-First version, 2026-10-13, this session's. Not yet attacked by its two readers and not yet sent.
-Everything under "What exists today" was read on `46eec34` by two read-only explorers and spot
-checked here; the rest is a proposal.
+Second version, 2026-10-13 19:15, this session's. The first is commit `f8e70c0`; two readers
+that did not write it attacked it, and "What the readers changed" says what moved. Everything
+under "What exists today" was read on `46eec34` by two read-only explorers and spot checked
+here; the code's reader confirmed its lines on `75b0ceb` (the merge between the two changed no
+code). A line cited in the sections after it that this session did not open itself is the
+reader's reading: this session opened `bin/doctor.mjs:215-236`, `bin/lib/project.mjs:1500-1536`
+and `bin/check.mjs:1124-1142`. The rest is a proposal, and none of it is built.
 
 ### What exists today, and what it costs a project without code
 
 What `install` writes on a host serves both kinds of project: two skills on each host
-(`bin/lib/manifest.mjs:108-127`) and three hook entries, `doctor --hook` at session start,
-`resume --hook` after a compaction and `resume --pause` after a tool call (`:134-165`). None is
+(`bin/lib/manifest.mjs:108-127`) and five hook entries of three kinds, `doctor --hook` at
+session start and `resume --hook` after a compaction on both hosts, `resume --pause` after a
+tool call on Claude alone (`:134-165`). None is
 a function of code. The code map's prompt hook, the status line and the output style are not
 the harness's: `rg -n -i "statusLine|status line" bin` finds nothing outside tests, and
 `codegraph.cmd prompt-hook` is in `~/.claude/settings.json:270`, in no manifest.
@@ -188,7 +195,7 @@ Two findings that shape the design:
    either. The only configuration read from git is `.gitattributes` at the pushed tip
    (`codex-review-scope.mjs:125`), where a branch that adds `* -codex-review` already exempts
    itself, by a design that says so (`:31-32`). An `--unavailable` record covers like a review
-   (`bin/lib/codex-review-coverage.mjs:247`): today's way to go without Codex, one slice at a
+   (`bin/lib/codex-review-coverage.mjs:252-258`, `check.mjs:1171-1173`): today's way to go without Codex, one slice at a
    time.
 
 ### The switches
@@ -196,177 +203,313 @@ Two findings that shape the design:
 Three, in `harness.json` under one key, each optional:
 
 ```json
-{ "functions": { "codeMap": "auto", "languageServer": "auto", "codexReview": "on" } }
+{ "functions": { "codeMap": "auto", "languageServer": "auto", "codexReview": "auto" } }
 ```
 
 | Switch | Values | When the key is absent | Governs |
 |---|---|---|---|
-| `codeMap` | `auto`, `ask`, `paste`, `off` | `auto` | the index and the paste |
-| `languageServer` | `auto`, `on`, `off` | `auto` | the TypeScript plugin in this project |
-| `codexReview` | `on`, `off` | `on` | the push check, the debt row, the command, the texts |
+| `codeMap` | `auto`, `on-demand`, `always`, `off` | `auto` | the index and the paste |
+| `languageServer` | `auto`, `on`, `off` | `auto` | the TypeScript plugin in this clone |
+| `codexReview` | `auto`, `on`, `off` | `auto` (question 2) | the push check, the debt row, the command, the texts |
 
-- `codeMap`: `off` is no index and no paste; `ask` is the index with the paste off, the map
-  asked when needed (what this repository has by hand, and what he approved at line 8275 as "de
-  fábrica"); `paste` is the index and codegraph's paste, today's behavior on a machine with
-  codegraph; `auto` is `ask` when the project holds code and `off` when it holds none.
-- `languageServer`: `off` writes the plugin off for this project; `on` leaves the machine's
-  setting alone; `auto` is `on` when the project holds a `tsconfig.json`, a `.ts` or a `.tsx`
-  file and `off` otherwise. It only ever writes when the plugin is installed on the machine.
+- `codeMap`: `off` is no index made or asked for by the harness, and the paste off; `on-demand`
+  is the index with the paste off, the map asked when needed (what this repository has by hand,
+  and what he approved at line 8275 as "de fábrica"); `always` is the index and no key written,
+  so codegraph pastes as it does by itself; `auto` is `on-demand` when the project holds code
+  and `off` when it holds none.
+- `languageServer`: `off` writes the plugin off for this clone; `on` writes nothing; `auto` is
+  `on` when the project holds a `tsconfig.json`, a `.ts` or a `.tsx` file and `off` otherwise.
+  In this repository that resolves to `off`, what he set by hand at line 3913 (408 tracked
+  files, none of those: the reader's count).
 - `codexReview`: `off` means nothing demands, counts, runs or advises a Codex review in this
-  project.
+  project; `auto` is `on` when the project holds code and `off` when it holds none.
 - A missing `functions`, or a missing switch in it, is the default and never an error (line
-  11166). A value outside the table is an error row that fails the gate, as `sameTree` does
-  (`check.mjs:308-321`), never read as on or as off.
-- No preset and no `kind` key. With `auto`, a project's kind is what its files say, so a
-  "research project" is the defaults in a tree with no code. This drops the orchestrator's
-  "a kind of project is a preset of switches": a preset would be a second place that says the
-  same thing and can disagree with the files.
+  11166). A value outside the table is an error row that fails the commit's gate, as `sameTree`
+  does (`bin/check.mjs:308-321`), never read as on or as off. On the push path, where a failing
+  row would also refuse the push that fixes it, an unreadable value is read as `on` and said.
+- No preset and no `kind` key. With `auto`, a project's kind is what its files say. This drops
+  the orchestrator's "a kind of project is a preset of switches": a preset would be a second
+  place that says the same thing and can disagree with the files.
 
-What else was considered and is not a switch: the sensors (already declared and already silent
-with nothing to run), gentle-ai's review (it has its own switch, `gentle-ai review mode`, his),
-the pause notice (he placed it in every project, line 8488), `resume`, the skills.
+What was considered and is not a switch: the sensors (already declared, and silent with nothing
+to run), gentle-ai's review (it has its own switch, `gentle-ai review mode`, his), the pause
+notice (he placed it in every project, line 8488), `resume`, the skills. The sub-agent defaults
+(`docs/ROADMAP.md`, "Open decisions", item 6, which item 4 says this "joins") are not a function
+of code and stay out of this feature.
 
 ### "The project holds code"
 
-One rule, in one new module, `bin/lib/functions.mjs`: a file git tracks or has staged whose name
-is a program's: a closed list of extensions (`.js .mjs .cjs .jsx .ts .tsx .py .go .rs .java .kt
-.cs .c .h .cpp .rb .php .swift .sh .ps1 .sql` to start) or a build file (`package.json`,
-`pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `Makefile`,
-`Dockerfile`). It reads names from `git ls-files`, so it is the same answer for every session
-and it can print its reason ("auto: ask, because `src/fetch.py`").
+One rule, in one new module, `bin/lib/functions.mjs`: a file whose name is a program's, among
+the files git tracks, has staged, or sees untracked and not ignored (`git ls-files --cached
+--others --exclude-standard`, asked with pathspecs so a large tree does not fill a buffer; on
+the push path, the same question to the pushed commit's tree). A closed list of extensions (`.js
+.mjs .cjs .jsx .ts .tsx .py .ipynb .r .jl .go .rs .java .kt .cs .c .h .cpp .rb .php .swift .sh
+.ps1 .sql` to start) or a build file (`package.json`, `pyproject.toml`, `requirements.txt`,
+`go.mod`, `Cargo.toml`, `pom.xml`, `Makefile`, `Dockerfile`). Outside a git repository, or when
+git fails, the answer is "unknown" and every `auto` reads as its code value: the harness never
+turns a check off because it could not look.
 
 It is a positive list on purpose. The Codex scope's rule is negative (anything that is not `.md`
-is code), which is right for a review, where a miss is an unread change, and wrong here, where a
-research project's `.csv`, `.png` and `.pdf` would turn the code map on. The two rules answer
-different questions and stay separate: this one decides what is prepared, never what is checked.
-A miss costs one line (`"codeMap": "ask"`).
+is code, `bin/lib/codex-review-scope.mjs:52-54`), which is right for counting what a review must
+read and wrong for deciding whether a project has code at all: a research project's `.csv`,
+`.png` and `.pdf` are code by it. The two rules stay separate. The positive list decides which
+functions exist in a project; once the Codex review is on, the review's own rule still decides
+which commits it must cover. A program in a language the list misses leaves `auto` off; the
+price is one line (`"codexReview": "on"`), and both `functions` and the push row print the
+reason they resolved as they did, so the miss is in plain sight at every push.
 
 This is the answer to "sea inteligente y sepa" (S1) with no watcher: nothing reads the
 conversation; the tree is read when a command already runs.
 
-- When the first code file is committed, nothing is prepared in the commit (a gate does not
-  write). At the next session start `doctor --hook` resolves `auto` to `ask`, finds no
-  `.codegraph` and prints the gap it prints today, with `js-harness sync` as the fix; `sync`
-  then prepares the index. Until then the gap does not exist.
-- The way back needs no event. With the paste off, an index costs nothing at a prompt, and the
-  per-commit functions already charge by what a commit touches. `auto` never deletes an index;
-  only a declared `off` removes it, and only if the manifest says the harness made it
-  (`createdDir`, `project.mjs:1246`).
+- **When code appears.** The commit's gate is the event, because its output is what an agent
+  reads at every commit. `check` gets one information row, `functions`: silent when what the
+  switches resolve to is what this clone has applied, and otherwise one line per difference with
+  the command that applies it (`js-harness functions apply`). It writes nothing: a gate does not
+  write. The first commit that holds a program file prints it. (The first version said the
+  session-start hook would tell the agent. It does not: `doctor --hook` prints a count of gaps
+  as a `systemMessage`, only when a machine-wide digest that holds no project changes,
+  `bin/doctor.mjs:223-230`.)
+- **The way back.** Nothing is turned off when the work returns to analysis, and nothing needs
+  to be: with the paste off an index costs nothing at a prompt, the sensors and both reviews
+  charge by what a commit touches, and a commit of documents touches no code. The language
+  server stays on while the project holds TypeScript. `auto` never deletes an index; only a
+  declared `off` removes it, and only if the manifest says the harness made it (`createdDir`,
+  `bin/lib/project.mjs:1246`). This is a narrower "a la inversa… desactivar" than his sentence
+  can be read to ask, and it is said to him in those words with the questions.
 
 ### How each command reads a switch
 
-- **`check` (the gate, a commit):** validates `functions` (an error row before the sensors).
-  With `codexReview` `off`, the debt row is one information line, "off in harness.json", and
-  runs no git.
-- **`check --push`:** with `codexReview` `off` the row passes with one line that says the review
-  is off and where that is read from; with `on`, today's row. **The switch is read from the
-  remote's default branch**, the same ref the row already measures from (`check.mjs:1133-1142`),
-  with `git show <ref>:harness.json`, never from the working tree (`--head` may not be the
-  checkout) and never from the pushed tip. So a branch cannot turn the review off for itself:
-  turning it off is a change that has to be merged first, and the branch that carries it is
-  still held to the rule it found. A branch in a repository with no remote default branch yet
-  reads the pushed tip, and says so.
-- **`codex-review`:** with the switch `off` (read from the working tree's `harness.json`, since
-  this is a command a person or an agent runs here) it launches nothing, writes no record,
-  prints that the project has the review off, and exits 0. `--plan` the same.
-- **`init`:** writes `harness.json` as today plus nothing by default (absent means default). It
-  runs `codegraph init` only when `codeMap` resolves to `ask` or `paste`; it applies the paste
-  and the language server (below). The `AGENTS.md` template becomes one text that serves both
-  kinds ("the evidence that proves it" beside "the test"), not two.
-- **`sync`:** applies the same three things to a project already installed, and reports each as
-  an action, as it reports files today.
-- **`doctor`:** a missing `.codegraph` is a gap only when `codeMap` resolves to `ask` or
-  `paste`. The `typescript-lsp` row stays a report.
+- **One source for a range.** What a check of commits reads, it reads from the head commit of
+  the range it measures: the pushed tip for `check --push`, the reviewed head for `codex-review`.
+  It is where `.gitattributes` is already read (`codex-review-scope.mjs:17-21`, `:125`). What a
+  command does in the working tree (`check` at a commit, `init`, `functions`) reads the working
+  tree's file, as every row of the gate does today (`check.mjs:126-131`).
+- **`check --push`:** the switch is read before the remote is resolved, so a project with the
+  review off is not refused for a remote the row cannot measure (`check.mjs:1124-1139`). Off: the
+  row passes with one line, the value and why. On: today's row. **When the pushed tip turns the
+  review off and the remote's default branch has it on, the row says so in a line of its own**
+  ("this push turns the Codex review off: `<commit>`") and passes. The first version read the
+  switch from the default branch so that a branch could not exempt itself; that bought nothing
+  and trapped the person the switch is for ("What the readers changed", 1).
+- **`check` (a commit's gate):** validates `functions` (an error row before the sensors); the
+  `functions` information row above; with the review off, the debt row is one line and runs no
+  git. With the Codex review off and gentle-ai's mode off (`check.mjs:1071-1074`), the `review`
+  row says in so many words that no review reads this project's code.
+- **`codex-review`:** with the switch off at the head it would review, it launches nothing,
+  prints why, and exits 0; `--plan` the same. `--unavailable` always records, switch or no
+  switch, so no state exists in which the push asks for a record that the command refuses to
+  write.
+- **`js-harness functions`** (new): with no argument, each switch, what is declared, what it
+  resolves to and why, and whether this clone has it applied. `functions apply` makes this clone
+  match: it runs `codegraph init` when the map resolves on, writes or removes the two settings
+  (below), and records each in the project manifest. `functions set <name> <value>` validates,
+  writes the key into `harness.json`, and applies. `set` is the one command that writes into an
+  existing `harness.json` (`project.mjs:1294` says none does today): the alternative is prose
+  that tells an agent which key to edit, and a command he can be shown is the smaller harness.
+- **`init` and `sync`:** call the same apply. `init` runs `codegraph init` only when `codeMap`
+  resolves on. The `AGENTS.md` template becomes one text that serves both kinds ("the evidence
+  that proves it" beside "the test"), not two.
+- **A project with no pin** (this repository: `harness.json` has no `version`): `sync` writes
+  nothing there (`project.mjs:1533`) and `init` finds it initialized, so `functions apply` is
+  the path, and it has to make the project manifest where none exists. How `sync` and that
+  manifest meet is JH 8's ground.
+- **`doctor`:** with `codeMap` resolved `off`, the codegraph row's `project` cell is `n/a`, not
+  a gap, and the fix it prints for a missing index (`gentle-ai codegraph init`,
+  `bin/lib/stack.mjs:345`) is not printed. The `typescript-lsp` row stays a report.
 - **`uninstall`:** undoes each applied setting from the project manifest (below).
-- **A new read-only command, `js-harness functions`:** each switch, what is declared, what it
-  resolves to and why, and whether this clone has it applied. No command writes `harness.json`
-  after `init` (`project.mjs:1294`): a switch is changed by editing the key and running `sync`.
-- **The hooks:** none changes. `doctor --hook` gets the new gap rule through `doctor`.
 - **The texts:** the skill says the Codex review applies where the project has it on
-  (`manifest.mjs:26`, `:29`); the usage line the same. This repository's `AGENTS.md` keeps its
-  rule: the review stays on here.
+  (`bin/lib/manifest.mjs:26`, `:29`); the usage line the same; the Codex rules in
+  `bin/lib/rules-data.mjs:8-93` say "where the review is on". This repository's `AGENTS.md`
+  keeps its rule: the review stays on here.
+
+What `off` cannot do, said plainly: gentle-ai's own instructions tell every agent to make the
+index when `.codegraph/` is missing (his global `CLAUDE.md`, the CodeGraph section, steps 4 and
+5). The harness does not own that text. So with `codeMap` `off` an agent may still make an
+index when it is asked about the code; what the switch guarantees is that the harness does not
+make one, does not report its absence, and keeps the paste off, which is where the cost was.
 
 ### The paste and the language server: a setting inside a file the harness does not own
 
-Both are keys in Claude's project settings: `env.CODEGRAPH_NO_PROMPT_HOOK = "1"` and
+Both are keys in Claude's settings: `env.CODEGRAPH_NO_PROMPT_HOOK = "1"` and
 `enabledPlugins["typescript-lsp@claude-plugins-official"] = false`. Codex has neither: `rg -n -i
 "codegraph|UserPromptSubmit" ~/.codex/hooks.json` finds nothing, and the plugin is Claude's
 (`stack.mjs:375`).
 
-- **Where:** the tracked `.claude/settings.json` of the project, not the untracked
-  `.claude/settings.local.json`. A tracked file reaches every clone and every linked worktree
-  with the checkout; the untracked one is why this repository's worktrees do not have the switch
-  that the main checkout has. The switch is a project's decision and `harness.json`, which
-  declares it, is tracked too.
-- **How it is recorded:** the project manifest learns one new list, `settings`: for each key
-  written, the file, the pointer, the value written, and what was there before (absent, or the
-  earlier value). Today it records whole files, folders and the codegraph flag
-  (`project.mjs:767-780`), and the machine manifest's entries only append to arrays
-  (`manifest.mjs:303-308`), so neither can express a key of an object.
+- **Where:** the clone's own `.claude/settings.local.json`, keys merged into what is there (this
+  repository's file also holds `effortLevel`, which stays). Per clone is what the hook, the index
+  and the project manifest already are. The first version chose the tracked
+  `.claude/settings.json`; a tracked file written by a per-clone command breaks the next
+  checkout in every worktree that applied first, and one clone's `uninstall` would remove the
+  key for all ("What the readers changed", 2). The price: each clone and each linked worktree
+  applies for itself, and the `functions` row of its gate tells it so.
+- **How it is recorded:** the project manifest learns one list, `settings`: for each key, the
+  file, the pointer, the value written, what was there before, and whether the harness created
+  the file, its folder or the containing object, as the machine manifest records for an entry
+  (`manifest.mjs:296-308`).
 - **How it is undone:** `uninstall` puts back what was there, only if the key still holds what
-  the harness wrote; a key someone changed since is kept and reported, as an edited file is. A
-  file the harness created and that is empty again is removed.
+  the harness wrote; a key someone changed since is kept and reported; a container or a file the
+  harness created and that is empty again is removed, so no `{"env":{}}` is left.
 - **A key that already holds another value** is never overwritten: it is reported, and the
-  switch shows as not applied.
+  switch shows as not applied. A key that already holds the harness's value is recorded as kept,
+  not as written, the way a committed file is today (`project.mjs:730-733`).
+- **Proof owed before this is built on:** that Claude Code honors both keys from that file is
+  shown only by this repository's hand-written copy, "two samples and no proof"
+  (`docs/ROADMAP.md:1300`). The first task of the build is a probe, recorded with its output.
+- **An older copy on the path:** the manifest's shape check ignores a list it does not know
+  (`project.mjs:1012-1027`), so an older `js-harness uninstall` would delete the manifest and
+  leave the keys. The manifest carries the version that wrote it; an `uninstall` older than its
+  manifest must refuse. That guard is JH 8's ground.
 
-### Defaults, and a project already installed
+### Defaults, a project already installed, and what the tests show
 
-- A project with code and no `functions` key: `codeMap` `auto` → `ask`. The index stays as it
-  is; **the paste goes off at the next `sync`**, which says so. This is the one behavior that
-  changes without anyone declaring it, and it is the one he approved at line 8275 ("pegado
-  automático apagado de fábrica"). `languageServer` `auto`: unchanged if the project has
-  TypeScript, off if not. `codexReview` `on`: unchanged.
-- A project without code: no index is made, no gap is reported, the plugin is off for it, and
-  the Codex review never comes up because no commit holds code by the review's own rule (a
-  project whose data files should not count marks them `-codex-review` in `.gitattributes`, as
-  today, or turns the switch off).
-- Nothing is applied until someone runs `sync` or `init` there. The only other installed project
-  on this machine is `D:\js-harness-practice\project` (found with `fd -H -I -d 4
-  '^harness\.json$'` on `D:` and the user folder).
-- This repository was never `init`-ed (it has no project manifest). Applying the switches here
-  replaces the hand-written `.claude/settings.local.json` and is a change on his machine: his
-  yes, asked when the build is done.
+- A project with code and no `functions` key: the index stays; the Codex review as today; the
+  language server unchanged if it has TypeScript. **Two things change at its next apply: the
+  paste goes off, and the TypeScript plugin goes off where the project has no TypeScript** (a
+  project of plain `.js` loses what the plugin gave it, until it declares `on`). Whether an
+  apply does that to a project already installed by itself is question 3; line 8275 approved a
+  factory default, in a reply that called itself a reading and not a design, and a default is
+  not a migration.
+- A project without code: no index, no gap, the plugin off, and no Codex review, because `auto`
+  resolves `off`. (The first version said the review "never comes up"; it would have: a commit
+  with a `.csv` is a code commit by the review's rule.)
+- Nothing is applied until a command is run there. The only other installed project on this
+  machine is `D:\js-harness-practice\project` (found with `fd -H -I -d 4 '^harness\.json$'` on
+  `D:` and the user folder; a deeper one would be missed).
+- This repository: applying the switches here writes his `.claude/settings.local.json` through
+  the harness in place of by hand. A change on his machine: asked when the build is done.
+- **Existing tests change by design.** The fixtures of `init` and `sync` are empty repositories
+  (`bin/lib/project.test.mjs:46-51`), where `auto` is `off`, so every test that expects
+  `codegraph init` to run there needs a program file in its fixture or changes its expectation
+  (the reader's list: `project.test.mjs:113`, `:322`, `:340`, `:835`, `:933`, `:948`, `:968`,
+  `:1000`, `:2053`, `:2720`, `:2852`, `:2897`; `stack.test.mjs:1226`; `doctor.test.mjs:271-292`;
+  `install.test.mjs:39`, `:1010`; `scripts/practice.mjs:312`, `:355-363`;
+  `js-harness.test.mjs:59` for the new command). The constraint "a project that has code
+  behaves as today" holds for a project with code; these fixtures have none, and "no index in a
+  project without code" is S3.
 
-### What is his to decide (sent through the orchestrator, one at a time)
+### What the readers changed
 
-1. **With the Codex review off, what does gentle-ai's review do?** Today gentle-ai reviews only
-   what its assessment calls high risk. Options: (a) it also reviews medium risk when Codex is
-   off (recommended: the orchestrator reported that Codex was the only reader of the code on
-   2026-10-12, so with it off a medium change would be read by nobody; this keeps the cost in
-   proportion); (b) as today, by its own assessment; (c) every slice with code. In every option
-   the harness can only say it: the `review` row of `check` and the project's `AGENTS.md` carry
-   the rule; nothing refuses a push for a missing gentle-ai review.
-2. **Does a project with the Codex review on refuse a push that lacks it?** Today only this
-   repository does. Options: (a) yes, `init` and `sync` wire the push check wherever the switch
-   is on (recommended: otherwise "on" means two things, and a review nothing demands is the kind
-   that stops happening unseen); (b) no, it stays advice outside this repository.
-3. **What does a new project get?** Options: (a) the Codex review on if the Codex CLI is
-   installed and logged in on the machine that runs `init`, off otherwise, written in
-   `harness.json` and said by `init` (recommended: it is his case of line 8758, the person with
-   no plan, decided without asking them); (b) always on; (c) always off.
-4. **Which functions get a switch in 1.0.0?** Options: (a) the three above (recommended); (b)
-   only the two he named, the code map and the Codex review, with the TypeScript server left to
-   the hand-written setting; (c) the three and a fourth for the gate's sensors.
+Two readers on Opus at high effort, neither of which wrote the design, read the first version
+(`f8e70c0`): one against the code, one against his words and against the two people the feature
+is for. What moved:
 
-### Files this needs from other sessions (to tell the orchestrator before any edit)
+1. **Where the push reads the switch** (the code's reader, blocker; the other reader, blocker).
+   Was: the remote's default branch, so that a branch could not turn the review off for itself.
+   A branch already can, four ways: `* -codex-review` at the tip, an `--unavailable` record, an
+   edit of the hook or of `check.mjs` (both run from the working tree), and `--no-verify`. And
+   it trapped the legitimate case: the commit that turns the review off is itself a code commit
+   by the review's rule, so the person without a plan needed a review to stop needing one, while
+   `codex-review`, reading the working tree, refused to write the record the push asked for.
+   Now: one source, the head commit; the row says in a line when a push turns the review off.
+2. **Where the settings are written** (the code's reader, blocker). Was: the tracked
+   `.claude/settings.json`. Now: the clone's `.claude/settings.local.json`.
+3. **How the agent learns that code appeared** (both readers). Was: the session-start hook,
+   which prints a count to the person and not a line to the agent. Now: a row of the commit's
+   gate, and untracked files count.
+4. **The Codex review gets `auto`** (the words' reader, blocker). Was: `on` or `off`, with the
+   claim that a research project never meets the review. It would, at its first data file.
+5. **Three decisions that were his were written as decided** (the words' reader, blocker): what
+   happens to projects already installed is now question 3; the default of a new project is
+   question 2 and no longer reads the machine's Codex login (a login is not a plan, and a fact
+   of one machine does not belong in a tracked file); the old question 4, which functions get a
+   switch, is cut, since lines 8275 and 10519 answer it.
+6. **A command to see, apply and set a switch** (both readers): `functions apply` because no
+   command applies anything in a project with no pin, `functions set` because "edit the key and
+   run `sync`" was prose where a command belongs.
+7. **What `off` cannot do** is now said: gentle-ai's instruction to make the index.
+8. **Undo:** created containers are recorded; an older copy must not undo a newer manifest.
+9. **Honesty about the tests:** the first version promised none would change.
+10. Smaller: `ask` and `paste` are now `on-demand` and `always`; the hook entries are five, not
+    three; the line that says a skip covers is `codex-review-coverage.mjs:252-258`, not `:247`;
+    "no review in this project" is printed when both reviews are off; question 1's
+    recommendation no longer rests on the orchestrator's unchecked count.
 
-- JH 8: `bin/check.mjs` (three call sites and a validation row), `bin/lib/project.mjs` (`init`,
-  `sync`, `uninstall`, the manifest's new list, the template), `bin/install.mjs` only if a
-  command is routed there.
-- JH 5: `bin/lib/manifest.mjs` if the skill's text is theirs (two lines); `bin/lib/stack.mjs`
-  for the gap rule. Their `codex-plugin` row of doctor is where the two features meet: with
-  `codexReview` `off` that row still spawns `codex login status`, and by line 8938 the plugin
-  is to be removed anyway.
-- JH 7: a line in an installed project's `AGENTS.md` for decision 1 touches the rules an
-  installed project carries, their design; `docs/ROADMAP.md`, item 4, is theirs to update.
+What the readers proposed and was not taken: dropping `auto` for the language server (the code's
+reader: one more key when declared `off`). Kept, because line 8275, which he approved, says the
+harness decides it from the project's files. Dropping `always` (the same reader). Kept: it
+costs no write, and without it a project cannot keep today's behavior.
+
+### What is his to decide (sent through the orchestrator, one at a time, in this order)
+
+Preface for him, since his line 8758 ended in "¿cierto?" and the answer he got was half true:
+today the Codex review is demanded before a push only in js-harness itself; in a project where
+the harness is installed it is advice.
+
+1. **Where the Codex review is on, is it demanded before a push?** (a) Yes (recommended): `init`
+   and `apply` wire the push check; a push with code and no review is refused. It costs more
+   build (a first push and a push by URL are refused by today's row and need an answer), and
+   more refusals. (b) No: it stays advice outside js-harness; it costs nothing and can stop
+   happening unseen.
+2. **How does the Codex review start in a new project?** (a) By itself (recommended): off with
+   no code, on when the first code appears; whoever has no plan turns it off once. (b) Off until
+   someone turns it on: nobody pays unasked; a project with code can go without a second reader.
+   (c) Always on: even a research project is asked for it at its first data file.
+3. **Projects already installed (today, the practice one): at their next update, do the paste of
+   the code map and, with no TypeScript, its server go off by themselves?** (a) Yes, and it says
+   so (recommended): about 1,200 tokens saved a prompt, measured here. (b) Only in new projects.
+   (c) It asks in each project.
+4. **With the Codex review off, what does gentle-ai review?** It is a written rule; nothing
+   refuses a push for it. (a) High and medium risk (recommended): gentle-ai enters a review only
+   at high risk by its own rule (his global `CLAUDE.md`, "Entry rule": "only when `review_due`
+   is true (`high_risk`)"), so with Codex off a medium change is read by nobody; it spends more
+   of the Claude plan. (b) As today, high only. (c) Every change with code: the dearest.
+
+To be told with them, not asked: the way back is by what a commit touches, not by turning
+things off (above); and `off` for the code map does not stop an agent that follows gentle-ai's
+own rule.
+
+### Where this meets the other sessions (told to the orchestrator before any edit)
+
+- JH 8: `bin/check.mjs` (the validation row, the `functions` row, the debt row, the push row
+  reading the switch before the remote); `bin/lib/project.mjs` (`init`, `sync`, `uninstall`, the
+  manifest's new list, the template) and its tests' fixtures; `scripts/practice.mjs`; what
+  `sync` does with no pin; the guard of an older `uninstall` against a newer manifest; if
+  question 1 is yes, a pre-push hook in the shared hooks folder against per-worktree manifests,
+  and what the row does at a first push (`bin/check-codex-reviews.test.mjs:863-876` pins a
+  refusal).
+- JH 5: `bin/lib/manifest.mjs:26`, `:29` (the skill's two lines); `bin/lib/stack.mjs` (the
+  codegraph row); the `codex-plugin` row, which still spawns `codex login status` with the
+  review off and whose plugin he ordered removed (line 8938).
+- JH 7: `bin/lib/rules-data.mjs:8-93` (the Codex rules); the line question 4 puts in an
+  installed project's `AGENTS.md`; `docs/ROADMAP.md`, item 4.
+- JH 10: the Codex row of `check --push` reads records from the clone's git folder
+  (`bin/lib/codex-reviews.mjs:38-48`), which GitHub does not have, so a green run there cannot
+  stand in for that row; it can stand in for the sensors. With the review off at the pushed tip
+  there is nothing to stand in for.
 - New files, nobody's: `bin/lib/functions.mjs`, `bin/functions.mjs` and their tests.
+
 
 ## Tasks
 
-- [ ] T0 (route: inline, with two read-only explorers for the map) The design: the functions
-  that exist and what each costs when it is not needed, which become switches, where a switch is
-  stored, how each command reads it, the defaults, the migration; attacked by two readers; its
-  questions sent to the orchestrator. Specs: S1 to S5.
+- [ ] T0 (route: inline, with two read-only explorers for the map and two readers; first
+  version `f8e70c0`) The design: the functions that exist and what each costs when it is not
+  needed, which become switches, where a switch is stored, how each command reads it, the
+  defaults, the migration; attacked by two readers; its questions sent to the orchestrator.
+  Specs: S1 to S5. Open until his four answers are in the Log.
+- [ ] T1 (route: inline; S1, S2) `bin/lib/functions.mjs`, new: reads and validates `functions`
+  from a parsed `harness.json`, answers "the project holds code" from a list of paths, resolves
+  each switch with its reason. Pure, no git and no file read in it, so every rule is a test.
+  The default of `codexReview` is one constant, since question 2 may move it.
+- [ ] T2 (route: inline; S2) The probe: Claude Code honors `env.CODEGRAPH_NO_PROMPT_HOOK` and
+  the `enabledPlugins` key from a clone's `.claude/settings.local.json`; its output in the Log.
+- [ ] T3 (route: inline; S2) `js-harness functions`, the read-only view, and its route.
+- [ ] T4 (route: inline; S4; needs JH 8's `bin/check.mjs`) `codexReview` in the commit's rows,
+  in the push row read at the pushed tip before the remote, and in `codex-review`; the line
+  when a push turns the review off; one test for each existing behavior of those rows at the
+  default.
+- [ ] T5 (route: inline; S2, S3; needs JH 8's `bin/lib/project.mjs`) The manifest's `settings`
+  list, `functions apply`, and `uninstall` undoing each key exactly.
+- [ ] T6 (route: inline; S1, S3; needs JH 8's and JH 5's files) `codeMap` in `init`, `sync` and
+  `doctor`; the `functions` row of the gate; the fixtures of the tests that expected an index
+  in an empty repository.
+- [ ] T7 (route: inline; S2) `functions set`.
+- [ ] T8 (route: inline; S4; needs JH 5's and JH 7's files) The texts: the skill, the usage,
+  the Codex rules, the `AGENTS.md` template that serves both kinds.
+- [ ] T9 What his answers add: the push check wired by `init` (question 1), the migration
+  (question 3), gentle-ai's rule with the Codex review off (question 4). Written when answered.
+
+Forecast: over 400 authored lines, so more than one pull request; the slices are the tasks,
+each to `main`, as this project's pull requests already go.
 
 ## Log
 
@@ -394,3 +537,15 @@ Both are keys in Claude's project settings: `env.CODEGRAPH_NO_PROMPT_HOOK = "1"`
   holds the gate on GitHub, and its design asks which local check a green run there may stand in
   for: it meets this feature at the Codex row of `check --push` (`bin/check.mjs`). Owed to the
   lead: where the two meet, once the design's second version says how that row reads the switch.
+- **L5** (2026-10-13 19:15) The first version committed as `f8e70c0` (the gate of a documents
+  commit: `rules` and `document tests` passed, the sensors did not run, review not due). Both
+  readers answered. The reader of the code confirmed the lines of "What exists today" but three,
+  and found four blockers (the default-branch read, the two sources of the switch, no command
+  that applies in a project with no pin, the tracked settings file); the reader of his words
+  found five (three decisions of his written as decided, a research project not free of Codex,
+  turning Codex off locked behind Codex, the default by the machine's login, the agent never
+  told that code appeared). The second version is written from both; "What the readers changed"
+  holds each move and the two proposals not taken, with the reason. Checked here of the
+  readers' claims: `bin/doctor.mjs:215-236`, `bin/lib/project.mjs:1500-1536`,
+  `bin/check.mjs:1124-1142`. Next: the four questions and the meeting points to the
+  orchestrator; then T1.
