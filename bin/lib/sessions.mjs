@@ -1641,7 +1641,8 @@ function callOfNumber(calls, number, at) {
  * with its prefix is the question's call (`callOfNumber`); `state` is `not-shown` when there is none, the call's
  * own state otherwise, or `answered-not-carried` when the answer is in a transcript other than the asker's, with
  * `answered: { session, line, at }` of that answer. An answer in the asker's own transcript closed the question
- * already, so it is left out. A call joined to a question of the record, open or closed, is left out of `open`. */
+ * already, so it is left out. What a call asked for a question of the record, open or closed, is left out of
+ * `open`; what else it asked stays there. */
 export function openQuestionsOf(sessions, { hours = null, record } = {}) {
   const read = sessions.filter((session) => Array.isArray(session.questions));
   const sooner = (one, other) => one !== null && other !== null && one < other;
@@ -1660,10 +1661,17 @@ export function openQuestionsOf(sessions, { hours = null, record } = {}) {
   // A question asked again later and answered then has his answer, one question at a time: a call that asked
   // two is open while either has none, and what it lists is what is left of it.
   const answeredLater = (call, text) => all.some((other) => other.state === 'answered' && other.asked.includes(text) && sooner(call.at, other.at));
-  const joined = new Set(record === undefined ? [] : record.map((question) => callOfNumber(all, question.number, question.at)).filter((call) => call !== null).map((call) => call.id));
+  // What a question of the record took of its call: the texts with its prefix. A call may ask something else
+  // beside it, which no notice holds: the call stays listed for that.
+  const taken = new Map();
+  for (const question of record ?? []) {
+    const call = callOfNumber(all, question.number, question.at);
+    if (call !== null) taken.set(call.id, [...(taken.get(call.id) ?? []), questionPrefix(question.number)]);
+  }
+  const isTaken = (call, text) => (taken.get(call.id) ?? []).some((prefix) => text.startsWith(prefix));
   const open = all
-    .filter((call) => call.state !== 'answered' && !joined.has(call.id))
-    .map((call) => ({ ...call, left: call.asked.filter((text) => !answeredLater(call, text)) }))
+    .filter((call) => call.state !== 'answered')
+    .map((call) => ({ ...call, left: call.asked.filter((text) => !answeredLater(call, text) && !isTaken(call, text)) }))
     .filter((call) => call.asked.length === 0 || call.left.length > 0)
     // Oldest first, a call with no time last. The times are compared as text, character by character: a
     // comparison by the locale's rules puts `~` before the digits, which listed a timeless call first.
@@ -2364,11 +2372,16 @@ function questionChanges(before, after) {
   const known = new Set(before.questions.open.filter(closed).map((question) => question.id));
   const sessions = lastReadSessions(before, after);
   const filled = sessions.some((session, i) => session !== after.sessions[i]);
-  const view = filled ? openQuestionsOf(sessions, { hours: after.questions.hours, record: after.questions.record }) : after.questions;
+  // A look that could not read the channel's record has the list of the transcripts alone. The calls are then
+  // read with the record of the look before, so that a recorded question's call is not taken for one nobody
+  // recorded; and nothing is said of the recorded questions, whose notices this look did not see: the baseline
+  // keeps them as they were (`watchBaseline`), and the look that reads the record again says what changed.
+  const unread = after.questions.record === undefined && before.questions.record !== undefined;
+  const view = filled || unread ? openQuestionsOf(sessions, { hours: after.questions.hours, record: after.questions.record ?? before.questions.record }) : after.questions;
   const lines = view.open
     .filter((question) => closed(question) && !known.has(question.id))
     .map((question) => `question ${QUESTION_STATE_WORDS.closed}, asked by ${senderWords(question.asker, { quoted: true })}: ${questionWords(question)}`);
-  if (!before.questions.recorded || !view.recorded) return lines;
+  if (unread || !before.questions.recorded || !view.recorded) return lines;
   const was = new Map(before.questions.recorded.map((question) => [question.number, question.state]));
   for (const question of view.recorded) {
     if (was.get(question.number) === question.state) continue;
@@ -2495,6 +2508,15 @@ export function boardChanges(before, after, { self } = {}) {
   ];
 }
 
+/** The open questions of the board the next look is compared with (`watchBaseline`): those of `newer`, rebuilt
+ * over `sessions` (`lastReadSessions`). When `newer` could not read the channel's record and `older` had it, the
+ * record and the recorded questions are the ones of `older`, unchanged. */
+function questionsKept(older, newer, sessions) {
+  const unread = newer.questions.record === undefined && older.questions?.record !== undefined;
+  const rebuilt = openQuestionsOf(sessions, { hours: newer.questions.hours, record: newer.questions.record ?? older.questions?.record });
+  return unread ? { ...rebuilt, recorded: older.questions.recorded } : rebuilt;
+}
+
 /** The board the next look is compared with: `newer`, with whatever it could not read taken from `older`.
  * Without this a transcript that was busy for one look, or one failed `gh` call, would hide the change
  * that happens across it. */
@@ -2514,7 +2536,9 @@ export function watchBaseline(older, newer) {
     sessions: lastRead,
     // The open questions follow from the transcripts: those of a session this look could not read are the
     // ones of its last readable facts, or a question closed before would be news again at the look after.
-    ...(newer.questions && { questions: openQuestionsOf(lastRead, { hours: newer.questions.hours, record: newer.questions.record }) }),
+    // The channel's record is the same: a look that could not read it keeps the record of the look before and
+    // its questions as that look had them, or what happened to one across the failed read would never be said.
+    ...(newer.questions && { questions: questionsKept(older, newer, lastRead) }),
     // Which gates are compared depends on the worktrees (`watchedGates`): a look that could not list them
     // compared none, so its gates are not yet what the next look is compared with.
     gates: newer.worktrees.available ? kept(newer.gates, older.gates) : older.gates,

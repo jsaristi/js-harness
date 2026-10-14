@@ -3392,6 +3392,39 @@ test('a recorded question whose answer a look could not read keeps its state at 
   assert.deepEqual(lib.boardChanges(failed, recordBoard([holder])).filter((line) => line.startsWith('question ')), ['question 1 answered at bbbbbbbb:9: not carried to title a yet']);
 });
 
+test('a call that asked a recorded question and another one stays listed for the other: only the text the record took leaves open', () => {
+  const mixed = { id: 'toolu_m', at: at(2), asked: ['Pregunta 1: ¿a?', '¿Y esto otro?'], state: 'pending' };
+  const found = lib.openQuestionsOf([seen(B, 'waiting', { questions: [mixed] })], { hours: 12, record: RECORD });
+  assert.deepEqual(found.recorded.map(({ number, state, call }) => [number, state, call]), [[1, 'pending', 'toolu_m']]);
+  assert.deepEqual(found.open, [{ id: 'toolu_m', at: at(2), question: '¿Y esto otro?', more: 0, state: 'pending', asker: { id: B, title: 'title b' } }]);
+  // A call that asked nothing else is listed once, under its number; and so is one whose question a notice closed.
+  assert.deepEqual(lib.openQuestionsOf([seen(B, 'waiting', { questions: [asksOne('pending')] })], { hours: 12, record: RECORD }).open, []);
+  const closedRecord = [{ ...RECORD[0], closed: true }];
+  assert.deepEqual(lib.openQuestionsOf([seen(B, 'waiting', { questions: [mixed] })], { hours: 12, record: closedRecord }).open.map((question) => question.question), ['¿Y esto otro?']);
+});
+
+test('a look that could not read the channel\'s record says nothing of its questions and keeps them as they were, so the look after says what happened across it', () => {
+  const asked = [seen(B, 'waiting', { questions: [asksOne('pending')] })];
+  const answeredNow = [seen(B, 'waiting', { questions: [asksOne('answered', { answeredAt: at(3), answeredLine: 9 })] })];
+  const closedNow = [seen(B, 'waiting', { questions: [asksOne('closed')] })];
+  // A board whose record could not be read has the list of the transcripts alone, as `sessions` builds it then.
+  const unread = (sessions) => boardOf({ sessions, questions: lib.openQuestionsOf(sessions, { hours: 12 }) });
+  const before = recordBoard(asked);
+  const ofQuestions = (lines) => lines.filter((line) => line.startsWith('question '));
+  // He answers while the record cannot be read: nothing is said then, and the look after says it, once.
+  assert.deepEqual(ofQuestions(lib.boardChanges(before, unread(answeredNow))), []);
+  const kept = lib.watchBaseline(before, unread(answeredNow));
+  assert.deepEqual(kept.questions.record, RECORD, 'the record of the last look that read it');
+  assert.deepEqual(kept.questions.recorded, before.questions.recorded, 'and its questions as that look had them');
+  const after = recordBoard(answeredNow);
+  assert.deepEqual(ofQuestions(lib.boardChanges(kept, after)), ['question 1 answered at bbbbbbbb:9: not carried to title a yet']);
+  assert.deepEqual(ofQuestions(lib.boardChanges(lib.watchBaseline(kept, after), recordBoard(answeredNow))), []);
+  // He closes it while the record cannot be read: its call is not taken for a question nobody recorded, which
+  // would say it now in other words and again, by its number, at the look after.
+  assert.deepEqual(ofQuestions(lib.boardChanges(before, unread(closedNow))), []);
+  assert.deepEqual(ofQuestions(lib.boardChanges(lib.watchBaseline(before, unread(closedNow)), recordBoard(closedNow))), ['question 1 closed by him without an answer: Should the board show it?']);
+});
+
 // --- `compactionStretch` and `replyOf`: what a transcript holds of the stretch before a compaction ---
 //
 // The stretch is the work a session did between two compactions, or before the first one. `compactionStretch`

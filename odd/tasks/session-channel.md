@@ -2320,6 +2320,38 @@ session needs beside it to go on; the summary of a compaction is not the record.
   gate was held fifteen minutes by another session's turn before the first run.
   PART 3 is written on copies outside the tree by a fourth bounded writer and read by this
   session: `recordQuestionsIn` and the block of questions the resume prints.
+- 2026-10-13, written at 19:49: the board's half is commit `c9b1bb5` (gate PASS; gentle-ai: not
+  due; Codex on `fc7fee2..c9b1bb5`: 254,242 input tokens, "incorrect (0.99)", two findings, P2,
+  both true). A call that asks a recorded question and another one lost the other from both
+  lists, since the joined call left the list of calls whole: only the texts with the record's
+  prefix leave it now. And a look that could not read the channel's record left a baseline with
+  no recorded questions, so the look that read it again compared with nothing and an answer
+  across the failed read was never said: such a look now keeps the record and its questions as
+  the look before had them (`questionsKept`), says nothing of them, and reads the calls with
+  that record. Fixed in the commit that carries this entry, test first (2 failed, then 545
+  passed). The gate was held twenty-five minutes by another session before that run.
+  HIS WORDS on questions, twice this evening, each read by this session with `sessions --quote`
+  in the lead's transcript `65318fd5`: line 12735, "siempre hazme las preguntas como te pedi que
+  me la dieras SIEMPRE tienes que cementarlo en el harnes"; line 13110, "Te dije que todas las
+  preguntas de todas las sesiones me las haces aca y eso debe quedar cementado osea te pasa la
+  pregunta aca y yo te la respondo aqui y le pasas la informacion. SIEMPRE debe ser asi ya
+  habiamos quedado en eso." What he met: the line `notify` prints since `fc7fee2` ("only in
+  the reply to a message he has just written") was read by the lead as "only when the turn
+  began with his message"; it held a question while he was there and wrote another out as text
+  with its options. THE LEAD'S READING, not his words: (1) every question of every session goes
+  to the orchestrator, which asks it in its own chat with the tool and carries the answer back
+  with its line; (2) he is there when he wrote a short while ago, and then the tool is called
+  at once; (3) only a longer silence earns one line that N questions wait, and the options are
+  never written out as text. WHAT THIS SESSION BUILDS FROM IT, a commit of its own after part
+  3: a transcript's facts gain when he last wrote in it (`personAt`); one function words the
+  rule from that and the clock (`askingRule`: "he wrote here 4m ago: put it to him now", or
+  "he last wrote here 2h ago: … call it in the reply to his next message; until then one line
+  says that N questions wait"); `notify`, the resume and the board's "Open questions" print
+  it. The limit is one constant, fifteen minutes, the lead's guess until he names a figure.
+  Its brief is `brief-ask-rule.md` in this session's scratchpad. For slice (c): the texts say
+  the three parts; and a check of a reply (a Stop hook that blocks a question written out with
+  options and no tool call) is measured over the transcripts before it is proposed: installing
+  a hook that blocks is his to decide.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
