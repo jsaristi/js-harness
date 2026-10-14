@@ -302,6 +302,21 @@ PR 137: run 38632863631 tested base 028d658; main c0364f8 has moved since by 6 p
 PR 137: refs/pull/137/merge still has 028d658 as its first parent, not main c0364f8: wait before reopening.
 ```
 
+### js-harness merge-queue
+
+Builds the candidate main would be: origin/main with each ready pull request merged into it in
+order of number, and names each one it leaves out and why. Ready means what `merge-ready` checks
+of the pull request itself, a Codex review record for every code commit, and no conflict with the
+candidate so far. `--dry-run` is the only mode for now: it tests and pushes nothing, and removes
+the candidate before it ends (odd/tasks/merge-queue.md).
+
+```console
+$ js-harness merge-queue --dry-run
+PR 144 is left out: PR 144 is not mergeable (CONFLICTING).
+Candidate: main eb6abf7 with 2 pull requests merged in order: PR 137 (docs/gate-turn-guards-followups), PR 146 (fix/codegraph-home-files).
+Dry run: nothing was tested or pushed, and the candidate was removed.
+```
+
 ### js-harness functions
 
 Shows each function the project can turn off and on in `harness.json` under `"functions"`: its

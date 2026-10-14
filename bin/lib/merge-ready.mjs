@@ -38,8 +38,9 @@ export function untestedPaths(changed) {
  *   changedSinceBase: [path], mergeTreeClean, pullMergeParent: id | null }
  * Returns { code, said: [line] }.
  */
-export function mergeReadiness(facts) {
-  const { pr, main, run, tested } = facts;
+/** What keeps the pull request `pr` itself from being merged, one sentence each, in this order: not open, a
+ * draft, not mergeable, not on main, no gentle-ai line in its body. Empty when nothing does. */
+export function pullRequestProblems(pr) {
   const name = `PR ${pr.number}`;
   const said = [];
   if (pr.state !== 'OPEN') said.push(`${name} is ${pr.state}, not open.`);
@@ -47,6 +48,13 @@ export function mergeReadiness(facts) {
   if (pr.mergeable !== 'MERGEABLE') said.push(`${name} is not mergeable (${pr.mergeable}).`);
   if (pr.baseRefName !== 'main') said.push(`${name} targets ${pr.baseRefName}, not main.`);
   if (!/gentle-ai/i.test(pr.body ?? '')) said.push(`${name}: its body has no gentle-ai line.`);
+  return said;
+}
+
+export function mergeReadiness(facts) {
+  const { pr, main, run, tested } = facts;
+  const name = `PR ${pr.number}`;
+  const said = pullRequestProblems(pr);
   if (said.length) return { code: FAILED, said };
 
   const head = pr.headRefOid;
