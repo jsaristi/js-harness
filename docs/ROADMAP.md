@@ -926,7 +926,9 @@ podamos implementar todo"), each a feature of its own with its own document and 
      every question to git stay on Windows, and the sensors of documents never move. A
      sensor that never reached the mirror runs on Windows and its row says why; one that
      failed there failed; a switch file that cannot be taken fails the gate in a row `wsl`.
-     The gate log marks each sensor that ran there (`ranIn`). With no file, off Windows,
+     The gate log marks each sensor that ran there (`ranIn`). A sensor that failed, there or on Windows, keeps in its end line
+     the names of its failing tests (`failing`, twenty at most), read from what `node --test`
+     printed (2026-10-14, `odd/tasks/gate-log-failing-tests.md`). With no file, off Windows,
      or with `JS_HARNESS_GATE_WSL=0`, a gate runs as it did; with the variable and the
      file, each row says where its temporary files went. What Windows loses per commit:
      its own code paths are tested by one run per merged batch, in a lock turn on `main`:

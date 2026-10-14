@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
@@ -4617,4 +4617,51 @@ test('the mark of a time that ran out counts only beside the exit status of time
   const failed = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
   assert.equal(failed.code, 1);
   assert.match(failed.output, /^FAIL {2}tests {2}npm run test exited 1 in WSL2 \(Ubuntu\)$/m);
+}));
+
+// The names of the tests that failed are kept in the gate's end line (odd/tasks/gate-log-failing-tests.md,
+// S1): a WSL2 run's output lives in the mirror and the report, and on 2026-10-14 JH 11 could not get back
+// which test had failed once the report was gone.
+const SPEC_FAILURE = [
+  '✔ one that passes (2.1ms)',
+  '✖ the first that fails (12.5ms)',
+  'ℹ tests 3',
+  'ℹ fail 2',
+  '',
+  '✖ failing tests:',
+  '',
+  'test at bin/a.test.mjs:10:1',
+  '✖ the first that fails (12.5ms)',
+  '  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:',
+  '',
+  'test at bin/b.test.mjs:4:1',
+  '\u001b[31m✖ a second, in another file (3ms)\u001b[39m',
+  '  Error: boom',
+].join('\n');
+const TAP_FAILURE = ['TAP version 13', 'ok 1 - fine', '    not ok 1 - a subtest', 'not ok 2 - the one that fails', '# fail 1'].join('\n');
+
+test('failingTests reads the names of the failing tests in the spec form and, without it, the tap form; none for a pass or other output', () => {
+  assert.deepEqual(failingTests(SPEC_FAILURE), ['the first that fails', 'a second, in another file']);
+  assert.deepEqual(failingTests(TAP_FAILURE), ['the one that fails']);
+  assert.deepEqual(failingTests('ℹ pass 3\nℹ fail 0\n'), []);
+  assert.deepEqual(failingTests('npm ERR! missing script: test\n'), []);
+  // Twenty at most, each two hundred characters at most, and each once.
+  const many = ['✖ failing tests:', ...Array.from({ length: 25 }, (_, i) => `✖ test ${i} ${'x'.repeat(300)} (1ms)`), '✖ test 0 (1ms)'].join('\n');
+  const names = failingTests(many);
+  assert.equal(names.length, 20);
+  assert.ok(names.every((name) => name.length <= 200), JSON.stringify(names.map((name) => name.length)));
+});
+
+test('a gate whose sensors fail keeps the names of their failing tests in its end line, and a sensor that passes has none', () => withGate({ tests: 'run-tests', lint: 'run-lint', more: 'run-more' }, async (dir, home) => {
+  const outputs = { 'run-tests': { status: 1, stdout: SPEC_FAILURE }, 'run-lint': { status: 1, stdout: '', stderr: TAP_FAILURE }, 'run-more': { status: 0, stdout: 'ℹ pass 1\n' } };
+  const spawn = async (command) => ({ signal: null, stderr: '', ...outputs[command] });
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, ...log.deps }));
+  assert.equal(code, 1, output);
+  const end = log.events.find((event) => event.event === 'end');
+  assert.deepEqual(end.sensors.map(({ name, pass, failing }) => ({ name, pass, failing })), [
+    { name: 'tests', pass: false, failing: ['the first that fails', 'a second, in another file'] },
+    { name: 'lint', pass: false, failing: ['the one that fails'] },
+    { name: 'more', pass: true, failing: undefined },
+  ]);
 }));
