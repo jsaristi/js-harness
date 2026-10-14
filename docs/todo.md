@@ -57,6 +57,11 @@ matters, who holds it, and where it was seen.
   transcripts first; a blocking hook is his decision.~~ Measured (about 67 percent precision, 20 to
   25 percent recall over 572 replies); no blocking hook, decided by the orchestrator under his line
   15820 and kept for his confirmation: `odd/tasks/session-channel.md`, Progress, 2026-10-13 23:46.
+- Text with backticks went through a shell string: a `node -e "..."` in Bash carrying Markdown code
+  spans inside double quotes ran each span as a command substitution (nothing it named existed, so
+  nothing ran; the command hung and was stopped). JH 12, 2026-10-14. The same family as the memory
+  note that a heredoc eats backslashes: text with backticks or backslashes goes through the editor's
+  Write and Edit, never a shell string. A candidate for a check or a protocol line; unassigned.
 
 ## Owed and not yet placed
 
@@ -73,6 +78,20 @@ matters, who holds it, and where it was seen.
 - The installed copy on his machine is at ad7b37b; main has moved by many pull requests. Updating it
   is a change on his machine he approved once; to be done at a quiet moment, with its undo.
 - The Codex plugin's removal waits for JH 5's doctor row (his order). JH 5.
+- 29 of the 31 memory notes of this project are rules or decisions that live only in memory (28 of
+  type `feedback`, 1 `project`; none `user`), where nothing acts on them and a session may not recall
+  them. Read on 2026-10-14 by the `memory-rules` row of `doctor`, built in JH 12's
+  `odd/tasks/commands-and-doctor.md` (T4, not on `main` yet). Each goes to a check, a line of
+  `AGENTS.md` or a protocol, then the note is deleted: JH 7's skill for recording a new rule holds it.
+  He asked for these two items here (the orchestrator's transcript `ffe99ebf`, line 3838).
+- Sessions of the two permission classes, with nothing joining them: 26 of the project's sessions of
+  the last 7 days bypass permission prompts and 1 asks for them (likely the phone's), and
+  `crossSessionInbound` is not set in his user settings, so a message from one class to the other is
+  held, and in the desktop app dropped when it expires
+  (https://code.claude.com/docs/en/cross-session-messaging). Read on 2026-10-14 by the
+  `session-classes` row of `doctor` (JH 12, T5). The fix is `js-harness install
+  --accept-session-messages`, which records the setting and is undone by `uninstall`; it needs his
+  installed copy (ad7b37b) updated first, a change on his machine, his, with its undo.
 
 ## His to tidy, when he wants (nothing waits on them)
 
