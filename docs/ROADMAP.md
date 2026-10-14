@@ -132,7 +132,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] `uninstall` in a project restores it exactly
 - [x] `sync` moves a project to its pinned version
 - [x] The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and the machine commands outside one
-- [x] `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged in, with its fix command
+- [x] `doctor` reports the Codex CLI (installed and logged in) when the project's codexReview switch is on, with its fix command
 - [x] The Codex review of each approved code slice leaves a record a check verifies, so a skipped review is caught
 
 ### F3 Task contract

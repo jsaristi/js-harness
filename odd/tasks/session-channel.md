@@ -1201,7 +1201,7 @@ reader, and that table names this feature as their owner.
   `1f5d67a`). Owed: (c) the orchestrator skill's text, the printed texts in words an
   installed project defines, the sentences for `AGENTS.md` and the two declared rules (the
   last two placed by the owner of the rules' wording; Progress, 2026-10-13 23:46)
-- [ ] T18 Every background timer, watcher or wake loop a session starts declares, in the same
+- [x] T18 Every background timer, watcher or wake loop a session starts declares, in the same
   step, what it is for, the condition that ends or cancels it, and who stops it, written to the
   session's state (the relief file for the orchestrator, the feature document for a work
   session); when its condition resolves another way, it is stopped in that same step. His
@@ -1209,7 +1209,11 @@ reader, and that table names this feature as their owner.
   `sessions --quote`, exit 0): the lead left a 05:00 timer running after the Linux gate it
   guarded against was proven. The rule's wording above is the lead's. The mechanism, the
   lead's candidate: `resume --hook` and the board list each session's live background tasks
-  with their declared purpose, so one left behind is seen after a compaction. After slice (c)
+  with their declared purpose, so one left behind is seen after a compaction. After slice (c). BUILT (Progress, 2026-10-14 06:10): the skill's rule, and the resume's line under the work in flight; the board already prints each open piece with its description
+- [x] T19 `notify` stamps the sender's hour and context share from its own reading, so a
+  notice carries both read, never typed: JH 14 typed its share unread twice on 2026-10-14, and
+  JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
+  wording). After T18
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -2869,7 +2873,51 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-14 04:30, THE NEWEST OF ALL: resumed at 03:54 (Progress, 04:25). `main`
+      AT 06:31: T19 is built on `feat/notify-stamp` by one writer on Haiku 5.5, test first (6, 11, 1 and 1 failed; then channel 51, notify 131, the library 281, the dispatcher 33 passed; resume 77 and sessions 207 untouched and passing; notify 131 rerun by this session): `senderOf` returns the sender's context (tokens and share), a notice records it in `from`, the confirmation of `notify` says the local hour and the share read, and the board's channel section prints the share. Not done: the watch's line for a notice to the orchestrator does not print the share yet. It is the commit that carries this text; then its reviews, push and pull request.
+      AT 06:22, AT THE CONTEXT PAUSE: pull request 132 (the doctor row) is MERGED; T18 is
+      pull request 133 (`0f8527e`, `check --push` exit 0 at 06:22, Codex "correct", 0.91). The
+      branch now is `feat/notify-stamp`, cut from `feat/background-purpose`, for T19; nothing
+      of it is written yet and no background task runs. T19, a first reading: a notice already
+      records the clock (`at`, UTC); what it lacks is the sender's context share, and what a
+      reader sees is the hour as the board prints it. So: `notify` reads the sender's context
+      from its transcript (the facts `senderOf` already reads) and records it in the notice
+      (`from.context`, tokens and share of the window), the board's channel section prints
+      each notice with its local hour and that share, and `notify`'s confirmation line says
+      both, so a session copies them into its message instead of typing them. Test first, on
+      `bin/lib/channel.mjs`, `bin/notify.mjs`, `bin/lib/sessions.mjs` and their tests.
+      AT 06:10: the doctor row is pull request 132 (`9e6f523`, `check --push` exit 0 at
+      06:08), pushed by the lead's correction of 06:01 (finished, gated, reviewed work never
+      waits unpushed; an idle session is never compacted, so the work goes on in this turn).
+      T18 is built on `feat/background-purpose`, cut from that branch, test first (one failed
+      in each file, then manifest 126 and resume 77 passed): the orchestrator skill's shared
+      part says that a background task declares in its description what it is for and what
+      ends it, is written to the session's state with who stops it, and is stopped in the step
+      its condition resolves another way; the resume, under the work in flight, says to judge
+      each piece at once and stop one that resolved or says neither. The board already prints
+      each open piece with its description (`workLine`), which is the purpose. Next: commit,
+      reviews, push, pull request; then T19.
+      AT 06:00, BEFORE A CUT: the doctor row is `ca75816` on `feat/doctor-codex-cli` (gate
+      PASS; gentle-ai not due; Codex in 4 parts, 478,911 input tokens, all "correct", 0.90 to
+      0.99, no finding); not pushed, its pull request after T18 and T19. NO background task
+      runs. NEXT, after the cut: T18 (read its line in Tasks and the first look below), its
+      design written here, then built test first on a branch of its own from `main`.
+      AT 05:50: the doctor row is written (the writer: 102 tool calls, test first, 27 of 118
+      failed before; after, stack 118, doctor 58, hook 11, latest 22, tui 76, dispatcher 33
+      passed; stack 118 rerun by this session) and is the commit that carries this text, on
+      `feat/doctor-codex-cli`; its pull request waits behind T18 and T19, in the lead's order.
+      `doctor`, its hook and the TUI now read the project's switches once a run, one `git
+      ls-files` more each.
+      STATE AT 2026-10-14 05:40, THE NEWEST OF ALL: slice (c) is pull request 127, MERGED
+      (`2a29285`, the lead's message). The branch now is `feat/doctor-codex-cli`, cut from
+      `feat/question-texts`; one writer on Haiku 5.5 builds the row `codex` in place of
+      `codex-plugin` there (launched 05:35, before the lead's new order; its diff is parked on
+      that branch). THE LEAD'S ORDER of 05:37: T18, then T19, then the doctor row. A first
+      look at T18, not yet a design: the board already prints each open piece of background
+      work with its call's `description` (`workLine`), so the purpose is mostly recorded; what
+      no transcript holds is the condition that ends it and who stops it, and the resume hook
+      does not list a session's own open work. Next after a cut: read T18 again from here,
+      write its design, then build it test first on its own branch from `main`.
+      STATE AT 2026-10-14 04:30 (the state before the one above): resumed at 03:54 (Progress, 04:25). `main`
       merged as `caa443f`; the commit that carries this text holds the opening's peek fix,
       `notify --opening`'s block, the pointers of T7 and T13 to T15, and T18. NEXT: its
       reviews, then `check --push`, push, the pull request of slice (c) with

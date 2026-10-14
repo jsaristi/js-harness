@@ -1140,6 +1140,9 @@ test('the block names the pieces of work the transcript leaves in flight when th
   ]);
   const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
   assert.deepEqual(lines.filter((line) => line.startsWith('  In flight')), ['  In flight when it was compacted, by the transcript: 2 (Agent (no id yet) (general-purpose) "Review the hook", Bash (no id yet) "Run the tests").']);
+  // A timer left running after what it waited for resolved (his correction, 2026-10-14): each piece is judged now.
+  const after = lines.findIndex((line) => line.startsWith('  In flight'));
+  assert.equal(lines[after + 1], '  Each says in its description what it is for and what ends it. Stop now (TaskStop) one whose condition resolved another way, or that says neither; write what stays running, and who stops it, to this session\'s state.');
 }));
 
 test('the block says when a turn at the machine\'s gate is held from the worktree of the feature document, or waits from it; a gate of another folder says nothing', withMachine(async (machine) => {
