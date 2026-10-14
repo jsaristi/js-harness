@@ -904,3 +904,11 @@ test('runs that both hold current trials and differ in setup are refused; a run 
   assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs()), b: docOf('b', currentOf('gamma')) })), 'two runs recorded before setups');
   assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs(), { setup: setupA }), b: docOf('b', currentOf('gamma'), { setup: setupA }) })), 'the same setup');
 });
+
+test('the setups are compared against the first run that holds current trials, whatever the order of the runs', () => {
+  const currentOf = (task, setup) => docOf(task, [trial({ task, config: 'current' })], { setup });
+  const message = refusal(() => buildReport(loadRuns({ dir: resultsDir({
+    a: docOf('a', [trial({ task: 'alpha' })]), b: currentOf('beta', { sha256: 'a'.repeat(64), items: {} }), c: currentOf('gamma', { sha256: 'b'.repeat(64), items: {} }),
+  }) })));
+  assert.match(message, /runs b and c differ in setup/);
+});

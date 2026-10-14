@@ -683,7 +683,14 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
   // directory, said before anything is spent. It needs no token, no binary and no login, and writes nothing.
   if (args.plan) {
     try {
-      const recorded = new Set((readResultsDocument(file)?.trials ?? []).map(trialKey));
+      const own = readResultsDocument(file);
+      // A run recorded on another model is not continued (`runChanges`), so none of its trials is one this run has
+      // done: the plan says the run would be refused rather than count them as recorded.
+      if (own !== null && (own.model ?? null) !== model) {
+        warn(`${file} was recorded on ${own.model ?? 'an unknown model'}: a run on ${model} would be refused. Pass --model ${own.model} to plan its continuation, or another --name for a new run.\n`);
+        return 1;
+      }
+      const recorded = new Set((own?.trials ?? []).map(trialKey));
       let planned = 0;
       const toRun = [];
       for (const task of args.tasks) {

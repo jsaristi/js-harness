@@ -269,3 +269,11 @@ section "Design of G5, G6 and G3" and `docs/future-model.md` Step 5 before writi
 still owed: rebuild the real templates hours after 04:27 (read from the file's time; an earlier reply of this session said 04:49 without reading it, the third unread figure of the day) and compare with the baseline saved in
 the session's scratchpad (`fp-baseline.json`); a later session redoes it from scratch (two builds
 hours apart, both hosts), since the scratchpad does not survive.
+
+L9 (2026-10-14) G3 committed (`41cbc41`). The slice `8aa93c3..41cbc41`: gentle-ai medium, not due
+(under budget). Codex reviewed it in a gate turn, `codex-review --plan` first (estimate about
+390,000 input tokens against an allowance of 688,800): 2 parts, 514,228 input tokens (399,360
+cached), recorded. Two P2 findings, both real, fixed test-first in the next commit: the report
+compared setups only against the first run, so a minimal-only first run let differing current
+setups pool (now each current-bearing run against the first of them); and `--plan` counted the
+trials of a run recorded on another model as done (now it says the run would be refused).

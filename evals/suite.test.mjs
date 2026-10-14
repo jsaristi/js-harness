@@ -1711,3 +1711,13 @@ test('--plan of a recorded run counts only the trials left to run', async () => 
   assert.match(plan.io.out, /8 trials planned on claude-opus-5-5, 4 to run/);
   assert.match(plan.io.out, /estimate for 4 of the 4 trials to run/);
 });
+
+test('--plan of a run recorded on another model says the run would be refused, and plans nothing as done', async () => {
+  const m = machine();
+  const first = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal', '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const plan = depsFor(m);
+  assert.equal(await suiteMain([...runArgv(m, { '--configs': 'minimal', '--efforts': 'medium', '--model': 'claude-fable-5-5' }), '--plan'], {}, plan.deps), 1);
+  assert.match(plan.io.err, /recorded on claude-opus-5-5: a run on claude-fable-5-5 would be refused/);
+  assert.doesNotMatch(plan.io.out, /0 to run/);
+});

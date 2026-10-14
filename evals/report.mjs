@@ -321,14 +321,19 @@ export function checkRuns(runs) {
       ['model', first.doc.model, run.doc.model],
       ['permission mode', first.doc.permissionMode, run.doc.permissionMode],
       ...stackDifferences(first.doc.stack, run.doc.stack).map(({ field, a, b }) => [field, a, b]),
-      // The setup of the current arm (G6 of `odd/tasks/future-model-protocol.md`), compared only between runs that
-      // both hold current trials: a run of the minimal arm alone has none to compare, and two runs recorded before
-      // setups were have none either, which reads as equal, as an unknown version does.
-      ...(holdsCurrent(first.doc) && holdsCurrent(run.doc) ? [['setup', setupOf(first.doc), setupOf(run.doc)]] : []),
     ];
     for (const [field, a, b] of pairs) {
       if (canonical(a) !== canonical(b)) problems.push(`runs ${first.name} and ${run.name} differ in ${field}: ${shown(a)} vs ${shown(b)}`);
     }
+  }
+  // The setup of the current arm (G6 of `odd/tasks/future-model-protocol.md`), compared between the runs that hold
+  // current trials, each against the first of them, so the order of the runs never decides: a run of the minimal arm
+  // alone has none to compare, and two runs recorded before setups were have none either, which reads as equal, as an
+  // unknown version does.
+  const [firstCurrent, ...otherCurrent] = runs.filter((run) => holdsCurrent(run.doc));
+  for (const run of otherCurrent) {
+    const [a, b] = [setupOf(firstCurrent.doc), setupOf(run.doc)];
+    if (a !== b) problems.push(`runs ${firstCurrent.name} and ${run.name} differ in setup: ${shown(a)} vs ${shown(b)}`);
   }
   const seen = new Map();
   for (const run of runs) {
