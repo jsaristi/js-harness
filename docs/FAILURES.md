@@ -426,6 +426,9 @@ Hours written in the relief file were not read from a clock.
   sent at 15:41; found by the same reader, read again here the same way
 - Seen: 2026-10-13 — the lead's message to JH 7 at 20:17 (claimed; the lead's own) — the hours of
   its messages "by date" ran about seven minutes ahead, carried from an earlier read
+- Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
+  05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
+  relief line, not a feature document
 - Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
   of the clock, and says the command wrote it" — since 2026-10-11
 
