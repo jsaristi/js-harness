@@ -326,6 +326,9 @@ on it.
 - Seen: 2026-10-13 — relief file, line 615 — "62 of 352, modest", the figure of JH 10's first
   version of a design, was told to him before its readers had read it; its readers made it about a
   third. A figure reaches him only from the version after the readers
+- Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
+  06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
+  the first read after 26 percent at about 04:30
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
