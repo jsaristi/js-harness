@@ -7,11 +7,9 @@ Branch: `feat/on-demand-functions`, in the linked worktree
 (app session `local_11c45a36-0115-4c92-b865-f1dc3f68c3c1`) · Runner: `node --test` · Delivery:
 ask-on-risk
 
-State 2026-10-13 19:43 (this machine's clock): the design is in its second version, after its
-two readers, and his four answers make it his (S6 to S9). One question is open with him, the
-first push of a project, built last. Slice 1 is being committed: T1, then the reader of a
-project's switches, the unrouted `functions` view and the settings key. Next: slice 2 ("The
-order of the build"), in a worktree of its own stacked on this branch.
+State 2026-10-14 01:10 (this machine's clock): slice 1 is on main (pull request 111). Slice 2 is next, on
+branch `feat/on-demand-functions-2` in this same worktree, cut from `origin/main` at `3f59bb2`;
+"Slice 2, read before it is written" says what it stands on. Nothing is built of it yet.
 
 ## Goal
 A project chooses which of the harness's functions it runs: what serves only programming is off
@@ -779,3 +777,14 @@ What the code already gives, so the slice stays call sites and one new module
   (`node --test bin/js-harness.test.mjs`, 33 of 33). The route touches the dispatcher every
   command shares, by one entry in its table; the test of `--help` that lists the other commands
   still passes. Risk: none.
+- **L16** (2026-10-13 22:50 to 2026-10-14 01:10) Pull request 111 opened at `8649718`; `main`
+  at `c99abbc` merged in as `b8a4022` at the orchestrator's word (check waited 4 min 4 s, tests
+  passed; pre-push: "4 code commits since origin/main, all covered by a Codex review record");
+  the orchestrator merged it (`main` = `3f59bb2`, after a reboot of the machine at his order).
+  The second Codex review, of the fixes and the route (`d24c510..8649718`), answered "the patch
+  is correct" with 122,175 input tokens. The notes for `docs/SPEC.md` he asked for (the
+  orchestrator's line 14050) were sent for slice 1, four capabilities. Owed from others, read
+  before slice 2 and slice 3 are written: JH 11 adds two imports and `...checkOwnRules(cwd)` in
+  `bin/check.mjs` and one line of `agentsTemplate` in `bin/lib/project.mjs`; whichever lands
+  second merges `main`. A separate item, the Codex plan learning from what reviews spent, was
+  declined as another feature. Next: slice 2.
