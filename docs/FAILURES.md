@@ -450,6 +450,8 @@ exactly.
   `.codegraph/telemetry.json`, beside the empty `.claude/`, `.codex/` and `AppData/Roaming/`; the
   fix (record what `codegraph init` creates, or remove those two files on uninstall) is JH 9's, in
   docs/todo.md
+- Control: check — bin/lib/project.test.mjs — "runCodegraphInit runs codegraph with DO_NOT_TRACK=1, so it
+  writes nothing under the home, on every platform" — since 2026-10-14
 
 ### installed-copy-stale
 The command on PATH was an old copy with no way to tell: the version reads 0.1.0 before and after,
