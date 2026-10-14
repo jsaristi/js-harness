@@ -1146,7 +1146,27 @@ test('syncMain with a pin different from the running version writes nothing, exi
   }
 });
 
-test('syncMain --cwd names harness.json and exits 1 when it has no version', async () => {
+// install-update T6: no version is no pin, not an unreadable file.
+test('syncMain --cwd says there is nothing to move to, and how to pin, when harness.json holds no version', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{ "sameTree": "skip" }\n', 'utf8');
+
+    const { code, errLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(code, 1);
+    const said = errLines.join('\n');
+    assert.match(said, /harness\.json pins no version, so there is nothing to move this project to; nothing was written/);
+    assert.ok(said.includes(`add "version": "${currentVersion()}" to harness.json and commit it`), said);
+    assert.doesNotMatch(said, /cannot read the pin/);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
+    assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), '{ "sameTree": "skip" }\n');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd names harness.json and exits 1 when it is not valid JSON', async () => {
   const root = makeTmpProjectRepo();
   try {
     fs.writeFileSync(path.join(root, 'harness.json'), '{ not json', 'utf8');

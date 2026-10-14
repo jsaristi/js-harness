@@ -1290,6 +1290,13 @@ export function invalidHarnessJsonMessage(harnessJsonPath, reason) {
   return `cannot read the pin from ${harnessJsonPath}: ${reason}`;
 }
 
+/** How a project with no pin gets one, the clause `status` and `sync` share (install-update T6): the
+ * pin is one line written by hand, since no command writes into a `harness.json` that already exists.
+ * `version` is the running js-harness, never a value read from the project. */
+export function howToPinClause(version) {
+  return `add "version": "${version}" to harness.json and commit it`;
+}
+
 /** What an `InitWriteError`'s best-effort rollback actually left behind, in one clause — never
  * overclaiming "nothing was left behind" when something could not be removed (T2c
  * R3-nothing-left-behind-overclaims). Shared by `init` and `sync`, which both throw `InitWriteError`.
@@ -1424,10 +1431,12 @@ function projectFiles(root, spawn) {
   };
 }
 
-/** The version `harness.json` pins: `{ pin }`, or `{ invalid: reason }` when the file cannot be read, is
- * not JSON, has no string `version`, or has one that is not semver. A committed pin reaches the terminal
- * inside a suggested install command, so a cloned repository must not be able to smuggle shell or escape
- * sequences through it (T4c, R1-001); the same holds for a reason, so those are fixed text or an error
+/** The version `harness.json` pins: `{ pin }`; `{ noPin: true }` when the file is a JSON object with no
+ * `version` at all, which is a project with no pin and not a broken file (install-update T6: a
+ * `harness.json` written by hand holds settings and no version); or `{ invalid: reason }` when the file
+ * cannot be read, is not a JSON object, or has a `version` that is not a semver string. A committed pin
+ * reaches the terminal inside a suggested install command, so a cloned repository must not be able to
+ * smuggle shell or escape sequences through it (T4c, R1-001); the same holds for a reason, so those are fixed text or an error
  * code, never the parser's message (which quotes the file's own bytes). The one reading `syncProject`
  * and `projectLocation` share. */
 function readPin(harnessJsonPath) {
@@ -1437,12 +1446,16 @@ function readPin(harnessJsonPath) {
   } catch (err) {
     return { invalid: `it cannot be read (${/^[A-Z0-9_]+$/.test(err?.code) ? err.code : 'unknown error'})` };
   }
-  let pin;
+  let parsed;
   try {
-    pin = JSON.parse(text)?.version;
+    parsed = JSON.parse(text);
   } catch {
     return { invalid: 'it is not valid JSON' };
   }
+  const isObject = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+  if (!isObject) return { invalid: 'it is not a JSON object' };
+  if (!Object.hasOwn(parsed, 'version')) return { noPin: true };
+  const pin = parsed.version;
   if (typeof pin !== 'string' || pin.length === 0) return { invalid: 'it has no string "version"' };
   if (!SEMVER.test(pin)) return { invalid: 'its "version" is not a semver version' };
   return { pin };
@@ -1456,6 +1469,8 @@ function readPin(harnessJsonPath) {
  * - `{ kind: 'initialized', root, pin, harnessJsonPath, manifestPath, manifestPresent }` — `manifestPresent`
  *   is false in a fresh clone of an initialized project, until `sync` sets it up.
  * - `{ kind: 'staleManifest', root, manifestPath }` — a manifest survives without `harness.json`.
+ * - `{ kind: 'noPin', root, harnessJsonPath, manifestPath, manifestPresent }` — `harness.json` is an object
+ *   with no `version`: a project with no pin.
  * - `{ kind: 'invalidHarnessJson', root, harnessJsonPath, reason }` — the pin is unusable, for the same
  *   reasons `syncProject` gives. */
 export function projectLocation(cwd, deps = {}) {
@@ -1471,6 +1486,7 @@ export function projectLocation(cwd, deps = {}) {
 
   const pinned = readPin(harnessJsonPath);
   if (pinned.invalid) return { kind: 'invalidHarnessJson', root, harnessJsonPath, reason: pinned.invalid };
+  if (pinned.noPin) return { kind: 'noPin', root, harnessJsonPath, manifestPath: manifestFilePath, manifestPresent };
   return { kind: 'initialized', root, pin: pinned.pin, harnessJsonPath, manifestPath: manifestFilePath, manifestPresent };
 }
 
@@ -1482,8 +1498,11 @@ export function projectLocation(cwd, deps = {}) {
  * - `{ code: 1, notInitialized: true }` — a git repository with neither `harness.json` nor a manifest;
  *   the caller (`syncMain`) reports it and names `--global`, never falling through to the machine.
  * - `{ code: 1, staleManifest: true, manifestPath }` — a manifest but no `harness.json`.
- * - `{ code: 1, invalidHarnessJson: true, harnessJsonPath, reason }` — `harness.json` is unreadable, not
- *   JSON, or has no semver `version` (T4c: the pin is printed inside a suggested install command).
+ * - `{ code: 1, invalidHarnessJson: true, harnessJsonPath, reason }` — `harness.json` is unreadable, not a
+ *   JSON object, or has a `version` that is not semver (T4c: the pin is printed inside a suggested
+ *   install command).
+ * - `{ code: 1, noPin: true, harnessJsonPath, version }` — `harness.json` holds no `version`, so there is
+ *   nothing to move the project to; nothing is written, a clone that is not set up included.
  * - `{ code: 1, pinMismatch: true, pin, version }` — the pin is not the running version.
  * - `{ code: 1, malformedManifest: true, manifestPath, reason? }` — as `uninstallProject`.
  * - `{ code: 0, root, actions, manifest, manifestPath, version, setUp: true }` — a fresh clone (no
@@ -1511,6 +1530,7 @@ export function syncProject(cwd, version, deps = {}) {
 
   const pinned = readPin(harnessJsonPath);
   if (pinned.invalid) return { code: 1, invalidHarnessJson: true, harnessJsonPath, reason: pinned.invalid };
+  if (pinned.noPin) return { code: 1, noPin: true, harnessJsonPath, version };
   const { pin } = pinned;
   if (pin !== version) return { code: 1, pinMismatch: true, pin, version };
 

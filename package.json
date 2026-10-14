@@ -8,7 +8,8 @@
   },
   "files": [
     "bin/",
-    "AGENTS.md"
+    "!bin/**/*.test.mjs",
+    "!bin/**/*.testkit.mjs"
   ],
   "scripts": {
     "check": "node bin/check.mjs",

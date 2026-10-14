@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
-import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage } from './lib/project.mjs';
+import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
 import { INSTALL_NEWEST, latestFromSource, splitCommand, installArgs, isNewer } from './lib/version.mjs';
 
 const PKG_NAME = 'js-harness';
@@ -106,16 +106,23 @@ function parseStatusArgs(argv, env) {
 
 /** The project half of `status`: what `init` pinned, what is running, and whether this clone is set up.
  * A pin that differs from the running version is reported, not failed: `status` reads, `sync` names the
- * ways out (T4 design). */
+ * ways out (T4 design). A project with no pin (`noPin`, install-update T6) is reported too: there is no
+ * version to compare, `sync` sets nothing up until one is pinned, and the last line says how to pin. */
 function reportProjectStatus(location, version) {
+  const pinned = location.kind !== 'noPin';
   console.log(`project: ${path.normalize(location.root)}`);
-  console.log(`pinned version: ${location.pin}`);
+  console.log(`pinned version: ${pinned ? location.pin : 'none'}`);
   console.log(`running version: ${version}`);
+  const notSetUp = pinned
+    ? 'this clone: not set up; js-harness sync sets it up'
+    : 'this clone: not set up; js-harness sync sets it up once a version is pinned';
   console.log(
-    location.manifestPresent
-      ? `this clone: set up (manifest: ${path.normalize(location.manifestPath)})`
-      : 'this clone: not set up; js-harness sync sets it up',
+    location.manifestPresent ? `this clone: set up (manifest: ${path.normalize(location.manifestPath)})` : notSetUp,
   );
+  if (!pinned) {
+    console.log(`to pin this project: ${howToPinClause(version)}`);
+    return;
+  }
   console.log(
     location.pin === version
       ? 'pin and running version: match'
@@ -143,6 +150,7 @@ ${STATUS_USAGE}`);
     const location = projectLocation(opts.cwd);
     switch (location.kind) {
       case 'initialized':
+      case 'noPin':
         reportProjectStatus(location, currentVersion());
         return 0;
       case 'invalidHarnessJson':
@@ -216,6 +224,30 @@ export async function updateMain(argv, env = process.env, spawn = spawnSync) {
   return 0;
 }
 
+/** A version as `js-harness --version` prints it. What a program found on the path answered is named in a
+ * line only when it is this plain; anything else is never printed (it may hold terminal escapes). */
+const PLAIN_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?$/;
+
+/** Why the `js-harness` on the path may not run the sync after an upgrade to `version`, or `null` when it
+ * may (T8): it is asked its version through the same shell the sync would run it through, and only the
+ * version just installed passes. A copy that fails, is not found or does not know `--version` (one older
+ * than this) is not the upgraded one either. Nothing is written by the question. The one way out it names
+ * is the sync itself, run with the upgraded copy: a second `upgrade` is no way out, since the install
+ * already happened and that run would find nothing newer, say "up to date" and sync nothing. */
+function pathCopyRefusal(spawn, version) {
+  const asked = spawn('js-harness', ['--version'], { shell: true, encoding: 'utf8' });
+  const answered = asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
+  if (answered === version) return null;
+  const found = PLAIN_VERSION.test(answered)
+    ? `the js-harness on the path is ${answered}, not the upgraded ${version}`
+    : `the js-harness on the path did not answer --version, so it is not the upgraded ${version}`;
+  return (
+    `${found}: ${version} was installed and nothing was synced. ` +
+    'Run `js-harness sync --global` with the copy that was just installed, by its own path: ' +
+    'the one the shell finds first is another.'
+  );
+}
+
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
   const opts = parseArgs(argv, env);
   if (!opts.source) {
@@ -248,9 +280,17 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
 
   // Re-run the NEWLY installed binary's own sync, so files on disk match the new release
   // rather than whatever this (old) process would have written. With --prefix we know exactly
-  // where npm put it; without one, run whatever `js-harness` the shell resolves on PATH. `--global`
+  // where npm put it; without one, it is whatever `js-harness` the shell resolves on PATH, so that
+  // copy says its version first and only the version just installed is let to write (T8). `--global`
   // (T4): upgrade runs from any folder, and inside a git repository a plain `sync` would act on that
   // project (or refuse for it) instead of the machine install this is meant to bring up to date.
+  if (!opts.prefix) {
+    const refusal = pathCopyRefusal(spawn, latest.version);
+    if (refusal) {
+      console.error(refusal);
+      return 1;
+    }
+  }
   const syncResult = opts.prefix
     ? spawn(process.execPath, [upgradedBinPath(opts.prefix, platform), 'sync', '--home', opts.home, '--global'], {
         encoding: 'utf8',

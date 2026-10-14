@@ -1004,6 +1004,18 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
       Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
       before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
+- [ ] T19 · A gate keeps who spent the processor over its run (2026-10-13, from the measure of
+      the slower check in Progress; ordered by the orchestrator at 20:13, after the stretch of
+      "JH 9" on `bin/check.mjs` is on `main`). With it, the comment at the head of
+      `bin/gate.mjs` says the whole rule for runs beside a gate. Route: inline, with a reader
+      for the design.
+- [ ] T20 · A queued command is refused before it waits, not after (candidate, 2026-10-13, the
+      orchestrator's, from a failure of the session "JH 9": its Codex review waited about 40
+      minutes for the lock and then started nothing, "Tracked files have uncommitted changes").
+      Two parts: `codex-review --plan` says that the tree is dirty; and `js-harness gate` can
+      run a cheap refusal the queued command declares, when it is queued and again when its
+      turn comes. The turn scripts of this session have the same hole: their check of the head
+      and of a clean tree runs after the wait. Not sized.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
@@ -2645,8 +2657,111 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   - **Not known:** how often a gate here finds its proof. The log's lines of kind `same`
     will say; nobody has counted the cases (a commit amended in its message, a clean
     merge of an already proven tree, a pick that lands on the same files).
+- 2026-10-13 · **Why the whole check got slower from 17:00: two Windows services, not the
+  sessions** (the orchestrator's order of 19:35, after its reading of the gate log: 481 to
+  557 s in the morning, 654 s in the 17 hour, 767 s in the 18 hour, one of 1,132 s). Written
+  at 20:10. Nothing was changed on the machine.
+  - *The gate log, 24 hours* (`checks-load.cjs`, 50 whole checks): 474 to 590 s from 04:23 to
+    14:13; 597 to 735 s from 17:01 to 17:54; then 722, 700, 962, 1,132 and 774 s. **The
+    one-second sample a gate takes at its start does not tell them apart**: the check of
+    962 s started at 2.3 of 8 processors busy.
+  - *The measured run* (`m1h-turn.sh`, 19:49:27 to 20:02:58, alone in the lock, tree
+    `0cca602`, 84 test files under `measure-run.mjs` and `count-git.mjs`), against the same
+    run of 01:19 (M1g): **wall 805 s against 533** (+51%). Busy 6,310 processor-seconds of
+    6,438 (98%) against 4,030 of 4,265 (94%): the same suite, 2,280 more seconds of work.
+  - *Not the suite.* 13,452 git starts against 13,043; 1,153 other children against 1,231;
+    every file grew alike (`bin/codex-review.test.mjs` 421 to 577 s, `evals/runner.test.mjs`
+    335 to 563, `bin/check-codex-reviews.test.mjs` 305 to 431, `evals/configs.test.mjs` 205 to
+    365, `evals/suite.test.mjs` 151 to 293). The same git starts cost 2,444 s against 1,709:
+    a start is 39% dearer. The start probes agree: `git --version` 101 ms before the run
+    against 62, 322 inside against 264; `node -e ""` 188 against 96, 518 against 376.
+  - *Where the 2,280 went*, by the processes that lived through the run: **the svchost of
+    pid 8936, 773 s against 29 for all eighty svchost** (+745); MsMpEng 1,139 against 859
+    (+280); the desktop app's twenty `claude` processes 389 against 190 (+199); System 254
+    against 88 (+167); dwm 123 against 56 (+67). Lived-through in all 2,912 against 1,357;
+    the rest, 3,398 against 2,673 (+725), is the short-lived ones, the suite's own among
+    them, paying more a start.
+  - *pid 8936 is `PcaSvc`*, the Program Compatibility Assistant (`Win32_Service`; started
+    with the machine on 2026-10-08, 29,758 processor-seconds since). Beside a running check
+    at 20:06 it spent 21 s in 21 s, one processor whole, and MsMpEng 39.8 s (`two-pids.ps1`,
+    which reads `Win32_Process`: `Get-Process` cannot read a system service's time). In the
+    gate log's 321 start samples since 2026-10-11 it is among the busiest in 19, **all 19
+    from 17:00 on 2026-10-13, never before** (`svchost-since.cjs`). No whole check ran
+    between 14:13 (497 s) and 17:01 (735 s); twelve of the app's processes were started in
+    the 15 hour and five at 16:57. That restart of the app is the only change that can be
+    dated; that it is why `PcaSvc` began is not proven. Its registry store holds 56
+    programs, so no list of its own grew.
+  - *Ruled out with numbers.* The processor's speed: an i5-1035G1 of 15 W; the performance
+    counter read every 20 s through the run is 154% of nominal on average under load,
+    lowest 140, no sag (`cpu-speed-log.ps1`; no reading of the morning to set beside it).
+    Memory: 9.0 to 9.4 GB free through the run, 10.3 in M1g. The runs beside a gate that
+    two sessions reported that evening (about 40 and 80 processor-seconds): at eight
+    processors that is 5 to 15 s of a check's wall, against 270 found.
+  - *What would hold the check near 520 s.* No rule for the sessions and no limit on how
+    many build: the check was alone in the lock in both runs. It is the machine's, so his:
+    restart the `PcaSvc` service once (an elevated `Restart-Service PcaSvc`) or the machine,
+    and measure the next check; and the antivirus exclusion for the test folders, already
+    his, is 1.9 processors while a check runs. Sent to the orchestrator between 20:06 and 20:08.
+  - *What the gate log lacks.* The busy share over the run would not have told either (94
+    and 98%): what tells is who spent the processor over the run. A candidate task, T19
+    below: a gate keeps the processes' times it reads at its start, reads them once more at
+    its end, and the heaviest that lived through the run are kept with the gate, in a file
+    of their own beside the log, so that no reader of the log's lines meets a new field.
+  - *The Codex review's share of the lock* (the orchestrator's question of 19:01;
+    `codex-in-lock.cjs`, the gate log joined with the run log of `codex-review`, 24 hours at
+    19:10): 102 turns held the lock 624.3 minutes; 47 Codex parts, all inside a turn, 42.9
+    minutes, **6.9% of the lock held**. 14 turns were the review alone: 19.8 minutes held,
+    42.5 waited (four waited 509 to 850 s). So a Codex review outside the lock gives at most
+    43 minutes of lock a day and 42 of waits. The orchestrator put its guard behind this
+    measure, bounded it to one slice and granted one probe of 100,000 input tokens at most
+    (a `NODE_OPTIONS` preload that ends a `node --test` Codex starts); not started.
+- 2026-10-13 · **After the measure** (written at 20:16; each line is the orchestrator's
+  message unless it says otherwise).
+  - *A second dated change in the gap, the orchestrator's own:* at 16:56 to 16:57 it updated
+    the installed copy (`pnpm add -g github:jsaristi/js-harness`, a new folder in pnpm's
+    global store, the old one left) and ran `js-harness install`. So two things changed
+    between the last fast check (14:13) and the first slow one (17:01): the desktop app's
+    restart and that install. Which of them, if either, set `PcaSvc` going is not proven.
+  - *The orchestrator's own read at 20:08*, a gate running, three reads of the performance
+    counters: the svchost of `PcaSvc` 76 to 97% of a processor, MsMpEng 86 to 138%.
+  - *His answer*, tapped, read by me (`js-harness sessions --quote
+    65318fd5-80e7-4bb8-92b5-06737140185b 13354`, 2026-10-14T01:12:32Z): "Lo reinicio yo ahora
+    (Recomendada)", to "El servicio de Windows "Asistente de compatibilidad" (PcaSvc) está
+    usando un núcleo entero y alarga cada comprobación de 9 a 13 minutos. ¿Qué hacemos?"
+    (the others: "Reinicio la máquina", "No tocar nada"). He restarts the service himself;
+    nobody else touches the machine. **Owed here:** the seconds of the first whole check in
+    the gate log after the service's pid changes (it was 8936), set beside 700 to 1,132 s
+    before; no extra run unless the log cannot tell.
+  - *The rule beside a gate, the orchestrator's ruling on my text:* beside a gate, a quote
+    and one test file of under half a minute are free; a whole run, a measure, a board read
+    and a reviewer are not. The comment at the head of `bin/gate.mjs` already says the
+    first half ("One test file run alone during a task stays free; this is for what takes
+    minutes"); its sentence is made whole in T19's commit, which edits that file, so that
+    one line of comment does not cost the line a whole gate of its own.
+  - *After his restart* (written at 22:24). He restarted `PcaSvc` himself at about 22:07:
+    `Restart-Service` hung at "Stop Pending", so he ended its svchost (pid 8936, which held
+    `PcaSvc` alone, read by the orchestrator) and started the service again; new pid 56312.
+    Read beside two gates (`two-pids.ps1`, 20 s each): **`PcaSvc` 0 s at 22:09 and at 22:16**,
+    against 21 s in 21 s at 20:06; MsMpEng 34.3 and 47.2 s, against 39.8. **The first whole
+    check that started after it** (`after-restart.cjs`, the gate log): 22:14:10, the worktree
+    `session-channel`, **576 s, pass**, against 641 to 844 s for the eleven between 20:00 and
+    22:00 and 474 to 590 s in the morning. One check, so one reading inside a spread, not a
+    proof; it agrees with the measure. Whether the service climbs again after an app restart
+    or an install is not known: the gate log's samples will show it if it does.
+  - *T19 is ordered:* after the stretch of the session "JH 9" on `bin/check.mjs` is on
+    `main`. The antivirus is his and nothing is recommended there: the numbers are 1,139
+    processor-seconds in a run of 805 s, 859 in one of 533.
 
 ## Next
+
+**At 20:10 on 2026-10-13, before the list below:** the gate on GitHub is no longer this
+session's. The orchestrator gave it to a new session, "JH 10", at 18:40, in its own document
+`odd/tasks/gate-on-github.md`; all this session knows of the trial is in Part 3 and in the
+entries of T9 in Progress (the worktree `gate-on-github` and the branch
+`trial/gate-on-github` stay as they are; no second push without telling the orchestrator).
+First in line here now: his answer on `PcaSvc` and the measure of the check after it; then
+T19 if the orchestrator orders it; then the guard of the Codex review (one slice, one probe);
+then the list below.
 
 Written on 2026-10-13 at the close of T17. The order is the orchestrator's (inside his
 "option 3", a faster suite on his machine); the last entries of Progress hold the proof
@@ -2698,6 +2813,116 @@ antivirus spends on each (his).
   merge's own resolution only" as his.
 
 ## Resume here
+
+**BEFORE EVERYTHING, by his answer typed at 2026-10-14T05:41Z (the orchestrator's transcript `ffe99ebf-72fb-48da-a79b-e7db21a20b3f`, line 1350, read by me): "Se instala ahora y ademas tiene que quedar funcionando y JH8 tiene que diseñarlo ya y debe quedar funcionando ya". He installs WSL2 (Ubuntu 24.04) now, with a reboot that restarts every session. The first task after it: design the gate running in WSL2 and get it working: node 22 from the nodejs.org tarball in his Linux home, no sudo; the code run from a mirror of the worktree on the Linux filesystem, synced before each run (not over /mnt/d); the memory cap in C:\Users\Oficina\.wslconfig is HIS file, its text goes to the orchestrator; anything installed or changed outside his Linux home goes to the orchestrator first; WSL measured against Windows on the same commit; Windows kept by one local whole run per merged batch. The orchestrator says when his Ubuntu is ready.**
+
+**THEN, by his answer (written at 00:37 on 2026-10-14): design a faster whole check of the
+same quality.** His request: the orchestrator's transcript `f6584277-0ceb-482c-a3d3-a7168c0f74ae`,
+line 1090; "Sí, primero que todo (Recomendada)", line 1111; "Seguir y darle prioridad
+(Recomendada)", line 1203 (the other sessions go on; this design comes first; when building
+starts, the orchestrator keeps the others off the gate). "Sol" is `gpt-6.1-sol`. Before T19, the
+Codex guard, T20 and the spec notes (those follow at the design's end).
+- *Measure, the orchestrator's:* last 3 hours at 00:10, 28 turns, 14 whole checks (164 minutes
+  held, 115 waited), the lock never free, 235 minutes of waiting in all. The same suite takes
+  145 s on GitHub's Linux (run 38511223058) and 11 to 12 minutes here. In that run's log 4,197
+  top-level tests sum to 139 s against a wall of 145 (measure whether the files run in
+  parallel there before believing it); 23 tests, 0.5%, take 55 s, most waiting out real
+  timeouts of 3 s or more.
+- *Ideas to design, each with its cost, what it can miss, and the safety net:* (1) at each
+  commit only the changed files' tests and their importers; (2) the whole suite once per pull
+  request on GitHub (JH 10's pull request 109; minutes against his 2,000); (3) merges in
+  batches of pull requests with disjoint files, one whole check on `main` after; (4) a slow
+  tier out of the commit, on the pull request and nightly; (5) the plan reviewed by Opus and
+  `gpt-6.1-sol` before writing, and one review by both over the pull request, instead of Codex
+  per slice; (6) Windows kept: one whole local run a day or per merged batch; (7) an
+  affected-test cache keyed by each test file's import closure, with declared data files;
+  (8) fixture repositories built once and copied; (9) the slow tests made fast (an injected
+  clock, shorter timeouts) or moved to the slow tier; (10) a `merge-ready <pr>` command; (11)
+  his machine, his decision, measured first: the gate in WSL2, antivirus exclusions. Safety
+  net explicit: a whole suite before any merge, a Windows run per merged batch. Say what
+  installed projects get by default.
+- *Process:* his earlier words searched; two independent readers (Opus, effort high) attack
+  it; the version after them to the orchestrator with what each reader changed; the questions
+  that can be undone apart (the orchestrator decides them) from his (spend outside the plan,
+  irreversible, his machine). Tell the orchestrator before touching JH 10's workflow or JH 5's
+  skill.
+
+**At 21:14 on 2026-10-13, at 84% of the context, the session "JH 8" cuts at a task's end.
+This paragraph is the newest; where the state below it says "in flight", it is done.**
+
+- **install-update T8 is delivered:** pull request 107 (`fix/upgrade-sync-from-path`, head
+  `0d09e14`: `0cca602`, the correction `c188381`, the record `f0567a4`, and a clean merge of
+  `main` `02567ed`), the orchestrator's to merge. Codex: 125,690 and 43,527 input tokens, the
+  second correct (0.98). The session "JH 9" adds its two lines to `bin/js-harness.mjs` after
+  it is on `main`. Its worktree `upgrade-sync-path` goes once it is merged, with
+  `package-contents` and `status-no-pin`.
+- **Done at 22:24:** the measure after his restart is in Progress (576 s, `PcaSvc` at 0 s).
+- **Was owed, waiting on him:** he answered that he restarts `PcaSvc` himself (Progress); at
+  21:10 it still had pid 8936 and the whole checks of the ninety minutes before read 641 to
+  815 s. When the orchestrator says the pid changed: the seconds of the first whole check in
+  the gate log after it (`checks-load.cjs <log> 2`), and one read of 20 s beside it
+  (`two-pids.ps1 20`), both written in Progress and sent to the orchestrator.
+- **Next, in the orchestrator's order:** T19 (ordered, after the stretch of "JH 9" on
+  `bin/check.mjs` is on `main`; with it the whole sentence of the rule in the comment at the
+  head of `bin/gate.mjs`, and T20 below if it is a few lines); then the guard of the Codex
+  review outside the lock (one slice, one probe granted; the design it starts from is in
+  the state below); then the list of "Next".
+- **Codex of this session on 2026-10-13 after its compaction of 17:55:** 135,381 (T6), 74,849
+  (T7), 125,690 and 43,527 (T8): 379,447 input tokens in four reviews, each inside its
+  allowance. No sub-agent.
+
+**State of the session "JH 8" at 20:13 on 2026-10-13, at 78% of its context (the app
+compacts it at 93%). Read this first; it is newer than the rest of this section.**
+
+- **In flight: the correction of install-update T8.** Worktree
+  `D:\js-harness-worktrees\upgrade-sync-path`, branch `fix/upgrade-sync-from-path`, head
+  `0cca602` (T8: after `upgrade --source` with no `--prefix` the copy on the path says its
+  version, with a new `js-harness --version`, before it is let to sync; design `6d09c57` in
+  `odd/tasks/install-update.md`, "T8 design"). Codex on `6d09c57..0cca602`: one P2, true (the
+  refusal offered a second `upgrade` with `--prefix`, which would say "up to date" and sync
+  nothing), 125,690 input tokens (plan 76,000, allowance 300,000). The correction is applied
+  in that tree, not committed (`bin/update.mjs`, `bin/update.test.mjs`,
+  `odd/tasks/install-update.md`), and its turn waits in the line of the lock since 20:03:
+  `t8b-turn.sh` (red with `bin/update.mjs` at HEAD, green, the commit with the message
+  `t8b-msg.txt`, then the Codex plan); its log is `t8b-turn.log`. **Then:** Codex once on
+  `0cca602..<the correction>` (`codex-turn.sh <worktree> 0cca602 <short head> 315000 t8b`,
+  only if the printed plan is inside the allowance); the record in
+  `odd/tasks/install-update.md` (T8 checked, Progress with both turns and both reviews,
+  "Next step"); merge `origin/main` in (`clean-merge-turn.sh <worktree>`: the branch is
+  stacked on `6dd2480`, and `main` `75b0ceb` holds it by a merge commit); push; pull request
+  with no AI attribution; the head to the orchestrator. The session "JH 9" adds two lines to
+  `bin/js-harness.mjs` only after T8 is on `main`.
+- **Done by this session on 2026-10-13 after its compaction of 17:55:** install-update T6
+  (`243794e`, pull request 103, merged), T7 (`5502d54`, pull request 104, merged), T8's first
+  commit; the measure of the slower check (Progress above; pull request 105, documents only,
+  this branch). Codex since that compaction: 135,381 (T6), 74,849 (T7), 125,690 (T8). No
+  sub-agent.
+- **Waiting on others:** his answer on `PcaSvc` (through the orchestrator), then one measured
+  check; the orchestrator's word on T19 and on the one text for the rule about small runs
+  beside a gate (my proposal: beside a gate, a quote and one test file of under half a minute
+  are free; a whole run, a measure, a board read and a reviewer are not; `bin/gate.mjs:4`
+  changes to match).
+- **Next after T8, by the orchestrator's order:** T19 if it orders it; then the guard of the
+  Codex review outside the lock (one slice at most, with a reader; one probe granted, 100,000
+  input tokens at most, medium effort, in a scratch folder, recorded here). The design I
+  would write first: `codex-review` builds Codex's environment in one place
+  (`bin/codex-review.mjs`, `childEnv` and `leanEnv`); outside a turn of the lock it adds a
+  `NODE_OPTIONS` preload that ends any `node` started with `--test` with one line, so a
+  review beside a gate cannot run a second copy of the tests; the probe is whether Codex
+  hands that variable to the commands it starts (else Codex's own
+  `shell_environment_policy.set`). The sandbox is no guard: seven of this session's reviews
+  ran `node --test`. If it comes out larger than one slice or needs anything of his: a
+  candidate with its number (43 minutes of lock a day, up to 42 of waits) and on to "Next".
+- **Worktrees of this session now:** `upgrade-sync-path` (T8, in flight);
+  `gate-wait-run-load` (this branch, pull request 105); `package-contents` and
+  `status-no-pin` (merged: to remove); `gate-wait-count` (the counting tool, `fc70dc3`, not
+  pushed); `gate-on-github` (JH 10 reads it; leave it).
+- **Scripts of this evening in the scratchpad:** `t6-turn.sh` and `t8-turn.sh` (the model of a
+  turn with several code files), `codex-turn.sh`, `m1h-turn.sh` with `m1-table.cjs` (the whole
+  suite by file against M1g), `checks-load.cjs`, `svchost-since.cjs`, `codex-in-lock.cjs`,
+  `cpu-sample.ps1`, `cpu-speed-log.ps1`, `two-pids.ps1`, `svchost-who.ps1`.
+- **Engram refuses this session's saves** ("Claude host session already ended"), so nothing
+  of this evening is in memory: the feature documents are the record.
 
 - **This document** is on `feat/gate-wait-two-halves` (worktree
   `D:\js-harness-worktrees\gate-wait-two-halves`) until its pull request is merged,

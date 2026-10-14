@@ -160,7 +160,11 @@ test('records appended in the same moment by several processes each stay one who
   // a torn line is what this looks for.
   const text = fs.readFileSync(file, 'utf8');
   assert.ok(text.endsWith('\n'));
-  const lines = text.slice(0, -1).split('\n');
+  // A blank line is no torn record: an append that looks at the file's tail while another append is
+  // still being written there can see it unterminated and start on a fresh line, and every reader skips
+  // a blank line. GitHub's Linux showed 24 more lines than records in one run of this test (pull request
+  // 109, run 38511223058); Windows never has.
+  const lines = text.slice(0, -1).split('\n').filter((line) => line !== '');
   assert.equal(lines.length, 1 + writers * count);
   const records = lines.map((line, at) => {
     try {

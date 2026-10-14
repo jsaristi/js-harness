@@ -203,7 +203,14 @@ function failure(result, timeoutMinutes) {
   return `exit ${result.status}`;
 }
 
-function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
+/** The run of one done-when command: `runSensor` of `check.mjs`, which at the timeout stops the whole
+ * process tree of the command, and after the shell exits whatever the command left holding its output.
+ * `spawnSync`'s own timeout kills only the shell (`cmd.exe`, `sh`), so the real command behind it ran on
+ * after `contract run` had answered "timed out". Imported when a command runs and not at the top, since
+ * `check.mjs` imports this file. */
+const startInTree = async (command, options) => (await import('./check.mjs')).runSensor(command, options);
+
+async function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env, start }) {
   if (env[RUN_GUARD] === '1') {
     stderr(`contract run started inside another contract run (${RUN_GUARD} is set): a done-when command must not be \`contract run\` itself`);
     return 2;
@@ -225,18 +232,15 @@ function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
   let met = true;
   // Every command runs, even after a failure: a /goal turn needs the whole picture, not the first red row.
   for (const command of commands) {
-    const outcome = spawn(command, {
-      shell: true,
-      cwd: root,
-      env: childEnv,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      timeout: toMilliseconds(parsed.timeoutMinutes),
-    });
+    // Through a shell, in the root, one at a time (`start`: `startInTree`, or a test's stand-in).
+    const outcome = await start(command, { cwd: root, env: childEnv, timeout: toMilliseconds(parsed.timeoutMinutes) });
     const passed = outcome.status === 0 && !outcome.error;
     met &&= passed;
     stdout(passed ? `PASS  ${command}` : `FAIL  ${command}  (${failure(outcome, parsed.timeoutMinutes)})`);
     for (const line of indented(outcome.stdout ?? '', outcome.stderr ?? '')) stdout(line);
+    // Said, not judged: the row is the command's own exit, and a process that could not be stopped is
+    // something the reader has to know is still there.
+    if (outcome.sweepError) stdout(`      could not stop every process the command started: ${outcome.sweepError}`);
   }
   if (checks.length > 0) {
     stdout('check by hand:');
@@ -303,12 +307,12 @@ const SUBCOMMANDS = { template: templateCommand, check: checkCommand, run: runCo
 export async function contractMain(
   argv,
   env = process.env,
-  { cwd = process.cwd(), stdout = console.log, stderr = console.error, spawn = spawnSync, harnessPath = RUNNING_HARNESS } = {},
+  { cwd = process.cwd(), stdout = console.log, stderr = console.error, spawn = spawnSync, start = startInTree, harnessPath = RUNNING_HARNESS } = {},
 ) {
   const [subcommand, ...rest] = argv;
   if (!Object.hasOwn(SUBCOMMANDS, subcommand ?? '')) {
     stderr(subcommand ? `unknown subcommand: ${subcommand}\n\n${USAGE}` : USAGE);
     return 2;
   }
-  return SUBCOMMANDS[subcommand](rest, { cwd, stdout, stderr, spawn, env, harnessPath });
+  return SUBCOMMANDS[subcommand](rest, { cwd, stdout, stderr, spawn, start, env, harnessPath });
 }

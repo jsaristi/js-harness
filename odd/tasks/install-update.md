@@ -63,12 +63,25 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   whoever registers it decides what `js-harness upgrade` installs and runs on this machine. The
   release source decided is git tags (`docs/ROADMAP.md`, Decided, "Release source") and is not
   built. The first to fix of the six. Not designed here
-- [ ] T6 `status` and `sync` work in a project whose `harness.json` holds no pin. Added on
+- [x] T6 (243794e; route: inline; done on 2026-10-13, see Progress) `status` and `sync` work in a
+  project whose `harness.json` holds no pin. Added on
   2026-10-13 (the same list, item e). Read: in this repository `js-harness status` prints
   "cannot read the pin from …harness.json: it has no string "version"" and exits 1
   (`bin/update.mjs:140-142`, `bin/lib/project.mjs:1473`; `sync` the same at `:1513`), because
   its `harness.json` was written by hand for `documents` and `documentSensors` and never by
-  `init`. Whether such a file is a project with no pin or an invalid one is the design
+  `init`. Whether such a file is a project with no pin or an invalid one was the design's
+  question, his, answered on 2026-10-13 (question 25): a project with no pin.
+- [x] T7 (5502d54; route: inline; done on 2026-10-13, see Progress) The package holds the commands
+  and nothing else of this repository. Added on 2026-10-13
+  (`docs/ROADMAP.md`, the defects in shipped behaviour, item c; open decision 10, answered by
+  him the same day: "Solo los comandos (Recomendada)" to question 24, read in the
+  orchestrator's transcript at line 11146). `package.json` lists `bin/` without its test files
+  and no `AGENTS.md`; a test reads npm's own list and pins it. Route: inline.
+- [x] T8 (0cca602, and c188381 after Codex's finding; route: inline; done on 2026-10-13, see
+  Progress) After `upgrade --source` with no `--prefix`, the copy of js-harness on the path says its
+  version before it is let to sync. Added on 2026-10-13 (the candidate under "Next step", told to
+  the orchestrator at 06:27 and ordered by it at 16:57). Design below ("T8 design"). Route:
+  inline; high risk by item 5 (an installer path), so Codex reads it and the turn proves it.
 
 ## Progress
 - 2026-09-26: document created. Measured: `npm` on PATH is `exec pnpm "$@"` (pnpm 12.6.0); the real
@@ -195,20 +208,219 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   parts of `35477d4..43934b2`: both passed with no finding, 213,326 input tokens (plan 179,000,
   allowance 520,800), recorded. The design's one reader: 155,976 tokens. Not checked by anyone:
   whether `npm install -g <tarball>` itself contacts the registry (audit, funding).
+- 2026-10-13 T6 (`243794e`, branch `fix/status-no-pin` off `main` `3e26e72`, written inline by
+  the session "JH 8" on the orchestrator's order, by his answer to question 25, "Vale, sin
+  versión fijada", read in the orchestrator's transcript at line 11166): a `harness.json` that
+  is a JSON object with no `version` key is a project with no pin. `readPin` answers
+  `{ noPin: true }`; `projectLocation` has the kind `noPin`; `status` prints the project,
+  "pinned version: none", the running version, whether the clone is set up, and "to pin this
+  project: add "version": "<running>" to harness.json and commit it", exit 0; `syncProject`
+  returns `{ code: 1, noPin: true, harnessJsonPath, version }` and `sync` says the file pins no
+  version, so there is nothing to move the project to, with the same way to pin, and writes
+  nothing; the menu lists `noPin` with the project kinds. Still refused: a `version` that is
+  there and is not a semver string (`null` and a number included), and a file that is not a
+  JSON object, whose reason is now "it is not a JSON object".
+  - Turn of 18:06 (`t6-turn.sh`): RED with the four code files at HEAD, `node --test` of the
+    four test files → 338 tests, 8 fail (the two of `syncProject`, the one of
+    `projectLocation`, the two of `status`, the one of `syncMain`, the two of the menu); GREEN
+    with the fix → 333 pass, 0 fail; the scan for a kill by number passes; `js-harness status`
+    in this worktree, whose own `harness.json` holds no version → exit 0, "pinned version:
+    none"; the commit's gate passed whole at 18:20. gentle-ai: review not due (`under_budget`,
+    medium risk, 210 lines).
+  - Codex, once, 18:21, medium effort, `2e5dda0..243794e`: "the patch is correct" (0.94), no
+    finding, 135,381 input tokens (plan 87,000, allowance 300,000), recorded. The push check: 1
+    code commit, covered. No sub-agent.
+  - Not built, by his answer: `init` on such a file answers "already initialized at unknown
+    version; js-harness sync moves a project to its pin" and writes nothing
+    (`bin/init.mjs:69-72`), so the pin is one line by hand. Whether `init` should write it was
+    put to him by the orchestrator: "Dejarlo como hoy (Recomendada)", tapped, among "Que init
+    la escriba" and "Que init pregunte" (the orchestrator's transcript, line 12059,
+    2026-10-13T23:42:24Z, read by me). So `init` does not touch a file that exists, and
+    `status` says how to pin. `uninstall` never reads the pin (`bin/lib/project.mjs`,
+    `uninstallProject`: only the manifest), so it is unchanged.
+- 2026-10-13 T7 (`5502d54`, branch `fix/package-contents` off `fix/status-no-pin` `5385db7`, which
+  is on `main` since pull request 103; written inline by the session "JH 8" on the
+  orchestrator's order, by his answer to question 24, "Solo los comandos (Recomendada)", read
+  in the orchestrator's transcript at line 11146): `package.json` lists `bin/`,
+  `!bin/**/*.test.mjs` and `!bin/**/*.testkit.mjs`, and no `AGENTS.md`. Read before: no command
+  reads the package's own `AGENTS.md` (every `AGENTS.md` path in `bin/` is built from the
+  project's folder or the home), and no file of `bin/` that is not a test imports a test file
+  or the test kit (`rg "testkit|\.test\.mjs" bin` outside the tests finds only comments and
+  the scan of `rules.mjs`).
+  - Measured with the real npm CLI 11.12.1 (`npm pack --dry-run --json`): 117 files before (59
+    test files, 1 test kit, `AGENTS.md`, `package.json`, 55 command files), 1,125,283 bytes
+    packed; 56 after (the 55 and `package.json`), 438,313 bytes.
+  - The test, `scripts/package-contents.test.mjs`: one dry run of `npm pack` through the npm CLI
+    `scripts/lib.mjs` resolves (the `npm` on this machine's path is pnpm's, which refuses to
+    pack here: "ERR_PNPM_BIN_CRLF", the bin file's first line ends with CRLF in this
+    checkout); it holds no test file, no `AGENTS.md`, every file of `bin/` that is not a test,
+    and nothing outside `bin/` but what npm packs whatever `files` says. It is skipped, with
+    the reason, where there is no npm CLI beside node.
+  - Turn of 18:41 (`pc-turn.sh`): RED with `package.json` at HEAD, 1 of 1 fails ("a test file
+    is in the package"); GREEN 1 of 1, not skipped; the commit's gate passed whole at 18:57.
+    gentle-ai: review not due (`under_budget`, medium risk, 78 lines).
+  - Codex, once, 18:58, medium effort, `5385db7..5502d54`: "the patch is correct" (0.91), no
+    finding, 74,849 input tokens (plan 27,000, allowance 300,000), recorded. The push check: 1
+    code commit, covered. No sub-agent.
+  - Seen and not built, told to the orchestrator: pnpm's own `pack` refuses this checkout on
+    Windows because `bin/js-harness.mjs` is checked out with CRLF; whether an install by pnpm
+    from the repository meets the same refusal is not measured.
+- 2026-10-13 T8 (`0cca602`, `c188381`, branch `fix/upgrade-sync-from-path` stacked on
+  `fix/package-contents` `6dd2480`, written inline by the session "JH 8" on the orchestrator's
+  order; design above, "T8 design"): with no `--prefix`, `upgrade` asks the `js-harness` on
+  the path its version through the same shell the sync would run it through
+  (`pathCopyRefusal`, `bin/update.mjs`) and runs that copy's sync only when the answer is
+  exactly the version just installed. `js-harness --version` is new (`bin/js-harness.mjs`):
+  the version alone on one line; the help names it. What a program on the path printed is
+  named only when it is a plain version.
+  - Turn of 19:07 to 19:34 (`t8-turn.sh`): RED with the two code files at HEAD, 6 of 78 fail
+    (the probe before the sync, the four refusals, `--version`); GREEN 78 of 78; the scan for
+    a kill by number passes; `js-harness --version` prints `0.1.0`; the commit's gate passed
+    whole (774 s). gentle-ai: review not due (`under_budget`, medium risk, 155 lines).
+  - Codex, once, 19:48, medium effort, `6d09c57..0cca602`: "the patch is incorrect" (0.96),
+    one P2, `bin/update.mjs:243-244`: the refusal offered a second way out, "run the upgrade
+    again with --prefix", and where the package manager replaced the running copy in place
+    that run reads the new version as installed, says "up to date", exits 0 and syncs
+    nothing. 125,690 input tokens (plan 76,000, allowance 300,000). **True.** Correction
+    `c188381`: the refusal says the version was installed and nothing was synced, and names
+    the one way out, `js-harness sync --global` with the copy that was just installed; the
+    test holds that no second upgrade is offered. Turn of 20:03 to 20:56 (forty minutes of
+    it in the line of the lock): with `bin/update.mjs` at `0cca602` 4 of 46 fail, 46 of 46
+    with it, the gate whole. Codex on the correction alone, 21:10: correct (0.98), 43,527
+    (plan 24,000, allowance 300,000). The push check: 2 code commits, both covered. No
+    sub-agent.
+  - What this does not cover, said to the orchestrator and to the session "JH 9": a person
+    who runs an old copy by hand, and a manifest written by a newer js-harness that an older
+    copy reads; the second is JH 9's, where the manifest is read.
 
 ## Next step
-T5 is done and waits for its pull request to be merged by the orchestrator. Two things are open,
-both sent to the orchestrator on 2026-10-13 at 06:27 and neither started:
-- **T6** waits for an answer that is his: is a `harness.json` with no version a project with no
-  pin (the recommendation: `status` answers and exits 0, `sync` says there is nothing to move to)
-  or an invalid file as today. `check` already accepts that file in this repository, so two
-  commands of the package disagree about it.
+T5 to T8 are done; T8 waits for its pull request to be merged by the orchestrator. Nothing of
+this feature is open after it but what "Next step" already said of the tags. What was
+open, sent to the orchestrator on 2026-10-13 at 06:27 and ordered by it at 16:57 after the
+package's contents:
 - **A candidate task, not yet in Tasks:** with no `--prefix`, `upgrade --source` runs the sync
   after its install as `js-harness sync --global` through a shell (`bin/update.mjs`, the
   `syncResult` block), so it runs whatever `js-harness` is found on the path, and the check that
   it was the upgraded copy comes after it ran.
 Reading the tags (`git ls-remote --tags`) is due with the first tag, 1.0.0: it changes the test
 "resolveLatest starts no process and answers nothing when no source is named" on purpose.
+
+## T8 design (written at 19:02 on 2026-10-13, read in the code on `6dd2480`; nothing built)
+
+- **What happens today** (`bin/update.mjs`, `upgradeMain`, the `syncResult` block). After the
+  package manager installed the tarball, with `--prefix` the sync is run from the file the
+  prefix names, by this same node, with no shell. With no `--prefix` it is
+  `spawn('js-harness', ['sync', '--home', <home>, '--global'], { shell: true })`: whatever
+  `js-harness` the shell finds on the path. Only after it ran does `upgrade` read the manifest
+  and say "the js-harness found is not the upgraded one". By then a copy that is not the
+  upgraded one has written the machine install: skills and hook entries of another version.
+- **The rule.** The copy on the path is asked which version it is before it is let to write.
+  `upgrade` runs `js-harness --version` through the same shell; only when the answer is
+  exactly the version it just installed does it run that copy's `sync`. Any other answer, no
+  answer, or a failure: nothing is synced, exit 1, and the line says what the copy on the path
+  answered, what was installed, and the one way out: run `js-harness sync --global` with the
+  copy that was just installed. (The first version of this line also offered a second
+  `upgrade` with `--prefix`; Codex found, rightly, that such a run finds nothing newer, says
+  "up to date" and syncs nothing. Removed in the correction.)
+- **`js-harness --version`** is new: it prints the running version, one line, exit 0. An older
+  copy on the path does not know it and answers "Unknown command", exit 2, which is a refusal
+  here, and rightly: a copy that cannot say its version is not the one just installed.
+- **What is printed of the answer.** The output of a program found on the path is not printed
+  as it comes: only when it is a plain version (digits, dots and the letters semver allows) is
+  it named; otherwise the line says the copy on the path "did not answer --version".
+- **What stays.** The check of the manifest after the sync stays, as the second proof. With
+  `--prefix` nothing changes. The probe and the run are two starts of the same name a moment
+  apart; a path that changes between them is not defended against.
+- **Considered and left:** running this process's own file when its `package.json` reads the
+  new version after the install (no shell at all). It is true for npm, which replaces the
+  folder in place, and not for a manager that keeps each version in its own folder (pnpm), where
+  it would refuse an upgrade that works today. One rule that holds for every manager is worth
+  more than a branch per manager.
+- **Tests, first and red** (`bin/update.test.mjs`, with the injected `spawn`): the probe is the
+  second process and the sync the third, both through the shell; a copy that answers another
+  version, or none, or fails: exit 1, no sync started, the line names both versions and prints
+  none of the copy's own bytes. The older tests whose stand-in answers nothing now answer the
+  probe. `bin/js-harness.test.mjs`: `--version` prints the version and the help lists it.
+
+## T6: state for a resume
+
+**At 21:11 on 2026-10-13: T8 is done and reviewed (`0cca602`, `c188381`, Progress). The newer
+state of the session "JH 8" is in `odd/tasks/gate-wait.md`, "Resume here".**
+
+**At 18:59 on 2026-10-13: T7 (the package's contents) is done and reviewed too (`5502d54`,
+Progress). Next, by the orchestrator's order: the sync that runs from the path after
+`upgrade --source` with no `--prefix` (the candidate task under "Next step"), then
+`odd/tasks/gate-wait.md`, "Next". The gate on GitHub is no longer this session's: the
+orchestrator gave it to a new session, "JH 10", at 18:40.**
+
+**At 18:22 on 2026-10-13: T6 is done and reviewed (`243794e`, Progress); what is left of it is
+its pull request and the notice to the orchestrator. The session was compacted by the app at
+17:55, after this section and the design below were committed. Next, by the orchestrator's
+order: the package's contents (his line 11146, read by me at 18:10: "Solo los comandos
+(Recomendada)" to question 24), in a branch of its own.**
+
+Written on 2026-10-13 at 17:53 by the session "JH 8", at 89% of its context, before any line
+of T6 was read in the code or written. The app compacts that session in the turn that crosses
+its limit; this is the record.
+
+- **Where.** Branch `fix/status-no-pin` off `main` `3e26e72`, worktree
+  `D:\js-harness-worktrees\status-no-pin`. Nothing but this section is written.
+- **His answer, read by me** (`js-harness sessions --quote
+  65318fd5-80e7-4bb8-92b5-06737140185b 11166`, answered by the user, tapped): "Vale, sin
+  versión fijada (Recomendada)", to "Pregunta 25: un proyecto tiene su archivo del harness
+  escrito a mano y sin versión. ¿Qué le contestan los comandos?" (the others: "Sigue siendo
+  inválido", "Se rechaza en todos lados"). So: a `harness.json` with no version is a project
+  with no pin. `status` says so and how to pin one, exit 0; `sync` says there is nothing to
+  move to and how to pin (its exit code is the design's to say; the question sent to him
+  proposed 1).
+- **What is read so far, from the task's own text, not yet in the code:** `status` prints
+  "cannot read the pin from …harness.json: it has no string "version"" and exits 1
+  (`bin/update.mjs`, the `invalidHarnessJson` case; `bin/lib/project.mjs`, about `:1473`,
+  and `sync` the same about `:1513`); this repository's own `harness.json` is such a file.
+  `check` already accepts it.
+- **The steps:** read `projectLocation` and its `invalidHarnessJson` reasons; a short design
+  here (a new kind of location, or a reason that is not an error; what `init` does with such
+  a file; what `uninstall` does); the failing tests first; one lock turn; gentle-ai as the
+  check says; Codex once when its printed plan is inside the allowance; push, pull request
+  with no AI attribution, the head to the orchestrator.
+- **After T6, the orchestrator's order of 16:57:** the package's contents (his line 11146 by
+  the orchestrator's word, not read by me: `bin/` without its test files and without this
+  repository's `AGENTS.md`, with a test that the packed list holds neither); the sync that
+  runs from the path after `upgrade --source` with no `--prefix`; then
+  `odd/tasks/gate-wait.md`, "Next". How the session works: `odd/tasks/gate-wait.md`, "Next"
+  and "Resume here"; its turn scripts are in its scratchpad (`ct-turn.sh` is the newest
+  model of a turn: red on HEAD's code, green, a rule check, then the commit;
+  `codex-turn.sh <worktree> <base> <short head> <allowance x 1.05> <name>`).
+- **On `main` from this session on 2026-10-13:** pull requests 98, 99, 100 and 102.
+
+### T6 design (read in the code on `main` `3e26e72`; nothing built)
+
+- **Where the refusal comes from.** `readPin` (`bin/lib/project.mjs:1433-1449`) returns
+  `{ invalid: 'it has no string "version"' }` for any JSON whose `version` is not a non-empty
+  string. `projectLocation` (`:1463-1475`) turns that into `kind: 'invalidHarnessJson'`, which
+  `statusMain` prints and exits 1 on (`bin/update.mjs:148-150`); `syncProject` (`:1512-1513`)
+  returns `invalidHarnessJson`, which `syncMain` prints with "nothing was written"
+  (`bin/install.mjs:224-225`). The menu treats the kind as a project (`bin/tui.mjs:61`).
+- **The rule, by his answer.** A `harness.json` that is a JSON object with no `version` key is
+  a project with no pin, not an invalid file. A `version` that is there and is not a
+  non-empty semver string stays invalid, and so does a file that is not a JSON object.
+- **`readPin`** gains a third answer, `{ noPin: true }`, for exactly that case.
+- **`projectLocation`** gains `{ kind: 'noPin', root, harnessJsonPath, manifestPath,
+  manifestPresent }`. `status` prints the project, `pinned version: (none)`, the running
+  version, whether this clone is set up, and how to pin: add `"version": "<running>"` to
+  that file; exit 0.
+- **`syncProject`** returns `{ code: 1, noPin: true, harnessJsonPath }`; `sync` says there is
+  nothing to move to, since the file pins no version, and the same way to pin; exit 1, as
+  the question put to him proposed; nothing is written.
+- **The menu** (`buildMenu`, `bin/tui.mjs:61`) lists `noPin` with the project kinds.
+- **Open, not built here:** `init` on such a file answers `alreadyInitialized` and writes
+  nothing (`bin/lib/project.mjs:830-877`, `:916`), so pinning is by hand; whether `init`
+  should offer to pin is a question of its own. `uninstall` is not read yet.
+- **Tests, first and red:** `projectLocation` and `syncProject` for an object with no
+  `version` (beside the existing invalid cases at `bin/lib/project.test.mjs:2610` and
+  `:3323`, which keep a `version` that is not a string); `status` exit 0 with its lines and
+  `sync` exit 1 with its line, in `bin/update.test.mjs` and `bin/install.test.mjs`; the
+  menu's kinds (`bin/tui.test.mjs:664`).
 
 ## State for a resume
 

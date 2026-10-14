@@ -85,7 +85,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián on 2026-10-06, closed by him on 13 of its 15 trials on 2026-10-12, and brought to `main` on 2026-10-13 from a branch cut from it (see "F6 result") |
-| F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
+| F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | Procedure written 2026-10-14: [future-model.md](future-model.md), version 2 after one reader (`odd/tasks/future-model-protocol.md`); it cannot run on a new model until its gaps are built: G5, G6, G3 and G2 cleared for that feature, G1, G4 and G7 later |
 
 ## Checklist
 
@@ -177,7 +177,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] Differences measured and written down
 
 ### F7 Future-model protocol
-- [ ] Written procedure: measure payload, run evals, strip one component at a time
+- [x] Written procedure: measure payload, run evals, strip one component at a time ([future-model.md](future-model.md))
 
 ## F5 result
 
@@ -907,6 +907,28 @@ podamos implementar todo"), each a feature of its own with its own document and 
      tree, so it says when a path appeared and not who wrote it: a file an editor or
      another process made meanwhile is named too. Each listing is bounded at twenty
      seconds, since it is asked while the lock is held.
+   - The sensors in WSL2 (2026-10-14, `odd/tasks/gate-wsl.md`): on one commit the whole suite
+     took 111.5 s in WSL2 and 603 s on this machine's Windows, and the lock had been busy
+     for hours. Where the js-harness home holds `gate-wsl.json` (a distribution and the
+     Linux folder of node) and the project's `harness.json` says `"sensorsInWsl": true`
+     (the machine says how, the project whether: a suite that cannot run on Linux is never
+     moved), the sensors of a gate's turn run in that distribution from a mirror of the
+     working tree on the Linux disk, synced by `rsync --checksum` before each run (about
+     seven seconds once it exists: `/mnt` shows mtimes to the second, so size and time
+     missed a change; `.git`, `.codegraph` and `node_modules` stay out, and what a test
+     made of them in the mirror goes), under a clean environment. Where they ran is part
+     of the tree's key, so a pass in WSL2 never spares a run on Windows; what a test left
+     in the mirror is named in a `tree` row. The lock, the load sample, the gate log, the tree key and
+     every question to git stay on Windows, and the sensors of documents never move. A
+     sensor that never reached the mirror runs on Windows and its row says why; one that
+     failed there failed; a switch file that cannot be taken fails the gate in a row `wsl`.
+     The gate log marks each sensor that ran there (`ranIn`). With no file, off Windows,
+     or with `JS_HARNESS_GATE_WSL=0`, a gate runs as it did; with the variable and the
+     file, each row says where its temporary files went. What Windows loses per commit:
+     its own code paths are tested by one run per merged batch, in a lock turn on `main`:
+     `TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node
+     bin/check.mjs`. An installed project gets nothing unless its machine has the file.
+     Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
@@ -1137,19 +1159,36 @@ those features has a session open: the lead assigns them.
   that no release is tagged yet; `upgrade` then exits 1 having installed nothing, and with a
   source it installs only a tarball newer than what is installed. Reading the tags is still
   not built: it is due with the first one. Left open and told to the lead: with no `--prefix`
-  the `sync` after an install runs whatever `js-harness` the shell finds on the path.
+  the `sync` after an install runs whatever `js-harness` the shell finds on the path. **Fixed
+  on 2026-10-13** (branch `fix/upgrade-sync-from-path`, `odd/tasks/install-update.md`, T8): that
+  copy is asked its version first, with a new `js-harness --version`, and only the version
+  just installed is let to sync; any other answer, or none, syncs nothing and exits 1.
 - b. **There is no README** (`fd -i -d 2 readme .` prints nothing, in a tree where it would
   find one). What it holds is his: open decision 9.
 - c. **The package ships this repository's `AGENTS.md` and its tests.** `package.json:9-12`
   lists `bin/` and `AGENTS.md`; nothing under `bin/` reads the package's own `AGENTS.md`, which
   is this project's working agreement with him and not an installed project's; and `bin/`
-  holds 58 test files, with no `.npmignore`. What ships is his: open decision 10.
+  holds 58 test files, with no `.npmignore`. What ships is his: open decision 10. **Fixed on
+  2026-10-13** (branch `fix/package-contents`), by his answer to question 24 ("Solo los
+  comandos"): `package.json` lists `bin/` without its `*.test.mjs` and `*.testkit.mjs` files and
+  no `AGENTS.md`. npm's own list went from 117 files to 56 (the 55 command files and
+  `package.json`), the tarball from 1,125,283 bytes to 438,313;
+  `scripts/package-contents.test.mjs` reads that list from a dry run of `npm pack` and pins it.
+  `odd/tasks/install-update.md`, T7.
 - d. **A timed-out command of `contract run` leaves its processes running**
   (`bin/contract.mjs:228-235`: a shell with a timeout, and only the shell is killed).
-  `odd/tasks/sensors.md`, T5.
+  `odd/tasks/sensors.md`, T5. **Fixed on 2026-10-13** (branch `fix/contract-timeout-tree`): a
+  done-when command runs through the sensor runner (`runSensor`), which stops the whole tree
+  at the timeout and whatever the command left holding its output; a test with real
+  processes pins that neither the command nor what it started is left.
 - e. **`status` exits 1 in a project whose `harness.json` holds no pin**, this repository
   among them: "it has no string "version"" (`bin/update.mjs:140-142`,
-  `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6.
+  `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6. **Fixed on
+  2026-10-13** (branch `fix/status-no-pin`), by his answer to question 25 ("Vale, sin versión
+  fijada"): a `harness.json` that is an object with no `version` is a project with no pin.
+  `status` reports it and says how to pin one, exit 0; `sync` says there is nothing to move
+  the project to and how to pin, writes nothing, exit 1. A `version` that is there and is
+  not a semver string, and a file that is not a JSON object, are refused as before.
 - f. **The practice run starts no host session**, so it does not prove that a host loads what
   was installed (`scripts/practice-lib.mjs:450-461`; item 4 under "Session channel" says so).
   `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve.
@@ -1339,7 +1378,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
 9. What the README holds (Next, the defects read on 2026-10-13, item b). Options: what the
    harness is and how to install and remove it, in one page; that and each command with an
    example; or none until the first version, with the roadmap as the only description.
-10. What the package ships (the same list, item c). Options: `bin/` without its tests and no
+10. **Answered on 2026-10-13: `bin/` without its tests and no `AGENTS.md`** ("Solo los comandos",
+    question 24; built the same day, item c). What the package ships (the same list, item c).
+    Options: `bin/` without its tests and no
     `AGENTS.md`, since an installed project gets its own from `init`; `bin/` whole and no
     `AGENTS.md`; or as today.
 

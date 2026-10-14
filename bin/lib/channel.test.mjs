@@ -58,10 +58,10 @@ test('a notice is a schema, the time, the sender, the role it is for, the kind, 
   assert.deepEqual([note().cwd, note().worktree, note().branch], [null, null, null]);
 });
 
-test('the kinds are six, and no other is one', () => {
-  assert.deepEqual(channel.NOTICE_KINDS, ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved']);
-  for (const kind of channel.NOTICE_KINDS.filter((one) => one !== 'answer')) assert.equal(note({ kind }).kind, kind);
-  for (const kind of ['done', 'Note', '', undefined, 'constructor']) refused({ kind }, /--kind takes one of opened, waiting, closed, note, answer, relieved/);
+test('the kinds are eight, question and withdrawn last and in that order, and no other is one', () => {
+  assert.deepEqual(channel.NOTICE_KINDS, ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn']);
+  for (const kind of channel.NOTICE_KINDS.filter((one) => !['answer', 'question', 'withdrawn'].includes(one))) assert.equal(note({ kind }).kind, kind);
+  for (const kind of ['done', 'Note', '', undefined, 'constructor']) refused({ kind }, /--kind takes one of opened, waiting, closed, note, answer, relieved, question, withdrawn/);
 });
 
 test('a notice is for a role: the orchestrator or the number of a work session', () => {
@@ -93,6 +93,192 @@ test('an answer carries the transcript and the line his words are read at, and n
   assert.equal('transcript' in note(), false);
 });
 
+// --- a question, a withdrawal, and the copy of an answer ---
+
+const asking = (fields = {}) => note({ kind: 'question', text: 'Which budget?', id: 'q-1', options: [], waits: 'the sprint', ...fields });
+const askingRefused = (fields, pattern) => assert.throws(() => asking(fields), (err) => err instanceof channel.ChannelInputError && pattern.test(err.message), JSON.stringify(Object.keys(fields)));
+const copyOfAnswered = { tool: 'AskUserQuestion', answers: [{ question: '¿Qué presupuesto?', options: ['Low', 'High'], answer: 'Low', how: 'tapped' }] };
+
+test('the limits of a question are 2000 characters of text, six options, 120 characters a label, 500 a description and 500 for what waits, and the copy of an answer keeps 2000', () => {
+  assert.deepEqual([channel.QUESTION_TEXT_MAX, channel.QUESTION_OPTIONS_MAX, channel.OPTION_LABEL_MAX, channel.OPTION_DESCRIPTION_MAX, channel.QUESTION_WAITS_MAX, channel.ANSWER_COPY_TEXT_MAX], [2000, 6, 120, 500, 500, 2000]);
+});
+
+const questionJson = (fields = {}) => JSON.stringify({ text: 'Which budget?', options: [{ label: 'Low (Recomendado)', description: 'the cheap one' }], waits: 'the sprint', ...fields });
+const questionRefusedIn = (json, pattern) => assert.throws(() => channel.questionFieldsOf(json), (err) => err instanceof channel.ChannelInputError && pattern.test(err.message), json.slice(0, 80));
+
+test('a question takes its fields from standard input as JSON: its text, its options with a label and a description, and what waits', () => {
+  assert.deepEqual(channel.questionFieldsOf(questionJson({ text: '  ¿Qué presupuesto?  ' })), { text: '¿Qué presupuesto?', options: [{ label: 'Low (Recomendado)', description: 'the cheap one' }], waits: 'the sprint' });
+  assert.deepEqual(channel.questionFieldsOf(questionJson({ options: [] })).options, [], 'a question with nothing to tap is allowed');
+  assert.deepEqual(channel.questionFieldsOf(questionJson({ options: [{ label: 'Otro' }] })).options, [{ label: 'Otro', description: '' }], 'a missing description is stored as an empty text');
+  assert.equal(channel.questionFieldsOf(`\uFEFF${questionJson()}`).text, 'Which budget?', 'a byte order mark is not part of the text');
+});
+
+test('standard input that is not JSON, or is JSON that is not an object, is refused in words', () => {
+  for (const json of ['', 'Which budget?', '{"text":', 'undefined']) questionRefusedIn(json, /what came is not JSON/);
+  for (const json of ['null', '[]', '"Which budget?"', '5', 'true']) questionRefusedIn(json, /what came is not an object/);
+});
+
+test('a question takes no key but text, options and waits, and the refusal names the key it found', () => {
+  questionRefusedIn(questionJson({ due: 'Friday' }), /a question takes no key "due": it takes text, options and waits/);
+});
+
+test('the text of a question is one line, not empty, of 2000 characters at most', () => {
+  questionRefusedIn(questionJson({ text: '' }), /the text of a question is empty/);
+  questionRefusedIn(questionJson({ text: 'two\nlines' }), /the text of a question is one line/);
+  questionRefusedIn(questionJson({ text: 'x'.repeat(2001) }), /the text of a question has 2001 characters, 2000 at most/);
+  assert.equal(channel.questionFieldsOf(questionJson({ text: 'x'.repeat(2000) })).text.length, 2000);
+});
+
+test('the options of a question are a list of six at most, each a label and a description and no other key, and no two share a label', () => {
+  const many = (count) => Array.from({ length: count }, (_, i) => ({ label: `Option ${i}` }));
+  questionRefusedIn(questionJson({ options: undefined }), /the options of a question are a list, the recommended one first/);
+  questionRefusedIn(questionJson({ options: 'Low' }), /the options of a question are a list/);
+  questionRefusedIn(questionJson({ options: { label: 'Low' } }), /the options of a question are a list/);
+  questionRefusedIn(questionJson({ options: many(7) }), /a question has 7 options, 6 at most/);
+  assert.equal(channel.questionFieldsOf(questionJson({ options: many(6) })).options.length, 6);
+  questionRefusedIn(questionJson({ options: ['Low'] }), /an option of a question is an object/);
+  questionRefusedIn(questionJson({ options: [{ label: 'Low', color: 'red' }] }), /an option takes no key "color": it takes label and description/);
+  questionRefusedIn(questionJson({ options: [{ label: '' }] }), /the label of an option is empty/);
+  questionRefusedIn(questionJson({ options: [{ label: 'two\nlines' }] }), /the label of an option is one line/);
+  questionRefusedIn(questionJson({ options: [{ label: 'x'.repeat(121) }] }), /the label of an option has 121 characters, 120 at most/);
+  questionRefusedIn(questionJson({ options: [{ label: 'Low', description: 5 }] }), /the description of an option is a text/);
+  questionRefusedIn(questionJson({ options: [{ label: 'Low', description: 'two\nlines' }] }), /the description of an option is one line/);
+  questionRefusedIn(questionJson({ options: [{ label: 'Low', description: 'x'.repeat(501) }] }), /the description of an option has 501 characters, 500 at most/);
+  assert.equal(channel.questionFieldsOf(questionJson({ options: [{ label: 'Low', description: 'x'.repeat(500) }] })).options[0].description.length, 500);
+  questionRefusedIn(questionJson({ options: [{ label: 'Low' }, { label: ' Low ' }] }), /two options of a question have the label "Low"/);
+});
+
+test('what waits on a question is one line, not empty, of 500 characters at most', () => {
+  questionRefusedIn(questionJson({ waits: undefined }), /what waits on a question is empty/);
+  questionRefusedIn(questionJson({ waits: '' }), /what waits on a question is empty/);
+  questionRefusedIn(questionJson({ waits: 'two\nlines' }), /what waits on a question is one line/);
+  questionRefusedIn(questionJson({ waits: 'x'.repeat(501) }), /what waits on a question has 501 characters, 500 at most/);
+});
+
+test('a question is the base notice, then its id, its options and its waits, in that order', () => {
+  const made = asking({ id: '  q-7f3a  ', text: '  Which budget?  ', options: [{ label: 'Low (Recomendado)', description: 'the cheap one' }, { label: 'High' }], waits: 'the sprint' });
+  assert.deepEqual(Object.keys(made), ['schema', 'at', 'from', 'to', 'kind', 'text', 'cwd', 'worktree', 'branch', 'id', 'options', 'waits']);
+  assert.deepEqual(made, {
+    schema: 'js-harness.channel-notice/v1',
+    at: AT,
+    from: FROM,
+    to: { role: 'orchestrator', number: null },
+    kind: 'question',
+    text: 'Which budget?',
+    cwd: null,
+    worktree: null,
+    branch: null,
+    id: 'q-7f3a',
+    options: [{ label: 'Low (Recomendado)', description: 'the cheap one' }, { label: 'High', description: '' }],
+    waits: 'the sprint',
+  });
+});
+
+test('a question goes to the orchestrator, who asks him, and takes an id of one line and 100 characters at most', () => {
+  assert.equal(asking({ to: 'ORQ' }).to.role, 'orchestrator');
+  askingRefused({ to: '5' }, /a question goes to the orchestrator, who asks him/);
+  askingRefused({ id: undefined }, /the id of a question is empty/);
+  askingRefused({ id: '' }, /the id of a question is empty/);
+  askingRefused({ id: 'x'.repeat(101) }, /the id of a question has 101 characters, 100 at most/);
+  askingRefused({ id: 'two\nids' }, /the id of a question is one line/);
+  assert.equal(asking({ id: 'x'.repeat(100) }).id.length, 100);
+});
+
+test('the text of a question may be 2000 characters where a note may be 500, and its options and waits are checked as standard input checks them', () => {
+  assert.equal(asking({ text: 'x'.repeat(2000) }).text.length, 2000);
+  askingRefused({ text: 'x'.repeat(2001) }, /the text of a question has 2001 characters, 2000 at most/);
+  askingRefused({ text: 'two\nlines' }, /the text of a question is one line/);
+  askingRefused({ text: '' }, /the text of a question is empty/);
+  refused({ text: 'x'.repeat(501) }, /501 characters.*500 at most/);
+  askingRefused({ options: [{ label: 'Low' }, { label: 'Low' }] }, /two options of a question have the label "Low"/);
+  askingRefused({ options: 'Low' }, /the options of a question are a list/);
+  askingRefused({ options: [{ label: 'x'.repeat(121) }] }, /the label of an option has 121 characters, 120 at most/);
+  askingRefused({ waits: '' }, /what waits on a question is empty/);
+});
+
+test('a question refuses a transcript and a line, a question number, a verdict and a copy', () => {
+  askingRefused({ transcript: '1d16beeb', line: 4 }, /only an answer takes --transcript and --line/);
+  askingRefused({ question: 1 }, /only an answer or a withdrawal takes --question/);
+  askingRefused({ verified: true }, /only an answer with a question takes verified and copy/);
+  askingRefused({ copy: null }, /only an answer with a question takes verified and copy/);
+});
+
+test('every other kind refuses the question fields, and a withdrawal takes its question number and nothing of a question', () => {
+  for (const kind of ['opened', 'waiting', 'closed', 'note', 'relieved']) {
+    refused({ kind, id: 'q-1' }, /only a question takes id, options and waits/);
+    refused({ kind, options: [] }, /only a question takes id, options and waits/);
+    refused({ kind, waits: 'the sprint' }, /only a question takes id, options and waits/);
+    refused({ kind, question: 1 }, /only an answer or a withdrawal takes --question/);
+    refused({ kind, verified: true }, /only an answer with a question takes verified and copy/);
+    refused({ kind, copy: null }, /only an answer with a question takes verified and copy/);
+  }
+});
+
+test('a withdrawal names its question and its reason is its text, one line of 500 characters at most', () => {
+  const closing = note({ kind: 'withdrawn', question: 3, text: 'he moved on to the next task' });
+  assert.deepEqual(closing, { schema: 'js-harness.channel-notice/v1', at: AT, from: FROM, to: { role: 'orchestrator', number: null }, kind: 'withdrawn', text: 'he moved on to the next task', cwd: null, worktree: null, branch: null, question: 3 });
+  refused({ kind: 'withdrawn', text: 'why' }, /a withdrawal names its question: --question <n>/);
+  for (const question of [0, -1, 1.5, '3', Number.MAX_SAFE_INTEGER + 1]) refused({ kind: 'withdrawn', question, text: 'why' }, /--question takes the number of a question, from 1/);
+  refused({ kind: 'withdrawn', question: 1, text: 'x'.repeat(501) }, /501 characters.*500 at most/);
+  const extras = [
+    [{ transcript: '1d16beeb', line: 4 }, /only an answer takes --transcript and --line/],
+    [{ id: 'q-1' }, /only a question takes id, options and waits/],
+    [{ options: [] }, /only a question takes id, options and waits/],
+    [{ waits: 'the sprint' }, /only a question takes id, options and waits/],
+    [{ verified: true }, /only an answer with a question takes verified and copy/],
+    [{ copy: null }, /only an answer with a question takes verified and copy/],
+  ];
+  for (const [extra, pattern] of extras) refused({ kind: 'withdrawn', question: 1, text: 'why', ...extra }, pattern);
+});
+
+test('an answer with no question keeps the shape it had, and takes neither verified nor copy', () => {
+  const plain = note({ kind: 'answer', text: 'A, as automatic as possible', transcript: '1d16beeb', line: 406 });
+  assert.deepEqual(Object.keys(plain), ['schema', 'at', 'from', 'to', 'kind', 'text', 'cwd', 'worktree', 'branch', 'transcript', 'line']);
+  refused({ kind: 'answer', transcript: '1d16beeb', line: 406, verified: true, copy: copyOfAnswered }, /only an answer with a question takes verified and copy/);
+  refused({ kind: 'answer', transcript: '1d16beeb', line: 406, copy: null }, /only an answer with a question takes verified and copy/);
+});
+
+test('an answer names its question, and is verified only where its line was read: then it keeps the copy of what the line holds', () => {
+  const verified = note({ kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406, question: 3, verified: true, copy: { ...copyOfAnswered, askedAt: AT } });
+  assert.deepEqual(Object.keys(verified).slice(-5), ['transcript', 'line', 'question', 'verified', 'copy']);
+  assert.deepEqual([verified.question, verified.verified, verified.copy], [3, true, copyOfAnswered]);
+  const unread = note({ kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406, question: 3, verified: false, copy: null });
+  assert.deepEqual([unread.question, unread.verified, unread.copy], [3, false, null]);
+  const cases = [
+    [{ question: 0, verified: true, copy: copyOfAnswered }, /--question takes the number of a question, from 1/],
+    [{ question: '3', verified: true, copy: copyOfAnswered }, /--question takes the number of a question, from 1/],
+    [{ question: 3 }, /verified takes true or false/],
+    [{ question: 3, verified: 'yes', copy: null }, /verified takes true or false/],
+    [{ question: 3, verified: true }, /a verified answer takes copy/],
+    [{ question: 3, verified: true, copy: null }, /a verified answer takes copy/],
+    [{ question: 3, verified: true, copy: ['Low'] }, /a verified answer takes copy/],
+    [{ question: 3, verified: true, copy: { tool: null, answers: [] } }, /the copy of an answer has no answers/],
+    [{ question: 3, verified: false, copy: copyOfAnswered }, /an answer that was not verified takes copy null/],
+  ];
+  for (const [fields, pattern] of cases) refused({ kind: 'answer', transcript: '1d16beeb', line: 406, ...fields }, pattern);
+});
+
+test('the copy of an answer keeps the question, the options and the answer, cut to its limits, and drops the keys it does not know', () => {
+  assert.deepEqual(channel.answerCopyOf({ ...copyOfAnswered, askedAt: AT }), copyOfAnswered);
+  const long = 'x'.repeat(2500);
+  const cut = channel.answerCopyOf({ tool: null, answers: [{ question: long, options: ['y'.repeat(130)], answer: long, how: 'typed' }] }).answers[0];
+  assert.deepEqual(cut, { question: `${'x'.repeat(1999)}…`, options: [`${'y'.repeat(119)}…`], answer: `${'x'.repeat(1999)}…`, how: 'typed' });
+  assert.equal(cut.question.length, channel.ANSWER_COPY_TEXT_MAX);
+  const labels = Array.from({ length: 13 }, (_, i) => `Option ${i}`);
+  assert.deepEqual(channel.answerCopyOf({ tool: 'AskUserQuestion', answers: [{ question: 'Which?', options: labels, answer: 'Option 0', how: 'tapped' }] }).answers[0].options, labels.slice(0, 12));
+  const refusals = [
+    [{ tool: 'AskUserQuestion', answers: [] }, /has no answers/],
+    [{ tool: 'AskUserQuestion' }, /has no answers/],
+    [null, /takes the tool that asked/],
+    [{ tool: 7, answers: copyOfAnswered.answers }, /takes the tool that asked/],
+    [{ tool: 'AskUserQuestion', answers: [{ question: 'Which?', options: ['Low'], answer: '  ', how: 'typed' }] }, /the answer to a question is empty/],
+    [{ tool: 'AskUserQuestion', answers: [{ question: ' ', options: ['Low'], answer: 'Low', how: 'tapped' }] }, /the question of an answer is empty/],
+    [{ tool: 'AskUserQuestion', answers: [{ question: 'Which?', options: 'Low', answer: 'Low', how: 'tapped' }] }, /the options of an answer are a list of labels/],
+    [{ tool: 'AskUserQuestion', answers: ['Low'] }, /an answer of a copy is an object/],
+  ];
+  for (const [answered, pattern] of refusals) assert.throws(() => channel.answerCopyOf(answered), (err) => err instanceof channel.ChannelInputError && pattern.test(err.message), pattern.source);
+});
+
 // --- the record ---
 
 test('appendNotice writes one JSON line per notice, creating the folder, and readNotices gives them back in order', withHome((home) => {
@@ -103,11 +289,11 @@ test('appendNotice writes one JSON line per notice, creating the folder, and rea
   channel.appendNotice(home, SLUG, second);
   const text = fs.readFileSync(file, 'utf8');
   assert.deepEqual(text.split('\n'), [JSON.stringify(first), JSON.stringify(second), '']);
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], readings: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], readings: [], questions: [], skipped: 0 });
 }));
 
 test('a project with no record yet has no notices, and that is not an error', withHome((home) => {
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], readings: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], readings: [], questions: [], skipped: 0 });
 }));
 
 test('readNotices counts and skips a torn line and a line that is not a notice, and keeps the rest', withHome((home) => {
@@ -138,7 +324,73 @@ test('a record that is there and cannot be read is unavailable with the reason, 
   const readFile = () => {
     throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
   };
-  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], readings: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], readings: [], questions: [], skipped: 0 });
+}));
+
+test('a question, a withdrawal and an answer with a number are kept only when they hold what makes them one', withHome((home) => {
+  const file = channel.recordPath(home, SLUG);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const good = asking({ id: 'q-1' });
+  const closing = note({ kind: 'withdrawn', question: 1, text: 'moved on' });
+  const answered1 = note({ kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406, question: 1, verified: false, copy: null });
+  const plain = note({ kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406 });
+  const broken = [
+    { ...good, id: undefined },
+    { ...good, id: '' },
+    { ...good, options: 'Low' },
+    { ...good, waits: 5 },
+    { ...closing, question: undefined },
+    { ...closing, question: 0 },
+    { ...closing, question: '1' },
+    { ...answered1, question: 0 },
+    { ...answered1, question: 1.5 },
+  ];
+  fs.writeFileSync(file, [good, ...broken, closing, answered1, plain].map((one) => JSON.stringify(one)).join('\n') + '\n', 'utf8');
+  const read = channel.readNotices(home, SLUG);
+  assert.deepEqual(read.notices, [good, closing, answered1, plain]);
+  assert.equal(read.skipped, broken.length);
+  assert.deepEqual(read.questions, [{ number: 1, notice: good }]);
+}));
+
+test('readNotices numbers the question lines in the order written, a broken one included, so the next valid question has the following number', withHome((home) => {
+  const first = asking({ id: 'q-1', text: 'first' });
+  const broken = { ...asking({ id: 'q-2', text: 'second' }), id: '' };
+  const third = asking({ id: 'q-3', text: 'third' });
+  const said = note({ text: 'the gate passed' });
+  const recordFile = channel.recordPath(home, SLUG);
+  fs.mkdirSync(path.dirname(recordFile), { recursive: true });
+  fs.writeFileSync(recordFile, [first, broken, third, said].map((one) => JSON.stringify(one)).join('\n') + '\n', 'utf8');
+  const read = channel.readNotices(home, SLUG);
+  assert.deepEqual(read.questions, [{ number: 1, notice: first }, { number: 3, notice: third }]);
+  assert.deepEqual([read.notices, read.skipped], [[first, third, said], 1]);
+}));
+
+test('recordedQuestions says which questions are still open, and what closed the others: the first answer or withdrawal that names them', withHome((home) => {
+  const asked = [asking({ id: 'q-1', text: 'one' }), asking({ id: 'q-2', text: 'two' }), asking({ id: 'q-3', text: 'three' }), asking({ id: 'q-4', text: 'four' })];
+  const answerTo = (question, text) => note({ kind: 'answer', text, transcript: '1d16beeb', line: 406, question, verified: false, copy: null });
+  const firstAnswer = answerTo(1, 'first answer to one');
+  const withdrawn = note({ kind: 'withdrawn', question: 2, text: 'he moved on' });
+  const written = [...asked, note({ kind: 'answer', text: 'an answer that names no question', transcript: '1d16beeb', line: 9 }), withdrawn, firstAnswer, answerTo(1, 'a second answer to one')];
+  for (const one of written) channel.appendNotice(home, SLUG, one);
+  assert.deepEqual(channel.recordedQuestions(channel.readNotices(home, SLUG)), [
+    { number: 1, notice: asked[0], closed: { by: 'answer', notice: firstAnswer } },
+    { number: 2, notice: asked[1], closed: { by: 'withdrawn', notice: withdrawn } },
+    { number: 3, notice: asked[2], closed: null },
+    { number: 4, notice: asked[3], closed: null },
+  ]);
+}));
+
+test('an answer no transcript confirmed closes its question only until his answer is read at its line', withHome((home) => {
+  const asked = asking({ id: 'q-1', text: 'one' });
+  const claimed = note({ kind: 'answer', text: 'he said yes', transcript: 'codex-thread', line: 1, question: 1, verified: false, copy: null });
+  const copy = { tool: 'AskUserQuestion', answers: [{ question: 'Pregunta 1: one', options: ['Yes', 'No'], answer: 'No', how: 'tapped' }] };
+  const read = note({ kind: 'answer', text: 'he tapped no', transcript: '1d16beeb', line: 406, question: 1, verified: true, copy });
+  for (const one of [asked, claimed]) channel.appendNotice(home, SLUG, one);
+  assert.deepEqual(channel.recordedQuestions(channel.readNotices(home, SLUG)), [{ number: 1, notice: asked, closed: { by: 'answer', notice: claimed } }]);
+  // The answer read at its line is written after the claim, and it is the one the question is closed by.
+  channel.appendNotice(home, SLUG, read);
+  channel.appendNotice(home, SLUG, note({ kind: 'answer', text: 'a later claim', transcript: 'codex-thread', line: 2, question: 1, verified: false, copy: null }));
+  assert.deepEqual(channel.recordedQuestions(channel.readNotices(home, SLUG)), [{ number: 1, notice: asked, closed: { by: 'answer', notice: read } }]);
 }));
 
 // --- the readings: which session read which opening ---
@@ -160,7 +412,7 @@ test('appendReading adds the reading to the record, and readNotices gives the re
   assert.equal(channel.appendReading(home, SLUG, reading), channel.recordPath(home, SLUG));
   const second = note({ kind: 'closed', text: 'delivered' });
   channel.appendNotice(home, SLUG, second);
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [first, second], readings: [reading], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [first, second], readings: [reading], questions: [], skipped: 0 });
   // A reading that lost what makes it one is a line the reader does not know, counted as such.
   for (const broken of [{ ...reading, reader: { ...reading.reader, id: 7 } }, { ...reading, title: '' }, { ...reading, at: 'yesterday' }, { ...reading, reader: 'somebody' }]) {
     fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify(broken)}\n`);
