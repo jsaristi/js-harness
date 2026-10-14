@@ -45,6 +45,32 @@ test('testRunWarning says nothing for one file, a free lock, a run under js-harn
 
 // Codex, 2026-10-14: a glob is many files, a quoted | or ; ends no command, and only the run that js-harness gate
 // wraps is in a turn.
+test('testRunWarning sees a run inside wsl.exe and sh -c, and a file named by a variable, which may expand to none (JH 8, 2026-10-14)', () => {
+  // The command of the slip, as the Bash tool was given it: the variable was empty, and the whole suite ran.
+  const slip = 'wsl.exe -d Ubuntu -- sh -c "cd /mnt/d/js-harness-worktrees/exact-tests && for f in bin/lib/a.test.mjs bin/lib/b.test.mjs; do /home/o/.local/node/bin/node --test --test-reporter=tap \\$f 2>&1 | grep -E pass | head -5; done"';
+  assert.equal(testRunFiles(slip), Infinity);
+  assert.equal(testRunWarning(slip, { env: {}, holder: held }), warned('several test files'));
+  assert.equal(testRunFiles('wsl.exe -d Ubuntu -- /home/o/node --test a.mjs b.mjs'), 2);
+  assert.equal(testRunFiles('wsl -- node --test'), 0);
+  assert.equal(testRunFiles("bash -c 'node --test a.mjs b.mjs'"), 2);
+  assert.equal(testRunFiles('sh -c "node --test a.mjs"'), 1);
+  assert.equal(testRunFiles('node --test "$FILE"'), Infinity);
+  assert.equal(testRunFiles('if true; then node --test a.mjs b.mjs; fi'), 2);
+  // A redirection is no file.
+  assert.equal(testRunFiles('node --test a.mjs 2>&1'), 1);
+  assert.equal(testRunFiles('node --test a.mjs > out.txt'), 1);
+  // Codex, 2026-10-14: a descriptor redirection ends no command; `-c` is read among the shell's options only,
+  // and within a cluster of them.
+  assert.equal(testRunFiles('node --test 2>&1 a.mjs'), 1);
+  assert.equal(testRunFiles("bash script.sh -c 'node --test a.mjs b.mjs'"), null);
+  assert.equal(testRunFiles("bash -- script.sh -c 'node --test a.mjs b.mjs'"), null);
+  assert.equal(testRunFiles("bash -cl 'node --test a.mjs b.mjs'"), 2);
+  assert.equal(testRunFiles("bash -e -c 'node --test a.mjs b.mjs'"), 2);
+  // A script is not read, and a shell that runs no test is no run.
+  assert.equal(testRunFiles('wsl.exe -d Ubuntu -- sh /mnt/c/x/wsl-one-test.sh /mnt/d/w bin/a.test.mjs'), null);
+  assert.equal(testRunFiles('wsl.exe -d Ubuntu -- sh -c "ls"'), null);
+});
+
 test('testRunWarning counts a glob as several files, reads quotes whole, and exempts only the run under js-harness gate', () => {
   assert.equal(testRunWarning('node --test bin/lib/*.test.mjs', { env: {}, holder: held }), warned('several test files'));
   assert.equal(testRunWarning('node --test --test-name-pattern="foo|bar" a.mjs', { env: {}, holder: held }), null);
