@@ -7,5 +7,6 @@
     "rules": "node bin/js-harness.mjs rules check",
     "document tests": "node --test bin/rules.test.mjs bin/sessions.test.mjs"
   },
-  "sameTree": "skip"
+  "sameTree": "skip",
+  "sensorsInWsl": true
 }

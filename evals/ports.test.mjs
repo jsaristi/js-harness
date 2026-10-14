@@ -22,6 +22,13 @@ function scripted(script) {
   return sync;
 }
 const noSleep = () => {};
+// A Linux with no `/proc` to read: the fake of the system for a lookup that is to keep the name `ps` or `ss`
+// printed. Without it a test that fakes Linux on a real one would read the link of whatever process holds the
+// fake's pid there.
+const noProc = () => {
+  throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+};
+const linux = { platform: 'linux', readlink: noProc };
 
 // ---- assertTrialPort and allocatePort ---------------------------------------------------------------------------
 
@@ -130,10 +137,46 @@ test('on POSIX the listener comes from lsof and ps, and lsof exiting 1 with noth
     ['ps', { stdout: 'engram\n' }],
     ['ps', { stdout: 'node\n' }],
   ]);
-  assert.deepEqual(findListeners(41000, { platform: 'linux', spawnSync: sync }), [{ pid: 321, name: 'engram' }, { pid: 322, name: 'node' }]);
+  assert.deepEqual(findListeners(41000, { ...linux, spawnSync: sync }), [{ pid: 321, name: 'engram' }, { pid: 322, name: 'node' }]);
   assert.deepEqual(sync.calls[0].args, ['-nP', '-iTCP:41000', '-sTCP:LISTEN', '-Fp']);
   assert.deepEqual(sync.calls[1].args, ['-o', 'comm=', '-p', '321']);
-  assert.deepEqual(findListeners(41000, { platform: 'linux', spawnSync: scripted([['lsof', { status: 1, stdout: '' }]]) }), []);
+  assert.deepEqual(findListeners(41000, { ...linux, spawnSync: scripted([['lsof', { status: 1, stdout: '' }]]) }), []);
+});
+
+// Node v24.21.0 on GitHub's Ubuntu runner names its main thread `MainThread`, and that is what `ps -o comm=`
+// and `ss` print for the process: the first run of this suite on Linux found a Node listener "not node".
+test('on Linux the name of a listener is the image its process runs, read from /proc, not the name of its main thread', () => {
+  const read = [];
+  const readlink = (link) => (read.push(link), '/opt/node/bin/node');
+  const lsof = scripted([['lsof', { stdout: 'p321\n' }]]);
+  assert.deepEqual(findListeners(41000, { platform: 'linux', spawnSync: lsof, readlink }), [{ pid: 321, name: 'node' }]);
+  assert.deepEqual(read, ['/proc/321/exe']);
+  assert.equal(lsof.calls.length, 1, 'ps is not asked for a name the system already gave');
+  const enoent = Object.assign(new Error('spawn lsof ENOENT'), { code: 'ENOENT' });
+  const ss = scripted([['lsof', { error: enoent }], ['ss', { stdout: 'LISTEN 0 511 127.0.0.1:41000 0.0.0.0:* users:(("MainThread",pid=555,fd=21))\n' }]]);
+  assert.deepEqual(findListeners(41000, { platform: 'linux', spawnSync: ss, readlink }), [{ pid: 555, name: 'node' }]);
+  // A binary replaced on disk while it runs is still that image.
+  const replaced = scripted([['lsof', { stdout: 'p321\n' }]]);
+  assert.deepEqual(findListeners(41000, { platform: 'linux', spawnSync: replaced, readlink: () => '/usr/bin/engram (deleted)' }), [{ pid: 321, name: 'engram' }]);
+});
+
+test('a link that cannot be read keeps the name ps printed, and no system but Linux is asked for a link', () => {
+  const sync = () => scripted([['lsof', { stdout: 'p321\n' }], ['ps', { stdout: '/usr/local/bin/engram\n' }]]);
+  assert.deepEqual(findListeners(41000, { platform: 'linux', spawnSync: sync(), readlink: noProc }), [{ pid: 321, name: 'engram' }]);
+  assert.deepEqual(findListeners(41000, { platform: 'darwin', spawnSync: sync(), readlink: () => assert.fail('only Linux has this link') }), [{ pid: 321, name: 'engram' }]);
+});
+
+test('on Linux a kill by port and a listing by image read the image too: a renamed main thread hides no process and names none', () => {
+  const images = { 321: '/opt/node/bin/node', 11: '/usr/bin/engram', 12: '/opt/node/bin/node', 13: '/opt/node/bin/node' };
+  const readlink = (link) => images[/^\/proc\/(\d+)\/exe$/.exec(link)[1]] ?? noProc();
+  const killed = [];
+  const sync = scripted([['lsof', { stdout: 'p321\n' }], ['lsof', { status: 1 }]]);
+  assert.deepEqual(killByPort(41000, { platform: 'linux', spawnSync: sync, readlink, name: /^node$/, label: 'node', kill: (pid) => killed.push(pid), sleep: noSleep }), { killed: [321] });
+  assert.deepEqual(killed, [321]);
+  // 12 is Node under its thread's name, 13 is Node whose main thread is named `engram`, and the link of 14 cannot be read.
+  const ps = () => scripted([['ps', { stdout: '  11 engram /usr/bin/engram serve\n  12 MainThread node a.js\n  13 engram node b.js\n  14 engram engram mcp\n' }]]);
+  assert.deepEqual(findProcesses('node', { platform: 'linux', spawnSync: ps(), readlink }), [{ pid: 12, command: 'node a.js' }, { pid: 13, command: 'node b.js' }]);
+  assert.deepEqual(findProcesses('engram', { platform: 'linux', spawnSync: ps(), readlink }), [{ pid: 11, command: '/usr/bin/engram serve' }, { pid: 14, command: 'engram mcp' }]);
 });
 
 test('without lsof, ss is used; without either, the lookup fails loudly instead of reporting a free port', () => {
@@ -142,11 +185,11 @@ test('without lsof, ss is used; without either, the lookup fails loudly instead 
   assert.deepEqual(findListeners(41000, { platform: 'darwin', spawnSync: ss }), [{ pid: 555, name: 'engram' }]);
   assert.deepEqual(ss.calls[1].args, ['-H', '-ltnp', 'sport', '=', ':41000']);
   const neither = scripted([['lsof', { error: enoent }], ['ss', { error: Object.assign(new Error('spawn ss ENOENT'), { code: 'ENOENT' }) }]]);
-  assert.throws(() => findListeners(41000, { platform: 'linux', spawnSync: neither }), /lsof/);
+  assert.throws(() => findListeners(41000, { ...linux, spawnSync: neither }), /lsof/);
 });
 
 test('an lsof that fails is a failed lookup, never a free port: only exit 1 with nothing on stdout and stderr means no listener', () => {
-  const find = (result) => findListeners(41000, { platform: 'linux', spawnSync: scripted([['lsof', result]]) });
+  const find = (result) => findListeners(41000, { ...linux, spawnSync: scripted([['lsof', result]]) });
   assert.deepEqual(find({ status: 1, stdout: '', stderr: '' }), [], 'the documented no-match result');
   assert.throws(() => find({ status: 1, stdout: '', stderr: 'lsof: WARNING: can\'t stat() fuse file system' }), /lsof exit 1.*can't stat/s, 'exit 1 with a message is an error');
   assert.throws(() => find({ status: 1, stdout: '', stderr: '\n' + 'permission denied' }), /permission denied/);
@@ -157,12 +200,12 @@ test('an lsof that fails is a failed lookup, never a free port: only exit 1 with
 
 test('a killByPort whose lsof lookup failed throws instead of reporting nothing killed', () => {
   const sync = scripted([['lsof', { status: 1, stdout: '', stderr: 'permission denied' }]]);
-  assert.throws(() => killByPort(41000, { platform: 'linux', spawnSync: sync, kill: () => assert.fail('killed'), sleep: noSleep }), /permission denied/);
+  assert.throws(() => killByPort(41000, { ...linux, spawnSync: sync, kill: () => assert.fail('killed'), sleep: noSleep }), /permission denied/);
 });
 
 test('an ss row for the port without ownership is an inconclusive lookup, a row with it is the listener, and no row is a free port', () => {
   const enoent = Object.assign(new Error('spawn lsof ENOENT'), { code: 'ENOENT' });
-  const withSs = (stdout) => findListeners(41000, { platform: 'linux', spawnSync: scripted([['lsof', { error: enoent }], ['ss', { stdout }]]) });
+  const withSs = (stdout) => findListeners(41000, { ...linux, spawnSync: scripted([['lsof', { error: enoent }], ['ss', { stdout }]]) });
   assert.throws(() => withSs('LISTEN 0 4096 127.0.0.1:41000 0.0.0.0:*\n'), /ss.*without (an owner|ownership)|cannot tell/s);
   assert.throws(() => withSs('LISTEN 0 4096 127.0.0.1:41000 0.0.0.0:* users:(("engram",pid=555,fd=7))\nLISTEN 0 4096 [::1]:41000 [::]:*\n'), /ss/, 'one row without an owner among rows with one');
   assert.deepEqual(withSs('LISTEN 0 4096 127.0.0.1:41000 0.0.0.0:* users:(("engram",pid=123,fd=7))\n'), [{ pid: 123, name: 'engram' }]);
@@ -174,7 +217,7 @@ test('an ss row for the port without ownership is an inconclusive lookup, a row 
 test('a port that is not a trial port is refused before anything runs', () => {
   const sync = scripted([]);
   assert.throws(() => findListeners(7437, { platform: 'win32', spawnSync: sync }), /7437/);
-  assert.throws(() => findListeners('41000; rm -rf', { platform: 'linux', spawnSync: sync }), /engram port/);
+  assert.throws(() => findListeners('41000; rm -rf', { ...linux, spawnSync: sync }), /engram port/);
   assert.equal(sync.calls.length, 0);
 });
 
@@ -224,7 +267,7 @@ test('on POSIX the listener gets SIGKILL through the injected kill', () => {
     ['lsof', { status: 1 }],
   ]);
   const killed = [];
-  assert.deepEqual(killByPort(41000, { platform: 'linux', spawnSync: sync, kill: (pid, signal) => killed.push([pid, signal]), sleep: noSleep }), { killed: [321] });
+  assert.deepEqual(killByPort(41000, { ...linux, spawnSync: sync, kill: (pid, signal) => killed.push([pid, signal]), sleep: noSleep }), { killed: [321] });
   assert.deepEqual(killed, [[321, 'SIGKILL']]);
 });
 
@@ -239,7 +282,7 @@ test('the real engram port is never searched or killed, whatever listens there',
   for (const platform of ['win32', 'linux']) {
     assert.throws(() => killByPort(REAL_ENGRAM_PORT, { platform, spawnSync: sync, kill: () => assert.fail('killed') }), /7437/);
   }
-  assert.throws(() => killByPort(41000, { platform: 'linux', spawnSync: sync, protectedPorts: [41000] }), /41000/);
+  assert.throws(() => killByPort(41000, { ...linux, spawnSync: sync, protectedPorts: [41000] }), /41000/);
   assert.equal(sync.calls.length, 0, 'not even a lookup');
 });
 
@@ -281,14 +324,14 @@ test('processes are listed by image name: on Windows through CIM with the name i
   assert.ok(!script.includes('engram'), 'the name is data, not script text');
 
   const posix = scripted([['ps', { stdout: '  11 engram /usr/bin/engram serve\n  12 node node a.js\n  13 engram engram mcp\n' }]]);
-  assert.deepEqual(findProcesses('engram', { platform: 'linux', spawnSync: posix }), [{ pid: 11, command: '/usr/bin/engram serve' }, { pid: 13, command: 'engram mcp' }]);
+  assert.deepEqual(findProcesses('engram', { ...linux, spawnSync: posix }), [{ pid: 11, command: '/usr/bin/engram serve' }, { pid: 13, command: 'engram mcp' }]);
   assert.deepEqual(posix.calls[0].args, ['-eo', 'pid=,comm=,args=']);
 });
 
 test('a listing that cannot run throws, so "no engram process survived" is never read from a failed lookup', () => {
   assert.throws(() => findProcesses('engram', { platform: 'win32', spawnSync: scripted([['powershell', { status: 1, stderr: 'denied' }]]) }), /denied/);
-  assert.throws(() => findProcesses('engram', { platform: 'linux', spawnSync: scripted([['ps', { error: new Error('spawn ps ENOENT') }]]) }), /ENOENT/);
-  assert.throws(() => findProcesses('en gram', { platform: 'linux', spawnSync: scripted([]) }), /name/);
+  assert.throws(() => findProcesses('engram', { ...linux, spawnSync: scripted([['ps', { error: new Error('spawn ps ENOENT') }]]) }), /ENOENT/);
+  assert.throws(() => findProcesses('en gram', { ...linux, spawnSync: scripted([]) }), /name/);
 });
 
 // ---- the real thing, against a process of this test's own ---------------------------------------------------------

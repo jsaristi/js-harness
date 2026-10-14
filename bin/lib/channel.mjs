@@ -4,7 +4,8 @@
 // message is only the doorbell, since a message can be held, expire or reach a session that left, and
 // none of that can be read afterwards. This file holds what `bin/notify.mjs` writes (a notice, a relief
 // line, an opening) and the readers the board takes them back with. A notice is a claim of the session
-// that wrote it, never the user's word.
+// that wrote it, never the user's word. A question put to him is a notice of kind `question`, and one closed
+// without his answer a notice of kind `withdrawn`; the board reads both from the record.
 //
 // The shape of the record is the one of `appendJsonLine` and `readJsonLines` (./codex-reviews.mjs), with
 // a writer of its own: theirs writes in the repository's git folder, and a project that is no repository
@@ -26,9 +27,11 @@ export const READING_SCHEMA = 'js-harness.channel-reading/v1';
 /** The kinds of a notice, and no other: each one costs its receiver a turn. `opened` (feature, worktree,
  * branch), `waiting` (on what, and whose it is), `closed` (what was delivered, and that nothing more goes
  * to the sender), `note` (from the orchestrator: only what the receiver cannot see), `answer` (the user's
- * words given in the orchestrator's chat, with the transcript and the line they are read at) and
- * `relieved` (who has the role now). */
-export const NOTICE_KINDS = ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved'];
+ * words given in the orchestrator's chat, with the transcript and the line they are read at), `relieved`
+ * (who has the role now), `question` (a question put to him, written before it is asked: its options, what
+ * waits on it, and the number it is known by, which is its line's place in the record) and `withdrawn` (a
+ * question closed without his answer, said as not his). */
+export const NOTICE_KINDS = ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn'];
 
 /** The longest text of a notice, in characters: two or three sentences. A notice says that something
  * happened; what happened is in the feature document, the commit or the transcript it points at. */
@@ -42,6 +45,19 @@ export const OPENING_TITLE_MAX = 120;
 /** The longest text of an opening. It is a prompt, of a few thousand characters; this only stops a file
  * sent to standard input by mistake. */
 export const OPENING_TEXT_MAX = 100000;
+/** The limits of a question and of the copy of an answer, in characters. They exist for the same reason as
+ * the others: the record is appended with one small write (`appendLine`), and a question with its six
+ * options and what waits on it stays far under what that write takes. */
+export const QUESTION_TEXT_MAX = 2000;
+export const QUESTION_OPTIONS_MAX = 6;
+export const OPTION_LABEL_MAX = 120;
+export const OPTION_DESCRIPTION_MAX = 500;
+export const QUESTION_WAITS_MAX = 500;
+export const ANSWER_COPY_TEXT_MAX = 2000;
+/** The longest id of a question: a random one of its own, by which the record finds the notice again. */
+const QUESTION_ID_MAX = 100;
+/** The most options of an answer that its copy keeps: the rest of a question's options are not kept. */
+const ANSWER_COPY_OPTIONS_MAX = 12;
 
 /** What the caller gave is not a notice, a relief line or an opening: `bin/notify.mjs` answers it with
  * its usage, and nothing is written. */
@@ -85,20 +101,135 @@ function oneLine(text, max, what) {
  * (`senderOf`), `to` (a role as `roleNamed` takes it: `orchestrator`, `ORQ` or a work session's number),
  * `kind`, `text`, and where it was run from: `cwd`, and the `worktree` and `branch` git gave there, each
  * `null` when it could not be read. An `answer` also has the `transcript` (a file or a session id) and the
- * `line` the user's words are read at; nothing here checks the quote. Throws a `ChannelInputError` for
- * anything that is not a notice. */
-export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line }) {
+ * `line` the user's words are read at; nothing here checks the quote. A `question` has no text of a note's
+ * length: its `text` is the question, and it has an `id`, its `options` (`checkedQuestion`) and its `waits`.
+ * A `withdrawn` closes the question numbered `question` without his answer, and its text is the reason. An
+ * `answer` may name the question it answers with `question`, with `verified` (whether its line was read) and
+ * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). Throws a
+ * `ChannelInputError` for anything that is not a notice. */
+export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy }) {
   const role = typeof to === 'string' ? roleNamed(to) : null;
   if (role === null) throw new ChannelInputError('--to takes a role: orchestrator (or ORQ), or the number of a work session');
   if (!NOTICE_KINDS.includes(kind)) throw new ChannelInputError(`--kind takes one of ${NOTICE_KINDS.join(', ')}`);
-  const notice = { schema: NOTICE_SCHEMA, at, from, to: role, kind, text: oneLine(text, NOTICE_TEXT_MAX, 'the text of a notice'), cwd, worktree, branch };
-  if (kind !== 'answer') {
-    if (transcript !== undefined || line !== undefined) throw new ChannelInputError('only an answer takes --transcript and --line');
-    return notice;
+  if (kind !== 'answer' && (transcript !== undefined || line !== undefined)) throw new ChannelInputError('only an answer takes --transcript and --line');
+  if (kind !== 'question' && (id !== undefined || options !== undefined || waits !== undefined)) throw new ChannelInputError('only a question takes id, options and waits');
+  if (kind !== 'answer' && kind !== 'withdrawn' && question !== undefined) throw new ChannelInputError('only an answer or a withdrawal takes --question');
+  if (kind !== 'answer' && (verified !== undefined || copy !== undefined)) throw new ChannelInputError('only an answer with a question takes verified and copy');
+  if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks him: --to orchestrator');
+  const asked = kind === 'question' ? checkedQuestion({ text, options, waits }) : null;
+  const notice = { schema: NOTICE_SCHEMA, at, from, to: role, kind, text: asked === null ? oneLine(text, NOTICE_TEXT_MAX, 'the text of a notice') : asked.text, cwd, worktree, branch };
+  if (kind === 'question') return { ...notice, id: oneLine(id, QUESTION_ID_MAX, 'the id of a question'), options: asked.options, waits: asked.waits };
+  if (kind === 'withdrawn') {
+    if (question === undefined) throw new ChannelInputError('a withdrawal names its question: --question <n>');
+    return { ...notice, question: questionNumberOf(question) };
   }
+  if (kind !== 'answer') return notice;
   if (transcript === undefined || line === undefined) throw new ChannelInputError('an answer says where his words are read: --transcript <file or session id> and --line <n>');
   if (!Number.isSafeInteger(line) || line < 1) throw new ChannelInputError('--line takes the number of a line of the transcript, from 1');
-  return { ...notice, transcript: oneLine(transcript, 1000, 'the value of --transcript'), line };
+  const answer = { ...notice, transcript: oneLine(transcript, 1000, 'the value of --transcript'), line };
+  if (question === undefined) {
+    if (verified !== undefined || copy !== undefined) throw new ChannelInputError('only an answer with a question takes verified and copy');
+    return answer;
+  }
+  const number = questionNumberOf(question);
+  if (typeof verified !== 'boolean') throw new ChannelInputError('verified takes true or false: whether the line of his words was read');
+  if (verified) {
+    if (!isObject(copy)) throw new ChannelInputError('a verified answer takes copy, what its line holds (answerCopyOf)');
+    return { ...answer, question: number, verified, copy: answerCopyOf(copy) };
+  }
+  if (copy !== null) throw new ChannelInputError('an answer that was not verified takes copy null: no transcript could be read');
+  return { ...answer, question: number, verified, copy: null };
+}
+
+/** The number of a question, as the command and the record take it: a whole number from 1. Throws a
+ * `ChannelInputError` otherwise. */
+function questionNumberOf(question) {
+  if (!isQuestionNumber(question)) throw new ChannelInputError('--question takes the number of a question, from 1');
+  return question;
+}
+
+/** Whether `value` is the number of a question: a whole number from 1. */
+function isQuestionNumber(value) {
+  return Number.isSafeInteger(value) && value >= 1;
+}
+
+/** The fields of a question as a notice keeps them, checked: `text` one line of `QUESTION_TEXT_MAX`, `options`
+ * a list of at most `QUESTION_OPTIONS_MAX` (the recommended one first; an empty list is a question with nothing
+ * to tap), no two with one label, and `waits` one line. It is the one check of a question, whether it comes
+ * from standard input (`questionFieldsOf`) or from a caller (`newNotice`). Throws a `ChannelInputError`. */
+function checkedQuestion({ text, options, waits }) {
+  const line = oneLine(text, QUESTION_TEXT_MAX, 'the text of a question');
+  if (!Array.isArray(options)) throw new ChannelInputError('the options of a question are a list, the recommended one first');
+  if (options.length > QUESTION_OPTIONS_MAX) throw new ChannelInputError(`a question has ${options.length} options, ${QUESTION_OPTIONS_MAX} at most`);
+  const checked = options.map(optionOf);
+  const labels = new Set();
+  for (const { label } of checked) {
+    if (labels.has(label)) throw new ChannelInputError(`two options of a question have the label "${label}"`);
+    labels.add(label);
+  }
+  return { text: line, options: checked, waits: oneLine(waits, QUESTION_WAITS_MAX, 'what waits on a question') };
+}
+
+/** One option of a question as it is kept: `{ label, description }`, a missing description stored as `''`. It
+ * takes no other key, so a misspelt one is named rather than dropped. Throws a `ChannelInputError`. */
+function optionOf(option) {
+  if (!isObject(option)) throw new ChannelInputError('an option of a question is an object, with a label and a description');
+  const extra = Object.keys(option).find((key) => key !== 'label' && key !== 'description');
+  if (extra !== undefined) throw new ChannelInputError(`an option takes no key "${extra}": it takes label and description`);
+  const label = oneLine(option.label, OPTION_LABEL_MAX, 'the label of an option');
+  const description = option.description === undefined ? '' : option.description;
+  if (typeof description !== 'string') throw new ChannelInputError('the description of an option is a text');
+  return { label, description: description.trim() === '' ? '' : oneLine(description, OPTION_DESCRIPTION_MAX, 'the description of an option') };
+}
+
+const QUESTION_KEYS = ['text', 'options', 'waits'];
+
+/** The fields of a question from the JSON text standard input gave: `{ text, options, waits }`, each checked as
+ * `checkedQuestion` checks it. The text may start with a byte order mark, as a Windows pipe may give one. A
+ * question takes no key but these three, so one that is misspelt is named. Throws a `ChannelInputError` in words
+ * that name what is wrong: text that is not JSON, JSON that is not an object, a key it does not take, or a field. */
+export function questionFieldsOf(json) {
+  let fields;
+  try {
+    fields = JSON.parse(typeof json === 'string' ? json.replace(/^\uFEFF/, '') : '');
+  } catch {
+    throw new ChannelInputError('the question is read from standard input as JSON, and what came is not JSON');
+  }
+  if (!isObject(fields)) throw new ChannelInputError('the question is a JSON object with text, options and waits, and what came is not an object');
+  const extra = Object.keys(fields).find((key) => !QUESTION_KEYS.includes(key));
+  if (extra !== undefined) throw new ChannelInputError(`a question takes no key "${extra}": it takes text, options and waits`);
+  return checkedQuestion(fields);
+}
+
+/** The copy of his answer that a `question` keeps, from what `quoteOf` gives as `answered`, `{ tool, answers:
+ * [{ question, options, answer, how }] }`: the question and the answer of each, cut to `ANSWER_COPY_TEXT_MAX`
+ * characters, each option's label cut to `OPTION_LABEL_MAX` (at most twelve an answer), and how he gave it.
+ * A label alone reads as nothing a week later, and a transcript does not live for ever, so the words are kept
+ * here. Keys it does not know (`askedAt`) are dropped. Throws a `ChannelInputError` for another shape. */
+export function answerCopyOf(answered) {
+  if (!isObject(answered) || (answered.tool !== null && typeof answered.tool !== 'string')) throw new ChannelInputError('the copy of an answer takes the tool that asked, a name or null, and its answers');
+  if (!Array.isArray(answered.answers) || answered.answers.length === 0) throw new ChannelInputError('the copy of an answer has no answers');
+  return { tool: answered.tool, answers: answered.answers.map(answerCopyEntry) };
+}
+
+/** One answer of `answerCopyOf`'s copy. Throws a `ChannelInputError` for one that has no question, no answer or
+ * a list of options that is not a list of labels. */
+function answerCopyEntry(entry) {
+  if (!isObject(entry)) throw new ChannelInputError('an answer of a copy is an object, with its question, options, answer and how');
+  if (typeof entry.question !== 'string' || entry.question.trim() === '') throw new ChannelInputError('the question of an answer is empty or not a text');
+  if (typeof entry.answer !== 'string' || entry.answer.trim() === '') throw new ChannelInputError('the answer to a question is empty or not a text');
+  if (!Array.isArray(entry.options) || !entry.options.every((label) => typeof label === 'string')) throw new ChannelInputError('the options of an answer are a list of labels');
+  return {
+    question: cutTo(entry.question, ANSWER_COPY_TEXT_MAX),
+    options: entry.options.slice(0, ANSWER_COPY_OPTIONS_MAX).map((label) => cutTo(label, OPTION_LABEL_MAX)),
+    answer: cutTo(entry.answer, ANSWER_COPY_TEXT_MAX),
+    how: entry.how,
+  };
+}
+
+/** `text` as it is kept: whole when it has `max` characters or fewer, else cut to `max` with `…` at its end. */
+function cutTo(text, max) {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
 /** Whether `file` exists, is not empty and does not end with a line break. */
@@ -122,8 +253,8 @@ function endsUnterminated(file) {
  *
  * Two sessions may write at the same moment. What this relies on: the file is opened for appending and
  * the line goes out in one write, which the system puts at the end of the file whole; a line here is a
- * few kilobytes at most (`NOTICE_TEXT_MAX`, `RELIEF_LINE_MAX`), far under what one write takes. The test
- * of this file has several processes do it together. A tail with no line break is what a crash or a
+ * few kilobytes at most (`NOTICE_TEXT_MAX`, `RELIEF_LINE_MAX`, and a question's limits), far under what one
+ * write takes. The test of this file has several processes do it together. A tail with no line break is what a crash or a
  * hand edit left: the line then starts on a fresh one, so the tail never swallows it. */
 function appendLine(file, line) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -174,7 +305,8 @@ function isReading(value) {
   );
 }
 
-/** Whether `value` is a notice of this schema: enough of one for a board to print it. */
+/** Whether `value` is a notice of this schema: enough of one for a board to print it. A question needs its id,
+ * its options and its waits; a withdrawal and an answer that names a question need that question's number. */
 function isNotice(value) {
   return (
     isObject(value) &&
@@ -184,27 +316,34 @@ function isNotice(value) {
     NOTICE_KINDS.includes(value.kind) &&
     typeof value.text === 'string' &&
     isObject(value.to) &&
-    (value.to.role === 'orchestrator' || (value.to.role === 'work' && Number.isSafeInteger(value.to.number)))
+    (value.to.role === 'orchestrator' || (value.to.role === 'work' && Number.isSafeInteger(value.to.number))) &&
+    (value.kind !== 'question' || (typeof value.id === 'string' && value.id !== '' && Array.isArray(value.options) && typeof value.waits === 'string')) &&
+    (value.kind !== 'withdrawn' || isQuestionNumber(value.question)) &&
+    (value.kind !== 'answer' || value.question === undefined || isQuestionNumber(value.question))
   );
 }
 
-/** The record of the project `slug` under `home`: `{ path, notices, readings, skipped }`, the notices and
- * the readings (`newReading`), each in the order written. A project with no record yet has none. A line
- * that is torn (a session appends while this reads), that is not JSON or that is neither a notice nor a
- * reading of these schemas is counted in `skipped` and left out, never fatal. A record that is there and
- * cannot be read is `unavailable` with the reason, so that "could not look" is never read as "no
- * notices". */
+/** The record of the project `slug` under `home`: `{ path, notices, readings, questions, skipped }`, the notices
+ * and the readings (`newReading`), each in the order written, and `questions`: the valid `question` notices, each
+ * as `{ number, notice }`. A question's number is its ordinal among the lines of the record that are question
+ * notices, valid or not, so a broken one still takes a number and the next valid question has the following one:
+ * the number is computed here, never stored, so that the record needs no lock. A project with no record yet has
+ * none. A line that is torn (a session appends while this reads), that is not JSON or that is neither a notice nor
+ * a reading of these schemas is counted in `skipped` and left out, never fatal. A record that is there and cannot
+ * be read is `unavailable` with the reason, so that "could not look" is never read as "no notices". */
 export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   const file = recordPath(home, slug);
   let text;
   try {
     text = readFile(file);
   } catch (err) {
-    const none = { path: file, notices: [], readings: [], skipped: 0 };
-    return err.code === 'ENOENT' ? none : { path: file, unavailable: err.code ?? err.message, notices: [], readings: [], skipped: 0 };
+    const none = { path: file, notices: [], readings: [], questions: [], skipped: 0 };
+    return err.code === 'ENOENT' ? none : { path: file, unavailable: err.code ?? err.message, notices: [], readings: [], questions: [], skipped: 0 };
   }
   const notices = [];
   const readings = [];
+  const questions = [];
+  let questionLines = 0;
   let skipped = 0;
   for (const line of text.split('\n')) {
     if (line.trim() === '') continue;
@@ -214,11 +353,30 @@ export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(f
     } catch {
       parsed = null;
     }
-    if (isNotice(parsed)) notices.push(parsed);
-    else if (isReading(parsed)) readings.push(parsed);
+    if (isObject(parsed) && parsed.schema === NOTICE_SCHEMA && parsed.kind === 'question') questionLines += 1;
+    if (isNotice(parsed)) {
+      notices.push(parsed);
+      if (parsed.kind === 'question') questions.push({ number: questionLines, notice: parsed });
+    } else if (isReading(parsed)) readings.push(parsed);
     else skipped += 1;
   }
-  return { path: file, notices, readings, skipped };
+  return { path: file, notices, readings, questions, skipped };
+}
+
+/** The questions of a record (`readNotices`), in the order written: `[{ number, notice, closed }]`. `closed` is
+ * `null` while nothing has closed the question; otherwise `{ by, notice }`, the notice of the record that
+ * closes it: an `answer` naming its number (`by: 'answer'`) or a `withdrawn` (`by: 'withdrawn'`). An answer that
+ * names no question closes none.
+ *
+ * The first notice that settles the question is the one given: a withdrawal, or an answer read at its line. An
+ * answer that no transcript confirmed (`verified: false`) is the sender's claim, so it closes the question only
+ * until his answer is read: one recorded later with its line replaces it here, and `notify` lets that one in. */
+export function recordedQuestions(record) {
+  return record.questions.map(({ number, notice }) => {
+    const closing = record.notices.filter((one) => (one.kind === 'answer' || one.kind === 'withdrawn') && one.question === number);
+    const settled = closing.find((one) => one.kind === 'withdrawn' || one.verified !== false) ?? closing[0];
+    return { number, notice, closed: settled === undefined ? null : { by: settled.kind, notice: settled } };
+  });
 }
 
 // ---- the relief file ----------------------------------------------------------------------------------
