@@ -1,0 +1,118 @@
+// The sensors of a gate's turn run in WSL2, on a Windows machine that opts in: see `odd/tasks/gate-wsl.md`.
+// The same suite took 145 s on GitHub's Linux and 11 to 12 minutes on this machine's Windows, since
+// process starts and file reads are what Windows makes slow. Only the sensors move: the lock, the
+// gate log and every question to git stay on Windows, where the gate runs.
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+/** The variable that runs one gate on Windows although the machine opted in: the run per merged batch
+ * that keeps the code paths of Windows tested. */
+export const GATE_WSL_ENV = 'JS_HARNESS_GATE_WSL';
+
+/** What the runner prints once the mirror is synced. Its absence from a sensor's output means the
+ * command never reached the mirror (no distro, no `wsl.exe`, a sync that failed), and the gate then
+ * runs that sensor on Windows: a gate that skipped its suite would be worse than a slow one. */
+export const SYNCED_MARK = 'js-harness-gate-wsl: synced in ';
+
+const DISTRO = /^[A-Za-z0-9._-]+$/;
+
+/** The switch file of a machine: `<home>/.js-harness/gate-wsl.json`. */
+export function gateWslPath(home) {
+  return path.join(home, '.js-harness', 'gate-wsl.json');
+}
+
+/** The machine's choice: `null` where the sensors run on Windows because there is no switch file,
+ * `{ windows: GATE_WSL_ENV }` where there is one and `GATE_WSL_ENV` is `0` in `env` (the run per merged
+ * batch, whose rows then say where its temporary files went, so a run that forgot to move them is seen),
+ * `{ distro, node }` where they run in WSL2, `{ error }` for a switch file that cannot be taken, which
+ * the gate fails as it fails a broken declaration. */
+export function readGateWsl(home, env = {}) {
+  if (env[GATE_WSL_ENV] === '0') return fs.existsSync(gateWslPath(home)) ? { windows: GATE_WSL_ENV } : null;
+  let text;
+  try {
+    text = fs.readFileSync(gateWslPath(home), 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    return { error: `${gateWslPath(home)} could not be read: ${error.message}` };
+  }
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (error) {
+    return { error: `${gateWslPath(home)} is not JSON: ${error.message}` };
+  }
+  const bad = (what) => ({ error: `${gateWslPath(home)} ${what}` });
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return bad('must be a JSON object');
+  if (typeof value.distro !== 'string' || !DISTRO.test(value.distro)) return bad('needs "distro", the name `wsl -l` gives the distribution');
+  if (typeof value.node !== 'string' || !value.node.startsWith('/')) return bad('needs "node", the Linux folder that holds the node binary, as an absolute path');
+  return { distro: value.distro, node: value.node };
+}
+
+/** A Windows path as WSL mounts it: `D:\a\b` is `/mnt/d/a/b`. `null` for a path on no drive letter
+ * (a share), which the mirror cannot be synced from. */
+export function toWslPath(windowsPath) {
+  const match = /^([A-Za-z]):(?:[\\/](.*))?$/.exec(windowsPath);
+  if (!match) return null;
+  const rest = (match[2] ?? '').replaceAll('\\', '/').replace(/\/+$/, '');
+  return `/mnt/${match[1].toLowerCase()}${rest ? `/${rest}` : ''}`;
+}
+
+/** The folder of a tree's mirror, under `~/.js-harness-gate/mirrors` of the Linux home: its name, so
+ * a person can tell whose it is, and a hash of its full path, so two trees of one name never share one. */
+export function mirrorName(windowsPath) {
+  const hash = crypto.createHash('sha256').update(path.resolve(windowsPath).toLowerCase()).digest('hex').slice(0, 10);
+  const base = path.basename(path.resolve(windowsPath)).replace(/[^A-Za-z0-9._-]/g, '_') || 'tree';
+  return `${base}-${hash}`;
+}
+
+/** A text as one word of bash. */
+const word = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
+
+/** The script that runs one sensor in WSL2: it syncs the mirror from `source` (a `/mnt` path), prints
+ * `SYNCED_MARK`, and runs `command` there with nothing of the caller's environment but a Linux home of
+ * its own, a `PATH` of Linux alone that starts with `node`, the variables a sensor of a gate is given, and
+ * the mark of a held lock when `held`. `seconds` bounds the command inside the distribution, a little
+ * short of the gate's own bound, so what the gate kills on Windows has already been stopped in Linux.
+ * The tree is synced without `.git`, which on Windows names folders that Linux cannot read, `.codegraph`
+ * and `node_modules`. Exit 97 is a sync that failed, before the mark. LF ends: bash reads no CR. */
+export function runnerScript({ source, mirror, node, command, held, heldVariable, seconds }) {
+  return [
+    '#!/bin/bash',
+    '# Written by js-harness check for one sensor of a gate; see bin/lib/gate-wsl.mjs.',
+    'set -u',
+    `source=${word(source)}`,
+    `mirror="$HOME/.js-harness-gate/mirrors/"${word(mirror)}`,
+    'started=$(date +%s%N)',
+    'mkdir -p "$mirror" || exit 97',
+    'rsync -a --delete --exclude=/.git --exclude=/.codegraph --exclude=node_modules "$source/" "$mirror/" || exit 97',
+    `echo "${SYNCED_MARK}$(( ($(date +%s%N) - started) / 1000000 )) ms" >&2`,
+    'home=$(mktemp -d) || exit 1',
+    'cd "$mirror" || exit 1',
+    `env -i HOME="$home" LANG=C.UTF-8 TERM=dumb PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin' \\`,
+    `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}npm_config_cache="$home/.npm-cache" \\`,
+    `  timeout -k 10 ${seconds} bash -c ${word(command)}`,
+    'code=$?',
+    'rm -rf "$home"',
+    'exit $code',
+    '',
+  ].join('\n');
+}
+
+/** The seconds inside the distribution for a sensor bounded by `timeoutMs` on Windows: fifteen fewer,
+ * one at least. */
+export const innerSeconds = (timeoutMs) => Math.max(1, Math.floor(timeoutMs / 1000) - 15);
+
+/** The command a sensor runs on Windows to run in WSL2: `runner` is the script's path as WSL mounts it. */
+export function wslCommand(distro, runner) {
+  return `wsl.exe -d ${distro} --exec bash "${runner}"`;
+}
+
+/** The milliseconds of the sync the runner printed, or `null` where it printed no mark: the sensor never
+ * reached the mirror. */
+export function syncedMs(output) {
+  const at = output.indexOf(SYNCED_MARK);
+  if (at === -1) return null;
+  const ms = Number.parseInt(output.slice(at + SYNCED_MARK.length), 10);
+  return Number.isFinite(ms) ? ms : 0;
+}

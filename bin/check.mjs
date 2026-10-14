@@ -18,6 +18,7 @@ import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
+import { innerSeconds, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
 
@@ -567,8 +568,12 @@ export const GATE_HELD_ENV = 'JS_HARNESS_GATE_HELD';
  *
  * Beside what a row prints, the result says how long the command took (`seconds`, to a tenth) and
  * whether its time ran out (`timedOut`), which is what the gate log keeps of a sensor.
- * `platform` stands in for the system this runs on, for the one variable that is set on Windows alone. */
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform } = {}) {
+ * `platform` stands in for the system this runs on, for the one variable that is set on Windows alone.
+ *
+ * With `wsl` (`{ distro, node }`, the machine's switch file) on Windows, the command runs in that WSL2
+ * distribution from a mirror of the tree (`./lib/gate-wsl.mjs`), and the row carries `ranIn: 'wsl'`; one
+ * that never reached the mirror runs here, and its row says why. `wslPath` stands in for `toWslPath`. */
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -599,9 +604,24 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
   let result;
+  // Where the machine opted in (`wsl`, on Windows alone), the sensor runs first in WSL2 from a mirror of
+  // the tree (`wslRoute`). It runs on Windows instead where it never reached the mirror, and `fellBack`
+  // then says why; a sensor that reached it and failed there failed.
+  let ranIn;
+  let fellBack;
   const startedAt = Date.now();
   try {
-    result = await spawn(sensor.command, { cwd, env, timeout: sensorTimeout });
+    const route = wsl?.distro && platform === 'win32' ? wslRoute(cwd, home, sensor, { wsl, wslPath, gateHeld, sensorTimeout }) : null;
+    if (route?.command) {
+      result = await spawn(route.command, { cwd, env, timeout: sensorTimeout });
+      const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+      const synced = syncedMs(output);
+      if (synced !== null || result.error?.code === 'ETIMEDOUT') ranIn = { distro: wsl.distro, synced };
+      else fellBack = notReached(output, result);
+    } else if (route) {
+      fellBack = route.why;
+    }
+    if (!ranIn) result = await spawn(sensor.command, { cwd, env, timeout: sensorTimeout });
   } finally {
     // Best effort: on Windows a survivor can still hold the home as its cwd, and that must not fail check.
     try {
@@ -619,11 +639,35 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (result.error) detail = `${command} could not run: ${result.error.message}`;
   else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
   else if (!pass) detail = `${command} exited ${result.status}`;
+  if (ranIn) detail += pass && ranIn.synced !== null ? ` in WSL2 (${ranIn.distro}, its mirror synced in ${(ranIn.synced / 1000).toFixed(1)} s)` : ` in WSL2 (${ranIn.distro})`;
+  else if (fellBack) detail += ` on Windows: WSL2 did not run it (${fellBack})`;
+  else if (wsl?.windows && platform === 'win32') detail += ` on Windows (${wsl.windows}=0), its temporary files under ${os.tmpdir()}`;
   // The verdict is the command's own; a leftover that could not be stopped is said, not hidden, and does not fail it.
   if (result.sweepError) detail += `; could not stop what it left running: ${result.sweepError}`;
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
-  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut };
+  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }) };
+}
+
+/** How one sensor runs in WSL2: `{ command }`, the command that runs the runner script it wrote into the
+ * sensor's throwaway `home`, or `{ why }` where it cannot run there. `wslPath` stands in for `toWslPath`. */
+function wslRoute(cwd, home, sensor, { wsl, wslPath, gateHeld, sensorTimeout }) {
+  const tree = path.resolve(cwd);
+  const source = wslPath(tree);
+  if (source === null) return { why: `${tree} is on no drive letter WSL mounts` };
+  const runner = path.join(home, 'gate-wsl.sh');
+  const mounted = wslPath(runner);
+  if (mounted === null) return { why: `${runner} is on no drive letter WSL mounts` };
+  fs.writeFileSync(runner, runnerScript({ source, mirror: mirrorName(tree), node: wsl.node, command: sensor.command, held: gateHeld, heldVariable: GATE_HELD_ENV, seconds: innerSeconds(sensorTimeout) }));
+  return { command: wslCommand(wsl.distro, mounted) };
+}
+
+/** Why a sensor sent to WSL2 never reached its mirror: the first line `wsl.exe` printed, which it may
+ * print in UTF-16 (its NUL bytes go), else how it ended. */
+function notReached(output, result) {
+  const line = output.replace(/\0/g, '').split(/\r?\n/).map((text) => text.trim()).find(Boolean);
+  if (line) return line.length > 200 ? `${line.slice(0, 200)}…` : line;
+  return result.error ? result.error.message : `wsl.exe exited ${result.status}`;
 }
 
 /** `ms` as a person reads a wait: `45 s`, `3 min 12 s`. */
@@ -925,7 +969,11 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * sensor and after the last, and names in an INFO row named `tree` the ones that appeared meanwhile
  * (`treeRows`). It fails nothing, and there is no row when none appeared or git did not say. Asked through
  * `deps.git`, outside the two lines of the gate's record so that the seconds of the log stay the sensors',
- * and not at all where no sensor runs or for a caller that is no gate. */
+ * and not at all where no sensor runs or for a caller that is no gate.
+ *
+ * `lock.wsl` is what the machine's switch file of WSL2 says (`readGateWsl` of `./lib/gate-wsl.mjs`): with a
+ * distribution, the sensors of the turn run there (`checkSensor`); with an error, the gate fails in one row
+ * named `wsl` before any sensor runs. The sensors of documents never move: they are checks of seconds. */
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
@@ -951,6 +999,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
       : 'no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json';
     return [{ name: 'sensors', pass: true, info: true, detail }];
   }
+  // A switch file of WSL2 that cannot be taken fails the gate as a broken declaration does: a gate that
+  // ran its suite where nobody asked would say nothing of the file that was meant to move it.
+  if (lock?.wsl?.error) return [{ name: 'wsl', pass: false, detail: lock.wsl.error }];
   const record = lock && lock.log !== false && lock.home !== undefined
     ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
     : null;
@@ -1010,12 +1061,12 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // log says the sensors took: a fraction of one.
     let code;
     try {
-      for (const sensor of sensors) ran.push(await checkSensor(cwd, sensor, { ...deps, gateHeld }));
+      for (const sensor of sensors) ran.push(await checkSensor(cwd, sensor, { ...deps, gateHeld, wsl: lock?.wsl ?? null }));
       result = sensorsResult(ran);
       if (result === 'pass' && key !== null && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
-      record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut }) => ({ name, seconds, pass, timedOut })), code });
+      record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut, ranIn }) => ({ name, seconds, pass, timedOut, ...(ranIn && { ranIn }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
@@ -1424,7 +1475,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
     const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null };
     const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
-    const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy });
+    const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy, wsl: readGateWsl(home, env) });
     rows.push(...sensed);
     stopped = sensed.some((row) => row.stopped === true);
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.

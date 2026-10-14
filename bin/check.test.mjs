@@ -10,6 +10,7 @@ import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
+import { SYNCED_MARK } from './lib/gate-wsl.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -4399,3 +4400,111 @@ test('a real gate in a real repository names the files its sensor left in the wo
     fs.rmSync(repo, { recursive: true, force: true });
   }
 });
+
+// --- the sensors of a gate's turn in WSL2, on a Windows machine whose switch file says so (`./lib/gate-wsl.mjs`) ---
+// The real distribution never runs here: `deps.spawn` stands in for it, `deps.platform` for Windows, and
+// `deps.wslPath` for the drive letters a temporary folder of a POSIX runner has none of.
+
+/** A stand-in for the mount of a path: any absolute path, as WSL would mount it. */
+const mountedAt = (where) => `/mnt/x/${where.replaceAll('\\', '/').replace(/^[A-Za-z]:\//, '').replace(/^\//, '')}`;
+/** What a sensor answers that reached the mirror, synced in `ms`. */
+const reachedMirror = (status, ms = 1200) => ({ status, signal: null, stdout: 'suite\n', stderr: `${SYNCED_MARK}${ms} ms\n` });
+/** A `deps.spawn` that answers from `answers` in turn, keeps each command, and reads the runner script at the time of the call. */
+function spawnsInTurn(...answers) {
+  const spawn = (command, options) => {
+    const runner = /--exec bash "(.*)"$/.exec(command);
+    spawn.calls.push({ command, cwd: options.cwd, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
+    return answers[spawn.calls.length - 1] ?? sensorRan();
+  };
+  spawn.calls = [];
+  spawn.files = new Map();
+  return spawn;
+}
+/** `deps` of a gate on Windows whose paths the stand-in mount translates; it records each path it mounts, so a test can read the runner by it. */
+function wslDeps(spawn, over = {}) {
+  const wslPath = (where) => {
+    const mounted = mountedAt(where);
+    spawn.files.set(mounted, where);
+    return mounted;
+  };
+  return gateDeps({ takeGateLock: lockTakenAtOnce(), spawn, platform: 'win32', wslPath, ...over });
+}
+const UBUNTU = { distro: 'Ubuntu', node: '/home/a/.local/node/bin' };
+
+test('a gate on a machine whose switch file names a distribution runs its sensor there, from a mirror of its tree, and says so in its row and in its log', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+  const spawn = spawnsInTurn(reachedMirror(0));
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.equal(spawn.calls.length, 1);
+  assert.match(spawn.calls[0].command, /^wsl\.exe -d Ubuntu --exec bash "\/mnt\/x\/.*gate-wsl\.sh"$/);
+  const { script } = spawn.calls[0];
+  assert.ok(script.includes(`source='${mountedAt(path.resolve(dir))}'`), script);
+  assert.match(script, /bash -c 'npm run test'/);
+  assert.match(script, /PATH='\/home\/a\/\.local\/node\/bin'/);
+  assert.match(script, /JS_HARNESS_GATE_HELD=1 /, 'the gate holds the lock, so its sensor is given the mark');
+  assert.match(output, /^PASS {2}tests {2}npm run test passed in WSL2 \(Ubuntu, its mirror synced in 1\.2 s\)$/m);
+  const ends = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.deepEqual(ends.map((end) => end.sensors.map(({ name, ranIn }) => ({ name, ranIn }))), [[{ name: 'tests', ranIn: 'wsl' }]]);
+}));
+
+test('a sensor that fails in WSL2 fails the gate there, and is not run again on Windows', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+  const spawn = spawnsInTurn(reachedMirror(1));
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 1);
+  assert.equal(spawn.calls.length, 1);
+  assert.match(output, /^FAIL {2}tests {2}npm run test exited 1 in WSL2 \(Ubuntu\)$/m);
+}));
+
+test('a sensor that never reached the mirror runs on Windows, and its row says why', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+  const spawn = spawnsInTurn({ status: 4294967295, signal: null, stdout: 'There is no distribution with the supplied name.\n', stderr: '' }, sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command, cwd }) => [command.startsWith('wsl.exe'), cwd]), [[true, dir], [false, dir]]);
+  assert.equal(spawn.calls[1].command, 'npm run test');
+  assert.match(output, /^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \(There is no distribution with the supplied name\.\)$/m);
+  const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
+  assert.equal(end.sensors[0].ranIn, undefined);
+}));
+
+test('a tree on no drive letter runs on Windows, and its row says why', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+  const spawn = spawnsInTurn(sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn, { wslPath: () => null }));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command }) => command), ['npm run test']);
+  assert.match(output, /^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \(.* is on no drive letter WSL mounts\)$/m);
+}));
+
+test('a gate runs on Windows as it always did with no switch file, with the variable set to 0, or on a system that is not Windows, and the variable says where its temporary files went', async () => {
+  const said = { variable: / on Windows \(JS_HARNESS_GATE_WSL=0\), its temporary files under \S/ };
+  for (const [label, file, env, platform] of [['no file', false, {}, 'win32'], ['variable', true, { JS_HARNESS_GATE_WSL: '0' }, 'win32'], ['linux', true, {}, 'linux'], ['variable, no file', false, { JS_HARNESS_GATE_WSL: '0' }, 'win32']]) {
+    await withGate({ tests: 'npm run test' }, async (dir, home) => {
+      if (file) {
+        fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+        fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+      }
+      const spawn = spawnsInTurn(sensorRan());
+      const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, wslDeps(spawn, { platform }));
+      assert.equal(code, 0, `${label}: ${output}`);
+      assert.deepEqual(spawn.calls.map(({ command }) => command), ['npm run test'], label);
+      assert.match(output, said[label] ? new RegExp(`^PASS {2}tests {2}npm run test passed${said[label].source}`, 'm') : /^PASS {2}tests {2}npm run test passed$/m, label);
+    });
+  }
+});
+
+test('a switch file that cannot be taken fails the gate in one row named wsl, before any sensor runs', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), '{ "distro": "Ubuntu" }');
+  const spawn = spawnsInTurn(sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 1);
+  assert.equal(spawn.calls.length, 0);
+  assert.match(output, /^FAIL {2}wsl {2}.*gate-wsl\.json needs "node"/m);
+}));

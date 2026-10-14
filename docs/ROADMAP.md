@@ -907,6 +907,23 @@ podamos implementar todo"), each a feature of its own with its own document and 
      tree, so it says when a path appeared and not who wrote it: a file an editor or
      another process made meanwhile is named too. Each listing is bounded at twenty
      seconds, since it is asked while the lock is held.
+   - The sensors in WSL2 (2026-10-14, `odd/tasks/gate-wsl.md`): on one commit the whole suite
+     took 111.5 s in WSL2 and 603 s on this machine's Windows, and the lock had been busy
+     for hours. Where the js-harness home holds `gate-wsl.json` (a distribution and the
+     Linux folder of node), the sensors of a gate's turn run in that distribution from a
+     mirror of the working tree on the Linux disk, synced by `rsync` before each run
+     (about two seconds once it exists; `.git`, `.codegraph` and `node_modules` stay out),
+     under a clean environment. The lock, the load sample, the gate log, the tree key and
+     every question to git stay on Windows, and the sensors of documents never move. A
+     sensor that never reached the mirror runs on Windows and its row says why; one that
+     failed there failed; a switch file that cannot be taken fails the gate in a row `wsl`.
+     The gate log marks each sensor that ran there (`ranIn`). With no file, off Windows,
+     or with `JS_HARNESS_GATE_WSL=0`, a gate runs as it did; with the variable and the
+     file, each row says where its temporary files went. What Windows loses per commit:
+     its own code paths are tested by one run per merged batch, in a lock turn on `main`:
+     `TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node
+     bin/check.mjs`. An installed project gets nothing unless its machine has the file.
+     Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
