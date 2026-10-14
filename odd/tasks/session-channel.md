@@ -2834,7 +2834,16 @@ summary.
       `codex-review` needs: the slice replaces it with a row for the CLI, it does not
       delete it. THE ORDER NOW: this branch's pull request; (a); the reader; (b) and
       (c); the phone's key; the plugin's row; the yardstick and a full orchestrator.
-      STATE AT 2026-10-14 01:10, THE NEWEST OF ALL: PAUSED, by his order (the lead's
+      STATE AT 2026-10-14 02:51, THE NEWEST OF ALL: still paused; this session's own wake is
+      armed (a background loop that ends when `main`'s `harness.json` has `"sensorsInWsl":
+      true` or at 05:00), by the lead's message and his answer at the lead's transcript
+      `ffe99ebf`, line 2856, tapped, read with `sessions --quote`, exit 0: "Retomar con el gate
+      viejo (Recomendada)". ON WAKE, in the lead's order: merge `origin/main` before the first
+      gate; pointers for T7 (moved to JH 12) and T13 to T15 (moved to JH 13); the `--opening`
+      defect JH 15 found (reading another session's opening with `--self` retitles the
+      reader); `notify --opening` prints the first message ready to paste (his correction, by
+      the lead); then slice (c)'s pull request, and its number to the lead.
+      STATE AT 2026-10-14 01:10 (the state before the one above): PAUSED, by his order (the lead's
       transcript `ffe99ebf`, line 1647, sent while it worked, read with `sessions --quote`, exit
       0: "si pero la idea es pausar todo precisamente para hacer unicamente esta mejora
       implementarla y ahi si seguir con lo siguiente"); only the faster check goes on (JH 8 and
