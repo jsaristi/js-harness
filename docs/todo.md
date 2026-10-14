@@ -67,14 +67,22 @@ matters, who holds it, and where it was seen.
 
 - The practice run with a real host session (practice-project T5): needed before 1.0.0, no session
   holds it. The orchestrator places it.
-- Every writing command refuses an unknown flag (rule-hierarchy T4): the one task a first user would
-  meet; its order is not set. JH 7's feature.
+- Every writing command refuses an unknown flag: the one task a first user would meet; its order is
+  not set. Moved on 2026-10-14 from rule-hierarchy T4 to JH 12's `odd/tasks/commands-and-doctor.md`
+  (T1), not on `main` yet.
 - An installed project's own rules: the last item he ordered that has no design; it waits behind the
   README in JH 7's queue and is on the path to the date. The orchestrator decides who takes it.
 - Which model the native gentle-ai review used (his answer of 2026-10-12, line 9776): read it from JH
   10's review of 2026-10-13 (lineage review-5ba00685b483e51f). The orchestrator.
-- pnpm's pack refuses this checkout on Windows (ERR_PNPM_BIN_CRLF, `bin/js-harness.mjs` checked out
-  with CRLF); whether an install by pnpm meets it is not measured. JH 7's register.
+- ~~pnpm's pack refuses this checkout on Windows (ERR_PNPM_BIN_CRLF, `bin/js-harness.mjs` checked
+  out with CRLF); whether an install by pnpm meets it is not measured. JH 7's register.~~ Placed on
+  2026-10-14: `docs/FAILURES.md`, entry `pnpm-pack-refuses-crlf`.
+- What `codegraph init` writes under the home is recorded by no manifest, so `uninstall --global`
+  leaves `.codegraph/telemetry-queue.jsonl` and `.codegraph/telemetry.json`: it breaks the rule that
+  what the harness writes outside the repository is undone exactly. Fix: record what `codegraph
+  init` creates, or remove those two files on uninstall. JH 9 holds it (`init`, in
+  `bin/lib/project.mjs`) and takes it after its slice 2, by the lead's message of 2026-10-14. Seen
+  by the README's runs; register entry `init-leaves-codegraph-files`.
 - The installed copy on his machine is at ad7b37b; main has moved by many pull requests. Updating it
   is a change on his machine he approved once; to be done at a quiet moment, with its undo.
 - The Codex plugin's removal waits for JH 5's doctor row (his order). JH 5.
