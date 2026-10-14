@@ -268,12 +268,14 @@ test('--help says what --at-login does to remote start and stop, and so does the
 // Hermetic: `run` marks the dispatcher as inside a gate, as a sensor's process is, so `gate` takes no lock
 // and this machine's real gates are neither waited for nor held up.
 test('--help lists gate, gate without a command exits 2 with its usage, and gate -- <command> exits with the command\'s code through the dispatcher', () => {
-  assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] -- <command>.*exit code is the command's/m);
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] -- <command>.*exit code is the command's/m);
+  // The two guards of a turn (odd/tasks/gate-turn-guards.md): a bound of wall time, and a push that waits goes first.
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+.*--max is how many minutes the command may run before it is stopped with every process it started \(30 when not given\)\. While the branch of the folder it runs in has an open pull request and commits a push would take now, it refuses any command but that push or a merge, and prints the push command\./m);
   const refused = run(['gate', '--no-wait']);
   assert.equal(refused.status, 2);
   // The last line of the usage says what the two flags of a wait mean, since 2026-10-11: the bound counts from
   // the last time the lock changed hands, which "--wait <minutes>" does not say by itself.
-  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--max <minutes>: how long the command may run before it is stopped with every process it started \(30 when not given\)\n$/);
   assert.match(run(['--help']).stdout, /^ {2}gate\s+.*It waits for its turn in the order the gates arrived; --wait is how many minutes the lock may go without changing hands before it gives up \(60 when not given\), and --no-wait refuses at once\./m);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-gate-home-'));
   try {
@@ -425,7 +427,14 @@ test('notify --opening reads the opening from the real standard input of the dis
     assert.equal(files.length, 1);
     const stored = JSON.parse(fs.readFileSync(path.join(openings, project, files[0]), 'utf8'));
     assert.deepEqual([stored.schema, stored.title, stored.text, stored.from.id], ['js-harness.channel-opening/v1', 'JH 9 · una prueba', text, null]);
-    assert.equal(result.stdout.trimEnd(), `js-harness notify: opening for "JH 9 · una prueba" written in ${path.join(openings, project, files[0])} (2 lines, ${text.length} characters)`);
+    assert.deepEqual(result.stdout.trimEnd().split(/\r?\n/), [
+      `js-harness notify: opening for "JH 9 · una prueba" written in ${path.join(openings, project, files[0])} (2 lines, ${text.length} characters)`,
+      // The new session's first message, as a block the user copies.
+      'The first message of the session "JH 9 · una prueba", to send in it as it is:',
+      '```',
+      "You are the session \"JH 9 · una prueba\". Read your opening with js-harness sessions --opening 'JH 9 · una prueba' and follow it.",
+      '```',
+    ]);
     assert.match(result.stderr, /^js-harness notify: the sender is not known: /);
   } finally {
     for (const dir of [cwd, home, claudeHome]) fs.rmSync(dir, { recursive: true, force: true });

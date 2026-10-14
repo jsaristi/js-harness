@@ -1721,6 +1721,7 @@ test('the installed skill names gate, the command that runs anything else heavy 
   assert.match(line, /not a commit's gate/);
   assert.match(line, /waits for its turn/);
   assert.match(line, /`--wait <minutes>`, `--no-wait`/);
+  assert.match(line, /stopped after 30 minutes \(`--max <minutes>`\)/);
   assert.match(line, /exit code is the command's/);
 });
 
@@ -1777,6 +1778,8 @@ test('the orchestrator skill no longer asks a session to keep by hand the rule t
   assert.doesNotMatch(text, /a gate is about to start/);
   // A whole test run of a session's own is no gate: the line names the command that puts it in line.
   assert.ok(text.includes("- Your commit's gate waits by itself while another runs: `Gates` in `js-harness sessions` says which runs and which wait. A whole test run of your own goes through `js-harness gate -- <command>`, which waits for its turn too.\n"));
+  // A push that waited for a measure's turn held a merge 16 minutes (odd/tasks/gate-turn-guards.md, S1).
+  assert.ok(text.includes('\n- Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, `js-harness gate` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (`--cwd <worktree>`).\n'));
   assert.doesNotMatch(text, /Start no whole test run/);
   assert.ok(text.includes('\n3. two gates run at once (a gate that waits for its turn is not one of them);\n'));
 });
@@ -1791,6 +1794,45 @@ test('the orchestrator skill carries its fixed opening prompt as its one fenced 
   assert.match(blocks[0][1], /js-harness-orchestrator/);
   // It ships to every user of the harness: it speaks of "the user", not of who wrote it.
   assert.doesNotMatch(text, /Sebasti/);
+});
+
+test('the orchestrator skill says the opening of a new work session comes back as a block the user copies', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes("it prints the session's first message as a block of its own"));
+});
+
+// Every question of the project reaches the user in one place, the orchestrator's chat, through the host's
+// question tool; it is recorded before it is asked and its answer after, so a compaction loses neither.
+test('the orchestrator skill says how a question reaches the user: recorded, asked in one place, answered and carried', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('\n## Questions to the user\n'));
+  assert.ok(text.includes('`js-harness notify --to orchestrator --kind question`'));
+  assert.ok(text.includes('`--kind answer --question <n>`'));
+  assert.ok(text.includes('`--kind withdrawn --question <n>'));
+  assert.ok(text.includes('The question tool holds the session that calls it until the user answers'));
+  assert.ok(text.includes('in the reply to their next message'));
+  assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
+  assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
+  // A session the user refused or stopped waited six hours in silence: it tells the orchestrator first.
+  assert.ok(text.includes('- When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need'));
+  // Terms an installed project never defines: who wrote the harness, and the conventions of its own repository.
+  assert.doesNotMatch(text, /\b(he|his|him)\b/);
+  assert.doesNotMatch(text, /two blocks of a cut/);
+  // The lines the questions rule replaced.
+  assert.doesNotMatch(text, /\n1\. a session starts waiting on them;\n/);
+  assert.doesNotMatch(text, /open questions, notices not yet delivered/);
+});
+
+test('the orchestrator skill says what may run beside a running gate, and what a merge checks first', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute'));
+  assert.ok(text.includes('`git merge-tree`'));
+  assert.ok(text.includes('touches only documentation and none of the files the pull request changes'));
+});
+
+test('the js-harness skill names the command that writes a notice between sessions', () => {
+  const text = components[0].content('0.1.0');
+  assert.ok(text.includes('- `js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"`'));
 });
 
 // --- optional files: written outside the components, on request (the login launcher of `remote start --at-login`) ---
