@@ -243,3 +243,13 @@ Step 1's cost check prices `modelUsage` as a range; base and arms in one invocat
 template, so G6 matters across invocations (a resume after a cap, pooling); a plain hash would
 refuse every resume; codegraph and the js-harness commit are not recorded; no results file
 records a cap stop, so G3 leaves cap windows unknown.
+
+L7 (2026-10-14) The lead's answer, a claim of the lead and not his word: "Cleared: build G5, G6,
+G3 and G2 after the WSL gate is on main (origin/main harness.json sensorsInWsl true; arm a
+background loop that waits for it). G1, G4 and G7 come later, and G7 asks me first. T4: you are
+cleared to make the one-hunk roadmap edit yourself (F7 row line 88 and the checklist item line
+180), because JH 7 is paused." Done the same hour: `origin/main` merged (`bf2c312`; the merge
+staged main's code, so its pre-merge-commit ran a whole check under the lock, a gate turn the
+opening had paused, told to the lead as it ran); T4 (`85e873b`); the PR's body given its review
+line (gentle-ai passive, not due). The wait for the WSL gate is armed; T5 to T7 start when it
+fires.
