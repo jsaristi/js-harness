@@ -199,6 +199,24 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   `settingsRestored` and `settingsKept` only when the manifest records a setting, so the fifteen tests
   of `bin/lib/manifest.test.mjs` that compare the whole result stay as they are.
 
+- L6 — 2026-10-14, after L5: his order "guardalas en el todo" (the orchestrator's transcript
+  `ffe99ebf` line 3838, 08:44:12Z, read with `sessions --quote`; the orchestrator first cited line
+  3843, an assistant entry) put the two facts of L5 in `docs/todo.md` through pull request 122, a
+  documents-only branch apart from this one.
+  T2 prepared without touching `bin/check.mjs`: two tests in `bin/check-codex-reviews.test.mjs`
+  (a file pull request 121 does not touch). The first reproduces failure 15, RED: with a commit
+  before the merge of `main` uncovered, the push row hints `<own>^`, the `main` the branch left. The
+  second, GREEN already, pins the literal case of S1: with the commits before the merge covered, the
+  hint is `<after>^`, which is the merge commit. The fix planned: the push row takes its base as the
+  plain row does (`rangeStart` and `reviewStart`, `bin/check.mjs:1274-1276`), so the two rows name
+  one review; where commits on both sides of the merge are uncovered that base is the default
+  branch, since the merge commit as base would leave the earlier ones out.
+  T3 prepared the same way: `bin/lib/citations.mjs` with its test, 3/3 (written in one step with its
+  test, so its RED was the missing module only). Measured over every feature document, all lines
+  taken as added: 1,857 citations, 190 unresolved (90 files of other repositories or removed, 100
+  commits of branches never merged), which is why the row starts as INFO. Its wiring in
+  `bin/check.mjs` waits for pull request 121.
+
 ## Next step
 When `origin/main` holds the WSL gate: merge it, run the gate, commit T1, T4 and T5 as three work
 units (T5 is Risk item 2, a security setting written on a flag, so it gets an independent verifier),
