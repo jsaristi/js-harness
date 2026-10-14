@@ -115,3 +115,12 @@ push and the pull request only when Codex has no P0 to P2; the body gets the gen
   `node --test` (exit 1, "no `node --test` outside a turn of the gate lock"); its usage event read 0 input
   tokens. Part 2 of faster-check (Codex out of the lock) is buildable; reported to the lead, who says whether
   it is built at once or designed first.
+- The lead's order for item 4 (after 15:48): "build it, test first; the design goes in faster-check.md in the
+  same commit, not as a separate step. One condition before it ships: a review whose verdict is "blocked"
+  only because node --test was refused would turn every Codex review into a stop. So codex-review must tell
+  Codex the gate already ran the suite on this range and that a refused node --test is expected, not a
+  finding; and the test proves that a review whose only complaint is the refusal is not recorded as blocked
+  (or, if you find that cannot be told apart, say so and we decide). testRunWarning's recheck stays before
+  it if its turn comes first." Worktree: `D:\js-harness-worktrees\codex-out-of-lock`, branch
+  `feat/codex-out-of-lock`; the preload of the probe is `guard/no-test-preload.cjs` in the old scratchpad
+  (d14eb9a1); a map of codex-review is being made by an explorer.
