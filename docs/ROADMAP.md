@@ -1137,19 +1137,36 @@ those features has a session open: the lead assigns them.
   that no release is tagged yet; `upgrade` then exits 1 having installed nothing, and with a
   source it installs only a tarball newer than what is installed. Reading the tags is still
   not built: it is due with the first one. Left open and told to the lead: with no `--prefix`
-  the `sync` after an install runs whatever `js-harness` the shell finds on the path.
+  the `sync` after an install runs whatever `js-harness` the shell finds on the path. **Fixed
+  on 2026-10-13** (branch `fix/upgrade-sync-from-path`, `odd/tasks/install-update.md`, T8): that
+  copy is asked its version first, with a new `js-harness --version`, and only the version
+  just installed is let to sync; any other answer, or none, syncs nothing and exits 1.
 - b. **There is no README** (`fd -i -d 2 readme .` prints nothing, in a tree where it would
   find one). What it holds is his: open decision 9.
 - c. **The package ships this repository's `AGENTS.md` and its tests.** `package.json:9-12`
   lists `bin/` and `AGENTS.md`; nothing under `bin/` reads the package's own `AGENTS.md`, which
   is this project's working agreement with him and not an installed project's; and `bin/`
-  holds 58 test files, with no `.npmignore`. What ships is his: open decision 10.
+  holds 58 test files, with no `.npmignore`. What ships is his: open decision 10. **Fixed on
+  2026-10-13** (branch `fix/package-contents`), by his answer to question 24 ("Solo los
+  comandos"): `package.json` lists `bin/` without its `*.test.mjs` and `*.testkit.mjs` files and
+  no `AGENTS.md`. npm's own list went from 117 files to 56 (the 55 command files and
+  `package.json`), the tarball from 1,125,283 bytes to 438,313;
+  `scripts/package-contents.test.mjs` reads that list from a dry run of `npm pack` and pins it.
+  `odd/tasks/install-update.md`, T7.
 - d. **A timed-out command of `contract run` leaves its processes running**
   (`bin/contract.mjs:228-235`: a shell with a timeout, and only the shell is killed).
-  `odd/tasks/sensors.md`, T5.
+  `odd/tasks/sensors.md`, T5. **Fixed on 2026-10-13** (branch `fix/contract-timeout-tree`): a
+  done-when command runs through the sensor runner (`runSensor`), which stops the whole tree
+  at the timeout and whatever the command left holding its output; a test with real
+  processes pins that neither the command nor what it started is left.
 - e. **`status` exits 1 in a project whose `harness.json` holds no pin**, this repository
   among them: "it has no string "version"" (`bin/update.mjs:140-142`,
-  `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6.
+  `bin/lib/project.mjs:1473`; `sync` the same). `odd/tasks/install-update.md`, T6. **Fixed on
+  2026-10-13** (branch `fix/status-no-pin`), by his answer to question 25 ("Vale, sin versión
+  fijada"): a `harness.json` that is an object with no `version` is a project with no pin.
+  `status` reports it and says how to pin one, exit 0; `sync` says there is nothing to move
+  the project to and how to pin, writes nothing, exit 1. A `version` that is there and is
+  not a semver string, and a file that is not a JSON object, are refused as before.
 - f. **The practice run starts no host session**, so it does not prove that a host loads what
   was installed (`scripts/practice-lib.mjs:450-461`; item 4 under "Session channel" says so).
   `odd/tasks/practice-project.md`, T5; a step that spends a model is his to approve.
@@ -1339,7 +1356,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
 9. What the README holds (Next, the defects read on 2026-10-13, item b). Options: what the
    harness is and how to install and remove it, in one page; that and each command with an
    example; or none until the first version, with the roadmap as the only description.
-10. What the package ships (the same list, item c). Options: `bin/` without its tests and no
+10. **Answered on 2026-10-13: `bin/` without its tests and no `AGENTS.md`** ("Solo los comandos",
+    question 24; built the same day, item c). What the package ships (the same list, item c).
+    Options: `bin/` without its tests and no
     `AGENTS.md`, since an installed project gets its own from `init`; `bin/` whole and no
     `AGENTS.md`; or as today.
 

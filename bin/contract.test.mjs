@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { contractMain, discoverContracts, validateEntries } from './contract.mjs';
 import { CONTRACT_TEMPLATE } from './lib/contract.mjs';
+import { createReaper } from './lib/process-tree.testkit.mjs';
 
 const GOOD = [
   '# A feature',
@@ -222,7 +223,7 @@ async function runWithFake(md, results, { args = [], ...extra } = {}) {
       calls.push({ command, opts: second });
       return results[command] ?? { status: 0, stdout: '', stderr: '' };
     };
-    const outcome = await run(['run', 'c.md', '--cwd', dir, ...args], { spawn, ...extra });
+    const outcome = await run(['run', 'c.md', '--cwd', dir, ...args], { spawn, start: async (command, opts) => spawn(command, opts), ...extra });
     return { ...outcome, calls, dir };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -234,7 +235,6 @@ test('run executes every command in order from the root, then lists the hand che
   const { code, stdout, calls, dir } = await runWithFake(md, { first: { status: 0, stdout: 'hello\n', stderr: '' } });
   assert.equal(code, 0);
   assert.deepEqual(calls.map((c) => c.command), ['first', 'second']);
-  assert.equal(calls[0].opts.shell, true);
   assert.equal(path.resolve(calls[0].opts.cwd), path.resolve(dir));
   assert.equal(calls[0].opts.env.JS_HARNESS_CONTRACT_RUN, '1');
   const lines = stdout.split('\n');
@@ -346,6 +346,63 @@ test('a command that times out is a FAIL row saying so, the next command still r
   assert.match((await runWithFake(md, { first: timedOut })).stdout, /\(timed out after 30 min\)/);
 });
 
+/** Waits until `holds()` is true, asking every 100 ms for up to `ms`; whether it came true. */
+async function until(holds, ms = 5000) {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    if (holds()) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+// A done-when command is run through a shell, and a shell killed at the timeout is not the command: the
+// real one behind it (`node` behind `cmd.exe`, `npm` behind `sh`) and what it started ran on after
+// `contract run` had answered. Real processes here, since only they can outlive a run.
+test('run stops a command at its timeout with its whole process tree: nothing it started is left running', async () => {
+  const dir = makeTmpDir();
+  const pidFile = (name) => path.join(dir, `${name}.pid`);
+  // `null` until the file holds a whole number: it exists, empty, for an instant before it is written.
+  const pidOf = (name) => {
+    const text = fs.existsSync(pidFile(name)) ? fs.readFileSync(pidFile(name), 'utf8') : '';
+    return /^[1-9]\d*$/.test(text) ? Number(text) : null;
+  };
+  const reaper = createReaper();
+  const since = Date.now();
+  let running;
+  try {
+    writeFile(path.join(dir, 'c.md'), contractWith('- `node hang.js` exits 0'));
+    // The grandchild writes its pid and sleeps; the command writes its own, waits for that file, then sleeps too.
+    const grandchild = `require('fs').writeFileSync(${JSON.stringify(pidFile('grandchild'))}, String(process.pid)); setTimeout(() => {}, 120000);`;
+    fs.writeFileSync(path.join(dir, 'hang.js'), [
+      "const { spawn } = require('child_process');",
+      "const fs = require('fs');",
+      `fs.writeFileSync(${JSON.stringify(pidFile('command'))}, String(process.pid));`,
+      `spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'inherit' });`,
+      `while (!fs.existsSync(${JSON.stringify(pidFile('grandchild'))})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);`,
+      'setTimeout(() => {}, 120000);',
+    ].join('\n'));
+    running = run(['run', 'c.md', '--cwd', dir, '--timeout', '0.1']);
+    // Recorded while both are alive, with when each was created: once they are stopped, Windows may give
+    // either number to another process, and neither the look below nor the teardown may take that one for ours.
+    assert.ok(await until(() => pidOf('command') !== null && pidOf('grandchild') !== null), 'the command and its child started before the timeout');
+    const pids = reaper.pids([pidOf('command'), pidOf('grandchild')], { since });
+    const { code, stdout } = await running;
+    assert.ok(Date.now() - since < 60000, `took ${Date.now() - since} ms`);
+    assert.equal(code, 1);
+    assert.match(stdout, /^FAIL {2}node hang\.js {2}\(timed out after 0\.1 min\)$/m);
+    assert.equal(stdout.split('\n').at(-1), 'not met');
+    const left = () => reaper.look(pids).filter(({ alive }) => alive);
+    assert.ok(await until(() => left().length === 0), `still running after the run answered: ${left().map(({ found }) => found).join('; ')}`);
+  } finally {
+    // Whatever a failing run left: this test must not be the one that leaves a process behind. The run is
+    // waited for first, and what was recorded is stopped by the shared teardown, by identity.
+    await running?.catch(() => {});
+    reaper.sweep();
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});
+
 test('--timeout needs a plain decimal number of minutes, and only run takes it (usage error, exit 2)', async () => {
   const bad = ['0', 'soon', '-3', '0x10', '1e2', 'Infinity', '1_0', '', '0.000001', '99999999'];
   const argvs = [['run', 'c.md', '--timeout'], ['goal', 'c.md', '--timeout', '5'], ['check', '--timeout', '5']];
@@ -378,7 +435,7 @@ test('run takes its root from the git top-level of --cwd, whatever the caller\'s
       calls.push(second);
       return { status: 0, stdout: '', stderr: '' };
     };
-    const { code } = await run(['run', path.join(dir, 'c.md'), '--cwd', path.join(dir, 'sub')], { spawn, cwd: os.tmpdir() });
+    const { code } = await run(['run', path.join(dir, 'c.md'), '--cwd', path.join(dir, 'sub')], { spawn, start: async (command, opts) => spawn(command, opts), cwd: os.tmpdir() });
     assert.equal(code, 0);
     assert.equal(path.resolve(calls[0].cwd), path.resolve(dir));
   } finally {
@@ -458,7 +515,7 @@ test('the emitted command, replayed from an unrelated directory, runs the checks
       calls.push(second);
       return { status: 0, stdout: '', stderr: '' };
     };
-    const code = await contractMain(['run', argv[1], '--cwd', argv[2]], {}, { spawn, cwd: os.tmpdir(), stdout() {}, stderr() {} });
+    const code = await contractMain(['run', argv[1], '--cwd', argv[2]], {}, { spawn, start: async (command, opts) => spawn(command, opts), cwd: os.tmpdir(), stdout() {}, stderr() {} });
     assert.equal(code, 0);
     assert.equal(path.resolve(calls[0].cwd), path.resolve(tmp)); // the git top-level of --cwd, not os.tmpdir()
   } finally {

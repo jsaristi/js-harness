@@ -2595,10 +2595,12 @@ test('syncProject accepts a semver prerelease pin and reports it as a mismatch (
   }
 });
 
-// A `harness.json` without a string `version` names the file and writes nothing.
+// A `harness.json` whose pin cannot be used names the file and writes nothing. An object with no
+// `version` at all is not one of these: it is a project with no pin (install-update T6), below.
 for (const [label, write] of [
   ['is not JSON', (p) => fs.writeFileSync(p, '{ not json', 'utf8')],
-  ['has no version', (p) => fs.writeFileSync(p, '{}\n', 'utf8')],
+  ['is not a JSON object', (p) => fs.writeFileSync(p, '[]\n', 'utf8')],
+  ['has a null version', (p) => fs.writeFileSync(p, '{ "version": null }\n', 'utf8')],
   ['has a non-string version', (p) => fs.writeFileSync(p, '{ "version": 1 }\n', 'utf8')],
   ['is an empty file', (p) => fs.writeFileSync(p, '', 'utf8')],
   ['is not readable (a directory)', (p) => fs.mkdirSync(p)],
@@ -2618,6 +2620,34 @@ for (const [label, write] of [
 
       assert.equal(result.code, 1);
       assert.equal(result.invalidHarnessJson, true);
+      assert.equal(fs.realpathSync(result.harnessJsonPath), fs.realpathSync(harnessJsonPath));
+      assert.deepEqual(contentSnapshot(root), before);
+      assert.equal(fs.existsSync(path.join(root, ...MANIFEST_REL)), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+// install-update T6: a `harness.json` written by hand, with settings and no `version`, is a project with
+// no pin. There is nothing to move it to, so sync says so (the caller names how to pin) and writes nothing.
+for (const [label, text] of [
+  ['an empty object', '{}\n'],
+  ['settings and no version', '{ "sameTree": "skip" }\n'],
+]) {
+  test(`syncProject reports noPin, not invalidHarnessJson, and writes nothing when harness.json is ${label}`, () => {
+    const root = makeTmpRepo();
+    try {
+      const harnessJsonPath = path.join(root, 'harness.json');
+      fs.writeFileSync(harnessJsonPath, text, 'utf8');
+      const before = contentSnapshot(root);
+
+      const result = syncProject(root, '0.1.0', syncDeps());
+
+      assert.equal(result.code, 1);
+      assert.equal(result.noPin, true);
+      assert.equal(result.invalidHarnessJson, undefined);
+      assert.equal(result.version, '0.1.0');
       assert.equal(fs.realpathSync(result.harnessJsonPath), fs.realpathSync(harnessJsonPath));
       assert.deepEqual(contentSnapshot(root), before);
       assert.equal(fs.existsSync(path.join(root, ...MANIFEST_REL)), false);
@@ -3315,7 +3345,8 @@ test('projectLocation reports a stale manifest (harness.json gone) with its path
 // The same harness.json failures syncProject names, with the same reasons: one reading of the pin.
 for (const [label, write] of [
   ['is not JSON', (p) => fs.writeFileSync(p, '{ not json', 'utf8')],
-  ['has no version', (p) => fs.writeFileSync(p, '{}\n', 'utf8')],
+  ['is not a JSON object', (p) => fs.writeFileSync(p, 'null\n', 'utf8')],
+  ['has a non-string version', (p) => fs.writeFileSync(p, '{ "version": 1 }\n', 'utf8')],
   ['is not readable (a directory)', (p) => fs.mkdirSync(p)],
   ['has a version that is not semver', (p) => fs.writeFileSync(p, JSON.stringify({ version: 'latest' }))],
   ['has a version with a terminal escape', (p) => fs.writeFileSync(p, JSON.stringify({ version: '1.0.0\u001b[2J' }))],
@@ -3339,6 +3370,35 @@ for (const [label, write] of [
     }
   });
 }
+
+// install-update T6: an object with no `version` is a project with no pin, in a clone that is set up and
+// in one that is not. Reading it writes nothing.
+test('projectLocation reports noPin, with the file and whether this clone is set up, when harness.json has no version', () => {
+  const fresh = makeTmpRepo();
+  const setUp = makeTmpRepo();
+  try {
+    fs.writeFileSync(path.join(fresh, 'harness.json'), '{ "sameTree": "skip" }\n', 'utf8');
+    assert.equal(initProject(setUp, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).code, 0);
+    fs.writeFileSync(path.join(setUp, 'harness.json'), '{}\n', 'utf8');
+    const before = [contentSnapshot(fresh), contentSnapshot(setUp)];
+
+    const inFresh = projectLocation(fresh, syncDeps());
+    const inSetUp = projectLocation(setUp, syncDeps());
+
+    assert.equal(inFresh.kind, 'noPin');
+    assert.equal(fs.realpathSync(inFresh.root), fs.realpathSync(fresh));
+    assert.equal(fs.realpathSync(inFresh.harnessJsonPath), fs.realpathSync(path.join(fresh, 'harness.json')));
+    assert.equal(inFresh.manifestPresent, false);
+    assert.equal(inFresh.pin, undefined);
+    assert.equal(inSetUp.kind, 'noPin');
+    assert.equal(inSetUp.manifestPresent, true);
+    assert.equal(fs.realpathSync(inSetUp.manifestPath), fs.realpathSync(path.join(setUp, ...MANIFEST_REL)));
+    assert.deepEqual([contentSnapshot(fresh), contentSnapshot(setUp)], before);
+  } finally {
+    fs.rmSync(fresh, { recursive: true, force: true });
+    fs.rmSync(setUp, { recursive: true, force: true });
+  }
+});
 
 // R1-status-reason-echo: a JSON syntax error quotes the bytes it choked on, and harness.json is committed
 // by whoever owns the repository — so the reason is fixed text, never the parser's or the OS's message.

@@ -58,7 +58,7 @@ export function buildMenu(location = { kind: 'notGit' }) {
   const machine = MENU_ITEMS.map(item);
   const section = (...ids) => [header('project'), ...[...ids, ...REMOTE_ITEMS].map(item), header('machine'), ...machine];
   if (location.kind === 'notInitialized') return section('project-init');
-  if (['initialized', 'staleManifest', 'invalidHarnessJson'].includes(location.kind)) {
+  if (['initialized', 'noPin', 'staleManifest', 'invalidHarnessJson'].includes(location.kind)) {
     return section('project-sync', 'project-status', 'project-uninstall');
   }
   return machine;

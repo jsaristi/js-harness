@@ -51,6 +51,16 @@ test('--help prints usage listing check and exits 0', () => {
   assert.match(result.stdout, /check/);
 });
 
+// install-update T8: `upgrade` asks the copy on the path which version it is before it lets it sync.
+test('--version prints the version of this copy, alone on one line, and exits 0; the help names it', () => {
+  const result = run(['--version']);
+  const { version } = JSON.parse(fs.readFileSync(path.join(path.dirname(dispatcher), '..', 'package.json'), 'utf8'));
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, `${version}\n`);
+  assert.equal(result.stderr, '');
+  assert.match(run(['--help']).stdout, /^js-harness --version /m);
+});
+
 test('unknown command exits 2', () => {
   const result = run(['bogus']);
   assert.equal(result.status, 2);
@@ -68,6 +78,14 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
   assert.match(result.stdout, /doctor/);
   assert.match(result.stdout, /progress/);
   assert.match(result.stdout, /codex-review/);
+});
+
+test('functions is listed in --help and wired through the dispatcher', () => {
+  assert.match(run(['--help']).stdout, /functions {3}Show each function this project can turn off and on/);
+  const result = run(['functions', '--no-such-flag']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /unknown argument: --no-such-flag/);
+  assert.match(result.stderr, /Usage: js-harness functions/);
 });
 
 // R3-dispatch-untested: the command is wired through the real dispatcher, not only importable.
