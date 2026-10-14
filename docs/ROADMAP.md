@@ -1137,7 +1137,10 @@ those features has a session open: the lead assigns them.
   that no release is tagged yet; `upgrade` then exits 1 having installed nothing, and with a
   source it installs only a tarball newer than what is installed. Reading the tags is still
   not built: it is due with the first one. Left open and told to the lead: with no `--prefix`
-  the `sync` after an install runs whatever `js-harness` the shell finds on the path.
+  the `sync` after an install runs whatever `js-harness` the shell finds on the path. **Fixed
+  on 2026-10-13** (branch `fix/upgrade-sync-from-path`, `odd/tasks/install-update.md`, T8): that
+  copy is asked its version first, with a new `js-harness --version`, and only the version
+  just installed is let to sync; any other answer, or none, syncs nothing and exits 1.
 - b. **There is no README** (`fd -i -d 2 readme .` prints nothing, in a tree where it would
   find one). What it holds is his: open decision 9.
 - c. **The package ships this repository's `AGENTS.md` and its tests.** `package.json:9-12`
