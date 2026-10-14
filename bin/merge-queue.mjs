@@ -64,7 +64,8 @@ export function circleciState(checkRuns, statuses) {
   const redStatus = posted.find((one) => one.state === 'failure' || one.state === 'error');
   if (redStatus) return { state: 'red', name: redStatus.context, conclusion: redStatus.state, url: redStatus.target_url };
   const all = runs.length + posted.length;
-  const done = runs.every((one) => one.status === 'completed' && ['success', 'neutral', 'skipped'].includes(one.conclusion)) && posted.every((one) => one.state === 'success');
+  // Every run a success: a skipped or neutral run is no run of the suite, and green is the suite passing (Codex, 2026-10-14).
+  const done = runs.every((one) => one.status === 'completed' && one.conclusion === 'success') && posted.every((one) => one.state === 'success');
   return { state: all > 0 && done ? 'green' : 'pending' };
 }
 
@@ -132,7 +133,9 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
           return null;
         }
       };
-      ci = circleciState(read('check-runs')?.check_runs, read('status')?.statuses);
+      // A read that fails is asked again at the next turn, never taken for an empty answer (Codex, 2026-10-14).
+      const [checks, statuses] = [read('check-runs')?.check_runs, read('status')?.statuses];
+      ci = Array.isArray(checks) && Array.isArray(statuses) ? circleciState(checks, statuses) : { state: 'pending' };
       if (ci.state !== 'pending') break;
       await sleep(CI_POLL_MS);
     }

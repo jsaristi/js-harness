@@ -3,8 +3,20 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
-import { mergeQueueMain } from './merge-queue.mjs';
+import test, { after, before } from 'node:test';
+import { circleciState, mergeQueueMain } from './merge-queue.mjs';
+
+// The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
+// would change what they do, so it is left out of every git this file starts (Codex, 2026-10-14).
+let configDir;
+before(() => {
+  for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-gitconfig-'));
+  process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
+after(() => fs.rmSync(configDir, { recursive: true, force: true }));
 
 const git = (cwd, ...args) => {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -229,4 +241,31 @@ test('--land: a candidate red on this machine is bisected, the pull request that
   assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', heads['feat/a'], landed], { cwd: origin }).status, 0);
   assert.notEqual(spawnSync('git', ['merge-base', '--is-ancestor', heads['feat/b'], landed], { cwd: origin }).status, 0, 'PR 2 is not in main');
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1.`);
+});
+
+test('CircleCI is green only when every run of it succeeded: a skipped or neutral run is no run of the suite (Codex, 2026-10-14)', () => {
+  const run = (conclusion) => ({ name: 'check', status: 'completed', conclusion, app: { slug: 'circleci-checks' } });
+  assert.equal(circleciState([run('success')], []).state, 'green');
+  assert.equal(circleciState([run('skipped')], []).state, 'pending');
+  assert.equal(circleciState([run('neutral')], []).state, 'pending');
+  assert.equal(circleciState([run('success'), run('skipped')], []).state, 'pending');
+  assert.equal(circleciState([], [{ context: 'ci/circleci: check', state: 'success' }]).state, 'green');
+  assert.equal(circleciState([], []).state, 'pending');
+});
+
+test('--land: a read of CircleCI that fails is asked again, never taken for an empty answer (Codex, 2026-10-14)', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  let reads = 0;
+  const base = landRunner([pr(1, 'feat/a', heads['feat/a'])], [[circle('completed', 'success')]]);
+  const run = (command, args, options) => {
+    if (command === 'gh' && args[0] === 'api' && /\/check-runs$/.test(args[1]) && (reads += 1) === 1) return { status: 1, stdout: '', stderr: 'HTTP 502' };
+    if (command === 'gh' && args[0] === 'api' && /\/status$/.test(args[1])) return { status: 0, stdout: JSON.stringify({ statuses: [{ context: 'ci/circleci: check', state: 'success' }] }) };
+    return base.run(command, args, options);
+  };
+  let slept = 0;
+  const out = [];
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => { slept += 1; }, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(slept, 1, 'the failed read was waited on and asked again');
+  assert.notEqual(git(origin, 'rev-parse', 'main'), main);
 });
