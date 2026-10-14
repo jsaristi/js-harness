@@ -55,9 +55,10 @@ research, the team rules) is in `docs/SPEC.md` or here". "Here" is `rule-hierarc
 session does not edit it, so the reading and the carry list are written below and the pointer
 waits for JH 7.
 
-S3. The gaps of `docs/future-model.md`: G1 the payload alone, G2 strip arms, G3 a cost statement
-before a run, G4 the whole first request measured by a committed script. Proposed, not asked for:
-each becomes a task only when cleared.
+S3. The gaps of `docs/future-model.md`, version 2: G1 the payload of the eval home, G2 arms of
+one component, G3 a cost statement before a run, G4 the whole first request measured by a
+committed script, G5 the eval model chosen per run, G6 the setup recorded with a run, G7 a new
+model noticed. Proposed, not asked for: each becomes a task only when cleared.
 
 ## The seven signals (read 2026-10-14, on `origin/main` at `d3f6ac1`)
 
@@ -106,16 +107,20 @@ Missing:
 ## Tasks
 
 - [x] T1 `docs/future-model.md`, version 1: the procedure, its cost table and its gaps (S1; route:
-  inline)
-- [ ] T2 A reader that did not write it attacks the procedure and looks for what is missing; its
-  fixes taken or answered here (S1; route: one read-only reader on opus at high)
+  inline; commit `43e9fdd`)
+- [x] T2 A reader that did not write it attacks the procedure and looks for what is missing; its
+  fixes taken or answered here, as version 2 (S1; route: one read-only reader on opus at high;
+  L5)
 - [x] T3 The seven signals read and recorded, and the carry list for the roadmap's section (S2;
   route: inline)
 - [ ] T4 The roadmap's F7 row and checkbox point to `docs/future-model.md`, through the lead (S1)
-- [ ] T5 G3, a cost statement before a run (S3; after the WSL gate, if cleared)
-- [ ] T6 G2, strip arms (S3; after the WSL gate, if cleared)
-- [ ] T7 G1 and G4, the payload alone and the whole first request (S3; after the WSL gate, if
-  cleared)
+- [ ] T5 G5 and G6, the eval model per run and the setup recorded with it: without G5 no step
+  that spends can run on a new model (S3; after the WSL gate, if cleared)
+- [ ] T6 G3, a cost statement before a run (S3; after the WSL gate, if cleared)
+- [ ] T7 G2, arms of one component (S3; after the WSL gate, if cleared)
+- [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
+  gate, if cleared)
+- [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
 
 ## Log
 
@@ -138,3 +143,39 @@ procedure's first step.
 L3 (2026-10-14) T1 and T3 written. The cost table is derived from F5's means ($0.76 and $1.57 a
 trial, about 3 minutes 40 seconds) and F6's per-trial range; a strip arm is costed at the
 `current` figure, an upper bound. Next: T2, the reader.
+
+L4 (2026-10-14) Committed as `43e9fdd`. Its pre-commit, a documents-only check, printed the
+payload rows with no sensor run and no lock: Claude 25,104 estimated tokens per turn from files
+(global `CLAUDE.md` 21,827, output style 1,778, project `AGENTS.md` 1,499), Codex 30,482 (global
+`AGENTS.md` 26,001, model instructions 2,982, project `AGENTS.md` 1,499); tools and hook output not
+counted. So the payload rows already come without a whole check, by a documents-only commit: G1 is
+narrower than version 1 says.
+
+L5 (2026-10-14) T2. One reader on opus at high, which did not write the procedure, found six
+blockers and nine advisories; the parent checked three of them in the code
+(`evals/suite.mjs:47-53`, the two model constants; `evals/report.mjs:162`, the Claude cost is
+`costUsd`; `odd/tasks/codex-parity.md:723-792`, the cap windows) and all held. Version 2 takes
+every one:
+- Blockers: the eval model is a constant, so Step 4 could not run on a new model (G5, and Step 1
+  says so); Step 1 priced only `evals/prices.mjs` while the Claude report reads Claude Code's
+  `costUsd` and Codex's prices live in `evals/report.mjs` (both tables, and the smoke trials'
+  `costUsd` checked against `listCost`); the Codex report needs `--results-dir
+  evals/results/codex` and its suite command was not spelled out; Step 6 did not say how five
+  tasks combine and its escape kept everything (a rule over the five tasks, a threshold fixed and
+  told before spend, proposed at 10 percent, and an escape narrowed to a failure entry or a proof
+  command); the component list was incomplete and called his machine js-harness's (read from
+  `CLAUDE_ITEMS`, `CODEX_ITEMS`, the MCP servers and plugins, by kind and owner, with no size
+  order until measured); nothing kept the base and the arms on one setup (frozen setup, one
+  invocation, G6).
+- Advisories: the cost table used pooled means and called a strip arm an upper bound (now F5's
+  `medium` cells, $9.75 and $20.28, and a scale, not a bound; the Codex row in cap windows, about
+  18 trials in the first and five of `current` in each later one, and the reviews that wait on the
+  same cap); "minimal plus one" added beside "current minus one", chosen from Step 4, with pairs
+  run together and a rule for a confirming run that loses; Step 5 gated on a discriminating task
+  or his acceptance of cost alone; the trigger said "major version", which Claude Code 2.1.x never
+  reaches (now B1's wording, and G7); B1's stale mark is not built (said); the preconditions
+  (token, login hours, isolation probes, permission modes); Step 2's comparison is by hand;
+  Step 3 is chars over four whatever the tokenizer, and the home that matters is the eval's;
+  Codex's `current` sessions end on gentle-ai's questions.
+- Not checked by the reader: the pricing pages, the carry list of S2. Next: T4 and the gaps,
+  through the lead.
