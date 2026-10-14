@@ -76,6 +76,14 @@ test('a review that called the patch correct and found only P3 findings owes no 
   assert.equal(incorrect.kind, 'recheck');
 });
 
+test('an incorrect verdict excused because it rested on refused test runs alone owes no correction, but a finding of P0 to P2 beside it still does', () => {
+  const nits = [finding('A nit', { severity: 'P3' })];
+  const at = (answer) => recheckState({ from: B, records: [record(A, B, { run: 'r1', excused: 'refused-tests' })], runs: [runLine('r1', { answer })] });
+  assert.deepEqual(at({ findings: nits, verdict: 'incorrect', excused: 'refused-tests' }), { kind: 'review' });
+  assert.equal(at({ findings: [finding('[P2] Drops a record')], verdict: 'incorrect', excused: 'refused-tests' }).kind, 'recheck');
+  assert.equal(at({ findings: nits, verdict: 'incorrect', excused: 'something else' }).kind, 'recheck');
+});
+
 test('commits that change only documents between a reviewed head and the start of a range do not move where its findings ended', () => {
   const D = 'd'.repeat(40);
   const records = [record(A, B, { run: 'r1' })];

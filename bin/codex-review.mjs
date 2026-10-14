@@ -165,6 +165,7 @@ import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStale
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import {
@@ -406,14 +407,21 @@ export function childEnv(env, platform) {
 }
 
 /** The environment of the lean session: `env` (already a child's, see `childEnv`) with `CODEX_HOME` set
- * to the run's own `home`. On Windows names are case-insensitive, so one spelled in another case is
- * dropped instead of left beside it. */
-function leanEnv(env, home, platform) {
+ * to the run's own `home`, and, for a review out of a turn of the gate lock (`outOfTurn`), `NODE_OPTIONS`
+ * with the preload that refuses `node --test` after the ones `env` gave (`noTestNodeOptions`). On Windows
+ * names are case-insensitive, so one spelled in another case is dropped instead of left beside it. */
+function leanEnv(env, home, platform, { outOfTurn = false } = {}) {
   const out = { ...env };
+  let nodeOptions = out.NODE_OPTIONS;
   for (const key of Object.keys(out)) {
     if (platform === 'win32' && /^codex_home$/i.test(key)) delete out[key];
+    if (outOfTurn && platform === 'win32' && /^node_options$/i.test(key) && key !== 'NODE_OPTIONS') {
+      nodeOptions ??= out[key];
+      delete out[key];
+    }
   }
   out.CODEX_HOME = home;
+  if (outOfTurn) out.NODE_OPTIONS = noTestNodeOptions(nodeOptions);
   return out;
 }
 
@@ -514,7 +522,8 @@ export function reviewEvidence(events, expectedKeys = null) {
     } else if (event.type === 'item.completed' && item) {
       if (item.type === 'agent_message' && typeof item.text === 'string') review = item.text.trim();
       else if (item.type === 'command_execution') {
-        commands.push({ command: String(item.command ?? ''), exitCode: item.exit_code });
+        // `refused`: a `node --test` the preload of a review out of the lock ended (`isRefusal`).
+        commands.push({ command: String(item.command ?? ''), exitCode: item.exit_code, refused: isRefusal({ exitCode: item.exit_code, output: item.aggregated_output }) });
         if (item.exit_code === 0) {
           succeeded = true;
           for (const shownKey of patchKeys(String(item.aggregated_output ?? ''))) shown.add(shownKey);
@@ -667,12 +676,22 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
 // a network stall), and without a bound the command would wait forever.
 const REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
 
-// What a review that did not stand ends with. A review that failed is run again, in a turn of the gate
-// lock; the explicit skip is for a machine where Codex cannot run (`NO_CODEX`, `SKIP_IS_THE_WAY_OUT`). The
-// command does not tell a spent usage limit from another failure, so every failed review is sent to the rerun.
+// What a review that did not stand ends with. A review that failed is run again; the explicit skip is for a
+// machine where Codex cannot run (`NO_CODEX`, `SKIP_IS_THE_WAY_OUT`). The command does not tell a spent usage
+// limit from another failure, so every failed review is sent to the rerun. The rerun needs no turn of the gate
+// lock (odd/tasks/faster-check.md, part 2): out of one the review runs no test suite, which the gate already ran.
 const WAYS_ON =
-  'Rerun the review in a turn of the gate lock: `js-harness gate -- js-harness codex-review --base <rev>`. ' +
+  'Rerun the review: `js-harness codex-review --base <rev>`. ' +
   'A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
+
+/** What a review asked for with `--prompt codex` out of a turn of the gate lock says: it is asked with the own
+ * prompt, the one that can tell Codex the suite already ran. */
+export const OWN_OUT_OF_TURN =
+  'Out of a turn of the gate lock the review is asked with this command\'s own prompt, which tells Codex the gate already ran the suite and a refused `node --test` is no finding: `--prompt codex` is for a review run in a turn.';
+
+/** What a review whose `incorrect` rested on refused test runs alone says (`excusedByRefusal`). */
+export const EXCUSED_LINE =
+  `Codex called the patch incorrect with no finding of P0 to P2, and the only commands that failed were \`node --test\` runs refused out of the lock (exit ${NO_TEST_EXIT}): the gate already ran the suite on this range, so the verdict owes no correction, and the record marks it (excused: ${EXCUSED_REFUSED_TESTS}).`;
 
 // What a refusal to make the session's home ends with. The home needs two things: a login in `auth.json`,
 // to link, and the harness's state dir on the volume of the Codex home, since a hard link cannot cross
@@ -936,7 +955,7 @@ const SUBMODULE_AS_A_FILE = '--submodule=short';
  * moved, and a session cannot be held to lines its git never prints. The check that the parts add up to the
  * range is made on patches with `SUBMODULE_AS_A_FILE`, where the patch of a range is one section a file
  * whatever is configured, which is what tells the sections of the files left out apart. */
-function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
+function planParts(spawn, root, { from, head, groups, intent, paths, why, suiteRan = false }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
   if (groups.length <= 1 && why.size === 0) return { parts: null };
   const parts = [];
@@ -946,7 +965,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
     const which = `part ${part.index} of ${part.of}`;
     let prompt;
     try {
-      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size });
+      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, suiteRan });
     } catch (err) {
       const needs = part.of === 1 ? 'The range leaves files out of its review, so it is asked by the files it reads' : `The range needs ${part.of} parts`;
       return { error: `${needs}, and the prompt of ${which} cannot be written. ${err.message}` };
@@ -1104,6 +1123,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (!(err instanceof ArgError)) throw err;
     error(`${err.message}\n\n${USAGE}`);
     return 2;
+  }
+  // Out of a turn of the gate lock the review runs no test suite (odd/tasks/faster-check.md, part 2): Codex's
+  // `node --test` is refused by a preload (`leanEnv`), and the review is asked with the own prompt, the one
+  // that says so (`SUITE_RAN`). A skip launches nothing, and is left as it was asked.
+  const outOfTurn = env.JS_HARNESS_GATE_HELD !== '1';
+  if (outOfTurn && args.unavailable === undefined && args.prompt !== 'own') {
+    if (argv.includes('--prompt')) log(OWN_OUT_OF_TURN);
+    args = { ...args, prompt: 'own' };
   }
   // The intent the own prompt carries, read before anything runs: a document that cannot be read, or that
   // holds no Goal or no Done when, is a flag given wrong, and no review is started to find that out.
@@ -1309,6 +1336,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // a line that could not be written); `null` and none for a range reviewed whole, and for a skip.
   let parts = null;
   let runIds = [];
+  // Whether the review's `incorrect` rested on refused test runs alone (`excusedByRefusal`), which its record marks.
+  let excused = false;
   // What the review of the range left out, for its record: the count `reviewScope` gives, `{ files,
   // changedLines, documents, marked }`, the last two the same two counts of each kind. `null` when it left
   // nothing out, and for a skip, which looked at no file. The kinds are kept apart because `check --push`
@@ -1412,7 +1441,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     // `null` for a range that is one part and leaves no file out.
-    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why });
+    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why, suiteRan: outOfTurn });
     if (made.error) return notSplit(made.error);
     ({ parts } = made);
     if (recheck !== null && parts !== null && parts.length > 1) {
@@ -1437,7 +1466,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     let promptText;
     if ((own || recheck !== null) && parts === null) {
       try {
-        promptText = reviewPrompt({ from, head, intent });
+        promptText = reviewPrompt({ from, head, intent, suiteRan: outOfTurn });
         if (recheck !== null) promptText = recheckPrompt(promptText, recheck.findings);
       } catch (err) {
         error(`Could not write the review prompt (${err.message}), so the review was not started and nothing was recorded.`);
@@ -1516,6 +1545,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           spent: spentOfKept(keptLine),
           durationMs: Number.isFinite(keptLine.durationMs) ? keptLine.durationMs : null,
           kept: true,
+          // A part whose `incorrect` was excused keeps the mark its line holds, for the record of the range
+          // (Codex, 2026-10-14).
+          excused: keptLine.answer?.excused === EXCUSED_REFUSED_TESTS,
         };
       }
       // Why HEAD and the tracked tree are not the range, or `null` when they are. Asked of a part alone, after
@@ -1587,7 +1619,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           cwd: root,
           stdio: [ownPrompt ? 'pipe' : 'ignore', 'pipe', 'inherit'],
           // The home of the run, and nothing else added or taken away.
-          env: leanEnv(codexEnv, leanHome.home, platform),
+          env: leanEnv(codexEnv, leanHome.home, platform, { outOfTurn }),
         }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals, input: asked });
         endedAt = readClock(monotonicNow);
       } finally {
@@ -1615,6 +1647,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // The answer as this command keeps it, when there is one that is valid. It is kept
       // in the run line whatever the attempt comes to, as what it spent is: a measurement.
       const review = answered?.ok ? normalizeAnswer(answered.answer, { root, platform }) : null;
+      // Out of a turn, an `incorrect` that rests on refused `node --test` runs alone owes no correction.
+      const excused = outOfTurn && review !== null && excusedByRefusal(review, evidence.commands);
       /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
        * could not be built or written: the measurement is lost and said so, and the attempt ends as it
        * would. Building the line is inside the `try` for that reason: its id and its date come from
@@ -1674,7 +1708,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             // What a review that stands found, whole, so that a range that starts at its head can be checked
             // against it (./lib/codex-review-recheck.mjs); `null` on every other line, so that every line has
             // the same fields.
-            answer: runOutcome === 'reviewed' && review !== null ? { findings: review.findings, verdict: review.verdict } : null,
+            // `excused` marks an `incorrect` that rested on refused test runs alone (`excusedByRefusal`), which
+            // owes no correction (./lib/codex-review-recheck.mjs).
+            answer: runOutcome === 'reviewed' && review !== null ? { findings: review.findings, verdict: review.verdict, ...(excused ? { excused: EXCUSED_REFUSED_TESTS } : {}) } : null,
             // A part that passed keeps what it answered, and the key of what its session was sent, so that a later
             // run of the same range does not ask it again (`runKept`, `keptPartFor`). No other line keeps one.
             ...(runOutcome === 'reviewed' && key !== null && review !== null ? { kept: { key, review, rendered: evidence.review } } : {}),
@@ -1802,7 +1838,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // The run line goes first, so that the record can name it. If the record then cannot be written
       // the command exits 1 and the log keeps a `reviewed` line no record names: a measurement of a
       // session that did meet the evidence rule, and still not a review `check --push` will count.
-      return { exit: 0, runId: logRun('reviewed'), review, rendered: evidence.review, spent, durationMs };
+      if (excused) log(EXCUSED_LINE);
+      return { exit: 0, runId: logRun('reviewed'), review, rendered: evidence.review, spent, durationMs, excused };
     };
 
     if (parts === null) {
@@ -1812,6 +1849,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const whole = await attempt({ expectedKeys: expected, prompt: asked, promptText, promptVersion: version });
       if (whole.exit !== 0) return whole.exit;
       runId = whole.runId;
+      excused = whole.excused;
       if (recheck !== null) recheckSaid(whole.review);
     } else if (parts.length === 1) {
       // A range that leaves files out, whose other files fit in one part: one session, asked by its files
@@ -1828,6 +1866,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       });
       if (sole.exit !== 0) return sole.exit;
       runId = sole.runId;
+      excused = sole.excused;
       if (recheck !== null) recheckSaid(sole.review);
     } else {
       const lines = parts.reduce((sum, part) => sum + part.changedLines, 0);
@@ -1888,6 +1927,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // One entry for every part, in order: `null` where the line of a part could not be written, so that
       // the record says how many parts the review was made in and which of them were measured.
       runIds = passed.map((one) => one.runId ?? null);
+      excused = passed.some((one) => one.excused);
       runId = passed.at(-1).runId;
     }
     outcome = 'reviewed';
@@ -1942,6 +1982,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // The head whose findings this range was a recheck of: the record still says `reviewed`, so it covers
     // its commits for `check --push`, and this says it checked those findings and no more.
     ...(outcome === 'reviewed' && recheck !== null ? { recheckOf: recheck.of } : {}),
+    // A review whose `incorrect` rested on refused test runs alone, in one of its parts or in its one session:
+    // counted from the records, it is how many reviews went through that way.
+    ...(outcome === 'reviewed' && excused ? { excused: EXCUSED_REFUSED_TESTS } : {}),
   });
   if (file === null) return 1;
   const what = outcome === 'reviewed' ? 'the Codex review' : `an unavailable Codex review (${args.unavailable})`;

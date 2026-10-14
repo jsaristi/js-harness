@@ -25,6 +25,7 @@
 
 import { isDocument } from './codex-review-scope.mjs';
 import { isValidCodexReview } from './codex-reviews.mjs';
+import { EXCUSED_REFUSED_TESTS } from './no-test-outside-turn.mjs';
 
 /** The version of the text a recheck adds to the review prompt. */
 export const RECHECK_PROMPT_VERSION = 'js-harness.codex-review-recheck-prompt/v1';
@@ -58,8 +59,11 @@ function recordRuns(rec) {
 
 /** Whether an answer found something a correction is owed for: a verdict of `incorrect`, or a finding of
  * P0 to P2. A review that found only P3 findings and called the patch correct leaves the next range a
- * review as any other, since that range is then more likely new work than a correction. */
-const owesCorrection = (answer) => answer.verdict === 'incorrect' || answer.findings.some((one) => ['P0', 'P1', 'P2'].includes(one?.severity));
+ * review as any other, since that range is then more likely new work than a correction. So does an
+ * `incorrect` the review excused (`excused: 'refused-tests'`, `excusedByRefusal`): it rested on `node --test`
+ * runs refused out of the lock alone, on a range whose suite the gate had already run. */
+const owesCorrection = (answer) =>
+  (answer.verdict === 'incorrect' && answer.excused !== EXCUSED_REFUSED_TESTS) || answer.findings.some((one) => ['P0', 'P1', 'P2'].includes(one?.severity));
 
 /** Where the findings a range may recheck ended: the head of the nearest `reviewed` record among the
  * commits behind `from` (`back`, `from` first, newest first), when nothing but documents changed between
