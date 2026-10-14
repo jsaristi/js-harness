@@ -42,8 +42,8 @@ only those files, and all of them. Measured on Windows with an empty home and an
 
 - the project is left as it was: `git status` shows nothing;
 - the home keeps the empty folders `.claude/` and `.codex/`, and an empty `AppData/Roaming/`;
-- the home also keeps `.codegraph/`, two telemetry files that codegraph writes itself when
-  `init` runs `codegraph init`. js-harness did not write them, so it does not remove them.
+- the home keeps no `.codegraph/`: `init` runs `codegraph init` with `DO_NOT_TRACK=1`, so codegraph
+  writes no telemetry there (measured on codegraph 1.6.0).
 
 ## Commands
 
@@ -353,6 +353,19 @@ message itself.
 $ js-harness notify --to orchestrator --kind note "JH 1: the README's example of a notice"
 js-harness notify: recorded note for the orchestrator at 2026-10-14T09:24:29.740Z from session 9265156a in ~\.js-harness\channel\…
 address of the orchestrator: no single one now (sessions --address exit 1): …
+```
+
+### js-harness wait
+
+Waits in the background for one condition and ends when it holds: a pull request merged, a
+commit or a file content on `origin/main`, or a notice addressed to a session in the channel
+record. It says at start what it waits for and what ends it, so a session keeps working instead
+of ending its turn to wait.
+
+```console
+$ js-harness wait --pr 133 --for 1 --every 5
+js-harness wait: waits for the merge of pull request 133; ends when it holds, or after 1 minutes; stop it with TaskStop when it is no longer needed
+js-harness wait: the merge of pull request 133 holds (14:12)
 ```
 
 ### js-harness resume

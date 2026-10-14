@@ -414,12 +414,16 @@ function codegraphDirPath(root) {
  * `{ ok: false, reason }`. */
 export function runCodegraphInit(root, { spawn = spawnSync, platform = process.platform } = {}) {
   const shell = platform === 'win32';
+  // With DO_NOT_TRACK, codegraph writes no telemetry queue and no update-check cache under the home, files no
+  // manifest records and `uninstall --global` would leave (docs/FAILURES.md, init-leaves-codegraph-files; measured on
+  // codegraph 1.6.0). `init` then writes nothing outside the repository, as bin/init.mjs says it does.
+  const env = { ...process.env, DO_NOT_TRACK: '1' };
   let result;
   try {
     if (shell) {
-      result = spawn('codegraph init --yes .', [], { encoding: 'utf8', shell: true, cwd: root });
+      result = spawn('codegraph init --yes .', [], { encoding: 'utf8', shell: true, cwd: root, env });
     } else {
-      result = spawn('codegraph', ['init', '--yes', '.'], { encoding: 'utf8', shell: false, cwd: root });
+      result = spawn('codegraph', ['init', '--yes', '.'], { encoding: 'utf8', shell: false, cwd: root, env });
     }
   } catch (err) {
     return { ok: false, reason: err.message };
