@@ -133,3 +133,14 @@ push and the pull request only when Codex has no P0 to P2; the body gets the gen
   Codex with `fakeCodex()` (`codex-review.test.mjs:298`); the env test at :531 breaks once NODE_OPTIONS is added.
   Two questions went to the lead: move the default prompt to `own`, and how to tell a complaint about the
   refusal alone from a real `incorrect` with no finding. PR 145 (testRunWarning) is open, a wait watches it.
+- The lead's decision on the two questions (after 15:54): "take both of your recommendations. (1) Out of the
+  lock the review always uses `own`, with the sentence in its intent block; `codex` stays only for a review
+  run inside a turn. (2) An `incorrect` with no P0-P2, on a run where NODE_OPTIONS carried the preload and
+  the only failed commands are refused node --test (exit 97 with the guard's line in the events), owes no
+  correction; the run line says why, any finding still blocks. Add one thing: the record marks each such
+  run, so a count of reviews let through this way is readable from the records (the measure you named as
+  the alternative, kept alongside instead of instead)."
+  Next: in `D:\js-harness-worktrees\codex-out-of-lock`, test first, the design in faster-check.md in the same
+  commit: the preload (a file in bin/lib, exit 97 with one line when `--test` and no turn), NODE_OPTIONS in
+  `leanEnv` when no turn is held, the sentence in `reviewPrompt`'s intent block, `own` forced out of a turn,
+  the exemption in `owesCorrection`, and a mark in the record; `WAYS_ON` no longer sends to `gate --`.
