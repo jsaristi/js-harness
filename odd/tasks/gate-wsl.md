@@ -104,7 +104,9 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
       `3f59bb2..adae7c8`: incorrect, four P2 (L8)
 - [x] T2c · S1 · Codex's four P2 (L8) · inline · test first · `f5cbaf4`; gentle-ai `under_budget`;
       Codex over `adae7c8..f5cbaf4`: incorrect, two P2 (L11)
-- [ ] T2d · S1 · Codex's two P2 (L11) · inline · test first
+- [x] T2d · S1 · Codex's two P2 (L11) · inline · test first · `ea7baff`, its gate in WSL2; Codex
+      over `d85d46f..ea7baff`: incorrect, one P2 (L12)
+- [ ] T2e · S1 · Codex's P2 (L12) · inline · test first
 - [x] T3 · S2 · the switch file on this machine (after the orchestrator has it), one gate measured
       through it, docs
 - [ ] T4 · S2 · `.wslconfig` text to the orchestrator; the run per merged batch named where merges
@@ -184,3 +186,8 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
   real gate in WSL2. Pull request 121 opened on it. T2d: the mark counts only beside exit 124 and alone
   on its line; the runner measures in nanoseconds. RED: the two new tests fail (one in WSL2); GREEN: 17
   of 17 in `bin/check.test.mjs` (by name), 15 of 15 in WSL2.
+- L12 · 03:10 · T2d committed `ea7baff`, its whole gate in WSL2 ("passed in WSL2 (Ubuntu, its mirror synced
+  in 4.3 s)"). Codex over `d85d46f..ea7baff`, 79,268 input tokens (49,408 cached; allowance 315,000):
+  incorrect (0.99), one P2, real: the mark, now taken only alone on its line, would be glued to the
+  last line of a suite whose error output did not end it. T2e: the runner ends the open line before
+  its marks. RED in WSL2: the new test fails; GREEN: 16 of 16 in WSL2.

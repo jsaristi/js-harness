@@ -202,3 +202,19 @@ test('a command that exits 124 by itself just before its bound is never said to 
   }
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// Codex, 2026-10-14, on d85d46f..ea7baff: a mark printed after output that did not end its line was glued
+// to that line, and the gate, which takes a mark alone on its line, missed it.
+test('the runner puts each mark on a line of its own, after output that did not end its line', { skip: !posixWithRsync && 'needs bash, rsync, timeout and flock on a POSIX system' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-run-'));
+  const source = path.join(root, 'tree');
+  fs.mkdirSync(source);
+  const runner = path.join(root, 'runner.sh');
+  fs.writeFileSync(runner, runnerScript({ source, mirror: 'm', node: path.dirname(process.execPath), command: 'printf half >&2; echo x > left.txt; sleep 30', held: false, heldVariable: 'JS_HARNESS_GATE_HELD', seconds: 1 }));
+  const run = spawnSync('bash', [runner], { encoding: 'utf8', env: { ...process.env, HOME: root } });
+  assert.equal(run.status, 124);
+  const lines = run.stderr.split('\n');
+  assert.ok(lines.includes(TIMED_OUT_MARK), run.stderr);
+  assert.deepEqual(leftPaths(run.stderr), ['left.txt']);
+  fs.rmSync(root, { recursive: true, force: true });
+});

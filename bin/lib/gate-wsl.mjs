@@ -118,6 +118,8 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}npm_config_cache="$home/.npm-cache" \\`,
     `  timeout -k 10 ${seconds} bash -c ${word(command)}`,
     'code=$?',
+    // Ends a line the command left open, so each mark below is a line of its own (Codex, 2026-10-14).
+    'echo >&2',
     // In nanoseconds: whole seconds called an exit 124 of the command's own, near the bound, a timeout.
     `[ "$code" -eq 124 ] && [ $(( $(date +%s%N) - ran )) -ge ${seconds}000000000 ] && echo "${TIMED_OUT_MARK}" >&2`,
     'rm -rf "$home"',
