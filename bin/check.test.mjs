@@ -3428,7 +3428,7 @@ test('a failing static row stops nothing where no sensor would have run: a fault
   const git = stagedGit(['docs/guide.md', 'src/app.js']);
   const { asked, deps } = afterStaticRows({ ...log.deps, git });
   const { code, output } = await runCheck(argv, {}, deps);
-  assert.deepEqual([code, { ...asked, git: git.asked }], [1, { ...NOTHING_ASKED, git: ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z'] }]);
+  assert.deepEqual([code, { ...asked, git: git.asked }], [1, { ...NOTHING_ASKED, git: ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z', ...['origin/HEAD', 'origin/main', 'origin/master', 'MERGE_HEAD'].map((ref) => `git rev-parse --verify --quiet ${ref}^{commit}`)] }]);
   assert.deepEqual([namesOf(output), gateRows(output)], [[...STATIC_ROWS, 'gate'], [stoppedRow(['budget'])]]);
   assert.deepEqual(log.events.map(({ event }) => event), ['stopped']);
 }));
@@ -4344,6 +4344,67 @@ test('a merge git commits by itself goes through the gate: one that brings docum
     assert.match(code.said, /^PASS {2}tests /m);
     assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that brings a code file');
     assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
+  } finally {
+    remove();
+  }
+});
+
+// The merge of the trunk into a branch of documents (odd/tasks/merge-documents-skip.md, S1): what the merge
+// holds differs from the side it merges only in declared documents, so no sensor runs, through the hook of a
+// merge git commits by itself and through `git commit` after `git merge --no-commit`. On 2026-10-14 such a
+// merge held the lock 10 minutes for nothing.
+test('a merge of the trunk into a branch of documents runs no sensor when the merge differs from the side it merges only in documents, by itself or committed by hand', async () => {
+  const { repo, marker, env, remove } = mergingRepo();
+  try {
+    const trunk = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD');
+    const run = (...args) => {
+      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: repo, env, encoding: 'utf8' });
+      return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+    };
+    const onTrunk = (file) => {
+      git(repo, 'checkout', '--quiet', trunk);
+      writeFile(repo, file, `written on the trunk\n`);
+      git(repo, 'add', file);
+      git(repo, ...commitAs, '--no-verify', '-m', `the trunk brings ${file}`);
+      git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    };
+    const merged = (side) => [
+      `INFO  sensors  no sensor ran (tests): the one path this commit changes against ${side} is a document declared in harness.json "documents"`,
+      'docs/guide.md',
+    ];
+
+    git(repo, 'checkout', '--quiet', '-b', 'documents', trunk);
+    writeFile(repo, 'docs/guide.md', 'written on documents\n');
+    git(repo, 'add', 'docs/guide.md');
+    git(repo, ...commitAs, '--no-verify', '-m', 'documents');
+    onTrunk('src/app.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    const byItself = run('merge', '--no-edit', trunk);
+    assert.equal(byItself.status, 0, byItself.said);
+    // git writes no MERGE_HEAD before the hook of a merge it commits by itself: the trunk is the side known there.
+    assert.deepEqual(sensorsRow(byItself.said), merged('origin/main'), byItself.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge that differs from the trunk in documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '1');
+
+    onTrunk('src/other.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    assert.equal(run('merge', '--no-commit', '--no-ff', trunk).status, 0);
+    const byHand = run('commit', '--quiet', '--no-edit');
+    assert.equal(byHand.status, 0, byHand.said);
+    assert.deepEqual(sensorsRow(byHand.said), merged('MERGE_HEAD'), byHand.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge committed by hand that differs from the trunk in documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
+
+    // A branch that holds code of its own differs from the trunk in more than documents: its merge runs them.
+    writeFile(repo, 'src/mine.js', 'written on documents\n');
+    git(repo, 'add', 'src/mine.js');
+    git(repo, ...commitAs, '--no-verify', '-m', 'code on documents');
+    onTrunk('src/third.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    const withCode = run('merge', '--no-edit', trunk);
+    assert.equal(withCode.status, 0, withCode.said);
+    assert.match(withCode.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that differs from both sides in code');
   } finally {
     remove();
   }
