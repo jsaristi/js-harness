@@ -138,3 +138,10 @@ test('readJournal reads JSON lines and skips a line that does not parse', () => 
     assert.deepEqual(readJournal(path.join(folder, 'none.jsonl')), []);
   });
 });
+
+test('an index link written as ./note.md matches the note', () => {
+  withFolder({ 'MEMORY.md': '- [A](./a.md) — a\n', 'a.md': note('user') }, (folder) => {
+    const journal = [{ kind: 'verify', at: new Date(NOW - DAY).toISOString(), notes: ['a.md'] }];
+    assert.deepEqual(hygieneState({ memory: readMemory(folder), journal, now: NOW }).reasons, []);
+  });
+});

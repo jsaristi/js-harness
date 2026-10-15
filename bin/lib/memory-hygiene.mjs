@@ -70,7 +70,7 @@ export function readMemory(folder) {
     const lines = text.split(/\r?\n/).flatMap((line, i) => {
       if (line.trim() === '') return [];
       const link = /\]\(([^)\s]+\.md)\)/.exec(line);
-      return [{ number: i + 1, text: line, chars: [...line].length, link: link ? link[1] : null }];
+      return [{ number: i + 1, text: line, chars: [...line].length, link: link ? link[1].replace(/^\.\//, '') : null }];
     });
     index = { bytes: Buffer.byteLength(text), mtimeMs: fs.statSync(file).mtimeMs, lines };
   }

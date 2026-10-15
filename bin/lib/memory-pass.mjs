@@ -115,6 +115,13 @@ function keptTokens(line) {
   return [...numbers, ...spans];
 }
 
+/** Whether `text` holds `token` whole: a number not inside a longer number ("88" is not in "1880"). */
+function holdsToken(text, token) {
+  if (!/^\d/.test(token)) return text.includes(token);
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\d.,])${escaped}(?![\\d]|[.,]\\d)`).test(text);
+}
+
 /** Checks the pass and records its after-state whatever the outcome: `{ ok, problems }`. `homes` is the
  * text of the repository's homes for his words (rule sources, the roadmap, feature documents); `approved`
  * names the notes whose deletion he approved. On success it journals a `verify` entry (the stamp `memory
@@ -123,6 +130,11 @@ function keptTokens(line) {
 export function verifyPass({ folder, stateDir, stamp, homes = '', approved = [], now }) {
   const manifest = readManifest(stateDir, stamp);
   const dir = snapshotDir(stateDir, stamp);
+  // A verified pass keeps the after-state undo reads: verifying it again would record later writes as its own.
+  const journal = (readOrNull(path.join(stateDir, 'journal.jsonl'))?.toString('utf8') ?? '').split('\n');
+  if (journal.some((line) => line.includes('"kind":"verify"') && line.includes(`"stamp":"${stamp}"`))) {
+    throw new PassError(`pass ${stamp} is already verified; plan a new pass for more changes`);
+  }
   const after = hashes(folder);
   const writeSet = new Set(manifest.writeSet);
   const problems = [];
@@ -159,7 +171,7 @@ export function verifyPass({ folder, stateDir, stamp, homes = '', approved = [],
       const newLine = newLines.find((line) => line.includes(`](${link})`)) ?? '';
       const noteText = currentText(link) ?? '';
       for (const token of keptTokens(oldLine)) {
-        if (!newLine.includes(token) && !noteText.includes(token)) problems.push(`MEMORY.md line for ${link} lost "${token}" (in neither the new line nor the note)`);
+        if (!holdsToken(newLine, token) && !holdsToken(noteText, token)) problems.push(`MEMORY.md line for ${link} lost "${token}" (in neither the new line nor the note)`);
       }
     }
   }
@@ -213,11 +225,15 @@ export function undoPass({ folder, stateDir, stamp, now }) {
         restored.push(name);
       }
     } else if (name === INDEX && beforeHash !== undefined && current !== null) {
-      // Someone wrote the index since: put back the lines the pass took, keep the lines they added.
-      const afterLines = new Set((readOrNull(path.join(dir, 'after-index.txt')) ?? Buffer.from('')).toString('utf8').split('\n'));
-      const beforeText = fs.readFileSync(path.join(dir, 'files', name), 'utf8');
-      const added = current.toString('utf8').split('\n').filter((line) => line !== '' && !afterLines.has(line));
-      fs.writeFileSync(file, `${beforeText}${beforeText.endsWith('\n') || beforeText === '' ? '' : '\n'}${added.map((line) => `${line}\n`).join('')}`);
+      // Someone wrote the index since: reverse only the pass's own changes. The lines before the pass come back,
+      // except one the pass kept that someone removed since; the lines someone added since stay.
+      const lines = (text) => text.split('\n').filter((line) => line !== '');
+      const afterLines = new Set(lines((readOrNull(path.join(dir, 'after-index.txt')) ?? Buffer.from('')).toString('utf8')));
+      const currentLines = lines(current.toString('utf8'));
+      const currentSet = new Set(currentLines);
+      const kept = lines(fs.readFileSync(path.join(dir, 'files', name), 'utf8')).filter((line) => !(afterLines.has(line) && !currentSet.has(line)));
+      const added = currentLines.filter((line) => !afterLines.has(line) && !kept.includes(line));
+      fs.writeFileSync(file, [...kept, ...added].map((line) => `${line}\n`).join(''));
       indexMerged = true;
       restored.push(name);
     } else {

@@ -323,3 +323,45 @@ Two independent read-only readers, 2026-10-15, neither the writer.
   slice; JH 7 is paused, so T11's moves come through the lead; JH 8 owns `guard.mjs` and the
   manifest and is asked first; the three contradictions in shipped text are this feature's, in
   D3, settled by his words of 2026-10-15; the deletions go to him as one list.
+
+## Next step (2026-10-15, context pause at 88%)
+- Commit `feat(memory): a hygiene sensor, a safe pass, a daily due line and the protocol` (T2, T3, T5, T6,
+  1,228 lines) is in the gate from `D:/js-harness-worktrees/memory-hygiene` (background). The first try failed
+  only on `bin/readme.test.mjs` (no README section for `memory`), fixed. After it lands: gentle-ai assess with
+  `--base-ref $(git merge-base HEAD origin/main) --committed-only`, then `codex-review --plan` and the review,
+  then push and a PR; tell the lead the size (over the 400-line heuristic: chain or single PR is the lead's call).
+- T4 is its own branch `feat/guard-memory-index` in `D:/js-harness-worktrees/guard-memory-index`, from
+  origin/main `a68a340`, uncommitted: `bin/lib/memory-index-guard.mjs` (new, zero imports), `bin/guard.mjs`
+  (async, lazy imports), `bin/guard.test.mjs` (9 pass), `bin/lib/manifest.mjs` matcher `|Write|Edit` +
+  `bin/lib/manifest.test.mjs` (134 pass, the sync-replaces-older-matcher test), `README.md`, `bin/js-harness.mjs`
+  usage. Waiting on the lead's clearance for `scripts/practice-lib.mjs:333`, `scripts/practice-lib.test.mjs:807`,
+  `bin/install.test.mjs:314` (the matcher pinned). Still to do: the guard line of `skillContent` in manifest,
+  those three files, the gate, gentle-ai assess with `--escalate-item 3`, an independent verifier, Codex, PR with
+  the timing: guard on a non-memory Write median 170 ms quiet / 305 ms loaded = the same as main's guard
+  (interleaved, 20 runs); the cost is the node start plus the dispatcher.
+- T7: the mechanical pass is simulated on a copy (`scratchpad/apply-index-pass.mjs`, `new-index.md`: index
+  11,077 -> 3,920 B, verify passes, undo byte-identical). Run it on the live folder only after the feature commit
+  is reviewed; the live folder now has 43 notes, so regenerate `new-index.md` for any new note first.
+- Payload fix: PR jsaristi/js-harness#183, reviewed, waiting for the lead's merge.
+- Update: the lead cleared the three matcher files; T4 is committed through the gate in the background from
+  `D:/js-harness-worktrees/guard-memory-index` (manifest 134/134, practice-lib 95/95, merge-tree clean against
+  origin/main). Lead's calls: the feature commit is ONE PR, not a chain; T4 its own PR with gentle-ai assess
+  `--escalate-item 3 --escalate-reason "installed hook matcher changes for every session"`, an independent
+  verifier, Codex, and the timing in the body (170 ms quiet / 305 ms loaded, all of it new per Write/Edit,
+  since main runs no guard there today). After a compaction: one line to the lead (title, hour by date, context
+  share, what resumes).
+- Update: the feature commit landed as `3fbfb31`; next its gentle-ai assess (base 5397771), Codex review of 2832ad8..3fbfb31 range code, push, ONE PR.
+- Update: gentle-ai assess of 5397771..3fbfb31: medium, not due (under_budget). Codex review of that range running in the background (4 parts, estimate ~910,000 of a 1,406,400 allowance); its output is the background task of this session. Then push feat/memory-hygiene and open ONE PR.
+- Update: the first Codex run refused (this doc was uncommitted); it runs again from the clean detached worktree D:/js-harness-worktrees/mh-review at 3fbfb31 (remove it after). The doc additions get their own docs commit later.
+- BLOCKER, next action: the Codex review of 5397771..3fbfb31 passed (4 parts correct, 573,463 tokens, recorded) but
+  `git push` was refused by the pre-push check: "the Codex review that ended at 3fbfb31 owes a correction: 4 findings
+  open, not rechecked". Read the findings in that run's answer (see bin/lib/codex-review-recheck.mjs: classifyRecheck,
+  runAnswerFindings, and `codex-review --again`/recheck flow in bin/codex-review.mjs), fix or answer them, then push
+  feat/memory-hygiene and open ONE PR (body drafted in this session: what, why, checks, Risk item 3). The branch is
+  not on origin yet. T4's commit is still in the gate (background) in D:/js-harness-worktrees/guard-memory-index.
+- Update: T4 commit result: see git log of feat/guard-memory-index (next: gentle-ai assess --escalate-item 3, verifier, Codex, PR).
+- Update (after the host's compaction at 04:07): the 4 findings of the Codex review ending at 3fbfb31 are fixed with a
+  test each, red seen first: `./note.md` links match their note; a second verify of a verified pass is refused and
+  keeps its after-state; undo reverses only the pass's own index changes (a line another session removed stays
+  removed); a kept number counts only as a whole token ("88" is not in "1880"). Next: commit, `codex-review --base
+  3fbfb31` (the recheck), push, ONE PR; then T4's chain.

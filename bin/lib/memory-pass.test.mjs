@@ -202,3 +202,32 @@ test('only the ten newest snapshots are kept', () => {
     assert.equal(fs.readdirSync(path.join(stateDir, 'snapshots')).length, 10);
   });
 });
+
+// Codex's findings on 5397771..3fbfb31.
+test('a second verify of a pass already verified is refused and leaves its after-state as it was', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW });
+    assert.equal(verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }).ok, true);
+    write('a.md', note('user', 'written later by another session'));
+    assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW + 1 }), /already verified/);
+  });
+});
+
+test('undo keeps an index line another session removed after the pass removed, and a line it kept', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a old\n- [B](b.md) — b\n', 'a.md': note('user', 'a old'), 'b.md': note('user', 'b') }, ({ folder, stateDir, read, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    write('MEMORY.md', '- [A](a.md) — a\n- [B](b.md) — b\n');
+    assert.equal(verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }).ok, true);
+    write('MEMORY.md', '- [A](a.md) — a\n');
+    undoPass({ folder, stateDir, stamp, now: NOW });
+    assert.equal(read('MEMORY.md'), '- [A](a.md) — a old\n', 'the pass\'s change is undone, the other session\'s removal of B stays');
+  });
+});
+
+test('a number kept only inside a longer number counts as lost', () => {
+  withPass({ 'MEMORY.md': '- [R](r.md) — pause at 88\n', 'r.md': note('user', 'since 1880') }, ({ folder, stateDir, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    write('MEMORY.md', '- [R](r.md) — pause\n');
+    assert.match(verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }).problems.join('\n'), /lost "88"/);
+  });
+});
