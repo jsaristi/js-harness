@@ -217,7 +217,7 @@ turning the overflow on for a project other than this one.
   3,000 minutes of waiting (about 5 percent), and never the suites inside `gate --` turns; exact tests
   shorten every run at no credit. Meanwhile PR 155 merged into main (3e682ea), so T0 now waits only for
   the `overflow` job and filter. No PR from this branch.
-- L5 2026-10-15 03:30: JH 17 closes. What stays open when he takes this up again: T0 (the `overflow` job
+- L5 2026-10-15 03:27: JH 17 closes. What stays open when he takes this up again: T0 (the `overflow` job
   and `overflow/*` filter, JH 10's config), then T2 to T6 as written. Before T4, ask who owns `bin/check.mjs`
   and `bin/lib/gate-log.mjs`; `circleciState` is still in the merge queue's file. A CircleCI token is still
   only needed for the exact meter. Found while writing this design: an amend of a commit of documents
