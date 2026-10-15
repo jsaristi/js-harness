@@ -296,13 +296,14 @@ async function runLoop(ctx, parsed, file) {
   for (const signal of signals) process.on(signal, forward);
   const outcome = await ended;
   for (const signal of signals) process.off(signal, forward);
-  await locked(ctx, file, 'its record is left, and reads stale', () => removeRecordOf(file, record));
+  const removed = await locked(ctx, file, 'its record is left, and reads stale', () => removeRecordOf(file, record));
+  const after = removed === true ? 'its record removed' : removed === false ? 'the record is now another run\'s, left as it is' : 'its record left, stale';
   if (outcome.error) {
-    ctx.err(`js-harness loop: ${name}'s command could not start (${outcome.error.message}); its record removed`);
+    ctx.err(`js-harness loop: ${name}'s command could not start (${outcome.error.message}); ${after}`);
     return 1;
   }
   const code = outcome.code ?? 1;
-  ctx.out(`js-harness loop: ${name} ended (${outcome.signal ? `signal ${outcome.signal}` : `exit ${code}`}, ${hourOf(ctx.now())}); its record removed`);
+  ctx.out(`js-harness loop: ${name} ended (${outcome.signal ? `signal ${outcome.signal}` : `exit ${code}`}, ${hourOf(ctx.now())}); ${after}`);
   return code;
 }
 

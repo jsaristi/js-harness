@@ -85,28 +85,33 @@ export function writeRecord(file, record, { exclusive = false } = {}) {
   }
 }
 
-/** A lock older than this was left by a session that died holding it. The longest hold is a stop: up to ten
- * looks at the process table, each a few seconds on Windows. */
-export const LOCK_STALE_MS = 120000;
+/** A lock older than this was left by a session that died holding it. The longest hold is a --restart whose
+ * stop finds a survivor: thirteen looks at the process table, each a PowerShell run capped at 60 s on Windows
+ * (bin/lib/process-tree.mjs), so 780 s at the very worst; a hold of seconds is the rule. */
+export const LOCK_STALE_MS = 15 * 60000;
 const LOCK_TRY_MS = 250;
 const LOCK_TRIES = 600;
+/** What Windows may answer for a lock that is there, or being deleted, or open in a scanner: try again. */
+const LOCK_BUSY = new Set(['EEXIST', 'EPERM', 'EACCES', 'EBUSY']);
 
 export class LockHeldError extends Error {}
 
 /** Runs `body` while holding the lock of the record `file` (`<file>.lock`, created exclusively), so reading,
  * reclaiming, claiming and removing a record are one step for one session at a time: a name is never seen free
  * while another session is deciding about it. Waits for the lock, breaks it once it is older than
- * LOCK_STALE_MS, and throws LockHeldError after LOCK_TRIES tries. The lock's age is the file's own time against
- * this machine's clock, never a fake one. */
+ * LOCK_STALE_MS, and throws LockHeldError after LOCK_TRIES tries. The lock holds a token of this hold, and is
+ * removed at the end only while it still holds it: a hold whose lock was broken never removes the next holder's.
+ * The lock's age is the file's own time against this machine's clock, never a fake one. */
 export async function withRecordLock(file, body, { sleep, clock = Date.now } = {}) {
   const lock = `${file}.lock`;
+  const token = `${process.pid} ${clock()} ${Math.random().toString(36).slice(2)}\n`;
   fs.mkdirSync(path.dirname(lock), { recursive: true });
   for (let tries = 0; ; tries += 1) {
     try {
-      fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' });
+      fs.writeFileSync(lock, token, { flag: 'wx' });
       break;
     } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
+      if (!LOCK_BUSY.has(err.code)) throw err;
     }
     if (breakStaleLock(lock, clock)) continue;
     if (tries >= LOCK_TRIES) throw new LockHeldError(`the lock ${lock} stayed held for ${(LOCK_TRIES * LOCK_TRY_MS) / 1000} s`);
@@ -115,13 +120,19 @@ export async function withRecordLock(file, body, { sleep, clock = Date.now } = {
   try {
     return await body();
   } finally {
-    fs.rmSync(lock, { force: true });
+    let held = '';
+    try {
+      held = fs.readFileSync(lock, 'utf8');
+    } catch {
+      // gone: broken by another session
+    }
+    if (held === token) fs.rmSync(lock, { force: true, maxRetries: 5 });
   }
 }
 
-/** Removes a lock older than LOCK_STALE_MS. It moves the lock aside first, so of two sessions breaking it only one
- * does, and puts back a lock that turns out to be new (taken in between). A lock is held for seconds, so only a
- * session that died inside it leaves an old one. */
+/** Removes a lock older than LOCK_STALE_MS; true only when it did. It moves the lock aside first, so of two
+ * sessions breaking it only one does, and puts back a lock that turns out to be new (taken in between). Only a
+ * session that died inside a hold leaves an old lock. */
 function breakStaleLock(lock, clock) {
   const old = (file) => {
     try {
@@ -135,7 +146,8 @@ function breakStaleLock(lock, clock) {
   try {
     fs.renameSync(lock, moved);
   } catch {
-    return true;
+    // gone already, or Windows will not move it now: the next try looks again, after its sleep
+    return false;
   }
   if (!old(moved)) {
     try {

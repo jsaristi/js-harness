@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loopMain } from './loop.mjs';
-import { killTargets, loopRecordPath, readRecord, snapshotProcesses, targetsOf, writeRecord as publishRecord } from './lib/loops.mjs';
+import { killTargets, loopRecordPath, readRecord, snapshotProcesses, targetsOf, withRecordLock, writeRecord as publishRecord } from './lib/loops.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 // The process table and the kill are fakes, except in the last test, which starts a real loop and stops it. The
@@ -265,12 +265,22 @@ test('a lock left by a session that died in it is broken once it is old, and the
   const lock = `${p.record('keeper')}.lock`;
   fs.mkdirSync(path.dirname(lock), { recursive: true });
   fs.writeFileSync(lock, 'held');
-  const old = new Date(Date.now() - 10 * 60000);
+  const old = new Date(Date.now() - 20 * 60000);
   fs.utimesSync(lock, old, old);
   const { deps } = world({ ...p, tables: [[self]] });
   const code = await loopMain(['run', 'keeper', '--purpose', 'PR keeper', '--until', '5 hours', '--', process.execPath, '-e', 'process.exit(0)'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
   assert.equal(code, 0);
   assert.deepEqual(fs.readdirSync(path.dirname(lock)), [], 'neither the record nor a lock is left');
+});
+
+test("a holder whose lock was broken and taken by another session does not remove that session's lock", async () => {
+  const p = place();
+  const lock = `${p.record('keeper')}.lock`;
+  await withRecordLock(p.record('keeper'), () => {
+    fs.rmSync(lock);
+    fs.writeFileSync(lock, 'another holder');
+  }, { sleep: async () => {} });
+  assert.equal(fs.readFileSync(lock, 'utf8'), 'another holder');
 });
 
 test('a stop that leaves a descendant alive keeps it in the record, so the next stop reaches it', async () => {
