@@ -54,7 +54,10 @@ Every example below is the output of a real run. Paths are shortened: `~` is the
 
 Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the declared sensors
 (tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
-runs it, so a red check means the commit is not ready yet.
+runs it, so a red check means the commit is not ready yet. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
+set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
+at a time, for a machine where node's default, one fewer than its processors, is too few: this
+repository's GitHub workflow sets 2.
 
 ```console
 $ js-harness check
