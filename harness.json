@@ -8,5 +8,6 @@
     "document tests": "node --test bin/rules.test.mjs bin/sessions.test.mjs"
   },
   "sameTree": "skip",
-  "sensorsInWsl": true
+  "sensorsInWsl": true,
+  "exactTests": "shadow"
 }

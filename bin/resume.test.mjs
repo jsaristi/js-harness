@@ -1257,6 +1257,42 @@ test('past the pause the command prints one JSON line with the notice, and nothi
   assert.deepEqual(first.calls, [], 'no git is asked: the project is found by its harness.json alone');
 }));
 
+// The channel's inbox rides on the same hook: a note to this session reaches it after its next tool call, once.
+/** `pauseInput`, with the session titled `title` at the end of its transcript. */
+function titledPauseInput(machine, tokens, title) {
+  const input = pauseInput(machine, tokens);
+  const { transcript_path: transcript } = JSON.parse(input);
+  fs.appendFileSync(transcript, `${JSON.stringify({ type: 'custom-title', customTitle: title, sessionId: SESSION })}\n`);
+  return input;
+}
+
+const noteTo = (machine, to, text) => appendNotice(machine.home, projectSlug(machine.root), newNotice({
+  at: new Date(Date.now() - 60000).toISOString(), from: { host: 'claude', id: SECOND, title: 'JH ORQ · proj' }, to, kind: 'note', text,
+}));
+
+test('a note to this session in the channel is said once by the hook, under the pause too', withMachine(async (machine) => {
+  noteTo(machine, '5', 'take the inbox next');
+  noteTo(machine, '7', 'not for this session');
+  const input = titledPauseInput(machine, UNDER, 'JH 5 · canal entre sesiones');
+  const first = await runPause(machine, input);
+  assert.deepEqual([first.code, first.stderr, first.lines.length], [0, '', 1]);
+  const said = JSON.parse(first.lines[0]).hookSpecificOutput;
+  assert.equal(said.hookEventName, 'PostToolUse');
+  assert.match(said.additionalContext, /^js-harness: 1 notice for this session in the channel since it last looked/);
+  assert.match(said.additionalContext, /note from "JH ORQ · proj": take the inbox next$/);
+  assert.ok(!said.additionalContext.includes('not for this session'));
+  assert.deepEqual((await runPause(machine, input)).lines, [], 'said once');
+}));
+
+test('past the pause with a note waiting, the hook says both in one line: the pause first, then the note', withMachine(async (machine) => {
+  noteTo(machine, '5', 'both at once');
+  const first = await runPause(machine, titledPauseInput(machine, PAUSED, 'JH 5 · canal entre sesiones'));
+  assert.equal(first.lines.length, 1);
+  const context = JSON.parse(first.lines[0]).hookSpecificOutput.additionalContext;
+  assert.match(context, /^js-harness: this session holds /);
+  assert.match(context, /\n\njs-harness: 1 notice for this session in the channel[^]*both at once$/);
+}));
+
 test('under the pause the command prints nothing, exits 0 and writes no state', withMachine(async (machine) => {
   const { code, lines, stderr, calls } = await runPause(machine, pauseInput(machine, UNDER));
   assert.deepEqual([code, lines, stderr, calls], [0, [], '', []]);

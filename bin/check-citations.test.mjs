@@ -17,6 +17,11 @@ before(() => {
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+  // The dates of every commit, fixed: a short hash cited as a commit must hold a digit and a letter, and one
+  // made at the hour of the run came out all digits about one run in 27 (docs/FAILURES.md,
+  // citations-test-reads-clock). With these dates the hash is the same at every run.
+  process.env.GIT_AUTHOR_DATE = '2026-01-01T00:00:00Z';
+  process.env.GIT_COMMITTER_DATE = '2026-01-01T00:00:00Z';
 });
 after(() => fs.rmSync(configDir, { recursive: true, force: true }));
 

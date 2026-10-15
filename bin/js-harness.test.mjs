@@ -80,6 +80,13 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
   assert.match(result.stdout, /codex-review/);
 });
 
+test('guard is listed in --help and wired through the dispatcher', () => {
+  assert.match(run(['--help']).stdout, /guard {7}The PreToolUse hook/);
+  const result = run(['guard']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Usage: js-harness guard --hook/);
+});
+
 test('functions is listed in --help and wired through the dispatcher', () => {
   assert.match(run(['--help']).stdout, /functions {3}Show each function this project can turn off and on/);
   assert.match(run(['--help']).stdout, /functions apply makes this clone what they ask.*functions set <name> <value>/);

@@ -31,6 +31,7 @@ js-harness commands:
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed.
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -185,6 +186,12 @@ export const entryComponents = [
     pointer: ['hooks', 'PostToolUse'],
     entry: () => pauseHookEntry(),
   },
+  {
+    id: 'claude-guard-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'PreToolUse'],
+    entry: () => guardHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -229,6 +236,21 @@ function pauseHookEntry() {
   };
 }
 
+/** The command of the guard hook, guarded to exit 0 like the pause hook's: a refusal travels as the hooks contract's
+ * JSON on standard output, so an older js-harness that answers 2 to `guard` never blocks a tool call. */
+export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
+
+/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the three tools it checks: a sub-agent's
+ * launch, whose model it holds to the project's rules, and the two ways of sending a message to another session,
+ * whose stamped hour it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14). Claude Code only: the tool
+ * names are Claude Code's. Five seconds: it may ask git for the project's root once. */
+function guardHookEntry() {
+  return {
+    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash',
+    hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
 export function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
@@ -255,7 +277,8 @@ function deepEqual(a, b) {
  * must lead, along one of them, to what we wrote, and every key that ends a pointer must hold the empty array we
  * left behind after removing our entry. Any other key, even one with an empty-looking value like `{}` or `null`,
  * means this document is not ours alone to delete. Several pointers can share one file: the doctor's and the
- * resume hook's both hang from `hooks.SessionStart`, and the pause hook hangs from `hooks.PostToolUse`, so a file
+ * resume hook's both hang from `hooks.SessionStart`, the pause hook from `hooks.PostToolUse` and the guard hook
+ * from `hooks.PreToolUse`, so a file
  * js-harness created goes with the last of them. */
 function isOnlyOurPointerPaths(value, pointers) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;

@@ -232,6 +232,10 @@ What each change counts as:
       did. Route: inline. Risk to name at its close.
 - [ ] T4 · S4: the plan recorded in the run log, once its readers are read. Route: inline.
 - [ ] T5 · S5 and S6 test first: `progress --pace`. Route: inline.
+- [x] T6 · A defect of T0 (L8 of odd/tasks/merge-queue.md): a range from the head of a rechecked
+      review was refused as a second recheck even on a branch that forked there, without the recheck
+      and its correction. Route: inline, branch fix/recheck-fork (PR 170, merged). See Progress,
+      2026-10-14, T6; closed 2026-10-15 by his answer: no guard of its own for an amended correction.
 
 ## Progress
 - 2026-10-14 · Opened. The explorer's map (read-only, 2026-10-14) is the source of "What is
@@ -296,6 +300,27 @@ What each change counts as:
 0. PR 128 (T0, the recheck): pushed at 95a3294 with main f819d0b merged; the orchestrator merges it. If main moves with code before that, it asks for one more merge of main.
 1. T3, S1 to S3, test first, on its own branch: off main once 128 is merged, or stacked on feat/read-from-records if the orchestrator wants it sooner. Read "Design (second version)" first; reader A's replay numbers are there. Merge main before any gate on bin/codex-review.mjs (JH 12 is changing its flag parser).
 2. T4 (S4), then T5 (S5, S6).
+
+- 2026-10-14 · **T6, a fork at a rechecked head.** Found by JH 10 on feat/merge-queue (forked at
+  e61ae6a, whose findings 8ccd689 rechecked): its own review was refused as "a second recheck".
+  `recheckState` now takes `holds`, whether the range's head holds a commit (`merge-base
+  --is-ancestor`, exit 1 a no, anything else unknown), and refuses from a rechecked head only when the
+  head holds that recheck's head, or git cannot say; a fork before the recheck is a review as any
+  other. RED then GREEN: one test in bin/lib/codex-review-recheck.test.mjs (holds true, false, null)
+  and one by the command in bin/codex-review.test.mjs; the recheck tests 19 of 19, the refusals of
+  the same line unchanged. Codex: b51b245..ab913c9 correct (0.92), 137,933 input tokens. An
+  independent verifier (a guard is loosened: risk item 2) found no blocker; both new tests fail on
+  b51b245; the tests now also hold `received === null`, the run line, and that `holds` is not asked
+  from the recheck's own head. Open for Sebastián, through the orchestrator: a correction amended
+  after its recheck (`reset --hard` to the reviewed head, another fix) now gets a plain review from
+  that head where it was refused before, since ancestry cannot tell it from a fork; findings are still
+  rechecked once and stay in the run log. Whether that needs a guard of its own (the files the old
+  findings name, say) is his decision.
+- 2026-10-15 · **T6 closed by his answer.** Asked by the orchestrator whether that case gets a guard
+  of its own, he tapped "No, alcanza con la revisión común (Recomendada)" (the orchestrator's
+  transcript `c47efdf7`, line 3804, 2026-10-15T05:04:10Z, read with `sessions --quote`). So a
+  correction amended after its recheck keeps the plain review PR 170 gives it, and nothing more is
+  built for it.
 
 ## Resume here
 Worktree D:/js-harness-worktrees/read-from-records, branch feat/read-from-records, pushed at 95a3294 (PR 128). T0 is done; T1 and T2 are written (the design's second version, 0eaf5d0); T3 to T5 are not started. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design. The session was cut at 76 percent of context after T0 closed.

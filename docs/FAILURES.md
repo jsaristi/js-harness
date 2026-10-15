@@ -160,6 +160,16 @@ session's claim.
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
+### citations-test-reads-clock
+A test of citations cited a fresh commit's short hash, which a citation must hold a digit and a
+letter to be (`bin/lib/citations.mjs:11`): about one run in 27 the hash came out all digits, was no
+citation, and the test failed by the clock alone.
+- Class: tool
+- Seen: 2026-10-14 — odd/tasks/exact-tests.md, L9 — two gates of feat/exact-tests (19:28 and 19:56)
+  failed it, the second in shadow, where selection would have skipped it
+- Control: check — bin/check-citations.test.mjs — "only the lines a staged change adds to a feature
+  document are read, and each unresolved citation is a line" — since 2026-10-14
+
 ### cli-updated-itself
 A tool of the measured stack updated itself and nobody saw it until a measurement was about to run
 on it.
@@ -341,6 +351,14 @@ on it.
   the first read after 26 percent at about 04:30
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
+
+### eval-interrupt-process-alive
+A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
+hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
+when the test looked, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
+  `[false, false]` was expected, pid 22809; the only failing test of the run
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
