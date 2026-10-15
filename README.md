@@ -546,7 +546,7 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
 document it works on and what to read there, so nobody pastes a resume prompt. It writes
-nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet.
+nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too.
 
 ```console
 $ js-harness resume --hook < hook-input.json
@@ -602,4 +602,23 @@ read; a host that sends no text has the transcript's last reply read instead.
 ```console
 $ js-harness guard --stop < stop.json
 {"decision":"block","reason":"js-harness guard: this reply states your context at 40%, and your transcript records 60% of a 500k window (the window of your last get_usage read, else the default). The reply is already sent: correct it in one line with the share mcp__ccd_session_mgmt__get_usage reads now, and say no share you have not just read."}
+```
+
+### js-harness fetch
+
+The second rung for a page that refuses WebFetch as AI traffic (a 403, a 402, a challenge
+page). It asks `r.jina.ai` for the page, which needs no install and no key, and reads the answer
+for a block: `r.jina.ai` answers HTTP 200 with the site's challenge page inside, so its status
+alone would take a block for a page. A page is printed whole with exit 0. A block at this rung
+exits 3 and says why and what the next rung is: the built-in browser's `get_page_text`. The
+`resume --pause` hook names this command after a WebFetch answered 402, 403, 429 or 503.
+
+It sends no cookie and no key. The URL goes to a third party, so a host that is not public (no
+dot, loopback, a private address), a URL with a user or a password, or a query parameter named
+like a secret is refused with exit 1 before anything is sent.
+
+```console
+$ js-harness fetch https://www.npmjs.com/package/react
+js-harness fetch: blocked at r.jina.ai: the site answered it HTTP 403.
+Next rung: open https://www.npmjs.com/package/react in the built-in browser and read it with get_page_text; if the text comes back empty, wait a few seconds and read it again.
 ```
