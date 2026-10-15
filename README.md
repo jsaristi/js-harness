@@ -542,7 +542,8 @@ over 150 characters, the host's own limit, in a project's memory index
 which every session reads on every turn; and a `Write` or `Edit` of a Markdown file that brings a
 line stamping today's date with an hour more than a minute ahead of the clock, where the line
 opens with the date or the date follows "written" (`- 2026-10-14 14:50 — T3 done.` written at
-14:44). A document also records earlier events, so an hour behind the clock passes. A
+14:44). A document also records earlier events, so an hour behind the clock passes; an `Edit` is
+judged by the lines of the file it leaves that were not already there. A
 refusal is printed as the hook's deny, with the reason and the right value; any other call runs
 as it was. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a
 Markdown file the hour check besides. An `Edit` is

@@ -25,7 +25,7 @@ export function isMemoryIndex(filePath, configDir) {
 /** The file the `Write` or `Edit` of `toolInput` leaves, given the file on disk (`before`, null when unreadable), or
  * null when it cannot be known. An Edit whose file cannot be read, or whose old text is not in it, is judged by its
  * new text alone. The replacement is spliced, not passed to `String.replace`, so `$&` in the text stays literal. */
-function resultOf(toolName, toolInput, before) {
+export function resultOf(toolName, toolInput, before) {
   if (toolName === 'Write') return typeof toolInput.content === 'string' ? toolInput.content : null;
   if (toolName !== 'Edit' || typeof toolInput.new_string !== 'string') return null;
   const { old_string: oldText, new_string: newText } = toolInput;

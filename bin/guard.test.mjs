@@ -72,9 +72,9 @@ test('a Write or an Edit of a Markdown file whose line opens with today and an h
     const refused = await hook(payload);
     assert.equal(refused.code, 0, payload.tool_input.file_path);
     assert.equal(denied(refused).permissionDecision, 'deny', payload.tool_input.file_path);
-    assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: line \d+ of the text this call writes stamps 2026-10-14 1[45]:\d\d, and the clock says 14:44\./);
+    assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: line \d+ of the file this call leaves stamps 2026-10-14 1[45]:\d\d, and the clock says 14:44\./);
   }
-  assert.match(denied(await hook(ahead[0])).permissionDecisionReason, /line 3 of the text this call writes stamps 2026-10-14 15:05/);
+  assert.match(denied(await hook(ahead[0])).permissionDecisionReason, /line 3 of the file this call leaves stamps 2026-10-14 15:05/);
 });
 
 test('an hour at the clock, behind it, on another day, inside a line, or in a file that is not Markdown passes', async () => {
@@ -86,6 +86,18 @@ test('an hour at the clock, behind it, on another day, inside a line, or in a fi
     { file_path: 'D:/proj/bin/a.test.mjs', content: "const line = '- 2026-10-14 23:59 — fixture';\n" },
   ];
   for (const tool_input of passes) assert.deepEqual(await hook({ tool_name: 'Write', tool_input }), quiet, tool_input.content);
+});
+
+// Codex on 9d976e3: an Edit that replaces part of a line was judged as if its fragment were the whole line.
+test('an Edit of a Markdown file is judged by the lines it leaves, read from disk, numbered in that file', async () => {
+  const index = '# A\n\n**2026-10-14, about 14:30: merged.\nThe wait ends at 2026-10-14 16:00, planned.\n';
+  const stamp = await hook({ tool_name: 'Edit', tool_input: { file_path: 'D:/proj/odd/tasks/a.md', old_string: '14:30', new_string: '15:10' } }, { index });
+  assert.match(denied(stamp).permissionDecisionReason, /^js-harness guard: line 3 of the file this call leaves stamps 2026-10-14 15:10, and the clock says 14:44\./);
+  const plan = await hook({ tool_name: 'Edit', tool_input: { file_path: 'D:/proj/odd/tasks/a.md', old_string: '16:00', new_string: '17:00' } }, { index });
+  assert.deepEqual(plan, { code: 0, out: '', err: '' });
+  const ahead = '**2026-10-14, about 15:30: written ahead before the check.\n';
+  const kept = await hook({ tool_name: 'Edit', tool_input: { file_path: 'D:/proj/odd/tasks/a.md', old_string: 'x', new_string: 'y' } }, { index: `${ahead}x\n` });
+  assert.deepEqual(kept, { code: 0, out: '', err: '' }, 'a line already on disk is not the call\'s');
 });
 
 test('a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes', async () => {

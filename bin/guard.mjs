@@ -57,7 +57,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (FILE_TOOLS.has(tool)) {
     const index = memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
-    return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now());
+    return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
   if (tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
   const { allowedModels, backtickRefusal, hourRefusal, modelRefusal } = await import('./lib/guard.mjs');
