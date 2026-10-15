@@ -1373,7 +1373,9 @@ function coveredDetail({ codeCommits, base }) {
 function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   const newest = codeCommits[0];
   if (newest === undefined) return null;
-  const last = covers.filter(({ covered }) => covered.has(newest.id)).at(-1);
+  // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
+  // review, so one written later, as to a document commit after the head, must not hide the debt.
+  const last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1);
   if (last === undefined) return null;
   const from = last.rec.head;
   let records;

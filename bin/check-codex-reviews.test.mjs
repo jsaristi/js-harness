@@ -194,6 +194,15 @@ test('a head whose last review owes a correction is refused, naming its open fin
   assert.ok(lines.includes(`js-harness codex-review --base ${short(root, head)}`), lines);
 });
 
+test('a skip ending at a later document commit does not clear the correction the review owes', () => {
+  const { root, base, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const doc = commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  record(root, base, doc, { outcome: 'unavailable', reason: 'codex was down' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
 test('a correction its recheck found fixed passes', () => {
   const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
   const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');
