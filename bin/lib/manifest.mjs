@@ -385,6 +385,15 @@ function countOurs(ourContainers) {
   return count;
 }
 
+/** Whether `item` is an older form of the harness's own `entry`: its one hook runs the same command, and it is not
+ * `entry` itself. The command is the harness's signature (`js-harness doctor --hook`, `js-harness guard --hook ||
+ * exit 0`, ...); an entry with another hook beside it is not the harness's alone, and is left as it is. */
+function isOlderOwnEntry(item, entry) {
+  const command = entry?.hooks?.[0]?.command;
+  return typeof command === 'string' && item !== null && typeof item === 'object' && Array.isArray(item.hooks)
+    && item.hooks.length === 1 && item.hooks[0]?.command === command && !deepEqual(item, entry);
+}
+
 /** Appends `entry` at `pointer` inside the JSON file at `target`, creating intermediate objects
  * and the array itself as needed. Missing file -> starts from `{}` (`createdFile: true`).
  * `ours` is the set of containers js-harness made (`oursContainers`): every container this creates is added to it, so
@@ -450,11 +459,15 @@ function appendEntryToFile(target, pointer, entry, ours) {
   ourContainers.push(ours.has(leafId));
   const arr = cursor[lastKey];
 
-  if (arr.some((item) => deepEqual(item, entry))) {
+  // An entry of an older release (another matcher or timeout) is taken out, and the new one goes in the place of
+  // the first of them: left there, the hook runs twice, and no record names it once install has written its own.
+  const stale = arr.map((item, i) => (isOlderOwnEntry(item, entry) ? i : -1)).filter((i) => i !== -1);
+  const has = arr.some((item) => deepEqual(item, entry));
+  if (has && stale.length === 0) {
     return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
   }
-
-  arr.push(entry);
+  for (const i of [...stale].reverse()) arr.splice(i, 1);
+  if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
