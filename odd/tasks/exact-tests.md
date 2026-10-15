@@ -62,7 +62,9 @@ Nothing planned.
   run it in shadow for a stretch (the gate still runs the whole suite, and records which tests selection
   would have skipped); the proof is a count read from the log: zero failing tests that selection would
   have skipped, over at least 30 gates, plus one test per seam (fs.promises, sync fs, a missing-file
-  probe, readdir, a dynamic import, a node child). Only then does it skip."
+  probe, readdir, a dynamic import, a node child). Only then does it skip." The count, by the lead's answer
+  (L12): "count only gates where selection would have skipped something (wouldSkip > 0); a gate that skips
+  nothing proves nothing."
 
 ## The tracer (S3's question)
 `strace` is not installed in the WSL2 Ubuntu (`command -v strace` found none, 2026-10-14), and installing
@@ -185,6 +187,12 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   inside that spread, so the shadow costs no time that five samples can see. The measure after waits for
   selection to skip, which waits for S6's count; how that count is read (only gates whose `wouldSkip` is
   above 0, L9) is asked of the lead, not yet answered. PR 163 holds T1 to T3d, pushed at `c80a76e`.
+- **L12** (2026-10-14 20:52, the lead's answer, verbatim): "S6, yes: count only gates where selection
+  would have skipped something (wouldSkip > 0); a gate that skips nothing proves nothing." So S6's 30 gates
+  are counted among the gate log's end lines whose `shadow.wouldSkip` is above 0, each with
+  `failedOfSkipped` empty. PR 163 merged at 19:58 with `fbff1a2`; the three commits after it went in as
+  PR 164 (merged 20:19). Next, from the same plan: step 4 (CI `node --test` with `--test-concurrency=2`),
+  then step 2 (a result memory shared by the worktrees, keyed per S5).
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
