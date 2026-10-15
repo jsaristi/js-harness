@@ -59,6 +59,11 @@ set, a tests sensor that is `node --test` (directly or as the `test` script) run
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
 repository's GitHub workflow sets 2.
 
+The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,
+before any work: the median of the latest five sessions, read from their transcripts under
+`~/.claude/projects` (and, from a worktree, its main checkout's). It never fails a commit, and warns
+over 100,000 tokens.
+
 ```console
 $ js-harness check
 PASS  budget  122 estimated tokens (budget 1500)
@@ -66,6 +71,8 @@ PASS  contracts  no contracts under odd/tasks
 INFO  payload claude  122 estimated tokens per turn from files (tools and hook output not counted)
       global CLAUDE.md   not found  ~\.claude\CLAUDE.md
       project AGENTS.md        122  my-project\AGENTS.md
+…
+INFO  fixed load  95570 tokens at the first turn, median of the latest 5 sessions (budget 100000)
 …
 INFO  sensors  no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json
 ```

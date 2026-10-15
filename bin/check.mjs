@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
+import { fixedLoadRow } from './lib/fixed-load.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
@@ -1957,7 +1958,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), fixedLoadRow(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
