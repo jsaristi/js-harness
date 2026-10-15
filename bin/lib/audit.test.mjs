@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { auditEntries, ownShares } from './audit.mjs';
+import { auditEntries, lastShare, ownShares, shareRefusal } from './audit.mjs';
 
 // Clauses read from this project's transcripts (2026-10-12 to 2026-10-15), each with the share it states of the
 // session that wrote it.
@@ -167,4 +167,49 @@ test('auditEntries reads only the session\'s own replies: no side chain, no repl
     { line: 32, entry: { type: 'user', timestamp: '2026-10-15T08:06:00.000Z', message: { content: 'Contexto: 10 %.' } } },
   ], { offsetMinutes: 0 });
   assert.deepEqual(result, { messages: 0, stamped: 0, wrongHours: [], shares: 0, wrongShares: [], windowRead: false });
+});
+
+// --- The share check (T16): the Stop hook's oracle, read from the end of the transcript ---
+
+const lines = (...items) => items.map(({ entry }) => JSON.stringify(entry));
+
+test('lastShare reads the tokens and text of the last own reply that records a usage, and the window of the last get_usage read', () => {
+  const read = lastShare(lines(
+    usageRead(1, { window: 300000 }),
+    reply(2, { text: 'Contexto: 10 %.', tokens: 30000 }),
+    usageRead(3, { window: 350000 }),
+    reply(4, { text: 'Mi contexto: 20 %.', tokens: 70000 }),
+    reply(5, { text: 'From a sub-agent.', tokens: 1000, sidechain: true }),
+    reply(6, { text: 'Written by the harness.', tokens: 1000, model: '<synthetic>' }),
+    { line: 7, entry: { type: 'user', message: { content: 'next' } } },
+  ));
+  assert.deepEqual(read, { tokens: 70000, window: 350000, windowRead: true, text: 'Mi contexto: 20 %.' });
+});
+
+test('lastShare takes the default window when no read of the session itself gives one, and skips lines it cannot parse', () => {
+  const read = lastShare([...lines(usageRead(1, { window: 300000, session: 'local_other' }), reply(2, { text: 'Contexto: 40 %.', tokens: 200000 })), '{broken', '']);
+  assert.deepEqual(read, { tokens: 200000, window: 500000, windowRead: false, text: 'Contexto: 40 %.' });
+  assert.equal(lastShare(lines(usageRead(1, { window: 300000 }))), null, 'no own reply with a usage');
+  assert.deepEqual(lastShare(lines(reply(1, { text: 'Contexto: 40 %.', tokens: 150000 }), usageRead(2, { window: 300000 }))), { tokens: 150000, window: 300000, windowRead: true, text: 'Contexto: 40 %.' }, 'a read after the last reply');
+  // Codex and the verifier on e3db6ef: once the read after the last reply is found, no earlier line naming
+  // contextWindow (another session's read, or the reply itself) may take its window away.
+  assert.deepEqual(lastShare(lines(
+    usageRead(1, { window: 350000 }),
+    reply(2, { text: 'Contexto: 50 %; contextWindow is the field.', tokens: 150000 }),
+    usageRead(3, { window: 500000, session: 'local_other' }),
+    usageRead(4, { window: 300000 }),
+  )), { tokens: 150000, window: 300000, windowRead: true, text: 'Contexto: 50 %; contextWindow is the field.' }, 'the latest read is kept');
+  assert.equal(lastShare([]), null);
+});
+
+test('shareRefusal refuses a stated own share more than 2 points from the recorded one, naming both and the window', () => {
+  const reason = shareRefusal('Listo. Contexto: 40 %.', { tokens: 300000, window: 500000 });
+  assert.match(reason, /states your context at 40%/);
+  assert.match(reason, /records 60% of a 500k window/);
+  assert.match(reason, /get_usage/);
+  assert.equal(shareRefusal('Contexto: 62 %.', { tokens: 300000, window: 500000 }), null, '2 points off is within the tolerance');
+  assert.equal(shareRefusal('Contexto: 58 %.', { tokens: 300000, window: 500000 }), null);
+  assert.equal(shareRefusal('JH 9 está al 10 % de contexto.', { tokens: 300000, window: 500000 }), null, 'another session\'s share');
+  assert.equal(shareRefusal('Nothing about it.', { tokens: 300000, window: 500000 }), null);
+  assert.match(shareRefusal('Mi contexto: 40 %.', { tokens: 300000, window: 350000 }), /records 86% of a 350k window/, 'a share of the window read');
 });

@@ -805,8 +805,9 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor and resum
     { event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' },
     { event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' },
     { event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', command: 'js-harness guard --hook || exit 0' },
+    { event: 'Stop', command: 'js-harness guard --stop || exit 0' },
   ]);
-  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude']]);
+  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude']]);
   assert.deepEqual(declared('claude'), listedFor('claude'));
   assert.deepEqual(declared('codex'), listedFor('codex'));
   assert.ok(Object.isFrozen(HARNESS_HOOKS));

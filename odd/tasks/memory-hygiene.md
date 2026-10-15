@@ -304,11 +304,19 @@ Two independent read-only readers, 2026-10-15, neither the writer.
   rechecked. Merges after #188
 - [ ] T5 (kind: build) The due line in the channel's hook and the board row (asked of their owner first)
 - [ ] T6 (kind: docs) The protocol section of the installed skill, with its incident and expiry; help text
-- [ ] T7 (kind: verify) The first pass on this project with T11's owner, after his answers, journaled and measured.
+- [x] T7 (kind: verify) The first pass on this project with T11's owner, after his answers, journaled and measured.
   Mechanical part done 2026-10-15 (pass `20261015T120606108Z`, verified and journaled): each of the 42 index
   lines appended verbatim to its note, the index replaced by 43 short lines; index 11,077 B -> 3,920 B (65
   percent less on every turn), `memory status`: nothing due; `memory undo 20261015T120606108Z` restores it.
-  Waiting on his answer to the list below (asked through the lead)
+  His answer, 2026-10-15 20:56Z, to the lead's question tool (JH ORQ transcript `e152c9d8`, line 3588): "Sí,
+  borrá y fusioná (Recomendada)". Pass `20261015T205843597Z`, verified with the 15 notes that go named in
+  `--approved`: each of the 15 (the two deletions too, so no word is lost) appended verbatim to its sibling
+  under "Merged from ... on 2026-10-15", the file and its index line removed; index 3,920 B -> 2,590 B, 43 -> 28
+  lines. Rehearsed first on a copy, whose undo was byte-identical (`diff -rq`). Then pass
+  `20261015T210012224Z` (write set `MEMORY.md` only) rewrote the 11 sibling lines to name what each absorbed
+  ("no CLAUDE.md, only AGENTS.md" in Dogfooding's), all under 150 characters: **index 2,879 B, 28 lines, 28
+  notes, nothing due; 11,077 B -> 2,879 B in all (74 percent)**. Each pass undoes with `memory undo <stamp>`,
+  the latest first
 
 ### T7: what goes to him (one list)
 

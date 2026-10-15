@@ -588,6 +588,22 @@ $ js-harness guard --hook < send.json
 {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"js-harness guard: this message stamps 03:10, and the clock says 15:01. Stamp 15:01, or no hour: an hour in a message is read from the clock in the same step, or left out."}}
 ```
 
+`install` also registers `guard --stop` for Claude Code, as a `Stop` hook: the share check. A
+reply that states the session's own context share ("Contexto: 40 %") more than 2 points from the
+share its transcript records is turned back with the hooks contract's `decision: "block"`, so the
+session corrects it in one line from `get_usage`. The share is of the window the session's last
+`get_usage` read reports, else the default 500,000 tokens; which clauses count as the session's
+own share is `js-harness audit`'s reading. A reply is already shown when a `Stop` hook runs, so
+the check cannot hold it back, only make the session correct it before the turn ends. It never
+turns back a stop it already turned back (`stop_hook_active`), and always exits 0. When the host
+sends the reply's text (`last_assistant_message`) and it names no share, the transcript is not
+read; a host that sends no text has the transcript's last reply read instead.
+
+```console
+$ js-harness guard --stop < stop.json
+{"decision":"block","reason":"js-harness guard: this reply states your context at 40%, and your transcript records 60% of a 500k window (the window of your last get_usage read, else the default). The reply is already sent: correct it in one line with the share mcp__ccd_session_mgmt__get_usage reads now, and say no share you have not just read."}
+```
+
 ### js-harness fetch
 
 The second rung for a page that refuses WebFetch as AI traffic (a 403, a 402, a challenge

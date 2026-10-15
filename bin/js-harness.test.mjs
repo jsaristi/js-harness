@@ -95,6 +95,7 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
 
 test('guard is listed in --help and wired through the dispatcher', () => {
   assert.match(run(['--help']).stdout, /guard {7}The PreToolUse hook/);
+  assert.match(run(['--help']).stdout, /js-harness guard --stop is the Stop hook/);
   const result = run(['guard']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Usage: js-harness guard --hook/);

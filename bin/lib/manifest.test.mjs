@@ -730,7 +730,7 @@ const [, , claudeResume, codexResume] = entryComponents;
 const ourEntries = () => [claudeHook.entry(), claudeResume.entry()];
 
 test('entryComponents declare the resume hook for Claude and Codex: a SessionStart entry for the matcher compact', () => {
-  assert.equal(entryComponents.length, 6);
+  assert.equal(entryComponents.length, 7);
   assert.deepEqual([claudeResume.id, codexResume.id], ['claude-resume-hook', 'codex-resume-hook']);
   assert.deepEqual([claudeResume.pointer, codexResume.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
   assert.deepEqual([claudeResume.target('/h'), codexResume.target('/h')], [claudeHook.target('/h'), codexHook.target('/h')], 'the files the first entry is in');
@@ -766,11 +766,25 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
   assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
 });
 
+// --- The share check: a `Stop` entry, in Claude Code's settings and nowhere else ---
+
+const shareHook = entryComponents.find((component) => component.id === 'claude-share-hook');
+
+test('entryComponents declare the share check for Claude Code only: a Stop entry with no matcher, guarded to exit 0', () => {
+  assert.ok(shareHook, 'the claude-share-hook component is declared');
+  assert.deepEqual(shareHook.pointer, ['hooks', 'Stop']);
+  assert.deepEqual(shareHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
+  assert.deepEqual(shareHook.entry(), { hooks: [{ type: 'command', command: 'js-harness guard --stop || exit 0', timeout: 5 }] });
+  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'Stop'), false, 'no Codex entry: the transcript read is Claude Code\'s');
+});
+
 // What the Claude Code settings file holds of ours after an install: the two SessionStart entries, the pause hook's
-// PostToolUse one and the guard's PreToolUse one. Codex's hooks file holds the two SessionStart entries only.
+// PostToolUse one, the guard's PreToolUse one and the share check's Stop one. Codex's hooks file holds the two
+// SessionStart entries only.
 const ourPostToolUse = () => [pauseHook.entry()];
 const ourPreToolUse = () => [guardHook.entry()];
-const ourSettings = () => ({ hooks: { SessionStart: ourEntries(), PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse() } });
+const ourStop = () => [shareHook.entry()];
+const ourSettings = () => ({ hooks: { SessionStart: ourEntries(), PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse(), Stop: ourStop() } });
 
 test('install writes the resume entry beside the doctor\'s in each host file and records both; uninstall removes both and the file it created', () => {
   const home = makeTmpHome();
@@ -781,7 +795,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
       const isClaude = target === claudeFile;
       assert.deepEqual(readJson(target), isClaude ? ourSettings() : { hooks: { SessionStart: ourEntries() } }, target);
       const records = manifest.entries.filter((e) => e.path === target);
-      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse(), ...ourPreToolUse()] : ourEntries());
+      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse(), ...ourPreToolUse(), ...ourStop()] : ourEntries());
       // The file is the install's whichever entry made it: the last one removed is the one that deletes it.
       assert.deepEqual(records.map((record) => [record.createdFile, record.skipped]), records.map(() => [true, false]), target);
       assert.equal(records[1].sha256, sha256(JSON.stringify(claudeResume.entry())));
@@ -790,7 +804,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
 
     const result = uninstall(home);
     assert.deepEqual(result.entriesKept, []);
-    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
+    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
     assert.deepEqual([fs.existsSync(claudeHook.target(home)), fs.existsSync(codexHook.target(home))], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -902,11 +916,11 @@ test('an update from an install made before the resume hook adds its entry, and 
 
       const manifest = sync(home, '0.2.0');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
-      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', created]]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', created], [undefined, created]]);
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
-      else assert.deepEqual(readJson(target), { hooks: { SessionStart: [unrelated] } }, 'the PostToolUse and PreToolUse lists install made go with their entries, and the user\'s SessionStart entry stays');
+      else assert.deepEqual(readJson(target), { hooks: { SessionStart: [unrelated] } }, 'the PostToolUse, PreToolUse and Stop lists install made go with their entries, and the user\'s SessionStart entry stays');
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
@@ -918,11 +932,11 @@ test('uninstall removes the entry that is still there when the user removed the 
   try {
     install(home, '0.1.0');
     const target = claudeHook.target(home);
-    // The user took the resume hook out by hand and put a hook of their own in the file; the pause and guard hooks are still there.
+    // The user took the resume hook out by hand and put a hook of their own in the file; the pause, guard and share hooks are still there.
     const theirs = { matcher: 'compact', hooks: [{ type: 'command', command: 'user command', timeout: 1 }] };
-    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs], PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse() } }, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs], PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse(), Stop: ourStop() } }, null, 2)}\n`, 'utf8');
     const result = uninstall(home);
-    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [3, 1]);
+    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [4, 1]);
     assert.deepEqual(readJson(target), { hooks: { SessionStart: [theirs] } }, 'the entries that were still ours are gone, and theirs stays');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1044,7 +1058,7 @@ test('install appends the hook entry to an existing file without disturbing othe
     assert.equal(data.hooks.SessionStart.length, 3);
     assert.deepEqual(data.hooks.SessionStart[0], seeded.hooks.SessionStart[0]);
     assert.deepEqual(data.hooks.SessionStart.slice(1), ourEntries());
-    assert.deepEqual(data.hooks.Stop, seeded.hooks.Stop);
+    assert.deepEqual(data.hooks.Stop, [...seeded.hooks.Stop, ...ourStop()], 'the user\'s Stop entry stays first, ours after it');
 
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.createdFile, false);
@@ -1277,8 +1291,8 @@ test('R3-001: install never clobbers a value of an unexpected shape, and reports
 
     const manifest = install(home, '0.1.0');
 
-    // The pause and guard hooks are separate entries under their own keys, so they are written; the SessionStart value is not touched.
-    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse() } }, 'the unexpected value is left as it is');
+    // The pause, guard and share hooks are separate entries under their own keys, so they are written; the SessionStart value is not touched.
+    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse(), Stop: ourStop() } }, 'the unexpected value is left as it is');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
   } finally {
@@ -1600,12 +1614,12 @@ test('install records how many containers it made for each entry: 2 for a file w
     fs.writeFileSync(target, `${JSON.stringify({ theme: 'dark' }, null, 2)}\n`, 'utf8');
     const first = install(home, '0.1.0');
     const claude = (manifest) => manifest.entries.filter((e) => e.path === target).map((e) => [e.pointer.join('.'), e.createdContainers]);
-    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PreToolUse', 2]]);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PreToolUse', 2]], 'a repeat install keeps what the first one made');
+    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2]]);
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2]], 'a repeat install keeps what the first one made');
 
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [userStart] } }, null, 2)}\n`, 'utf8');
     uninstall(home);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1], ['hooks.PreToolUse', 1]], 'only the PostToolUse and PreToolUse lists were missing');
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1], ['hooks.PreToolUse', 1], ['hooks.Stop', 1]], 'only the PostToolUse, PreToolUse and Stop lists were missing');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1643,16 +1657,16 @@ test('sync takes out an entry it no longer declares, and the list install made f
     fs.writeFileSync(target, `${JSON.stringify({ theme: 'dark' }, null, 2)}\n`, 'utf8');
     const seeded = fs.readFileSync(target, 'utf8');
     const manifest = install(home, '0.1.0');
-    // An entry an earlier release grafted under hooks.Stop, recorded as the install that made the Stop list.
+    // An entry an earlier release grafted under hooks.SubagentStop, recorded as the install that made the SubagentStop list.
     const stale = { hooks: [{ type: 'command', command: 'js-harness old-stop', timeout: 1 }] };
     const data = readJson(target);
-    data.hooks.Stop = [stale];
+    data.hooks.SubagentStop = [stale];
     fs.writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-    const staleRecord = { path: target, pointer: ['hooks', 'Stop'], entry: stale, sha256: sha256(JSON.stringify(stale)), createdFile: false, createdContainers: 1, skipped: false };
+    const staleRecord = { path: target, pointer: ['hooks', 'SubagentStop'], entry: stale, sha256: sha256(JSON.stringify(stale)), createdFile: false, createdContainers: 1, skipped: false };
     fs.writeFileSync(manifestPath(home), JSON.stringify({ ...manifest, entries: [...manifest.entries, staleRecord] }, null, 2), 'utf8');
 
     sync(home, '0.2.0');
-    assert.deepEqual(readJson(target), { theme: 'dark', ...ourSettings() }, 'the stale entry and its Stop list go; ours and the user\'s file stay');
+    assert.deepEqual(readJson(target), { theme: 'dark', ...ourSettings() }, 'the stale entry and its SubagentStop list go; ours and the user\'s file stay');
 
     uninstall(home);
     assert.equal(fs.readFileSync(target, 'utf8'), seeded, 'and uninstall then leaves the file as it was');
@@ -1690,7 +1704,7 @@ test('a manifest written before createdContainers existed is uninstalled as befo
     fs.writeFileSync(manifestPath(home), JSON.stringify(older, null, 2), 'utf8');
 
     uninstall(home);
-    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [], PreToolUse: [] } });
+    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [], PreToolUse: [], Stop: [] } });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1820,6 +1834,7 @@ test('the installed skill holds no merge conflict marker, and names both wait an
   const text = components[0].content('0.1.0');
   assert.match(text, /^- `js-harness wait /m);
   assert.match(text, /^- `js-harness guard --hook`/m);
+  assert.match(text, /Its `--stop` form is the Stop hook beside it/, 'and the share check');
 });
 
 // The skill is where an agent learns the review record exists; without it `codex-review` is only

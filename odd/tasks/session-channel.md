@@ -1518,7 +1518,7 @@ Three slices, each a work-unit commit with its tests first:
 
 About 600 authored lines. Layer 1 alone is about 250.
 
-#### Open for him (through the lead, with buttons)
+#### Open for him (through the lead, with buttons) — answered 2026-10-15: Q1 only where declared, Q2 refuse and name start_session (Progress)
 
 - Q1. The guard is a user-level hook, so its refusal reaches every project on the machine, his
   other project included. Should js-harness refuse these tools on the whole machine, or only in a
@@ -2824,6 +2824,14 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   before and 43.4 s after (one run each). On this machine 7 sessions carry the mark, so the
   lead's watch will say 7 changes once after it lands. Left for T9: the relief-file line as a
   second way to "kept", and the two measures that reopen a decision (section 16).
+- 2026-10-15, his answers through the lead's question tool, read with `sessions --quote` in
+  the lead's transcript `e152c9d8`. T16 layer 3, Q1 (line 3689): "Solo donde se declara
+  (Recomendada)": the guard refuses the scheduled-task tools only in a project whose rules
+  declare it, as this repository will. Q2 (line 3702): "Rechazar y nombrar start_session
+  (Recomendada)": a scheduled task he asks for himself is refused too, and the refusal names
+  `start_session`. T11 (line 3680): "Con teléfono, cuando salga (Recomendada)": T11 stays open
+  until his next time away, and "Done when" keeps its phone clause. Layer 3 is unblocked.
+  The same day, T9's relief slice is draft pull request 229 and T9b is ticked.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

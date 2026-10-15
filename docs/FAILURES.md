@@ -374,7 +374,8 @@ on it.
 - Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
   06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
   the first read after 26 percent at about 04:30
-- Control: owed — odd/tasks/honesty-audit.md — "The share check, his call"
+- Control: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off
+  the recorded one is blocked from stopping, with the reason" — since 2026-10-15
 
 ### eval-interrupt-process-alive
 A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
