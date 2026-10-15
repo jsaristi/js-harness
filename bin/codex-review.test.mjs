@@ -4707,6 +4707,7 @@ const LEFT_OUT_LINE = 'Left out of the review: 2 files, 6 changed lines (1 Markd
 // The same, as a record holds it: the documents apart from what the project marks, which `check --push` reads.
 const LEFT_OUT = { files: 2, changedLines: 6, documents: { files: 1, changedLines: 2 }, marked: { files: 1, changedLines: 4 } };
 const BY_ITS_FILES = 'The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.';
+const MERGE_OWN_PROMPT = 'The review of a merge is asked with this command\'s own prompt: the sentence Codex writes for `--base` names a diff of two commits, not what was written in a merge.';
 
 test('a range that also changes a document and a file the project marks is asked by the files it reads, held to their changed lines alone, and says what it left out', async () => {
   const { root, base, head } = makeMixedRepo();
@@ -5346,6 +5347,9 @@ test('the review of a resolved merge asks Codex for a diff of two objects that e
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 1);
   assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: mine, head, part: { index: 1, of: 1, files: ['m.txt'] }, merge: auto }));
+  // Why its own prompt: a merge's diff is not one of two commits, whatever files it holds (verifier A3).
+  assert.ok(result.out.includes(MERGE_OWN_PROMPT), result.out);
+  assert.ok(!result.out.includes(BY_ITS_FILES), result.out);
   const record = readCodexReviews(root).at(-1);
   assert.deepEqual([record.base, record.head, record.outcome, record.diff], [mine, head, 'reviewed', 'remerge']);
   assert.equal(readCodexReviewRuns(root).at(-1).diff, 'remerge');

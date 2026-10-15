@@ -80,6 +80,21 @@ test('merge-ready behind main only by documents checks the merge into main is cl
   assert.match(unread.out, /could not read what main changed since/);
 });
 
+test('merge-ready of a pull request that conflicts with main asks git which files, and says how to keep the merge clean', async () => {
+  const conflicted = [
+    ['gh pr view 7', { stdout: view({ mergeable: 'CONFLICTING' }) }],
+    [`git merge-tree --write-tree --name-only --no-messages ${MAIN} ${HEAD}`, { status: 1, stdout: `${PULL_MERGE}\nbin/check.mjs\n` }],
+  ];
+  const { code, out, calls } = await main(['7'], conflicted);
+  assert.equal(code, 1, out);
+  assert.match(out, /PR 7 conflicts with main bbbbbbb in bin\/check\.mjs\. Before merging main into its branch/);
+  assert.ok(!calls.some((line) => line.startsWith('gh run')), 'a pull request that cannot merge reads no run');
+  // A merge-tree that does not answer leaves the advice out, never the verdict.
+  const unread = await main(['7'], [conflicted[0], [`git merge-tree --write-tree --name-only --no-messages ${MAIN} ${HEAD}`, { status: 128 }]]);
+  assert.equal(unread.code, 1);
+  assert.equal(unread.out, 'PR 7 is not mergeable (CONFLICTING).');
+});
+
 test('merge-ready with no green run for the head exits 4 and does not read a log', async () => {
   const { code, out, calls } = await main(['7'], [['gh run list --branch feat/x', { stdout: runs([{ ...green, headSha: OLD }]) }]]);
   assert.equal(code, 4, out);
