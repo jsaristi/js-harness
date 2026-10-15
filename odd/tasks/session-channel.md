@@ -1528,6 +1528,85 @@ About 600 authored lines. Layer 1 alone is about 250.
   is it still refused? His words are absolute ("no debes abrir sesiones en otra parte"). The
   recommendation is to refuse it, with `start_session` named as the way.
 
+### 18. The two measures that reopen a decision (T9; design version 2, 2026-10-15)
+
+Section 16 names the two measures and owes their printing to T9: "an orchestrator relieved more
+than once in a working day because its context filled" (it reopens "one session, the
+orchestrator is the lead") and "no task reopened because a cut lost what it needed" (it reopens
+the context rule). Both print from `sessions --measures` and its `--json`, and ask no agent to
+write anything the protocol does not already ask for.
+
+Version 1 read reliefs from the transcripts and reopenings from ticked boxes. Its reader found
+three blockers, each checked on this machine's data of 2026-10-15:
+
+- A relieved lead is renamed out of the role's title ("JH ORQ viejo · relevado 04:25"), and the
+  board reads a transcript's last title, so every relieved lead dropped out: the day's four
+  handovers (about 01:16, 04:25, 04:35 the fork, 06:02) read as one, and that one was wrong.
+- A restart or a fork copies the earlier entries with their old timestamps (three transcripts
+  open at 2026-10-14T03:42:54.204Z), so ordering by the first entry makes reliefs of restarts.
+- No commit since 2026-10-01 turns `- [x] <ID>` into `- [ ] <ID>`: reopenings are written as Log
+  entries ("reopened by the lead's order", `orphan-gate` L7, 1134f84), and 7 of 52 feature
+  documents track tasks in a table. A box-only rule prints zero and reads it as a proof.
+
+#### Reliefs, from the `relieved` notices
+
+- **Source: the record.** Section 5 already has the handover end with the one before appending
+  `relieved` (`notify --kind relieved`), and section 12 names those notices as this measure's
+  source. No lead has ever written one: the record holds 237 notices and none is `relieved`, and
+  the orchestrator skill does not carry the step. So the fix is the protocol's, not the
+  measure's: the skill's handover gains that step (owed with this task), and the measure counts
+  `relieved` notices. Until the first one, it says so: "no relieved notice in the record", never
+  "no relief".
+- **Because its context filled.** The notice's sender (`from.id`, the full session id) is the
+  relieved session, when its `from.title` is the relieved title section 5 has it take before
+  the append; a notice sent by any other session, by Codex (no id), or with no transcript found
+  in the project's folders is "not known". Its transcript is read up to the notice: the highest
+  context share of its own replies (no side chain) since its last compaction before the notice,
+  against the context pause (the rule value `context-pause`, printed with the result, since it
+  has changed over time). At or past it, "filled"; below it, "another reason"; with no reply that
+  records its usage, "not known". The share is of the window its own last `get_usage` before the
+  notice read (`"session": "self"`), else the board's. A lead the host compacted and relieved
+  later had room again, so it reads "another reason"; its last compaction's `preTokens` is
+  printed beside it, and the notice's own `from.context` is shown as a cross-check.
+- **A working day** is the local calendar day of the notice, and the measure reads whole days:
+  every day the `--hours` window touches is read from its start, so a relief of the morning is not
+  dropped by a window that starts at noon.
+- **Printed:** a line per relief (time, the relieved session's first eight characters, its share
+  and "filled", "another reason" or "not known"), and a closing line: the reliefs, those because
+  the context filled, and the days with more than one such relief, or "none".
+
+#### Tasks reopened: candidates for the lead, never a count (version 3)
+
+Version 2 read reopenings three ways in landed diffs. Its reader ran them by hand over the
+first-parent history since 2026-10-01 (193 document diffs): boxes 0, table rows 0, and 60 added
+lines holding "reopen", of which about two are reopenings (`orphan-gate` L7, 859b0bd;
+`remote-control` "reopened as T8–T11", 311c330). The rest reopen pull requests, define the word,
+deny it ("nothing reopened"), or are this section. And the one real reopening it found changed no
+box and no row in its landed diff: a task reopened and closed again inside one pull request is
+invisible to a net diff. So no reader of today's data can count reopenings, and none can prove
+there were none.
+
+- **What the measure prints:** the candidates, as candidates. Lines added under a document's
+  `## Log` that open with a Log id (`- **L7**`, `- L2.`) and hold "reopen" in any form, from the
+  first-parent history of the default branch (`git log -p -m --first-parent`) over the same
+  whole days as the reliefs: a line each (merge time, document, Log id, commit). A Log entry
+  that restates an earlier one is printed again; the lead reads both.
+- **What it says it cannot see:** the closing line says that a reopening written nowhere in a
+  Log, or closed again inside one pull request, is not read, so "no candidate" is not "no task
+  reopened". The cause is never read; the lead judges each candidate and writes the verdict in
+  that document's Log.
+- Whether a reopening should leave a mark a program can count (a declared Log form) is a change
+  to gentle-ai's ODD document, not to this harness; it is left open, not built.
+
+#### Tests owed
+
+Through the public functions, with a fake `run`, fake records and fake transcripts: a relieved
+notice whose sender filled, one below the pause, one with no usage; one sent by a session whose
+title is not the relieved one; a compaction between the peak and the notice; two filled reliefs
+on one day; a window that starts at noon of a day with a morning relief; a record with no
+relieved notice. A Log line "L7 ... reopened" found; a "reopen" line outside `## Log`, and one in
+the Log with no Log id, not found; a merge's diff; git failing (not known, never "no candidate").
+
 ## Failures this feature owns
 From the list of 2026-10-10 in `odd/tasks/rule-hierarchy.md` ("Failures of 2026-10-10"): 3, 4,
 5, 6, 14, 17 and 18. Each closes only when its proof there exists and passes. 7 and 8 were left
