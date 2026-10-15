@@ -164,7 +164,8 @@ const unreadable = (faults) => ({ findings: faults, notes: [], readers: {}, sent
  * `input` is `{ rules, sources, dataText, listText, codeFiles, textFiles, readFile }`: the declarations (default
  * `RULES`), the sources object or `null`, the text of rules-data.mjs or `null`, the text of docs/RULES.md or `null`,
  * the code and text files as `{ path, text }`, and `readFile(path)` for a file of the repository, or `null`. A
- * finding is a fault that must be repaired; a note is what was left out because it was not given. */
+ * finding is a fault that must be repaired; a note is what was left out because it was not given. `declared` is the list
+ * the shortest phrase is read from (default `RULES`): a change of that rule is checked against its new bound. */
 export function checkRules(input) {
   const {
     rules = RULES,
@@ -172,12 +173,13 @@ export function checkRules(input) {
     codeFiles = [],
     textFiles = [],
     readFile,
+    declared = RULES,
   } = input;
   const dataText = normal(input.dataText ?? null);
   const listText = normal(input.listText ?? null);
 
   // A list that cannot be read has no meaning for the checks below, so only its faults are told.
-  const faults = readRules(rules);
+  const faults = readRules(rules, { declared });
   if (faults.length > 0) return unreadable(faults);
 
   const findings = [];

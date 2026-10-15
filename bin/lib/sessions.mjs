@@ -1532,8 +1532,9 @@ export function channelOf(record, sessions, { count = CHANNEL_LINES } = {}) {
 
 // ---- whose words a line of a transcript holds ---------------------------------------------------------
 
-// A paste as the host writes it into the person's entry: the same id opens and closes it.
-const PASTED_CONTENT = /<pasted_content id="([^"]*)">[\s\S]*?<\/pasted_content id="\1">/g;
+// A paste as the host writes it into the person's entry: the same id opens and closes it. The command that changes a
+// rule strips it too, to store only what he typed (bin/lib/rules-change.mjs).
+export const PASTED_CONTENT = /<pasted_content id="([^"]*)">[\s\S]*?<\/pasted_content id="\1">/g;
 
 const TOOL_RESULT = 'the result of a tool call';
 const isToolResult = (block) => block.type === 'tool_result';

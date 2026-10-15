@@ -9,6 +9,9 @@
 // All of that is in the harness's own repository. In a project that installs the harness (its git top holds no
 // bin/lib/rules-data.mjs), `rules`, `rules <id>` and `rules check` are about that project's own list, docs/rules.json,
 // beside the rules of the harness in force there, and `render` is refused (bin/lib/project-rules.mjs).
+// `rules change <id>` is the one form that writes a rule: run in the checkout it changes, on a branch rule/<name>, it
+// writes the declaration, its source and docs/RULES.md and appends a relief line (bin/lib/rules-change-run.mjs). It
+// is refused in a project that installs the harness, whose own list is edited by hand.
 // Zero dependencies.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,9 +26,10 @@ import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
+import { changeRule } from './lib/rules-change-run.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source]]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
@@ -39,6 +43,19 @@ class RulesArgError extends Error {}
 
 /** The words of argv, walked token by token: a flag is a usage error, and so is a second word. */
 function parseArgs(argv) {
+  // `change <id>` is the one form with options: `--dry-run` prints what it would write, `--check-source` checks a
+  // stored source again instead of a change.
+  if (argv[0] === 'change') {
+    const parsed = { command: 'change', id: undefined, dryRun: false, checkSource: false };
+    for (const token of argv.slice(1)) {
+      if (token === '--dry-run') parsed.dryRun = true;
+      else if (token === '--check-source') parsed.checkSource = true;
+      else if (token.startsWith('-') || parsed.id !== undefined) throw new RulesArgError(`unknown argument: ${token}`);
+      else parsed.id = token;
+    }
+    if (parsed.id === undefined) throw new RulesArgError('rules change needs the id of the rule');
+    return parsed;
+  }
   const words = [];
   for (const token of argv) {
     if (token.startsWith('-') || words.length === 1) throw new RulesArgError(`unknown argument: ${token}`);
@@ -360,6 +377,8 @@ export async function rulesMain(argv, {
   homedir = os.homedir,
   now = Date.now,
   run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }),
+  stdin = () => fs.readFileSync(0, 'utf8'),
+  rename = fs.renameSync,
 } = {}) {
   let parsed;
   try {
@@ -381,7 +400,28 @@ export async function rulesMain(argv, {
       stderr(err.message);
       return 1;
     }
+    if (!harnessRepository && parsed.command === 'change') {
+      stderr(`not changed: ${PROJECT_RULES_PATH} is edited by hand in a project that installs the harness; rules change changes the harness's own rules`);
+      return 1;
+    }
     if (!harnessRepository) return projectForm(parsed, top, { run, stdout, stderr });
+  }
+
+  if (parsed.command === 'change') {
+    const slug = projectSlug(mainCheckout(run, cwd));
+    return changeRule({
+      ...parsed,
+      top,
+      packageRoot: root,
+      readTree: readAll,
+      git: (args) => run('git', args, { cwd: top }),
+      stdin,
+      now,
+      home: path.resolve(env.JS_HARNESS_HOME || homedir()),
+      slug,
+      transcripts: path.join(env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), 'projects', slug),
+      rename,
+    }, stdout, stderr);
   }
 
   // The plain listing needs only the declarations, so a file it does not read cannot stop it.
