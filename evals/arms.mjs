@@ -25,7 +25,7 @@ const CLAUDE_FIXED = [
 ];
 const CODEX_FIXED = [
   'agents-md', 'gentle-ai-agent-routing', 'gentle-ai-codegraph-guidance', 'gentle-ai-engram-protocol', 'gentle-ai-orchestrator',
-  'gentle-ai-persona', 'hooks', 'project', 'skills',
+  'gentle-ai-persona', 'hooks', 'js-harness', 'project', 'skills',
 ];
 const FAMILY = /^(plugin|mcp)-[a-z0-9][a-z0-9.-]*$/;
 /** The components of each agent: a fixed list and the two families. */

@@ -16,6 +16,7 @@ import {
 } from './home.mjs';
 import { exists } from './paths.mjs';
 import { assertTrialPort } from './ports.mjs';
+import { applyWithout, checkWithout } from './without.mjs';
 
 /** What the marker of a Codex template says it is: a kind of its own, so `home.mjs` never seeds a Claude
  * home from it, and nothing here seeds a Codex home from a Claude template. */
@@ -542,11 +543,16 @@ export function seedCodexHome(templateDir, home, { engramPort } = {}) {
  * `CODEX_HOME` pointing at the trial's own in case a step of it looks for one, and without Claude Code's
  * credential, which `initWorkspace` lets through for the Claude arm and nothing of a Codex trial needs. The
  * template is checked now, when the seed is made, so a wrong path fails before any trial. `runInit` and
- * `env` go to `initWorkspace`. */
-export function seedFromCodexTemplate(templateDir, { runInit, env } = {}) {
+ * `env` go to `initWorkspace`. `without` names the components an arm of one component takes out
+ * (`evals/without.mjs`), checked against the template now and taken out of each trial's home after the seed;
+ * without `project`, init does not run. */
+export function seedFromCodexTemplate(templateDir, { runInit, env, without = [] } = {}) {
   readTemplate(templateDir, CODEX_TEMPLATE);
+  checkWithout(path.join(templateDir, PAYLOAD), without, 'codex');
   return async ({ home, workspace, engramPort }) => {
     seedCodexHome(templateDir, home, { engramPort });
+    applyWithout(home, without, 'codex');
+    if (without.includes('project')) return;
     await initWorkspace({ home, workspace, engramPort, runInit, env: { CODEX_HOME: codexHomeOf(home), CLAUDE_CODE_OAUTH_TOKEN: null, ...env } });
   };
 }

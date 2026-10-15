@@ -20,6 +20,7 @@ import { sandboxEnv } from './configs.mjs';
 import { exists, isWithin, resolveReal } from './paths.mjs';
 import { assertTrialPort } from './ports.mjs';
 import { childEnv } from './runner.mjs';
+import { applyWithout, checkWithout } from './without.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 export const requireAbsolute = (label, value) => {
@@ -376,11 +377,16 @@ export async function initWorkspace({ home, workspace, engramPort, runInit = run
 /** The `seed` of the current arm (`currentConfig({ seed })`): copies the template into the trial's home,
  * then initializes the workspace; the trial's `engramPort` comes with the context the config's `prepare` hands
  * to a seed. The template is checked now, when the seed is made, so a wrong path fails before any trial.
- * `runInit` and `env` are passed to `initWorkspace`. */
-export function seedFromTemplate(templateDir, { runInit, env } = {}) {
+ * `runInit` and `env` are passed to `initWorkspace`. `without` names the components an arm of one component
+ * takes out (`evals/without.mjs`), checked against the template now and taken out of each trial's home after the
+ * seed; without `project`, init does not run. */
+export function seedFromTemplate(templateDir, { runInit, env, without = [] } = {}) {
   readTemplate(templateDir);
+  checkWithout(path.join(templateDir, PAYLOAD), without, 'claude');
   return async ({ home, workspace, engramPort }) => {
     seedHome(templateDir, home, { engramPort });
+    applyWithout(home, without, 'claude');
+    if (without.includes('project')) return;
     await initWorkspace({ home, workspace, engramPort, runInit, env });
   };
 }

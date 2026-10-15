@@ -231,7 +231,8 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
   assessed medium and under budget by gentle-ai; G6b, the record and the refusal, next; left of
   G6: codegraph's version and the js-harness commit
 - [x] T6 G3, a cost statement before a run (S3; route: inline): `--plan` on `evals/suite.mjs`, with `evals/plan.mjs`
-- [ ] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7)
+- [ ] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
+  C1 `fa39244` and C2 `21a06bf` merged in #141; C3a, the filters of paths and JSON keys, see L17)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
@@ -393,3 +394,19 @@ pull request, and go on with C3a.
 L15 (2026-10-15, 01:15 by the lead) PAUSED by the lead for gate load (median wait 5.9 min over his 5-minute line). PRs #130 and #141 merged. Nothing in progress: C3a not started. Resume on this branch, `feat/eval-arms-filters` from `origin/main` `eab3eff`, with C3a (template filters), then C3b to C7; open T5, T8 to T11. No gate taken until a new orchestrator wakes this session.
 
 L16 (2026-10-15, 04:05 by `date`) Woken by the new lead (JH ORQ, since 01:20; its message of 04:04, a claim): the gate queue is empty, resume from L15. Rebased this branch onto `origin/main` `149e1d8`. Found the head of this document (lines 1 to 156) copied into the design of G2 since `258bf6e`, by a `$`` in a `String.replace` replacement; removed after a byte-equal check, recorded in `docs/todo.md`. The lead at 04:07: main is frozen for #167; a new pull request opens as a draft until it lands. Next: C3a, test-first.
+
+L17 (2026-10-15, 04:22 by `date`) C3a built: `evals/without.mjs` (`checkWithout`, `applyWithout`)
+takes an arm's components out of a trial's home after the seed; `seedFromTemplate` and
+`seedFromCodexTemplate` take `without`, check it against the template when the seed is made, and
+skip `js-harness init` for `project`. RED observed (`evals/without.test.mjs`, no module), then 11
+GREEN; `evals/home.test.mjs` 41 GREEN (248 s beside another worktree's gate, over the half-minute
+line; the Codex seed test and the whole suite run in the commit's gate turn). Decisions: the
+components are disjoint, so `skills` and `hooks` leave js-harness's own skill folders and hook
+entries (an entry whose every command starts `js-harness `), which are the `js-harness` component,
+now one of Codex's too; `plugin-<name>` switches the plugin off in `enabledPlugins` and keeps its
+files, so Claude Code has no missing plugin to fetch at startup (the design said the cache folder
+goes too; the probe of C6 settles whether off is enough); `output-style` takes the `outputStyle`
+setting with its folder; an edited JSON file is written back with two-space indent. Refused until
+C3b: `claude-md-own`, the `gentle-ai-*` blocks, Codex's `plugin-*` and `mcp-*`. A slip: a board
+read chained after a test's output while the gate ran (`docs/FAILURES.md`,
+`board-read-loads-gate`). Next: C3b.

@@ -554,6 +554,19 @@ test('seedFromCodexTemplate seeds the home, then initializes the workspace under
   assert.ok(fs.existsSync(path.join(home, '.codex', 'config.toml')), 'the home was seeded before init ran');
 });
 
+test('a Codex seed without components takes them out of the trial\'s home, and without project skips init (G2, C3a)', async () => {
+  const { templateDir } = setup();
+  assert.throws(() => seedFromCodexTemplate(templateDir, { without: ['agents'] }), /agents is not a component/);
+  const calls = [];
+  const runInit = (call) => (calls.push(call), { status: 0, stdout: '', stderr: '' });
+  const home = path.join(tmp('trial'), 'home');
+  await seedFromCodexTemplate(templateDir, { runInit, without: ['agents-md', 'project'] })({ home, workspace: tmp('workspace'), engramPort: PORT });
+  assert.equal(fs.existsSync(path.join(home, '.codex', 'AGENTS.md')), false);
+  assert.ok(fs.existsSync(path.join(home, '.codex', 'config.toml')), 'the rest of the home is seeded, its engram server set');
+  assert.match(fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8'), new RegExp(`ENGRAM_PORT = "${PORT}"`));
+  assert.equal(calls.length, 0, 'an arm without project does not run js-harness init');
+});
+
 // ---- withEngramEnv -----------------------------------------------------------------------------------
 
 const ENV = { dataDir: path.join(scratch, 'trial home', '.engram'), port: 45678 };

@@ -106,6 +106,8 @@ one runs.
   over 16 worktrees (claimed by JH 5)
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — a session that knew the rule ran
   `js-harness sessions` once while another session's gate ran
+- Seen: 2026-10-15 — odd/tasks/future-model-protocol.md, L17 — JH 14 chained a board read after a
+  test file's output while the gate of another worktree ran; it passed 120 s and was stopped
 
 ### broken-wait-script
 A private script written to wait or to check was broken, kept running, and reported a state that was
