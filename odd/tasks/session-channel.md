@@ -1130,7 +1130,8 @@ reader, and that table names this feature as their owner.
   says of part (2) is in Progress, 2026-10-11 23:20
 - [x] T7, MOVED to JH 12 (2026-10-14, by the lead's message; its record is there now), and DONE there: PR 144 (feat/commands-and-doctor, c77ce5d), merged 2026-10-14 at 16:45 local; the state is in odd/tasks/commands-and-doctor.md L8. The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
-- [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
+- [x] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
+  DONE by JH 19 (Progress, 2026-10-15 05:16), `feat/orchestrator-skill-rewrite`.
   It closes the twelve items of the sweep about the skill's text (`docs/sweep-2026-10-11.md`,
   "JH 5", the two lists of `bin/lib/manifest.mjs`), which wait for it. Its text also carries
   the recap line of T13 to T15: one line a session with its mode and why (B5 of the proposal
@@ -1226,8 +1227,7 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
 | The yardstick of "the last task". A message that arrives while a session works starts a task since the round of fixes, and it closes the task before it even when that task's work is not over, so the last task can read far smaller than the work done and "it fits" leans towards true (gentle-ai's warning on `bin/lib/sessions.mjs`, `instructionBy`) | point 7, "Open"; Progress, 2026-10-11 19:57 to 20:42 and 22:20 to 23:57 | his decision, before T9 |
 | The refusal of a pause not below the compaction point also fires for a window so small that the two default shares round to one token, and names two flags nobody gave (gentle-ai's suggestion on `bin/sessions.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
 | The hint above the list of several openings says to ask with the title in double quotes, the quoting the hook's rule for a printed command rejects (gentle-ai's suggestion on `bin/resume.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
-| The text of the orchestrator skill: twelve items of the sweep | `docs/sweep-2026-10-11.md`, "JH 5", the two lists of `bin/lib/manifest.mjs` | T8 |
-| Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | his answer, asked through the lead |
+| Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | kept as compaction by default, a relief on request, by the lead's notice of 2026-10-15 05:44 (T8, Progress); no question to him |
 
 ## Progress
 - 2026-10-10, T0. Designed with `odd/tasks/rule-hierarchy.md`, whose Progress holds what was
@@ -2251,6 +2251,30 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `sessions --json`, and passes when the board shows the notice's marker from the practice home's
   record and the real home's record does not hold it. The journey on b0d0af2: "13 of 13 steps passed
   (left out: host-loads); real home: unchanged". Codex: correct (0.88). gentle-ai: medium, not due.
+- 2026-10-15 05:16 (date), T8, done by JH 19, a reserve session the lead handed it to (its
+  brief, the lead's notice of 05:09), on `feat/orchestrator-skill-rewrite`. The orchestrator
+  skill (`bin/lib/manifest.mjs`) now describes the lead: "## The lead", whose "What you may
+  do" points at the charter at the head of the relief file instead of "You read"; "Interrupt
+  the user only when" with item 6 as the context pause by name, no number; "Otherwise keep
+  the work moving" in place of "Otherwise stay silent"; a section "## The recap" with the
+  line a session and its effort mode, the sessions to archive and stopped (a routine named
+  as one), the Codex meter read then, a session read before saying what waits there, the
+  notice that a stretch ended, the ask before the user leaves and the block held once while
+  away; "Compaction, and a relief only on request" in place of "Relief, not compaction", the
+  fixed prompt kept only for a relief the user asks for; the rotation rules of the lead's
+  relief file, 2026-10-15 04:26 to 04:57 (started and detached in a turn of the user's, never
+  a fork, the children detached before an archive, reserves opened before the user leaves);
+  the closing notice as `notify --kind closed`; notices out of the relief file's line. The
+  twelve items of the sweep (`docs/sweep-2026-10-11.md`, "JH 5", the two lists of
+  `bin/lib/manifest.mjs`) are checked off; the roadmap's sentence on the watchman skill is in
+  the past. Proof: five tests in `bin/lib/manifest.test.mjs`, RED before the text (5 failed,
+  10 passed), then `node --test bin/lib/manifest.test.mjs` 138 passed, 0 failed. Owed: the
+  paragraph on `js-harness loop` that JH 18 sends, after PR 201 (the command) is on main. The
+  open point on whether the lead is relieved or compacted (A3 89): the text takes the sweep's
+  fix for A1 2 and CD 4 (compaction by default, a relief only when he asks), and the lead's
+  notice of 05:44 keeps it, as matching his rules, with no question to him. Moved onto main
+  `eec4ee3` at 07:02: the line on starting from the fixed prompt keeps main's new wording on who
+  archives the old orchestrator, with "say that you lead".
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
