@@ -62,11 +62,23 @@ export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) 
   return sessions;
 }
 
-/** The scheduled tasks the app keeps, as `{ id, cwd, enabled }`. */
-export function scheduledTasks(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
-  return orgFolders(root, readdir).flatMap((folder) => {
+/** The app's scheduled-task registry: `{ found, tasks }`. `found` is whether a registry file (`scheduled-tasks.json`)
+ * of some account and org parses to an object that holds a task list, an empty one included; `tasks` are every such
+ * file's tasks as `{ id, cwd, enabled }`. A missing or unparsable file is no registry, so `found` says nothing of
+ * its tasks: the caller decides what that is. */
+export function scheduledRegistry(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+  let found = false;
+  const tasks = [];
+  for (const folder of orgFolders(root, readdir)) {
     const data = jsonOf(readFile, path.join(folder, 'scheduled-tasks.json'));
-    const tasks = Array.isArray(data?.scheduledTasks) ? data.scheduledTasks.filter(isObject) : [];
-    return tasks.map((task) => ({ id: task.id, cwd: task.cwd, enabled: task.enabled === true }));
-  });
+    if (!Array.isArray(data?.scheduledTasks)) continue;
+    found = true;
+    for (const task of data.scheduledTasks.filter(isObject)) tasks.push({ id: task.id, cwd: task.cwd, enabled: task.enabled === true });
+  }
+  return { found, tasks };
+}
+
+/** The scheduled tasks the app keeps, as `{ id, cwd, enabled }`. */
+export function scheduledTasks(root, deps = {}) {
+  return scheduledRegistry(root, deps).tasks;
 }

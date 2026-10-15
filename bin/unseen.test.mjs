@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { unseenMain } from './unseen.mjs';
+import { sessionFacts } from './lib/sessions.mjs';
 
 const ROOT = 'D:\\js-harness';
 const SLUG = 'D--js-harness';
@@ -258,19 +259,32 @@ test('--json gives the items with their level and the number to clear', async ()
 
 // The app's session records carry the folder a session runs in (`cwd`), so a scheduled session of this project
 // is named without reading a transcript. The transcript reader that throws below is the proof: it is never called.
-const NO_TRANSCRIPTS = () => {
-  throw new Error('the transcript reader was called');
-};
 const SESSION_B = '2b2b2b2b-1111-4222-8333-444455556666';
 
-test('--records-only fails a scheduled session record of this project that is not archived, named by title and id, reading no transcript', async () => {
+/** A transcript reader that counts its calls and otherwise reads as the board does: the guard of `--records-only`. */
+function readSpy() {
+  const spy = { calls: 0, readFacts: (text, options) => {
+    spy.calls += 1;
+    return sessionFacts(text, options);
+  } };
+  return spy;
+}
+
+test('--records-only fails a scheduled session record of this project that is not archived, named by title and id, and reads no transcript while the full command does', async () => {
   const m = machine();
   try {
+    m.transcript(SESSION, { turnOrigin: 'scheduled', title: 'Wake after plan reset' });
     m.record('1', { cliSessionId: SESSION, scheduledTaskId: 'jh-wake', isArchived: false, cwd: ROOT, title: 'Wake after plan reset' });
-    const r = await unseen(m, ['--records-only'], { readFacts: NO_TRANSCRIPTS });
+    const quick = readSpy();
+    const r = await unseen(m, ['--records-only'], { readFacts: quick.readFacts });
     assert.equal(r.code, 1, r.out + r.err);
+    assert.equal(quick.calls, 0, 'the records-only path reads no transcript');
     assert.match(r.out, /^FAIL {2}Wake after plan reset \(130317af-1111-4222-8333-444455556666\): opened by a scheduled task, in Routines$/m);
     assert.equal(r.out.split('\n').at(-1), 'unseen: 1 to clear');
+    const full = readSpy();
+    const whole = await unseen(m, [], { readFacts: full.readFacts });
+    assert.ok(full.calls >= 1, 'the full command reads the transcript');
+    assert.equal(whole.code, 1, whole.out + whole.err);
   } finally {
     m.remove();
   }
@@ -279,16 +293,60 @@ test('--records-only fails a scheduled session record of this project that is no
 test('--records-only is nothing for an archived record, a record with no scheduled task, or a record of another folder, and it reads a sub-folder of this project', async () => {
   const m = machine();
   try {
+    m.transcript(SESSION, { turnOrigin: 'scheduled' });
     m.record('1', { cliSessionId: SESSION, scheduledTaskId: 'jh-wake', isArchived: true, cwd: ROOT });
     m.record('2', { cliSessionId: SESSION_B, scheduledTaskId: '', isArchived: false, cwd: ROOT });
     m.record('3', { cliSessionId: 'c-other-folder-1111', scheduledTaskId: 'jh-wake', isArchived: false, cwd: 'C:\\other' });
-    const quiet = await unseen(m, ['--records-only'], { readFacts: NO_TRANSCRIPTS });
-    assert.equal(quiet.code, 0, quiet.out + quiet.err);
-    assert.equal(quiet.out, NOTHING);
+    const quiet = readSpy();
+    const r = await unseen(m, ['--records-only'], { readFacts: quiet.readFacts });
+    assert.equal(r.code, 0, r.out + r.err);
+    assert.equal(r.out, NOTHING);
+    assert.equal(quiet.calls, 0, 'the records-only path reads no transcript');
     m.record('4', { cliSessionId: 'c-sub-folder-2222', scheduledTaskId: 'jh-wake', isArchived: false, cwd: 'd:/JS-HARNESS/sub' });
-    const sub = await unseen(m, ['--records-only'], { readFacts: NO_TRANSCRIPTS });
+    const sub = await unseen(m, ['--records-only'], { readFacts: readSpy().readFacts });
     assert.equal(sub.code, 1, sub.out + sub.err);
     assert.match(sub.out, /^FAIL {2}.*c-sub-folder-2222/m);
+  } finally {
+    m.remove();
+  }
+});
+
+// Two transcripts of one title are one row of the board, whose `where` comes from its latest member. Each
+// transcript is judged by its own app record: the older, scheduled and not archived, is a FAIL, whatever the
+// archived latest one says, in the full command and in --records-only alike.
+test('a row of two transcripts with one title judges each by its own record: the older scheduled one that is not archived FAILs, in both modes', async () => {
+  const OLDER = 'a1a1a1a1-1111-4222-8333-444455556666';
+  const LATEST = 'b2b2b2b2-1111-4222-8333-444455556666';
+  const m = machine();
+  try {
+    m.transcript(OLDER, { turnOrigin: 'scheduled', minutes: 120, title: 'Same title' });
+    m.transcript(LATEST, { turnOrigin: 'human', minutes: 10, title: 'Same title' });
+    m.record('1', { cliSessionId: OLDER, scheduledTaskId: 'jh-wake', isArchived: false, cwd: ROOT, title: 'Same title' });
+    m.record('2', { cliSessionId: LATEST, scheduledTaskId: 'jh-wake', isArchived: true, cwd: ROOT, title: 'Same title' });
+    for (const argv of [[], ['--records-only']]) {
+      const r = await unseen(m, argv);
+      assert.equal(r.code, 1, `${argv.join(' ') || 'full'}: ${r.out}${r.err}`);
+      const fails = r.out.split('\n').filter((line) => line.startsWith('FAIL'));
+      assert.equal(fails.length, 1, `${argv.join(' ') || 'full'}: ${r.out}`);
+      assert.ok(fails[0].includes(OLDER), fails[0]);
+      assert.ok(!r.out.includes(LATEST), `${argv.join(' ') || 'full'}: the archived one is named nowhere: ${r.out}`);
+    }
+  } finally {
+    m.remove();
+  }
+});
+
+// An empty registry is a registry: it says nothing is scheduled, so a leftover folder that names the project is
+// information, and the fallback that reads the folders' SKILL.md runs only where there is no registry at all.
+test('an empty registry is a registry: a leftover folder that names the project is information, not a failure', async () => {
+  const m = machine();
+  try {
+    m.tasks([]);
+    m.skill('jh-leftover', 'A folder that names D:\\js-harness, left by the app.\n');
+    const r = await unseen(m);
+    assert.equal(r.code, 0, r.out + r.err);
+    assert.match(r.out, /^INFO {2}leftover.*jh-leftover/m);
+    assert.doesNotMatch(r.out, /^FAIL/m);
   } finally {
     m.remove();
   }

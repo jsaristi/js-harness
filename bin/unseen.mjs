@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { appRoot, appSessions, scheduledTasks } from './lib/app-record.mjs';
+import { appRoot, appSessions, scheduledRegistry } from './lib/app-record.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, mainCheckout, projectSlug, rosterOf, sessionFacts, shareOf } from './lib/sessions.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { readSessionsWindow } from './sessions.mjs';
@@ -75,8 +75,9 @@ function itemsOf(root, { claudeHome, appRootPath, hours, now, tmpdir, harnessHom
   // registry, the folders' own SKILL.md is all there is to say whether a task runs in this project.
   const scheduledRoot = path.join(claudeHome, 'scheduled-tasks');
   const folders = listingOf(io.readdir, scheduledRoot);
-  const tasks = scheduledTasks(appRootPath, { readdir: io.readdir, readFile: io.readFile });
-  if (tasks.length === 0) {
+  const registry = scheduledRegistry(appRootPath, { readdir: io.readdir, readFile: io.readFile });
+  const { tasks } = registry;
+  if (!registry.found) {
     for (const id of folders) {
       const file = path.join(scheduledRoot, id, 'SKILL.md');
       const text = textOf(io.readFile, file);
@@ -117,15 +118,20 @@ function itemsOf(root, { claudeHome, appRootPath, hours, now, tmpdir, harnessHom
       fail(`the sessions folder ${projectDir} could not be listed (${seen.unlisted}): the sessions of this project are not known`);
     } else if (seen.unlisted === undefined) {
       const app = appSessions(appRootPath, { readdir: io.readdir, readFile: io.readFile });
-      for (const row of rosterOf(seen.sessions, { since: seen.since, app }).rows) {
-        for (const transcript of row.transcripts) covered.add(transcript.id);
-        if (row.where === 'archived') continue;
-        const ids = row.transcripts.map((transcript) => transcript.id).join(', ');
-        const name = `${row.title ?? 'a session with no title'} (${ids})`;
-        if (row.opened === 'scheduled' || row.where === 'routines') {
-          const place = row.where === 'unknown' ? 'where it sits is not known: its app record is missing' : WHERE_WORDS[row.where] ?? `in ${row.where}`;
+      // The board's rows say which transcripts are in the window; each of those is judged by its own app record. A
+      // row takes its `where` from its latest member alone, so an archived latest member would hide an older one.
+      const inWindow = new Set(rosterOf(seen.sessions, { since: seen.since, app }).rows.flatMap((row) => row.transcripts.map((transcript) => transcript.id)));
+      for (const session of seen.sessions) {
+        if (!inWindow.has(session.id)) continue;
+        covered.add(session.id);
+        const record = app.get(session.id);
+        const where = record?.where ?? (session.opened === 'command' ? 'not-in-app' : 'unknown');
+        if (where === 'archived') continue;
+        const name = `${session.title ?? 'a session with no title'} (${session.id})`;
+        if (session.opened === 'scheduled' || where === 'routines') {
+          const place = where === 'unknown' ? 'where it sits is not known: its app record is missing' : WHERE_WORDS[where] ?? `in ${where}`;
           fail(`${name}: opened by a scheduled task, ${place}`);
-        } else if (row.where === 'not-in-app') {
+        } else if (where === 'not-in-app') {
           info(`${name}: opened by a command, not in the app`);
         }
       }
