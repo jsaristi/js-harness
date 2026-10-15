@@ -119,6 +119,13 @@ matters, who holds it, and where it was seen.
 - The installed copy on his machine is at ad7b37b; main has moved by many pull requests. Updating it
   is a change on his machine he approved once; to be done at a quiet moment, with its undo.
 - The Codex plugin's removal waits for JH 5's doctor row (his order). JH 5.
+- Codex's `resume --hook` may never run on his machine: `~/.codex/hooks.json` holds four
+  `SessionStart` groups (gentle-ai, a PowerShell script, js-harness's doctor, js-harness's resume)
+  and `~/.codex/config.toml` holds a `[hooks.state.'...hooks.json:session_start:<n>:0']` trust
+  table for n = 0 to 2 only (headers read by JH 14, 2026-10-15, values not read). Codex keys a
+  hook's trust by its place, so a hook installed after the last trust prompt is untrusted until
+  someone answers one. `doctor` could say so per hook. Unassigned; JH 14 meets the same keys in
+  G2 (C3c), where taking a hook out moves the places of the rest.
 - 29 of the 31 memory notes of this project are rules or decisions that live only in memory (28 of
   type `feedback`, 1 `project`; none `user`), where nothing acts on them and a session may not recall
   them. Read on 2026-10-14 by the `memory-rules` row of `doctor`, built in JH 12's

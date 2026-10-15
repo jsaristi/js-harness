@@ -143,9 +143,9 @@ test('a plugin already switched off is not in the home', (t) => {
   assert.throws(() => checkWithout(root, ['plugin-engram'], 'claude'), ArmError);
 });
 
-test('the components cut by marker lines or TOML tables are refused until they are built', (t) => {
+test('Codex\'s plugins and MCP servers, tables of config.toml, are refused until they are built', (t) => {
   const root = claudeHome(tmp(t));
-  for (const [id, agent] of [['claude-md-own', 'claude'], ['gentle-ai-persona', 'claude'], ['gentle-ai-orchestrator', 'codex'], ['mcp-engram', 'codex'], ['plugin-gentle-ai', 'codex']]) {
+  for (const [id, agent] of [['mcp-engram', 'codex'], ['plugin-gentle-ai', 'codex']]) {
     assert.throws(() => checkWithout(root, [id], agent), (err) => err instanceof ArmError && /not built yet/.test(err.message), `${agent} ${id}`);
   }
 });
@@ -172,4 +172,76 @@ test('Codex: agents-md, skills, hooks and js-harness take out their own pieces',
   const jsh = cut(t, ['js-harness'], 'codex', codexHome);
   assert.deepEqual([jsh.gone, jsh.changed], [['.codex/skills/js-harness/SKILL.md'], ['.codex/hooks.json']]);
   assert.deepEqual(json(jsh.root, '.codex/hooks.json'), { hooks: { SessionStart: [OTHER_START] } });
+});
+
+// ---- C3b: the blocks of the global instruction file, cut by their marker lines ------------------------
+
+const open = (name) => `<!-- gentle-ai:${name} -->`;
+const close = (name) => `<!-- /gentle-ai:${name} -->`;
+const CLAUDE_MD = [
+  open('codegraph-guidance'), 'codegraph text', close('codegraph-guidance'), '',
+  open('persona'), 'persona text', close('persona'), '',
+  open('orchestrator'), 'orch text', '<!-- authority-first-terminal-procedure:start -->', 'proc', '<!-- authority-first-terminal-procedure:end -->', close('orchestrator'), '',
+  open('agent-routing'), 'routing', open('remote-authorization'), 'remote', close('remote-authorization'), close('agent-routing'), '',
+  '# his own', 'his line', '',
+].join('\r\n');
+
+/** A Claude home whose CLAUDE.md is `text`. */
+const withClaudeMd = (text) => (root) => {
+  claudeHome(root);
+  put(root, '.claude/CLAUDE.md', text);
+  return root;
+};
+
+test('gentle-ai-<name> takes out its whole block, nested blocks and other markers with it, and keeps the line endings', (t) => {
+  const { root, gone, changed } = cut(t, ['gentle-ai-agent-routing'], 'claude', withClaudeMd(CLAUDE_MD));
+  assert.deepEqual([gone, changed], [[], ['.claude/CLAUDE.md']]);
+  const text = fs.readFileSync(path.join(root, '.claude', 'CLAUDE.md'), 'utf8');
+  assert.equal(text, CLAUDE_MD.replace(`${[open('agent-routing'), 'routing', open('remote-authorization'), 'remote', close('remote-authorization'), close('agent-routing')].join('\r\n')}\r\n`, ''));
+  const orchestrator = cut(t, ['gentle-ai-orchestrator'], 'claude', withClaudeMd(CLAUDE_MD));
+  const left = fs.readFileSync(path.join(orchestrator.root, '.claude', 'CLAUDE.md'), 'utf8');
+  assert.equal(left.includes('authority-first'), false);
+  assert.equal(left.includes('orch text'), false);
+  assert.ok(left.includes('persona text') && left.includes('his line'));
+});
+
+test('claude-md-own keeps the blocks only, and the blocks leave his own lines', (t) => {
+  const own = cut(t, ['claude-md-own'], 'claude', withClaudeMd(CLAUDE_MD));
+  const text = fs.readFileSync(path.join(own.root, '.claude', 'CLAUDE.md'), 'utf8');
+  assert.equal(text.includes('his'), false);
+  for (const name of ['codegraph-guidance', 'persona', 'orchestrator', 'agent-routing']) assert.ok(text.includes(open(name)) && text.includes(close(name)), name);
+  const allBlocks = cut(t, ['gentle-ai-persona'], 'claude', withClaudeMd(CLAUDE_MD));
+  assert.ok(fs.readFileSync(path.join(allBlocks.root, '.claude', 'CLAUDE.md'), 'utf8').includes('his line'));
+});
+
+test('a block the file does not hold, and own lines a file of blocks only does not have, are refused', (t) => {
+  const root = withClaudeMd(CLAUDE_MD)(tmp(t));
+  assert.throws(() => checkWithout(root, ['gentle-ai-engram-protocol'], 'claude'), (err) => err instanceof ArmError && /gentle-ai-engram-protocol is not in/.test(err.message));
+  put(root, '.claude/CLAUDE.md', [open('persona'), 'p', close('persona'), ''].join('\n'));
+  assert.throws(() => checkWithout(root, ['claude-md-own'], 'claude'), (err) => err instanceof ArmError && /claude-md-own is not in/.test(err.message));
+});
+
+test('a marker out of balance, a block twice or a block left open is refused, naming the line', (t) => {
+  const root = claudeHome(tmp(t));
+  const cases = [
+    [[open('persona'), close('orchestrator')], /line 2/],
+    [[open('persona'), close('persona'), open('persona'), close('persona')], /persona.*twice|twice.*persona/],
+    [[open('persona'), 'text'], /persona.*not closed|not closed.*persona/],
+    [[close('persona')], /line 1/],
+  ];
+  for (const [lines, pattern] of cases) {
+    put(root, '.claude/CLAUDE.md', `${lines.join('\n')}\n`);
+    assert.throws(() => checkWithout(root, ['gentle-ai-persona'], 'claude'), (err) => err instanceof ArmError && pattern.test(err.message), lines.join(' '));
+  }
+});
+
+test('Codex: the blocks of AGENTS.md come out the same way', (t) => {
+  const make = (root) => {
+    codexHome(root);
+    put(root, '.codex/AGENTS.md', [open('persona'), 'p', close('persona'), '', open('engram-protocol'), 'e', close('engram-protocol'), ''].join('\n'));
+    return root;
+  };
+  const { root, changed } = cut(t, ['gentle-ai-persona'], 'codex', make);
+  assert.deepEqual(changed, ['.codex/AGENTS.md']);
+  assert.equal(fs.readFileSync(path.join(root, '.codex', 'AGENTS.md'), 'utf8'), ['', open('engram-protocol'), 'e', close('engram-protocol'), ''].join('\n'));
 });

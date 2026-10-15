@@ -7,8 +7,8 @@
 // because its arm would be the current arm under another name. `project` takes nothing out of the home: its arm
 // skips `js-harness init` in the workspace, which the seed does (`evals/home.mjs`).
 //
-// Built here: what a path or a JSON key holds. Refused until C3b: the blocks of the global instruction file, cut
-// by their marker lines, and Codex's plugins and MCP servers, which are TOML tables.
+// Built here: what a path or a JSON key holds, and the blocks of the global instruction file, cut by their marker
+// lines. Refused until C3c: Codex's plugins and MCP servers, which are TOML tables.
 import fs from 'node:fs';
 import path from 'node:path';
 import { components as fileComponents } from '../bin/lib/manifest.mjs';
@@ -17,8 +17,8 @@ import { ArmError, parseArm } from './arms.mjs';
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const HOSTS = {
-  claude: { dir: '.claude', hooksFile: '.claude/settings.json', hookFolder: '.claude/hooks' },
-  codex: { dir: '.codex', hooksFile: '.codex/hooks.json', hookScripts: /\.(ps1|sh)$/ },
+  claude: { dir: '.claude', instructions: '.claude/CLAUDE.md', hooksFile: '.claude/settings.json', hookFolder: '.claude/hooks' },
+  codex: { dir: '.codex', instructions: '.codex/AGENTS.md', hooksFile: '.codex/hooks.json', hookScripts: /\.(ps1|sh)$/ },
 };
 
 /** The skill folders js-harness installs under `dir` (`.claude` or `.codex`), by name. */
@@ -66,15 +66,60 @@ function edit(root, rel, mutate) {
   return isObject(json) && mutate(json) ? [{ write: rel, json }] : [];
 }
 
-const MARKER_BLOCKS = /^(claude-md-own|gentle-ai-.+)$/;
+// gentle-ai writes each of its sections of the global instruction file between an opening and a closing marker
+// line, and one may hold another (`remote-authorization` sits inside `agent-routing`). Other markers
+// (`authority-first-terminal-procedure:start`) are text of the block they sit in.
+const MARKER = /^\s*<!--\s*(\/?)gentle-ai:([a-z0-9-]+)\s*-->\s*$/;
 
-/** What taking `id` out of the home in `root` means for `agent`: a list of removals and JSON edits, empty when
- * the home does not hold it. */
+/** The top-level blocks of `lines` as `{ name: { from, to } }`, line indexes inclusive. A closing marker that
+ * does not close the block last opened, a top-level block twice or a block left open is an `ArmError` naming the
+ * line: cut on a guess, an arm could lose half of another block or keep half of its own. */
+function blocksOf(lines, rel) {
+  const blocks = {};
+  const stack = [];
+  lines.forEach((line, index) => {
+    const marker = MARKER.exec(line);
+    if (!marker) return;
+    const [, closing, name] = marker;
+    if (!closing) {
+      stack.push({ name, from: index });
+      return;
+    }
+    const top = stack.pop();
+    if (top?.name !== name) throw new ArmError(`${rel} line ${index + 1} closes gentle-ai:${name}, ${top ? `but gentle-ai:${top.name} is the block open there` : 'which is not open'}, so its blocks cannot be cut for certain`);
+    if (stack.length > 0) return;
+    if (Object.hasOwn(blocks, name)) throw new ArmError(`${rel} holds the block gentle-ai:${name} twice (line ${blocks[name].from + 1} and line ${top.from + 1}), so which one an arm takes out is a guess`);
+    blocks[name] = { from: top.from, to: index };
+  });
+  if (stack.length > 0) throw new ArmError(`${rel} line ${stack[0].from + 1} opens gentle-ai:${stack[0].name}, which is not closed, so its blocks cannot be cut for certain`);
+  return blocks;
+}
+
+/** A rewrite of the instruction file `rel` without the lines `drop(index, blocks)` takes, when one of them is not
+ * blank (blank lines alone are no component); the file's own line endings kept. */
+function cutLines(root, rel, drop) {
+  if (!exists(root, rel)) return [];
+  const text = fs.readFileSync(full(root, rel), 'utf8');
+  const lines = text.split(/\r?\n/);
+  const blocks = blocksOf(lines, rel);
+  const dropped = lines.map((line, index) => drop(index, blocks));
+  if (!lines.some((line, index) => dropped[index] && line.trim() !== '')) return [];
+  return [{ text: rel, content: lines.filter((line, index) => !dropped[index]).join(text.includes('\r\n') ? '\r\n' : '\n') }];
+}
+
+const within = (block, index) => block !== undefined && index >= block.from && index <= block.to;
+
+/** What taking `id` out of the home in `root` means for `agent`: a list of removals and edits, empty when the
+ * home does not hold it. */
 function piecesOf(root, id, agent) {
   const host = HOSTS[agent];
   const own = ownSkills(host.dir);
-  if (MARKER_BLOCKS.test(id)) throw new ArmError(`${id} is cut out of the global instruction file by its marker lines, which are not built yet (C3b of G2)`);
-  if (agent === 'codex' && /^(plugin|mcp)-/.test(id)) throw new ArmError(`${id} is a table of Codex's config.toml, which is not built yet (C3b of G2)`);
+  if (id.startsWith('gentle-ai-')) {
+    const name = id.slice('gentle-ai-'.length);
+    return cutLines(root, host.instructions, (index, blocks) => within(blocks[name], index));
+  }
+  if (id === 'claude-md-own') return cutLines(root, host.instructions, (index, blocks) => !Object.values(blocks).some((block) => within(block, index)));
+  if (agent === 'codex' && /^(plugin|mcp)-/.test(id)) throw new ArmError(`${id} is a table of Codex's config.toml, which is not built yet (C3c of G2)`);
   switch (id) {
     case 'claude-md': return removal(root, '.claude/CLAUDE.md');
     case 'agents-md': return removal(root, '.codex/AGENTS.md');
@@ -128,6 +173,7 @@ export function applyWithout(root, components, agent) {
   for (const id of components) {
     for (const piece of piecesOf(root, id, agent)) {
       if (piece.remove) fs.rmSync(full(root, piece.remove), { recursive: true, force: true });
+      else if (piece.text) fs.writeFileSync(full(root, piece.text), piece.content);
       else fs.writeFileSync(full(root, piece.write), `${JSON.stringify(piece.json, null, 2)}\n`);
     }
   }

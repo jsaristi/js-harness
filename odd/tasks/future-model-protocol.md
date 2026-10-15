@@ -232,7 +232,8 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
   G6: codegraph's version and the js-harness commit
 - [x] T6 G3, a cost statement before a run (S3; route: inline): `--plan` on `evals/suite.mjs`, with `evals/plan.mjs`
 - [ ] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
-  C1 `fa39244` and C2 `21a06bf` merged in #141; C3a, the filters of paths and JSON keys, see L17)
+  C1 `fa39244` and C2 `21a06bf` merged in #141; C3a `776b03a`, the filters of paths and JSON keys,
+  see L17; C3b, the marker blocks, see L18; C3c, Codex's TOML tables and hook trust, next)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
@@ -410,3 +411,17 @@ setting with its folder; an edited JSON file is written back with two-space inde
 C3b: `claude-md-own`, the `gentle-ai-*` blocks, Codex's `plugin-*` and `mcp-*`. A slip: a board
 read chained after a test's output while the gate ran (`docs/FAILURES.md`,
 `board-read-loads-gate`). Next: C3b.
+
+L18 (2026-10-15, 04:39 by `date`) C3a committed `776b03a` (gate green in WSL2; gentle-ai medium,
+`under_budget`, pending in the slice). C3b built: `gentle-ai-<name>` takes its top-level block out
+of `.claude/CLAUDE.md` or `.codex/AGENTS.md`, nested blocks and other markers with it, the file's
+line endings kept; `claude-md-own` keeps the block lines only; a marker out of balance, a block
+twice or one left open is refused naming the line. RED observed (5 failing), then 16 GREEN. A
+read-only check found all five blocks in both real files and own lines in the real CLAUDE.md.
+Split from the design's C3b: C3c, Codex's `plugin-*` and `mcp-*` (TOML tables, `withoutDesktopApp`
+generalized; `mcp-engram` with its two instruction files and the two config keys naming them).
+Found while planning C3c: Codex keys a hook's trust by its place
+(`[hooks.state.'<hooks.json>:<event>:<group>:<hook>']`), so C3a's Codex `hooks` and `js-harness`
+move the places of the hooks they keep; C3c remaps those tables (dropped with their hooks, renamed
+to the new places), assuming the trusted hash is of the hook, not its place: the probe of C6
+checks. And the real `SessionStart` has four groups but trust for three (`docs/todo.md`).
