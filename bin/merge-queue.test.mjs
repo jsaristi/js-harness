@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
-import { circleciState, mergeQueueMain } from './merge-queue.mjs';
+import { circleciState, failedRows, mergeQueueMain } from './merge-queue.mjs';
 
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
 // would change what they do, so it is left out of every git this file starts (Codex, 2026-10-14).
@@ -313,4 +313,22 @@ test('--land: a read of CircleCI that fails is asked again, never taken for an e
   assert.equal(code, 0, out.join('\n'));
   assert.equal(slept, 1, 'the failed read was waited on and asked again');
   assert.notEqual(git(origin, 'rev-parse', 'main'), main);
+});
+
+test('the red rows of the candidate are the gate\'s own FAIL rows, never a FAIL a test printed in the output below them', () => {
+  // The first land of PR 167, 2026-10-15: the message quoted "FAIL  budget  1501 estimated tokens (budget 1500)",
+  // a test's own output, beside the tests row, while the candidate's AGENTS.md was 1478.
+  const output = [
+    'gate: the machine\'s gate lock is free',
+    'PASS  budget  1478 estimated tokens (budget 1500)',
+    'FAIL  tests  npm run test exited 1 in WSL2 (Ubuntu)',
+    '      a.test.mjs',
+    'INFO  review  medium risk',
+    '',
+    '✖ failing tests:',
+    'FAIL  budget  1501 estimated tokens (budget 1500)',
+    '  FAIL  contracts  an indented one',
+  ].join('\n');
+  assert.deepEqual(failedRows(output), ['FAIL  tests  npm run test exited 1 in WSL2 (Ubuntu)']);
+  assert.deepEqual(failedRows('npm ERR! nothing like a row'), []);
 });

@@ -71,11 +71,26 @@ export function circleciState(checkRuns, statuses) {
   return { state: all > 0 && done ? 'green' : 'pending' };
 }
 
+/** The gate's own FAIL rows in its `output`. `check` prints its rows as one block, then each failed sensor's
+ * output after a blank line (`main` of bin/check.mjs), and that output can hold a FAIL a test printed; so the
+ * rows are the first run of lines that begin with a row's status, up to the first blank line. */
+export function failedRows(output) {
+  const lines = String(output ?? '').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
+  if (start === -1) return [];
+  const rows = [];
+  for (const line of lines.slice(start)) {
+    if (line.trim() === '') break;
+    if (/^FAIL {2}/.test(line)) rows.push(line.trim());
+  }
+  return rows;
+}
+
 /** The whole suite on the candidate at `place`, under the gate lock, by the candidate's own commands. */
 function localSuite(run, place) {
   const bin = path.join(place, 'bin', 'js-harness.mjs');
   const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
-  const last = `${done.out}\n${done.err}`.split('\n').map((line) => line.trim()).filter((line) => /^FAIL /.test(line));
+  const last = failedRows(done.out);
   return { ok: done.ok, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
 }
 
