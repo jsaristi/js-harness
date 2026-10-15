@@ -91,6 +91,7 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 | T2b | S5 | inline | done, `bb3331f` | the key holds `os` and `env` (`TRACE_ENV`: TZ, LANG, LC_ALL, CI, NODE_ENV, FORCE_COLOR, NO_COLOR); a read of the home outside the temporary folder, or a `net` connection, marks a test untraced; the clock is marked by hand (`// js-harness: untraced (...)`), since `node:test` itself uses timers and any detection would mark every test. RED: the import of `TRACE_ENV`, and the selection's case; GREEN 8/8 and 6/6 |
 | T2c | S6 | inline | done, `bb3331f` | one test per seam: sync fs, a missing-file probe, readdir and a node child (the first test), fs.promises `readFile`/`stat`/`opendir` and a dynamic import (the seams test). The seams test passed with no change to the tracer: its RED was only the missing import of the file |
 | T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
+| T3c | S6 | inline | pending, a follow-up | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
 | T4 | S2, S3, S6 | inline | pending | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
@@ -152,6 +153,9 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   here: this node has the hooks). The leftover `eval-relroot-40620-194/` was removed: `evals/runner.test.mjs:1422`
   makes it under the cwd and removes it when it ends, so it was a run cut short at 17:11, most likely the one
   stopped at 17:13.
+- **L8** (2026-10-14 19:52): the corrections committed `710a0cb`, gate green in WSL2 in shadow. Codex's
+  recheck of `1532bc2..710a0cb`: 7 of 8 fixed, finding 8 not fixed (T3c, above). The branch is pushed and
+  its pull request opened with `710a0cb` as its last code commit, which the reviews cover; T3c follows.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
