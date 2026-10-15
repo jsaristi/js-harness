@@ -10,6 +10,7 @@ import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
+import { ruleValue } from './lib/rules.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
@@ -38,7 +39,8 @@ import { readRecords, recordFolders } from './subagents.mjs';
 
 export { estimateTokens };
 
-const TOKEN_BUDGET = 1500;
+// The budget AGENTS.md is held to: the declared rule `agents-budget` (bin/lib/rules-data.mjs).
+export const TOKEN_BUDGET = ruleValue('agents-budget', 'estimated tokens');
 
 /** PASS/FAIL row for AGENTS.md's token budget, rooted at `cwd`. */
 export function checkBudget(cwd) {
@@ -93,8 +95,8 @@ export function checkPayload(cwd, home) {
 // A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
 // gate forever, so the wait is bounded. Twenty minutes, not ten: this repository's own suite takes about
 // eight on a quiet machine and passed ten once other programs held two of eight cores, which refused
-// commits whose tests were green.
-const SENSOR_TIMEOUT_MS = 20 * 60 * 1000;
+// commits whose tests were green. The figure is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
+export const SENSOR_TIMEOUT_MS = ruleValue('sensor-timeout', 'minutes') * 60 * 1000;
 const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
 // The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
@@ -27,7 +28,7 @@ test('estimateTokens divides length by 4, rounding up', () => {
 test('checkBudget passes at exactly the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6000)); // 1500 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(TOKEN_BUDGET * 4)); // the budget, exactly
     const row = checkBudget(dir);
     assert.equal(row.pass, true);
   } finally {
@@ -38,7 +39,7 @@ test('checkBudget passes at exactly the token limit', () => {
 test('checkBudget fails over the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004)); // 1501 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4)); // one token over it
     const row = checkBudget(dir);
     assert.equal(row.pass, false);
   } finally {
@@ -60,7 +61,7 @@ test('checkBudget fails with a clear message when AGENTS.md is missing', () => {
 test('main exits 1 when a row fails (budget over limit, tests skipped)', async () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
     const code = await main(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
     assert.equal(code, 1);
   } finally {
@@ -452,7 +453,7 @@ test('checkSensor gives every sensor a 20 minute timeout by default', async () =
     return { status: 0, stdout: '', stderr: '' };
   };
   await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
-  assert.equal(options.timeout, 20 * 60 * 1000);
+  assert.equal(options.timeout, SENSOR_TIMEOUT_MS);
 });
 
 /** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
@@ -1649,7 +1650,7 @@ test('main waits for the gate that holds the lock, says once on stderr whose it 
   const names = rowsOf(output).map((row) => row.split('  ')[1]);
   assert.deepEqual(names.slice(names.indexOf('gate'), names.indexOf('tests') + 1), ['gate', 'load', 'tests'], output);
   // The wait is not the sensor's time: its own bound starts when it does, whole.
-  assert.deepEqual(timeouts, [20 * 60 * 1000]);
+  assert.deepEqual(timeouts, [SENSOR_TIMEOUT_MS]);
   assert.equal(readGateHolder(home, { now: clock.now }), null);
 }));
 
@@ -3338,8 +3339,8 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
 // changes when a failure is known, never what a commit proves: such a gate was red before, and is red now.
 
 /** Puts the AGENTS.md of `dir` over its budget: the static row a test fails by itself. */
-const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
-const BUDGET_FAILS = 'FAIL  budget  1501 estimated tokens (budget 1500)';
+const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
+const BUDGET_FAILS = `FAIL  budget  ${TOKEN_BUDGET + 1} estimated tokens (budget ${TOKEN_BUDGET})`;
 const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex'];
 const namesOf = (output) => rowsOf(output).map((row) => row.split('  ')[1]);
 

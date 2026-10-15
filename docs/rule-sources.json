@@ -1,4 +1,8 @@
 {
+  "agents-budget": {
+    "kind": "design",
+    "path": "docs/ROADMAP.md"
+  },
   "codex-review-floor": {
     "kind": "words",
     "quotes": [
@@ -184,6 +188,10 @@
       "date": "2026-10-11",
       "by": "session"
     }
+  },
+  "sensor-timeout": {
+    "kind": "design",
+    "path": "odd/tasks/remote-control.md"
   },
   "session-effort": {
     "kind": "words",

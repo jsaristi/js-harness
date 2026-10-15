@@ -5,6 +5,14 @@
 // gives for the list, and a test holds it to that: a rule is changed there, never in another shape.
 export const RULES = [
   {
+    "id": "agents-budget",
+    "subject": "the most estimated tokens AGENTS.md may hold, since every session pays it on every turn",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 1500,
+    "unit": "estimated tokens"
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
@@ -141,6 +149,14 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 1200,
     "unit": "changed lines"
+  },
+  {
+    "id": "sensor-timeout",
+    "subject": "how long one sensor of the gate may run before it is stopped and the commit refused",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 20,
+    "unit": "minutes"
   },
   {
     "id": "session-effort",
