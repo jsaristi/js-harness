@@ -164,6 +164,10 @@
     "kind": "design",
     "path": "odd/tasks/codex-review-cost.md"
   },
+  "review-timeout": {
+    "kind": "design",
+    "path": "odd/tasks/codex-exec-review.md"
+  },
   "reviewed-commit-lines": {
     "kind": "words",
     "quotes": [
