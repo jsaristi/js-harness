@@ -133,6 +133,12 @@ test('a control in place gives its level, its path, its phrase and the day it re
   }
 });
 
+test('a control measured gives the file of the measurement, its dated phrase and the day it was measured', () => {
+  const control = '- Control: measured — odd/tasks/honesty-audit.md — "2026-10-15: the audit caught 2 or 3 of 14" — since 2026-10-15';
+  const read = only(entry('measured-control', '- Class: tool', SEEN, control));
+  assert.deepEqual(read.control, { level: 'measured', path: 'odd/tasks/honesty-audit.md', phrase: '2026-10-15: the audit caught 2 or 3 of 14', since: '2026-10-15' });
+});
+
 test('a Control phrase is what stands between the outermost quotes, so it may hold a quote and a dash', () => {
   const read = only(entry(
     'phrase-with-a-quote',
@@ -308,7 +314,8 @@ test('an entry with two classes or two controls is refused', () => {
 });
 
 test('a control in a shape it does not know is refused, and both shapes are shown', () => {
-  const shapes = /^entry "odd-control": .*owed — <document> — "<phrase>".*<check\|line\|protocol> — <path> — "<phrase>" — since <YYYY-MM-DD>/;
+  const shapes =
+    /^entry "odd-control": .*owed — <document> — "<phrase>".*<check\|line\|protocol> — <path> — "<phrase>" — since <YYYY-MM-DD>.*measured — <path> — "<phrase>" — since <YYYY-MM-DD>/;
   for (const control of [
     'hook — bin/check.mjs — "two gates never run together" — since 2026-10-12',
     'check — bin/check.test.mjs — two gates never run together — since 2026-10-12',
@@ -318,6 +325,7 @@ test('a control in a shape it does not know is refused, and both shapes are show
     'check bin/check.test.mjs "two gates never run together" — since 2026-10-12',
     'owed — odd/tasks/gate-log.md — "T4 the gate stops before its sensors" — since 2026-10-12',
     'owed',
+    'measured — odd/tasks/honesty-audit.md — "2026-10-15: the audit caught 2 or 3 of 14"',
   ]) {
     refusedOnce(faults(entry('odd-control', '- Class: machine', SEEN, `- Control: ${control}`)), shapes);
   }
@@ -355,6 +363,21 @@ test('a check is never a .md file, though a line or a protocol may be', () => {
   refusedOnce(faults(entry('check-in-prose', '- Class: machine', SEEN, control('check'))), /^entry "check-in-prose": a check is never a \.md file.*test/);
   assert.deepEqual(faults(entry('line-in-prose', '- Class: machine', SEEN, control('line'))), []);
   assert.deepEqual(faults(entry('protocol-in-prose', '- Class: machine', SEEN, control('protocol'))), []);
+});
+
+test('a measurement whose phrase does not hold its date is refused, so measuring again is a new dated line', () => {
+  const control = '- Control: measured — odd/tasks/honesty-audit.md — "the audit caught 2 or 3 of 14" — since 2026-10-15';
+  refusedOnce(faults(entry('undated-measure', '- Class: tool', SEEN, control)), /^entry "undated-measure": .*phrase .*holds .*"2026-10-15"/);
+});
+
+test('the register itself is refused as the file of any control, since its own Control line holds every phrase', () => {
+  for (const control of [
+    'owed — docs/FAILURES.md — "T4 the gate stops before its sensors"',
+    'line — docs/FAILURES.md — "never two gates at once" — since 2026-10-12',
+    'measured — docs/FAILURES.md — "2026-10-15: the audit caught 2 or 3 of 14" — since 2026-10-15',
+  ]) {
+    refusedOnce(faults(entry('own-register', '- Class: tool', SEEN, `- Control: ${control}`)), /^entry "own-register": the path "docs\/FAILURES\.md" is the register/);
+  }
 });
 
 test('a fence left open inside an entry is refused, and is the only fault of that entry', () => {
@@ -507,10 +530,37 @@ test('a wrapped list item counts as one item, and ends where the next item or a 
   assert.equal(holdsPhrase(document, 'the last task a paragraph', { unchecked: true }), false);
 });
 
-// ── The seven states ────────────────────────────────────────────────────────────────────────────
+test('a measurement is found in the prose, a checked item or an unchecked one, and never in a comment or a fence', () => {
+  const document = [
+    '## Measured',
+    '- [x] T15 2026-10-15: the audit caught 2 or 3 of',
+    '  14, measured not worth it',
+    '- [ ] T16 2026-10-16: the share check, measured',
+    '2026-10-17: a paragraph of prose',
+    '<!-- 2026-10-18: an old measurement kept in a comment -->',
+    '```',
+    '2026-10-19: an example inside a fence',
+    '```',
+    '  ~~~',
+    '  2026-10-20: an example in an indented fence',
+    '  ~~~',
+    '',
+  ].join('\r\n');
+  const prose = { prose: true };
+  assert.equal(holdsPhrase(document, '2026-10-15: the audit caught 2 or 3 of 14', prose), true);
+  assert.equal(holdsPhrase(document, '2026-10-16: the share check', prose), true);
+  assert.equal(holdsPhrase(document, '2026-10-17: a paragraph of prose', prose), true);
+  assert.equal(holdsPhrase(document, '2026-10-18: an old measurement', prose), false);
+  assert.equal(holdsPhrase(document, '2026-10-19: an example inside a fence', prose), false);
+  assert.equal(holdsPhrase(document, '2026-10-20: an example in an indented fence', prose), false);
+  assert.equal(holdsPhrase(document, '2026-10-18: an old measurement'), true, 'a control in place is looked for in the whole file');
+});
+
+// ── The ten states ──────────────────────────────────────────────────────────────────────────────
 
 const OWED = { level: 'owed', path: 'odd/tasks/gate-log.md', phrase: 'T4 the gate stops before its sensors' };
 const IN_PLACE = { level: 'check', path: 'bin/check.test.mjs', phrase: 'two gates never run together', since: '2026-10-12' };
+const MEASURED = { level: 'measured', path: 'odd/tasks/honesty-audit.md', phrase: '2026-10-15: the audit caught 2 or 3 of 14', since: '2026-10-15' };
 
 test('seen once with no control is "once"', () => {
   assert.equal(entryState(recorded(), no), 'once');
@@ -551,7 +601,24 @@ test('a sighting later than the day the control reached main is "seen again"', (
   assert.equal(entryState(recorded({ control: IN_PLACE, dates: ['2026-10-09', '2026-10-13'] }), yes), 'seen again');
 });
 
-test('the state asks for an unchecked item of the owed document, and for the phrase anywhere in a control in place', () => {
+test('a measurement whose file holds its phrase, with no sighting after it, is "measured", however often it was seen', () => {
+  assert.equal(entryState(recorded({ control: MEASURED, dates: ['2026-10-09', '2026-10-11', '2026-10-14'] }), yes), 'measured');
+});
+
+test('a sighting on the very day of the measurement is counted by it', () => {
+  assert.equal(entryState(recorded({ control: MEASURED, dates: ['2026-10-15'] }), yes), 'measured');
+});
+
+test('a sighting later than the measurement is "measured, seen again": its count is out of date', () => {
+  assert.equal(entryState(recorded({ control: MEASURED, dates: ['2026-10-09', '2026-10-16'] }), yes), 'measured, seen again');
+});
+
+test('a measurement whose file is gone or no longer holds its phrase is "measure lost", not "control lost"', () => {
+  assert.equal(entryState(recorded({ control: MEASURED }), no), 'measure lost');
+  assert.equal(entryState(recorded({ control: MEASURED, dates: ['2026-10-16'] }), no), 'measure lost');
+});
+
+test('the state asks for an unchecked item of the owed document, for the phrase anywhere in a control in place, and in the prose of a measurement', () => {
   const asked = [];
   const holds = (...question) => {
     asked.push(question);
@@ -559,16 +626,29 @@ test('the state asks for an unchecked item of the owed document, and for the phr
   };
   entryState(recorded({ control: OWED }), holds);
   entryState(recorded({ control: IN_PLACE }), holds);
+  entryState(recorded({ control: MEASURED }), holds);
   entryState(recorded(), holds);
   assert.deepEqual(asked, [
     ['odd/tasks/gate-log.md', 'T4 the gate stops before its sensors', { unchecked: true }],
     ['bin/check.test.mjs', 'two gates never run together', { unchecked: false }],
+    ['odd/tasks/honesty-audit.md', '2026-10-15: the audit caught 2 or 3 of 14', { unchecked: false, prose: true }],
   ]);
 });
 
-test('there are seven states, and "once", "owed" and "controlled" are the settled ones', () => {
-  assert.deepEqual(STATES, ['once', 'repeated', 'owed', 'owed, stale', 'controlled', 'control lost', 'seen again']);
-  assert.deepEqual(STATES.filter(isSettled), ['once', 'owed', 'controlled']);
+test('there are ten states, and "once", "owed", "measured" and "controlled" are the settled ones', () => {
+  assert.deepEqual(STATES, [
+    'once',
+    'repeated',
+    'owed',
+    'owed, stale',
+    'measured',
+    'measured, seen again',
+    'measure lost',
+    'controlled',
+    'control lost',
+    'seen again',
+  ]);
+  assert.deepEqual(STATES.filter(isSettled), ['once', 'owed', 'measured', 'controlled']);
 });
 
 // ── The counts ──────────────────────────────────────────────────────────────────────────────────
@@ -600,18 +680,32 @@ test('the counts by class follow the order the classes are declared in, a class 
   ]);
 });
 
-test('the counts by state name all seven, and count the same sighting once', () => {
+test('the counts by state name all ten, and count the same sighting once', () => {
   const twice = recorded({ id: 'read-twice' });
   twice.seen.push({ ...twice.seen[0] });
   const entries = [
     twice,
     recorded({ id: 'came-back', dates: ['2026-10-09', '2026-10-11'] }),
     recorded({ id: 'lost-control', control: IN_PLACE }),
+    recorded({ id: 'measured-once', control: MEASURED }),
+    recorded({ id: 'measured-and-back', control: MEASURED, dates: ['2026-10-16'] }),
   ];
   const holds = (path) => path !== IN_PLACE.path;
   const counts = summarize({ classes: ['machine'], entries }, holds);
-  assert.deepEqual(counts.byState, { once: 1, repeated: 1, owed: 0, 'owed, stale': 0, controlled: 0, 'control lost': 1, 'seen again': 0 });
-  assert.equal(counts.sightings, 4);
+  assert.deepEqual(counts.byState, {
+    once: 1,
+    repeated: 1,
+    owed: 0,
+    'owed, stale': 0,
+    measured: 1,
+    'measured, seen again': 1,
+    'measure lost': 0,
+    controlled: 0,
+    'control lost': 1,
+    'seen again': 0,
+  });
+  assert.equal(counts.sightings, 6);
+  assert.equal(counts.unsettled, 3);
 });
 
 test('the counts give one row per entry, the most seen first, with its state and the first day it was seen', () => {

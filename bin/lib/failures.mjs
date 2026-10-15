@@ -7,15 +7,31 @@
 import { tokenize } from './progress.mjs';
 import { ruleValue } from './rules.mjs';
 
-/** The seven states an entry can be in. None is written in the file: a state written by hand would
+/** The ten states an entry can be in. None is written in the file: a state written by hand would
  * be one more statement that can be false, so each is computed from the fields (`entryState`). */
-export const STATES = ['once', 'repeated', 'owed', 'owed, stale', 'controlled', 'control lost', 'seen again'];
-const SETTLED = new Set(['once', 'owed', 'controlled']);
+export const STATES = [
+  'once',
+  'repeated',
+  'owed',
+  'owed, stale',
+  'measured',
+  'measured, seen again',
+  'measure lost',
+  'controlled',
+  'control lost',
+  'seen again',
+];
+const SETTLED = new Set(['once', 'owed', 'measured', 'controlled']);
 
 const FIELDS = ['Class', 'Aka', 'Seen', 'Control', 'Proof', 'Was'];
 const FIELD_LIST = `${FIELDS.slice(0, -1).join(', ')} and ${FIELDS.at(-1)}`;
 // The three levels of the placement rule a control in place sits at.
 const LEVELS = ['check', 'line', 'protocol'];
+// A control measured is no level: it says that no control sits anywhere, and where the measurement
+// that found one not worth building is written.
+const MEASURED = 'measured';
+// The register itself: its own `Control:` line always holds the phrase it names.
+const REGISTER = 'docs/FAILURES.md';
 // A phrase shorter than this could be found in a file by accident. The number is a declared rule.
 const MIN_PHRASE = ruleValue('control-phrase-min', 'characters');
 // What cuts a field into its parts. Never a bare dash: a note or a phrase may hold those.
@@ -38,7 +54,7 @@ const OPEN_FENCE =
   'a code fence is left open: every line after it is read as code and every entry after it is lost; close it with a line that holds only its marker';
 const SEEN_SHAPE ='"- Seen: <YYYY-MM-DD> — <where the evidence is> — <a note>"';
 const CONTROL_SHAPES =
-  'a control is written `owed — <document> — "<phrase>"` or `<check|line|protocol> — <path> — "<phrase>" — since <YYYY-MM-DD>`';
+  'a control is written `owed — <document> — "<phrase>"`, `<check|line|protocol> — <path> — "<phrase>" — since <YYYY-MM-DD>` or `measured — <path> — "<phrase>" — since <YYYY-MM-DD>`';
 
 /** `text` with every run of white space read as one space: the files here end their lines with a
  * carriage return and wrap their sentences, and neither may change what a field or a phrase says. */
@@ -82,15 +98,15 @@ function readSeen(value) {
 
 /** One `Control` value as `{ control, errors }`. It takes its first word, the `— since <date>` at its
  * end and the phrase between the outermost quotes, so a phrase may hold a quote or a dash. An owed
- * control and one in place both name a file and a phrase, kept as `path` and `phrase`. */
+ * control, one in place and one measured all name a file and a phrase, kept as `path` and `phrase`. */
 function readControl(value) {
   const level = value.split(' ', 1)[0];
   const open = value.indexOf('"');
   const close = value.lastIndexOf('"');
   const between = value.slice(level.length, open); // ` — <path> — `
-  const tail = value.slice(close + 1); // nothing when owed, ` — since <date>` when in place
+  const tail = value.slice(close + 1); // nothing when owed, ` — since <date>` when in place or measured
   const since = tail.match(SINCE_PATTERN)?.[1];
-  const ends = level === 'owed' ? tail === '' : LEVELS.includes(level) && since !== undefined;
+  const ends = level === 'owed' ? tail === '' : (LEVELS.includes(level) || level === MEASURED) && since !== undefined;
   const namesPath = between.startsWith(SEPARATOR) && between.endsWith(SEPARATOR) && between.length > 2 * SEPARATOR.length;
   if (!ends || open === close || !namesPath) return { control: null, errors: [`cannot read the control "${value}": ${CONTROL_SHAPES}`] };
 
@@ -99,6 +115,9 @@ function readControl(value) {
   const errors = [];
   const wrong = pathFault(file);
   if (wrong) errors.push(`the path "${file}" ${wrong}: a path starts at the top of the repository and uses forward slashes`);
+  if (file === REGISTER) {
+    errors.push(`the path "${file}" is the register itself: its own Control line holds every phrase it names, so a control names another file`);
+  }
   if (level === 'check' && /\.md$/i.test(file)) {
     errors.push(`a check is never a .md file ("${file}"): a check names the test file that proves it, and prose is a line or a protocol`);
   }
@@ -106,6 +125,10 @@ function readControl(value) {
     errors.push(`the phrase "${phrase}" has ${phrase.length} characters: a phrase has at least twelve, so that it is not found by accident`);
   }
   if (level !== 'owed' && !isDate(since)) errors.push(`in Control, "${since}" is no date: a date is written YYYY-MM-DD`);
+  // A date edited on this line alone would settle every sighting before it, measured or not.
+  else if (level === MEASURED && !phrase.includes(since)) {
+    errors.push(`the phrase "${phrase}" of a measurement holds no "${since}", its date: measuring again is a new dated line where the measurement is written, named here`);
+  }
   return { control: level === 'owed' ? { level, path: file, phrase } : { level, path: file, phrase, since }, errors };
 }
 
@@ -289,30 +312,46 @@ function uncheckedItems(markdown) {
   return items.map(squash);
 }
 
-/** Whether `text`, the content of a file, holds `phrase`, with every run of white space read as one
- * space on both sides. With `unchecked`, only inside a list item that is not checked off: the task
- * that still owes a control. A phrase found is not a control that works; the test it names proves
- * that. */
-export function holdsPhrase(text, phrase, { unchecked = false } = {}) {
-  const wanted = squash(phrase);
-  if (unchecked) return uncheckedItems(text).some((item) => item.includes(wanted));
-  return squash(text).includes(wanted);
+/** The text of `markdown` with what its comments and its fences hold left out, fences indented
+ * under a list item included: the prose a reader reads. */
+function proseOf(markdown) {
+  return tokenize(markdown, { stripComments: true, indentedFences: true })
+    .filter((token) => !token.fence)
+    .map((token) => token.line)
+    .join('\n');
 }
 
-/** The state of `entry`, one of `STATES`. `holds(path, phrase, { unchecked })` answers for the
+/** Whether `text`, the content of a file, holds `phrase`, with every run of white space read as one
+ * space on both sides. With `unchecked`, only inside a list item that is not checked off: the task
+ * that still owes a control. With `prose`, only outside comments and fences: a measurement kept in a
+ * comment or shown as an example is no measurement. A phrase found is not a control that works; the
+ * test it names proves that. */
+export function holdsPhrase(text, phrase, { unchecked = false, prose = false } = {}) {
+  const wanted = squash(phrase);
+  if (unchecked) return uncheckedItems(text).some((item) => item.includes(wanted));
+  return squash(prose ? proseOf(text) : text).includes(wanted);
+}
+
+/** The state of `entry`, one of `STATES`. `holds(path, phrase, { unchecked, prose })` answers for the
  * caller's files whether the file at `path` holds `phrase` (in an unchecked list item, for a control
- * that is owed); a file that is gone holds nothing. A date has no hour, so a sighting on the day the
- * control reached `main` reads as seen before it. */
+ * that is owed; in its prose, for one measured); a file that is gone holds nothing. A date has no
+ * hour, so a sighting on the day the control reached `main`, or on the day of the measurement, reads
+ * as seen before it. */
 export function entryState(entry, holds) {
   const { control } = entry;
   const seen = sightings(entry);
   if (!control) return seen.length > 1 ? 'repeated' : 'once';
   if (control.level === 'owed') return holds(control.path, control.phrase, { unchecked: true }) ? 'owed' : 'owed, stale';
+  const after = seen.some((sighting) => sighting.date > control.since);
+  if (control.level === MEASURED) {
+    if (!holds(control.path, control.phrase, { unchecked: false, prose: true })) return 'measure lost';
+    return after ? 'measured, seen again' : 'measured';
+  }
   if (!holds(control.path, control.phrase, { unchecked: false })) return 'control lost';
-  return seen.some((sighting) => sighting.date > control.since) ? 'seen again' : 'controlled';
+  return after ? 'seen again' : 'controlled';
 }
 
-/** True for the three states that ask nothing of anybody: `once`, `owed` and `controlled`. */
+/** True for the four states that ask nothing of anybody: `once`, `owed`, `measured` and `controlled`. */
 export function isSettled(state) {
   return SETTLED.has(state);
 }
@@ -320,7 +359,7 @@ export function isSettled(state) {
 /** The counts of a register read without a fault, with `holds` as `entryState` takes it:
  * `entries`, `sightings`, `repeated` (the entries seen more than once, whatever their control),
  * `unsettled`, `was` (the `Was` lines: the controls that had to be replaced), `byClass` in the order
- * the classes are declared, `byState` for all seven, and `rows`, one per entry, the most seen first. */
+ * the classes are declared, `byState` for all ten, and `rows`, one per entry, the most seen first. */
 export function summarize({ classes, entries }, holds) {
   const rows = entries
     .map((entry) => {
