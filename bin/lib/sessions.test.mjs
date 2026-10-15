@@ -87,6 +87,53 @@ test('sessionFacts reports the lines it skipped', () => {
   assert.equal(lib.sessionFacts(transcript(prompt('go', 1), 'not json')).skippedLines, 1);
 });
 
+// --- sessionFacts: how the session was opened, and its effort (T16 slice 1a) ---
+
+// The first prompt of a transcript says how the session was opened: the desktop app's own entry, a command, the
+// SDK's first prompt, or a scheduled run. Its shape is the one of the host's entries (`turnOrigin`, `entrypoint`,
+// `turnPosition`), which the fixtures below invent.
+const typed = (fields, minute = 1) => ({ ...prompt('go', minute), ...fields });
+const openedBy = (...entries) => lib.sessionFacts(transcript(...entries)).opened;
+
+test('sessionFacts says a session his prompt opened in the desktop app was opened by him', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' })), 'his');
+});
+
+test('sessionFacts says a session a command opened was opened by a command, even when a person sent its prompt', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'human', entrypoint: 'sdk-cli' })), 'command');
+  assert.equal(openedBy(typed({ turnOrigin: 'human', entrypoint: 'cli' })), 'command');
+});
+
+test('sessionFacts says a scheduled run is scheduled, never a command, even when it ran from the SDK CLI', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'scheduled', entrypoint: 'sdk-cli' })), 'scheduled');
+  assert.equal(openedBy(typed({ origin: { kind: 'task', subkind: 'scheduled-trigger' }, entrypoint: 'sdk-cli' })), 'scheduled');
+});
+
+test('sessionFacts says a session the SDK opened with its first prompt was opened by a session', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'sdk', turnPosition: { promptIndex: 0 } })), 'session');
+});
+
+test('sessionFacts says unknown for an SDK prompt with no turn position, and for a transcript with no prompt', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'sdk' })), 'unknown');
+  assert.equal(openedBy(reply('an answer with no prompt', 1)), 'unknown');
+  assert.equal(openedBy(typed({ isCompactSummary: true, turnOrigin: 'human', entrypoint: 'claude-desktop' })), 'unknown');
+});
+
+test('sessionFacts skips a compaction summary, a meta entry and a tool result before the first prompt, and only the first prompt decides', () => {
+  const summary = typed({ isCompactSummary: true, turnOrigin: 'human', entrypoint: 'sdk-cli' }, 1);
+  const meta = typed({ isMeta: true, turnOrigin: 'sdk', turnPosition: { promptIndex: 0 } }, 2);
+  const carrier = { type: 'user', ...base(3), turnOrigin: 'human', entrypoint: 'sdk-cli', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_x', content: 'ok' }] } };
+  assert.equal(openedBy(summary, meta, carrier, typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' }, 4), typed({ turnOrigin: 'human', entrypoint: 'sdk-cli' }, 5)), 'his');
+});
+
+test('sessionFacts gives the effort of the last assistant entry that has one, and null when none has', () => {
+  const high = { ...reply('a', 2), effort: 'high' };
+  const low = { ...reply('b', 3), effort: 'low' };
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), high, low, reply('c', 4))).effort, 'low');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), high, reply('c', 4))).effort, 'high');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('no effort here', 2))).effort, null);
+});
+
 // --- sessionFacts: background work ---
 
 test('a background Bash call is listed with the task id its tool result records, its description and its launch time', () => {

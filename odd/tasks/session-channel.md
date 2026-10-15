@@ -1357,6 +1357,170 @@ block. A session in another permission mode holds incoming messages for his appr
 rule about how a reply ends is paid on every turn, so where it lives is settled by the rule
 hierarchy above, not by this feature.
 
+### 17. T16 design, version 2 (2026-10-15)
+
+His words (transcript `130317af`, read with `sessions --quote`): line 3443 "pero ninguna de esas
+las veo en el tablero de claude desktop, deben estar en otra parte y ese es el problema, no debes
+abrir sesiones en otra parte que no sea aca"; line 3549 "Tenemo que encontrar una forma que esto
+no vuelva a pasar"; line 3608 "La opción B". Option B, in the lead's text at line 3577: layer 1
+"dice, para cada una, dónde está en la app y cómo se abrió"; layer 2 "Un control que da error…
+con la capa 2 el control te las va a nombrar hasta que las borres"; layer 3 "Una regla del
+proyecto que le niegue a cualquier sesión la herramienta que crea tareas programadas".
+
+#### What each review changed
+
+Version 1 was read by two independent readers: one attacked it against code and transcripts,
+one searched his words, the memory notes and the records.
+
+- **Where it is in the app** (his option). Version 1 printed how a session was opened. Version 2
+  also prints where it sits.
+- **Two app records** (attack, B1, B4). Two files of the app answer what version 1 guessed from
+  prose and from time:
+  - `%APPDATA%\Claude\claude-code-sessions\<account>\<org>\scheduled-tasks.json` holds each task's
+    `cwd`, `enabled` and `fireAt`;
+  - `local_<id>.json` holds each session's `cliSessionId`, `scheduledTaskId`, `effort`,
+    `isArchived`, and `spawnedFrom` with `userFork`.
+- **"His" needs the entrypoint as well** (attack, B2). Four `sdk-cli` sessions (`js-harness
+  remote`, `claude -p`) carry `turnOrigin: human`, and none of them was in his sidebar.
+- **Opener per transcript, before the window** (attack, B3). Version 1 took the opener from the
+  row's oldest transcript, so a compacted row read `unknown`. Version 2 works it out per
+  transcript, before the window filter.
+- **No refused-by-time pass** (attack, B4). "Not closed" now means not archived in the app's
+  record. When there is no record, it reads `unknown`.
+- **More calls refused** (both readers). Version 1 refused only `create`. Version 2 also refuses
+  `run`, which opened `cbca9769`, `update`, which can re-enable the disabled task, and
+  `RemoteTrigger`. `CronCreate` stays in-session and is out of scope.
+- **Anchored matcher** (attack, B6). A matcher with `-` may become an unanchored regex.
+- **No noisy mark** (his-words reader, F3). Sessions the lead opens with `start_session` sit in
+  his sidebar, so "by a session" is information and not a mark.
+- **The refusal names `start_session`** (F2). The 2026-10-15 rules let the lead open sessions, so
+  the refusal's reason names that route.
+- **Something makes layer 2 run** (F5, failure class `rule-not-acting`). It is a `doctor` row.
+- **A FAILURES entry** (F8). There was none for this failure.
+- **A practice step** (F9). The roadmap requires one for what a project receives.
+- **Effort flag** (F10). Effort below `high` is flagged.
+- **The questions** (F7, B7, Q1). The guard is a user-level hook, so its refusal reaches every
+  project on the machine, and Q2 is reframed that way. Q1 is dropped: the charter lets the lead
+  update the installed copy after a merge without asking. The real try is made harmless instead.
+
+#### Evidence (measured 2026-10-15)
+
+- E1. 120 top-level transcripts, 93 in `D--js-harness`. The first `user` entry's `turnOrigin`:
+  - human 79
+  - sdk 18
+  - scheduled 2
+  - peer 1
+  - missing 20
+  - 3 transcripts have no user entry.
+
+  `entrypoint` is `claude-desktop` on 86 of the `D--js-harness` transcripts and `sdk-cli` on 4.
+- E2. The two scheduled sessions are `cbca9769` (opened by `run_scheduled_task` from `1cca9aae`)
+  and `dd949a0e` (the wake-up created in `130317af`). Both ran only at `medium`; the app record
+  agrees, with `effortInherited: true`.
+- E3. The board reads the model (`contextOf`, bin/lib/sessions.mjs:330-337), never effort or
+  opener. `rosterOf` drops transcripts outside the window before grouping (:1287-1290).
+- E4. `scheduled-tasks.json` lists `jh-orq-wake-after-plan-reset`: `cwd` `D:\js-harness`,
+  `enabled: false`. `jh-open-session-test` is only a leftover `SKILL.md` folder that the app no
+  longer schedules.
+- E5. A real try at 10:35: the guard refused the app-provided
+  `mcp__ccd_session_mgmt__send_message`. The call is in this session's transcript at line 31399
+  and the refusal at line 31401; the lead's transcript has no such message. So a `PreToolUse`
+  hook reaches an app tool by its `mcp__<server>__<tool>` name. The server name
+  `scheduled-tasks` holds in all 27 recorded `create` calls.
+
+#### Layer 1 — seen: how each session was opened, where it is, its effort
+
+- `sessionFacts` records `opened` per transcript, before the window, from its first prompt entry
+  (not a compaction summary or meta):
+  - `his`: `turnOrigin` human and `entrypoint` claude-desktop;
+  - `command`: `entrypoint` sdk-cli or cli;
+  - `session`: `turnOrigin` sdk with `promptIndex` 0;
+  - `scheduled`: `turnOrigin` scheduled, or `origin.subkind` scheduled-trigger;
+  - `unknown` otherwise.
+
+  A transcript that starts at a compaction takes its opener from the record of its session, or
+  says `unknown`.
+- Where it is: read from the app record of its session, when present.
+  - `in Routines`: has a `scheduledTaskId`.
+  - `archived`: `isArchived`.
+  - `in Sessions`: otherwise.
+  - `not in the app`: an sdk-cli session has no record.
+  - `unknown`: there is no app folder (another OS, or a moved app).
+
+  The app's files are undocumented, so they are read as optional and labelled "app record".
+- Effort: the last assistant entry that has one, else the app record's.
+- The board adds one line per row, so the `mode … folder …` line that 13 tests pin is unchanged:
+  `opened by him | by a session | by a command | by a scheduled task | unknown; in Sessions |
+  in Routines | archived | not in the app | unknown; effort <x>`.
+  - A row outside Sessions that is not archived is marked `NOT IN HIS SIDEBAR`.
+  - An effort below `high` is marked on any row he did not open.
+- Tests first, through `sessions` on fixtures:
+  - one per opener, including the `say hi` sdk case with no `turnPosition`;
+  - the compaction start, with and without an app record;
+  - effort read from the latest answer that has one;
+  - the app record present and absent;
+  - the pinned line, unchanged.
+
+#### Layer 2 — told by a command, run by `doctor`, never in the commit gate
+
+- A read-only command of its own, `js-harness sessions-unseen` (name open). It exits 1 and names
+  each item below, and exits 0 when there are none:
+  - (a) an enabled task in `scheduled-tasks.json` whose `cwd` is this project or under it. A
+    disabled task, or a leftover `SKILL.md` folder with no registry entry, is listed as inert
+    (INFO). When the registry is missing, a `SKILL.md` scan matches the project's absolute path
+    only, never its name.
+  - (b) a session of this project that is `NOT IN HIS SIDEBAR` per layer 1 and not archived.
+    Without an app record it reads `unknown`, and `unknown` is a failure line, never a pass.
+- `doctor`, which runs on `SessionStart` and notifies only on change, gains a row that runs it.
+  The orchestrator skill text gains one line: the lead runs it in its recap until it exits 0.
+- It is not a row of `check`. A gate row that fails on his machine would block every commit until
+  he cleans up.
+
+#### Layer 3 — refused, promised only once verified
+
+- The guard refuses `mcp__scheduled-tasks__create_scheduled_task`, `update_scheduled_task`,
+  `run_scheduled_task` and `RemoteTrigger`.
+  - Reason: a session these open lands in the app's Routines, or in the cloud, at the effort it
+    inherits, where he does not see it.
+  - Instead: open it with `start_session` (a row in his sidebar), or tell the lead.
+  - `delete_scheduled_task` and `list` pass. `CronCreate` stays in the session and passes.
+    Sessions started by a Bash `claude -p` are out of this layer's reach; layer 1 shows them as
+    `by a command`.
+- The matcher is anchored, `^(…)$`, or the new names go in a separate entry. Before building,
+  check the hooks reference on how a matcher with `-` is read. A test pins the matcher string, and
+  `TodoWrite` and `NotebookEdit` must not match.
+- A practice step: a guard call on each refused tool is denied in the practice project, before his
+  home.
+- It reaches his machine on the next merge, through the lead's update of the installed copy, which
+  the charter lets the lead do without asking. The refusal is promised only after one real try
+  there. The try is harmless: a `create_scheduled_task` with no schedule and an empty prompt. If it
+  is refused, nothing is created. If it is not, the lead deletes the task at once with
+  `delete_scheduled_task` and reports it.
+- A FAILURES entry, `session-opened-unseen`:
+  - Class `unseen-state`.
+  - Seen 2026-10-12, `130317af:3443`.
+  - Control owed to T16; it becomes `check` or `doctor` as each layer lands.
+
+#### Order and size
+
+Three slices, each a work-unit commit with its tests first:
+
+1. Layer 1 with the FAILURES entry.
+2. Layer 2 with its `doctor` row and the skill line.
+3. Layer 3 with its practice step. It waits for his answers below.
+
+About 600 authored lines. Layer 1 alone is about 250.
+
+#### Open for him (through the lead, with buttons)
+
+- Q1. The guard is a user-level hook, so its refusal reaches every project on the machine, his
+  other project included. Should js-harness refuse these tools on the whole machine, or only in a
+  project that declares it as a rule (this repository would)? The recommendation is only where
+  declared: an installed user may want scheduled tasks.
+- Q2. A scheduled task he asks for himself, like the wake-up of 2026-10-11, made "with his yes":
+  is it still refused? His words are absolute ("no debes abrir sesiones en otra parte"). The
+  recommendation is to refuse it, with `start_session` named as the way.
+
 ## Failures this feature owns
 From the list of 2026-10-10 in `odd/tasks/rule-hierarchy.md` ("Failures of 2026-10-10"): 3, 4,
 5, 6, 14, 17 and 18. Each closes only when its proof there exists and passes. 7 and 8 were left

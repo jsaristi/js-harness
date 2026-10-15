@@ -348,6 +348,23 @@ function compactionOf(entry) {
   return { before: counted(said.preTokens), after: counted(said.postTokens), automatic: said.trigger === 'auto', at: entry.timestamp ?? null };
 }
 
+/** Whether a user entry only carries tool results: the host writes a call's result as such an entry, and it is no prompt. */
+const isToolResultCarrier = (entry) => {
+  const blocks = blocksOf(entry);
+  return blocks.length > 0 && blocks.every((block) => block.type === 'tool_result');
+};
+
+/** How a session was opened, read from its first prompt: `'scheduled'` for a scheduled run, `'command'` for one the SDK
+ * CLI or the CLI opened, `'his'` for one he typed in the desktop app, `'session'` for the first prompt the SDK gave a
+ * session, else `'unknown'`. A scheduled run is checked first: it can come from the SDK CLI too. */
+function openerOf(entry) {
+  if (entry.turnOrigin === 'scheduled' || entry.origin?.subkind === 'scheduled-trigger') return 'scheduled';
+  if (entry.entrypoint === 'sdk-cli' || entry.entrypoint === 'cli') return 'command';
+  if (entry.turnOrigin === 'human' && entry.entrypoint === 'claude-desktop') return 'his';
+  if (entry.turnOrigin === 'sdk' && entry.turnPosition?.promptIndex === 0) return 'session';
+  return 'unknown';
+}
+
 /** What the stretch of work `stretch` cost, as the board keeps a task: `{ tokens, startedBy, startedAt,
  * endedAt, compactions }`, or `{ unavailable }` with the reason when the transcript does not say.
  * `tokens` is how much the context grew from the instruction that started it to its last reply, added up
@@ -497,7 +514,10 @@ export function personAtOf(entries) {
  * question tool included: what the board says of a call that waits too long is `sessionLines`' rule.
  *
  * `personAt` is the time of the newest entry the person wrote, by `quoteOf`'s rule with the question calls of
- * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time. */
+ * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time.
+ *
+ * `opened` is how the session was opened (`openerOf`, read from its first prompt, `'unknown'` when there is none);
+ * `effort` is the effort of its last reply that records one, `null` when none does. */
 export function sessionFacts(
   text,
   {
@@ -532,6 +552,8 @@ export function sessionFacts(
   let stoppedHow = null;
   let lastReply = null;
   let context = null;
+  let opened = null; // how the session was opened, by its first prompt (`openerOf`)
+  let effort = null; // the effort of the session's last reply that records one
 
   for (const [index, entry] of entries.entries()) {
     context = contextOf(entry) ?? context;
@@ -590,6 +612,8 @@ export function sessionFacts(
       if (!received.has(key)) received.set(key, message);
     }
     firstPrompt ??= promptText(entry);
+    if (opened === null && entry.type === 'user' && !entry.isMeta && !entry.isCompactSummary && !isToolResultCarrier(entry)) opened = openerOf(entry);
+    if (isOwnReply(entry) && typeof entry.effort === 'string') effort = entry.effort;
     const said = turnOf(entry);
     if (said !== null) {
       turn = said;
@@ -704,6 +728,8 @@ export function sessionFacts(
     cwd,
     gitBranch,
     permissionMode,
+    opened: opened ?? 'unknown',
+    effort,
     received: [...received.values()],
     sent: [...sentByCall.values()],
     context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
