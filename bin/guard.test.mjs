@@ -205,3 +205,55 @@ test('a memory index under CLAUDE_CONFIG_DIR is held to the limit, whatever that
   assert.deepEqual(await hook(write), quiet, 'without the variable it is no memory index');
   assert.deepEqual(await hook({ ...write, tool_input: { ...write.tool_input, file_path: 'D:/claude-config/notes/MEMORY.md' } }, { configDir: 'D:/claude-config' }), quiet, 'outside projects/<slug>/memory');
 });
+
+// --- `guard --stop`, the `Stop` hook: the share of its context a reply states, against the share the transcript
+// records (odd/tasks/honesty-audit.md, T16) ---
+
+const TRANSCRIPT = 'D:/claude/projects/D--proj/session.jsonl';
+const usageLine = (window) => JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: JSON.stringify({ context: { session: 'self', contextWindow: window } }) }] } });
+const replyLine = (text, tokens) => JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5-5', usage: { input_tokens: 10, cache_read_input_tokens: tokens - 10 }, content: [{ type: 'text', text }] } });
+
+/** Runs `guard --stop` on `payload` with the transcript at TRANSCRIPT reading `transcript` (null for none). */
+async function stop(payload, { transcript = [usageLine(500000), replyLine('Contexto: 40 %.', 300000)].join('\n') } = {}) {
+  const out = [];
+  const err = [];
+  const read = [];
+  const code = await guardMain(['--stop'], {
+    readStdin: () => JSON.stringify(payload),
+    readTranscript: (file) => {
+      read.push(file);
+      if (transcript === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
+      return transcript;
+    },
+    stdout: (text) => out.push(text),
+    stderr: (text) => err.push(text),
+  });
+  return { code, out: out.join(''), err: err.join(''), read };
+}
+
+test('a reply whose stated own share is more than 2 points off the recorded one is blocked from stopping, with the reason', async () => {
+  const result = await stop({ hook_event_name: 'Stop', transcript_path: TRANSCRIPT, stop_hook_active: false, last_assistant_message: 'Listo. Contexto: 40 %.' });
+  assert.equal(result.code, 0);
+  assert.deepEqual(result.read, [TRANSCRIPT]);
+  const answer = JSON.parse(result.out);
+  assert.equal(answer.decision, 'block');
+  assert.match(answer.reason, /states your context at 40%.*records 60% of a 500k window/s);
+});
+
+test('the reply text comes from last_assistant_message, and from the transcript\'s last reply when the host sends none', async () => {
+  const quiet = { code: 0, out: '', err: '', read: [TRANSCRIPT] };
+  assert.deepEqual(await stop({ transcript_path: TRANSCRIPT, last_assistant_message: 'Contexto: 61 %.' }), quiet, 'the host\'s text is the one checked');
+  assert.equal(JSON.parse((await stop({ transcript_path: TRANSCRIPT })).out).decision, 'block', 'the transcript\'s text, 40 %');
+});
+
+test('the check stays quiet when it already blocked this stop, when the reply states no share, and when it cannot read', async () => {
+  const quiet = { code: 0, out: '', err: '' };
+  const wrong = { transcript_path: TRANSCRIPT, last_assistant_message: 'Contexto: 40 %.' };
+  const { read, ...again } = await stop({ ...wrong, stop_hook_active: true });
+  assert.deepEqual([again, read], [quiet, []], 'a stop the hook already turned back is let through, so it cannot loop');
+  const { read: none, ...plain } = await stop({ ...wrong, last_assistant_message: 'Merged; nothing else.' });
+  assert.deepEqual([plain, none], [quiet, []], 'no share stated: the transcript is not read');
+  assert.deepEqual(await stop(wrong, { transcript: null }), { ...quiet, read: [TRANSCRIPT] }, 'no transcript');
+  assert.deepEqual(await stop({ ...wrong, transcript_path: undefined }), { ...quiet, read: [] }, 'no transcript path');
+  assert.deepEqual(await stop(wrong, { transcript: usageLine(500000) }), { ...quiet, read: [TRANSCRIPT] }, 'no reply records a usage');
+});

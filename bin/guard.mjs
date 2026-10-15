@@ -14,6 +14,12 @@
 //     every session, so that path loads nothing but that file: the modules of the other checks are imported only for
 //     the tools they check. Then, for a Markdown file, a line that stamps today's date with an hour ahead of the clock
 //     (bin/lib/document-hour-guard.mjs; odd/tasks/session-channel.md, T12b), imported only for a `.md` path.
+// `js-harness guard --stop` is the `Stop` hook (odd/tasks/honesty-audit.md, T16): a reply that states the session's own
+// context share more than 2 points from the share its transcript records (bin/lib/audit.mjs, `shareRefusal`). A reply
+// is not a tool call and is already shown when the hook runs, so it cannot be refused before it is sent: the hook
+// turns the stop back with the hooks contract's `decision: "block"` and its reason, and the session corrects the share
+// in its next words. It never turns back a stop it already turned back (`stop_hook_active`), so it cannot loop; it
+// reads the transcript only when the reply states a share, and a failure inside it lets the session stop.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,7 +30,10 @@ const USAGE = 'Usage: js-harness guard --hook\n'
   + '  message whose stamped hour is more than a minute off the clock, a Bash command with backticks inside double\n'
   + '  quotes, a node --test of several files while another gate holds the lock, and a Write or Edit that puts a line\n'
   + '  over 150 characters in a memory index (MEMORY.md) or a line in a Markdown file that stamps today with an hour\n'
-  + '  ahead of the clock; always exits 0\n';
+  + '  ahead of the clock; always exits 0\n'
+  + '       js-harness guard --stop\n'
+  + '  reads a Stop payload on standard input; turns the stop back when the reply states this session\'s context share\n'
+  + '  more than 2 points from the share its transcript records, so the session corrects it; always exits 0\n';
 
 const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);
 const FILE_TOOLS = new Set(['Write', 'Edit']);
@@ -72,6 +81,20 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   return run(String(input.command ?? ''));
 }
 
+/** Why the reply that ends the turn of the `Stop` payload is to be corrected, or null. The text is the host's
+ * `last_assistant_message`, else the transcript's last own reply: the host writes its transcript after the fact, so
+ * the recorded share may be the step before the reply's, a tool result short of it. */
+async function stopRefusalOf(payload, readTranscript) {
+  if (payload?.stop_hook_active === true || typeof payload?.transcript_path !== 'string' || payload.transcript_path === '') return null;
+  const { lastShare, shareRefusal } = await import('./lib/audit.mjs');
+  const given = typeof payload.last_assistant_message === 'string' ? payload.last_assistant_message : null;
+  // A reply that names no context share costs no read of the transcript; the window the share is of comes from it.
+  if (given !== null && !(/context/i.test(given) && /\d\s?%/.test(given))) return null;
+  const recorded = lastShare(readTranscript(payload.transcript_path).split(/\r?\n/));
+  if (recorded === null) return null;
+  return shareRefusal(given ?? recorded.text, recorded);
+}
+
 export async function guardMain(argv, {
   readStdin = () => fs.readFileSync(0, 'utf8'),
   now = () => new Date(),
@@ -82,10 +105,21 @@ export async function guardMain(argv, {
   testRun,
   readIndex = (file) => fs.readFileSync(file, 'utf8'),
   claudeConfigDir = process.env.CLAUDE_CONFIG_DIR,
+  readTranscript = (file) => fs.readFileSync(file, 'utf8'),
 } = {}) {
-  if (argv.length !== 1 || argv[0] !== '--hook') {
+  if (argv.length !== 1 || (argv[0] !== '--hook' && argv[0] !== '--stop')) {
     stderr(USAGE);
     return 2;
+  }
+  if (argv[0] === '--stop') {
+    let turnBack = null;
+    try {
+      turnBack = await stopRefusalOf(JSON.parse(readStdin()), readTranscript);
+    } catch {
+      return 0;
+    }
+    if (turnBack !== null) stdout(`${JSON.stringify({ decision: 'block', reason: turnBack })}\n`);
+    return 0;
   }
   let reason = null;
   try {
