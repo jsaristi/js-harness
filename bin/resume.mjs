@@ -35,6 +35,7 @@ import { modeLines } from './contract.mjs';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
+import { dueNotice } from './lib/memory-hygiene.mjs';
 import { pauseNotice, toldBetween } from './lib/pause.mjs';
 import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
@@ -48,7 +49,8 @@ const USAGE = [
   'Usage: js-harness resume --pause',
   '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
   '         one JSON line with the notice the first time a stretch of work passes the pause, and the notices of the',
-  '         channel addressed to the session that it was not told yet, once each; nothing else.',
+  '         channel addressed to the session that it was not told yet, once each, and at most once a day for',
+  '         the project that a memory hygiene pass is due (js-harness memory status); nothing else.',
   '         It never fails and always exits 0.',
 ].join('\n');
 
@@ -931,7 +933,15 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
   const notice = pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) });
   // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
   const inbox = inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) });
-  const said = [notice?.text, inbox?.text].filter((text) => typeof text === 'string');
+  // A memory hygiene pass that is due, at most once a day for the project (odd/tasks/memory-hygiene.md, D5).
+  let hygiene = null;
+  try {
+    const slug = projectSlug(mainCheckoutByFiles(cwd) ?? mainCheckout(run, cwd));
+    hygiene = dueNotice({ home, slug, folder: path.join(home, '.claude', 'projects', slug, 'memory'), now: Date.now() });
+  } catch {
+    // The pause and the inbox are said whatever happens here.
+  }
+  const said = [notice?.text, inbox?.text, hygiene].filter((text) => typeof text === 'string');
   if (said.length === 0) return null;
   // Another entry (a `Stop` hook, later) runs this command too, so the event is the input's own when it names one.
   const event = typeof input.hook_event_name === 'string' && input.hook_event_name !== '' ? input.hook_event_name : 'PostToolUse';
