@@ -72,10 +72,20 @@ function show(value) {
  * measured by its words and not by the spaces around them. */
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
 
-/** True when `pattern` is a regular expression that `new RegExp` accepts. */
+// What `{amount}` stands for in a pattern: any amount in any wording, so a pattern finds a restated value by its
+// subject and still finds it after the value changes. A number with an optional unit word ("60 minutes", "3,600 s",
+// "88%"), an hour or half of one, or a model id ("gpt-6.1-sol", "claude-opus-5-5").
+const AMOUNT = String.raw`(?:\d[\d,.]*\s*(?:%|[a-z]+\b)?|(?:half )?an? (?:hour|minute|day)\b|[a-z]+(?:-[a-z0-9.]+)*-\d[\w.]*)`;
+
+/** The regular expression of `pattern`, its `{amount}` written out, tried case-insensitively on one line. */
+export function patternOf(pattern) {
+  return new RegExp(pattern.split('{amount}').join(AMOUNT), 'i');
+}
+
+/** True when `pattern` is a regular expression that `new RegExp` accepts, its `{amount}` written out. */
 function compiles(pattern) {
   try {
-    new RegExp(pattern);
+    patternOf(pattern);
     return true;
   } catch {
     return false;
@@ -187,6 +197,8 @@ function optionalFaults({ patterns, row, failure, differs, review }) {
     } else {
       for (const pattern of items) {
         if (!compiles(pattern)) faults.push(`the pattern "${pattern}" is not a regular expression`);
+        else if (!pattern.includes('{amount}')) faults.push(`the pattern "${pattern}" has no {amount}: it finds a value by its subject and any amount`);
+        else if (patternOf(pattern).test('')) faults.push(`the pattern "${pattern}" matches an empty line`);
       }
     }
   }

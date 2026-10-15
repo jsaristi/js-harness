@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { OWNERS, readRules, renderList, rulesHash, ruleHere, ruleOf, ruleValue, writeRules } from './rules.mjs';
+import { OWNERS, patternOf, readRules, renderList, rulesHash, ruleHere, ruleOf, ruleValue, writeRules } from './rules.mjs';
 import { RULES } from './rules-data.mjs';
 
 // Marks a field to leave out of a fixture, so one test can take one key away.
@@ -38,14 +38,14 @@ const WHOLE = [
   valueRule('alpha-value', {
     flag: '--wait',
     was: [{ value: 30, until: '2026-10-01' }],
-    patterns: ['a\\d+'],
+    patterns: ['a {amount}'],
     row: { refuses: '2026-10-01' },
     failure: 'language-server-load',
     differs: 'the text of a sibling rule',
     review: '2026-10-20',
   }),
   textRule('beta-text', {
-    patterns: ['gate'],
+    patterns: ['gate {amount}'],
     row: { reports: 'the gate reports it', since: '2026-10-02' },
     failure: 'language-server-load',
     differs: 'the text of a sibling rule',
@@ -55,7 +55,7 @@ const WHOLE = [
     was: [{ value: 9, until: '2026-09-01' }],
     unit: 'minutes',
     successors: ['alpha-value'],
-    patterns: ['x'],
+    patterns: ['x {amount}'],
     row: { refuses: '2026-10-11' },
     failure: 'language-server-load',
     differs: 'the text of a sibling rule',
@@ -449,10 +449,31 @@ test('a pattern that is not a regular expression is refused by its text, one fau
   assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['a('] })]), [
     'rule "alpha-value": the pattern "a(" is not a regular expression',
   ]);
-  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['ok', '(', '[' ] })]), [
+  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['{amount} ok', '(', '[' ] })]), [
     'rule "alpha-value": the pattern "(" is not a regular expression',
     'rule "alpha-value": the pattern "[" is not a regular expression',
   ]);
+});
+
+test('a pattern names its {amount}, and one that matches an empty line is refused', () => {
+  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['wait for the gate'] })]), [
+    'rule "alpha-value": the pattern "wait for the gate" has no {amount}: it finds a value by its subject and any amount',
+  ]);
+  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['{amount}|'] })]), [
+    'rule "alpha-value": the pattern "{amount}|" matches an empty line',
+  ]);
+});
+
+test('{amount} stands for any amount in any wording, so a pattern outlives a change of value', () => {
+  const wait = patternOf('wait.{0,40}{amount}');
+  for (const line of ['the gate may wait 60 minutes', 'a wait of 45 min', 'it waits an hour', 'wait half an hour', 'the wait is 3,600 s']) {
+    assert.match(line, wait, line);
+  }
+  assert.doesNotMatch('the wait for its turn', wait);
+  const model = patternOf('review model.{0,20}{amount}');
+  assert.match('the review model is gpt-6.1-sol', model);
+  assert.match('the review model is "claude-opus-5-5"', model);
+  assert.match('THE REVIEW MODEL: gpt-6.1-sol', model);
 });
 
 test('a row that is not { refuses: day } or { reports: text, since: day } is refused', () => {
