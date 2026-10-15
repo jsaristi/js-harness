@@ -76,6 +76,14 @@ matters, who holds it, and where it was seen.
   nothing ran; the command hung and was stopped). JH 12, 2026-10-14. The same family as the memory
   note that a heredoc eats backslashes: text with backticks or backslashes goes through the editor's
   Write and Edit, never a shell string. A candidate for a check or a protocol line; unassigned.
+- A `$`` in the replacement of a JavaScript `String.replace` inserts the text ahead of the match:
+  a design appended to JH 14's feature document with a script carried the runner's name pattern,
+  ending `)*$``, so the document's whole head (156 lines) was copied into it in `258bf6e` and stayed
+  there through three commits, unseen until a resume read the headings (2026-10-15). Fixed on
+  `feat/eval-arms-filters` after a byte-equal check of the copy. The same family as the entry
+  above: text goes through Write and Edit, or a script passes the replacement as a function
+  (`replace(x, () => text)`). A check could refuse a feature document with a heading twice;
+  unassigned.
 - A background timer, watcher or wake loop left running after what it guarded resolved: the
   orchestrator's 05:00 timer outlived the Linux gate it waited for (his correction, the
   orchestrator's transcript `ffe99ebf`, line 4215). Each one declares what it is for, what ends
