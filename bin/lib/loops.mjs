@@ -102,7 +102,7 @@ export class LockHeldError extends Error {}
  * LOCK_STALE_MS, and throws LockHeldError after LOCK_TRIES tries. The lock holds a token of this hold, and is
  * removed at the end only while it still holds it: a hold whose lock was broken never removes the next holder's.
  * The lock's age is the file's own time against this machine's clock, never a fake one. */
-export async function withRecordLock(file, body, { sleep, clock = Date.now } = {}) {
+export async function withRecordLock(file, body, { sleep, clock = Date.now, readFile = (f) => fs.readFileSync(f, 'utf8') } = {}) {
   const lock = `${file}.lock`;
   const token = `${process.pid} ${clock()} ${Math.random().toString(36).slice(2)}\n`;
   fs.mkdirSync(path.dirname(lock), { recursive: true });
@@ -120,13 +120,21 @@ export async function withRecordLock(file, body, { sleep, clock = Date.now } = {
   try {
     return await body();
   } finally {
-    let held = '';
-    try {
-      held = fs.readFileSync(lock, 'utf8');
-    } catch {
-      // gone: broken by another session
+    // A lock that is gone was broken by another session; a read Windows refuses for a moment (a scanner has it
+    // open) is tried again, so a lock of this hold is not left to block the name until it is old.
+    for (let tries = 0; tries < 8; tries += 1) {
+      let held;
+      try {
+        held = readFile(lock);
+      } catch (err) {
+        if (err.code === 'ENOENT') break;
+        if (!LOCK_BUSY.has(err.code)) throw err;
+        await sleep(LOCK_TRY_MS);
+        continue;
+      }
+      if (held === token) fs.rmSync(lock, { force: true, maxRetries: 5 });
+      break;
     }
-    if (held === token) fs.rmSync(lock, { force: true, maxRetries: 5 });
   }
 }
 

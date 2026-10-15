@@ -283,6 +283,22 @@ test("a holder whose lock was broken and taken by another session does not remov
   assert.equal(fs.readFileSync(lock, 'utf8'), 'another holder');
 });
 
+test('a hold removes its own lock even when Windows refuses the first reads of it at the end', async () => {
+  const p = place();
+  const lock = `${p.record('keeper')}.lock`;
+  let refusals = 0;
+  const readFile = (file) => {
+    if (refusals < 2) {
+      refusals += 1;
+      throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+    }
+    return fs.readFileSync(file, 'utf8');
+  };
+  await withRecordLock(p.record('keeper'), () => {}, { sleep: async () => {}, readFile });
+  assert.equal(refusals, 2);
+  assert.equal(fs.existsSync(lock), false);
+});
+
 test('a stop that leaves a descendant alive keeps it in the record, so the next stop reaches it', async () => {
   const p = place();
   writeRecord(p.record('keeper'), liveRecord('keeper', OWNER));
