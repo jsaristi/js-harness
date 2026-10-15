@@ -7,6 +7,7 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
@@ -4808,3 +4809,117 @@ test('a gate whose sensors fail keeps the names of their failing tests in its en
     { name: 'more', pass: true, failing: undefined },
   ]);
 }));
+
+// The sub-agents row of `check --subagents` (odd/tasks/honesty-audit.md, T13). Plain check runs none of it.
+const SUBAGENT_NOW = Date.parse('2026-10-14T20:00:00Z'); // 15:00 in Bogota, UTC-5
+const BOGOTA_OFFSET = -300;
+const recordLine = (entries) => `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`;
+const turnAt = (stamp, model) => ({ type: 'assistant', timestamp: stamp, effort: 'high', message: { id: `m-${stamp}`, model, usage: { input_tokens: 10, output_tokens: 1 }, content: [] } });
+
+/** `run` answering git as a main checkout at `dir` with no other worktree, as `recordFolders` asks it. */
+function gitOf(dir) {
+  return (command, args) => {
+    if (args[0] === 'rev-parse') return { status: 0, stdout: `${path.join(dir, '.git')}\n` };
+    if (args[0] === 'worktree') return { status: 0, stdout: `worktree ${dir}\nHEAD abc\nbranch refs/heads/main\n\n` };
+    return { status: 1, stdout: '' };
+  };
+}
+
+/** A project of today's sub-agents: a writer on haiku and an explorer on sonnet, the explorer off the reader's
+ * rule (opus). `rules` gives the project the harness's rules file, the one the rules are read from; `records`
+ * gives it a config folder with the records. */
+function subagentProject({ rules = true, records = true } = {}) {
+  const dir = makeTmpDir();
+  const config = makeTmpDir();
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+  if (rules) {
+    fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+    fs.copyFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib', 'rules-data.mjs'), path.join(dir, 'bin', 'lib', 'rules-data.mjs'));
+  }
+  if (records) {
+    const folder = path.join(config, 'projects', projectSlug(dir));
+    const agents = path.join(folder, 's1', 'subagents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(folder, 's1.jsonl'), recordLine([turnAt('2026-10-14T14:00:00Z', 'claude-opus-5-5')]));
+    const agent = (id, meta, model, stamp) => {
+      fs.writeFileSync(path.join(agents, `agent-${id}.jsonl`), recordLine([turnAt(stamp, model)]));
+      fs.writeFileSync(path.join(agents, `agent-${id}.meta.json`), JSON.stringify(meta));
+    };
+    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, 'claude-haiku-5-5', '2026-10-14T14:02:00Z');
+    agent('e1', { agentType: 'Explore', description: 'Map things' }, 'claude-sonnet-5-5', '2026-10-14T14:03:00Z');
+  }
+  return { dir, config, cleanup: () => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(config, { recursive: true, force: true }); } };
+}
+
+/** The deps `main` takes for the sub-agents row, with the day and the machine's zone fixed. */
+const subagentDeps = (project, extra = {}) => ({ run: gitOf(project.dir), now: () => SUBAGENT_NOW, offsetMinutes: BOGOTA_OFFSET, ...extra });
+
+/** The lines of `output` that open the sub-agents row. */
+const subagentRows = (output) => output.split('\n').filter((line) => line.startsWith('INFO  subagents  ') || line.startsWith('PASS  subagents  ') || line.startsWith('FAIL  subagents  '));
+
+test('plain check prints no subagents row and reads no record', async () => {
+  const project = subagentProject();
+  const gitCalls = [];
+  const run = gitOf(project.dir);
+  try {
+    const { code, output } = await runCheck(['--cwd', project.dir], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project, { run: (command, args, options) => { gitCalls.push(args); return run(command, args, options); } }));
+    assert.equal(subagentRows(output).length, 0, output);
+    assert.equal(gitCalls.filter((args) => args[0] === 'worktree').length, 0, JSON.stringify(gitCalls));
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents prints an INFO subagents row that counts today\'s launches against the rules', async () => {
+  const project = subagentProject();
+  try {
+    const { code, output, errOutput } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    assert.equal(errOutput, '', output);
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /2 launches today: 1 on a model off the rules/, output);
+    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('subagent-reader-model')), output);
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says the sub-agent rules are not in force here, and compares nothing', async () => {
+  const project = subagentProject({ rules: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /not in force/, output);
+    assert.doesNotMatch(row, /launches today/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says no sub-agent launched today when the project has no records folder', async () => {
+  const project = subagentProject({ records: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  no sub-agent launched today: no Claude Code records folder/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says what it cannot tell when reading the records throws, and fails nothing', async () => {
+  const project = subagentProject();
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1' }, subagentDeps(project, { homedir: () => { throw new Error('no home directory here'); } }));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  cannot tell: .*no home directory here/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+

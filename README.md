@@ -70,6 +70,8 @@ INFO  payload claude  122 estimated tokens per turn from files (tools and hook o
 INFO  sensors  no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json
 ```
 
+`js-harness check --subagents` adds one INFO row, `subagents`, for today's sub-agents of this project, read from the Claude Code records: each writer launch is compared with `subagent-writer-model`, each explorer, reviewer or verifier with `subagent-reader-model`, and every launch's effort with `subagent-effort`. It says how many ran off those rules and fails nothing. It is opt-in: the commit gate runs plain `check`, which reads no record, and a day of records is about 231 MB.
+
 ### js-harness gate
 
 Runs a heavy command under the machine's gate lock, one at a time with the gates of every

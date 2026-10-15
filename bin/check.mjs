@@ -29,6 +29,11 @@ import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
+import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
+import { ruleHere, ruleOf } from './lib/rules.mjs';
+import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
+import { dayOf, launchesOf } from './lib/subagent-count.mjs';
+import { readRecords, recordFolders } from './subagents.mjs';
 
 export { estimateTokens };
 
@@ -1844,8 +1849,60 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   ]);
 }
 
+/** The rules the sub-agent row reads, by id: a writer against the first, an explorer, reviewer or verifier
+ * against the second, and every launch's effort against the third. */
+const SUBAGENT_RULES = { writer: 'subagent-writer-model', reader: 'subagent-reader-model', effort: 'subagent-effort' };
+
+/** Why a rule is not in force, as `ruleHere` names it: no rules file here, or one that is not the harness's list. */
+const OFF_WHY = { elsewhere: 'this project keeps no bin/lib/rules-data.mjs', behind: "its bin/lib/rules-data.mjs is not the harness's list" };
+
+/** `id` as `{ value, alias }` when `ruleHere` finds it in force in the rules text `text`, else `{ off }`. The alias
+ * is `ruleOf`'s, null where the rule has none. */
+function subagentRuleHere(id, text) {
+  const here = ruleHere(id, undefined, text);
+  return Object.hasOwn(here, 'value') ? { value: here.value, alias: ruleOf(id).alias ?? null } : { off: here.off };
+}
+
+/** The sub-agents row of `check --subagents` (odd/tasks/honesty-audit.md, T13): today's launches of this project,
+ * each compared with the rules in force here, as information. It is opt-in because plain check is the commit gate
+ * and a day of records is about 231 MB; only this row reads them.
+ *
+ * It fails nothing, as `checkCodexReviewDebt` does: a throw is said as what the row cannot tell. Where none of the
+ * three rules is in force, one line says so and no record is read. A rule that is not in force is said beside the
+ * others, and nothing is compared with it. `deps` takes the day's clock (`now`), the zone (`offsetMinutes`),
+ * `homedir` and `run` (git, as `subagentsMain` takes it), so a test reads neither the real `~/.claude` nor the clock. */
+export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Date.now, offsetMinutes = -new Date().getTimezoneOffset(), run = (command, args, options) => spawnSync(command, args, { encoding: 'utf8', ...options }) } = {}) {
+  const row = (detail, lines) => ({ name: 'subagents', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  try {
+    const read = readRulesData(cwd);
+    if ('unreadable' in read) throw new Error(`the rules file cannot be read (${read.unreadable})`);
+    const rules = Object.fromEntries(Object.entries(SUBAGENT_RULES).map(([side, id]) => [side, subagentRuleHere(id, read.text)]));
+    const offRules = Object.entries(rules).filter(([, rule]) => 'off' in rule);
+    if (offRules.length === Object.keys(rules).length) {
+      const why = [...new Set(offRules.map(([, rule]) => OFF_WHY[rule.off]))].join('; ');
+      return row(`the sub-agent rules are not in force here (${why}): no launch is compared`);
+    }
+    const notInForce = offRules.map(([side, rule]) => `not in force here: ${SUBAGENT_RULES[side]} (${OFF_WHY[rule.off]})`);
+    const expected = {
+      writerModel: 'off' in rules.writer ? null : rules.writer,
+      readerModel: 'off' in rules.reader ? null : rules.reader,
+      effort: 'off' in rules.effort ? null : rules.effort.value,
+    };
+    const day = dayOf(new Date(now()).toISOString(), offsetMinutes);
+    const folders = recordFolders({ cwd: path.resolve(cwd), env, homedir, run });
+    if (folders.length === 0) return row('no sub-agent launched today: no Claude Code records folder for this project', notInForce);
+    const since = Date.parse(`${day}T00:00:00Z`) - offsetMinutes * 60_000;
+    const { calls, records } = await readRecords(folders, { since, inWindow: () => false });
+    const launches = launchesOf(records, { from: day, to: day, offsetMinutes, calls });
+    const { detail, lines } = subagentRowLines(compareLaunches(launches, expected), expected);
+    return row(detail, [...notInForce, ...lines]);
+  } catch (err) {
+    return row(`cannot tell: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 const USAGE = [
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
 ].join('\n');
 
@@ -1880,7 +1937,7 @@ export function parseGateWait(argv) {
 }
 
 const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait'];
-const BARE_FLAGS = ['--push', '--no-wait'];
+const BARE_FLAGS = ['--push', '--no-wait', '--subagents'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
  * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited
@@ -1909,6 +1966,7 @@ function parseArgs(argv, env) {
     cwd: get('--cwd') ?? process.cwd(),
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
     push: argv.includes('--push'),
+    subagents: argv.includes('--subagents'),
     head: get('--head') ?? 'HEAD',
     remote: get('--remote') ?? 'origin',
     noWait,
@@ -1987,6 +2045,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // A clone that is not what its switches ask is said after the sensors, as the review is, and not by a gate
   // that stopped: it reads git, which a stopped gate asks nothing of.
   if (!push && !stopped) rows.push(...checkFunctionsPending(cwd, { spawn: deps.git }), checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
+  // The sub-agents row runs only when asked (`--subagents`), since it reads a day of records, which a plain gate never does.
+  if (!push && parsed.subagents) rows.push(await checkSubagents(cwd, env, deps));
 
   for (const row of rows) {
     console.log(formatRow(row));
