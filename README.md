@@ -310,6 +310,9 @@ of the pull request itself, a Codex review record for every code commit, and no 
 candidate so far. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
 green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+A candidate red on this machine is bisected: the pull request that turns it red is left out and
+named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
+merge made on GitHub's side does not pass through it.
 
 ```console
 $ js-harness merge-queue --dry-run

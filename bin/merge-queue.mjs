@@ -21,8 +21,10 @@ request it leaves out and why.
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, then CircleCI's run
 of a queue/* branch pushed for it and removed after. When both are green, main is pushed as the
-candidate, by fast-forward from the main it was built from. Exit 0 landed or nothing to land, 4 red,
-3 main moved meanwhile (nothing pushed), 1 anything else.`;
+candidate, by fast-forward from the main it was built from. A candidate red on this machine is
+bisected: the pull request that turns it red is left out and named, and the rest is landed. The
+pre-push hook refuses every other push of main. Exit 0 landed or nothing to land, 4 red, 3 main
+moved meanwhile (nothing pushed), 1 anything else.`;
 
 const TIMEOUT_MS = 60_000;
 
