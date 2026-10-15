@@ -140,3 +140,12 @@ shape the hook reads).
   branch moved past `784c752` after the lineage froze. By the handoff rule a refused decline fails closed
   with no substitute command, so lineage `review-b745615b61ecbd6c` stays as it is; gentle-ai left no record
   for this branch.
+- **L10** (2026-10-15): Sebastián answered the lead at about 16:10 (JH ORQ transcript `e152c9d8`, line
+  3788, the question tool): "Reintentar gentle-ai". The PR conflicted with main in one hunk of
+  `bin/js-harness.mjs` (main's guard help line against this branch's resume and fetch lines); merged in
+  `b4f526d` keeping all three, gate green. Codex read the resolution only (`a78ce44..b4f526d`, 7 lines):
+  "the patch is correct", 46,406 input tokens, recorded. gentle-ai assess over the branch's own range
+  (`23708b1..b4f526d`, 609 lines): medium, not due (`under_budget`); the review was started anyway because
+  he asked for it. The selectorless STATUS ended `operation_timeout` ("context deadline exceeded",
+  `pre_native`, `retry_safe: false`, `next_action: stop`, nothing mutated), with the machine's CPU near 0 %
+  when sampled right after. Stopped as the envelope says; the pull request stays a draft.
