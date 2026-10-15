@@ -71,6 +71,22 @@ test('a test traced on another system, or with another value of an allowlisted v
   assert.equal(ask({}, { env: traceEnvOf({ TZ: 'America/Bogota' }) }).why.get('t.test.mjs'), 'traced with TZ=UTC, not TZ=America/Bogota');
 });
 
+// The result memory (odd/tasks/result-memory.md, T1, S1): a test keeps several passing traces, one per content
+// key, from any worktree; one of them matching now is enough, and with none matching it runs.
+test('a test is skipped when any of its stored traces matches now, and runs, saying the newest one\'s reason, when none does', () => {
+  const now = { 'a.test.mjs': 'h-a', 'f.txt': 'h-2', 'package.json': 'h-p' };
+  const newest = traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'f.txt': 'h-3', 'package.json': 'h-p' });
+  const matching = traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'f.txt': 'h-2', 'package.json': 'h-p' });
+  const older = traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'f.txt': 'h-1', 'package.json': 'h-p' });
+  const skip = selectTests({ tests: ['a.test.mjs'], readTraces: () => [newest, matching, older], stateOf: (key) => now[key] ?? 'absent' });
+  assert.deepEqual(skip.skipped, ['a.test.mjs']);
+  assert.equal(skip.full, null);
+  const run = selectTests({ tests: ['a.test.mjs'], readTraces: () => [newest, older], stateOf: (key) => now[key] ?? 'absent' });
+  assert.deepEqual(run.run, ['a.test.mjs']);
+  assert.match(run.why.get('a.test.mjs'), /f\.txt/);
+  assert.equal(selectTests({ tests: ['a.test.mjs'], readTraces: () => [], stateOf: () => 'absent' }).why.get('a.test.mjs'), 'no trace of a passing run');
+});
+
 test('a changed package.json is the whole suite, whatever the traces say', () => {
   const now = { 'a.test.mjs': 'h-a', 'package.json': 'h-new' };
   const traces = [traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'package.json': 'h-old' })];

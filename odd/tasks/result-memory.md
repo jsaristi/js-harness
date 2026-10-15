@@ -68,7 +68,7 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
 ## Tasks
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
-| T1 | S1, S2 | inline | pending | several traces per test by content key, and selection matching any |
+| T1 | S1, S2 | inline | T1a done (selection matches any stored trace: `readTraces`, RED then GREEN 8/8 in `bin/lib/select-tests.test.mjs`); T1b next | several traces per test by content key, and selection matching any |
 | T2 | S1 | inline | pending | the store under the git common dir, shared by the worktrees; the old per-worktree folder removed |
 
 ## Log
@@ -76,3 +76,8 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
   (research/parallel-gate.md): step 4 first (CI node --test with --test-concurrency=2, measure the GitHub
   run before/after; small), then step 2 (result memory shared by the worktrees, keyed per S5)." Step 4 is
   PR 166.
+- **Next step** (21:10): T1b, the tracer: write `<dir>/<encodeURIComponent(test)>/<key>.json` (key = the
+  sha of tracerHash, node, os, env, untraced and reads), keep the newest 8 by an exported pruning function
+  (unit-tested), a failure removes the test's folder and its old single file; `readTraces(dir, test)` in
+  `bin/lib/trace-reads.mjs`, newest first, and `readTrace` its newest; `startShadow` passes `readTraces`.
+  Then T2, the store under the git common dir.
