@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loopMain } from './loop.mjs';
-import { loopRecordPath } from './lib/loops.mjs';
+import { killTargets, loopRecordPath, readRecord, snapshotProcesses, targetsOf, writeRecord as publishRecord } from './lib/loops.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 // The process table and the kill are fakes, except in the last test, which starts a real loop and stops it. The
@@ -48,7 +48,7 @@ const liveRecord = (name, owner, extra = {}) => ({
 });
 
 /** The seams of one call. `table` is the process table each look returns, one after another, the last again. */
-function world({ cwd, home, tables = [[]], killAnswer = (targets) => ({ killed: targets.map((t) => t.pid), gone: [], running: [] }) }) {
+function world({ cwd, home, tables = [[]], onLook = () => {}, killAnswer = (targets) => ({ killed: targets.map((t) => t.pid), gone: [], running: [] }) }) {
   const state = { out: [], err: [], kills: [], looks: 0 };
   const deps = {
     cwd,
@@ -58,7 +58,11 @@ function world({ cwd, home, tables = [[]], killAnswer = (targets) => ({ killed: 
     homedir: () => home,
     run: noGit,
     pid: ME,
-    snapshot: () => tables[Math.min(state.looks++, tables.length - 1)],
+    snapshot: () => {
+      const look = state.looks++;
+      onLook(look);
+      return tables[Math.min(look, tables.length - 1)];
+    },
     kill: (targets) => {
       state.kills.push(targets);
       return killAnswer(targets);
@@ -204,11 +208,57 @@ test('run --restart of a loop another session owns refuses without --take-over',
   assert.equal(state.kills.length, 0);
 });
 
-test('a real loop: run in the background, status sees it alive, stop leaves no process of it', { timeout: 120000 }, async () => {
+test('run does not remove a live claim another session wrote after it read the stale record', async () => {
+  const p = place();
+  writeRecord(p.record('keeper'), liveRecord('keeper', OTHER));
+  const fresh = liveRecord('keeper', OTHER, { pid: 6000, createdAt: 3_000_000, child: null });
+  // The other session reclaims the stale record and claims the name between this run's read and its own reclaim.
+  const onLook = (look) => {
+    if (look === 0) writeRecord(p.record('keeper'), fresh);
+  };
+  const { state, deps } = world({ ...p, tables: [[self, { pid: 6000, ppid: 1, createdAt: 3_000_000 }]], onLook });
+  const code = await loopMain(['run', 'keeper', '--purpose', 'PR keeper', '--until', '5 hours', '--', process.execPath, '-e', 'process.exit(0)'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
+  assert.equal(code, 2);
+  assert.match(state.err.join('\n'), /another keeper was started meanwhile/);
+  assert.equal(JSON.parse(fs.readFileSync(p.record('keeper'), 'utf8')).pid, 6000, "the other session's claim is still there");
+  assert.deepEqual(fs.readdirSync(path.dirname(p.record('keeper'))), ['keeper.json'], 'nothing is left beside it');
+});
+
+test('a stop that leaves a descendant alive keeps it in the record, so the next stop reaches it', async () => {
+  const p = place();
+  writeRecord(p.record('keeper'), liveRecord('keeper', OWNER));
+  const grandchild = { pid: 5002, ppid: 5001, createdAt: 2_000_020 };
+  const first = world({ ...p, tables: [liveTable, [self, grandchild]], killAnswer: () => ({ killed: [5000, 5001], gone: [], running: [5002] }) });
+  assert.equal(await loopMain(['stop', 'keeper'], { CLAUDE_CODE_SESSION_ID: OWNER }, first.deps), 1);
+  assert.deepEqual(JSON.parse(fs.readFileSync(p.record('keeper'), 'utf8')).survivors, [{ pid: 5002, createdAt: 2_000_020 }]);
+  const second = world({ ...p, tables: [[self, grandchild], [self]] });
+  assert.equal(await loopMain(['stop', 'keeper'], { CLAUDE_CODE_SESSION_ID: OWNER }, second.deps), 0);
+  assert.deepEqual(second.state.kills, [[{ pid: 5002, createdAt: 2_000_020 }]]);
+  assert.equal(fs.existsSync(p.record('keeper')), false);
+});
+
+test('an exclusive claim refuses a name already recorded, keeps that record as it was and leaves no temporary file', () => {
+  const p = place();
+  const file = p.record('keeper');
+  publishRecord(file, liveRecord('keeper', OTHER), { exclusive: true });
+  assert.throws(() => publishRecord(file, liveRecord('keeper', OWNER), { exclusive: true }), { code: 'EEXIST' });
+  assert.equal(readRecord(file).record.owner, OTHER);
+  assert.deepEqual(fs.readdirSync(path.dirname(file)), ['keeper.json']);
+});
+
+test('a real loop: run in the background, status sees it alive, stop leaves no process of it', { timeout: 120000 }, async (t) => {
   const p = place();
   const bin = fileURLToPath(new URL('./loop.mjs', import.meta.url));
   const env = { ...process.env, CLAUDE_CODE_SESSION_ID: OWNER, JS_HARNESS_HOME: p.home };
   const child = spawn(process.execPath, [bin, 'run', 'sleeper', '--cwd', p.cwd, '--purpose', 'test', '--until', 'stopped', '--', process.execPath, '-e', 'setInterval(() => {}, 1000)'], { env, stdio: 'ignore' });
+  // Whatever fails below, nothing of the loop outlives the test: a stop, then its processes by pid and creation
+  // time, then the wrapper by its handle.
+  t.after(() => {
+    spawnSync(process.execPath, [bin, 'stop', 'sleeper', '--cwd', p.cwd], { env, stdio: 'ignore' });
+    const left = readRecord(p.record('sleeper')).record;
+    if (left) killTargets(targetsOf(left, snapshotProcesses()));
+    child.kill('SIGKILL');
+  });
   const deadline = Date.now() + 60000;
   while (!fs.existsSync(p.record('sleeper')) || JSON.parse(fs.readFileSync(p.record('sleeper'), 'utf8')).child === null) {
     assert.ok(Date.now() < deadline, 'the record appears');

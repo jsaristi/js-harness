@@ -130,7 +130,10 @@ function resolveCommand(command) {
 /** Stops the loop of `record`, under the owner rule. Returns the exit code. */
 async function stopLoop(ctx, name, file, record, snapshot, { caller, takeOver }) {
   if (stateOf(record, snapshot) === 'stale') {
-    fs.rmSync(file, { force: true });
+    if (!removeRecordOf(file, record)) {
+      ctx.err(`js-harness loop: ${name} was started again by another session meanwhile; nothing was stopped`);
+      return 2;
+    }
     ctx.out(`js-harness loop: ${name} was not running (pid ${record.pid}, owner ${short(record.owner)}, since ${sinceOf(record)}); its stale record removed`);
     return 0;
   }
@@ -157,13 +160,16 @@ async function stopLoop(ctx, name, file, record, snapshot, { caller, takeOver })
       return 1;
     }
     if (left.length === 0) {
-      fs.rmSync(file, { force: true });
+      removeRecordOf(file, record);
       ctx.out(`js-harness loop: stopped ${name}: ${targets.length} process${targets.length === 1 ? '' : 'es'}, none left (looked at ${hourOf(ctx.now())})`);
       return 0;
     }
     await ctx.sleep(300);
   }
-  ctx.err(`js-harness loop: ${name} is still alive after the kill: pid ${left.join(', ')}; its record is kept`);
+  // The record keeps what is left by pid and creation time: the runner and its command may be gone, and a record
+  // that named only them would read as stale and the next stop would kill nothing.
+  writeRecord(file, { ...record, survivors: targets.filter((target) => left.includes(target.pid)) });
+  ctx.err(`js-harness loop: ${name} is still alive after the kill: pid ${left.join(', ')}; its record is kept with them, for the next stop`);
   return 1;
 }
 
@@ -174,16 +180,18 @@ async function runLoop(ctx, parsed, file) {
     ctx.err('js-harness loop: the owner is not known: give --owner <session id>, or run it from a session (CLAUDE_CODE_SESSION_ID); nothing started');
     return 2;
   }
+  // The record first, then the table: a record names processes that existed before it was written, so a live
+  // loop's processes are in a table taken after the read.
+  const existing = readRecord(file);
+  if (existing.unreadable) {
+    ctx.err(`js-harness loop: the record ${file} cannot be read (${existing.unreadable}); nothing started. Look at it, then remove it by hand`);
+    return 1;
+  }
   let snapshot;
   try {
     snapshot = ctx.snapshot();
   } catch (err) {
     ctx.err(`js-harness loop: the process table could not be read (${err.message}); nothing started`);
-    return 1;
-  }
-  const existing = readRecord(file);
-  if (existing.unreadable) {
-    ctx.err(`js-harness loop: the record ${file} cannot be read (${existing.unreadable}); nothing started. Look at it, then remove it by hand`);
     return 1;
   }
   if (existing.record) {
@@ -197,7 +205,10 @@ async function runLoop(ctx, parsed, file) {
       if (stopped !== 0) return stopped;
       snapshot = ctx.snapshot();
     } else {
-      fs.rmSync(file, { force: true });
+      if (!removeRecordOf(file, record)) {
+        ctx.err(`js-harness loop: another ${name} was started meanwhile; nothing started`);
+        return 2;
+      }
       ctx.out(`js-harness loop: a stale record of ${name} (pid ${record.pid}, owner ${short(record.owner)}, since ${sinceOf(record)}) was cleared: its processes are gone`);
     }
   }

@@ -62,34 +62,63 @@ export function readRecords(folder, { readdir = (d) => fs.readdirSync(d), readFi
     });
 }
 
-/** Writes the whole record by rename, so a reader never sees half of it. `exclusive` creates it only when no
- * record of that name is there (the claim of a new loop) and throws EEXIST otherwise. */
+let asides = 0;
+/** A name beside `file` that no other writer uses (this process and a counter); it does not end in .json, so no
+ * read of the folder takes it for a record. */
+const besideOf = (file, kind) => `${file}.${process.pid}.${(asides += 1)}.${kind}`;
+
+/** Writes the whole record to a file of its own first, so a reader never sees half of it. `exclusive` publishes it
+ * by a hard link, which throws EEXIST when a record of that name is there: the claim of a new loop is whole and
+ * only one. Otherwise a rename replaces the record. */
 export function writeRecord(file, record, { exclusive = false } = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const text = `${JSON.stringify(record, null, 2)}\n`;
-  if (exclusive) {
-    fs.writeFileSync(file, text, { flag: 'wx' });
+  const temporary = besideOf(file, 'tmp');
+  fs.writeFileSync(temporary, `${JSON.stringify(record, null, 2)}\n`);
+  if (!exclusive) {
+    fs.renameSync(temporary, file);
     return;
   }
-  const temporary = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, text);
-  fs.renameSync(temporary, file);
+  try {
+    fs.linkSync(temporary, file);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
 }
 
-/** Removes the record only while it is still the one `record` is (the same process): a loop that was taken over
- * and started again by another session has a new record, which is not this one's to remove. */
+const sameRun = (a, b) => a.pid === b.pid && a.createdAt === b.createdAt;
+
+/** Removes the record only while it is still the one `record` is (the same process). It moves the file aside
+ * first, which only one session can do, and reads what it moved: a record another session wrote meanwhile (a new
+ * claim of the name) is put back and the answer is false. True when `record`'s file was removed or was gone. */
 export function removeRecordOf(file, record, { readFile } = {}) {
-  const now = readRecord(file, { readFile });
-  if (now.record && (now.record.pid !== record.pid || now.record.createdAt !== record.createdAt)) return false;
-  fs.rmSync(file, { force: true });
-  return true;
+  const moved = besideOf(file, 'aside');
+  try {
+    fs.renameSync(file, moved);
+  } catch (err) {
+    if (err.code === 'ENOENT') return true;
+    throw err;
+  }
+  const read = readRecord(moved, { readFile });
+  if (read.record && sameRun(read.record, record)) {
+    fs.rmSync(moved, { force: true });
+    return true;
+  }
+  try {
+    fs.linkSync(moved, file);
+  } catch {
+    // a third session claimed the name in between: its record stands
+  }
+  fs.rmSync(moved, { force: true });
+  return false;
 }
 
 const known = (value) => typeof value === 'number' && Number.isFinite(value);
 
-/** The processes a record names as its own: the one that runs the loop and the command it started. */
+/** The processes a record names as its own: the one that runs the loop, the command it started and what a stop
+ * before this one left alive. */
 function rootsOf(record) {
-  return [{ pid: record.pid, createdAt: record.createdAt }, record.child ?? null].filter((root) => root !== null && Number.isInteger(root.pid) && known(root.createdAt));
+  const survivors = Array.isArray(record.survivors) ? record.survivors : [];
+  return [{ pid: record.pid, createdAt: record.createdAt }, record.child ?? null, ...survivors].filter((root) => root !== null && typeof root === 'object' && Number.isInteger(root.pid) && known(root.createdAt));
 }
 
 const isSame = (entry, root) => entry.pid === root.pid && entry.createdAt === root.createdAt;
