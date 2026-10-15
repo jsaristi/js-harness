@@ -130,3 +130,13 @@ shape the hook reads).
   sub-agents too; `resume` 86/86, gate green. Codex read the resolution only (`5741be5..1050643`, 41
   lines): "the patch is correct", 109,993 input tokens against a plan of about 33,000, inside the 300,000
   allowance.
+- **L9** (2026-10-15): Sebastián answered the lead's question at 15:55 (JH ORQ transcript `e152c9d8`, line
+  3557, the question tool): "Reportar el defecto de gentle-ai y seguir". After a privacy scan, an open and
+  closed search of Gentleman-Programming/gentle-ai found one equivalent, #5404 (the same three-record
+  refusal, closed not planned, no fix, its maintainer asking for a failing run); the occurrence went there
+  as one comment:
+  https://github.com/Gentleman-Programming/gentle-ai/issues/5404#issuecomment-6202134031. The captured
+  `declined` invocation then ran once and was refused, nothing mutated: `stale_target_identity`, since the
+  branch moved past `784c752` after the lineage froze. By the handoff rule a refused decline fails closed
+  with no substitute command, so lineage `review-b745615b61ecbd6c` stays as it is; gentle-ai left no record
+  for this branch.
