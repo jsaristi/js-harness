@@ -149,7 +149,7 @@ function countLines(count, { from, to, offsetMinutes, folders, ms }) {
   lines.push(format(header), ...table.map(format));
   const { share } = count;
   lines.push(`Their share of the day's tokens: input ${percent(share.input)}, cache write ${percent(share.cacheCreation)}, cache read ${percent(share.cacheRead)}, output ${percent(share.output)}`);
-  lines.push(`Read as other: ${count.other}; effort or model inherited from the session: ${count.inherited}; call not found: ${count.callNotFound}`);
+  lines.push(`Read as other: ${count.other}; effort or model inherited from the session: ${count.inherited}; call not found: ${count.callNotFound}; carried over from the day before: ${count.carried}`);
   lines.push(`Read in ${(ms / 1000).toFixed(1)} s`);
   return lines;
 }

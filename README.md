@@ -366,10 +366,10 @@ role      model             effort asked/ran  launches  input  cache write  cach
 explorer  claude-opus-5-5   high/high               23    932      2197153    37928674   274820
 writer    claude-haiku-5-5  high/high               11    646      1626090    46702162   397934
 …
-total                                               53   2432      6297822   129006824  1036844
-Their share of the day's tokens: input 19%, cache write 28%, cache read 8%, output 23%
-Read as other: 4; effort or model inherited from the session: 14; call not found: 0
-Read in 7.3 s
+total                                               54   2502      6420288   132472395  1050507
+Their share of the day's tokens: input 19%, cache write 29%, cache read 8%, output 23%
+Read as other: 5; effort or model inherited from the session: 14; call not found: 1; carried over from the day before: 0
+Read in 8.2 s
 ```
 
 ### js-harness notify

@@ -65,7 +65,7 @@ test('subagents counts the day\'s launches by role, model and efforts, with toke
     assert.match(stdout, /^explorer\s+claude-opus-5-5\s+-\/high\s+1\s+100\s/m);
     assert.match(stdout, /^total\s+2\s+200\s/m);
     assert.match(stdout, /share of the day's tokens: input 40%/, 'sub-agents 200 of 500: the session\'s 300 of that day, not the 9999 of the day before');
-    assert.match(stdout, /Read as other: 0; effort or model inherited from the session: 1; call not found: 0/);
+    assert.match(stdout, /Read as other: 0; effort or model inherited from the session: 1; call not found: 0; carried over from the day before: 0/);
   } finally {
     records.cleanup();
   }

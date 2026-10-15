@@ -140,20 +140,28 @@ function ranOf(entries) {
   return { model: null, effort: null };
 }
 
-/** Each launch of `records` that started on a local day from `from` to `to` (inclusive):
- * `{ agentId, session, role, verb, modelAsked, effortAsked, inherited, modelRan, effortRan, usage, start,
- * end }`. A record is `{ session, agentId, meta, entries }`: the `.meta.json` object and the parsed lines
- * of one `agent-*.jsonl`. `calls` is the union of `callsOf` over the parent sessions. `effortAsked` and
- * `inherited` come from the parent's call, since the meta file records an effort even when none was
- * asked; both are `null` when the call was not found. Of the description only its first word is kept. */
+/** Each launch of `records` that started, or spent tokens, on a local day from `from` to `to` (inclusive):
+ * `{ agentId, session, role, verb, modelAsked, effortAsked, inherited, modelRan, effortRan, usage, started,
+ * start, end }`. A record is `{ session, agentId, meta, entries }`: the `.meta.json` object and the parsed
+ * lines of one `agent-*.jsonl`. `calls` is the union of `callsOf` over the parent sessions. `effortAsked`
+ * and `inherited` come from the parent's call, since the meta file records an effort even when none was
+ * asked; both are `null` when the call was not found. Of the description only its first word is kept.
+ * `usage` counts only the entries inside the days asked, as the sessions' usage the share compares it with
+ * does; `started` says whether the launch began inside them, so one carried over midnight adds its tokens
+ * to the next day without counting as one of its launches. */
 export function launchesOf(records, { from, to, offsetMinutes, calls = new Map() }) {
+  const inWindow = (stamp) => {
+    const day = dayOf(stamp, offsetMinutes);
+    return day !== null && day >= from && day <= to;
+  };
   const launches = [];
   for (const { session, agentId, meta = {}, entries } of records) {
     const stamps = entries.map((entry) => entry?.timestamp).filter((stamp) => typeof stamp === 'string' && !Number.isNaN(Date.parse(stamp)));
     if (stamps.length === 0) continue;
     const start = stamps[0];
-    const day = dayOf(start, offsetMinutes);
-    if (day < from || day > to) continue;
+    const spent = entries.filter((entry) => typeof entry?.timestamp === 'string' && inWindow(entry.timestamp));
+    const started = inWindow(start);
+    if (!started && spent.length === 0) continue;
     const ran = ranOf(entries);
     const call = calls.get(meta.toolUseId) ?? null;
     const modelAsked = typeof meta.model === 'string' ? meta.model : (call?.model ?? null);
@@ -167,7 +175,8 @@ export function launchesOf(records, { from, to, offsetMinutes, calls = new Map()
       inherited: call ? call.model === null || call.effort === null : null,
       modelRan: ran.model,
       effortRan: ran.effort,
-      usage: usageOf(entries),
+      usage: usageOf(spent),
+      started,
       start,
       end: stamps.at(-1),
     });
@@ -177,15 +186,17 @@ export function launchesOf(records, { from, to, offsetMinutes, calls = new Map()
 
 /** The count `subagents` prints: one row per role, model ran, effort asked and effort ran, sorted by
  * launches; the total; and the share of each token figure the sub-agents took of the day, `sessions`
- * being the main sessions' `usageOf` over the same days. */
+ * being the main sessions' `usageOf` over the same days. A launch carried over from before the days
+ * (`started: false`) adds its tokens and is not counted as a launch; `carried` says how many there were. */
 export function countOf(launches, sessions) {
   const rows = new Map();
   const total = { launches: 0, ...Object.fromEntries(TOKEN_FIELDS.map((field) => [field, 0])) };
   for (const launch of launches) {
     const key = [launch.role, launch.modelRan, launch.effortAsked, launch.effortRan].join('|');
     const row = rows.get(key) ?? { role: launch.role, model: launch.modelRan, effortAsked: launch.effortAsked, effortRan: launch.effortRan, launches: 0, ...Object.fromEntries(TOKEN_FIELDS.map((field) => [field, 0])) };
-    row.launches += 1;
-    total.launches += 1;
+    const counted = launch.started === false ? 0 : 1;
+    row.launches += counted;
+    total.launches += counted;
     for (const field of TOKEN_FIELDS) {
       row[field] += launch.usage[field];
       total[field] += launch.usage[field];
@@ -200,8 +211,9 @@ export function countOf(launches, sessions) {
     rows: [...rows.values()].sort((a, b) => b.launches - a.launches || a.role.localeCompare(b.role)),
     total,
     share,
-    other: launches.filter((launch) => launch.role === 'other').length,
-    inherited: launches.filter((launch) => launch.inherited === true).length,
-    callNotFound: launches.filter((launch) => launch.inherited === null).length,
+    other: launches.filter((launch) => launch.started !== false && launch.role === 'other').length,
+    inherited: launches.filter((launch) => launch.started !== false && launch.inherited === true).length,
+    callNotFound: launches.filter((launch) => launch.started !== false && launch.inherited === null).length,
+    carried: launches.filter((launch) => launch.started === false).length,
   };
 }

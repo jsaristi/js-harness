@@ -240,6 +240,17 @@ test('launchesOf keeps a launch by the local day it started, and skips one with 
   assert.deepEqual(launchesOf(records, { from: '2026-10-14', to: '2026-10-14', offsetMinutes: BOGOTA }).map((l) => l.agentId), ['late']);
 });
 
+test('a launch that crosses midnight counts its tokens on the day each was spent, and as a launch on the day it started', () => {
+  const record = { session: 's', agentId: 'night', meta: {}, entries: [answer('m1', { at: '2026-10-14T04:50:00Z', input: 7 }), answer('m2', { at: '2026-10-14T05:10:00Z', input: 11 })] };
+  // 23:50 on the 13th and 00:10 on the 14th, in Bogotá.
+  const [before] = launchesOf([record], { from: '2026-10-13', to: '2026-10-13', offsetMinutes: BOGOTA });
+  assert.deepEqual([before.started, before.usage.input], [true, 7]);
+  const [after] = launchesOf([record], { from: '2026-10-14', to: '2026-10-14', offsetMinutes: BOGOTA });
+  assert.deepEqual([after.started, after.usage.input], [false, 11]);
+  const count = countOf([after], { input: 0, cacheCreation: 0, cacheRead: 0, output: 0 });
+  assert.deepEqual([count.total.launches, count.total.input, count.carried], [0, 11, 1]);
+});
+
 test('countOf groups by role, model and efforts, totals, and gives each figure its share of the day', () => {
   const usage = (input, output) => ({ input, cacheCreation: 0, cacheRead: 100, output, messages: 1 });
   const launches = [

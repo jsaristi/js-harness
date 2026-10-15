@@ -285,7 +285,9 @@ classifier. Pure functions, no fs, built in T2 and T4:
   'explorer' | 'reviewer' | 'verifier' | 'other'`; and `launchesOf(entries, { from, to,
   offsetMinutes })` over parsed record entries → `{ agentId, session, role, verb, modelAsked,
   effortAsked, inherited, modelRan, effortRan, usage: { input, cacheCreation, cacheRead, output },
-  start, end }`, where `verb` is the description's first word and nothing else of it is kept.
+  started, start, end }`, where `verb` is the description's first word and nothing else of it is
+  kept, `usage` counts only the days asked and `started` says whether the launch began in them
+  (L13); `countOf(launches, sessions)` also says how many were `carried` over.
   The reader of files, `readEntries(folders, { from })`, streams lines and is apart.
 
 ## The paragraph handed over (T5)
@@ -345,8 +347,8 @@ questions listed.
   project's records, under `js-harness gate` since it reads about 231 MB
 - [ ] T5 (kind: docs) The paragraph for JH 5's skill and the js-harness skill, `taskModes` for
   JH 7's check, the startup item for JH 8, handed through the orchestrator (S2)
-- [ ] T6 (kind: verify) Two real days counted, the figures and a proposed rule on launches (C4)
-  to the orchestrator (S3)
+- [x] T6 (kind: verify) Two real days counted, the figures and a proposed rule on launches (C4)
+  to the orchestrator (S3). Figures and proposal in L14, sent to the orchestrator
 
 ## Log
 
@@ -408,3 +410,25 @@ questions listed.
   8%, output 23%. So the 59 percent of 2026-10-11 does not hold for this day by any figure; the
   Haiku writers read more cache (46.7 M) than the 23 Opus explorers (37.9 M). These are T6's first
   figures; T6 wants a second day before a rule on launches is proposed.
+- L13 (2026-10-15): gentle-ai assessed the branch (base `origin/main`) medium risk, review not
+  due (`under_budget`). The Codex review of 759c6b8..9900559 (4 parts, 616,701 input tokens, inside
+  the allowance of 1,408,800) found one defect, twice (P2, `bin/lib/subagent-count.mjs:170` and
+  `bin/subagents.mjs:129-131`): a sub-agent that crosses midnight summed its whole record on the
+  day it started, while the sessions' usage it is compared with was cut to the day. Taken: a
+  launch's `usage` now counts only its entries inside the days asked, `started` says whether it
+  began inside them, and one carried over adds its tokens without counting as a launch
+  (`carried` in the count's last line). RED observed for both tests, then GREEN. `launchesOf`
+  gained the field `started` and `countOf` the count `carried`, both additive: told to JH 15.
+- L14 (2026-10-15, T6): two days counted with the fix, `js-harness gate -- "node
+  bin/js-harness.mjs subagents --day 2026-10-13 && ... --day 2026-10-14"`. 13th: 35 launches
+  (reviewers 16, writers 11, explorers 7, verifiers 1), share input 28%, cache write 34%, cache
+  read 15%, output 38%, 4 inherited. 14th: 54 launches (explorers 24, writers 11, reviewers 8,
+  verifiers 6, other 5), share input 19%, cache write 29%, cache read 8%, output 23%, 14
+  inherited, 1 call not found. Every launch asked and ran at high. Cache read per launch: Haiku
+  writers 4.8 M and 4.2 M, Opus readers 1.6 M to 2.5 M. Reading: the "59 percent of a day's
+  tokens" of 2026-10-11 does not hold on either day for any figure; the main sessions take 62 to
+  92 percent, cache reads above all, so fewer sub-agent launches is not the lever. Proposed to
+  the orchestrator, his to decide: (1) no rule on fewer launches now; (2) a writer's brief stays
+  one narrow task, since a Haiku writer reads about twice the cache of a reader per launch,
+  measured again with this command after a week; (3) every Agent call names its model, since 4
+  and 14 launches inherited it, which the paragraph of T5 already asks.
