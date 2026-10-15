@@ -374,6 +374,9 @@ it, in a change that touched nothing of the evals.
 - Class: machine
 - Seen: 2026-10-15 — PR 185's GitHub run 38705933668, on Linux, by the lead's notice — line 198,
   `readdirSync(workRoot)` gave `['eval-m3TuMV']` where `[]` was expected: its cleanup had not ended
+- Seen: 2026-10-15 — PR 185's GitHub run 38722955417, on Linux, by the lead's message to JH 21 —
+  `actual: [ 'eval-k9fHPH' ]` where `[]` was expected, under `--test-concurrency=2`; the only failing
+  test of the run (odd/tasks/drop-github-gate.md L2)
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
