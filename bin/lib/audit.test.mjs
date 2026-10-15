@@ -45,6 +45,10 @@ const NOT_OWN = [
   'Son las 06:45 y voy por el 26% del contexto.',
   'Mi contexto: 70 % de 350k.',
   '- Mi contexto: 49% (148k de 300k).',
+  // A range is no exact claim, either end of it (Codex, 2026-10-15).
+  'Mi contexto: 40%-50%.',
+  'Contexto: 40-50 %.',
+  'Contexto: 40 % – 50 %.',
 ];
 
 test('ownShares reads the share a session states of its own context', () => {
@@ -124,6 +128,26 @@ test('auditEntries takes a share of the window the session\'s own last get_usage
   assert.equal(result.shares, 4);
   assert.equal(result.windowRead, true);
   assert.deepEqual(result.wrongShares, [{ line: 46, stated: 50, recorded: 30 }]);
+});
+
+test('auditEntries takes no window from a side chain\'s get_usage read (Codex, 2026-10-15)', () => {
+  const sidechain = usageRead(60, { window: 300000 });
+  sidechain.entry.isSidechain = true;
+  const result = auditEntries([sidechain, reply(61, { text: 'Contexto: 30 %.', tokens: 150000 })], { offsetMinutes: 0 });
+  assert.equal(result.windowRead, false);
+  assert.deepEqual(result.wrongShares, []);
+});
+
+test('auditEntries reads each hour of sending at the offset of its own time, so a day across a clock change reads right (Codex, 2026-10-15)', () => {
+  // A host on UTC-5 in winter and UTC-4 in summer: both messages were stamped right by the local clock.
+  const offsetAt = (timestamp) => (timestamp < '2026-03-08T07:00:00.000Z' ? -300 : -240);
+  const result = auditEntries([
+    reply(70, { timestamp: '2026-01-15T13:00:20.000Z', tools: [send('SendMessage', 'From JH 15, 08:00 local. Winter.')] }),
+    reply(71, { timestamp: '2026-07-15T12:00:20.000Z', tools: [send('SendMessage', 'From JH 15, 08:00 local. Summer.')] }),
+    reply(72, { timestamp: '2026-07-15T13:00:20.000Z', tools: [send('SendMessage', 'From JH 15, 08:00 local. An hour late.')] }),
+  ], { offsetMinutes: offsetAt });
+  assert.equal(result.stamped, 3);
+  assert.deepEqual(result.wrongHours, [{ line: 72, stamped: '08:00', sent: '09:00' }]);
 });
 
 test('auditEntries says when no get_usage read gave the window, so its shares are of the default one', () => {

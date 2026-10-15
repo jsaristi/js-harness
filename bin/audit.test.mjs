@@ -122,6 +122,25 @@ test('audit --day reads another day', async (t) => {
   assert.deepEqual(JSON.parse(out).sessions.map((s) => [s.stamped, s.wrongHours.length]), [[1, 1]]);
 });
 
+test('audit reads a day of another season at that season\'s offset, its bounds and its hours (Codex, 2026-10-15)', async (t) => {
+  // UTC-5 in winter, UTC-4 in summer; run in summer about a winter day. 04:30Z on the 16th is 23:30 of the 15th there.
+  const where = fixture(t, {
+    'ffffffff-6666': [reply('2026-01-16T04:30:20.000Z', { tools: [send('From JH 15, 23:30 local. Late in winter.')] })],
+  });
+  const out = [];
+  const code = await auditMain(['--day', '2026-01-15', '--json'], where.env, {
+    cwd: where.project,
+    stdout: (line) => out.push(line),
+    stderr: () => {},
+    run: () => ({ status: 128, stdout: '', stderr: '' }),
+    homedir: () => '/nowhere',
+    now: () => Date.parse('2026-07-15T20:00:00.000Z'),
+    offsetMinutes: (timestamp) => (timestamp < '2026-03-08T07:00:00.000Z' ? -300 : -240),
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(JSON.parse(out.join('\n')).sessions.map((s) => [s.stamped, s.wrongHours.length]), [[1, 0]]);
+});
+
 test('audit refuses an unknown argument or a bad day with exit 2 and its usage', async (t) => {
   const where = fixture(t, TRANSCRIPTS);
   for (const argv of [['--nope'], ['--day', '2026-02-30'], ['--days', '9']]) {

@@ -144,7 +144,7 @@ export async function auditMain(argv, env = process.env, deps = {}) {
     run = (command, args, options) => spawnSync(command, args, { encoding: 'utf8', ...options }),
     homedir = os.homedir,
     now = Date.now,
-    offsetMinutes = -new Date().getTimezoneOffset(),
+    offsetMinutes = (timestamp) => -new Date(timestamp).getTimezoneOffset(),
   } = deps;
   let parsed;
   try {
@@ -153,31 +153,36 @@ export async function auditMain(argv, env = process.env, deps = {}) {
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
+  // The offset at each timestamp, not today's: a day before a clock change has another one (Codex, 2026-10-15).
+  const offsetAt = typeof offsetMinutes === 'function' ? offsetMinutes : () => offsetMinutes;
   const started = now();
-  const to = parsed.day ?? dayOf(new Date(started).toISOString(), offsetMinutes);
+  const startedAt = new Date(started).toISOString();
+  const to = parsed.day ?? dayOf(startedAt, offsetAt(startedAt));
   const from = shiftDay(to, 1 - parsed.days);
   const folders = recordFolders({ cwd: path.resolve(parsed.cwd ?? defaultCwd), env, homedir, run });
   if (folders.length === 0) {
     stderr('no Claude Code records folder for this project');
     return 1;
   }
-  const since = Date.parse(`${from}T00:00:00Z`) - offsetMinutes * 60_000;
+  // Files changed before the first day's start are left unread; a day's margin covers any offset.
+  const since = Date.parse(`${from}T00:00:00Z`) - 86_400_000;
   const inWindow = (timestamp) => {
-    const day = typeof timestamp === 'string' ? dayOf(timestamp, offsetMinutes) : null;
+    const day = typeof timestamp === 'string' && !Number.isNaN(Date.parse(timestamp)) ? dayOf(timestamp, offsetAt(timestamp)) : null;
     return day !== null && day >= from && day <= to;
   };
+  const zoneAt = offsetAt(`${to}T12:00:00.000Z`);
   const sessions = [];
   for (const folder of folders) {
     for (const file of recentTranscripts(folder, since)) {
-      const audit = await auditFile(file, { inWindow, offsetMinutes });
+      const audit = await auditFile(file, { inWindow, offsetMinutes: offsetAt });
       if (audit.messages > 0 || audit.shares > 0) sessions.push({ session: path.basename(file, '.jsonl'), ...audit });
     }
   }
   sessions.sort((a, b) => a.session.localeCompare(b.session));
   if (parsed.json) {
-    stdout(JSON.stringify({ from, to, offsetMinutes, folders: folders.length, sessions }, null, 2));
+    stdout(JSON.stringify({ from, to, offsetMinutes: zoneAt, folders: folders.length, sessions }, null, 2));
   } else {
-    for (const line of auditLines(sessions, { from, to, offsetMinutes, folders: folders.length, ms: now() - started })) stdout(line);
+    for (const line of auditLines(sessions, { from, to, offsetMinutes: zoneAt, folders: folders.length, ms: now() - started })) stdout(line);
   }
   return 0;
 }

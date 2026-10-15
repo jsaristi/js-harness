@@ -62,8 +62,9 @@ export function ownShares(text, window = DEFAULT_CONTEXT_WINDOW) {
       numbers.add(match.index);
     }
     for (const at of [...numbers].sort((a, b) => a - b)) {
-      if (/[-–]\s*$/.test(clause.slice(0, at))) continue;
       const rest = clause.slice(at);
+      // Either end of a range, "40%-50%" or "40-50 %", is no exact claim (Codex, 2026-10-15).
+      if (/[-–]\s*$/.test(clause.slice(0, at)) || /^\d{1,3}\s?%?\s*[-–]\s*\d/.test(rest)) continue;
       // A window named right after the share, "70 % de 350k" or "49% (148k de 300k)", that is not the session's.
       const named = /^\d{1,3}\s?%\s*(?:\(\s*\d+\s?k\s+)?(?:de|of)\s+(\d+)\s?k\b/i.exec(rest);
       if (named !== null && Number(named[1]) * 1000 !== window) continue;
@@ -93,7 +94,8 @@ const USAGE_READ = /"session":\s*"self"[\s\S]{0,300}?"contextWindow":\s*(\d+)/;
 
 /** The window the user entry `entry` reports from a get_usage read of the session itself, or null. */
 function windowRead(entry) {
-  if (entry?.type !== 'user' || !Array.isArray(entry.message?.content)) return null;
+  // A side chain's read is a sub-agent's own context, not the session's (Codex, 2026-10-15).
+  if (entry?.type !== 'user' || entry.isSidechain || !Array.isArray(entry.message?.content)) return null;
   for (const block of entry.message.content) {
     if (block?.type !== 'tool_result') continue;
     const texts = typeof block.content === 'string' ? [block.content]
@@ -106,11 +108,15 @@ function windowRead(entry) {
   return null;
 }
 
-/** `timestamp` as `HH:MM` in the local time `offsetMinutes` east of UTC, or null when it is no time. */
+/** `timestamp` as `HH:MM` in the local time `offsetMinutes` east of UTC, or null when it is no time. `offsetMinutes`
+ * is a number, or a function giving the offset at a timestamp: a day before a clock change has another offset than
+ * today (Codex, 2026-10-15). */
 function localHour(timestamp, offsetMinutes) {
   const at = Date.parse(timestamp);
   if (Number.isNaN(at)) return null;
-  const local = new Date(at + offsetMinutes * 60_000);
+  const offset = typeof offsetMinutes === 'function' ? offsetMinutes(timestamp) : offsetMinutes;
+  if (!Number.isFinite(offset)) return null;
+  const local = new Date(at + offset * 60_000);
   return `${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`;
 }
 
@@ -124,8 +130,8 @@ function minutesApart(a, b) {
 /**
  * The audit of one session's transcript.
  * @param {Array<{ entry: object, line: number }>} items the transcript's entries with their line numbers, in order
- * @param {{ offsetMinutes: number, window?: number }} options the local time's offset east of UTC, in minutes,
- *   and the context window a share is of when no get_usage read of the session gives one
+ * @param {{ offsetMinutes: number | ((timestamp: string) => number), window?: number }} options the local time's
+ *   offset east of UTC, in minutes, or a function giving it at a timestamp, and the context window a share is of when no get_usage read of the session gives one
  * @returns {{ messages: number, stamped: number, wrongHours: Array<{ line: number, stamped: string, sent: string }>,
  *   shares: number, wrongShares: Array<{ line: number, stated: number, recorded: number }>, windowRead: boolean }}
  *   messages: the messages sent to other sessions; stamped: those whose opening stamps an hour; wrongHours: the
