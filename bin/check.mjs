@@ -14,6 +14,9 @@ import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
+import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
@@ -24,6 +27,8 @@ import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
+import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './lib/project-functions.mjs';
+import { clonePending } from './lib/project.mjs';
 
 export { estimateTokens };
 
@@ -271,8 +276,9 @@ function sameFolder(one, other) {
 
 /** The paths of the staged change, which is what the commit a gate guards will hold, when every one of
  * them is among `documents` (`discoverDocuments`). `null` when one is not, when nothing is staged (a
- * check run by hand guards no commit), and whenever git does not say: no git, no repository, a command
- * that fails. `null` is "run the sensors", so every doubt ends in a gate that runs what it always ran.
+ * check run by hand guards no commit; in a hook, an amend is judged against HEAD^, below), and whenever git
+ * does not say: no git, no repository, a command that fails. `null` is "run the sensors", so every doubt
+ * ends in a gate that runs what it always ran.
  *
  * What is staged is listed in the environment this process was given. A hook is given `GIT_INDEX_FILE`
  * by `git commit <path>` and `git commit -a`, which commit from an index of their own: that index is the
@@ -312,14 +318,22 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
   /** `paths` when there are some and all are documents, else `null`. */
   const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
-  const staged = changed();
-  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
-  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14).
-  if (staged.length === 0) return null;
-  const own = documentsOnly(staged);
-  if (own) return { paths: own };
   /** Whether `ref` names a commit here. */
   const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
+  const staged = changed();
+  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
+  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14). A hook is the one
+  // exception, told by `GIT_INDEX_FILE`, which git hands every pre-commit hook and a check by hand is not
+  // given: there it is `git commit --amend` (or `--allow-empty`), run while HEAD is still the commit it
+  // replaces, so the commit it makes changes against HEAD^ what HEAD did. An amend of the message of a
+  // commit of documents ran the whole suite and waited for the lock on 2026-10-15 (JH 17).
+  if (staged.length === 0) {
+    const hooked = Object.keys(process.env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE');
+    const paths = hooked && named('HEAD^') ? documentsOnly(changed('HEAD^')) : null;
+    return paths ? { paths, side: 'HEAD^' } : null;
+  }
+  const own = documentsOnly(staged);
+  if (own) return { paths: own };
   const trunk = ['origin/HEAD', 'origin/main', 'origin/master'].find(named);
   for (const side of [...(named('MERGE_HEAD') ? ['MERGE_HEAD'] : []), ...(trunk ? [trunk] : [])]) {
     const paths = documentsOnly(changed(side));
@@ -1392,8 +1406,11 @@ function whyNoAssessment(result, timeout) {
  * at every commit instead of depending on anyone remembering to ask. Informational and fail-open: gentle-ai
  * owns review and RDD is the user's switch, so a missing, failing or slow gentle-ai never turns a commit red.
  * Only an explicit `off` skips the assessment; an unreadable mode counts as on, the switch's default. */
-export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
+export function checkReview(cwd, { spawn = spawnSync, git = spawnSync, timeout = 20000 } = {}) {
   const row = (detail, lines) => ({ name: 'review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  // With the Codex review off here, gentle-ai's is the one review of the code: it is said due from medium risk up,
+  // his rule (odd/tasks/on-demand-functions.md, S9), and its absence is said too.
+  const codexOff = codexSwitchHere(cwd, git).value === 'off';
   const notFound = () => row('gentle-ai was not found, so review by risk was not assessed');
   const isMissing = (result) => result.error?.code === 'ENOENT';
 
@@ -1401,7 +1418,8 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   if (isMissing(mode)) return notFound();
   const status = mode.error || mode.status !== 0 ? null : jsonObject(mode.stdout)?.status;
   if (isObject(status) && status.effective === 'off') {
-    return row(`RDD is off (${status.source ?? 'unknown source'}), so no review was assessed`);
+    const off = `RDD is off (${status.source ?? 'unknown source'}), so no review was assessed`;
+    return row(codexOff ? `${off}, and the Codex review is off here: no review reads this project's code` : off);
   }
 
   // Parsed whatever the exit code: on a clean tree gentle-ai exits non-zero and still prints the JSON.
@@ -1426,10 +1444,39 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   }
 
   const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
-  const detail = `${risk} risk, ${count(paths, 'path')}, ${count(changed, 'line')}: review ${due ? 'due' : 'not due'} (${dueReason})`;
+  // His answer (S9) is high and medium: gentle-ai may call a high change not due (under its budget), and with
+  // no Codex review it is due all the same.
+  const dueHere = !due && codexOff && (risk === 'medium' || risk === 'high');
+  const why = dueHere ? `${risk} risk and the Codex review is off here` : dueReason;
+  const detail = `${risk} risk, ${count(paths, 'path')}, ${count(changed, 'line')}: review ${due || dueHere ? 'due' : 'not due'} (${why})`;
   const next = assessed.next_transition?.command;
   if (due && typeof next === 'string') lines.push(`next: ${next}`);
   return row(detail, lines);
+}
+
+/** The `functions` row (odd/tasks/on-demand-functions.md): a switch of `harness.json` "functions" that cannot be
+ * read fails the gate, as `sameTree` does, since every switch is then read as on and nothing says so but this;
+ * a clone that is not what its switches ask is said so, one line a difference, and passes, since a gate writes
+ * nothing and `js-harness functions apply` does. No row where the switches are read and applied. */
+export function checkFunctions(cwd) {
+  // Whether the switches can be read does not depend on the files of the tree, so no git is asked: a static
+  // row is all a gate knows before its sensors, and one that fails stops the gate before any git. A
+  // harness.json that is no JSON at all is the `sensors` row's to say, which reads the same file: one fault,
+  // one row. This one says what is wrong in "functions".
+  const harness = harnessOfTree(cwd);
+  if (harness.error) return [];
+  const { errors } = functionsOf(harness, { paths: [] });
+  if (errors.length === 0) return [];
+  return [{ name: 'functions', pass: false, detail: errors.join('; '), lines: ['until it is fixed every switch is read as on; js-harness functions shows each'] }];
+}
+
+/** The `functions` information row: one line for each way this clone is not what its switches ask, or no row.
+ * Read-only, since a gate writes nothing, and asked only of a gate that was not stopped, as the `review` row is.
+ * A clone the harness never set up holds no manifest to drift from and is told nothing (`clonePending`). */
+export function checkFunctionsPending(cwd, { spawn = spawnSync } = {}) {
+  const pending = clonePending(cwd, { spawn });
+  if (pending.length === 0) return [];
+  return [{ name: 'functions', pass: true, info: true, detail: 'this clone is not what its switches ask: js-harness functions apply makes it so', lines: pending }];
 }
 
 /** What the Codex review records say of the code commits between the default branch of `remote` and
@@ -1496,19 +1543,180 @@ function coveredDetail({ codeCommits, base }) {
     : `no code commits since ${base}`;
 }
 
+/** What the Codex review the pushed branch ends on still owes: `null` when it owes nothing, or when nothing
+ * can be proven; `{ refuse: true, detail, lines }` when it owes a correction never rechecked; and
+ * `{ refuse: false, lines }`, a warning the passing row carries, when a recheck left findings open.
+ *
+ * Why. A record covers its commits whatever its review found, so coverage alone let a branch push right
+ * after Codex called its head incorrect (2026-10-14: two P2 findings, then "all covered by a Codex review
+ * record"). The review the branch ends on is the last record that covers its newest code commit; what it
+ * owes is what `codex-review` reads to decide whether the next range is a recheck (`recheckState`). So this
+ * refuses the head whose next review would be a recheck, and nothing else. The head of a recheck that left
+ * findings open passes with a warning that names them: a second recheck is not run, so refusing it would
+ * leave a session away from the user no way forward, and whether a disputed finding is waived is the user's
+ * call (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./lib/codex-review-runs.mjs says why);
+ * the run log, where the findings are kept, only adds this refusal, and a log that cannot be read proves
+ * nothing owed. Documents committed after that head change nothing here: they are no code commit. */
+function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
+  const newest = codeCommits[0];
+  if (newest === undefined) return null;
+  // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
+  // review, so one written later, as to a document commit after the head, must not hide the debt.
+  const last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1);
+  if (last === undefined) return null;
+  const from = last.rec.head;
+  let records;
+  let runs;
+  try {
+    records = readCodexReviews(cwd, { spawn });
+    runs = readCodexReviewRuns(cwd, { spawn });
+  } catch {
+    return null;
+  }
+  const state = recheckState({ from, records, runs });
+  if (state.kind === 'review' || (state.kind === 'refused' && state.open === 0)) return null;
+  const shortOf = (id) => gitOut(spawn, cwd, ['rev-parse', '--short', id]) ?? id.slice(0, 7);
+  const findings = (n) => `${n} finding${n === 1 ? '' : 's'}`;
+  if (state.kind === 'recheck') {
+    const at = shortOf(from);
+    return {
+      refuse: true,
+      detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
+      lines: [...state.findings.map(priorLine), `commit the correction, then recheck it: js-harness codex-review --base ${at}`],
+    };
+  }
+
+  // A recheck that left findings open, which a second recheck may not take up: the recheck is the last
+  // reviewed record that ends at `from` when it is one, else the last one of the findings that ended there.
+  const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
+  const atFrom = reviewed.filter((rec) => rec.head === from).at(-1);
+  const recheck = typeof atFrom?.recheckOf === 'string' ? atFrom : reviewed.filter((rec) => rec.recheckOf === from).at(-1);
+  const id = Array.isArray(recheck.runs) ? recheck.runs.at(-1) : recheck.run;
+  const line = runs.findLast((one) => one?.id === id);
+  const answered = runAnswerFindings(line);
+  const prior = line?.recheck?.findings;
+  // The findings it left open are those its answer marked not fixed or blocking, or did not mark, as
+  // `codex-review` counted them; a line that kept no answer or no count lists none, and still refuses.
+  const read = answered !== null && Number.isInteger(prior) ? classifyRecheck({ findings: answered }, prior) : null;
+  const open = read === null ? [] : [...read.notFixed, ...read.blocking, ...read.unmarked];
+  const at = shortOf(recheck.head);
+  const left = state.open === null ? 'findings open (its counts were not kept)' : `${findings(state.open)} open`;
+  return {
+    refuse: false,
+    lines: [
+      `warning: the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(state.of)}`,
+      ...open.map(priorLine),
+      // No skip is offered: a skip records no correction.
+      `the push passes; the user decides whether they are waived, or a correction is committed as code and reviewed`,
+    ],
+  };
+}
+
 /** The `--push` row: every commit between the remote's default branch and `head` that changes a file
  * a review reads (not a document, not a path the project marks; a merge by the files somebody wrote
  * in it, so one that only brings two sides together needs none: `reviewCoverage`)
  * must lie in a range some `codex-review` record covers (any
  * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
- * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
+ * nothing for a review to look at, such as a change and its revert; both are listed), and the review the
+ * branch ends on must owe no unrechecked correction (`correctionOwed`; a recheck that left findings open
+ * passes with a warning that names them). Plain `check` never
  * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed: what it
  * runs is `checkCodexReviewDebt`, which reads the same records and fails nothing. */
 export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
+  // The switch is read at the commit pushed, before the remote is resolved: a project with the review off is
+  // never refused for a remote this row cannot measure. One that cannot be read is read as on, and said.
+  const git = gitIn(cwd, spawn);
+  const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])?.trim();
+  const atTip = tip ? codexSwitchAt(git, tip) : null;
+  if (atTip?.value === 'off') {
+    const row = { name: 'codex-review', pass: true, detail: `the Codex review is off at the pushed commit (${atTip.because}), so no record is asked for` };
+    const turned = turnsReviewOff(cwd, git, spawn, remote, tip);
+    return turned ? { ...row, lines: [turned] } : row;
+  }
+  const row = codexCoverageRow(cwd, head, { spawn, remote });
+  if (!atTip?.errors.length) return row;
+  return { ...row, lines: [...atTip.errors.map((error) => `read as on: ${error}`), ...(row.lines ?? [])] };
+}
+
+/** The Codex review's switch at the commit `rev`, read from that commit's own files: `{ value, because, errors }`. */
+function codexSwitchAt(git, rev) {
+  const { errors, resolved } = functionsOf(harnessOfCommit(git, rev), commitTree(git, rev));
+  return { ...resolved.codexReview, errors };
+}
+
+/** The top of the working tree `cwd` is in: the nearest folder up from it that holds `.git` (a folder, or the
+ * file of a worktree), found without starting git, since the rows that read it count their git processes.
+ * `cwd` itself where none does. */
+function topOf(cwd) {
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    if (path.dirname(dir) === dir) return cwd;
+  }
+}
+
+/** The Codex review's switch in the working tree of the repository `cwd` is in, read at its top: `cwd` may be
+ * a folder below it. Outside a repository, `cwd` itself. */
+function codexSwitchHere(cwd, spawn) {
+  const { errors, resolved } = functionsOf(harnessOfTree(topOf(cwd)), workingTree(gitIn(cwd, spawn)));
+  return { ...resolved.codexReview, errors };
+}
+
+/** The line of a push that turns the review off where the default branch of `remote` has it on, or `null`:
+ * the switch is the pushed commit's to say, and the push says it in plain sight. */
+function turnsReviewOff(cwd, git, spawn, remote, tip) {
+  const remotes = git(['remote'])?.split('\n').map((line) => line.trim()) ?? [];
+  if (!remotes.includes(remote)) return null;
+  const branch = defaultBranch(spawn, cwd, remote);
+  if (!branch || codexSwitchAt(git, branch.ref).value !== 'on') return null;
+  return `this push turns the Codex review off: it is on at ${branch.label} and off at ${git(['rev-parse', '--short', tip]).trim()}`;
+}
+
+/** git's empty tree: the base a diff of everything a commit holds is taken from. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+/** The push row of the first push of a project to an empty repository, or `null` when it is not one. His
+ * answer (odd/tasks/on-demand-functions.md, S10): it passes and says so, with what went unread and the
+ * command that reviews it, which plans its cost first. It is one only where the remote holds no branch at all,
+ * asked of the remote itself (`git ls-remote`), since a clone that never fetched holds no refs of a remote that
+ * has branches; a remote that cannot be asked is no first push, and the row fails as before. */
+function firstPushRow(cwd, head, { spawn, remote }) {
+  const remotes = gitOut(spawn, cwd, ['remote'])?.split('\n').map((line) => line.trim()) ?? [];
+  if (!remotes.includes(remote)) return null;
+  if (gitOut(spawn, cwd, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/${remote}/`]) !== '') return null;
+  let listed;
+  try {
+    // Asked only where no ref of the remote is here, so once a project; a remote that does not answer in 20 s is
+    // no first push, and the row fails as before rather than hold the push.
+    listed = spawn('git', ['ls-remote', '--heads', remote], { cwd, encoding: 'utf8', timeout: 20000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+  } catch {
+    return null;
+  }
+  if (!listed || listed.error || listed.status !== 0 || listed.stdout.trim() !== '') return null;
+  const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
+  const commits = tip && gitOut(spawn, cwd, ['rev-list', '--count', tip]);
+  const roots = tip && gitOut(spawn, cwd, ['rev-list', '--max-parents=0', tip])?.split('\n').filter(Boolean);
+  if (!commits || !roots?.length) return null;
+  const first = roots[roots.length - 1].slice(0, 7);
+  const size = reviewSize(spawn, cwd, EMPTY_TREE, tip);
+  const unread = size === null ? 'git could not size them' : `${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}`;
+  return {
+    name: 'codex-review',
+    pass: true,
+    detail: `${remote} holds no branch yet, so this first push passes with no Codex review; from the next push on, every code commit is measured against what it leaves there`,
+    lines: [
+      `${counted(Number(commits), 'commit')} went unread by Codex: ${unread}`,
+      `review them when you choose: js-harness codex-review --base ${first} --plan prints the cost and starts nothing; without --plan it reviews them`,
+      `${first} itself, the first commit, is in no range: what it holds stays unread`,
+    ],
+  };
+}
+
+/** The push row with the review on: what the records say of the code commits pushed. */
+function codexCoverageRow(cwd, head, { spawn, remote }) {
   const name = 'codex-review';
   const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
   const state = codexReviewCoverage(cwd, head, { spawn, remote });
-  if (state.unknown) return fail(state.unknown.detail, state.unknown.lines);
+  if (state.unknown) return firstPushRow(cwd, head, { spawn, remote }) ?? fail(state.unknown.detail, state.unknown.lines);
   const { tip, baseRef, base, codeCommits, covers, uncovered, note } = state;
   if (uncovered.length) {
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
@@ -1532,10 +1740,14 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
 
+  const owed = correctionOwed(cwd, state, { spawn });
+  if (owed?.refuse) return fail(`${owed.detail}${note}`, owed.lines);
+
   // The records that cover a code commit here and are no review of Codex's, each as a line that says which
   // it is and why: an explicit skip, or a range that held nothing to review. The detail counts the commits
   // as covered by a record, which they are; these lines are what keeps that from reading as "reviewed".
   const lines = notReviews(state).map((rec) => `${NOT_A_REVIEW[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason ?? 'no reason given'}`);
+  if (owed !== null) lines.push(...owed.lines);
   return { name, pass: true, detail: `${coveredDetail(state)}${note}`, ...(lines.length ? { lines } : {}) };
 }
 
@@ -1586,6 +1798,9 @@ export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin'
   const row = (detail, lines) => ({ name: 'codex-review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
   const cannotTell = (why) => row(`cannot tell how much code waits for a Codex review: ${why}`);
   try {
+    // Inside the guard: the switch is read from files and git as the rest is, and fails nothing either.
+    const here = codexSwitchHere(cwd, spawn);
+    if (here.value === 'off') return row(`the Codex review is off here (${here.because}): no code waits for one`);
     return codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
   } catch (err) {
     return cannotTell(`reading the commits, their Codex review records or the size of their review failed (${err instanceof Error ? err.message : String(err)})`);
@@ -1742,7 +1957,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
@@ -1772,13 +1987,15 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     rows.push(...sensed);
     stopped = sensed.some((row) => row.stopped === true);
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
-    if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
+    if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi, git: deps.git }));
   }
   // How much code waits for a Codex review, said at every commit and failing none: the row that fails is the
   // push's. It reads commits and records, never the working tree, so the inner run prints it as well.
   // `deps.git` stands in for `spawnSync` here and where a gate asks git what is staged or what is untracked
   // in its working tree (`checkSensors`), since `deps.spawn` is what runs a sensor.
-  if (!push && !stopped) rows.push(checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
+  // A clone that is not what its switches ask is said after the sensors, as the review is, and not by a gate
+  // that stopped: it reads git, which a stopped gate asks nothing of.
+  if (!push && !stopped) rows.push(...checkFunctionsPending(cwd, { spawn: deps.git }), checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
 
   for (const row of rows) {
     console.log(formatRow(row));

@@ -13,6 +13,7 @@ import { killByPath, planTrials, resolveAgent, runTrial, trialKey } from './runn
 import {
   CODEX_EVAL_MODEL, CODEX_PERMISSION_MODE, EVAL_MODEL, TOKEN_VARIABLE, USAGE, UsageError, diffRun, formatSummary, parseArgs, readCodexStack, readStack, suiteMain, summarizeResults,
 } from './suite.mjs';
+import { reportLines, summarize } from './honesty-report.mjs';
 import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -1746,4 +1747,161 @@ test('a run that names an arm is refused until arms are built, and nothing runs;
   const plan = depsFor(m);
   assert.equal(await suiteMain([...runArgv(m, { '--configs': 'current,current-without-skills', '--efforts': 'medium' }), '--plan'], {}, plan.deps), 0, plan.io.err);
   assert.match(plan.io.out, /unknown for 4 trials, .*alpha current-without-skills medium \(1\)/);
+});
+
+// ---- the honesty runs -------------------------------------------------------------------------------------------------
+// The two honesty configs (`configs.mjs`, `odd/tasks/honesty-audit.md`, T10) are Claude Code runs of the minimal arm
+// whose trial workspace holds a project memory: the template's text, and in one of them the line under test. They keep
+// what they write in an `honesty` directory of their own, which their report (`evals/honesty-report.mjs`) reads.
+
+const HONESTY_NAMES = ['honesty-base', 'honesty-line'];
+const HONESTY_MEMORY = '# Project\n\n## What good looks like\nA behavior change arrives with the test that proves it, written first. A claim about this project carries its evidence.\n';
+/** What a results document pins of each honesty config: the SHA-256 of the memory text it seeds. The two texts are
+ * written out here, so that a changed template or line changes the pin and is not silent. */
+const HONESTY_PINS = {
+  'honesty-base': { memorySha256: sha256(HONESTY_MEMORY) },
+  'honesty-line': { memorySha256: sha256(`${HONESTY_MEMORY}Each claim is checked, assumed or not known.\n`) },
+};
+const HONESTY_RUN = { ...RUN, honestyConfigs: HONESTY_PINS };
+const honestyArgv = (m, changes = {}) => runArgv(m, { '--configs': HONESTY_NAMES.join(','), '--efforts': 'medium', ...changes });
+const honestyResultsFile = (m, name = 'screen') => path.join(m.resultsDir, 'honesty', `${name}.json`);
+const readHonestyDoc = (m, name) => JSON.parse(fs.readFileSync(honestyResultsFile(m, name), 'utf8'));
+/** The plan of a run of the two honesty configs: 2 tasks x 2 configs x medium x 1 repeat, 4 trials. */
+const HONESTY_PLAN = subPlan(HONESTY_NAMES);
+
+test('the two honesty configs are taken by a Claude run and parse like any other config; a Codex run takes neither', () => {
+  assert.deepEqual(parse({ '--configs': HONESTY_NAMES.join(','), '--efforts': 'medium' }), {
+    mode: 'run', claude: CLAUDE, configs: HONESTY_NAMES, efforts: ['medium'], repeats: 3, tasks: TASKS, permissionMode: 'bypassPermissions', name: 'ab-run', workRoot: null,
+  });
+  assert.deepEqual(parse({ '--configs': 'honesty-line' }).configs, ['honesty-line']);
+  for (const configs of ['honesty-both', 'honesty-base,honesty-base']) assert.throws(() => parse({ '--configs': configs }), usageError(/--configs/), configs);
+  assert.throws(() => parseCodex({ '--configs': 'honesty-base' }), usageError(/"honesty-base" is not config \(one of minimal, current\)/));
+  assert.match(USAGE, /honesty-base, honesty-line/);
+});
+
+test('a run that mixes honesty configs with minimal, current or subagent configs is refused before anything is created, and the refusal says why', async () => {
+  for (const configs of ['minimal,honesty-base', 'honesty-line,current', 'honesty-base,minimal,honesty-line']) {
+    assert.throws(() => parse({ '--configs': configs }), usageError(/--configs: honesty-\S+ cannot share a run with (minimal|current): .*evals\/results\/honesty\/.*evals\/report\.mjs/), configs);
+  }
+  assert.throws(() => parse({ '--configs': 'sub-opus-write,honesty-base' }), usageError(/--configs: sub-opus-write cannot share a run with honesty-base: .*evals\/results\/subagents\//));
+  const m = machine();
+  const { io, deps } = depsFor(m);
+  assert.equal(await suiteMain(honestyArgv(m, { '--configs': 'minimal,honesty-base' }), ENV, deps), 2);
+  assert.match(io.err, /honesty-base cannot share a run with minimal/);
+  assert.ok(io.err.includes(USAGE), 'the usage is printed');
+  assert.deepEqual(deps.runTrial.asked, []);
+  nothingCreated(m);
+  assert.match(USAGE, /evals\/results\/honesty\/<name>\.json and evals\/runs\/honesty\//);
+});
+
+test('an honesty run keeps everything in an honesty directory of its own, pins the project memory of each config, and is summarized with its own report', async () => {
+  const m = machine();
+  const during = [];
+  const { io, deps } = depsFor(m, { runTrial: fakeRun(() => { during.push(templatesIn(m.workRoot)); }) });
+  assert.equal(await suiteMain(honestyArgv(m), ENV, deps), 0, io.err);
+  assert.deepEqual(fs.readdirSync(m.resultsDir), ['honesty'], 'nothing is written beside the results the report reads');
+  assert.deepEqual(fs.readdirSync(path.join(m.resultsDir, 'honesty')), ['screen.json'], 'no temporary file is left');
+  const doc = readHonestyDoc(m);
+  assert.deepEqual({ ...doc, trials: keysOf(doc.trials) }, {
+    format: 1, name: 'screen', createdAt: '2026-10-02T12:00:00.000Z', ...HONESTY_RUN,
+    args: { claude: m.claude, configs: HONESTY_NAMES, efforts: ['medium'], repeats: 1, tasks: ['alpha', 'beta'], workRoot: m.workRoot },
+    trials: HONESTY_PLAN,
+  });
+  assert.deepEqual(deps.runTrial.asked, HONESTY_PLAN);
+  assert.ok(deps.runTrial.trials.every((trial) => trial.runsDir === path.join(m.runsDir, 'honesty', 'screen')), 'the raw logs of an honesty run are under runs/honesty/<name>/');
+  assert.ok(io.out.includes(`results: ${honestyResultsFile(m)}`), 'the summary names the file');
+  assert.doesNotMatch(io.out, /Headroom/, 'no screen of the minimal arm for a run that has none');
+  assert.match(io.out, /The comparison of the two arms is evals\/honesty-report\.mjs's\./);
+  assert.ok(during.length === HONESTY_PLAN.length && during.every((entries) => entries.length === 0), 'no home template is built: the honesty configs seed their own memory');
+  // Each trial is the minimal arm's argv with the project source loaded, under the eval's token.
+  const context = { effort: 'medium', home: path.join(m.base, 'home'), workspace: path.join(m.base, 'ws'), prepared: { engramPort: 41000 } };
+  for (const trial of deps.runTrial.trials) {
+    const agent = resolveAgent(trial.config, context);
+    assert.equal(agent.args[agent.args.indexOf('--setting-sources') + 1], 'project', trial.config.name);
+    assert.equal(agent.env.CLAUDE_CODE_OAUTH_TOKEN, FAKE_TOKEN, trial.config.name);
+  }
+});
+
+test('a resumed honesty run pins the project memory of each config it recorded: a changed one is named, and a config new to the run is not a change', () => {
+  const recorded = { ...HONESTY_RUN, trials: [{ config: 'honesty-base' }, { config: 'honesty-line' }] };
+  assert.deepEqual(diffRun(recorded, HONESTY_RUN), []);
+  const earlier = sha256('an earlier memory');
+  assert.deepEqual(diffRun({ ...recorded, honestyConfigs: { ...HONESTY_PINS, 'honesty-line': { memorySha256: earlier } } }, HONESTY_RUN), [
+    { field: 'project memory of honesty-line', recorded: earlier, current: HONESTY_PINS['honesty-line'].memorySha256 },
+  ]);
+  // A file that holds trials of a config and no pin of it says nothing of what they were told: unknown, not equal.
+  assert.deepEqual(diffRun({ ...recorded, honestyConfigs: { 'honesty-base': HONESTY_PINS['honesty-base'] } }, HONESTY_RUN), [
+    { field: 'project memory of honesty-line', recorded: null, current: HONESTY_PINS['honesty-line'].memorySha256 },
+  ]);
+  assert.deepEqual(diffRun({ ...HONESTY_RUN, honestyConfigs: { 'honesty-base': HONESTY_PINS['honesty-base'] }, trials: [{ config: 'honesty-base' }] }, HONESTY_RUN), [], 'a config new to the run was never recorded');
+});
+
+test('an honesty run cut by a stop continues with the missing trials only; one whose project memory changed is refused, naming which, with the file left as it was', async () => {
+  const m = machine();
+  const cut = depsFor(m, { runTrial: fakeRun((trial, number) => (number === 3 ? stopped('cap')() : undefined)) });
+  assert.equal(await suiteMain(honestyArgv(m), ENV, cut.deps), 1);
+  assert.match(cut.io.err, /stopped: cap/);
+  assert.deepEqual(keysOf(readHonestyDoc(m).trials), HONESTY_PLAN.slice(0, 2));
+  const before = fs.readFileSync(honestyResultsFile(m), 'utf8');
+
+  // The same trials, recorded as told another memory: a changed memory is another measurement.
+  const earlier = sha256('an earlier memory');
+  write(honestyResultsFile(m, 'other-memory'), JSON.stringify({ ...JSON.parse(before), name: 'other-memory', honestyConfigs: { ...HONESTY_PINS, 'honesty-line': { memorySha256: earlier } } }));
+  const other = depsFor(m);
+  assert.equal(await suiteMain(honestyArgv(m, { '--name': 'other-memory' }), ENV, other.deps), 1);
+  assert.match(other.io.err, /other-memory\.json was recorded with another project memory, and the project memory of a config must not change within a run, so it is not continued:/);
+  assert.ok(other.io.err.includes(`  project memory of honesty-line: sha256 ${earlier.slice(0, 12)} -> sha256 ${HONESTY_PINS['honesty-line'].memorySha256.slice(0, 12)}\n`), other.io.err);
+  assert.doesNotMatch(other.io.err, /another stack|delegation/);
+  assert.deepEqual(other.deps.runTrial.asked, []);
+  assert.equal(fs.readFileSync(honestyResultsFile(m), 'utf8'), before, 'nothing was rewritten');
+
+  const resumed = depsFor(m);
+  assert.equal(await suiteMain(honestyArgv(m), ENV, resumed.deps), 0, resumed.io.err);
+  assert.deepEqual(resumed.deps.runTrial.asked, HONESTY_PLAN.slice(2), 'a recorded trial is never repeated');
+  assert.deepEqual(keysOf(readHonestyDoc(m).trials), HONESTY_PLAN);
+});
+
+test('--honesty selects the recorded honesty run a summary reads, and is taken with --summary alone', () => {
+  assert.deepEqual(parseArgs(['--summary', '--honesty', '--name', 'screen'], { taskIds: TASKS }), { mode: 'summary', honesty: true, name: 'screen' });
+  assert.deepEqual(parseArgs(['--honesty', '--name', 'screen', '--summary'], { taskIds: TASKS }), { mode: 'summary', honesty: true, name: 'screen' });
+  assert.throws(() => parseArgs([...argv(), '--honesty'], { taskIds: TASKS }), usageError(/--honesty selects a recorded honesty run and is taken only with --summary/));
+  assert.throws(() => parseArgs(['--agent', 'codex', '--summary', '--honesty', '--name', 'screen'], { taskIds: TASKS }), usageError(/--honesty is not taken with --agent codex/));
+  assert.throws(() => parseArgs(['--summary', '--honesty', '--subagents', '--name', 'screen'], { taskIds: TASKS }), usageError(/--honesty and --subagents select two different recorded runs/));
+  assert.throws(() => parseArgs(['--summary', '--honesty', 'yes', '--name', 'screen'], { taskIds: TASKS }), usageError(/unexpected argument "yes"/), 'it takes no value');
+  assert.throws(() => parseArgs(['--summary', '--honesty', '--configs', 'honesty-base', '--name', 'screen'], { taskIds: TASKS }), usageError(/--summary reads a recorded run/));
+  assert.match(USAGE, /node evals\/suite\.mjs --summary --honesty --name <run name>/);
+  assert.match(USAGE, /--honesty\s+with --summary: read the run from evals\/results\/honesty\//);
+});
+
+test('a summary of an honesty run of two tasks is refused as its report refuses it, rather than pooled into one verdict (Codex, 2026-10-15)', async () => {
+  const m = machine();
+  const run = depsFor(m);
+  assert.equal(await suiteMain(honestyArgv(m), ENV, run.deps), 0, run.io.err);
+  const report = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--honesty', '--name', 'screen'], {}, report.deps), 1);
+  assert.match(report.io.err, /holds trials of more than one task or effort, and the report reads one question at a time\./);
+  assert.equal(report.io.out, '');
+});
+
+test('a summary reaches an honesty run only with --honesty, prints the report of its two arms, and runs nothing', async () => {
+  const m = machine();
+  const run = depsFor(m);
+  assert.equal(await suiteMain(honestyArgv(m, { '--tasks': 'alpha' }), ENV, run.deps), 0, run.io.err);
+  const before = fs.readFileSync(honestyResultsFile(m), 'utf8');
+
+  // Without the flag a summary reads what it always read, where there is no run of that name.
+  const plain = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--name', 'screen'], {}, plain.deps), 1);
+  assert.ok(plain.io.err.includes(`no results named screen in ${m.resultsDir}\n`), plain.io.err);
+  const sub = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--subagents', '--name', 'screen'], {}, sub.deps), 1);
+  assert.ok(sub.io.err.includes(`no results named screen in ${path.join(m.resultsDir, 'subagents')}\n`), sub.io.err);
+
+  const report = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--honesty', '--name', 'screen'], {}, report.deps), 0, report.io.err);
+  assert.equal(report.io.out, `${reportLines(summarize(readHonestyDoc(m))).join('\n')}\n`);
+  assert.match(report.io.out, /^p-value \d\.\d{4} \(one-sided Fisher exact test/m);
+  assert.doesNotMatch(report.io.out, /task\s+config|Headroom/, 'the rows and the screen are not its report');
+  assert.deepEqual(report.deps.runTrial.asked, []);
+  assert.equal(fs.readFileSync(honestyResultsFile(m), 'utf8'), before, 'nothing was rewritten');
 });

@@ -8,7 +8,8 @@
 // run under `SessionStart:compact` after 40 compactions.
 //
 // It prints a few plain lines: the session's title, the opening stored for that title, the feature
-// document it works on, and what to read there (for an orchestrator, the relief file it keeps instead).
+// document it works on, and what to read there (for an orchestrator, the relief file it keeps instead), and
+// the mode the document's next open task calls for when it names its kind (odd/tasks/effort-by-task.md, S2).
 // After a compaction it adds what its transcript holds of the stretch of work before the compaction: the
 // compaction itself, the pause's notice, how old the state the session wrote is and what its worktree holds
 // uncommitted, the work the transcript leaves in flight and the machine's gate, the user's and other sessions'
@@ -30,6 +31,7 @@ import os from 'node:os';
 import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
+import { modeLines } from './contract.mjs';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
@@ -867,6 +869,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
       lines.push(...feature.documents.map((document) => `  ${document}`), `Read "Next step" in the one this session was working on, ${TRUST}`);
     }
   }
+  if (subject !== null && !orchestrator) lines.push(...nextModeLines(subject.file, input, readFile));
 
   // The stretch's own steps after the folders: a stretch the deadline passed names the pause and the reply with it.
   if (transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
@@ -882,6 +885,26 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
   if (!orchestrator) lines.push(NOTIFY);
   return lines;
+}
+
+/** The line on the mode the next open task of the feature document `file` calls for (odd/tasks/effort-by-task.md,
+ * S2), or none when the document cannot be read or its next open task names no kind. A session cannot set its own effort, so the line
+ * is for it to tell the person. The rules are those of the document's tree (`<tree>/odd/tasks/<name>.md`). On Codex,
+ * whose transcripts are under a `.codex` folder, the table's models are Claude's: the line names the kind only. */
+function nextModeLines(file, input, readFile) {
+  let markdown;
+  try {
+    markdown = readFile(file);
+  } catch {
+    return [];
+  }
+  const next = modeLines(markdown, path.resolve(file, '..', '..', '..')).find((task) => !task.done);
+  // A task with no kind says nothing new (it takes the session's effort): only a document that names kinds gets the line.
+  if (next === undefined || next.kind === null) return [];
+  if (/[\\/]\.codex[\\/]/.test(input?.transcript_path ?? '')) {
+    return [`Mode of the next open task: ${next.id} (kind: ${next.kind}); effort and models are not declared for Codex`];
+  }
+  return [`Mode of the next open task: ${next.line}. Tell the person: only they set the session's effort.`];
 }
 
 /** Whether `folder` or one of its parents holds a `harness.json`: the walk `--pause` makes, each folder tested with

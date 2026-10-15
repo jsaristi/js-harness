@@ -22,7 +22,7 @@ import path from 'node:path';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
-import { launchersAlive, readLaunchers } from './lib/launcher.mjs';
+import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
@@ -339,21 +339,26 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   }
 
   // What started this gate, asked at every look of its wait (odd/tasks/orphan-gate.md): a gate whose launcher
-  // ended is an orphan, and its turn would run a script nobody waits for. The first look is not asked, the
-  // launcher having started this gate a moment ago, so a turn taken at once reads nothing; the launchers are
-  // read at the second, once this gate waits, from the parent this process had when it started. Where they
-  // are cheap to read (Linux, `/proc`) they are read now, before any wait: there a shell whose parent ended is
-  // adopted, and a chain read later would end at its adopter and hide the one that ended (Codex, 2026-10-14).
-  const launcher = deps.launchers ?? { read: () => readLaunchers({ ppid: STARTED_BY }), alive: launchersAlive, eager: process.platform !== 'win32' };
+  // ended is an orphan, and its turn would run a script nobody waits for. The launchers are read as the gate
+  // starts, from the parent this process had then: read later, a chain ends at a Linux adopter and hides the
+  // one that ended (Codex, 2026-10-14), and on Windows it takes the wrapper above the Bash tool's shell, gone
+  // within a second, for a launcher that ended while the gate waited (2026-10-15). On Windows the table comes
+  // in beside the gate; until it does there is no chain to ask, and the gate keeps its place. The first look
+  // is not asked, the launcher having started this gate a moment ago.
+  const launcher = deps.launchers ?? { ...startLaunchers({ ppid: STARTED_BY }), alive: launchersAlive, eager: true };
   let launchers = launcher.eager ? launcher.read() : null;
   let looks = 0;
   const stillWanted = () => {
     looks += 1;
     if (looks === 1) return true;
     launchers ??= launcher.read();
-    return launcher.alive(launchers);
+    return launchers === null || launcher.alive(launchers);
   };
   const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, stillWanted }, deps.takeGateLock);
+  // A turn that came after a wait has its last look before the command: a table not in yet is waited for
+  // (Codex, 2026-10-15), never stopped, since an orphan would otherwise run with no look at all.
+  if (looks > 1) launchers ??= launcher.settle ? await launcher.settle() : launcher.read();
+  launcher.stop?.();
   const { waitedMs, waitedFor } = turn;
   if (turn.refused) {
     console.error(`gate: nothing ran: ${turn.refused}`);

@@ -1340,8 +1340,9 @@ test('main prints the codex-review row last, as information, and runs its git th
     const rows = output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
     assert.match(rows.at(-2), /^INFO {2}review /);
     assert.match(rows.at(-1), /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /);
-    // The questions of this row, and before them the one a gate asks of its working tree before its sensors.
-    assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status) /.test(line)), asked.join('\n'));
+    // The questions of this row, and before them the one a gate asks of its working tree before its sensors,
+    // and the names of its files, which the switches of harness.json "functions" are resolved from.
+    assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status|ls-files) /.test(line)), asked.join('\n'));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -4105,6 +4106,90 @@ test('a commit of one named path is judged by what it holds, not by what else is
     assert.deepEqual([gate.end.id, gate.end.result, gate.end.sensors.map(({ name, pass, timedOut }) => ({ name, pass, timedOut }))], [gate.start.id, 'pass', [{ name: 'tests', pass: true, timedOut: false }]]);
   } finally {
     remove();
+  }
+});
+
+// `git commit --amend` runs the hook while HEAD is still the commit it replaces, so an amend of the message
+// alone stages nothing against HEAD; the commit it makes changes against HEAD^ what HEAD did. On 2026-10-15
+// such an amend of a commit of documents ran the whole suite and waited for the lock (JH 17).
+const amended = [
+  'INFO  sensors  no sensor ran (tests): the one path this commit changes against HEAD^ is a document declared in harness.json "documents"',
+  'docs/guide.md',
+];
+
+test('an amend of the message of a commit of documents runs no sensor: it changes against HEAD^ documents alone', async () => {
+  const { repo, home, marker, commit, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    const document = commit(repo);
+    assert.equal(document.status, 0, document.said);
+    assert.equal(fs.existsSync(marker), false, 'the sensor ran for a commit of documents alone');
+
+    const amend = commit(repo, '--amend');
+    assert.equal(amend.status, 0, amend.said);
+    assert.deepEqual(sensorsRow(amend.said), amended, amend.said);
+    assert.equal(fs.existsSync(marker), false, 'the sensor ran for an amend of the message of a commit of documents');
+    assert.equal(fs.existsSync(gateLogDir(home)), false, 'an amend of documents alone wrote the gate log');
+  } finally {
+    remove();
+  }
+});
+
+test('an amend of the message of a commit that holds code runs the sensors', async () => {
+  const { repo, marker, commit, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    writeFile(repo, 'src/app.js');
+    git(repo, 'add', 'docs/guide.md', 'src/app.js');
+    git(repo, ...commitAs, '--no-verify', '-m', 'code and a document');
+
+    const amend = commit(repo, '--amend');
+    assert.equal(amend.status, 0, amend.said);
+    assert.match(amend.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for an amend of a commit that holds a code file');
+  } finally {
+    remove();
+  }
+});
+
+test('a check run by hand with nothing staged runs the sensors, though HEAD changes documents alone against HEAD^', async () => {
+  const { repo, marker, commit, env, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    assert.equal(commit(repo).status, 0);
+    assert.equal(fs.existsSync(marker), false);
+
+    // No hook, so no GIT_INDEX_FILE: the check guards no commit.
+    const byHand = spawnSync(process.execPath, [path.join(path.dirname(fileURLToPath(import.meta.url)), 'check.mjs')], { cwd: repo, env, encoding: 'utf8' });
+    const said = `${byHand.stdout}${byHand.stderr}`.replace(/\r\n/g, '\n');
+    assert.doesNotMatch(said, /changes against HEAD\^/, said);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a check by hand with nothing staged');
+  } finally {
+    remove();
+  }
+});
+
+test('an amend of the message of a root commit runs the sensors: there is no HEAD^ to compare with', async () => {
+  const { repo, home, marker, env, remove } = hookedRepo();
+  const root = makeTmpDir();
+  try {
+    for (const file of ['harness.json', 'AGENTS.md']) fs.copyFileSync(path.join(repo, file), path.join(root, file));
+    writeFile(root, 'docs/guide.md');
+    git(root, 'init', '--quiet');
+    git(root, 'config', 'core.hooksPath', path.join(home, 'hooks').replace(/\\/g, '/'));
+    git(root, 'add', '.');
+    git(root, ...commitAs, '--no-verify', '-m', 'root');
+
+    const amend = spawnSync('git', [...commitAs, '--amend', '-m', 'root again'], { cwd: root, env, encoding: 'utf8' });
+    const said = `${amend.stdout}${amend.stderr}`.replace(/\r\n/g, '\n');
+    assert.equal(amend.status, 0, said);
+    assert.doesNotMatch(said, /changes against HEAD\^/, said);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for an amend of a root commit');
+  } finally {
+    remove();
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
