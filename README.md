@@ -57,7 +57,7 @@ Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the decl
 runs it, so a red check means the commit is not ready yet. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
-repository's GitHub workflow sets 2.
+repository's CircleCI run of the merge queue's candidates sets 2.
 
 When a `node --test` suite fails, the test files it names as failed run once more, alone. A
 file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,
@@ -352,6 +352,7 @@ of the pull request itself, a Codex review record for every code commit, and no 
 candidate so far. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
 green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+That CircleCI run is the repository's only CI run: no GitHub workflow runs for a pull request.
 A candidate red on this machine is bisected: the pull request that turns it red is left out and
 named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
