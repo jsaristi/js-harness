@@ -66,6 +66,22 @@ export const RULES = [
     "unit": "characters"
   },
   {
+    "id": "gate-log-command",
+    "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 120,
+    "unit": "characters"
+  },
+  {
+    "id": "gate-log-size",
+    "subject": "the size past which the gate log is renamed over its older file, so the log stays near a megabyte",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 512,
+    "unit": "KiB"
+  },
+  {
     "id": "gate-wait",
     "subject": "how long a gate waits for its turn of the lock before it gives up, by default",
     "owner": "project",

@@ -7,7 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { GATE_NOT_RUN, commandLineOf, gateMain } from './gate.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
-import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { GATE_COMMAND_MAX, appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 
 // `js-harness gate -- <command>` runs any command under the machine's gate lock, for the heavy runs that
 // are not a commit's gate. The lock itself is tested in lib/gate-lock.test.mjs and what `check` does with
@@ -914,12 +914,12 @@ test('the end of a gate says how its command ended: its exit code, killed, or an
 }));
 
 // What comes after `--` can hold a secret, and the log is a file that stays.
-test('gate writes its command cut at 120 characters', withHome(async (home, dir) => {
+test('gate writes its command cut at the declared gate-log-command', withHome(async (home, dir) => {
   const log = capturedLog();
-  const secret = `--token=${'s'.repeat(200)}`;
+  const secret = `--token=${'s'.repeat(GATE_COMMAND_MAX + 80)}`;
   await runGate(['--home', home, '--cwd', dir, '--', 'node', 'deploy.mjs', secret], {}, { spawn: ranWith(0), ...log.deps });
-  assert.equal(log.events[0].command, `gate -- node deploy.mjs ${secret}`.slice(0, 120));
-  assert.equal(log.events[0].command.length, 120);
+  assert.equal(log.events[0].command, `gate -- node deploy.mjs ${secret}`.slice(0, GATE_COMMAND_MAX));
+  assert.equal(log.events[0].command.length, GATE_COMMAND_MAX);
 }));
 
 test('gate that waited for another writes in its start whose gate that was and for how long, and one that ran nothing writes one line that says why', withHome(async (home, dir) => {
