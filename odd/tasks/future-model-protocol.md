@@ -545,3 +545,5 @@ chained to push `feat/eval-arms` and open its pull request (based on #130) only 
 record and no P0 to P2 finding. Resume when origin/main's `docs/todo.md` holds "JH 14 resume"
 (the wait armed at the pause); then read this Log to its end, check the review's outcome and the
 pull request, and go on with C3a.
+
+L15 (2026-10-15, 01:15 by the lead) PAUSED by the lead for gate load (median wait 5.9 min over his 5-minute line). PRs #130 and #141 merged. Nothing in progress: C3a not started. Resume on this branch, `feat/eval-arms-filters` from `origin/main` `eab3eff`, with C3a (template filters), then C3b to C7; open T5, T8 to T11. No gate taken until a new orchestrator wakes this session.
