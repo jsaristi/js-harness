@@ -156,6 +156,24 @@ test('a test that reads the home outside the temporary folder, or opens a networ
   }
 });
 
+test('with a results file, every test file adds how it ended, failed or passed, for the shadow count (S6)', () => {
+  const { root, traces, done } = project({
+    'package.json': '{"type":"module"}',
+    'test/ok.test.mjs': "import { test } from 'node:test';\ntest('ok', () => {});\n",
+    'test/red.test.mjs': "import { test } from 'node:test';\ntest('red', () => { throw new Error('red'); });\n",
+  });
+  const results = path.join(traces, 'results.jsonl');
+  try {
+    const env = { ...process.env, ...traceEnv({ root, dir: traces, results }) };
+    delete env.NODE_TEST_CONTEXT;
+    assert.notEqual(spawnSync(process.execPath, ['--test', 'test/ok.test.mjs', 'test/red.test.mjs'], { cwd: root, env, encoding: 'utf8' }).status, 0);
+    const ended = fs.readFileSync(results, 'utf8').trim().split('\n').map((line) => JSON.parse(line)).sort((a, b) => a.test.localeCompare(b.test));
+    assert.deepEqual(ended.map(({ test: file, code }) => [file, code === 0]), [['test/ok.test.mjs', true], ['test/red.test.mjs', false]]);
+  } finally {
+    done();
+  }
+});
+
 test('a test file that failed leaves no trace, and one already there from an earlier pass is removed', () => {
   const { root, traces, done } = project({
     'package.json': '{"type":"module"}',

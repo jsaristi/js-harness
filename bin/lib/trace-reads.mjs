@@ -27,12 +27,14 @@ export const stateOf = tracer.stateOf;
 
 /** The variables that trace a run of the tests of `root` into `dir`: the preload after the `NODE_OPTIONS`
  * given (`existing`), quoted when its path holds a space, and the two settings the preload reads. */
-export function traceEnv({ root, dir, existing = '' }) {
+export function traceEnv({ root, dir, existing = '', results = null }) {
   const require = /\s/.test(TRACE_PRELOAD) ? `--require="${TRACE_PRELOAD.replace(/[\\"]/g, '\\$&')}"` : `--require=${TRACE_PRELOAD}`;
   return {
     NODE_OPTIONS: `${existing ?? ''} ${require}`.trim(),
     JS_HARNESS_TRACE_DIR: dir,
     JS_HARNESS_TRACE_ROOT: path.resolve(root),
+    // `results`, for a gate in shadow (S6): the file each test file adds `{ test, code }` to as it ends.
+    ...(results ? { JS_HARNESS_TRACE_RESULTS: results } : {}),
   };
 }
 

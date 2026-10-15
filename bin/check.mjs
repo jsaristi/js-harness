@@ -21,6 +21,8 @@ import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
+import { selectTests, testFilesOf } from './lib/select-tests.mjs';
+import { readTrace, stateOf, traceEnv } from './lib/trace-reads.mjs';
 import { TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
@@ -688,7 +690,7 @@ export function failingTests(output) {
   return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
 }
 
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath } = {}) {
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -718,6 +720,10 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
+  // The tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): the whole suite runs under the tracer, and
+  // the selection is asked first, so the row can say what it would have skipped and which of those failed.
+  // Not yet in WSL2, where the tracer's variables do not reach the mirror (T3b).
+  const shadow = sensor.name === 'tests' && traces?.dir && !(wsl?.distro && platform === 'win32') ? startShadow(cwd, traces.dir, env) : null;
   let result;
   // Where the machine opted in (`wsl`, on Windows alone), the sensor runs first in WSL2 from a mirror of
   // the tree (`wslRoute`). It runs on Windows instead where it never reached the mirror, and `fellBack`
@@ -770,7 +776,42 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
   const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
-  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+  const shadowed = shadow ? endShadow(shadow) : null;
+  if (shadowed) {
+    const { files, wouldSkip, failedOfSkipped } = shadowed;
+    detail += `; shadow: ${wouldSkip.length} of ${files} test files would have been skipped`;
+    if (failedOfSkipped.length > 0) detail += `, and ${failedOfSkipped.length} of them failed: ${failedOfSkipped.join(', ')}`;
+  }
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+}
+
+/** The start of a tests sensor in shadow: the selection asked of the traces in `dir`, and `env` given the
+ * tracer, with a results file each test file adds how it ended to. */
+function startShadow(cwd, dir, env) {
+  const root = path.resolve(cwd);
+  const tests = testFilesOf(root);
+  const { skipped } = selectTests({ tests, readTrace: (one) => readTrace(dir, one), stateOf: (key) => stateOf(root, key) });
+  fs.mkdirSync(dir, { recursive: true });
+  const results = path.join(dir, `results-${process.pid}-${Date.now()}.jsonl`);
+  Object.assign(env, traceEnv({ root, dir, results, existing: env.NODE_OPTIONS }));
+  return { tests, skipped, results };
+}
+
+/** The end of it: `{ files, wouldSkip, failedOfSkipped }`, the files that selection would have skipped and
+ * those of them whose run ended with a code other than 0. The results file goes. */
+function endShadow({ tests, skipped, results }) {
+  const failed = new Set();
+  try {
+    for (const line of fs.readFileSync(results, 'utf8').split('\n')) {
+      if (line.trim() === '') continue;
+      const ended = JSON.parse(line);
+      if (ended.code !== 0) failed.add(ended.test);
+    }
+  } catch {
+    // no file ended, or the file cannot be read: nothing is known to have failed
+  }
+  fs.rmSync(results, { force: true });
+  return { files: tests.length, wouldSkip: skipped, failedOfSkipped: skipped.filter((one) => failed.has(one)) };
 }
 
 /** How one sensor runs in WSL2: `{ command }`, the command that runs the runner script it wrote into the

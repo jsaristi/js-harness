@@ -31,6 +31,7 @@ const real = {
   readdirSync: fs.readdirSync,
   statSync: fs.statSync,
   writeFileSync: fs.writeFileSync,
+  appendFileSync: fs.appendFileSync,
   mkdirSync: fs.mkdirSync,
   rmSync: fs.rmSync,
   renameSync: fs.renameSync,
@@ -249,6 +250,8 @@ function install() {
         real.writeFileSync(path.join(parts, `${process.pid}-${crypto.randomBytes(4).toString('hex')}.json`), JSON.stringify({ reads: [...reads], untraced }));
         return;
       }
+      // How this test file ended, for a gate in shadow (S6): which of the files selection would have skipped failed.
+      if (env.JS_HARNESS_TRACE_RESULTS) real.appendFileSync(env.JS_HARNESS_TRACE_RESULTS, `${JSON.stringify({ test, code })}\n`);
       const file = path.join(dir, traceName(test));
       let partNames = [];
       try {

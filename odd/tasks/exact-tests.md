@@ -115,6 +115,24 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 - WSL2 runs of one file go through a script that refuses an empty name (2026-10-14: an empty variable in
   `wsl.exe -- sh -c` ran the whole suite outside a turn): `sh <scratchpad>/wsl-one-test.sh <worktree on
   /mnt> <file>`, with `MSYS_NO_PATHCONV=1`, node at `/home/oficina/.local/node/bin/node`.
+- T3a (18:5x, its commit queued in a gate turn): `checkSensor(..., { traces: { dir } })` runs the tests
+  sensor in shadow on Windows (`startShadow`/`endShadow` in `bin/check.mjs`): the whole suite under the
+  tracer, the selection asked first, and the row's `shadow` and detail say what it would have skipped and
+  which of those failed. `bin/check-shadow.test.mjs`, RED then GREEN 2/2. Next, T3b: the same in WSL2
+  (the trace variables inside `runnerScript`), then `checkSensors` passing `traces` when `harness.json`
+  says `"exactTests": "shadow"`, the gate log's end line keeping the counts, and this repo's harness.json.
+- T3 started (17:45), not committed: the tracer's results file is written and green
+  (`traceEnv({ results })`, `JS_HARNESS_TRACE_RESULTS`; RED: the file never appeared; GREEN 9/9 on
+  Windows; not yet run in WSL2). Next: `checkSensor` in shadow, test first, then commit T3 in a gate turn.
+- T3, read from the code (17:40): the tests sensor runs in `checkSensor` (`bin/check.mjs:691`), whose env
+  replaces `HOME`/`USERPROFILE` with a throwaway home under the temporary folder, so in a gate the
+  tracer's home rule never fires (a test there cannot read the real home anyway). In WSL2 the command
+  goes through `wslRoute` and `runnerScript` (`bin/lib/gate-wsl.mjs`) in the mirror: the trace variables
+  are set inside that script, `JS_HARNESS_TRACE_ROOT` the mirror and `JS_HARNESS_TRACE_DIR` the
+  worktree's `<git dir>/js-harness/traces/<place>/` through `/mnt`. Shadow needs which test files failed:
+  a `JS_HARNESS_TRACE_RESULTS` file each test-file process appends `{ test, code }` to at exit; would-skip
+  (asked before the run, under the node version of the place) intersected with a code other than 0 is
+  the count S6 reads, in the row's detail and the gate log's end line.
 - Next is T3: where the selection plugs in. `check`'s sensors are a project's own commands
   (`discoverSensors`, `bin/check.mjs:159`: `npm run test`). The design: opt-in by `harness.json`
   `"exactTests": "shadow"`, honoured only when the `test` script is exactly `node --test` (S6: shadow
