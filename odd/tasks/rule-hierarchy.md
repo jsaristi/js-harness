@@ -1343,6 +1343,272 @@ a phone; zero compared, which read as a pass; and the home of the three ids, whi
 in the pure module no check could see, so they are literal reads in the command. Cut on its
 advice: a test of the table, and a promise about rows of `check` and `doctor`.
 
+### The one command that changes a rule (T16c)
+Designed on 2026-10-15, after a read-only explorer mapped what exists on `main` at 10e29e6. Two
+readers that did not write it then read the first draft, one to attack it and one to find what
+it lacks; this text is the draft with their findings, listed at its end. It builds letter C and
+what "Where the rest of the protocol lands" gives T16c. Not built.
+
+What exists. These places come from the explorer's report and the readers', and this session
+checked three of them:
+- No code writes `bin/lib/rules-data.mjs`. `writeRules` is called only by the check, to
+  compare (`bin/lib/rules-check.mjs:279`). The rendered list still says the declarations are
+  written by hand (`RENDER_NOTE`, `bin/lib/rules.mjs:418`).
+- `rules` takes one word and refuses every option (`bin/rules.mjs:41-50`). It reads and writes
+  under `PACKAGE_ROOT` (`:27`, `:355`), and it imports `RULES` statically (`:18`). Run as the
+  installed command, it is a copy of the default branch in the global packages.
+- `checkRules` already finds every read of a rule that a change would break, `ruleValue`,
+  `ruleHere` and `ruleOf` alike (`bin/lib/rules-check.mjs:239-245`). It also finds every
+  `` `rule:<id>` `` mark in a text in force (`:258-268`), and returns the faults of `readRules`
+  (`:180-181`).
+- `readRules` reads the shortest phrase from the static list (`bin/lib/rules.mjs:294`) unless
+  it is given `declared`.
+- A source of his words is checked by its shape only, never against the transcript (`:41-61`).
+  Every `checked.by` in `docs/rule-sources.json` is `session`, and its quotations are excerpts.
+- `quoteOf(text, line)` (`bin/lib/sessions.mjs:1879`):
+  - It says whether an entry is his, including a message he queued inside a running turn
+    (`:1833-1858`).
+  - It returns `person: true` for an answer to the question tool too, a tapped option included
+    (`:1908-1913`).
+  - It marks a message that is only a paste (`pastedOnly`). For a message that is part typed
+    and part pasted it gives the whole text, and the pattern that strips a paste is not
+    exported (`:1536`).
+  - Its time is the transcript's, in UTC.
+- `appendRelief` stamps every line `local (notify).` (`bin/lib/channel.mjs:390-392`). It refuses
+  a line that is too long or holds a line break (`reliefLineOf`, `:408`). Relief lines have no
+  id; documents cite them by their place in the file.
+- In this repository a branch can gain commits after its pull request lands
+  (`feat/session-unseen`, 4077a17, after pull request 227). So "a branch `origin/main` does not
+  contain" does not mean "a change not landed".
+- Nothing prints a memory update. No draft of `AGENTS.md` and no approval by hash exist; letter
+  G is design only.
+- An installed project's list is its own `docs/rules.json`, which the harness never writes
+  (`bin/lib/project-rules.mjs:4`).
+
+**The command.** `js-harness rules change <id> [--dry-run]`, with the change as JSON on
+standard input, the way `notify --kind question` takes its fields. Its sibling form,
+`rules change <id> --check-source`, reads only a source already stored, checks it as step 3
+does, and writes `checked: { date, by: "command" }`. That is the "checked once" of letter C for
+the fourteen sources a session seeded.
+
+It runs in the checkout of this repository only. The git top of the folder it runs in must
+hold `bin/lib/rules-data.mjs` and must be the root of the code that runs, so it is run from the
+branch as `node bin/js-harness.mjs rules change`. Run from the installed copy, or in an
+installed project, it refuses and says why: an installed project's `docs/rules.json` is edited
+by hand.
+
+**The change, as JSON.** At most one body, `set`, and `source`.
+- **The body**, at most one of:
+  - `value`. Its unit is the rule's, and a new rule gives `unit` with it. A change of unit is
+    refused: earlier values are `{ value, until }` with no unit of their own
+    (`bin/lib/rules.mjs:97-101`), so a new unit is a new id.
+  - `path` and `phrases`.
+  - `retire`, with `successors`, a list that may be empty.
+- **`set`**: the other keys of a declaration (`subject`, `owner`, `flag`, `alias`, `scope`,
+  `review`, `differs`), held to `readRules`. `row`, `patterns` and `failure` are named here so
+  that the shape does not change later, and they are refused until T16d builds them. `sensor` is
+  refused, because it belongs to a project's list. A new rule gives `subject` and `owner` in
+  `set`.
+- **`source`**, one of the two kinds:
+  - `{ "kind": "words", "quotes": [{ "session", "line", "excerpt"? }], "reading", "accepted" }`;
+  - `{ "kind": "design", "path" }`.
+  The command never takes the text of a quotation: it reads each one from the transcript, so
+  nothing he said is retyped by a session.
+
+**The kinds, and what each does to the declaration.** Every key the change does not name is
+kept as it is on `origin/main`. The change is always computed from `origin/main`'s declaration,
+never from the branch's, so a second run that corrects a first run does not push a value that
+never landed into `was`.
+- **A new value.**
+  - The value in force moves into `was`, newest first, with `until` today, and `since` becomes
+    today.
+  - A value equal to the one in force is refused.
+  - A rule in prose that takes a value keeps its id, with an empty `was`.
+- **A new text.** `path` and `phrases` are replaced, and `since` becomes today.
+- **A retirement.**
+  - The value in force moves into `was` as above.
+  - It writes `retired: <today>` and `successors`, and drops the body, `flag` and `alias`,
+    which `readRules` refuses on a retired rule (`bin/lib/rules.mjs:236-240`).
+  - It keeps `subject`, `owner`, `since` and `was`. It keeps the unit only when `was` holds a
+    number.
+- **A form-only change.** `set` with no body moves neither `since` nor `was`, as "Model and
+  effort as rules" asks of a change of form.
+- **A new rule.** It enters with `since` today. An id in use, or one used by a retired rule, is
+  refused, because an id is never reused.
+- **A revert.** A new value whose value is in `was`, with its own source. An urgent change is
+  the same command.
+- **A change of several ids.** A split needs its successors declared before the retirement, and
+  a model and its effort are two rules. So one branch may carry several runs of the command, one
+  id each, and is one change.
+- **The day.** Every day written is today by the machine's clock, and so is the stored `date` of
+  a quotation: the local day of its transcript time.
+
+**What it does, in this order.** It computes everything in memory first, and writes nothing
+until the last check passes.
+1. **The branch.**
+   - It runs only on a branch named `rule/<name>` whose base is `origin/main`.
+   - The tree may differ from the branch's last commit only in the rule's home, old path and
+     new: `checkRules` refuses a home that no longer holds a phrase (`bin/lib/rules-check.mjs:195`),
+     so the text and its declaration change together.
+   - Otherwise it refuses and prints the `git` command that makes such a branch.
+2. **The one open change.**
+   - An open change is a `rule/*` branch other than this one, local or on `origin` as last
+     fetched, whose `bin/lib/rules-data.mjs` differs from `origin/main`'s. That holds after a
+     squash merge and after commits added past a merge, so no lock outlives its change.
+   - The mark is computed and never stored, and the refusal names that branch.
+   - Two runs on two branches before either commits both pass; that is under "Not guaranteed".
+3. **The source.**
+   - For words, each `session` names a transcript in the project's sessions folder, the one
+     `sessions --quote` reads.
+   - `quoteOf` must say the line is his and typed. A tapped answer to the question tool is
+     refused: its text was written by a session.
+   - A message that is only a paste is refused. Of a mixed message only the typed part counts,
+     which needs the paste pattern exported.
+   - The stored quotation is the `excerpt` when one is given, found in the typed part with white
+     space squashed, or else the whole typed part. Today's sources are excerpts.
+   - A session not in the folder, a line past the end of the transcript, and one bad quotation
+     among several are each refused.
+   - `reading` and `accepted` are stored as given. Nothing checks that `accepted` names a line
+     where he accepted the reading; that stays a session's word, as it is today.
+   - A design path must exist in the tree.
+   - A rule owned by `sebastian` takes words only, as `rules check` already refuses.
+4. **The new list.**
+   - `checkRules` runs on the new texts held in memory, with the new list passed as `declared`,
+     so a change to `control-phrase-min` is checked against its new bound.
+   - Any finding refuses the change, and the finding is printed. This one check covers a
+     retirement, a scope of `repository` and an id that code or a text still reads: each read
+     and each mark is named, so the code and the texts move first, in a pull request of their
+     own that lands before the `rule/` branch is cut.
+   - Any change whose home is `AGENTS.md`, old path or new, is refused. A phrase of `AGENTS.md`
+     changes only by the approved draft of letter G, which is not built.
+5. **The relief line.** It is built before any write and checked with `reliefLineOf`.
+   - The line reads: `` rule:<id> proposed on rule/<name>, not landed: <what>; source <kind>;
+     supersedes relief line <n> ``.
+   - `<what>` is `<old> to <new>` for a value, `text of <path>` for a text, `retired,
+     successors <ids or none>` for a retirement, `new` for a new rule, and `form` for a
+     form-only change.
+   - `<n>` is the place, blank lines counted as the file counts them, of the last line the
+     command wrote for this id: one holding `` rule:<id> proposed `` with no character of an id
+     after the id. With no such line, it says `supersedes no relief line`.
+   - The stamp names the command, not `notify`: `appendRelief` takes who writes, with `notify`
+     as the default.
+6. **The write.**
+   - The three files: `bin/lib/rules-data.mjs` (`writeRules`), `docs/rule-sources.json`, and
+     `docs/RULES.md` (`renderList`). Each is written beside itself and renamed.
+   - If a rename fails, the three are restored with `git checkout HEAD -- <the three>` and
+     nothing is appended. The tree held no change to them, by step 1.
+   - The relief line is appended last.
+7. **What it prints.**
+   - The memory update owed, which it does not do: any memory note or engram observation that
+     states the old value is changed to point to `rule:<id>`. The command reads no memory, and
+     letter F says a note points to an id.
+   - The cost, as the protocol asks for each change: one gate, gentle-ai's assessment and a
+     small Codex review.
+   - `--dry-run` prints the new declaration, the new source, the relief line, the memory update
+     and the cost, and writes nothing.
+
+**What it leaves to the session.** The commit, the gate, both reviews and the pull request,
+which letter B keeps for a change of a value. "Straight to `main`" is the orchestrator's
+reading in the approved text: a pull request of its own against `main`, never riding a feature
+branch, through the lead's merge queue. It is never a push to `main`. Item (1) of his yes lets
+the orchestrator run this command, with its commit, as the one exception to its rule of never
+committing. The orchestrator skill says so, and from which checkout.
+
+**Files touched.**
+- A new `bin/lib/rules-change.mjs`, the change computed with no file system, and its test.
+- `bin/rules.mjs`: the verb, its options, its root, and `USAGE`.
+- `bin/lib/rules.mjs`: `RENDER_NOTE`, with `docs/RULES.md` rendered again.
+- `bin/lib/sessions.mjs`: the paste pattern exported.
+- `bin/lib/channel.mjs`: who writes a relief line.
+- `bin/js-harness.mjs`: its usage and long help.
+- `bin/lib/manifest.mjs`: the command in the `js-harness` skill's list, and the orchestrator's
+  exception.
+- This document: "A change before T16c exists" and "written by hand" become the command.
+
+Every file but the new one is shared and is told to the lead first.
+
+**Tests first.** Each test is seen failing before it passes. Each runs on a project made in the
+test; none reads the real relief file or the real transcripts.
+- **The root:** run from another root; in an installed project; an id only in `docs/rules.json`.
+- **Step 1:** another branch; a change outside the home; the home edited with its text change,
+  accepted.
+- **Step 2:** another `rule/*` branch whose data differs, local and remote, refused. A landed
+  branch with a later commit, and this branch itself, are not open changes.
+- **Step 3**, on transcripts written in the test:
+  - a line not his; a tapped answer; a paste only;
+  - a mixed line, which keeps the typed part; a queued message he typed, accepted;
+  - an excerpt not in the typed part;
+  - a session not in the folder; a line past the end; one bad quotation among two;
+  - a design path that does not exist; a rule of his with a design source;
+  - `--check-source` on a stored source, good and bad.
+- **The kinds:** each kind compared with an expected declaration:
+  - a number and a string value;
+  - a prose rule taking a value;
+  - a retirement of a value rule and of a prose rule, the last value in `was`;
+  - a form-only change;
+  - a new rule, and a reused id, refused;
+  - a unit change, refused; an equal value, refused;
+  - an unknown id that is not new;
+  - a change of a retired rule.
+- **Step 4:** a retirement with a reader in single quotes and in double quotes; a mark in an open
+  feature document; an `AGENTS.md` home, old and new; a change of `control-phrase-min` checked
+  against its new bound.
+- **Steps 5 and 6:**
+  - the relief line names the right line among blank lines, and ignores `rule:<id>-longer`;
+  - a line too long is refused, with nothing written;
+  - a failed rename restores the three files and appends nothing;
+  - `--dry-run` writes nothing.
+- **A round trip:** a change, then its revert, gives back the first `rules-data.mjs` apart from
+  `was` and `since`.
+- **Untouched behaviour:** `rules`, `rules check`, `rules render` and `notify --relief`, the
+  stamp's default included, give the same output as before.
+
+**Risk.** Item 1: the command rewrites stored data, `rules-data.mjs` and the sources. Item 3:
+`appendRelief`, `quoteOf`'s module and the dispatcher's help are shared. The change gets an
+independent verifier after its own checks.
+
+**Not guaranteed.**
+- That `accepted` is true.
+- That a session used the command: a hand edit in `writeRules`' shape passes until T16d's row.
+- Two changes started on two branches before either commits.
+- A line that says a change was proposed and never landed. The line that confirms a landing is
+  written at the merge, in T16e.
+- The source of an earlier value: it is replaced in `docs/rule-sources.json`, and git keeps it.
+- Words he said to a session of a worktree: the sessions folder read is the main checkout's.
+- A relief line's number after a hand edit of the file.
+- The three renames: they are not one atomic act, and a crash between them leaves the files out
+  of step until `rules check` names it.
+
+**What the two readers changed.**
+- **The attack:**
+  - The root is the checkout's, not the installed copy's.
+  - The open change is read from the data a branch holds, not from its ancestry.
+  - The home edit rides with its declaration.
+  - A retirement keeps the last value and drops `flag` and `alias`.
+  - A unit change is refused.
+  - The relief line is built first, written last, and marked as not landed.
+  - A tapped answer is refused, and an excerpt is allowed.
+  - The day of a quotation is the local one.
+  - One `checkRules` on the new list replaces a separate reader scan.
+  - Two false places in the first draft were corrected.
+- **What was missing:**
+  - `set`, for the keys that are not a body.
+  - The form-only and prose-to-value kinds.
+  - Computing from `origin/main`.
+  - Several ids on one branch.
+  - `--check-source`.
+  - The printed cost.
+  - The installed project.
+  - Each help text and skill that must name the command.
+  - The tests of each case.
+
+**For later letters, named here and not built.**
+- **T16d:** the switch of a wrong red row, "by the same command, with a reason, and counted", as
+  `set.row`, with where the count is kept; `patterns` and `failure`.
+- **T16e:** the line that confirms a landing.
+- **T16f:** the hash in the installed command.
+- **Letter H**, its own home, has no task yet: it is added as T16g.
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build
@@ -1770,7 +2036,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       Codex's records). What it leaves, named: a row of `check` or `doctor` that calls the
       command, whose files are open in other features; the hook that refuses a launch (T13),
       which is his to approve
-  - [ ] T16c The one command that changes a rule
+  - [ ] T16c The one command that changes a rule: designed on 2026-10-15 and read by two
+    readers (the attack and what was missing), "The one command that changes a rule (T16c)";
+    route inline, the parent writes it; not built
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
     its sensors
@@ -1780,6 +2048,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     review is written in a document on the pull request's own branch
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
+  - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
+    of the relief file's line 245, carries its cost and a review date, and its done is one
+    command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it
 - [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
   then one writer for documents)
   - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
@@ -2694,8 +2965,26 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - Given to this session by the lead on 2026-10-13, after this pull request: the branch
     `feat/codex-parity` (F6), which had no owner. First a read only, and the answer to what
     closing it takes, before any commit on it; nothing in its worktree is deleted.
+- 2026-10-15, T16c designed, on `docs/rule-hierarchy-t16c-design`. A read-only explorer mapped
+  what exists. Two readers that did not write it then read the first draft. The attack found
+  seven blockers, among them:
+  - the installed copy as the root;
+  - an open change read from ancestry;
+  - a clean tree that could not hold a text's home;
+  - a retirement that lost its last value;
+  - a unit change;
+  - the write order.
+
+  What was missing found twelve gaps, among them `set`, the form-only kind, computing from
+  `origin/main`, the installed project and the help texts. All are folded into "The one command
+  that changes a rule (T16c)". T16g, letter H, was added because it had no task. Not built.
 
 ## Next step
+**State for a resume, 2026-10-15, after T16c's design.** T16c is designed and its two
+readers' findings are folded in, on `docs/rule-hierarchy-t16c-design`; T16g, letter H, is
+added. Next: build T16c as the design says, tests first, telling the lead before each shared
+file; then an independent verifier, since it is item 1.
+
 **State for a resume, 2026-10-15 at 15:05 by `date`.** Pull request 232 landed (`main`
 10e29e6): T16b is checked off, its three parts done. Next: T16c, the one command that changes a
 rule, designed and read by a reader that did not write it before it is built.
