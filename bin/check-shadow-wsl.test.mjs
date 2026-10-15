@@ -20,7 +20,7 @@ const sensor = { name: 'tests', command: 'node --test' };
 /** A project with two test files and a folder of traces, and the stand-ins of a gate on Windows that sends the
  * sensor to WSL2: `wslPath` mounts a path and remembers it; `spawn` plays the mirror, reading the runner it is
  * given, and writes, as the tracer in Linux would, a trace of each file under node `v24.9.0` and `ended`, the
- * code each file ended with, into the results file the runner names. */
+ * code each file ended with, a file each, into the results folder the runner names. */
 function gate({ ended = {}, reached = true } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-shadow-wsl-'));
   fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module"}');
@@ -45,7 +45,8 @@ function gate({ ended = {}, reached = true } = {}) {
       for (const one of ['a.test.mjs', 'b.test.mjs']) {
         const trace = { v: 1, test: one, tracer: TRACER_VERSION, tracerHash: hashOf(TRACE_PRELOAD), node: 'v24.9.0', os: 'linux', env: traceEnvOf({ LANG: 'C.UTF-8' }), untraced: null, reads: {} };
         fs.writeFileSync(path.join(mounted.get(traceDir), traceName(one)), JSON.stringify(trace));
-        fs.appendFileSync(mounted.get(results), `${JSON.stringify({ test: one, code: ended[one] ?? 0 })}\n`);
+        fs.mkdirSync(mounted.get(results), { recursive: true });
+        fs.writeFileSync(path.join(mounted.get(results), `${one}.json`), JSON.stringify({ test: one, code: ended[one] ?? 0 }));
       }
     }
     const failed = Object.values(ended).some((code) => code !== 0);

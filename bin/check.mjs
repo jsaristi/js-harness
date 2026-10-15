@@ -811,7 +811,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
   // A suite of the mirror that fell back to Windows ran untraced: it says nothing of what was skipped.
   const shadowed = shadow && !(shadow.mounted && !ranIn) ? endShadow(shadow) : null;
-  if (shadow && !shadowed) fs.rmSync(shadow.results, { force: true });
+  if (shadow && !shadowed) fs.rmSync(shadow.results, { recursive: true, force: true });
   if (shadowed) {
     const { files, wouldSkip, failedOfSkipped } = shadowed;
     detail += `; shadow: ${wouldSkip.length} of ${files} test files would have been skipped`;
@@ -822,19 +822,19 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
 
 /** The start of a tests sensor in shadow: the selection asked of the traces in `dir`, under `place` (the
  * node, system and variables of where the suite runs, this process's by default), and `env` given the tracer
- * where given, with a results file each test file adds how it ended to. */
+ * where given, with a results folder each test file writes how it ended into, a file of its own. */
 function startShadow(cwd, dir, { env = null, place = {} } = {}) {
   const root = path.resolve(cwd);
   const tests = testFilesOf(root);
   const { skipped } = selectTests({ tests, readTrace: (one) => readTrace(dir, one), stateOf: (key) => stateOf(root, key), ...place });
   fs.mkdirSync(dir, { recursive: true });
-  const results = path.join(dir, `results-${process.pid}-${Date.now()}.jsonl`);
+  const results = path.join(dir, `results-${process.pid}-${Date.now()}`);
   if (env) Object.assign(env, traceEnv({ root, dir, results, existing: env.NODE_OPTIONS }));
   return { tests, skipped, results };
 }
 
 /** A shadow of the mirror in `wsl.distro`: its traces under `dir/wsl-<distro>`, the selection asked with the
- * version that distribution's node says and the runner's variables, and `mounted`, the folder and results file
+ * version that distribution's node says and the runner's variables, and `mounted`, the folder and results folder
  * as the runner names them; `null` where the node says no version or WSL mounts neither path. */
 function wslShadow(cwd, dir, { wsl, wslPath, wslNode }) {
   const node = wslNode(wsl.distro, wsl.node);
@@ -852,24 +852,23 @@ const shadowCounts = ({ files, wouldSkip, failedOfSkipped }) => ({ files, wouldS
 
 /** The end of it: `{ files, wouldSkip, failedOfSkipped }`, the files that selection would have skipped and
  * those of them that did not pass: whose run ended with a code other than 0, or left no end at all (killed,
- * timed out, or a results file that cannot be read), since a run not seen to pass is no evidence for S6
- * (Codex, 2026-10-14). The results file goes. */
+ * timed out, or a result that cannot be read), since a run not seen to pass is no evidence for S6
+ * (Codex, 2026-10-14). The results folder goes. */
 function endShadow({ tests, skipped, results }) {
   const passed = new Set();
   try {
-    for (const line of fs.readFileSync(results, 'utf8').split('\n')) {
-      if (line.trim() === '') continue;
+    for (const name of fs.readdirSync(results)) {
       try {
-        const ended = JSON.parse(line);
+        const ended = JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'));
         if (ended.code === 0) passed.add(ended.test);
       } catch {
-        // a line cut short: its file is not seen to pass
+        // a result cut short: its file is not seen to pass
       }
     }
   } catch {
-    // no file ended, or the file cannot be read: none is seen to pass
+    // no file ended, or the folder cannot be read: none is seen to pass
   }
-  fs.rmSync(results, { force: true });
+  fs.rmSync(results, { recursive: true, force: true });
   return { files: tests.length, wouldSkip: skipped, failedOfSkipped: skipped.filter((one) => !passed.has(one)) };
 }
 

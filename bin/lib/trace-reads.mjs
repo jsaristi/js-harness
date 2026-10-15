@@ -33,7 +33,8 @@ export function traceEnv({ root, dir, existing = '', results = null }) {
     NODE_OPTIONS: `${existing ?? ''} ${require}`.trim(),
     JS_HARNESS_TRACE_DIR: dir,
     JS_HARNESS_TRACE_ROOT: path.resolve(root),
-    // `results`, for a gate in shadow (S6): the file each test file adds `{ test, code }` to as it ends.
+    // `results`, for a gate in shadow (S6): the folder each test file writes `{ test, code }` into, a file of
+    // its own, as it ends.
     ...(results ? { JS_HARNESS_TRACE_RESULTS: results } : {}),
   };
 }

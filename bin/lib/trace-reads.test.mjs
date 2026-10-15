@@ -212,18 +212,23 @@ test('a test that reads the home outside the temporary folder, or opens a networ
   }
 });
 
-test('with a results file, every test file adds how it ended, failed or passed, for the shadow count (S6)', () => {
+// A file of its own for each test file, not lines appended to one: at the gate of 19:56 (2026-10-14, in WSL2)
+// a test file that passed had no end in the shared file; appends of processes at once through /mnt are the
+// likely cause (inferred, not measured), and a file each leaves nothing to interleave.
+test('with a results folder, every test file writes how it ended, failed or passed, in a file of its own, for the shadow count (S6)', () => {
   const { root, traces, done } = project({
     'package.json': '{"type":"module"}',
     'test/ok.test.mjs': "import { test } from 'node:test';\ntest('ok', () => {});\n",
     'test/red.test.mjs': "import { test } from 'node:test';\ntest('red', () => { throw new Error('red'); });\n",
   });
-  const results = path.join(traces, 'results.jsonl');
+  const results = path.join(traces, 'results');
   try {
     const env = { ...process.env, ...traceEnv({ root, dir: traces, results }) };
     delete env.NODE_TEST_CONTEXT;
     assert.notEqual(spawnSync(process.execPath, ['--test', 'test/ok.test.mjs', 'test/red.test.mjs'], { cwd: root, env, encoding: 'utf8' }).status, 0);
-    const ended = fs.readFileSync(results, 'utf8').trim().split('\n').map((line) => JSON.parse(line)).sort((a, b) => a.test.localeCompare(b.test));
+    const files = fs.readdirSync(results);
+    assert.equal(files.length, 2, files.join(', '));
+    const ended = files.map((name) => JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'))).sort((a, b) => a.test.localeCompare(b.test));
     assert.deepEqual(ended.map(({ test: file, code }) => [file, code === 0]), [['test/ok.test.mjs', true], ['test/red.test.mjs', false]]);
   } finally {
     done();
