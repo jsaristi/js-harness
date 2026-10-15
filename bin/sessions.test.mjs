@@ -2364,3 +2364,60 @@ test('--measures exits 0 with the total alone when nothing was compacted, and 1 
   assert.equal(none.stdout, '');
   assert.equal(none.stderr, `js-harness sessions: no sessions folder for ${machine.root}: ${machine.projectDir} (ENOENT)`);
 }));
+
+// --- the last automatic compaction that misses a fact, on the board (session channel, T9) ---
+
+/** Session A's last automatic compaction, told the pause and kept in the document, but never announced: no reply
+ * of the stretch holds the block of the bare `/compact`. */
+function writeMissing(machine) {
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  writeAt(
+    path.join(machine.projectDir, `${SESSION_A}.jsonl`),
+    jsonl(
+      { type: 'custom-title', customTitle: 'Board feature', sessionId: SESSION_A },
+      prompt('go', 900),
+      call('toolu_m1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+      reply('Saved.', 700),
+      boundary('b1', 'auto', 600),
+      reply('working again', 300),
+    ),
+    60,
+  );
+  const state = statePath(machine.userHome, SESSION_A);
+  fs.mkdirSync(path.dirname(state), { recursive: true });
+  fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told: [{ at: before(750).toISOString(), tokens: 400000 }], written: before(500).toISOString() }));
+}
+
+const missLines = (stdout) => stdout.split('\n').filter((line) => line.includes('last automatic compaction'));
+
+test('the board marks the last automatic compaction of a session that misses a fact, and --json carries it', withMachine(async (machine) => {
+  writeMissing(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n`));
+  const { code, stdout, stderr } = await runSessions(machine, [], { run: measuring.run });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(missLines(stdout), ['    last automatic compaction 10m ago: missed announced']);
+  const json = await runSessions(machine, ['--json'], { run: measuringRun(machine, () => ok(`${before(650).toISOString()}\n`)).run });
+  const session = JSON.parse(json.stdout).sessions.find((item) => item.id === SESSION_A);
+  assert.deepEqual(session.compactionMiss, { at: before(600).toISOString(), uuid: 'b1', missed: ['announced'], unknown: [] });
+}));
+
+test('the board says a fact that its reader cannot answer as not known, and never as missed', withMachine(async (machine) => {
+  writeMissing(machine);
+  const failing = measuringRun(machine, () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' }));
+  const { code, stdout } = await runSessions(machine, [], { run: failing.run });
+  assert.equal(code, 0);
+  assert.deepEqual(missLines(stdout), ['    last automatic compaction 10m ago: missed announced; not known: kept']);
+}));
+
+test('the board calls no measure reader for a session with no automatic compaction, and its --json says none', withMachine(async (machine) => {
+  writeSessions(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n`));
+  const { code, stdout } = await runSessions(machine, [], { run: measuring.run });
+  assert.equal(code, 0);
+  assert.deepEqual(measuring.logs, []);
+  assert.deepEqual(missLines(stdout), []);
+  const json = await runSessions(machine, ['--json'], { run: measuringRun(machine, () => ok('')).run });
+  assert.ok(JSON.parse(json.stdout).sessions.length > 0);
+  for (const session of JSON.parse(json.stdout).sessions) assert.equal(session.compactionMiss, null, session.id);
+}));

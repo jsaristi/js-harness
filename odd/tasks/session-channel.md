@@ -2804,6 +2804,14 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   transcripts. On this machine it exits 0: the wake-up task is disabled, `jh-open-session-test`
   is a leftover folder, and both scheduled sessions are archived. The two design changes are
   in section 17, layer 2.
+- 2026-10-15, T16 layer 2 landed (pull request 227); T17 found delivered and ticked (its
+  line says by what). T9's second slice on `feat/compaction-mark`: the board marks a session
+  whose last automatic compaction misses a fact, with a line naming the facts missed (a fact
+  not known is said apart and never marks), and the watch says it once per compaction, by its
+  uuid. Only the last automatic compaction calls the readers: the 12-hour board took 42.0 s
+  before and 43.4 s after (one run each). On this machine 7 sessions carry the mark, so the
+  lead's watch will say 7 changes once after it lands. Left for T9: the relief-file line as a
+  second way to "kept", and the two measures that reopen a decision (section 16).
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

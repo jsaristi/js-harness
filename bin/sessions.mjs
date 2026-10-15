@@ -55,7 +55,7 @@ import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { keptByGitLog, measuresLines, measuresTotal } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -336,7 +336,7 @@ function workFile(work, { sessionDir, tasksDir }, io) {
 /** One session of the board: its transcript's facts plus, for each piece of work with no recorded end,
  * the last write of its file. A transcript that cannot be read, or that the reader cannot turn into
  * facts, is a session with `unavailable` and the reason: one transcript never costs the whole board. */
-function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault }, io) {
+function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders }, io) {
   let text;
   try {
     text = io.readFile(path.join(projectDir, `${id}.jsonl`));
@@ -353,7 +353,19 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindo
   for (const work of facts.work) {
     if (!work.ended) work.file = workFile(work, folders, io);
   }
-  return { id, modifiedAt, ...facts };
+  return { id, modifiedAt, ...facts, compactionMiss: missOf(text, id, measureReaders) };
+}
+
+/** The miss of the session's last automatic compaction (`compactionMissOf`), judged by the readers `--measures` uses;
+ * `null` when no readers are given, or the transcript has no automatic compaction that misses a fact. A judgment that
+ * throws is no miss: the board says nothing of it, and `--measures` says what it cannot read. */
+function missOf(text, id, readers) {
+  if (readers === undefined) return null;
+  try {
+    return compactionMissOf(text, { told: (after, at) => readers.told(id, after, at), kept: readers.kept });
+  } catch {
+    return null;
+  }
 }
 
 /** The measures of one session's compactions (`compactionMeasures`): `{ id, modifiedAt, title, titleSource,
@@ -402,8 +414,10 @@ function readRelief(file, readFile) {
  * when the folder could not be listed, with the system's code for why, or its message when it gave no code.
  * `ENOENT` is a project with no sessions folder; any other is a folder that may hold sessions and did not show
  * them, which is not the same answer to every caller (`--address`). `unseen` reads its sessions through this too,
- * so the two never parse a transcript in two ways. `io` is `{ readFile, readdir, stat, readFacts }`. */
-export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io }) {
+ * so the two never parse a transcript in two ways. `io` is `{ readFile, readdir, stat, readFacts }`. `measureReaders`
+ * (`{ told(sessionId, after, at), kept(query) }`, optional) judges each session's last automatic compaction (`missOf`);
+ * without it no session has a miss. */
+export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io, measureReaders }) {
   let names;
   try {
     names = io.readdir(projectDir);
@@ -412,7 +426,7 @@ export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, 
   }
   const generatedAt = now();
   const since = generatedAt - hours * 3600 * 1000;
-  const where = { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault };
+  const where = { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders };
   const read = [];
   for (const name of names) {
     if (!name.endsWith('.jsonl')) continue;
@@ -480,6 +494,15 @@ export async function sessionsMain(
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
   const io = { readFile, readdir, stat, readFacts };
+  // The readers of a compaction's measures (odd/tasks/session-channel.md, section 14): told from the pause's state, kept
+  // from the commits of the feature document. The board judges each session's last automatic compaction with them and
+  // `--measures` every compaction, so the two never read a fact in two ways.
+  const pauseTmp = parsed.tmp ?? tmpdir();
+  const stateFiles = { readFileSync: readFile, statSync: stat };
+  const measureReaders = {
+    told: (sessionId, after, at) => toldBetween({ home: harnessHome, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
+    kept: keptByGitLog(run),
+  };
   // Where the session that orchestrates this project keeps its notes: one file per project under the
   // harness home, which is JS_HARNESS_HOME or the user's home. An empty JS_HARNESS_HOME is no home here:
   // joined as it is, it would put the file under the folder the command runs in. A relative `--relief` is
@@ -515,6 +538,7 @@ export async function sessionsMain(
       contextCompactionDefault: parsed.contextCompactionDefault,
       self,
       io,
+      measureReaders,
     });
 
   const noFolder = (code) => `js-harness sessions: no sessions folder for ${root}: ${projectDir} (${code})`;
@@ -811,12 +835,6 @@ export async function sessionsMain(
     }
     const generatedAt = now();
     const since = generatedAt - parsed.hours * 3600 * 1000;
-    const stateFiles = { readFileSync: readFile, statSync: stat };
-    const pauseTmp = parsed.tmp ?? tmpdir();
-    const readers = {
-      told: (sessionId, after, at) => toldBetween({ home: harnessHome, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
-      kept: keptByGitLog(run),
-    };
     const measured = [];
     for (const name of names) {
       if (!name.endsWith('.jsonl')) continue;
@@ -830,7 +848,7 @@ export async function sessionsMain(
         measured.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
         continue;
       }
-      if (changedAt >= since) measured.push(measureSession(id, new Date(changedAt).toISOString(), file, readers, io));
+      if (changedAt >= since) measured.push(measureSession(id, new Date(changedAt).toISOString(), file, measureReaders, io));
     }
     // A session opened from the phone has its title from the opening it read, as on the board.
     const sessions = titledByReadings(measured, readNotices(harnessHome, slug, { readFile }).readings);
