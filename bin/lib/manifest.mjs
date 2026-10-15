@@ -32,7 +32,7 @@ js-harness commands:
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
-- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock.
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`).
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -265,11 +265,12 @@ export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 
 /** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the three tools it checks: a sub-agent's
  * launch, whose model it holds to the project's rules, and the two ways of sending a message to another session,
- * whose stamped hour it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14). Claude Code only: the tool
- * names are Claude Code's. Five seconds: it may ask git for the project's root once. */
+ * whose stamped hour it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14), a Bash command, and a Write or
+ * an Edit, whose line in a memory index it holds to 150 characters (odd/tasks/memory-hygiene.md, T4). Claude Code
+ * only: the tool names are Claude Code's. Five seconds: it may ask git for the project's root once. */
 function guardHookEntry() {
   return {
-    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash',
+    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit',
     hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
   };
 }

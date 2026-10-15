@@ -330,7 +330,7 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
-  Object.freeze({ event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */

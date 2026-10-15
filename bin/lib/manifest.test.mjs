@@ -759,7 +759,7 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
   assert.deepEqual(guardHook.pointer, ['hooks', 'PreToolUse']);
   assert.deepEqual(guardHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(guardHook.entry(), {
-    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash',
+    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit',
     hooks: [{ type: 'command', command: 'js-harness guard --hook || exit 0', timeout: 5 }],
   });
   assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
@@ -796,6 +796,43 @@ test('install writes the resume entry beside the doctor\'s in each host file and
   }
 });
 
+// T4 of odd/tasks/memory-hygiene.md: the guard's matcher gained Write and Edit. An install made with the older matcher
+// is moved to the new entry by sync, with no second guard entry left behind, and uninstall takes the new one exactly.
+test('sync replaces a guard entry recorded with the older matcher by the new one, once, and uninstall removes it exactly', () => {
+  for (const created of [true, false]) {
+    const home = makeTmpHome();
+    try {
+      const target = guardHook.target(home);
+      const theirs = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo their-own-pre-tool-use', timeout: 5 }] };
+      if (!created) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [theirs] } }, null, 2)}\n`, 'utf8');
+      }
+      // The older install: the same entries, with the guard's matcher as it was before Write and Edit.
+      const olderEntry = { ...guardHook.entry(), matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash' };
+      const older = install(home, '0.1.0');
+      const data = readJson(target);
+      data.hooks.PreToolUse = data.hooks.PreToolUse.map((entry) => (deepEqualJson(entry, guardHook.entry()) ? olderEntry : entry));
+      fs.writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+      const olderRecords = older.entries.map((record) => (record.path === target && deepEqualJson(record.entry, guardHook.entry())
+        ? { ...record, entry: olderEntry, sha256: sha256(JSON.stringify(olderEntry)) } : record));
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: olderRecords }, null, 2), 'utf8');
+
+      const manifest = sync(home, '0.2.0');
+      assert.deepEqual(readJson(target).hooks.PreToolUse, created ? [guardHook.entry()] : [theirs, guardHook.entry()], 'one guard entry, the new one');
+      assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), [guardHook.entry()]);
+
+      uninstall(home);
+      if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
+      else assert.deepEqual(readJson(target), { hooks: { PreToolUse: [theirs] } }, 'only the user\'s own entry is left');
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+const deepEqualJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 test('an update from an install made before the resume hook adds its entry, and uninstall still leaves the host file as it found it', () => {
   for (const created of [true, false]) {
     const home = makeTmpHome();
@@ -818,7 +855,7 @@ test('an update from an install made before the resume hook adds its entry, and 
 
       const manifest = sync(home, '0.2.0');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
-      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', created]]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', created]]);
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
