@@ -120,7 +120,7 @@ function atLogin() {
   const out = [];
   const options = { cwd, stdout: (text) => out.push(text), stderr: (text) => err.push(text), env: { APPDATA: appData, JS_HARNESS_HOME: home }, homedir: () => home, run: () => ({ status: 1, stdout: '', stderr: '' }), execPath: 'C:\\Program Files\\nodejs\\node.exe' };
   const file = path.join(dir, `js-harness-wake-${remoteId(cwd)}.cmd`);
-  return { main: (...argv) => wakeMain(argv, options), out, err, home, file, dir };
+  return { main: (...argv) => wakeMain(argv, options), out, err, home, file, dir, cwd, appData };
 }
 
 test('wake --at-login writes the Startup file that runs wake --notify for this project, and records it for uninstall', async () => {
@@ -150,6 +150,28 @@ test('wake --at-login --remove takes the file and its record away; a file js-har
   assert.equal(await main('--at-login'), 1);
   assert.equal(fs.readFileSync(file, 'utf8'), 'the user\'s own');
   assert.match(err.join('\n'), /a file js-harness did not write/);
+});
+
+test('a home and a Claude home set only in the shell are carried into the Startup file, and the default ones are not', async () => {
+  const { file, home, cwd, appData } = atLogin();
+  const claude = path.join(cwd, 'claude elsewhere');
+  const options = (env, homedir) => ({ cwd, stdout: () => {}, stderr: () => {}, env: { APPDATA: appData, ...env }, homedir: () => homedir, run: () => ({ status: 1, stdout: '', stderr: '' }), execPath: 'C:\\node\\node.exe' });
+  assert.equal(await wakeMain(['--at-login'], options({ JS_HARNESS_HOME: home, CLAUDE_CONFIG_DIR: claude }, path.join(cwd, 'user'))), 0);
+  const carried = fs.readFileSync(file, 'utf8');
+  assert.ok(carried.includes(`--home ${home}`) || carried.includes(`--home "${home}"`), carried);
+  assert.ok(carried.includes(`--claude-home "${claude}"`), carried);
+  assert.equal(await wakeMain(['--at-login', '--remove'], options({ JS_HARNESS_HOME: home, CLAUDE_CONFIG_DIR: claude }, path.join(cwd, 'user'))), 0);
+  assert.equal(await wakeMain(['--at-login'], options({}, home)), 0);
+  const plain = fs.readFileSync(file, 'utf8');
+  assert.ok(!plain.includes('--home') && !plain.includes('--claude-home'), plain);
+});
+
+test('wake --home records its notes under that home', async () => {
+  const { main, home, slug } = fixture();
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-wake-home-'));
+  assert.equal(await main('--notify', '--home', other), 0);
+  assert.ok(readNotices(other, slug).notices.length > 0);
+  assert.equal(readNotices(home, slug).notices.length, 0);
 });
 
 test('--remove without --at-login, or --at-login with --notify, is a usage error that writes nothing', async () => {

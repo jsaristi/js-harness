@@ -16,8 +16,8 @@ import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { WAKE_WINDOW_MS, wakePlan, wakeText } from './lib/wake.mjs';
 
 const USAGE = [
-  'Usage: js-harness wake [--notify] [--boot-time <iso>] [--cwd <path>] [--claude-home <path>]',
-  '       js-harness wake --at-login [--remove] [--cwd <path>]',
+  'Usage: js-harness wake [--notify] [--boot-time <iso>] [--cwd <path>] [--claude-home <path>] [--home <path>]',
+  '       js-harness wake --at-login [--remove] [--cwd <path>] [--claude-home <path>] [--home <path>]',
   '',
   'Lists the sessions of the project that were open before the machine last booted (an entry in the 12 hours',
   'before it), each with the command that prints its stored opening and the `js-harness wait` calls the boot',
@@ -39,14 +39,20 @@ const startupName = (id) => `js-harness-wake-${id}.cmd`;
  * Every line ends in CRLF, and a `chcp 65001` line comes first when the command holds a letter beyond ASCII
  * (`loginLauncher` in bin/lib/remote.mjs says why). Throws, naming the value, when one holds what cmd.exe acts
  * on: a file that runs something else at every login is worse than none. */
-function startupText({ node, root }) {
-  const values = { 'the node executable': node, 'this install of js-harness': SELF, 'the project folder': root };
+function startupText({ node, root, home, claudeHome }) {
+  const values = { 'the node executable': node, 'this install of js-harness': SELF, 'the project folder': root, 'the home': home, 'the Claude home': claudeHome };
   for (const [label, value] of Object.entries(values)) {
-    const found = UNSAFE_IN_BATCH.exec(value);
+    const found = value === undefined ? null : UNSAFE_IN_BATCH.exec(value);
     if (found) throw new Error(`the Startup file cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and cmd.exe acts on & | < > ^ % " ! and control characters in a batch file`);
   }
   const quoted = quoteWindowsArg(node);
-  const command = windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, [SELF, '--notify', '--cwd', root]);
+  const command = windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, [
+    SELF, '--notify', '--cwd', root,
+    // A home other than the user's own is named, or the run at login, which has neither variable a shell set,
+    // would read and write the default ones (Codex, 2026-10-15).
+    ...(home === undefined ? [] : ['--home', home]),
+    ...(claudeHome === undefined ? [] : ['--claude-home', claudeHome]),
+  ]);
   return [
     '@echo off',
     'rem Leaves each session of one project a note after a boot. Written by js-harness wake --at-login; js-harness wake --at-login --remove removes it.',
@@ -64,7 +70,7 @@ const BOOTED = /^The machine booted at (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?
 function parseArgs(argv) {
   const parsed = { notify: false, atLogin: false, remove: false };
   const flags = new Map([['--notify', 'notify'], ['--at-login', 'atLogin'], ['--remove', 'remove']]);
-  const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--boot-time', 'bootTime']]);
+  const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--home', 'home'], ['--boot-time', 'bootTime']]);
   for (let index = 0; index < argv.length; index++) {
     const token = argv[index];
     if (flags.has(token)) parsed[flags.get(token)] = true;
@@ -75,7 +81,7 @@ function parseArgs(argv) {
     } else throw new Error(`unknown argument: ${token}`);
   }
   if (parsed.remove && !parsed.atLogin) throw new Error('--remove goes with --at-login');
-  if (parsed.atLogin && (parsed.notify || parsed.bootTime !== undefined || parsed.claudeHome !== undefined)) throw new Error('--at-login takes only --remove and --cwd: the file it writes runs wake --notify at each login');
+  if (parsed.atLogin && (parsed.notify || parsed.bootTime !== undefined)) throw new Error('--at-login takes neither --notify nor --boot-time: the file it writes runs wake --notify at each login');
   if (parsed.bootTime !== undefined && !Number.isFinite(Date.parse(parsed.bootTime))) throw new Error(`--boot-time takes a time, as 2026-10-15T04:52:00Z: ${parsed.bootTime}`);
   return parsed;
 }
@@ -133,8 +139,13 @@ export async function wakeMain(
   }
 
   const root = mainCheckout(run, path.resolve(parsed.cwd ?? defaultCwd));
+  // The harness home (the channel, the machine manifest) and the Claude home (the transcripts). An empty
+  // JS_HARNESS_HOME is no home: joined as it is, it would name the folder the command runs in.
+  const harnessHome = parsed.home !== undefined ? path.resolve(parsed.home) : env.JS_HARNESS_HOME || homedir();
+  const defaultClaudeHome = path.join(homedir(), '.claude');
+  const claudeHome = parsed.claudeHome !== undefined ? path.resolve(parsed.claudeHome) : env.CLAUDE_CONFIG_DIR || defaultClaudeHome;
   if (parsed.atLogin) {
-    const home = env.JS_HARNESS_HOME || homedir();
+    const home = harnessHome;
     const name = startupName(remoteId(root));
     if (parsed.remove) {
       const removed = removeStartupFile({ env, home, name });
@@ -147,7 +158,13 @@ export async function wakeMain(
     }
     let content;
     try {
-      content = startupText({ node: execPath, root });
+      const same = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+      content = startupText({
+        node: execPath,
+        root,
+        home: same(harnessHome, homedir()) ? undefined : harnessHome,
+        claudeHome: same(claudeHome, defaultClaudeHome) ? undefined : claudeHome,
+      });
     } catch (err) {
       stderr(`js-harness wake: ${err.message}.`);
       return 1;
@@ -161,9 +178,7 @@ export async function wakeMain(
     return 0;
   }
   const slug = projectSlug(root);
-  const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
-  const harnessHome = env.JS_HARNESS_HOME || homedir();
   const bootMs = parsed.bootTime !== undefined ? Date.parse(parsed.bootTime) : now() - uptime() * 1000;
   const bootAt = new Date(bootMs).toISOString();
 
