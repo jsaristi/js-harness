@@ -618,3 +618,7 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
   second and last correction: "no evidence" counts only when the rest of its clause speaks of no
   counterevidence (against, contrary, otherwise, contradict, dispute, refute, suggests, indicates, shows,
   says, points). RED 1, GREEN 6/6. A further finding goes to the PR as a follow-up.
+  FOLLOW-UP T10-F1 (open): Codex's second recheck of finding 5 is refused by `codex-review` (one recheck a
+  review), so the fix in `47b45d2` ("no evidence" counted only when its clause speaks of no
+  counterevidence) has no Codex verdict. Its proof instead: the pilot's Q4 line of every trial is read by
+  hand against the grader's verdict before the full run, and any disagreement is a test and a fix.
