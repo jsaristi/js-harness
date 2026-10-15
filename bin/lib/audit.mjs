@@ -147,7 +147,7 @@ export function lastShare(lines, fallback = DEFAULT_CONTEXT_WINDOW) {
         reply = { tokens, text };
       }
     }
-    if (line.includes('contextWindow')) window = windowRead(entryOf(line));
+    if (window === null && line.includes('contextWindow')) window = windowRead(entryOf(line));
   }
   return reply === null ? null : { tokens: reply.tokens, window: window ?? fallback, windowRead: window !== null, text: reply.text };
 }

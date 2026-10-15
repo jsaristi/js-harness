@@ -191,6 +191,14 @@ test('lastShare takes the default window when no read of the session itself give
   assert.deepEqual(read, { tokens: 200000, window: 500000, windowRead: false, text: 'Contexto: 40 %.' });
   assert.equal(lastShare(lines(usageRead(1, { window: 300000 }))), null, 'no own reply with a usage');
   assert.deepEqual(lastShare(lines(reply(1, { text: 'Contexto: 40 %.', tokens: 150000 }), usageRead(2, { window: 300000 }))), { tokens: 150000, window: 300000, windowRead: true, text: 'Contexto: 40 %.' }, 'a read after the last reply');
+  // Codex and the verifier on e3db6ef: once the read after the last reply is found, no earlier line naming
+  // contextWindow (another session's read, or the reply itself) may take its window away.
+  assert.deepEqual(lastShare(lines(
+    usageRead(1, { window: 350000 }),
+    reply(2, { text: 'Contexto: 50 %; contextWindow is the field.', tokens: 150000 }),
+    usageRead(3, { window: 500000, session: 'local_other' }),
+    usageRead(4, { window: 300000 }),
+  )), { tokens: 150000, window: 300000, windowRead: true, text: 'Contexto: 50 %; contextWindow is the field.' }, 'the latest read is kept');
   assert.equal(lastShare([]), null);
 });
 

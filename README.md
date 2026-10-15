@@ -595,8 +595,9 @@ session corrects it in one line from `get_usage`. The share is of the window the
 `get_usage` read reports, else the default 500,000 tokens; which clauses count as the session's
 own share is `js-harness audit`'s reading. A reply is already shown when a `Stop` hook runs, so
 the check cannot hold it back, only make the session correct it before the turn ends. It never
-turns back a stop it already turned back (`stop_hook_active`), reads the transcript only when the
-reply names a share, and always exits 0.
+turns back a stop it already turned back (`stop_hook_active`), and always exits 0. When the host
+sends the reply's text (`last_assistant_message`) and it names no share, the transcript is not
+read; a host that sends no text has the transcript's last reply read instead.
 
 ```console
 $ js-harness guard --stop < stop.json

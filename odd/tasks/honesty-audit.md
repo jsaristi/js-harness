@@ -784,3 +784,11 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
     then GREEN; manifest, install and practice-lib tests hold the fifth Claude entry.
   - `docs/FAILURES.md`'s estimate-passed-as-fact moved from `owed` (T16) to `check`, naming
     `bin/guard.test.mjs`; `failures check` exit 0, the entry reads `controlled`.
+- 2026-10-15, 16:41: e3db6ef passed the gate (gentle-ai: medium, not due, `under_budget`). Codex
+  (incorrect, 0.99, 138k input) and an independent verifier (high-risk item 5, the installer) found the
+  same defect: once the reverse scan of `lastShare` had the window of a read after the last reply, an
+  earlier line naming `contextWindow` (another session's read, or the reply itself) reset it, and an
+  accurate share was turned back. Fixed with a guard on the window, test first (RED 1 of 14, then
+  GREEN). The verifier passed the rest: install, uninstall byte for byte, sync from a pre-T16 install,
+  the real command's probes, a 63 MB transcript in 370 ms. Its README advisory is taken: with no
+  `last_assistant_message`, the transcript is read whatever the reply says.
