@@ -162,3 +162,8 @@ shape the hook reads).
   lens (reliability). Approved and acknowledged (`authority: burned`), with two non-blocking suggestions,
   left as later work: the dispatcher's `fetch` entry has no test of its own, and a JSON error from
   r.jina.ai without a `message` field gives a reason that stops at the status.
+- **L13** (2026-10-15): main `8b061ec` (the share check, PR #237) conflicted in the guard help line and at
+  the end of the README's guard section. Merged in `44c064c`, keeping both: the guard line takes
+  `guard --stop`, the README's guard paragraph closes its section and the fetch section follows. Gate
+  green (gentle-ai: under budget, not due). Codex read the resolution only (`e7df499..44c064c`): "the
+  patch is correct", 44,346 input tokens, recorded.
