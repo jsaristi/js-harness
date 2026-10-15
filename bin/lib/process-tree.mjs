@@ -12,6 +12,7 @@
 // selection and the commands without a process, and a failed lookup always throws: "nothing to kill" must
 // never be read from "could not look".
 import { spawnSync as spawnChildSync } from 'node:child_process';
+import fs from 'node:fs';
 
 /** How far the clocks may disagree, in ms: the creation time Windows records is read in 100 ns units off
  * the system clock, a spawn or an exit is timed by Node with `Date.now()`. Measured on Windows 10: a child's
@@ -292,4 +293,50 @@ export function killSurvivors(child, lifetime, { platform = process.platform, sp
     throw new Error(`cannot search what pid ${child.pid} left behind: when it started is not known, and a pid alone does not name its children`);
   }
   killWindowsTree(child, lifetime, sync, now);
+}
+
+/** The pids of process group `pgid` that still run, read from /proc: each entry whose `pgrp` field is `pgid` and
+ * whose state is neither a zombie (`Z`) nor dead (`X`), which are gone and only wait to be reaped. An entry that
+ * cannot be read has ended. `readdir` and `readStat` are injectable; on a POSIX system with no /proc it throws. */
+export function groupMembers(pgid, { readdir = () => fs.readdirSync('/proc'), readStat = (pid) => fs.readFileSync(`/proc/${pid}/stat`, 'utf8') } = {}) {
+  const members = [];
+  for (const name of readdir()) {
+    if (!/^\d+$/.test(name)) continue;
+    let text;
+    try {
+      text = readStat(name);
+    } catch {
+      continue;
+    }
+    if (!text) continue;
+    // The comm field is in parentheses and may hold either, so the fields are read after its last `)`.
+    const [state, , pgrp] = text.slice(text.lastIndexOf(')') + 1).trim().split(/\s+/);
+    if (Number(pgrp) === pgid && state !== 'Z' && state !== 'X') members.push(Number(name));
+  }
+  return members;
+}
+
+/** Waits, at most `ms`, for process group `pgid` to have no member that runs (`members`, default `groupMembers`),
+ * looking every `every` ms, and resolves to the members still running at the end: none once it is gone. A kill
+ * sent to a group is delivered when the kernel next runs each member, which under load can be after the killer has
+ * moved on. `now` and `sleep` are injectable. */
+export async function waitGroupGone(pgid, { ms = 2000, every = 50, now = Date.now, sleep = (wait) => new Promise((resolve) => setTimeout(resolve, wait)), members = groupMembers } = {}) {
+  const deadline = now() + ms;
+  for (;;) {
+    const left = members(pgid);
+    if (left.length === 0 || now() >= deadline) return left;
+    await sleep(Math.min(every, deadline - now()));
+  }
+}
+
+/** What a run waits for after it killed `child`'s tree: on POSIX the child's group (`waitGroupGone`), on Windows
+ * nothing, where each kill already waits for its process (`killProcesses`). A system with no /proc to read is not
+ * waited for. Resolves to the pids still running. */
+export async function settleGroup(child, { platform = process.platform, wait = waitGroupGone } = {}) {
+  if (platform === 'win32' || !child?.pid) return [];
+  try {
+    return await wait(child.pid);
+  } catch {
+    return [];
+  }
 }
