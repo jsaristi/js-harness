@@ -1144,7 +1144,7 @@ reader, and that table names this feature as their owner.
   lead reads a session at that moment before it says what waits for him there; a notice
   when a stretch ends
 - [ ] T9 `--measures`
-- [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
+- [x] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
 - [ ] T11 The real stretch of "Done when", recorded
 - [ ] T12 The failures this feature owns closed with their proofs; the roadmap's section
@@ -2246,6 +2246,11 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   - Left for T9: the board's mark for a session whose last automatic compaction misses a
     fact, the relief-file line as a second way to "kept", and the other measures of section 12.
   - T8 went to JH 19 by the lead's order.
+- 2026-10-15 06:27 local, T10 (JH 5): the practice journey's step `channel`, draft PR 199
+  (feat/journey-channel-step, b0d0af2). It runs the installed `notify` in the practice project, then
+  `sessions --json`, and passes when the board shows the notice's marker from the practice home's
+  record and the real home's record does not hold it. The journey on b0d0af2: "13 of 13 steps passed
+  (left out: host-loads); real home: unchanged". Codex: correct (0.88). gentle-ai: medium, not due.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
