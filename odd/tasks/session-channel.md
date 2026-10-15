@@ -2232,6 +2232,20 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   must look it up again (`sessions --address`, by role). Test 5 is done. Tests 1, 2, 3 and 6
   still wait for him, so T2 stays open. T20, T21 and T22 are marked done in "Tasks" from their
   merges: PR 156 (3b9e681), PR 149 (eb6abf7), PR 151 (34be88d).
+- 2026-10-15 05:36 local, T6b and T9 (JH 5).
+  - T6b is built on main in the shape of section 14's version 2: the pause notice, plus the
+    resume hook; that version left the `PreCompact` snapshot out. Part 3's measure was left
+    unwired: `compactionMeasures`, tested, and called by no command.
+  - T9's first slice wires it, draft PR 194 (feat/compaction-measures, 8729131).
+    `sessions --measures [--hours <n>] [--json]` prints, for each automatic compaction, told
+    (`toldBetween`), kept (a `git log` of the feature document) and announced. A closing line
+    counts those that miss a fact, with unknown facts counted apart.
+  - gentle-ai: medium, not due. Codex: correct in both parts (0.85, 0.91).
+  - On this machine's last 24 hours: 31 automatic compactions judged in 11 sessions, 19 miss
+    a fact (told 9, kept 4, announced 10); 13 with a fact not known.
+  - Left for T9: the board's mark for a session whose last automatic compaction misses a
+    fact, the relief-file line as a second way to "kept", and the other measures of section 12.
+  - T8 went to JH 19 by the lead's order.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
