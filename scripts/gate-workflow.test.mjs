@@ -72,6 +72,12 @@ test('a second push to a pull request stops the run of the first', () => {
   assert.deepEqual(below(workflowLines(), 'concurrency:').map((line) => line.text), ['group: gate-${{ github.event.pull_request.number }}', 'cancel-in-progress: true']);
 });
 
+test('the gate on GitHub runs the test files two at a time: its runner has 2 logical processors, where node --test runs one', () => {
+  // Step 4 of the parallel-gate plan; the variable is check's, since node takes no --test-concurrency in NODE_OPTIONS.
+  const gate = below(below(workflowLines(), 'steps:'), '- name: The gate').map((line) => line.text);
+  assert.deepEqual(gate, ['env:', 'JS_HARNESS_TEST_CONCURRENCY: 2', 'run: node bin/check.mjs']);
+});
+
 test('every action is pinned to a commit, and the gate it runs is check', () => {
   const steps = below(workflowLines(), 'steps:');
   const uses = steps.map((line) => /^(?:- )?uses: (.+)$/.exec(line.text)?.[1]).filter(Boolean);

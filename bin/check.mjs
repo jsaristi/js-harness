@@ -417,6 +417,23 @@ export function discoverExactTests(cwd) {
   return { value: null, error: `harness.json "exactTests" must be "shadow"; it is ${JSON.stringify(declared.exactTests)}` };
 }
 
+/** The variable that runs a tests sensor of `node --test` that many test files at a time, for a machine whose
+ * processors make node's default too few: GitHub's runner has 2, where the default is one fewer, 1. Node takes no
+ * `--test-concurrency` in NODE_OPTIONS, so the workflow names it here (step 4 of the parallel-gate plan). */
+export const TEST_CONCURRENCY_ENV = 'JS_HARNESS_TEST_CONCURRENCY';
+
+/** `{ value }` of `TEST_CONCURRENCY_ENV` in `env`, `null` when unset, or `{ value: null, error }` for a value that
+ * is not a whole number above 0: a variable set wrong fails the gate rather than run it as nobody asked. */
+export function discoverTestConcurrency(env = process.env) {
+  const value = env[TEST_CONCURRENCY_ENV];
+  if (value === undefined) return { value: null };
+  if (/^[1-9]\d*$/.test(value)) return { value: Number(value) };
+  return { value: null, error: `${TEST_CONCURRENCY_ENV} must be a whole number above 0; it is ${JSON.stringify(value)}` };
+}
+
+/** `command`, a tests sensor of `node --test`, with `--test-concurrency=<count>`: after `--` for the `test` script. */
+const withConcurrency = (command, count) => (/^npm (run )?test$/.test(command) ? `${command} -- --test-concurrency=${count}` : `${command} --test-concurrency=${count}`);
+
 /** What the tests sensor runs when it is `npm run test` or `npm test`: the project's `test` script; else
  * the command itself. Shadow traces `node --test` alone, which finds the test files selection is asked of. */
 function testsCommand(cwd, command) {
@@ -747,7 +764,8 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // in a temp directory acts on the repository being committed to, and once left it bare.
   // The mark of a held lock goes whenever it is not given above: the one this process carries is its
   // parent's word, and a gate that runs its sensors without the lock must not pass it on.
-  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
+  // The variable of the tests' concurrency is check's, read above: a test of check in the suite must not see it.
+  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
   // The tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): the whole suite runs under the tracer, and
@@ -1215,6 +1233,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
   if (inWsl.error) return [{ name: 'sensors', pass: false, detail: inWsl.error }];
   const exact = discoverExactTests(cwd);
   if (exact.error) return [{ name: 'sensors', pass: false, detail: exact.error }];
+  const concurrency = discoverTestConcurrency();
+  if (concurrency.error) return [{ name: 'sensors', pass: false, detail: concurrency.error }];
   const quick = discoverDocumentSensors(cwd, declared.documents);
   if (quick.error) return [{ name: 'sensors', pass: false, detail: quick.error }];
   // Git is asked only by a project that declares documents, and has a sensor their commit would not run
@@ -1304,8 +1324,12 @@ export async function checkSensors(cwd, deps = {}, lock) {
         // suite of another command runs as it did, and its row says why it has no shadow.
         const tests = exact.value === 'shadow' && sensor.name === 'tests' ? testsCommand(cwd, sensor.command) : null;
         const dir = tests === 'node --test' ? tracesDir(cwd, deps.git) : null;
-        const row = await checkSensor(cwd, sensor, { ...deps, gateHeld, wsl, traces: dir ? { dir } : null });
+        // The tests sensor that many files at a time where the variable says so, when it is `node --test`.
+        const concurrent = concurrency.value !== null && sensor.name === 'tests' ? testsCommand(cwd, sensor.command) : null;
+        const asked = concurrent === 'node --test' ? { ...sensor, command: withConcurrency(sensor.command, concurrency.value) } : sensor;
+        const row = await checkSensor(cwd, asked, { ...deps, gateHeld, wsl, traces: dir ? { dir } : null });
         if (tests !== null && tests !== 'node --test') row.detail += `; harness.json "exactTests" is "shadow", but the tests run by \`${tests}\`, not \`node --test\`: no shadow`;
+        if (concurrent !== null && concurrent !== 'node --test') row.detail += `; ${TEST_CONCURRENCY_ENV} is ${concurrency.value}, but the tests run by \`${concurrent}\`, not \`node --test\`: they run as written`;
         ran.push(row);
       }
       result = sensorsResult(ran);
