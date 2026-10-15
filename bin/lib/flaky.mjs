@@ -22,9 +22,17 @@ export function failedTestFiles(output, testFiles) {
   if (at === -1) return [];
   const known = new Set(testFiles);
   const named = [];
-  for (const line of text.slice(at).split(/\r?\n/)) {
+  // Each failed test of the summary is a `✖ <name>` line after its `test at` line; one with none names no file.
+  let located = false;
+  for (const line of text.slice(at + '✖ failing tests:'.length).split(/\r?\n/)) {
+    if (line.trim().startsWith('✖ ')) {
+      if (!located) return [];
+      located = false;
+      continue;
+    }
     const found = /^test at (.+):\d+:\d+$/.exec(line.trim());
     if (!found) continue;
+    located = true;
     const file = found[1].replace(/\\/g, '/');
     if (!known.has(file) || !SAFE_PATH.test(file)) return [];
     if (!named.includes(file)) named.push(file);

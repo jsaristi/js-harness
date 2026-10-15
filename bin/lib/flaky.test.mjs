@@ -149,3 +149,7 @@ test('a failure in a file that cannot be rerun safely, or in no test file of the
   assert.deepEqual(failedTestFiles(`${SPEC}\ntest at bin/$(x).test.mjs:1:1\n✖ three (1ms)`, files), []);
   assert.deepEqual(failedTestFiles(`${SPEC}\ntest at lib/helper.mjs:4:2\n✖ three (1ms)`, files), []);
 });
+
+test('a failed test the summary lists with no location means no rerun at all, since a rerun of the others could hide it', () => {
+  assert.deepEqual(failedTestFiles(`${SPEC}\n\n✖ a test with no location (1ms)\n  Error: boom`, FILES), []);
+});
