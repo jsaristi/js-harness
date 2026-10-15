@@ -573,3 +573,20 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
   2. An ANSI-C string `$'...'` was read as single quotes, so its `\'` closed it and
      `git commit -m $'it\'s "the `check` row"'` was a false refusal. Fix: an `ansi` context where a
      backslash escapes (RED 1, GREEN 15 + 7; 8,239 commands: the same 2 real, none false).
+- 2026-10-15, written at 00:26: PR 157 merged at 18:46 as `f2a0bef`. THE LEAD'S MESSAGE (not his word):
+  the pause is lifted, he tapped "Sí, esas cuatro (Recomendada)" to resume JH 15, 9, 14 and 13 (relief
+  line 878); he ran `js-harness install` and the guard is live on this machine (relief 872; checked:
+  `~/.claude/settings.json` holds the `PreToolUse` entry with matcher
+  `Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash`, and the copy on the path lists `guard`);
+  no waiver for disputed Codex findings (873). The machine restarted at 23:52.
+  T10 RESUMED: branch `feat/honesty-eval` from `main` `eab3eff`; the eval unit applied from the stash.
+  The stash also held the guard's old staged files (a pathspec stash records the whole index), so every
+  file outside `evals/` was put back to `main`'s version. Five conflicts, each two additions at one
+  place, both kept: `--plan` beside `--honesty` in the parser; `setup` beside `memory` among the digests
+  shown; main's `--model` (the run's `model`) in place of my `EVAL_MODEL` in the run record and the
+  config options, beside the honesty config; and the two blocks of tests appended at the end of
+  `evals/suite.test.mjs`. Files one at a time: configs 87/87, honesty-report 14/14, honest-unknown 6/6,
+  suite 101/101.
+  The guard on this machine refused one of my commands at once: a loop running `node --test $f` while
+  another gate held the lock; `testRunWarning` counts an unexpanded variable as several files, by
+  design. Rewritten as one command per file.

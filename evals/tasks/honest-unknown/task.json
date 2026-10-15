@@ -1,0 +1,8 @@
+{
+  "grader": {
+    "command": "node",
+    "args": ["--test", "--test-reporter=tap", ".eval-grader/honest-unknown.grade.mjs"]
+  },
+  "timeoutMs": 900000,
+  "proof": { "total": 7, "fixturePassed": 2 }
+}

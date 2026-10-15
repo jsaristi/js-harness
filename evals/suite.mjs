@@ -20,6 +20,14 @@
 //     --tasks <ids> --permission-mode <mode> --name <run name> [--work-root <dir>]
 //   node evals/suite.mjs --summary --subagents --name <run name>
 //
+// The honesty configs (`odd/tasks/honesty-audit.md`, T10) are runs of Claude Code too, named in `--configs` alone, as the
+// subagent configs are and apart from them. Their memory is seeded by the config itself, so no home template is built,
+// and they keep everything they write in an `honesty` directory of their own:
+//
+//   node evals/suite.mjs --claude <path> --configs honesty-base,honesty-line --efforts medium --repeats 3 \
+//     --tasks honest-unknown --permission-mode <mode> --name <run name> [--work-root <dir>]
+//   node evals/suite.mjs --summary --honesty --name <run name>
+//
 // It wires what the other modules provide (`runSuite`, the two config builders, the home template, the work
 // root checks and the port cleanup) and adds what none of them owns: the login token, a results file that
 // names the stack it was measured on, and the headroom summary. The reasoning is in `odd/tasks/evals.md`
@@ -32,8 +40,9 @@ import { fileURLToPath } from 'node:url';
 import { tools } from '../bin/lib/stack.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
 import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
-import { SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, minimalConfig, subagentConfig, subagentPin } from './configs.mjs';
+import { HONESTY_CONFIGS, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, honestyConfig, honestyPin, minimalConfig, subagentConfig, subagentPin } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
+import { reportLines, summarize } from './honesty-report.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
 import { ArmError, parseArm } from './arms.mjs';
 import { cellBasis, planLines, runPlan } from './plan.mjs';
@@ -72,6 +81,11 @@ const CODEX_DIR = 'codex';
  * F5's gate. Their own report reads this directory (`odd/tasks/subagent-model-routing.md`). */
 const SUBAGENTS_DIR = 'subagents';
 
+/** The directory that holds everything a run of the honesty configs writes, for the same reason as `SUBAGENTS_DIR`: the
+ * report that reads the directory of F5's runs refuses a config it does not know. Their report is
+ * `evals/honesty-report.mjs`, which reads this directory (`odd/tasks/honesty-audit.md`, T10). */
+const HONESTY_DIR = 'honesty';
+
 /** Where the login token of the eval run is read from: a variable of its own, so the global
  * `CLAUDE_CODE_OAUTH_TOKEN` that would log Sebastián's daily sessions in with a connector-less token is never needed. */
 export const TOKEN_VARIABLE = 'JS_HARNESS_EVAL_OAUTH_TOKEN';
@@ -91,6 +105,12 @@ const CONFIGS = ['minimal', 'current'];
 /** The subagent configs (`configs.mjs`): Claude Code's alone, since what they force is Claude Code's subagent model. */
 const SUBAGENT_NAMES = Object.keys(SUBAGENT_CONFIGS);
 const isSubagentConfig = (name) => Object.hasOwn(SUBAGENT_CONFIGS, name);
+/** The honesty configs (`configs.mjs`): Claude Code's alone, for the same reason as the subagent configs. */
+const HONESTY_NAMES = Object.keys(HONESTY_CONFIGS);
+const isHonestyConfig = (name) => Object.hasOwn(HONESTY_CONFIGS, name);
+/** The directory a config's results are kept in, apart from F5's: a subagent config's and an honesty config's, each its
+ * own; `null` for `minimal` and `current`, whose results are the ones the report reads. */
+const dedicatedOf = (name) => (isSubagentConfig(name) ? SUBAGENTS_DIR : isHonestyConfig(name) ? HONESTY_DIR : null);
 
 export const USAGE = [
   'Usage: node evals/suite.mjs --claude <path> --configs <minimal,current> --efforts <medium,high> --repeats <n> --tasks <ids|all>',
@@ -99,12 +119,14 @@ export const USAGE = [
   '                            --tasks <ids|all> --name <run name> [--work-root <dir>] [--model <id>] [--plan]',
   '       node evals/suite.mjs [--agent codex] --summary --name <run name>',
   '       node evals/suite.mjs --summary --subagents --name <run name>',
+  '       node evals/suite.mjs --summary --honesty --name <run name>',
   '',
   `  --agent <name>            ${AGENTS.join(', ')}: the CLI the run measures; claude when it is not given`,
   '  --claude <path>           the real claude binary, an absolute path (never a .cmd shim)',
   '  --codex <path>            with --agent codex: the real codex binary (codex.exe), an absolute path, never the codex.cmd shim on PATH',
-  `  --configs <list>          ${CONFIGS.join(', ')}; or, for claude alone and never in one run with those two, the subagent configs`,
-  `                            ${SUBAGENT_NAMES.join(', ')}`,
+  `  --configs <list>          ${CONFIGS.join(', ')}; or, for claude alone and never in one run with those two or with another kind, one of:`,
+  `                            the subagent configs ${SUBAGENT_NAMES.join(', ')};`,
+  `                            the honesty configs ${HONESTY_NAMES.join(', ')}`,
   `  --efforts <list>          ${EFFORTS.join(', ')}; with --agent codex: ${CODEX_EFFORTS.join(', ')}`,
   '  --repeats <n>             trials per task, config and effort',
   '  --tasks <ids|all>         task ids from evals/tasks, comma separated, or all',
@@ -112,7 +134,8 @@ export const USAGE = [
   `                            not taken with --agent codex, whose arms always run with --${CODEX_PERMISSION_MODE}`,
   '  --name <run name>         results go to evals/results/<name>.json, raw logs to evals/runs/<name>/;',
   `                            with --agent codex, to evals/results/${CODEX_DIR}/<name>.json and evals/runs/${CODEX_DIR}/<name>/;`,
-  `                            with subagent configs, to evals/results/${SUBAGENTS_DIR}/<name>.json and evals/runs/${SUBAGENTS_DIR}/<name>/`,
+  `                            with subagent configs, to evals/results/${SUBAGENTS_DIR}/<name>.json and evals/runs/${SUBAGENTS_DIR}/<name>/;`,
+  `                            with honesty configs, to evals/results/${HONESTY_DIR}/<name>.json and evals/runs/${HONESTY_DIR}/<name>/`,
   '  --work-root <dir>         where trials run (default: js-harness-evals-work next to the repository)',
   `  --model <id>              the model both arms run on, recorded with the run (default ${EVAL_MODEL}; with --agent codex,`,
   `                            ${CODEX_EVAL_MODEL}); a Claude model by its full id, never an alias. A recorded run continues only on its model`,
@@ -122,7 +145,8 @@ export const USAGE = [
   '                            current-without-<id>_<id>, minimal-with-<id> (the ids and what minimal takes: evals/arms.mjs)',
   '  --summary                 print the summary of a recorded run and run nothing',
   `  --subagents               with --summary: read the run from evals/results/${SUBAGENTS_DIR}/, where a run of subagent configs is recorded;`,
-  `                            without it a summary reads evals/results/ (evals/results/${CODEX_DIR}/ with --agent codex) and looks nowhere else`,
+  `  --honesty                 with --summary: read the run from evals/results/${HONESTY_DIR}/, where a run of honesty configs is recorded;`,
+  `                            without either a summary reads evals/results/ (evals/results/${CODEX_DIR}/ with --agent codex) and looks nowhere else`,
   '',
   `The login token is read from the ${TOKEN_VARIABLE} environment variable (create it with \`claude setup-token\`).`,
   `With --agent codex the model is ${CODEX_EVAL_MODEL} and no token is read: the login is the real ~/.codex/auth.json, copied into`,
@@ -144,7 +168,7 @@ const MODEL_PATTERNS = { claude: /^claude-[a-z]+(-\d+)+$/, codex: /^[A-Za-z0-9][
 const COMMAND_LINES = {
   claude: {
     binary: '--claude',
-    configs: [...CONFIGS, ...SUBAGENT_NAMES],
+    configs: [...CONFIGS, ...SUBAGENT_NAMES, ...HONESTY_NAMES],
     efforts: EFFORTS,
     required: ['--claude', '--configs', '--efforts', '--repeats', '--tasks', '--permission-mode', '--name'],
     refused: { '--codex': 'names the binary of a Codex run and is taken only with --agent codex' },
@@ -205,19 +229,20 @@ function configsOf(agent, value, allowed) {
  * (`--claude`, `--permission-mode`) are refused instead of ignored, since a flag that was typed and did nothing
  * would let a run be taken for one it was not.
  *
- * A Claude run may name the subagent configs in `--configs`, and parses into the same shape. It names them alone: one
- * that also names `minimal` or `current` is refused, because the two kinds of run keep their results apart
- * (`SUBAGENTS_DIR`) and one command writes one results file.
+ * A Claude run may name the subagent configs or the honesty configs in `--configs`, and parses into the same shape. It
+ * names one kind alone: one that also names `minimal` or `current`, or a config of the other special kind, is refused,
+ * because each kind keeps its results apart (`dedicatedOf`) and one command writes one results file.
  *
- * A summary names no config, so nothing in it says which of the two directories its run is in: `--subagents`, a
- * flag without a value, selects the subagent one (`{ mode: 'summary', subagents: true, name }`), and without it a
- * summary reads what it always read. It is taken with `--summary` alone and is Claude Code's alone: on a run it could
- * contradict the configs, which already say where the results go. */
+ * A summary names no config, so nothing in it says which of the directories its run is in: `--subagents` or `--honesty`,
+ * a flag without a value, selects that one (`{ mode: 'summary', subagents: true, name }`, `{ mode: 'summary', honesty:
+ * true, name }`), and without either a summary reads what it always read. Each is taken with `--summary` alone and is
+ * Claude Code's alone: on a run it could contradict the configs, which already say where the results go. */
 export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory' } = {}) {
   const given = new Map();
   let summary = false;
   let subagents = false;
   let plan = false;
+  let honesty = false;
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (token === '--summary') {
@@ -226,6 +251,8 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
       plan = true;
     } else if (token === '--subagents') {
       subagents = true;
+    } else if (token === '--honesty') {
+      honesty = true;
     } else if (VALUE_FLAGS.includes(token)) {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) throw new UsageError(`${token} requires a value`);
@@ -247,14 +274,17 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
   const codex = agent === 'codex';
   if (subagents && codex) throw new UsageError('--subagents is not taken with --agent codex: the subagent configs are Claude Code\'s alone');
   if (subagents && !summary) throw new UsageError('--subagents selects a recorded subagent run and is taken only with --summary: a run says where its results go by the configs it names');
+  if (honesty && codex) throw new UsageError('--honesty is not taken with --agent codex: the honesty configs are Claude Code\'s alone');
+  if (honesty && subagents) throw new UsageError('--honesty and --subagents select two different recorded runs: a summary reads one of them');
+  if (honesty && !summary) throw new UsageError('--honesty selects a recorded honesty run and is taken only with --summary: a run says where its results go by the configs it names');
 
   if (summary) {
     if (plan) throw new UsageError('--plan states what a run would cost and is taken only on a run, not with --summary');
     const others = [...given.keys()].filter((flag) => flag !== '--name' && flag !== '--agent');
-    if (others.length > 0) throw new UsageError(`--summary reads a recorded run and takes only --name, --agent and --subagents, not ${others.join(', ')}`);
+    if (others.length > 0) throw new UsageError(`--summary reads a recorded run and takes only --name, --agent, --subagents and --honesty, not ${others.join(', ')}`);
     if (!given.has('--name')) throw new UsageError('--name is required with --summary');
     checkName(given.get('--name'));
-    return { mode: 'summary', ...(codex && { agent }), ...(subagents && { subagents }), name: given.get('--name') };
+    return { mode: 'summary', ...(codex && { agent }), ...(subagents && { subagents }), ...(honesty && { honesty }), name: given.get('--name') };
   }
 
   const line = COMMAND_LINES[agent];
@@ -294,10 +324,11 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
     repeats: Number(repeats),
     tasks,
   };
-  const subagent = cells.configs.find(isSubagentConfig);
-  const arm = cells.configs.find((name) => !isSubagentConfig(name));
-  if (subagent !== undefined && arm !== undefined) {
-    throw new UsageError(`--configs: ${subagent} cannot share a run with ${arm}: a run of subagent configs keeps its results in evals/results/${SUBAGENTS_DIR}/, `
+  const dedicated = cells.configs.find((name) => dedicatedOf(name) !== null);
+  const clash = dedicated === undefined ? undefined : cells.configs.find((name) => dedicatedOf(name) !== dedicatedOf(dedicated));
+  if (clash !== undefined) {
+    const dir = dedicatedOf(dedicated);
+    throw new UsageError(`--configs: ${dedicated} cannot share a run with ${clash}: a run of ${dir === HONESTY_DIR ? 'honesty' : 'subagent'} configs keeps its results in evals/results/${dir}/, `
       + 'apart from the files evals/report.mjs reads, which refuses a run that holds any config but minimal and current. Run the two as separate commands');
   }
   // The model a run is measured on (G5 of `odd/tasks/future-model-protocol.md`): written into what is parsed only
@@ -334,15 +365,20 @@ const STACK_FIELDS = {
  * trial was told, so trials told two texts are not one measurement. Each config of the run about to continue is
  * compared with what the file says of it. A config the file neither names nor holds a trial of is new to the run,
  * which a continued run may widen, and is not a change; one it holds trials of without a pin is, in both, since
- * nothing says what those trials ran on. */
+ * nothing says what those trials ran on.
+ *
+ * A run of the honesty configs pins, for each, the SHA-256 of the project memory it seeds (`honestyConfigs`, `honestyPin`),
+ * compared the same way: the memory is what the trials were told, so a changed one is another measurement. */
 export function diffRun(recorded, current) {
   return runChanges(recorded, current).map(({ field, recorded: before, current: now }) => ({ field, recorded: before, current: now }));
 }
 
 /** The changes of `diffRun`, each with its `kind`: `stack` for what every run records, `subagentModel` and
- * `delegation` for the two pins of a subagent config. The refusal says which kinds changed (`refusalOf`). */
+ * `delegation` for the two pins of a subagent config, and `memory` for the pin of an honesty config. The refusal says
+ * which kinds changed (`refusalOf`). */
 function runChanges(recorded, current) {
   const pinned = isObject(recorded.subagentConfigs) ? recorded.subagentConfigs : {};
+  const pinnedMemory = isObject(recorded.honestyConfigs) ? recorded.honestyConfigs : {};
   const ran = new Set((recorded.trials ?? []).map((entry) => entry.config));
   const pairs = [
     ['stack', 'agent', agentOf(recorded), agentOf(current)],
@@ -355,6 +391,9 @@ function runChanges(recorded, current) {
         ['subagentModel', `subagent model of ${name}`, pinned[name]?.model ?? null, pin.model],
         ['delegation', `delegation text of ${name}`, pinned[name]?.delegationSha256 ?? null, pin.delegationSha256],
       ]),
+    ...Object.entries(current.honestyConfigs ?? {})
+      .filter(([name]) => Object.hasOwn(pinnedMemory, name) || ran.has(name))
+      .map(([name, pin]) => ['memory', `project memory of ${name}`, pinnedMemory[name]?.memorySha256 ?? null, pin.memorySha256]),
   ];
   return pairs.filter(([, , before, now]) => before !== now).map(([kind, field, before, now]) => ({ kind, field, recorded: before, current: now }));
 }
@@ -379,6 +418,7 @@ const CHANGE_KINDS = {
   setup: ['on another setup', 'the home the current arm is built from'],
   subagentModel: ['with another subagent model', 'the model a config forces on its subagents'],
   delegation: ['with another delegation text', 'the delegation text of a config'],
+  memory: ['with another project memory', 'the project memory of a config'],
 };
 const listed = (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 
@@ -388,7 +428,7 @@ const listed = (items) => (items.length < 2 ? items.join('') : `${items.slice(0,
  * tell two apart. */
 function refusalOf(file, changes) {
   const kinds = Object.keys(CHANGE_KINDS).filter((kind) => changes.some((change) => change.kind === kind));
-  const shown = (kind, value) => (value === null ? 'unknown' : kind === 'delegation' || kind === 'setup' ? `sha256 ${String(value).slice(0, 12)}` : value);
+  const shown = (kind, value) => (value === null ? 'unknown' : kind === 'delegation' || kind === 'setup' || kind === 'memory' ? `sha256 ${String(value).slice(0, 12)}` : value);
   return `${file} was recorded ${listed(kinds.map((kind) => CHANGE_KINDS[kind][0]))}, and ${listed(kinds.map((kind) => CHANGE_KINDS[kind][1]))} must not change within a run, so it is not continued:\n`
     + `${changes.map(({ kind, field, recorded, current }) => `  ${field}: ${shown(kind, recorded)} -> ${shown(kind, current)}`).join('\n')}\n`
     + `${kinds.length === 1 && kinds[0] === 'stack' ? 'Restore the recorded versions' : 'Restore what was recorded'}, or start a new run with another --name.\n`;
@@ -534,10 +574,11 @@ const table = (header, body) => {
 /** The summary as text: the table of rows, and the screen. A mean over only some of a group's trials carries a
  * `*` (the others did not report that value).
  *
- * `screen: false` is for a run of the subagent configs: the screen reads the minimal config alone, so it would call
- * every task of such a run incomplete. The rows are what any run has, and one line says where the reading of this
- * kind of run is, since it is not here. */
-export function formatSummary(summary, { screen = true } = {}) {
+ * `screen: false` is for a run of the subagent or honesty configs: the screen reads the minimal config alone, so it would
+ * call every task of such a run incomplete. The rows are what any run has, and one line says where the reading of this
+ * kind of run is, since it is not here: `report`, the script that compares the arms (`evals/subagents-report.mjs` by
+ * default, `evals/honesty-report.mjs` for an honesty run). */
+export function formatSummary(summary, { screen = true, report = 'evals/subagents-report.mjs' } = {}) {
   if (summary.rows.length === 0) return 'no trial recorded yet\n';
   const partial = (stats, row) => (stats.known < row.trials && stats.known > 0 ? '*' : '');
   const lines = table(
@@ -546,7 +587,7 @@ export function formatSummary(summary, { screen = true } = {}) {
       `${tokenText(row.tokens.mean)}${partial(row.tokens, row)}`, `${duration(row.wallMs.mean)}${partial(row.wallMs, row)}`]),
   );
   if (summary.rows.some((row) => [row.tokens, row.wallMs].some((stats) => stats.known < row.trials && stats.known > 0))) lines.push('* mean over the trials that reported it');
-  if (!screen) return `${[...lines, '', 'The comparison of the two arms is evals/subagents-report.mjs\'s.'].join('\n')}\n`;
+  if (!screen) return `${[...lines, '', `The comparison of the two arms is ${report}'s.`].join('\n')}\n`;
   lines.push('', `Headroom screen (minimal at medium: keep when ${HEADROOM_TRIALS} or more trials average below ${HEADROOM_BELOW}, drop at ${HEADROOM_BELOW} or above)`);
   lines.push(...table(
     ['task', 'verdict'],
@@ -639,6 +680,10 @@ const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksD
  * for `--summary --subagents`, which is the only way a summary reads that directory: it never falls back from one
  * directory to another, so a run is never taken for one of the same name of another kind.
  *
+ * A run of the honesty configs (`--configs honesty-...`) is the same, with its results in a `honesty` directory and its
+ * pin of each config's project memory (`honestyConfigs`, `honestyPin`) in place of the subagent pins. Its summary is
+ * `evals/honesty-report.mjs`'s report for `--summary --honesty`, and the rows for the run's own end.
+ *
  * A run stops, exit 1, at a trial whose reading the runner refuses (`runSuite`, the `reader` stop), whatever the
  * agent: nothing is recorded for that trial, its raw output is kept with the run's raw logs, and the same command
  * repeats exactly that trial. */
@@ -680,9 +725,12 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
   // A run names subagent configs or the two arms, never both (`parseArgs`); a summary names no config at all, and
   // says with a flag of its own which kind of run it reads.
   const subagents = args.mode === 'run' ? args.configs.some(isSubagentConfig) : args.subagents === true;
-  // Where this run's results file and raw logs live: a Codex run's and a subagent run's each in a directory of their
-  // own (see `CODEX_DIR` and `SUBAGENTS_DIR`).
-  const ownDir = codex ? CODEX_DIR : subagents ? SUBAGENTS_DIR : null;
+  const honesty = args.mode === 'run' ? args.configs.some(isHonestyConfig) : args.honesty === true;
+  // Where this run's results file and raw logs live: a Codex run's, a subagent run's and an honesty run's each in a
+  // directory of their own (see `CODEX_DIR`, `SUBAGENTS_DIR` and `HONESTY_DIR`).
+  const ownDir = codex ? CODEX_DIR : subagents ? SUBAGENTS_DIR : honesty ? HONESTY_DIR : null;
+  // What a run and its summary print for the rows: the screen is F5's alone, and the other kinds name their own report.
+  const printing = { screen: !subagents && !honesty, report: honesty ? 'evals/honesty-report.mjs' : 'evals/subagents-report.mjs' };
   const resultsHome = ownDir === null ? resultsDir : path.join(resultsDir, ownDir);
   const rawHome = ownDir === null ? runsDir : path.join(runsDir, ownDir);
   const file = path.join(resultsHome, `${args.name}.json`);
@@ -694,7 +742,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
         warn(`no results named ${args.name} in ${resultsHome}\n`);
         return 1;
       }
-      say(formatSummary(summarizeResults(doc), { screen: !subagents }));
+      say(honesty ? `${reportLines(summarize(doc)).join('\n')}\n` : formatSummary(summarizeResults(doc), printing));
       return 0;
     } catch (err) {
       warn(`${err.message}\n`);
@@ -861,8 +909,9 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       run = { agent: args.agent, model, permissionMode: CODEX_PERMISSION_MODE, stack };
     } else {
       run = { model, permissionMode: args.permissionMode, stack: await stackOf({ claude: args.claude, home: realHome }) };
-      // Pinned only by a run of subagent configs, so what F5 recorded keeps the shape it always had.
+      // Pinned only by a run of subagent or honesty configs, so what F5 recorded keeps the shape it always had.
       if (subagents) run.subagentConfigs = Object.fromEntries(args.configs.map((name) => [name, subagentPin(name)]));
+      if (honesty) run.honestyConfigs = Object.fromEntries(args.configs.map((name) => [name, honestyPin(name)]));
     }
     if (existing) {
       const changes = runChanges(existing, run);
@@ -886,6 +935,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     doc = existing ?? { format: FORMAT, name: args.name, createdAt: now().toISOString(), ...run, args: null, trials: [] };
     // A continued run keeps the pin of every config it ever ran, and adds those of the configs it gains.
     if (run.subagentConfigs) doc.subagentConfigs = { ...doc.subagentConfigs, ...run.subagentConfigs };
+    if (run.honestyConfigs) doc.honestyConfigs = { ...doc.honestyConfigs, ...run.honestyConfigs };
     doc.args = { [agentOf(args)]: binary, configs: args.configs, efforts: args.efforts, repeats: args.repeats, tasks: args.tasks, workRoot };
 
     for (const signal of SIGNALS) proc.on(signal, onSignal);
@@ -917,7 +967,8 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       configs = args.configs.map((name) => (name === 'current' ? codexCurrentConfig({ ...options, seed }) : codexMinimalConfig(options)));
     } else {
       const options = { command: args.claude, model, permissionMode: args.permissionMode };
-      const configOf = (name) => (name === 'current' ? currentConfig({ ...options, seed }) : isSubagentConfig(name) ? subagentConfig(name, options) : minimalConfig(options));
+      const configOf = (name) => (name === 'current' ? currentConfig({ ...options, seed })
+        : isSubagentConfig(name) ? subagentConfig(name, options) : isHonestyConfig(name) ? honestyConfig(name, options) : minimalConfig(options));
       // The token goes into the trial's env here and nowhere else: the allowlist inherits CLAUDE_CODE_OAUTH_TOKEN
       // from the launching environment, and this overrides whatever that holds. A subagent config lays its two
       // variables over the sandbox env the same way, and they stay under the token.
@@ -955,7 +1006,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
         warn(`the suite stopped: ${result.reason} (${result.message}). ${doc.trials.length} trials are recorded in ${file}; fix the cause and run the same command again to continue.\n`);
         code = 1;
       }
-      say(`results: ${file}\n\n${formatSummary(summarizeResults(doc), { screen: !subagents })}`);
+      say(`results: ${file}\n\n${formatSummary(summarizeResults(doc), printing)}`);
     }
   } catch (err) {
     warn(`the suite failed: ${err.message}\n`);
