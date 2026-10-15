@@ -327,15 +327,15 @@ function ruleReader(projectData) {
 }
 
 /** The tasks of `markdown` with their mode lines, read against the rules of the project at `root`:
- * `[{ id, done, line }]`. */
-function modeLines(markdown, root) {
+ * `[{ id, kind, done, line }]`. Also read by the resume hook (bin/resume.mjs). */
+export function modeLines(markdown, root) {
   let projectData = null;
   try {
     projectData = fs.readFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
   } catch {
     // A project that declares no rules: every mode says so.
   }
-  return taskModes(markdown, ruleReader(projectData)).map((mode) => ({ id: mode.id, done: mode.done, line: modeLine(mode) }));
+  return taskModes(markdown, ruleReader(projectData)).map((mode) => ({ id: mode.id, kind: mode.kind, done: mode.done, line: modeLine(mode) }));
 }
 
 /** `modes`: the mode each open task calls for (its kind's effort and sub-agent models, from the rules

@@ -328,10 +328,14 @@ questions listed.
   bin/readme.test.mjs bin/js-harness.test.mjs` 120 pass; `contract modes` on this document prints
   T2-T6; `contract check` passes all 20 contracts. Three old tests changed with the spec: `##
   Effort` no longer required, the template ends with a task line
-- [ ] T3 (kind: build) The mode line of `resume --hook` (S2, the half without a lead). Not
-  started; the one line of `bin/resume.mjs` is cleared by the orchestrator (L5), after a merge of
-  `origin/main` (JH 12 edits that file too)
-- [ ] T4 (kind: build) `js-harness subagents` (S3). Built and committed, not yet wired:
+- [x] T3 (kind: build) The mode line of `resume --hook` (S2, the half without a lead). After the
+  feature-document lines, `Mode of the next open task: <modes line>. Tell the person: only they
+  set the session's effort.`; on Codex (a transcript under a `.codex` folder) the kind only. Printed
+  only when the next open task names its kind (L11). RED observed, then `node --test
+  bin/resume.test.mjs` 80 pass; `modeLines` is exported from `bin/contract.mjs` for it
+- [x] T4 (kind: build) `js-harness subagents` (S3). Wired after the resume (L12): the entry in
+  `COMMANDS`, its help line, a README section from its first real run; `node --test
+  bin/readme.test.mjs` 5 pass, `bin/js-harness.test.mjs` 35 pass. Before that, committed unwired:
   `bin/lib/subagent-count.mjs` (roles, token sums, the join, the count) and `bin/subagents.mjs`
   (`subagentsMain`), 38 tests green. Two Haiku writers wrote `roleOf`/`verbOf` and `usageOf` (RED
   then GREEN seen by them, code read by the parent); the parent wrote the join and the command,
@@ -390,3 +394,17 @@ questions listed.
   unwired; nothing pushed (the orchestrator's instruction). Resume when the orchestrator says so
   (a line "JH 13 resume" in `docs/todo.md` on `origin/main`, or `js-harness wait` once JH 5 lands
   it): merge `origin/main`, finish T4's wiring and real run, then T3, then the pull request.
+- L11 (2026-10-15): resumed by the orchestrator's message (his tap "Sí, esas cuatro
+  (Recomendada)", relief line 878, a claim); `origin/main` eab3eff merged as ea8dab3. T3's line is
+  printed only when the next open task names its kind: a task with no kind always says the
+  session's effort, so a document that has not adopted kinds would gain a line with nothing new,
+  and twelve existing tests of the hook's exact output showed how much that line would add to
+  every compaction. A new `PreToolUse` hook of the harness refused three test files at once beside
+  another session's gate: one file at a time.
+- L12 (2026-10-15): the first real run, `js-harness gate -- node bin/js-harness.mjs subagents
+  --day 2026-10-14`, read two record folders in 7.3 s: 53 launches (explorers 23 on Opus and 1 on
+  Haiku, writers 11 on Haiku, reviewers 8, verifiers 6, other 4), all asked and run at high; 14
+  inherited the session's model. Their share of the day: input 19%, cache write 28%, cache read
+  8%, output 23%. So the 59 percent of 2026-10-11 does not hold for this day by any figure; the
+  Haiku writers read more cache (46.7 M) than the 23 Opus explorers (37.9 M). These are T6's first
+  figures; T6 wants a second day before a rule on launches is proposed.

@@ -352,6 +352,26 @@ $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
 ```
 
+### js-harness subagents
+
+Counts a day's sub-agents of the project by role (writer, explorer, reviewer, verifier), model
+and effort, with their tokens and the share of the day's tokens they took, so that what to
+measure next and how many to launch come from a count. It reads the Claude Code records of the
+main checkout and each worktree and keeps no text of any message; Codex is not counted.
+
+```console
+$ js-harness subagents --day 2026-10-14
+Sub-agents, local day 2026-10-14 (UTC-05:00), 2 record folders; Claude records only, Codex not counted
+role      model             effort asked/ran  launches  input  cache write  cache read   output
+explorer  claude-opus-5-5   high/high               23    932      2197153    37928674   274820
+writer    claude-haiku-5-5  high/high               11    646      1626090    46702162   397934
+…
+total                                               53   2432      6297822   129006824  1036844
+Their share of the day's tokens: input 19%, cache write 28%, cache read 8%, output 23%
+Read as other: 4; effort or model inherited from the session: 14; call not found: 0
+Read in 7.3 s
+```
+
 ### js-harness notify
 
 Appends one notice to the project's channel record under the home, with the time, the sender's

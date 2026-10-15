@@ -1557,3 +1557,24 @@ test('past the hook\'s own deadline no line of the questions is printed, and the
   // In time, the same record is given its four lines.
   assert.equal(questionLinesOf((await runHook(machine, hookInput(machine))).lines).length, 4);
 }));
+
+test('after the feature document the hook names the mode its next open task calls for, for the session to tell the person', withMachine(async (machine) => {
+  const doc = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md');
+  fs.writeFileSync(doc, '# Session channel\n\n- [x] T5 (kind: design) Done\n- [ ] T6 (kind: build) The resume hook\n\n## Next step\nT6.\n');
+  notified(machine);
+  const modeOf = async (more = {}) => (await runHook(machine, hookInput(machine, { session_title: TITLE, ...more }))).lines.filter((line) => line.startsWith('Mode of the next open task'));
+  // A project that declares no rules: the line says so.
+  assert.deepEqual(await modeOf(), ['Mode of the next open task: T6 (kind: build): no effort or model declared in this project. Tell the person: only they set the session\'s effort.']);
+  // A project whose rules are this copy's: the effort and the models.
+  fs.mkdirSync(path.join(machine.worktree, 'bin', 'lib'), { recursive: true });
+  fs.copyFileSync(new URL('./lib/rules-data.mjs', import.meta.url), path.join(machine.worktree, 'bin', 'lib', 'rules-data.mjs'));
+  assert.deepEqual(await modeOf(), ['Mode of the next open task: T6 (kind: build): session high; writers haiku, readers opus; every sub-agent at high. Tell the person: only they set the session\'s effort.']);
+  // On Codex the models of the table are Claude's: the kind only.
+  const codex = path.join(machine.home, '.codex', 'sessions', `${SESSION}.jsonl`);
+  assert.deepEqual(await modeOf({ transcript_path: codex }), ['Mode of the next open task: T6 (kind: build); effort and models are not declared for Codex']);
+  // No open task, or a next open task that names no kind: no line.
+  fs.writeFileSync(doc, '# Session channel\n\n- [x] T6 (kind: build) The resume hook\n');
+  assert.deepEqual(await modeOf(), []);
+  fs.writeFileSync(doc, '# Session channel\n\n- [ ] T6 The resume hook\n- [ ] T7 (kind: build) Later\n');
+  assert.deepEqual(await modeOf(), []);
+}));
