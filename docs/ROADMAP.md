@@ -991,8 +991,8 @@ redone because it could have been seen that another way, or doing it together wi
 feature, was better; like a lead developer with several programmers; it should know the
 project in detail, ask what it doubts, be curious; and it should not take his words
 literally but order the ideas and propose the better way. Quality comes before speed, and
-speed still matters. What stands today is the opposite on purpose: the installed skill
-makes the orchestrator a watchman ("You read", "Otherwise stay silent"), because reading
+speed still matters. What stood until the skill's rewrite (T8 of `odd/tasks/session-channel.md`)
+was the opposite on purpose: the installed skill made the orchestrator a watchman ("You read", "Otherwise stay silent"), because reading
 code and discussing a design fill a context that has to last. So the role changes, and the
 knowledge goes to files instead of to the orchestrator's conversation:
 
