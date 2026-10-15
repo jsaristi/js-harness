@@ -5355,6 +5355,24 @@ test('the review of a resolved merge asks Codex for a diff of two objects that e
   assert.equal(readCodexReviewRuns(root).at(-1).diff, 'remerge');
 });
 
+test('a commit after a merge of main that a record covers is reviewed alone, from the merge (T6, L3)', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  appendCodexReview(root, { ...reviewedRecord(mine, head), diff: 'remerge' });
+  fs.writeFileSync(path.join(root, 'a.txt'), 'A1 after the merge\n', 'utf8');
+  git(root, 'commit', '-qam', 'after the merge');
+  const after = git(root, 'rev-parse', 'HEAD');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  nothing.untouched('the plan after a reviewed merge');
+  // Four code commits past main: the change of `makeRepoWith` (on the trunk only, since main's side forks
+  // from `base`), `mine`, the merge and the one after; the records cover the first three.
+  assert.deepEqual(result.out.split('\n'), [
+    startsAt(rangeOf(main, after), 4, 3, head),
+    ...planned(root, head, after, [{ files: ['a.txt'], changedLines: 2 }]),
+  ]);
+});
+
 // Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
 const readOnlyHolds = process.platform !== 'win32' && process.getuid?.() !== 0;
 
