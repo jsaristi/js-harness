@@ -35,6 +35,7 @@ import { modeLines } from './contract.mjs';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
+import { webBlockNotice } from './lib/web-block.mjs';
 import { pauseNotice, toldBetween } from './lib/pause.mjs';
 import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
@@ -48,7 +49,8 @@ const USAGE = [
   'Usage: js-harness resume --pause',
   '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
   '         one JSON line with the notice the first time a stretch of work passes the pause, and the notices of the',
-  '         channel addressed to the session that it was not told yet, once each; nothing else.',
+  '         channel addressed to the session that it was not told yet, once each; and, after a WebFetch the site',
+  '         answered 402, 403, 429 or 503, sub-agents\' too, the next rung: js-harness fetch, then the browser.',
   '         It never fails and always exits 0.',
 ].join('\n');
 
@@ -923,15 +925,19 @@ function hasHarnessJson(folder, isFile) {
  * state file by; the caller's catch turns that into silence. The state goes to the harness home, and its temp folder
  * is under the same home when `JS_HARNESS_HOME` is set, so a made-up home never reaches the real temp folder. */
 function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
-  if (!isObject(input) || (typeof input.agent_id === 'string' && input.agent_id !== '')) return null;
-  if (typeof input.transcript_path !== 'string' || input.transcript_path === '') return null;
+  if (!isObject(input)) return null;
+  // The web notice is said to a sub-agent too, since research is mostly theirs; the pause and the inbox are the
+  // session's own, and need its transcript.
+  const own = !(typeof input.agent_id === 'string' && input.agent_id !== '') && typeof input.transcript_path === 'string' && input.transcript_path !== '';
+  const web = webBlockNotice(input);
+  if (!own && web === null) return null;
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
   if (!hasHarnessJson(cwd, isFile)) return null;
   const home = env.JS_HARNESS_HOME || homedir();
-  const notice = pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) });
+  const notice = own ? pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) }) : null;
   // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
-  const inbox = inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) });
-  const said = [notice?.text, inbox?.text].filter((text) => typeof text === 'string');
+  const inbox = own ? inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) }) : null;
+  const said = [web, notice?.text, inbox?.text].filter((text) => typeof text === 'string');
   if (said.length === 0) return null;
   // Another entry (a `Stop` hook, later) runs this command too, so the event is the input's own when it names one.
   const event = typeof input.hook_event_name === 'string' && input.hook_event_name !== '' ? input.hook_event_name : 'PostToolUse';
