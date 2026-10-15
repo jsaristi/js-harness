@@ -67,12 +67,28 @@ test('the time he counts as present is the declared person-present in millisecon
 // The command's test file held both values in its expected output, 67 and 58 times: his change of the
 // effort on 2026-10-12 was a change of every one of those lines. It reads the two constants now, and this
 // holds it there. A value is looked for as a word, so that `gpt-6.1-sol-next` or `mediumish` would not count.
+/** The lines of `file` (a path under `bin/`) that hold `value` as a word, or as a regex escapes it. */
+function linesStating(file, value) {
+  const lines = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').split('\n');
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const written = [value, escaped].map((form) => form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const asWord = new RegExp(`(?<![\\w-])(?:${written.join('|')})(?![\\w-])`);
+  return lines.flatMap((line, at) => (asWord.test(line) ? [at + 1] : []));
+}
+
 test('the test file of the review command states neither the model nor the effort of a review: it reads both', () => {
-  const lines = fs.readFileSync(new URL('../codex-review.test.mjs', import.meta.url), 'utf8').split('\n');
   for (const value of [ruleValue('review-model'), ruleValue('review-effort')]) {
-    const asWord = new RegExp(`(?<![\\w-])${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`);
-    const stated = lines.flatMap((line, at) => (asWord.test(line) ? [at + 1] : []));
+    const stated = linesStating('codex-review.test.mjs', value);
     assert.equal(stated.length, 0, `${value} is written in ${stated.length} lines of bin/codex-review.test.mjs, the first at ${stated[0]}`);
+  }
+});
+
+// The plan's and the run log's tests held the review's model as the model of their fixtures, 17 and 11
+// lines: a change of the model would have left them stating the old one. A neutral name does the same work.
+test('the tests of the review plan and of its run log do not state the review model', () => {
+  for (const file of ['lib/codex-review-plan.test.mjs', 'lib/codex-review-runs.test.mjs']) {
+    const stated = linesStating(file, ruleValue('review-model'));
+    assert.equal(stated.length, 0, `${ruleValue('review-model')} is written in ${stated.length} lines of bin/${file}, the first at ${stated[0]}`);
   }
 });
 
