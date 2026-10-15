@@ -138,7 +138,8 @@ export function validateContract(markdown) {
 
   if (bodies.has('Effort')) {
     const effort = bodies.get('Effort');
-    if (!EFFORTS.includes(effort.toLowerCase())) {
+    if (effort === '') errors.push('section "## Effort" is empty');
+    else if (!EFFORTS.includes(effort.toLowerCase())) {
       errors.push(`"## Effort" must be exactly "medium" or "high", found "${effort}"`);
     }
   }

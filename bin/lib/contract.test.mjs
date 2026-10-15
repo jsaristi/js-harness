@@ -325,3 +325,7 @@ test('## Effort is optional: a contract without it passes, one with a wrong valu
   assert.deepEqual(validateContract(withSection('Effort', null)), { ok: true, errors: [] });
   assert.equal(validateContract(withSection('Effort', 'low')).ok, false);
 });
+
+test('an empty ## Effort is still named as an empty section, as before it became optional', () => {
+  assert.deepEqual(validateContract(withSection('Effort', '')).errors, ['section "## Effort" is empty']);
+});

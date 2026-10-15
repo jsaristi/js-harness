@@ -100,7 +100,7 @@ test('--day and --days choose the local days counted', async () => {
 test('a bad flag is a usage error (exit 2), and a project with no records folder exits 1 saying so', async () => {
   const records = makeRecords();
   try {
-    for (const argv of [['--days', '8'], ['--days', '0'], ['--day', '14-10-2026'], ['--day'], ['--what']]) {
+    for (const argv of [['--days', '8'], ['--days', '0'], ['--day', '14-10-2026'], ['--day', '2026-02-30'], ['--day'], ['--what']]) {
       const { code, stderr } = await subagents(argv, records);
       assert.equal(code, 2, argv.join(' '));
       assert.match(stderr, /Usage: js-harness subagents/);
@@ -109,6 +109,12 @@ test('a bad flag is a usage error (exit 2), and a project with no records folder
     const none = await subagents([], records);
     assert.equal(none.code, 1);
     assert.match(none.stderr, /no Claude Code records folder/);
+    // A records "folder" that cannot be listed is none either, not an empty count.
+    fs.mkdirSync(path.join(records.config, 'projects'), { recursive: true });
+    fs.writeFileSync(path.join(records.config, 'projects', projectSlug(records.main)), 'not a folder');
+    const unreadable = await subagents([], records);
+    assert.equal(unreadable.code, 1);
+    assert.match(unreadable.stderr, /no Claude Code records folder/);
   } finally {
     records.cleanup();
   }

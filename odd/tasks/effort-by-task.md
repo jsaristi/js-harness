@@ -345,8 +345,10 @@ questions listed.
   `COMMANDS` and the help line of `bin/js-harness.mjs`, a README section with a real run
   (`bin/readme.test.mjs` asks one for each command of `--help`), and the first real run on this
   project's records, under `js-harness gate` since it reads about 231 MB
-- [ ] T5 (kind: docs) The paragraph for JH 5's skill and the js-harness skill, `taskModes` for
-  JH 7's check, the startup item for JH 8, handed through the orchestrator (S2)
+- [x] T5 (kind: docs) The paragraph for JH 5's skill and the js-harness skill, `taskModes` for
+  JH 7's check, the startup item for JH 8, handed through the orchestrator (S2). The paragraph
+  sent 2026-10-14 03:08, the interface to JH 15 (whose the check is, L5) the same hour with its
+  confirmation (L6) and the change of L13, the startup item 2026-10-15 (L15)
 - [x] T6 (kind: verify) Two real days counted, the figures and a proposed rule on launches (C4)
   to the orchestrator (S3). Figures and proposal in L14, sent to the orchestrator
 
@@ -432,3 +434,13 @@ questions listed.
   one narrow task, since a Haiku writer reads about twice the cache of a reader per launch,
   measured again with this command after a week; (3) every Agent call names its model, since 4
   and 14 launches inherited it, which the paragraph of T5 already asks.
+- L15 (2026-10-15): Codex's recheck of 9900559..d1e5343: both findings fixed, 101,754 input
+  tokens. An independent verifier (opus, high, probes in a scratch copy) found no blocker: S1 and
+  S3 met; `contract check` and `goal`'s stdout byte-identical to the baseline on four documents;
+  the planted secret never printed. Three of its advisories taken, each with a test seen red: a
+  `--day` that does not come back as itself (2026-02-30) is refused; a records folder that cannot
+  be listed counts as none (exit 1); an empty `## Effort` is named "is empty" again, as before.
+  Left as advisories: a removed worktree's records are not counted, the zone offset is today's,
+  `modes` prints a misspelled kind as `(no kind)` (`check` names it), and the ID test pins a copy
+  of the board's pattern. The startup item went to the lead. The lead changed to "JH ORQ 2 ·
+  js-harness" (local_a8ef1e36-0003-4a3d-b6b5-9d18df61ab3e); notices go there.

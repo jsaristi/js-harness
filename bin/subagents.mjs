@@ -29,7 +29,9 @@ function parseArgs(argv) {
     };
     if (token === '--day') {
       parsed.day = value();
-      if (!DAY_PATTERN.test(parsed.day) || Number.isNaN(Date.parse(`${parsed.day}T00:00:00Z`))) throw new SubagentsArgError('--day takes a date as YYYY-MM-DD');
+      // A day that does not come back as itself (2026-02-30 is read as March 2nd) is no date.
+      const read = DAY_PATTERN.test(parsed.day) ? Date.parse(`${parsed.day}T00:00:00Z`) : NaN;
+      if (Number.isNaN(read) || new Date(read).toISOString().slice(0, 10) !== parsed.day) throw new SubagentsArgError('--day takes a date as YYYY-MM-DD');
     } else if (token === '--days') {
       const raw = value();
       parsed.days = /^\d+$/.test(raw) ? Number(raw) : NaN;
@@ -49,14 +51,21 @@ function parseArgs(argv) {
 const shiftDay = (day, delta) => new Date(Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000).toISOString().slice(0, 10);
 
 /** The records folders of this project: the main checkout's and each worktree's, as Claude Code names them
- * under `<config>/projects`, the ones that exist. */
+ * under `<config>/projects`, the ones that can be listed. */
 function recordFolders({ cwd, env, homedir, run }) {
   const main = mainCheckout(run, cwd);
   const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: main, encoding: 'utf8' });
   const trees = listed.error || listed.status !== 0 ? [] : parseWorktreeList(listed.stdout).map((tree) => tree.path);
   const root = path.join(env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), 'projects');
   const slugs = [...new Set([main, ...trees].map((folder) => projectSlug(path.resolve(folder))))];
-  return slugs.map((slug) => path.join(root, slug)).filter((dir) => fs.existsSync(dir));
+  return slugs.map((slug) => path.join(root, slug)).filter((dir) => {
+    try {
+      fs.readdirSync(dir);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** Each line of `file` parsed, handed to `keep`; a line that is not JSON is skipped. Streamed: a session's
