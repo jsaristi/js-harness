@@ -355,7 +355,9 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return launchers === null || launcher.alive(launchers);
   };
   const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, stillWanted }, deps.takeGateLock);
-  if (looks > 1) launchers ??= launcher.read();
+  // A turn that came after a wait has its last look before the command: a table not in yet is waited for
+  // (Codex, 2026-10-15), never stopped, since an orphan would otherwise run with no look at all.
+  if (looks > 1) launchers ??= launcher.settle ? await launcher.settle() : launcher.read();
   launcher.stop?.();
   const { waitedMs, waitedFor } = turn;
   if (turn.refused) {

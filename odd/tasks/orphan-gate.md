@@ -92,3 +92,10 @@ Nothing planned.
   shell's parent ended reads alive, and gone once that shell ends on a stop file, since the repository's guard
   forbids signalling a pid), `gate.test.mjs` (an unknown chain
   keeps its place); 6/6 and 62/62. The real gate test caught `kill EINVAL` on a read already ended.
+- **L8** (2026-10-15 02:32): `1134f84`. gentle-ai, raised to high (item 4: the order of the table's read
+  against the wait of every session's gate): native review, lenses resilience and reliability, approved and
+  acknowledged (lineage `review-ee742770df9c120b`), seven non-blocking advisories. Codex `dfe4345..1134f84`:
+  incorrect, one P2 (152,310 input tokens): a turn that came after a wait, before the table was in, stopped
+  the read and ran with no last look. Corrected alone: such a turn waits for the read (`settle`), bounded at
+  20 s like the blocking read, after which the table is none. RED then GREEN in `bin/gate.test.mjs` (63/63);
+  the end-to-end case still exits 0.

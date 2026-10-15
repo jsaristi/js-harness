@@ -37,38 +37,45 @@ function windowsTable() {
 }
 
 /** The same table read without blocking: `rows()` is `undefined` until it is in, then the table or `null`;
- * `stop()` ends a read nobody needs any more. */
+ * `done` settles when it is in; `stop()` ends a read nobody needs any more. */
 function windowsTableSoon() {
   let rows;
   let child;
   try {
     child = spawn('powershell.exe', WINDOWS_TABLE, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
   } catch {
-    return { rows: () => null, stop() {} };
+    return { rows: () => null, done: Promise.resolve(), stop() {} };
   }
   let out = '';
+  let settle;
+  const done = new Promise((resolve) => {
+    settle = resolve;
+  });
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk) => {
     out += chunk;
   });
   child.on('error', () => {
     rows ??= null;
+    settle();
   });
   child.on('close', (code) => {
     rows ??= code === 0 ? tableOf(out) : null;
+    settle();
   });
-  return {
-    rows: () => rows,
-    stop() {
-      if (rows !== undefined) return;
-      rows = null;
-      try {
-        child.kill();
-      } catch {
-        // it ended before its close was told: nothing to stop
-      }
-    },
+  const stop = () => {
+    if (rows !== undefined) return;
+    rows = null;
+    settle();
+    try {
+      child.kill();
+    } catch {
+      // it ended before its close was told: nothing to stop
+    }
   };
+  // The bound of the blocking read: a listing that hangs is no table, and nothing waits on it longer.
+  setTimeout(stop, 20_000).unref();
+  return { rows: () => rows, done, stop };
 }
 
 /** The rows of PowerShell's listing, or `null` for a listing with none. */
@@ -133,24 +140,29 @@ export function readLaunchers({ ppid = process.ppid, readTable = defaultTable } 
   return launchers.length === 0 ? alone : launchers;
 }
 
-/** The launchers of a gate, read as it starts, `{ read, stop }`: `read()` gives the chain, or `null` while
- * the table is not in yet, and `stop()` ends a read nobody needs any more. On Linux `/proc` is read at once;
- * on Windows PowerShell lists the processes beside the gate (about a second), so a turn taken at once waits
- * for nothing. */
+/** The launchers of a gate, read as it starts, `{ read, settle, stop }`: `read()` gives the chain, or `null`
+ * while the table is not in yet; `settle()` waits for it and gives the chain; `stop()` ends a read nobody
+ * needs any more. On Linux `/proc` is read at once; on Windows PowerShell lists the processes beside the gate
+ * (about a second), so a turn taken at once waits for nothing. */
 export function startLaunchers({ ppid = process.ppid, platform = process.platform } = {}) {
   if (platform !== 'win32') {
     const chain = readLaunchers({ ppid });
-    return { read: () => chain, stop() {} };
+    return { read: () => chain, settle: async () => chain, stop() {} };
   }
   const table = windowsTableSoon();
   let chain = null;
+  const read = () => {
+    if (chain === null) {
+      const rows = table.rows();
+      if (rows !== undefined) chain = readLaunchers({ ppid, readTable: () => rows });
+    }
+    return chain;
+  };
   return {
-    read() {
-      if (chain === null) {
-        const rows = table.rows();
-        if (rows !== undefined) chain = readLaunchers({ ppid, readTable: () => rows });
-      }
-      return chain;
+    read,
+    async settle() {
+      await table.done;
+      return read();
     },
     stop: table.stop,
   };
