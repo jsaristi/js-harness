@@ -64,8 +64,8 @@ function reliefInstant(line) {
 }
 
 /** A reader of the orchestrator's relief file for `compactionMeasures`: for `{ after, before }` it reads `file` through
- * `readFile(file)` and answers `{ known: true, kept }`, `kept` being whether a line is stamped after `after` (the notice;
- * `null` is open) and at or before `before` (the boundary), compared as instants. A stamp that does not parse proves
+ * `readFile(file)` and answers `{ known: true, kept }`, `kept` being whether a line is stamped in or after the minute of
+ * `after` (the notice; `null` is open) and in or before the minute of `before` (the boundary), compared as instants. A stamp that does not parse proves
  * nothing. `{ known: false }` when the file cannot be read, ENOENT included, or a bound does not parse. */
 export function keptByRelief(readFile, file) {
   return ({ after, before } = {}) => {
@@ -79,11 +79,14 @@ export function keptByRelief(readFile, file) {
     } catch {
       return unknown;
     }
+    // A stamp names a minute and the bounds carry seconds: each bound is taken to its minute, and a line of the
+    // notice's minute or of the boundary's counts, since which side of the second it fell on cannot be read.
+    const minuteOf = (time) => Math.floor(time / 60000) * 60000;
     const kept = String(text)
       .split(/\r?\n/)
       .some((line) => {
         const time = reliefInstant(line);
-        return time > from && time <= to;
+        return time >= minuteOf(from) && time <= minuteOf(to);
       });
     return { known: true, kept };
   };

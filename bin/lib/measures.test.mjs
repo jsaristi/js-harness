@@ -76,9 +76,19 @@ test('keptByRelief keeps the stretch when a line of the relief file is stamped a
   const kept = (text, after = at(3), before = at(6)) => keptByRelief(() => text, RELIEF)({ after, before });
   assert.deepEqual(kept(`${stampOf(1)} earlier\n${stampOf(5)} inside\n`), { known: true, kept: true });
   assert.deepEqual(kept(`${stampOf(6)} at the boundary\n`), { known: true, kept: true }, 'a line at the boundary itself is before it');
-  assert.deepEqual(kept(`${stampOf(3)} at the notice\n`), { known: true, kept: false }, 'a line at the notice is not after it');
+  assert.deepEqual(kept(`${stampOf(3)} in the notice's minute\n`), { known: true, kept: true }, 'a stamp has minutes only: its minute may follow the notice');
   assert.deepEqual(kept(`${stampOf(7)} late\n${stampOf(2)} early\n`), { known: true, kept: false });
   assert.deepEqual(kept(''), { known: true, kept: false }, 'a relief file with no line of the stretch was not kept');
+});
+
+// Codex on edf9e75: the stamp has minutes and the notice has seconds, so a line written in the notice's own minute was
+// read as before it, and a state kept read as missed.
+test('keptByRelief compares minute with minute: a line in the notice minute or the boundary minute counts', () => {
+  const second = (minute, s) => new Date(Date.parse(at(minute)) + s * 1000).toISOString();
+  const kept = (text) => keptByRelief(() => text, RELIEF)({ after: second(3, 10), before: second(6, 20) });
+  assert.deepEqual(kept(`${stampOf(3)} written at 40 seconds past\n`), { known: true, kept: true });
+  assert.deepEqual(kept(`${stampOf(6)} in the boundary minute\n`), { known: true, kept: true });
+  assert.deepEqual(kept(`${stampOf(2)} the minute before\n${stampOf(7)} the minute after\n`), { known: true, kept: false });
 });
 
 test('keptByRelief reads the stamp as the local time the line was written, in the same form the command writes, and a hand-written one too', () => {
