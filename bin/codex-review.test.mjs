@@ -165,6 +165,13 @@ function copyOf(key, build) {
   return { root, ...ids };
 }
 
+/** Writes the `harness.json` that turns the Codex review on in `root`. The fixtures hold no program, so
+ * `auto` would read the review as off and `codex-review` would stop before it starts; declaring it on keeps
+ * these tests about the review. The file is in the first commit and never changes, so no range shows it. */
+function declareReviewOn(root) {
+  fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify({ functions: { codexReview: 'on' } })}\n`, 'utf8');
+}
+
 /** A repo whose first commit (`base`) holds `before` and second (`head`) holds `after`, both maps
  * of file name to content. */
 function makeRepoWith(before, after) {
@@ -177,6 +184,7 @@ function buildRepoWith(before, after) {
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  declareReviewOn(root);
   for (const [name, content] of Object.entries(before)) fs.writeFileSync(path.join(root, name), content, 'utf8');
   git(root, 'add', '.');
   git(root, 'commit', '-m', 'one');
@@ -4314,6 +4322,7 @@ test('a renamed file and a binary one, in parts: the renamed file is shown whole
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  declareReviewOn(root);
   fs.writeFileSync(path.join(root, 'old.txt'), 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n', 'utf8');
   fs.writeFileSync(path.join(root, 'z.txt'), 'z1\n', 'utf8');
   fs.writeFileSync(path.join(root, 'blob.bin'), Buffer.from([0, 1, 2, 0, 255]));
@@ -4813,6 +4822,8 @@ function makeSubmoduleRepo() {
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
   fs.mkdirSync(path.join(root, 'sub'));
+  declareReviewOn(root);
+  git(root, 'add', 'harness.json');
   const committed = (pointer, files, message) => {
     for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(root, name), content, 'utf8');
     git(root, 'add', ...Object.keys(files));

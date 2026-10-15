@@ -1001,6 +1001,45 @@ test('a repository with no refs of the remote fails, naming the command that set
   assert.ok(row.lines.some((line) => line.includes('git remote set-head origin --auto')), row.lines.join('\n'));
 });
 
+// S10: the first push of a project to an empty repository passes and says so: what went unread, and the
+// command that reviews it, which plans its cost first. Only where the remote holds no branch at all.
+
+/** A repository whose `origin` is a bare repository on disk, with no refs of it fetched; `branch` pushed
+ * there first when given, so the remote holds it. */
+function makeFirstPushRepo(branch = null) {
+  const remote = tmp('js-harness-check-empty-remote-');
+  git(remote, 'init', '--bare');
+  const { root, base } = makeRepo(null);
+  git(root, 'remote', 'set-url', 'origin', remote);
+  if (branch) {
+    git(root, 'push', '-q', 'origin', `HEAD:refs/heads/${branch}`);
+    // A push writes the remote-tracking ref of what it pushed: drop it, as a clone that never fetched holds none.
+    git(root, 'update-ref', '-d', `refs/remotes/origin/${branch}`);
+  }
+  return { root, base };
+}
+
+test('the first push to an empty repository passes, says what went unread and the command that reviews it', () => {
+  const { root, base } = makeFirstPushRepo();
+  commit(root, 'b.js', 'two\nthree\n', 'feat: two');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /origin holds no branch yet, so this first push passes with no Codex review/);
+  const lines = row.lines.join('\n');
+  assert.match(lines, /2 commits went unread by Codex: 3 changed lines in 2 files/);
+  assert.match(lines, new RegExp(`js-harness codex-review --base ${base.slice(0, 7)} --plan`));
+  assert.match(lines, new RegExp(`${base.slice(0, 7)} itself, the first commit, is in no range`));
+});
+
+test('a remote that holds a branch not fetched here is no first push: the row still fails', () => {
+  const { root } = makeFirstPushRepo('main');
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false);
+  assert.match(row.detail, /no default branch of origin/i);
+});
+
 test('a local main is never the base: with no origin refs it still fails', () => {
   const { root } = makeRepo(null);
   git(root, 'branch', 'master');
@@ -1385,6 +1424,8 @@ const CANNOT_TELL = {
     make: () => {
       const root = tmp('js-harness-check-plain-');
       git(root, 'init');
+      // A program not yet committed: with none, the review is off here and the row says that first (S7).
+      fs.writeFileSync(path.join(root, 'a.js'), 'one', 'utf8');
       return [root];
     },
     why: 'HEAD does not name a commit',
@@ -1510,8 +1551,10 @@ test('plain check exits 0 where the row cannot tell: a project with no remote, a
   const noRemote = tmp('js-harness-check-plain-');
   git(noRemote, 'init');
   const noRepository = tmp('js-harness-check-plain-nongit-');
+  // A program in each, not committed: with none, the review is off there and the row says that first (S7).
   for (const root of [noRemote, noRepository]) {
     fs.writeFileSync(path.join(root, 'AGENTS.md'), 'short', 'utf8');
+    fs.writeFileSync(path.join(root, 'a.js'), 'one', 'utf8');
     const { code, output } = await runCheck(['--cwd', root, '--home', tmp('js-harness-check-push-home-')]);
     assert.equal(code, 0, output);
     assert.match(output, /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /m);

@@ -1796,6 +1796,14 @@ test('agentsTemplate serves a project with code and one without', () => {
   assert.match(template, /A behavior change arrives with the test that proves it, written first; a finding, with the\nevidence that proves it\./);
 });
 
+// His answer to question 4 (odd/tasks/on-demand-functions.md, S9): with the Codex review off, gentle-ai reviews
+// high and medium risk, a written rule that nothing enforces at a push.
+test('agentsTemplate writes the rule of a project whose Codex review is off', () => {
+  const template = agentsTemplate('project');
+  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), gentle-ai reviews every change of medium\nor high risk\.$/m);
+  assert.ok(template.length < 1200, `template is ${template.length} chars`);
+});
+
 // --- runCodegraphInit spawn shape ---
 // T2b Codex P2 (shell expansion): the root path is never embedded in the command line — it is
 // passed as the child's own `cwd`, with the command always the literal `.` — so a root containing
