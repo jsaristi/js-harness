@@ -87,7 +87,7 @@ shape the hook reads).
 ## Tasks
 - [x] T1 (kind: build) `js-harness fetch <url>`: refuses what is not a public page, asks r.jina.ai, says read or blocked with the next rung (S1, S3). Inline. RED: `node --test bin/fetch.test.mjs` failed, no module; GREEN: 8/8
 - [x] T2 (kind: build) the web notice in `resume --pause` after a blocked WebFetch (S3). Inline. RED: 3 of the 4 new tests failed; GREEN: `node --test bin/resume.test.mjs` 84/84
-- [ ] T3 (kind: verify) `npm run check`, gentle-ai and Codex reviews recorded, a draft pull request
+- [ ] T3 (kind: verify) `npm run check`, gentle-ai and Codex reviews recorded, a draft pull request. Done but gentle-ai: gate green, Codex recorded on both commits, draft PR open; gentle-ai stopped on its own defect (L5)
 - [ ] T4 (kind: build) a `PostToolUseFailure` entry for WebFetch's tool error, if Sebastián wants it (S4): not started
 
 ## Log
@@ -121,3 +121,6 @@ shape the hook reads).
   command did not quote the URL, so a shell would cut it at `&`. Fixed test first (RED: the refusal test and
   4 notice tests failed; GREEN: `fetch` 8/8, `resume` 85/85). A heredoc ate the backslash of `/\.$/` and
   made it strip any last character; the existing `127.0.0.1` case caught it before the commit.
+- **L7** (2026-10-15): commit `dccfa2a`, gate green. Codex recheck over `784c752..dccfa2a`, recorded: 3
+  fixed, 0 not fixed, "the patch is correct" (36,709 input tokens). T3 waits on Sebastián's answer on the
+  gentle-ai defect; the pull request stays a draft until then (the lead, 2026-10-15).
