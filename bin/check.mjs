@@ -1357,14 +1357,17 @@ function coveredDetail({ codeCommits, base }) {
 }
 
 /** What the Codex review the pushed branch ends on still owes: `null` when it owes nothing, or when nothing
- * can be proven, else the `detail` and `lines` of a refusal.
+ * can be proven; `{ refuse: true, detail, lines }` when it owes a correction never rechecked; and
+ * `{ refuse: false, lines }`, a warning the passing row carries, when a recheck left findings open.
  *
  * Why. A record covers its commits whatever its review found, so coverage alone let a branch push right
  * after Codex called its head incorrect (2026-10-14: two P2 findings, then "all covered by a Codex review
  * record"). The review the branch ends on is the last record that covers its newest code commit; what it
  * owes is what `codex-review` reads to decide whether the next range is a recheck (`recheckState`). So this
- * refuses the head whose next review would be a recheck, and the head of a recheck that left findings open,
- * and nothing else. Coverage is still read from the records alone (./lib/codex-review-runs.mjs says why);
+ * refuses the head whose next review would be a recheck, and nothing else. The head of a recheck that left
+ * findings open passes with a warning that names them: a second recheck is not run, so refusing it would
+ * leave a session away from the user no way forward, and whether a disputed finding is waived is the user's
+ * call (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./lib/codex-review-runs.mjs says why);
  * the run log, where the findings are kept, only adds this refusal, and a log that cannot be read proves
  * nothing owed. Documents committed after that head change nothing here: they are no code commit. */
 function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
@@ -1388,6 +1391,7 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   if (state.kind === 'recheck') {
     const at = shortOf(from);
     return {
+      refuse: true,
       detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
       lines: [...state.findings.map(priorLine), `commit the correction, then recheck it: js-harness codex-review --base ${at}`],
     };
@@ -1409,13 +1413,12 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   const at = shortOf(recheck.head);
   const left = state.open === null ? 'findings open (its counts were not kept)' : `${findings(state.open)} open`;
   return {
-    detail: `the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(state.of)}`,
+    refuse: false,
     lines: [
+      `warning: the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(state.of)}`,
       ...open.map(priorLine),
-      // No skip is offered: a skip records no correction, and the newest code commit would still be the
-      // recheck's, so the push would refuse again after it. What clears it is a later code commit whose own
-      // review owes nothing.
-      `a second recheck is not run: commit a correction of those findings as code and have Codex review it; a disputed finding has no waiver yet: the user decides it`,
+      // No skip is offered: a skip records no correction.
+      `the push passes; the user decides whether they are waived, or a correction is committed as code and reviewed`,
     ],
   };
 }
@@ -1426,7 +1429,8 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
  * must lie in a range some `codex-review` record covers (any
  * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
  * nothing for a review to look at, such as a change and its revert; both are listed), and the review the
- * branch ends on must owe no correction (`correctionOwed`). Plain `check` never
+ * branch ends on must owe no unrechecked correction (`correctionOwed`; a recheck that left findings open
+ * passes with a warning that names them). Plain `check` never
  * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed: what it
  * runs is `checkCodexReviewDebt`, which reads the same records and fails nothing. */
 export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
@@ -1458,12 +1462,13 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   }
 
   const owed = correctionOwed(cwd, state, { spawn });
-  if (owed !== null) return fail(`${owed.detail}${note}`, owed.lines);
+  if (owed?.refuse) return fail(`${owed.detail}${note}`, owed.lines);
 
   // The records that cover a code commit here and are no review of Codex's, each as a line that says which
   // it is and why: an explicit skip, or a range that held nothing to review. The detail counts the commits
   // as covered by a record, which they are; these lines are what keeps that from reading as "reviewed".
   const lines = notReviews(state).map((rec) => `${NOT_A_REVIEW[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason ?? 'no reason given'}`);
+  if (owed !== null) lines.push(...owed.lines);
   return { name, pass: true, detail: `${coveredDetail(state)}${note}`, ...(lines.length ? { lines } : {}) };
 }
 
