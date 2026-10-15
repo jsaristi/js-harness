@@ -181,7 +181,7 @@ session's claim.
 - Seen: 2026-10-11 — relief file, line 290 — a transcript line cited as his words from a text search,
   without reading the entry's type: it was a queue entry with the same text (the orchestrator's own
   report)
-- Control: owed — odd/tasks/honesty-audit.md — "The general honesty audit, measured not worth it"
+- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### citations-test-reads-clock
 A test of citations cited a fresh commit's short hash, which a citation must hold a digit and a
@@ -1056,7 +1056,7 @@ was not so.
   reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
   taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
   a gate now names the processes that spent the processor before its command
-- Control: owed — odd/tasks/honesty-audit.md — "The general honesty audit, measured not worth it"
+- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
 Sessions ended their turn waiting for his `/compact` or for a message while he was away, so nothing
