@@ -328,28 +328,12 @@ Left out of the review: 5 Markdown documents, 818 changed lines.
 Allowance of this plan: 872,400 input tokens, the larger of 300,000 a review and 1,200 a changed line, for the 727 changed lines it reads. Its estimate, about 470,000, is inside it. …
 ```
 
-### js-harness merge-ready
-
-Says whether a pull request may be merged on its GitHub run, and merges nothing: open, not a
-draft, mergeable, on main, a gentle-ai line in its body, the latest run of its head green, and
-the base that run tested (from its checkout log) is today's main, or behind it only by documents
-with a clean merge. Exit 0 ready, 3 stale, 4 run missing, pending or red, 1 otherwise. A stale
-pull request gets a fresh run by closing and reopening it, once GitHub has recomputed its merge
-against main, which it says. One that conflicts with main is told the files, and to move its own
-change out of them in a small commit before merging main: a clean merge costs no review of its own.
-
-```console
-$ js-harness merge-ready 137
-PR 137: run 38632863631 tested base 028d658; main c0364f8 has moved since by 6 paths that are not documents (bin/check.mjs, bin/check.test.mjs, evals/arms.mjs, ...): stale.
-PR 137: refs/pull/137/merge still has 028d658 as its first parent, not main c0364f8: wait before reopening.
-```
-
 ### js-harness merge-queue
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in
-order of number, and names each one it leaves out and why. Ready means what `merge-ready` checks
-of the pull request itself, a Codex review record for every code commit, and no conflict with the
-candidate so far. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+order of number, and names each one it leaves out and why. Ready means the pull request is open,
+not a draft, mergeable, on main and with a gentle-ai line in its body, has a Codex review record for
+every code commit, and merges into the candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
 green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
 A candidate red on this machine is bisected: the pull request that turns it red is left out and

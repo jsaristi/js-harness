@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkCodexReviews } from './check.mjs';
-import { pullRequestProblems } from './lib/merge-ready.mjs';
+import { pullRequestProblems } from './lib/pull-request.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
 

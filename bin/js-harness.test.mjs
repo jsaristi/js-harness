@@ -66,6 +66,15 @@ test('unknown command exits 2', () => {
   assert.equal(result.status, 2);
 });
 
+test('merge-ready is retired: --help does not list it and it exits 2 as an unknown command, since no pull request has a GitHub run of its own to decide on (odd/tasks/retire-merge-ready.md)', () => {
+  const help = run(['--help']);
+  assert.doesNotMatch(help.stdout, /merge-ready/);
+  assert.match(help.stdout, /merge-queue/, 'the queue is how code reaches main');
+  const result = run(['merge-ready', '7']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Unknown command: merge-ready/);
+});
+
 test('--help lists init, install, sync, uninstall, status, update, upgrade, doctor, progress and codex-review', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /init/);
