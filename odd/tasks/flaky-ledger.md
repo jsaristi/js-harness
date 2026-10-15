@@ -34,10 +34,33 @@ high
 - S2. Step 5 of that plan, the orchestrator's words (C:\Users\Oficina\.js-harness\research\parallel-gate.md, line 26): "Flaky: rerun only failed files once; a pass on rerun goes into a committed quarantine ledger with owner and expiry; still runs, does not block."
 - S3. The orchestrator's order to JH 10 (cross-session message, 2026-10-15): "Tonight's eval-interrupt-process-alive in FAILURES.md is the first case. Feature document with the task contract, test first."
 
+## Design (T1, from the explorer's map of 2026-10-15)
+1. The failed files are read from the spec reporter's output: the `test at <path>:<line>:<col>` lines under
+   `✖ failing tests:` (today `failingTests`, bin/check.mjs:737-744, keeps the names and drops these lines).
+   A path is normalized to `/` and kept only when it is a test file of the repository (`testFilesOf`,
+   bin/lib/select-tests.mjs:66-81). A failure that names no test file, a timeout and a kill are never
+   rerun: they block as today.
+2. The rerun is one more run of the same sensor, `node --test <files>`, through the same route
+   (`checkSensor`, so WSL2 and its mirror when the tests run there), once, untraced, in `checkSensors`
+   after a tests row that exited non-zero (bin/check.mjs:1328-1340).
+3. The tests row passes only when the rerun exits 0 and every rerun file has a current entry in the
+   ledger. Otherwise it fails with the text it has today, which tests pin (bin/check.test.mjs:4609 and the
+   rows of point 5 of the map); those fakes print no `test at` line, so they start no rerun.
+4. An INFO row `flaky` says what the rerun did: the files, its result, and for a file that passed and has
+   no current entry, the entry to add. A file that passes on rerun and is not in the ledger blocks once:
+   the ledger is committed by whoever adds the entry, and a gate that wrote it itself would pass on a file
+   nobody committed (the second constraint). A decision of this session, said to the orchestrator.
+5. The ledger is docs/FLAKY.md, written by hand as docs/FAILURES.md is: one `### <test file>` entry with
+   `- Owner:`, `- Expires: <YYYY-MM-DD>` and `- Failure: <id in docs/FAILURES.md>`. A static row `flaky`
+   validates it: a malformed entry fails the gate; an expired one is listed and no longer counts, so its
+   file blocks again. The first entry: evals/suite.test.mjs, failure `eval-interrupt-process-alive`.
+
 ## Tasks
-- [ ] T1 (S2): the map of the tests sensor (how the suite runs, how a failed file is named in its output, the exact-tests shadow), by a read-only explorer; then the design written here. Route: delegated, read-only.
-- [ ] T2 (S2): rerun the failed files once, test first. Route: inline.
+- [x] T1 (S2): the map of the tests sensor (how the suite runs, how a failed file is named in its output, the exact-tests shadow), by a read-only explorer; then the design written here. Route: delegated, read-only. Done: "Design" above.
+- [x] T2 (S2): rerun the failed files once, test first. Route: inline. RED: bin/check-flaky.test.mjs (no second spawn); GREEN 2 of 2, with bin/lib/flaky.test.mjs 3 of 3. The rerun is in `checkSensors` and kept on the tests row as `row.rerun = { files, pass, detail }`; the row's text and pass are unchanged (T3 decides them). Commit: the work-unit commit after L2.
 - [ ] T3 (S2, S3): the ledger, its owner and expiry, and a quarantined file that fails and passes on rerun does not block; the first entry. Route: inline.
 
 ## Log
 - L1. 2026-10-15, the order: S3, verbatim; the plan: S1 and S2. Opened by JH 10 at 79% of its context, so that a compaction resumes from here.
+- L2. 2026-10-15, T1 done (Design). T2 begun: `failedTestFiles(output, testFiles)` in bin/lib/flaky.mjs, test first (RED: missing module; GREEN 3 of 3 in bin/lib/flaky.test.mjs), not committed. Next in T2: in `checkSensors` (bin/check.mjs:1328-1340), after a tests row that exited non-zero, take `failedTestFiles(row.output, testFilesOf(root))` and, when there are some, run `{ name: 'tests', command: 'node --test <files>' }` once through `checkSensor`; its test first in a new bin/check-flaky.test.mjs with a fake spawn (as bin/check-test-concurrency.test.mjs does), asserting the second spawn's command and that the existing rows' texts do not change. Then T3: docs/FLAKY.md, its parser and static row, the pass rule, the INFO row. Interrupted for the orchestrator's priority (the first --land of 167 and the GitHub minutes proposal, sent 2026-10-15).
+- L3. 2026-10-15, T2 committed: the rerun in `checkSensors`, with bin/check-flaky.test.mjs (2 of 2) and bin/lib/flaky.test.mjs (3 of 3). JH 10 was compacted by the host at 01:24 before the commit; the document held the state. Next: T3.

@@ -22,6 +22,7 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gat
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { selectTests, testFilesOf } from './lib/select-tests.mjs';
+import { failedTestFiles } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 
@@ -1336,6 +1337,16 @@ export async function checkSensors(cwd, deps = {}, lock) {
         const row = await checkSensor(cwd, asked, { ...deps, gateHeld, wsl, traces: dir ? { dir } : null });
         if (tests !== null && tests !== 'node --test') row.detail += `; harness.json "exactTests" is "shadow", but the tests run by \`${tests}\`, not \`node --test\`: no shadow`;
         if (concurrent !== null && concurrent !== 'node --test') row.detail += `; ${TEST_CONCURRENCY_ENV} is ${concurrency.value}, but the tests run by \`${concurrent}\`, not \`node --test\`: they run as written`;
+        // A red suite of `node --test` that names its failed test files runs them once more, alone and
+        // untraced, by the same route (odd/tasks/flaky-ledger.md, Design 2). A timeout names nothing it
+        // can trust, and a suite of another command has no files to give.
+        if (sensor.name === 'tests' && !row.pass && !row.timedOut && testsCommand(cwd, sensor.command) === 'node --test') {
+          const files = failedTestFiles(row.output, testFilesOf(cwd));
+          if (files.length > 0) {
+            const again = await checkSensor(cwd, { name: 'tests', command: `node --test ${files.join(' ')}` }, { ...deps, gateHeld, wsl, traces: null });
+            row.rerun = { files, pass: again.pass, detail: again.detail };
+          }
+        }
         ran.push(row);
       }
       result = sensorsResult(ran);
