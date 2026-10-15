@@ -8,9 +8,11 @@ import path from 'node:path';
 import { hashOf, TRACE_ENV, TRACE_PRELOAD, traceEnvOf } from './trace-reads.mjs';
 
 /** Which of `tests` run and which are skipped: `{ run, skipped, why, full }`, `why` a map from each test that
- * runs to the reason, `full` the reason the whole suite runs or `null`. `readTrace(test)` gives a test's trace
- * or `null`; `stateOf(key)` what a recorded path is now, as the tracer would record it. */
-export function selectTests({ tests, readTrace, stateOf, node = process.version, os = process.platform, env = traceEnvOf(process.env), tracerHash = hashOf(TRACE_PRELOAD) }) {
+ * runs to the reason, `full` the reason the whole suite runs or `null`. `readTraces(test)` gives a test's stored
+ * passing traces, newest first (the result memory, odd/tasks/result-memory.md): one matching now is enough, and
+ * with none matching the reason is the newest one's. `readTrace(test)`, one trace or `null`, stands in for it.
+ * `stateOf(key)` is what a recorded path is now, as the tracer would record it. */
+export function selectTests({ tests, readTraces, readTrace, stateOf, node = process.version, os = process.platform, env = traceEnvOf(process.env), tracerHash = hashOf(TRACE_PRELOAD) }) {
   const why = new Map();
   const skipped = [];
   const states = new Map();
@@ -19,15 +21,21 @@ export function selectTests({ tests, readTrace, stateOf, node = process.version,
     return states.get(key);
   };
   let full = null;
+  const tracesOf = readTraces ?? ((test) => [readTrace(test)].filter(Boolean));
+  const reasonOf = (trace) => (trace.untraced ? `untraced: ${trace.untraced}`
+    : trace.node !== node ? `traced under node ${trace.node}, not ${node}`
+      : trace.tracerHash !== tracerHash ? 'traced by another version of the tracer'
+        : trace.os !== os ? `traced on ${trace.os}, not ${os}`
+          : changedVariable(trace.env, env) ?? changedRead(trace.reads, now));
   for (const test of tests) {
-    const trace = readTrace(test);
-    const reason = trace === null ? 'no trace of a passing run'
-      : trace.untraced ? `untraced: ${trace.untraced}`
-        : trace.node !== node ? `traced under node ${trace.node}, not ${node}`
-          : trace.tracerHash !== tracerHash ? 'traced by another version of the tracer'
-            : trace.os !== os ? `traced on ${trace.os}, not ${os}`
-              : changedVariable(trace.env, env) ?? changedRead(trace.reads, now);
-    if (trace !== null && 'package.json' in trace.reads && now('package.json') !== trace.reads['package.json']) full ??= 'package.json changed';
+    const traces = tracesOf(test);
+    const reasons = traces.map(reasonOf);
+    // An untraced pass, newer or older, says the test can reach what no trace sees: it runs (S5).
+    const untraced = traces.find((trace) => trace.untraced);
+    const reason = traces.length === 0 ? 'no trace of a passing run' : untraced ? reasonOf(untraced) : reasons.includes(null) ? null : reasons[0];
+    // package.json changed since every passing run of this test that recorded it: the whole suite.
+    const recorded = traces.filter((trace) => 'package.json' in trace.reads);
+    if (recorded.length > 0 && recorded.every((trace) => now('package.json') !== trace.reads['package.json'])) full ??= 'package.json changed';
     if (reason === null) skipped.push(test);
     else why.set(test, reason);
   }

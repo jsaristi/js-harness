@@ -22,7 +22,7 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gat
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { selectTests, testFilesOf } from './lib/select-tests.mjs';
-import { TRACE_PRELOAD, readTrace, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
+import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
@@ -442,12 +442,18 @@ function testsCommand(cwd, command) {
   return typeof script === 'string' ? script : command;
 }
 
-/** The folder of the traces of the repository at `cwd`, under its git dir, or `null` where git names none. */
+/** The folder of the traces of the repository at `cwd`, or `null` where git names none: under its common git
+ * dir, one store for every worktree of it (the result memory, odd/tasks/result-memory.md), since a trace is
+ * keyed by content and as true in any of them. The folder a linked worktree kept under its own git dir before
+ * it is removed here, by the first gate that writes the shared one. */
 function tracesDir(cwd, spawn = spawnSync) {
   try {
-    const asked = spawn('git', ['rev-parse', '--absolute-git-dir'], { cwd, encoding: 'utf8' });
-    const gitDir = asked && !asked.error && asked.status === 0 ? String(asked.stdout).trim() : '';
-    return gitDir ? path.join(gitDir, 'js-harness', 'traces') : null;
+    const asked = spawn('git', ['rev-parse', '--absolute-git-dir', '--git-common-dir'], { cwd, encoding: 'utf8' });
+    const [gitDir, common] = asked && !asked.error && asked.status === 0 ? String(asked.stdout).split(/\r?\n/).map((line) => line.trim()) : [];
+    if (!gitDir || !common) return null;
+    const shared = path.resolve(cwd, common);
+    if (path.resolve(gitDir) !== shared) fs.rmSync(path.join(gitDir, 'js-harness', 'traces'), { recursive: true, force: true });
+    return path.join(shared, 'js-harness', 'traces');
   } catch {
     return null; // no git on PATH
   }
@@ -844,7 +850,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
 function startShadow(cwd, dir, { env = null, place = {} } = {}) {
   const root = path.resolve(cwd);
   const tests = testFilesOf(root);
-  const { skipped } = selectTests({ tests, readTrace: (one) => readTrace(dir, one), stateOf: (key) => stateOf(root, key), ...place });
+  const { skipped } = selectTests({ tests, readTraces: (one) => readTraces(dir, one), stateOf: (key) => stateOf(root, key), ...place });
   fs.mkdirSync(dir, { recursive: true });
   const results = path.join(dir, `results-${process.pid}-${Date.now()}`);
   if (env) Object.assign(env, traceEnv({ root, dir, results, existing: env.NODE_OPTIONS }));

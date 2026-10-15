@@ -21,14 +21,14 @@ function project({ script = 'node --test', harness = { exactTests: 'shadow' } } 
   fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify(harness));
   for (const name of ['a.test.mjs', 'b.test.mjs']) fs.writeFileSync(path.join(root, name), "import { test } from 'node:test';\ntest('x', () => {});\n");
   assert.equal(spawnSync('git', ['init', '-q'], { cwd: root }).status, 0);
-  const gate = async () => {
+  const gate = async (at = root) => {
     const events = [];
-    const rows = await checkSensors(root, { gateLog: { append: (_, event) => (events.push(event), { ok: true }) } }, { home, held: true, load: false });
+    const rows = await checkSensors(at, { gateLog: { append: (_, event) => (events.push(event), { ok: true }) } }, { home, held: true, load: false });
     return { rows, end: events.find((event) => event.event === 'end') };
   };
   const traces = path.join(root, '.git', 'js-harness', 'traces');
   const done = () => [root, home].forEach((one) => fs.rmSync(one, { recursive: true, force: true }));
-  return { gate, traces, done };
+  return { root, gate, traces, done };
 }
 
 test('in shadow the gate traces its suite under the git dir and its end line keeps the counts', async () => {
@@ -43,6 +43,32 @@ test('in shadow the gate traces its suite under the git dir and its end line kee
     const second = await gate();
     assert.deepEqual(second.end.sensors[0].shadow, { files: 2, wouldSkip: 2, failedOfSkipped: [] });
   } finally {
+    done();
+  }
+});
+
+// The result memory (odd/tasks/result-memory.md, T2): one store for every worktree of the repository.
+test('the worktrees of a repository share one store of traces under its common git dir, and a worktree\'s own old folder goes', async () => {
+  const { root, gate, traces, done } = project();
+  const linked = `${root}-linked`;
+  const git = (...args) => assert.equal(spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: root }).status, 0, args.join(' '));
+  try {
+    // The checkout of the linked worktree writes the bytes the main one has, whatever this machine's autocrlf.
+    git('config', 'core.autocrlf', 'false');
+    git('add', '-A');
+    git('commit', '-qm', 'tests');
+    git('worktree', 'add', '-q', linked);
+    // Where step 1 kept a linked worktree's traces: its own git dir.
+    const old = path.join(root, '.git', 'worktrees', path.basename(linked), 'js-harness', 'traces');
+    fs.mkdirSync(path.join(old, PLACE), { recursive: true });
+    fs.writeFileSync(path.join(old, PLACE, 'a.test.mjs.json'), '{}');
+    assert.deepEqual((await gate()).end.sensors[0].shadow, { files: 2, wouldSkip: 0, failedOfSkipped: [] });
+    // The linked worktree, with the same content, knows both pass from the gate of the other.
+    assert.deepEqual((await gate(linked)).end.sensors[0].shadow, { files: 2, wouldSkip: 2, failedOfSkipped: [] });
+    assert.equal(fs.existsSync(old), false, 'the old folder of the linked worktree is removed');
+    assert.equal(fs.readdirSync(path.join(traces, PLACE)).filter((name) => !name.startsWith('results-')).length, 2);
+  } finally {
+    fs.rmSync(linked, { recursive: true, force: true });
     done();
   }
 });

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import nodeModule from 'node:module';
-import { hashOf, readTrace, TRACE_ENV, TRACE_PRELOAD, TRACER_VERSION, traceEnv } from './trace-reads.mjs';
+import { hashOf, KEPT_TRACES, pruneTraces, readTrace, readTraces, TRACE_ENV, TRACE_PRELOAD, TRACER_VERSION, traceEnv, writeTrace } from './trace-reads.mjs';
 
 /** Whether this node has `module.registerHooks`, by which the tracer sees imports (Node 22.15 and later). */
 const HOOKS = typeof nodeModule.registerHooks === 'function';
@@ -349,6 +349,51 @@ test('every call shape of child_process keeps its meaning, promisify included, a
     for (const name of ['one', 'two', 'three', 'four']) assert.ok(reads[`lib/${name}.txt`], `${name}: ${JSON.stringify(Object.keys(reads))}`);
   } finally {
     done();
+  }
+});
+
+// The result memory (odd/tasks/result-memory.md, T1b): a pass keeps a trace per content key, so passes with
+// other inputs (another worktree, an earlier state) are all kept, newest first; a failure leaves none.
+test('passes with different inputs keep a trace each, newest first, and a failure removes every trace of the test', () => {
+  const { root, traces, done } = project({
+    'package.json': '{"type":"module"}',
+    'test/f.test.mjs': "import { test } from 'node:test';\nimport fs from 'node:fs';\ntest('f', () => { if (fs.readFileSync('f.txt', 'utf8') === 'red') throw new Error('red'); });\n",
+    'f.txt': 'one',
+  });
+  try {
+    assert.equal(runTests(root, traces, ['test/f.test.mjs']).status, 0);
+    fs.writeFileSync(path.join(root, 'f.txt'), 'two');
+    assert.equal(runTests(root, traces, ['test/f.test.mjs']).status, 0);
+    const kept = readTraces(traces, 'test/f.test.mjs');
+    assert.equal(kept.length, 2);
+    assert.equal(kept[0].reads['f.txt'], hashOf(path.join(root, 'f.txt')), 'the newest is the last pass');
+    assert.deepEqual(readTrace(traces, 'test/f.test.mjs'), kept[0]);
+    fs.writeFileSync(path.join(root, 'f.txt'), 'red');
+    assert.notEqual(runTests(root, traces, ['test/f.test.mjs']).status, 0);
+    assert.deepEqual(readTraces(traces, 'test/f.test.mjs'), []);
+  } finally {
+    done();
+  }
+});
+
+test('a pass with the inputs of a stored trace replaces it, and only the newest traces of a test are kept', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-prune-'));
+  try {
+    const trace = (n) => ({ v: 1, test: 't.test.mjs', tracer: TRACER_VERSION, tracerHash: 'h', node: 'v1', os: 'linux', env: {}, untraced: null, reads: { 'f.txt': `hash-${n}` } });
+    writeTrace(dir, trace(0));
+    writeTrace(dir, trace(0));
+    assert.equal(readTraces(dir, 't.test.mjs').length, 1, 'the same inputs are one trace');
+    for (let n = 1; n <= KEPT_TRACES + 2; n += 1) writeTrace(dir, trace(n));
+    assert.equal(readTraces(dir, 't.test.mjs').length, KEPT_TRACES);
+    // Pruning keeps the newest by when each was written, whatever their names.
+    const folder = path.join(dir, encodeURIComponent('t.test.mjs'));
+    const names = fs.readdirSync(folder).sort();
+    names.forEach((name, at) => fs.utimesSync(path.join(folder, name), new Date(2026, 0, 1, 0, at), new Date(2026, 0, 1, 0, at)));
+    pruneTraces(folder, 3);
+    assert.deepEqual(fs.readdirSync(folder).sort(), names.slice(-3));
+    assert.deepEqual(readTraces(dir, 't.test.mjs').map((one) => one.reads['f.txt']), names.slice(-3).reverse().map((name) => JSON.parse(fs.readFileSync(path.join(folder, name), 'utf8')).reads['f.txt']));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
