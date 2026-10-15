@@ -3195,6 +3195,17 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     - the date fixtures depended on the host's time zone.
 
 ## Next step
+**State for a resume, 2026-10-15 at 18:45, T16d being built.** The design is draft pull request
+241. The build is on `feat/rules-row` (worktree `D:js-harness-worktreesules-row`, from `main`
+b0093b8), inline, tests first. Unit 1 is done: `patternOf` and `{amount}` in `bin/lib/rules.mjs`,
+with `readRules` refusing a pattern with no `{amount}` or one matching an empty line (its commit
+is going through the gate). Next units, in order:
+1. the scan and the counts in `bin/lib/rules-check.mjs`, with its two findings;
+2. the row in `checkOwnRules`;
+3. the command's three keys;
+4. the help.
+Then the verifier, gentle-ai and Codex, and a draft pull request.
+
 **State for a resume, 2026-10-15, after T16d was designed and read.** T16d is designed in "The row
 `rules` (T16d)" on `docs/rule-hierarchy-t16d`, with both readers' findings folded in. Next: open
 its pull request (draft), then build T16d inline on a `feat/` branch from `main`, tests first, in
