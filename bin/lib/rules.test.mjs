@@ -816,7 +816,7 @@ test('rulesHash is different when a unit, a flag, a path or the phrases change, 
 
 // ── renderList ─────────────────────────────────────────────────────────────────────────────────
 
-const NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.\nThe list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
+const NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.\nThe list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
 
 // One rule of each kind: his with a value and words, a project rule with a unit, a flag, earlier values,
 // two readers and a design source; prose with its sentence and without it; retired with successors and without.

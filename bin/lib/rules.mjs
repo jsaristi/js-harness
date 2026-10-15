@@ -415,7 +415,7 @@ const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phr
 // The last line of that paragraph: where the engine version and the day of a check are read, since the list holds neither.
 const LIST_NOTE = 'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
 // The paragraph that docs/RULES.md gives under its title.
-const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.';
+const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.';
 
 /** A copy of `list` sorted by id, with plain `<` on the texts so that no locale changes the order. */
 const byId = (list) => [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
