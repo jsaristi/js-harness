@@ -1619,6 +1619,83 @@ independent verifier after its own checks.
 - **T16f:** the hash in the installed command.
 - **Letter H**, its own home, has no task yet: it is added as T16g.
 
+### The row `rules` (T16d)
+Designed on 2026-10-15, after a read-only explorer mapped what exists on `main` at 9773770. It
+builds letter D and what T16c left to it: `patterns`, `row` and `failure`, and the switch of a
+wrong red row. Not built; two readers that did not write it read it before it is built.
+
+**What exists, and what it lacks** (by the explorer's map):
+- `readRules` already accepts and validates the three keys (`bin/lib/rules.mjs:12-18`, `:181-200`),
+  but no rule carries one, and `changedList` refuses them (`bin/lib/rules-change.mjs:14`, `:37-41`).
+- A static row of `bin/check.mjs` returns `{ name, pass, info?, detail, lines? }`. An `info` row
+  reports and never fails; a failing static row already stops the gate before its sensors
+  (`bin/check.mjs:2189-2190`).
+- The added lines of the staged change come from `addedLines` (`bin/lib/citations.mjs:31`), as
+  `[{ file, line, text }]`, used today only by `checkCitations`, limited to `odd/tasks/`.
+- `checkOwnRules` (`bin/check.mjs:186`) returns nothing in this repository; its comment says T16d
+  extends it.
+- Nothing scans a text for a restated value. Sightings are written by hand only
+  (`bin/failures.mjs:15`).
+
+**The texts it reads.** The texts in force are the ones `readAll` reads for `rules check`
+(`bin/rules.mjs:97-130`), plus `AGENTS.md`, each skill and template text in
+`bin/lib/manifest.mjs`, and `README.md`.
+- `docs/RULES.md` is left out, because it is the one text that shows a value. So are the quoted
+  sources in `docs/rule-sources.json`, `docs/FAILURES.md` (its evidence quotes what was said),
+  `docs/origin.md` (frozen), and a feature document from `## Progress` on (its history).
+- A line that names the rule by `` `rule:<id>` `` is not a finding: pointing to the rule is the
+  cure, not the fault.
+
+**A pattern.** `patterns` is a list of regular expressions, each one tried case-insensitively on
+one line of text.
+- It is written for the rule's subject and any wording of its value: for `gate-wait`, "60
+  minutes", "an hour" or "3,600 s" beside a wait for the gate's turn.
+- A finding is a line that matches, outside a fence, and names no `rule:<id>`.
+- A rule with no patterns is not scanned. The row lists it as unscanned, so the gap stays in
+  view.
+
+**The row.** It is one static row named `rules`, the extension of `checkOwnRules`, and it reads
+the staged change's added lines in the texts above.
+- Rule by rule, its state is the stored `row`:
+  - **absent:** a finding in the added lines is an INFO line;
+  - **`{ refuses: <day> }`:** a finding fails the row, and with it the gate, before the sensors;
+  - **`{ reports: <reason>, since: <day> }`:** the row is a red one switched back; a finding is
+    INFO and the line names the reason.
+- A FAIL line names the rule, the file, the line and the text, and says the cure: write
+  `rule:<id>` instead of the value, or change the rule with `rules change`. It also prints the
+  `- Seen:` line to add under the rule's `failure` id in `docs/FAILURES.md`. The register stays
+  written by hand, as it is today.
+- The row counts each rule's findings on the whole texts in force too, not only the added lines.
+  `rules check` prints that count per rule: the text in force shrinks first.
+
+**Turning a rule to refuse, and back.** Both are `rules change <id>` with `set.row`; T16c's
+command stops refusing the three keys.
+- `set.row: { refuses: <today> }` is refused while the rule's count on the texts in force of the
+  branch is above zero, and while it has no `patterns` or no `failure`. The state is stored, not
+  computed, so a new finding cannot turn a refusing rule back into a reporting one.
+- `set.row: { reports: <reason>, since: <today> }` is accepted only from `refuses`. The source
+  is the same as for any change. It is counted as a sighting: its relief line names the rule's
+  `failure` id, and the session adds the `- Seen:` line by hand.
+- `set.patterns` and `set.failure` are a change of form: they move neither `since` nor `was`.
+  `failure` must name an entry of `docs/FAILURES.md`.
+
+**The planted violation.** One test per state, on a fixture repository:
+- it stages a line that restates a rule's value, and the row reports it while `row` is absent;
+- it fails the gate, before the sensors, once `row` is `refuses`;
+- it reports again with the reason after the switch back.
+
+A test of the real list shows that every pattern in it compiles and finds its own planted line.
+
+**What it changes.** `bin/check.mjs` (the row), `bin/lib/rules-check.mjs` (the scan and the
+counts), `bin/lib/rules-change.mjs` (the three keys, the turn and the switch back), and
+`bin/lib/citations.mjs` (`addedLines` for any path), each with its tests. `rules-data.mjs` gains
+`patterns` and `failure` for the first rules through the command, in their own `rule/` branch.
+Then `docs/FAILURES.md` gains one entry for a restated value, and the help and this document
+change with it.
+
+**Not guaranteed.** A pattern finds the wordings it was written for. A value said in a new way
+passes until a pattern is added, so the row's list of unscanned rules is the honest edge.
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build
@@ -2054,7 +2131,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (`main` e7e97df), its design as pull request 234 (d2441d5)
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
-    its sensors
+    its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline
   - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
     inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
     loop over what the reviews cover looks at each record itself, and the evidence of a
