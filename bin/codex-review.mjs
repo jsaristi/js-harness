@@ -211,7 +211,7 @@ const USAGE =
   `--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
-  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (`git show --remerge-diff`: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -930,7 +930,7 @@ const SUBMODULE_AS_A_FILE = '--submodule=short';
 
 /** The line that says a review reads a merge by what was written in it (`mergeStart`). */
 export function mergeReviewSaid({ head, side, branch }) {
-  return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, a commit of ${branch}: its review reads what was written in the merge (\`git show --remerge-diff\`), not what the merge brought in.`;
+  return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, a commit of ${branch}: its review reads what was written in the merge (its diff with the automatic merge of its parents), not what the merge brought in.`;
 }
 
 /** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
@@ -973,7 +973,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
     const which = `part ${part.index} of ${part.of}`;
     let prompt;
     try {
-      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, merge: merge !== null, suiteRan });
+      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, merge: merge === null ? null : merge.auto, suiteRan });
     } catch (err) {
       const needs = part.of === 1 ? 'The range leaves files out of its review, so it is asked by the files it reads' : `The range needs ${part.of} parts`;
       return { error: `${needs}, and the prompt of ${which} cannot be written. ${err.message}` };
@@ -1287,7 +1287,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // starts at the first parent of the merge and reads what was written in it (`mergeStart`).
     const atMerge = mergeStart(root, { given, tip: head, spawn, where });
     if (atMerge !== null) {
-      merge = { side: atMerge.side, branch: atMerge.branch };
+      merge = { side: atMerge.side, branch: atMerge.branch, auto: atMerge.auto };
       log(mergeReviewSaid({ head, ...merge }));
       base = atMerge.from;
       return atMerge.from;

@@ -42,8 +42,9 @@ export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v1';
 export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v3';
 
 // The version of the text `reviewPrompt` writes for a part of the review of a merge (`merge`): another text,
-// which names what was written in the merge (`git show --remerge-diff`) instead of a diff of two commits.
-export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v1';
+// which names what was written in the merge, the diff of the automatic merge's tree and the merge, instead
+// of a diff of two commits. `v1` named `git show --remerge-diff`, which shows nothing in a read-only sandbox.
+export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v2';
 
 // How much of each section of the intent goes into the prompt: a feature document is written by hand and
 // has no bound of its own, and the prompt is paid on every request of the review.
@@ -83,7 +84,10 @@ const isPart = (part, leftOut) =>
 
 /** The lines that say what to review: the whole range, or the `part` of it, in a range that leaves `leftOut`
  * files out of the review. */
-function scope(from, head, part, leftOut, merge = false) {
+function scope(from, head, part, leftOut, merge = null) {
+  if (merge !== null && (typeof merge !== 'string' || !COMMIT_ID.test(merge))) {
+    throw new Error(`The review of a merge names the tree of its automatic merge by full object id, got ${JSON.stringify(merge)}.`);
+  }
   const findings = 'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.';
   if (!Number.isInteger(leftOut) || leftOut < 0) throw new Error(`How many files are left out of the review must be a count, got ${JSON.stringify(leftOut)}.`);
   if (part === null) {
@@ -116,12 +120,16 @@ function scope(from, head, part, leftOut, merge = false) {
   // merging its two parents again gives, which is the resolution of its conflicts, conflict markers on the
   // removed side, and any edit made in it. What the merge brought in from the default branch had its own
   // review there (`mergeStart` in `../codex-review.mjs`).
+  //
+  // It is asked as a diff of two objects that exist, the tree of the automatic merge (`mergeStart` writes it)
+  // and the merge: `git show --remerge-diff` writes a temporary object directory, and in Codex's read-only
+  // sandbox it printed nothing and exited 0 (odd/tasks/merge-review.md, L12).
   if (merge) {
-    const command = `git --literal-pathspecs show --remerge-diff --format= --no-renames ${head} -- ${files}`;
+    const command = `git --literal-pathspecs diff --no-renames ${merge} ${head} -- ${files}`;
     const which = part.of === 1 ? 'the files the command below names' : `part ${part.index} of ${part.of} of that review: the files the command below names`;
     return [
       `Review what was written in the merge commit ${head}, whose first parent is ${from}: the resolution of its conflicts and any edit made in it. This review covers ${which}.`,
-      `Run \`${command}\` to inspect them: its output compares the merge with what merging its two parents again automatically gives, conflict markers included, and it is the whole change under review.`,
+      `Run \`${command}\` to inspect them: ${merge} is the tree that merging its two parents again automatically gives, conflict markers included, so its output is what was written in the merge, and it is the whole change under review.`,
       findings,
       `What the merge took unchanged from either parent was reviewed on its own branch: ${context}`,
     ];
@@ -162,12 +170,13 @@ function scope(from, head, part, leftOut, merge = false) {
  * its files fit in one part that part is `{ index: 1, of: 1, files }`, whose text speaks of no part.
  *
  * `merge` is for the review of a merge of the default branch, `head` the merge and `from` its first parent:
- * the command of each part is then `git show --remerge-diff` of the merge, what was written in it, and a
- * merge is always asked by its files, one part of one included.
+ * it is the full id of the tree that merging the two parents again gives (`mergeStart`), and the command of
+ * each part is then `git diff <that tree> <head>`, what was written in the merge. A merge is always asked by
+ * its files, one part of one included.
  *
  * `suiteRan`, for a review out of a turn of the gate lock, ends the text with `SUITE_RAN`: there the gate has
  * already run the suite on the range, and a `node --test` Codex starts is refused. */
-export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = false, suiteRan = false }) {
+export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = null, suiteRan = false }) {
   const text = promptText({ from, head, intent, part, leftOut, merge });
   return suiteRan ? `${text}\n${SUITE_RAN}\n` : text;
 }

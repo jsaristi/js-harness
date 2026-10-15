@@ -12,7 +12,7 @@ import {
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
-import { rangeDiff } from './lib/codex-review-coverage.mjs';
+import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
 import { numstatFiles } from './lib/codex-review-parts.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
@@ -1443,7 +1443,7 @@ test('--session current is a usage error since the session was removed: exit 2 w
 // merge of the default branch read by what was written in it.
 const STARTS_WHERE_RECORDS_END =
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
-  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (`git show --remerge-diff`: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
 
 test(`the usage names no session: its flags are those of a review, and its second line says what a review loads and that it runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`, async () => {
   const result = await run(['--cwd', '.']);
@@ -5315,9 +5315,11 @@ test('a merge that took one side whole is no code commit and starts no review, a
   assert.match(result.out, /a Codex review record already covers/);
 });
 
-test('the diff of a merge review shows no signature, whatever the configuration says (Codex, 2026-10-14)', () => {
-  const args = rangeDiff({ from: 'a'.repeat(40), head: 'b'.repeat(40), merge: { side: 'c'.repeat(40), branch: 'origin/main' } }, ['--numstat']);
-  assert.deepEqual(args.slice(0, 4), ['show', '--remerge-diff', '--no-show-signature', '--format=']);
+test('the diff of a merge review is a diff of the automatic merge and the merge, which shows no signature, whatever the configuration says (Codex, 2026-10-14)', () => {
+  const [head, auto] = ['b'.repeat(40), 'd'.repeat(40)];
+  const args = rangeDiff({ from: 'a'.repeat(40), head, merge: { side: 'c'.repeat(40), branch: 'origin/main', auto } }, ['--numstat'], ['m.txt']);
+  // `log.showSignature` writes a signature in what `git show` and `git log` print, never in a `git diff`.
+  assert.deepEqual(args, ['diff', '--numstat', '--no-renames', auto, head, '--', 'm.txt']);
 });
 
 test('a merge of a branch the default branch does not hold is reviewed as before: from the merged branch, the whole branch', async () => {
@@ -5329,17 +5331,49 @@ test('a merge of a branch the default branch does not hold is reviewed as before
   assert.deepEqual(result.out.split('\n'), planned(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
-test('the review of a resolved merge asks Codex for the remerge-diff of its files, and its record says so', async () => {
+test('the review of a resolved merge asks Codex for a diff of two objects that exist, the automatic merge and the merge, and its record says so', async () => {
   const { root, mine, main, head } = makeResolvedMergeRepo();
-  const command = `git --literal-pathspecs show --remerge-diff --format= --no-renames ${head} -- m.txt`;
-  const fake = fakeCodexInParts({ stdout: jsonl(thread, turn, cmd(command, 0, remergeOf(root, head, 'm.txt')), msg(FINDINGS), done) });
+  // Codex's sandbox is read-only, and `git show --remerge-diff` prints nothing there (it writes a temporary
+  // object directory): the command computes the automatic merge's tree itself and asks for a plain diff (L12).
+  const auto = spawnSync('git', ['merge-tree', '--write-tree', mine, main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0];
+  const command = `git --literal-pathspecs diff --no-renames ${auto} ${head} -- m.txt`;
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', auto, head, '--', 'm.txt');
+  // The same lines as the remerge-diff; only the label of a marker differs, a full id for an id and subject.
+  const unlabeled = (diff) => patchKeys(diff).map((key) => key.replace(/^(.*\n-[<>]{7}) .*$/s, '$1')).sort();
+  assert.deepEqual(unlabeled(shown), unlabeled(remergeOf(root, head, 'm.txt')), 'the same lines as the remerge-diff');
+  const fake = fakeCodexInParts({ stdout: jsonl(thread, turn, cmd(command, 0, shown), msg(FINDINGS), done) });
   const result = await run(['--base', main, '--cwd', root], { ...fake, randomUUID: runIds() });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 1);
-  assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: mine, head, part: { index: 1, of: 1, files: ['m.txt'] }, merge: true }));
+  assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: mine, head, part: { index: 1, of: 1, files: ['m.txt'] }, merge: auto }));
   const record = readCodexReviews(root).at(-1);
   assert.deepEqual([record.base, record.head, record.outcome, record.diff], [mine, head, 'reviewed', 'remerge']);
   assert.equal(readCodexReviewRuns(root).at(-1).diff, 'remerge');
+});
+
+// Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
+const readOnlyHolds = process.platform !== 'win32' && process.getuid?.() !== 0;
+
+test('the diff a merge review reads shows every line of it where the object store is read-only, as in Codex\'s sandbox', { skip: !readOnlyHolds && 'mode bits stop no write here' }, () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  const atMerge = mergeStart(root, { given: main, tip: head });
+  assert.equal(atMerge?.from, mine);
+  const args = ['--literal-pathspecs', ...rangeDiff({ from: mine, head, merge: atMerge }, ['--no-color', '--no-ext-diff'], ['m.txt'])];
+  const writable = git(root, ...args);
+  const objects = path.join(root, '.git', 'objects');
+  const chmodAll = (mode) => spawnSync('chmod', ['-R', mode, objects]);
+  chmodAll('a-w');
+  try {
+    // The old command shows nothing there, and exits 0 all the same (L12): what this test holds against.
+    const remerge = spawnSync('git', ['--literal-pathspecs', 'show', '--remerge-diff', '--format=', '--no-renames', head, '--', 'm.txt'], { cwd: root, encoding: 'utf8' });
+    assert.equal(remerge.stdout, '', 'the remerge-diff is empty with read-only objects');
+    const readOnly = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(readOnly.status, 0, readOnly.stderr);
+    assert.equal(readOnly.stdout.trim(), writable);
+    assert.match(writable, /^-<<<<<<< /m, 'the conflict markers are shown, as the remerge-diff shows them');
+  } finally {
+    chmodAll('u+w');
+  }
 });
 
 test('when the records cannot be read against the range, the range is reviewed as it was given, and one line says so', async () => {
