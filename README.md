@@ -216,7 +216,9 @@ Features  295/349  85%
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
 validates every contract, `run` runs a contract's done-when commands, and `goal` prints the
-`/goal` condition that runs them.
+`/goal` condition that runs them. Each task names its kind of work, `(kind: design | build |
+verify | docs)`; `modes` prints the effort and sub-agent models each open task calls for, from
+the project's rules, and `goal` prints the same lines on stderr.
 
 ```console
 $ js-harness contract template
@@ -348,6 +350,26 @@ decision; `--address <role>` prints the title of the session that holds a role; 
 ```console
 $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
+```
+
+### js-harness subagents
+
+Counts a day's sub-agents of the project by role (writer, explorer, reviewer, verifier), model
+and effort, with their tokens and the share of the day's tokens they took, so that what to
+measure next and how many to launch come from a count. It reads the Claude Code records of the
+main checkout and each worktree and keeps no text of any message; Codex is not counted.
+
+```console
+$ js-harness subagents --day 2026-10-14
+Sub-agents, local day 2026-10-14 (UTC-05:00), 2 record folders; Claude records only, Codex not counted
+role      model             effort asked/ran  launches  input  cache write  cache read   output
+explorer  claude-opus-5-5   high/high               23    932      2197153    37928674   274820
+writer    claude-haiku-5-5  high/high               11    646      1626090    46702162   397934
+…
+total                                               54   2502      6420288   132472395  1050507
+Their share of the day's tokens: input 19%, cache write 29%, cache read 8%, output 23%
+Read as other: 5; effort or model inherited from the session: 14; call not found: 1; carried over from the day before: 0
+Read in 8.2 s
 ```
 
 ### js-harness notify
