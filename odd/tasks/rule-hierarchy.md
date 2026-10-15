@@ -3199,9 +3199,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 241. The build is on `feat/rules-row` (worktree `D:js-harness-worktreesules-row`, from `main`
 b0093b8), inline, tests first. Unit 1 is done (0b292bc): `patternOf` and `{amount}` in `bin/lib/rules.mjs`, with `readRules`
 refusing a pattern with no `{amount}` or one matching an empty line. Unit 2, the scan, is
-`bin/lib/rules-scan.mjs` (`inForceLines`, `scanLines`, `countFindings`; its commit is going through
-the gate). Next units, in order:
-1. `rules check` prints the counts (`bin/rules.mjs` `checkList`) and gains its two findings;
+`bin/lib/rules-scan.mjs` (8aa9b00). Unit 3: `rules check` prints `patterns: none; unscanned: 29`
+after its PASS line (`bin/rules.mjs` `patternsLine`; its commit is going through the gate). Next
+units, in order:
+1. `rules check`'s two findings: a `failure` naming no register entry, a switch back with no sighting;
 2. the row in `checkOwnRules`;
 3. the command's three keys;
 4. the help.
