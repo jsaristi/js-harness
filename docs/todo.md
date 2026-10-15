@@ -15,6 +15,10 @@ matters, who holds it, and where it was seen.
   and a scripted turn that hangs with the lock (the pair measure, 24 minutes).~~ Placed: JH 8,
   `odd/tasks/gate-turn-guards.md`: `gate` refuses a turn while a push waits, and stops a command at
   30 minutes (`--max`); done when its pull request merges.
+- ~~A queued `gate --wait` left alive when its launcher was stopped (JH 5, 2026-10-14: a TaskStop killed
+  the shell, and the orphan would have committed a half-edited tree at its turn).~~ Placed: JH 8,
+  `odd/tasks/orphan-gate.md`: a waiting gate whose launcher ended gives up its place and runs nothing;
+  done when its pull request merges.
 - The antivirus (MsMpEng) takes one to two of the eight processors while a check runs (124 to 189
   percent of one processor, read 2026-10-13 22:07). His: nothing is changed without his word. JH 8
   measures what an exclusion of the suite's temporary folders would give before anything reaches him.
