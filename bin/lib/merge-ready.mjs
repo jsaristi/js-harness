@@ -32,16 +32,10 @@ export function untestedPaths(changed) {
   return changed.filter((path) => !DOCUMENTS.test(path) || AGENTS.test(path));
 }
 
-/**
- * facts: { pr: {number, state, isDraft, mergeable, baseRefName, body, headRefOid}, main,
- *   run: {id, status, conclusion} | null, tested: {head, base} | null, baseIsAncestor,
- *   changedSinceBase: [path], mergeTreeClean, pullMergeParent: id | null,
- *   conflicts: [path] | null, the files a conflicting pull request conflicts in, when git could say }
- * Returns { code, said: [line] }.
- */
 /** What keeps the pull request `pr` itself from being merged, one sentence each, in this order: not open, a
- * draft, not mergeable, not on main, no gentle-ai line in its body. Empty when nothing does. */
-export function pullRequestProblems(pr) {
+ * draft, not mergeable, not on main, no gentle-ai line in its body. Empty when nothing does. A conflicting one
+ * is also told how to keep the merge of `main` clean, when `conflicts` names the files git found. */
+export function pullRequestProblems(pr, { main, conflicts } = {}) {
   const name = `PR ${pr.number}`;
   const said = [];
   if (pr.state !== 'OPEN') said.push(`${name} is ${pr.state}, not open.`);
@@ -49,18 +43,25 @@ export function pullRequestProblems(pr) {
   if (pr.mergeable !== 'MERGEABLE') said.push(`${name} is not mergeable (${pr.mergeable}).`);
   // Advice, not a verdict (S7 of odd/tasks/merge-review.md): a conflict moved out of the merge costs a small
   // review of its own commit, and the merge of main then needs none.
-  if (pr.mergeable === 'CONFLICTING' && facts.conflicts?.length) {
-    said.push(`${name} conflicts with main ${short(main)} in ${facts.conflicts.join(', ')}. Before merging main into its branch, move the branch's own change out of those lines in a small commit of its own, with its own small Codex review, so that the merge is clean; a conflict resolved in the merge is reviewed by its diff with the automatic merge.`);
+  if (pr.mergeable === 'CONFLICTING' && conflicts?.length) {
+    said.push(`${name} conflicts with main ${short(main)} in ${conflicts.join(', ')}. Before merging main into its branch, move the branch's own change out of those lines in a small commit of its own, with its own small Codex review, so that the merge is clean; a conflict resolved in the merge is reviewed by its diff with the automatic merge.`);
   }
   if (pr.baseRefName !== 'main') said.push(`${name} targets ${pr.baseRefName}, not main.`);
   if (!/gentle-ai/i.test(pr.body ?? '')) said.push(`${name}: its body has no gentle-ai line.`);
   return said;
 }
 
+/**
+ * facts: { pr: {number, state, isDraft, mergeable, baseRefName, body, headRefOid}, main,
+ *   run: {id, status, conclusion} | null, tested: {head, base} | null, baseIsAncestor,
+ *   changedSinceBase: [path], mergeTreeClean, pullMergeParent: id | null,
+ *   conflicts: [path] | null, the files a conflicting pull request conflicts in, when git could say }
+ * Returns { code, said: [line] }.
+ */
 export function mergeReadiness(facts) {
   const { pr, main, run, tested } = facts;
   const name = `PR ${pr.number}`;
-  const said = pullRequestProblems(pr);
+  const said = pullRequestProblems(pr, { main, conflicts: facts.conflicts });
   if (said.length) return { code: FAILED, said };
 
   const head = pr.headRefOid;
