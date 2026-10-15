@@ -421,5 +421,8 @@ export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, re
   // records say it is covered, instead of a second paid review of the same merge (Codex, 2026-10-14).
   const atMerge = reviewCoverage(cwd, { from: first, tip: head, spawn, where });
   if (atMerge.unknown !== undefined || atMerge.covers.some(({ covered }) => covered.has(head))) return null;
+  // And only a merge the push check counts as code: one that took a side whole has a remerge-diff of the
+  // markers it removed, and no line anybody wrote (verifier B1, 2026-10-14).
+  if (!atMerge.uncovered.some((commit) => commit.id === head)) return null;
   return { from: first, side, branch: branch.label };
 }

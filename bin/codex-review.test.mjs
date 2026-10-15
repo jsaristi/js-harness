@@ -5256,7 +5256,7 @@ test('a merge somebody wrote in is a commit of the range: with a record for ever
 /** A branch that merged its remote's default branch and resolved a conflict in `m.txt`, while that branch also
  * changed `s.txt`: `{ root, base, mine, main, head }`, with a record over `base..mine`. With `inMain` false,
  * the merged side is a branch of its own, which the remote's default branch does not hold. */
-function makeResolvedMergeRepo({ inMain = true } = {}) {
+function makeResolvedMergeRepo({ inMain = true, resolution = 'M1 both\n' } = {}) {
   const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
   const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
   fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
@@ -5273,7 +5273,7 @@ function makeResolvedMergeRepo({ inMain = true } = {}) {
   }
   git(root, 'checkout', '--quiet', trunk);
   spawnSync('git', ['merge', '--no-ff', '--quiet', 'side'], { cwd: root });
-  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 both\n', 'utf8');
+  fs.writeFileSync(path.join(root, 'm.txt'), resolution, 'utf8');
   git(root, 'commit', '-am', 'merge main, resolving m.txt');
   const head = git(root, 'rev-parse', 'HEAD');
   appendCodexReview(root, reviewedRecord(base, mine));
@@ -5304,6 +5304,15 @@ test('a merge already covered by a record is not reviewed again: the run says th
   assert.deepEqual([result.code, result.err], [0, '']);
   assert.ok(!result.out.includes('remerge'), result.out);
   assert.match(result.out, /a Codex review record already covers all of them/);
+});
+
+test('a merge that took one side whole is no code commit and starts no review, as before merge mode (verifier B1, 2026-10-14)', async () => {
+  const { root, main } = makeResolvedMergeRepo({ resolution: 'M1 theirs\n' });
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('remerge'), result.out);
+  assert.match(result.out, /a Codex review record already covers/);
 });
 
 test('the diff of a merge review shows no signature, whatever the configuration says (Codex, 2026-10-14)', () => {
