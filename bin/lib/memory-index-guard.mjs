@@ -10,9 +10,16 @@ export const INDEX_LINE_CHARS = 150;
 
 const MEMORY_INDEX = /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/]memory[\\/]MEMORY\.md$/i;
 
-/** Whether `filePath` is a project's memory index. */
-export function isMemoryIndex(filePath) {
-  return typeof filePath === 'string' && MEMORY_INDEX.test(filePath);
+/** Whether `filePath` is a project's memory index: under a `.claude` folder, or under `configDir` (Claude Code's
+ * `CLAUDE_CONFIG_DIR`, which need not be named `.claude`), compared without case and with either separator. */
+export function isMemoryIndex(filePath, configDir) {
+  if (typeof filePath !== 'string') return false;
+  if (MEMORY_INDEX.test(filePath)) return true;
+  if (typeof configDir !== 'string' || configDir === '') return false;
+  const norm = (text) => text.replace(/\\/g, '/').toLowerCase();
+  const root = `${norm(configDir).replace(/\/+$/, '')}/projects/`;
+  const file = norm(filePath);
+  return file.startsWith(root) && /^[^/]+\/memory\/memory\.md$/.test(file.slice(root.length));
 }
 
 /** The file the `Write` or `Edit` of `toolInput` leaves, given the file on disk (`before`, null when unreadable), or
@@ -31,8 +38,8 @@ function resultOf(toolName, toolInput, before) {
 /** Why the `Write` or `Edit` of `toolInput` is refused, or null: the first line of the file it leaves that is longer
  * than the limit and was not already in the file, numbered in that file. `readIndex(path)` reads the file on disk; a
  * line already long there is the hygiene pass's to shorten, not a reason to block every other edit until then. */
-export function memoryIndexRefusal(toolName, toolInput, readIndex) {
-  if (!isMemoryIndex(toolInput?.file_path)) return null;
+export function memoryIndexRefusal(toolName, toolInput, readIndex, configDir) {
+  if (!isMemoryIndex(toolInput?.file_path, configDir)) return null;
   let before = null;
   try {
     before = readIndex(toolInput.file_path);

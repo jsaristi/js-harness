@@ -49,10 +49,10 @@ function rulesTextOf(root, readFile) {
 }
 
 /** Why the call of `payload` is refused, or null. */
-async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
-  if (FILE_TOOLS.has(tool)) return memoryIndexRefusal(tool, input, readIndex);
+  if (FILE_TOOLS.has(tool)) return memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
   if (tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
   const { allowedModels, backtickRefusal, hourRefusal, modelRefusal } = await import('./lib/guard.mjs');
   if (tool === 'Agent') {
@@ -75,6 +75,7 @@ export async function guardMain(argv, {
   stderr = (text) => process.stderr.write(text),
   testRun,
   readIndex = (file) => fs.readFileSync(file, 'utf8'),
+  claudeConfigDir = process.env.CLAUDE_CONFIG_DIR,
 } = {}) {
   if (argv.length !== 1 || argv[0] !== '--hook') {
     stderr(USAGE);
@@ -82,7 +83,7 @@ export async function guardMain(argv, {
   }
   let reason = null;
   try {
-    reason = await refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun, readIndex });
+    reason = await refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir });
   } catch {
     return 0;
   }

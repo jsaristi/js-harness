@@ -11,7 +11,7 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, index = null } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, index = null, configDir } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -26,6 +26,7 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     testRun: (command) => testRunWarning(command, { env: {}, holder: () => held }),
+    claudeConfigDir: configDir,
     readIndex: () => {
       if (index === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
       return index;
@@ -150,4 +151,17 @@ test('without --hook it prints its usage and exits 2', async () => {
   const result = await hook({}, { args: [] });
   assert.equal(result.code, 2);
   assert.match(result.err, /Usage: js-harness guard --hook/);
+});
+
+// Codex on a68a340..c3ffdfa: Claude Code keeps its folder where CLAUDE_CONFIG_DIR says, which need not be named .claude
+// (bin/subagents.mjs and bin/sessions.mjs read it too); the memory index there is held to the same limit.
+test('a memory index under CLAUDE_CONFIG_DIR is held to the limit, whatever that folder is named', async () => {
+  const custom = 'D:\\claude-config\\projects\\D--proj\\memory\\MEMORY.md';
+  const write = { tool_name: 'Write', tool_input: { file_path: custom, content: `${longLine}
+` } };
+  assert.match(denied(await hook(write, { configDir: 'D:/claude-config' })).permissionDecisionReason, /^js-harness guard: line 1 of the memory index/);
+  assert.match(denied(await hook(write, { configDir: 'd:\\Claude-Config\\' })).permissionDecisionReason, /line 1/, 'case and a trailing separator');
+  const quiet = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook(write), quiet, 'without the variable it is no memory index');
+  assert.deepEqual(await hook({ ...write, tool_input: { ...write.tool_input, file_path: 'D:/claude-config/notes/MEMORY.md' } }, { configDir: 'D:/claude-config' }), quiet, 'outside projects/<slug>/memory');
 });

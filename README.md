@@ -422,7 +422,8 @@ message whose stamped hour is more than a minute off the clock; a shell command 
 inside double quotes, which bash runs as commands; a `node --test` of several files outside a
 gate turn while another gate holds the machine's lock; and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
-(`~/.claude/projects/<project>/memory/MEMORY.md`), which every session reads on every turn. A
+(`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
+which every session reads on every turn. A
 refusal is printed as the hook's deny, with the reason and the right value; any other call runs
 as it was. A `Write` or `Edit` of any other file loads nothing but that last check. An `Edit` is
 judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
