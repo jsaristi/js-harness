@@ -475,6 +475,31 @@ What changes. `bin/lib/failures.mjs` (the parser, `CONTROL_SHAPES`, `entryState`
 shapes. Nothing is migrated: JH 15 rewrites its two entries once this lands. Out of scope: a
 command that writes the measurement.
 
+Read at 09:21 by a reader that did not write it (verdict: build with changes). What it changed:
+1. A `measured` control's phrase must hold its `since` date, so measuring again means a new
+   dated line in the measurement file, not a date edit on the `Control:` line
+   (`told-him-unverified` has 8 sightings; a bare date edit would settle it unchecked).
+2. The places that become false are not FAILURES.md's header, which explains no shapes: this
+   section's "absent, owed or in place" and its list of seven states, `CONTROL_SHAPES` and the
+   comments of `bin/lib/failures.mjs` (lines 10, 84-85, 315, 323), and the usage line of
+   `bin/js-harness.mjs:22`, which lists the unsettled states.
+3. A measurement whose phrase is gone is its own state, `measure lost` (not settled), not
+   `control lost`: no control ever sat there. Ten states, not nine. A measurement replaced by a
+   control is deleted, never moved to `Was`, which counts replaced controls.
+4. A sighting dated the same day as `since` counts as covered (`>` stays strict), pinned by a
+   test; JH 15's two rewrites date the measurement 2026-10-15, its version 4.
+5. `docs/FAILURES.md` is refused as the path of any control: its own `Control:` line always
+   holds its phrase.
+6. For `measured`, the phrase is matched with comments and fenced blocks stripped.
+7. `estimate-passed-as-fact` stays `owed`: its control waits on his call (the share check).
+8. `bin/failures.mjs` needs no change: it prints any state string and pads its columns.
+Tests, first: the shape with a `.md` path; refused without `since`, without the date in its
+phrase, and on the register's own path; settled with the box checked or not; a later sighting;
+a same-day sighting; the phrase gone; one row in `bin/failures.test.mjs`'s style; and the
+existing tests of seven states (`bin/lib/failures.test.mjs:510`, `:569-571`, `:603-613`, `:311`)
+updated. Built on a branch from `main`, whose FAILURES.md already points the two entries at
+`odd/tasks/honesty-audit.md` T15 (this worktree is behind it).
+
 ### One home for every rule (T16)
 The need, what was measured, a first design, and the protocol he approved on 2026-10-11. The
 homes' declarations, the command and the row are not designed yet: each is designed, and read
@@ -2659,9 +2684,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 `main`. `bin/lib/manifest.mjs` is done as pull requests 213 (ready, marked by the lead) and
 216 (draft, stacked on 213), both on branches of the worktree
 `D:\js-harness-worktrees\rule-contract-timeout`. At 09:16, T3f's design is drafted ("A failure
-with no control, measured (T3f)" under `## Design`), not yet read. Next: a reader that did not
-write it attacks it and looks for what it lacks; then it is built test first in
-`bin/lib/failures.mjs`, told to the lead before `docs/FAILURES.md` is touched; the dispatcher's help
+with no control, measured (T3f)" under `## Design`); at 09:21 a reader that did not write it
+read it, and its eight changes are written there. Next: build it test first on a new branch
+from `main` (`feat/register-measured`), in `bin/lib/failures.mjs` and its tests, the usage line
+of `bin/js-harness.mjs:22` told to the lead first (pull requests 201 and 194 change that
+file); then tell JH 15 it can rewrite its two entries; the dispatcher's help
 once pull requests 201 and 194 land; JH 8's two test files close T16b.
 
 **State for a resume, 2026-10-14 at about 15:00, at 89 percent of the context.** T16b is PAUSED by
