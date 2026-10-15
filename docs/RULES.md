@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `6d806ce4c8b9`. In force: 22 (14 of Sebastián, 8 of the project). Retired: 0.
+Hash `f15940b13531`. In force: 24 (14 of Sebastián, 10 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -91,6 +91,11 @@ The most work sessions open at one time: 3 sessions.
 
 ## The project's
 
+### agents-budget
+The most estimated tokens AGENTS.md may hold, since every session pays it on every turn: 1,500 estimated tokens.
+- Read by: `bin/check.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `docs/ROADMAP.md`.
+
 ### contract-run-timeout
 How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.
 - Read by: `bin/contract.mjs`.
@@ -130,6 +135,11 @@ The most parts a Codex review runs in without being told its count: 6 parts. The
 How long a Codex review may run before it is stopped as stalled: 30 minutes.
 - Read by: `bin/codex-review.mjs`.
 - Since 2026-10-14. Row: reports. Source: design, `odd/tasks/codex-exec-review.md`.
+
+### sensor-timeout
+How long one sensor of the gate may run before it is stopped and the commit refused: 20 minutes.
+- Read by: `bin/check.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/remote-control.md`.
 
 ## Retired
 

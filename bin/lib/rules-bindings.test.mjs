@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from '../check.mjs';
 import { REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS } from '../codex-review.mjs';
 import { DEFAULT_TIMEOUT_MINUTES } from '../contract.mjs';
 import { GATE_WAIT_MS } from './gate-lock.mjs';
@@ -17,6 +18,14 @@ test('the model and the effort of a Codex review are the declared ones', () => {
 
 test('the timeout of a Codex review is the declared review-timeout in milliseconds', () => {
   assert.equal(REVIEW_TIMEOUT_MS, ruleValue('review-timeout', 'minutes') * 60_000);
+});
+
+test('the bound of a sensor of the gate is the declared sensor-timeout in milliseconds', () => {
+  assert.equal(SENSOR_TIMEOUT_MS, ruleValue('sensor-timeout', 'minutes') * 60_000);
+});
+
+test('the budget AGENTS.md is held to is the declared agents-budget', () => {
+  assert.equal(TOKEN_BUDGET, ruleValue('agents-budget', 'estimated tokens'));
 });
 
 test('the timeout of a done-when command of a contract run is the declared contract-run-timeout', () => {
