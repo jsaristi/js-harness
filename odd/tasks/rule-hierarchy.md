@@ -2607,7 +2607,11 @@ the staged merge was dropped, the work was reapplied as a patch, and it was comm
 as pull request 192. At 05:44, `bin/check.mjs` followed as pull request 196, stacked on 192,
 with the lead's leave. All three carry Codex records and gentle-ai's "not due". Next:
 `bin/lib/manifest.mjs`, after JH 16's pull requests 188 and 191 land, since they change it.
-Once 167 lands, mark 190, 192 and 196 ready, in that order.
+Pull request 167 landed at 05:47 (main `d34f1d6`), and code now reaches main only through
+`merge-queue --land`. The lead's order of 05:49: these stay drafts until its batch 1 (183, 185,
+186, flaky-ledger, sweep-waits) is on main; then the lead marks them ready and lands them, not
+this session. `git merge-tree` of `d34f1d6` with 196's stack exits 0, so the stack is rebased
+once, after batch 1, since each rebase renews the commit ids and their three Codex records.
 
 **State for a resume, 2026-10-14 at about 15:00, at 89 percent of the context.** T16b is PAUSED by
 his order to fix the failures first (the lead's transcript ffe99ebf, lines 5906 and 5853). Parked:
