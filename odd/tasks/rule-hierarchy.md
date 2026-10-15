@@ -3092,6 +3092,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     - the date fixtures depended on the host's time zone.
 
 ## Next step
+**State for a resume, 2026-10-15, after T16d was designed.** T16d is designed in "The row `rules`
+(T16d)" (bb94765, branch `docs/rule-hierarchy-t16d`, pushed, no pull request yet). Two readers that
+did not write it are reading it, one to attack it and one for what it lacks. Next: fold their
+findings into the section, list them at its end, open the pull request (draft), then build T16d
+inline on a `feat/` branch, tests first.
+
 **State for a resume, 2026-10-15 at 18:21 by `date`.** Pull requests 238 and 234 landed
 (`main` e7e97df and d2441d5): T16c is checked off. Its prerequisite for T16d, the gate's stop
 before its sensors, is built (`docs/ROADMAP.md:801`, 2026-10-11). Next: T16d, the row `rules`,
