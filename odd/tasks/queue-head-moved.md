@@ -36,3 +36,6 @@ open, and nothing said that a commit of it is not on main.
 - L2. 2026-10-15 11:37: the heads are read with one `git ls-remote origin` of the landed branches after the push of main, so a
   head pushed at any moment of the land is caught; a read that fails is said, never taken for no head moved (second
   test). Exit stays 0: main moved, as S1 asks.
+- L3. 2026-10-15 11:44: gate green on 115c73f; gentle-ai assessment medium, review not due (under_budget); Codex on
+  ab2202f..115c73f: "the patch is correct (confidence 0.96)", no findings, 87,854 input tokens, recorded. Draft PR
+  opened; the lead is told. Next step: none here; the lead decides when it goes ready.
