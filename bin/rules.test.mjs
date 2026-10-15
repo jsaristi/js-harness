@@ -234,9 +234,13 @@ test('rules <id> prints the declaration, the code that reads it and its source; 
   const reader = "import { ruleValue } from './lib/rules.mjs';\n\nexport const wait = ruleValue('gate-wait', 'minutes');\n";
   await inProject({ ...BASE(), 'bin/cmd.mjs': reader }, async (dir) => {
     const rule = RULES.find((item) => item.id === 'gate-wait');
+    // The project holds the real home files of the rules in prose, and one of them, the skill's manifest,
+    // reads this rule too: the readers are the fixture's and those.
+    const homesReading = Object.keys(HOMES).filter((file) => HOMES[file].includes("ruleValue('gate-wait'"));
+    const readBy = ['bin/cmd.mjs', ...homesReading].sort().join(', ');
     assert.deepEqual(await run(['gate-wait'], dir), {
       code: 0,
-      out: [JSON.stringify(rule, null, 2), 'Read by: bin/cmd.mjs', `Source: ${JSON.stringify(SOURCES['gate-wait'], null, 2)}`],
+      out: [JSON.stringify(rule, null, 2), `Read by: ${readBy}`, `Source: ${JSON.stringify(SOURCES['gate-wait'], null, 2)}`],
       err: [],
     });
     assert.deepEqual(await run(['no-such-rule'], dir), { code: 1, out: [], err: ['no rule "no-such-rule" is declared'] });

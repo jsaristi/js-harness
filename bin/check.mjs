@@ -1079,7 +1079,7 @@ const aheadSaid = (line) => (line?.ahead > 1 ? `; ${line.ahead} gates are ahead 
 /** What `--wait <minutes>` and `--no-wait` mean, for the usage of `check` and of `js-harness gate`, which
  * take the two flags alike. The bound is not on the whole of a wait (`takeGateLock`). */
 export const GATE_WAIT_USAGE =
-  "       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (60 when not given); --no-wait: refuse at once instead of waiting";
+  `       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (${GATE_WAIT_MS / 60_000} when not given); --no-wait: refuse at once instead of waiting`;
 
 /** The sentence of a refusal of the lock (`takeGateLock`), for a gate that was given `waitMinutes`: which
  * gate it was refused for, and whether that gate held the lock or waited ahead of this one for it. A wait
