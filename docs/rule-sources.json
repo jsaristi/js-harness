@@ -296,6 +296,14 @@
       "by": "session"
     }
   },
+  "wait-every": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
+  },
+  "wait-for": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
+  },
   "work-sessions": {
     "kind": "words",
     "quotes": [
