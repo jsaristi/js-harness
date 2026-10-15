@@ -23,7 +23,6 @@ Commands:
   failures    The register of what went wrong, docs/FAILURES.md: the totals, the count by class and one line per failure, the most seen first, with its state. failures <id> prints one entry whole; failures check runs the gate's row alone and exits 1 when the register is refused, and with --settled also while a failure is not settled (repeated with no control, a control owed that is stale, a control lost or seen again, or a measurement lost or seen again). Read-only: only an editor writes the register.
   rules       Show the declared rules of the harness, each with its value or its home (rules <id> prints one with its source and who reads it). rules check exits 1 when a declaration, its source, a reader or docs/RULES.md is wrong; rules render writes docs/RULES.md. In a project that installs the harness, the project's own rules in docs/rules.json are listed too, and rules check holds them: each phrase still in its file, each sensor still declared, no rule deleted since HEAD.
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
-  merge-ready  Say whether pull request <pr> may be merged on its GitHub run, and merge nothing: open, not a draft, mergeable, on main, a gentle-ai line, the latest run of its head green, and the base that run tested is today's main or behind it only by documents. Exit 0 ready, 3 stale (it says when to reopen for a fresh run), 4 run missing, pending or red, 1 otherwise.
   merge-queue  Build the candidate main would be: origin/main with each ready pull request merged in order of number, naming each one left out and why. --dry-run prints it and pushes nothing; --land tests it on this machine and on CircleCI and, when both are green, moves main to it by fast-forward.
   functions   Show each function this project can turn off and on (harness.json "functions"): its value here and why. functions apply makes this clone what they ask (the code map index, the push check, the keys of .claude/settings.local.json), recorded so uninstall undoes it, with no pin needed; functions set <name> <value> writes one switch into harness.json and applies it.
   remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status. start --at-login also starts it at every Windows login, and again within five minutes whenever it is not running (a scheduled task); stop --at-login undoes both. A server stopped with stop stays stopped until the next start.
@@ -62,7 +61,6 @@ const COMMANDS = {
   failures: async () => (await import('./failures.mjs')).failuresMain,
   rules: async () => (await import('./rules.mjs')).rulesMain,
   'codex-review': async () => (await import('./codex-review.mjs')).codexReviewMain,
-  'merge-ready': async () => (await import('./merge-ready.mjs')).mergeReadyMain,
   'merge-queue': async () => (await import('./merge-queue.mjs')).mergeQueueMain,
   functions: async () => (await import('./functions.mjs')).functionsMain,
   remote: async () => (await import('./remote.mjs')).remoteMain,
