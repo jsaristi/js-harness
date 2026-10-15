@@ -150,11 +150,17 @@ test('what is not a public page is refused with exit 1 and nothing is sent', asy
     ['http://169.254.169.254/latest/meta-data/', 'its host is not public'],
     ['http://[::1]/', 'its host is not public'],
     ['http://app.localhost/', 'its host is not public'],
+    ['http://localhost./', 'its host is not public'],
+    ['http://service.internal./', 'its host is not public'],
+    ['http://intranet./wiki', 'its host is not public'],
     ['ftp://example.com/file', 'only http and https pages are read'],
     ['https://user:secret@example.com/', 'it carries a user or a password'],
     ['https://example.com/a?api_key=abc', 'its query carries a parameter named like a secret (api_key)'],
     ['https://example.com/a?access_token=abc', 'its query carries a parameter named like a secret (access_token)'],
     ['https://example.com/a?X-Amz-Signature=abc', 'its query carries a parameter named like a secret (X-Amz-Signature)'],
+    ['https://example.com/a?accessToken=abc', 'its query carries a parameter named like a secret (accessToken)'],
+    ['https://example.com/a?sessionToken=abc', 'its query carries a parameter named like a secret (sessionToken)'],
+    ['https://example.com/a?clientSecret=abc', 'its query carries a parameter named like a secret (clientSecret)'],
     ['not a url', 'it is not a URL'],
   ];
   for (const [url, why] of cases) {
@@ -167,8 +173,9 @@ test('what is not a public page is refused with exit 1 and nothing is sent', asy
 
 test('a public page with an ordinary query is sent', async () => {
   const fake = fakeFetch(200, PAGE);
-  assert.equal((await run(['https://example.com/search?q=keyboard&page=2'], fake.fn)).code, 0);
-  assert.equal(fake.calls.length, 1);
+  assert.equal((await run(['https://example.com/search?q=keyboard&page=2&monkey=1&tokenize=yes'], fake.fn)).code, 0);
+  assert.equal((await run(['https://www.example.com./docs'], fake.fn)).code, 0);
+  assert.equal(fake.calls.length, 2);
 });
 
 test('no URL, two of them or an unknown flag is a usage error: exit 2 and nothing is sent; --help prints the usage and exits 0', async () => {

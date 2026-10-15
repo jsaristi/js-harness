@@ -17,10 +17,12 @@ export function webBlockNotice(input) {
   if (!Number.isInteger(code) || !BLOCK_STATUSES.includes(code)) return null;
   const asked = isObject(input.tool_input) && typeof input.tool_input.url === 'string' ? input.tool_input.url : input.tool_response.url;
   if (typeof asked !== 'string' || asked === '') return null;
+  // Quoted, so a shell keeps the URL's `&` and spaces; a quote inside is percent-encoded, which is the same URL.
+  const quoted = `'${asked.replace(/'/g, '%27')}'`;
   const status = typeof codeText === 'string' && codeText !== '' ? `${code} ${codeText}` : String(code);
   return (
     `js-harness: WebFetch got HTTP ${status} from ${asked}, the answer a site gives AI traffic. ` +
-    `Next rung: js-harness fetch ${asked} reads it through r.jina.ai (a public page only: it sends no cookie and no key); ` +
+    `Next rung: js-harness fetch ${quoted} reads it through r.jina.ai (a public page only: it sends no cookie and no key); ` +
     'if that says blocked, open it in the built-in browser and read it with get_page_text.'
   );
 }

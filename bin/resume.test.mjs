@@ -1325,7 +1325,7 @@ const webFetchOf = (code, codeText, url = NPM) => ({
   tool_response: { bytes: 0, code, codeText, result: `The server returned HTTP ${code} ${codeText}.`, durationMs: 616, url },
 });
 const WEB_NOTICE = (code, codeText, url = NPM) =>
-  `js-harness: WebFetch got HTTP ${code} ${codeText} from ${url}, the answer a site gives AI traffic. Next rung: js-harness fetch ${url} reads it through r.jina.ai (a public page only: it sends no cookie and no key); if that says blocked, open it in the built-in browser and read it with get_page_text.`;
+  `js-harness: WebFetch got HTTP ${code} ${codeText} from ${url}, the answer a site gives AI traffic. Next rung: js-harness fetch '${url}' reads it through r.jina.ai (a public page only: it sends no cookie and no key); if that says blocked, open it in the built-in browser and read it with get_page_text.`;
 const webContext = (lines) => (lines.length === 1 ? JSON.parse(lines[0]).hookSpecificOutput.additionalContext : lines);
 
 test('a WebFetch the site refused as AI traffic gets the notice of the next rung, once per call, under the pause', withMachine(async (machine) => {
@@ -1339,6 +1339,12 @@ test('a WebFetch the site refused as AI traffic gets the notice of the next rung
   for (const [code, text] of [[402, 'Payment Required'], [429, 'Too Many Requests'], [503, 'Service Unavailable']]) {
     assert.equal(webContext((await runPause(machine, pauseInput(machine, UNDER, webFetchOf(code, text)))).lines), WEB_NOTICE(code, text), String(code));
   }
+}));
+
+test('the suggested command quotes the URL, so a shell keeps its & and its spaces; a quote in it is percent-encoded', withMachine(async (machine) => {
+  const url = "https://example.com/search?q=a&page=2&who=o'brien";
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFetchOf(403, 'Forbidden', url)))).lines);
+  assert.ok(said.includes("Next rung: js-harness fetch 'https://example.com/search?q=a&page=2&who=o%27brien' reads it"), said);
 }));
 
 test('a WebFetch that read its page, one the site says is not there, a redirect and another tool get no web notice', withMachine(async (machine) => {

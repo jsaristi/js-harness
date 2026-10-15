@@ -36,13 +36,15 @@ export function notPublic(text) {
   if (url.username !== '' || url.password !== '') return 'it carries a user or a password';
   if (!publicHost(url.hostname)) return 'its host is not public';
   for (const name of url.searchParams.keys()) {
-    if (SECRET_NAME.test(name)) return `its query carries a parameter named like a secret (${name})`;
+    // `accessToken` is `access_token` in camelCase: a boundary of case counts as a separator.
+    if (SECRET_NAME.test(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2'))) return `its query carries a parameter named like a secret (${name})`;
   }
   return null;
 }
 
 function publicHost(host) {
-  const name = host.toLowerCase();
+  // `localhost.` and `service.internal.` are the absolute DNS spellings of the same hosts: the final dot goes.
+  const name = host.toLowerCase().replace(/\.$/, '');
   if (name.startsWith('[')) {
     const ip = name.slice(1, -1);
     return !(ip === '::' || ip === '::1' || /^f[cd]/.test(ip) || /^fe[89ab]/.test(ip) || ip.startsWith('::ffff:'));

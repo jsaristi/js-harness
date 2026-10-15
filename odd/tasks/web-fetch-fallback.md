@@ -106,3 +106,18 @@ shape the hook reads).
   1 on `http://localhost:3000/`; the measured WebFetch answer for Medium piped into `resume --pause` as a
   sub-agent's input prints the notice. The installed copy on the path says it only after this branch is
   merged and synced.
+- **L5** (2026-10-15): commit `784c752`, gate green (tests in WSL2). gentle-ai review, consent granted as
+  AGENTS.md pre-grants it, lineage `review-b745615b61ecbd6c`, lenses risk, readability, reliability: risk
+  and readability admitted; reliability failed in preflight ("Git repository selection must return exactly
+  three path records", `invalid_request`, nothing mutated), and the bound STATUS then stopped with
+  `manual_intervention_required`. A gentle-ai defect: whether to report it is Sebastián's, asked through
+  the lead, who holds it while he is away; the lineage is left as it is. Read in gentle-ai's source
+  (v4.1.1, `repository_locator.go:934-942`, `snapshot.go:2042-2044`): not the nested worktree (the same
+  preflight passed twice there at the same moment); likely a stdout cut short under load, since
+  `exec.ErrWaitDelay` is taken as success, with the machine at 7.7 to 8.0 of 8 cores busy.
+- **L6** (2026-10-15): Codex over `d34f1d6..784c752`, recorded, 2 parts, 202,853 input tokens (137,472
+  cached), inside the 487,200 allowance. Three findings, all accepted: [P1] camelCase secret names
+  (`?accessToken=`) passed the guard; [P2] a final DNS dot (`localhost.`) passed it; [P2] the suggested
+  command did not quote the URL, so a shell would cut it at `&`. Fixed test first (RED: the refusal test and
+  4 notice tests failed; GREEN: `fetch` 8/8, `resume` 85/85). A heredoc ate the backslash of `/\.$/` and
+  made it strip any last character; the existing `127.0.0.1` case caught it before the commit.
