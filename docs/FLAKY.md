@@ -26,5 +26,13 @@ Other lines are for people.
 - Failure: eval-interrupt-process-alive
 
 The test "an interrupt during a real trial against a hanging fake agent leaves nothing of it" finds the
-fake agent's grandchild still running at the suite's exit, under load. The fix owed is in the sweep:
-after its kills, it waits, bounded, until each killed process stops answering, before the exit.
+fake agent's grandchild still running at the suite's exit, under load. The fix is fix/sweep-waits-for-exit:
+after its kills, a run waits, bounded, until the killed process group is gone.
+
+### evals/codex-configs.test.mjs
+- Owner: JH 10
+- Expires: 2026-10-22
+- Failure: eval-missing-login-workroot-kept
+
+The test "a missing login stops the trial before the agent starts" finds the trial's directory still in
+the work root under load: its removal had not ended when the test read the folder.

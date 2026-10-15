@@ -357,12 +357,20 @@ A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real
 hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
 when the test looked, in a change that touched nothing of the evals.
 - Class: machine
-- Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
-  `[false, false]` was expected, pid 22809; the only failing test of the run
 - Seen: 2026-10-14 — JH 15's gate in WSL2, about 15:45, by the lead's notice of 2026-10-15 — `alive:
   [false, true]`, the grandchild in state R at the assertion; the file passes alone
 - Seen: 2026-10-15 — JH 15's gate in WSL2, about 01:30, by the lead's notice — `alive: [false, true]`,
   the grandchild in state R; the file passed in the gate of cfee7ae
+- Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
+  `[false, false]` was expected, pid 22809; the only failing test of the run
+
+### eval-missing-login-workroot-kept
+A run on GitHub failed on one test of `evals/codex-configs.test.mjs`, "a missing login stops the trial
+before the agent starts", because the work root still held the trial's directory when the test read
+it, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-15 — PR 185's GitHub run 38705933668, on Linux, by the lead's notice — line 198,
+  `readdirSync(workRoot)` gave `['eval-m3TuMV']` where `[]` was expected: its cleanup had not ended
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
