@@ -375,6 +375,35 @@ js-harness wait: waits for the merge of pull request 133; ends when it holds, or
 js-harness wait: the merge of pull request 133 holds (14:12)
 ```
 
+### js-harness wake
+
+A boot kills every background command of every session, and the transcripts do not say so: a
+wait the boot killed still reads as running. After a boot, `wake` lists the sessions of the
+project that were open before it (an entry in the 12 hours before), each with the command that
+prints its stored opening and the `js-harness wait` calls the boot killed. With `--notify` it
+leaves each session whose title names a role a note, which the inbox hook tells it on its next
+tool call: its waits are gone, read the opening, re-arm only its declared waits. The
+orchestrator gets the list of sessions to wake with `send_message`, since no command can put a
+prompt into an idle session. A second run after the same boot records nothing.
+
+```console
+$ js-harness wake --notify
+The machine booted at 2026-10-15T04:52:10.000Z. 2 sessions were open before it (an entry in the 12 hours before).
+
+JH 5 · canal entre sesiones  (last entry 2026-10-15T04:51:00.000Z, e5376fe9-d1cc-4288-b9e9-cf533ba35a5a)
+  opening: js-harness sessions --opening 'JH 5 · canal entre sesiones'
+  waits the boot killed:
+    js-harness wait --pr 162 --for 60
+  tell it: The machine booted at 2026-10-15T04:52:10.000Z: the background waits and tasks of this session are gone. Read your opening: js-harness sessions --opening 'JH 5 · canal entre sesiones'. Then re-arm only these declared waits: 1) js-harness wait --pr 162 --for 60
+
+JH ORQ · js-harness  (last entry 2026-10-15T04:50:00.000Z, c47efdf7-a307-47ef-8644-cf01d1bc377c)
+  opening: none stored
+  waits the boot killed: none
+  tell it: The machine booted at 2026-10-15T04:52:10.000Z: the background waits and tasks of this session are gone. It has no stored opening: resume from its feature document. No declared wait was running: re-arm none.
+
+3 notes recorded in C:\Users\you\.js-harness\channel\D--js-harness.jsonl.
+```
+
 ### js-harness resume
 
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
