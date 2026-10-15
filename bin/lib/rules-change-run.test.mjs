@@ -13,7 +13,9 @@ import { rulesOfText } from './rules-change-run.mjs';
 import { projectSlug } from './sessions.mjs';
 
 const NOW = Date.parse('2026-10-16T17:00:00.000Z');
-const TODAY = '2026-10-16';
+// The days the command writes are local days, so the fixtures read them by the clock of the host that runs them.
+const localDay = (ms) => { const at = new Date(ms); const two = (n) => String(n).padStart(2, '0'); return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`; };
+const TODAY = localDay(NOW);
 
 const LIST = [
   { id: 'control-phrase-min', subject: 'the shortest phrase of a control', owner: 'project', since: '2026-10-01', value: 12, unit: 'characters' },
@@ -199,7 +201,7 @@ test('his words are read from the transcript and stored with a check by the comm
   const result = await change(repo, ['gate-wait'], { value: 30, source });
   assert.equal(result.code, 0, result.err);
   const stored = JSON.parse(read(repo.dir, 'docs/rule-sources.json'))['gate-wait'];
-  assert.deepEqual(stored, { kind: 'words', quotes: [{ quote: 'treinta minutos', date: '2026-10-15', session, line: 1 }], reading: 'thirty minutes', accepted: 'he typed it', checked: { date: TODAY, by: 'command' } });
+  assert.deepEqual(stored, { kind: 'words', quotes: [{ quote: 'treinta minutos', date: localDay(Date.parse('2026-10-15T17:00:00.000Z')), session, line: 1 }], reading: 'thirty minutes', accepted: 'he typed it', checked: { date: TODAY, by: 'command' } });
   git(repo.dir, 'commit', '-q', '-am', 'the change');
   git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   git(repo.dir, 'switch', '-q', '-c', 'rule/check');
@@ -332,4 +334,45 @@ test('a bound is checked against its new value, and AGENTS.md is refused as a ne
   const home = await change(repo, ['proto-text'], { path: 'AGENTS.md', phrases: ['He decides spend, anything irreversible'], source: DESIGN });
   assert.equal(home.code, 1);
   assert.match(home.err, /AGENTS.md changes only by its approved draft/);
+});
+
+test('a rule of his keeps needing his words when the change also gives it another owner', async () => {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', 'main');
+  write(repo.dir, 'bin/lib/rules-data.mjs', writeRules(LIST.map((rule) => (rule.id === 'gate-wait' ? { ...rule, owner: 'sebastian' } : rule))));
+  git(repo.dir, 'commit', '-q', '-am', 'his rule');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(repo.dir, 'switch', '-q', '-C', 'rule/gate-wait', 'main');
+  const result = await change(repo, ['gate-wait'], { value: 20, set: { owner: 'project' }, source: DESIGN });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /a rule of his changes only with his words/);
+});
+
+test('a relief line that cannot be appended puts the three files back', async () => {
+  const repo = repository();
+  const before = snapshot(repo);
+  write(repo.home, '.js-harness', 'a file where the folder of the relief file goes\n');
+  const result = await change(repo, ['gate-wait'], { value: 30, source: DESIGN });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /are as they were/);
+  assert.deepEqual(snapshot(repo), before);
+});
+
+test('AGENTS.md is refused however its path is spelled', async () => {
+  const repo = repository();
+  for (const home of ['./AGENTS.md', 'agents.md', 'docs/../AGENTS.md']) {
+    const result = await change(repo, ['agents-rule'], { path: home, phrases: ['He decides spend, anything irreversible'], set: { subject: 'a rule in AGENTS.md', owner: 'project' }, source: DESIGN });
+    assert.equal(result.code, 1, home);
+    assert.match(result.err, /AGENTS.md changes only by its approved draft/, home);
+  }
+});
+
+test('a design source is a file inside the repository', async () => {
+  const repo = repository();
+  write(path.dirname(repo.dir), 'outside.md', '# Outside\n');
+  for (const design of ['../outside.md', 'docs']) {
+    const result = await change(repo, ['gate-wait'], { value: 30, source: { kind: 'design', path: design } });
+    assert.equal(result.code, 1, design);
+    assert.match(result.err, /is not a file of the repository/, design);
+  }
 });

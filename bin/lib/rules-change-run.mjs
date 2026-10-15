@@ -30,6 +30,18 @@ export function rulesOfText(text) {
   return JSON.parse(text.slice(start + 'export const RULES = '.length, end));
 }
 
+/** A home that names AGENTS.md, however it is spelled: `./AGENTS.md`, `docs/../AGENTS.md` or another case. */
+const isAgents = (file) => typeof file === 'string' && path.posix.normalize(file.replace(/\\/g, '/')).toLowerCase() === 'agents.md';
+
+/** A path of the repository `top` that names a file inside it, and not a folder or a file outside. */
+function isFileOf(top, file) {
+  if (typeof file !== 'string' || path.isAbsolute(file)) return false;
+  const full = path.resolve(top, file);
+  const relative = path.relative(path.resolve(top), full);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) return false;
+  return fs.existsSync(full) && fs.statSync(full).isFile();
+}
+
 /** Two paths name the same folder, without regard to case on Windows. */
 function samePath(a, b) {
   const [x, y] = [path.resolve(a), path.resolve(b)];
@@ -155,7 +167,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     }
     const { list, rule, what } = checkSource ? { list: head, rule: head.find((item) => item.id === id), what: 'source checked' } : changedList(start, id, change, { today });
     if (rule === undefined) throw new RuleChangeError(`no rule "${id}" is declared on ${branch}`);
-    if (before?.path === 'AGENTS.md' || rule.path === 'AGENTS.md') {
+    if (isAgents(before?.path) || isAgents(rule.path)) {
       throw new RuleChangeError('a phrase of AGENTS.md changes only by its approved draft (letter G), which is not built');
     }
 
@@ -184,7 +196,9 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       const file = path.join(transcripts, `${session}.jsonl`);
       return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
     };
-    const source = sourceOf(given, { owner: rule.owner, today, transcriptOf, exists: (file) => fs.existsSync(path.join(top, file)) });
+    // A rule of his needs his words whether it is his before the change or after it.
+    const owner = before?.owner === 'sebastian' ? 'sebastian' : rule.owner;
+    const source = sourceOf(given, { owner, today, transcriptOf, exists: (file) => isFileOf(top, file) });
     const sources = sortedKeys({ ...startSources, [id]: source });
 
     // The new list, checked against the repository before anything is written.
@@ -220,21 +234,25 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       return 0;
     }
 
-    // The write: each file beside itself, then renamed; a failed rename puts the three back, and nothing is appended.
+    // The write: each file beside itself, then renamed, then the relief line; a failure puts the three back.
     const writes = [[DATA, dataText], [SOURCES, sourcesText], [LIST, listText]];
+    let written;
     try {
       for (const [file, text] of writes) {
         const target = path.join(top, ...file.split('/'));
         fs.writeFileSync(`${target}.change-tmp`, text, 'utf8');
         rename(`${target}.change-tmp`, target);
       }
+      written = appendRelief(home, slug, line, now(), 'rules change');
     } catch (err) {
       for (const [file] of writes) fs.rmSync(path.join(top, ...file.split('/')) + '.change-tmp', { force: true });
-      git(['checkout', 'HEAD', '--', ...writes.map(([file]) => file)]);
-      stderr(`not changed: a file could not be written (${err.code ?? err.message}); ${writes.map(([file]) => file).join(', ')} are as they were`);
+      const files = writes.map(([file]) => file);
+      const restored = git(['checkout', 'HEAD', '--', ...files]).status === 0;
+      stderr(restored
+        ? `not changed: a file could not be written (${err.code ?? err.message}); ${files.join(', ')} are as they were`
+        : `not changed: a file could not be written (${err.code ?? err.message}), and putting ${files.join(', ')} back failed too: git checkout HEAD -- ${files.join(' ')}`);
       return 1;
     }
-    const written = appendRelief(home, slug, line, now(), 'rules change');
     stdout(`changed: ${id}, ${what}; ${writes.map(([file]) => file).join(', ')} written`);
     stdout(`relief: ${written.line}`);
     stdout(memory);
