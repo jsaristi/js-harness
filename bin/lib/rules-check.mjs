@@ -103,7 +103,7 @@ export function sentenceOf(text, phrase) {
  * backticks whose words hold another backtick opens nothing: it is a code span written with three marks, and taking it
  * for a fence would hide every mark after it and report a fence that is not there. The lines that open and close a
  * fence are not outside. */
-function fenceWalk(text) {
+export function fenceWalk(text) {
   const walked = [];
   let fence = null;
   let opened = 0;
