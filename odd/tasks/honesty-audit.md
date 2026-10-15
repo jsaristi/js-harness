@@ -350,7 +350,8 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
   level for a failure with no control and a measure (JH 7's, the lead's call of 2026-10-15).
   Done: the register's `measured` level landed in PR 219, and both lines now read `measured`, naming
   this sentence: on 2026-10-15 the general honesty audit was measured not worth building, 2 or 3 of 14.
-- [ ] T16 (S3) The share check, his call: `js-harness audit` found 93 of 267 stated own context shares
+- [x] T16 (S3) The share check, his call (his "Sí, construilo (Recomendada)", about 16:05, through the
+  lead's question tool; built by JH 19 on `feat/share-check`, see the Log of 2026-10-15, 16:29): `js-harness audit` found 93 of 267 stated own context shares
   wrong over three days (30 of 30 sampled real), so `estimate-passed-as-fact` could get a check like the
   hour guard, one that refuses a reply whose stated own share is more than 2 points from its usage. A new
   check that refuses replies is a new protocol: the lead holds it for his answer (2026-10-15).
@@ -761,3 +762,25 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
     hook's test file, since the day it lands.
   If he says no, check T16 off with his words and turn that `Control:` line into `measured`, naming the
   measure of 2026-10-15 (93 of 267 stated shares wrong over three days).
+- 2026-10-15, 16:29: T16 built by JH 19 on `feat/share-check`, from main `23708b1`. He said yes ("Sí,
+  construilo (Recomendada)", about 16:05, the lead's question tool, JH ORQ transcript e152c9d8).
+  - The hooks contract (code.claude.com/docs/en/hooks, read 2026-10-15): a `Stop` hook gets
+    `transcript_path`, `stop_hook_active` and `last_assistant_message`, the text of the final reply; it
+    blocks with `{"decision": "block", "reason": ...}`, which keeps the session going with the reason as
+    its next input. It cannot un-send a reply: a reply is already shown when the hook runs. So "refuse"
+    is built as "turn the stop back and make the session correct the share", the nearest the contract
+    allows, and no product question was left open.
+  - `js-harness guard --stop` (bin/guard.mjs) is the hook, registered by install as the
+    `claude-share-hook` entry under `hooks.Stop` of Claude Code's settings (no matcher; Claude Code
+    only). It checks `last_assistant_message`, else the transcript's last own reply; it never turns back
+    a stop it already turned back (`stop_hook_active`), so it cannot loop; it reads the transcript only
+    when the reply names a share. The oracle is `lastShare` and `shareRefusal` in `bin/lib/audit.mjs`,
+    on `ownShares` and the audit's 2-point tolerance; the window is that of the last `get_usage` read of
+    the session itself, else 500,000.
+  - The transcript may lag the reply (the contract says so), so the recorded share may be the step
+    before the reply's, a tool result short of it; the 2-point tolerance covers most such steps.
+  - Tests first: RED on `bin/lib/audit.test.mjs` (import missing; then a read after the last reply,
+    which caught a loop that stopped at the window before the reply) and `bin/guard.test.mjs` (3 of 18),
+    then GREEN; manifest, install and practice-lib tests hold the fifth Claude entry.
+  - `docs/FAILURES.md`'s estimate-passed-as-fact moved from `owed` (T16) to `check`, naming
+    `bin/guard.test.mjs`; `failures check` exit 0, the entry reads `controlled`.

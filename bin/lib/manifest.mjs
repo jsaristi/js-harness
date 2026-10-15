@@ -34,7 +34,7 @@ js-harness commands:
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
 - \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
-- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`).
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -238,6 +238,12 @@ export const entryComponents = [
     pointer: ['hooks', 'PreToolUse'],
     entry: () => guardHookEntry(),
   },
+  {
+    id: 'claude-share-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'Stop'],
+    entry: () => shareHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -295,6 +301,20 @@ function guardHookEntry() {
   return {
     matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit',
     hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the share check, guarded to exit 0 like the guard's: an older js-harness answers 2 to `--stop`,
+ * and a `Stop` hook that exits 2 turns the stop back. */
+export const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
+
+/** `guard --stop` (bin/guard.mjs) registered as a `Stop` hook: a reply that states the session's own context share
+ * more than 2 points from the share its transcript records is turned back to be corrected (odd/tasks/honesty-audit.md,
+ * T16). A `Stop` entry takes no matcher. Claude Code only: the transcript it reads is Claude Code's. Five seconds: it
+ * reads the transcript once, and only when the reply states a share. */
+function shareHookEntry() {
+  return {
+    hooks: [{ type: 'command', command: SHARE_HOOK_COMMAND, timeout: 5 }],
   };
 }
 

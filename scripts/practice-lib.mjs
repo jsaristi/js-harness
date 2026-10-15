@@ -320,6 +320,9 @@ const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
 /** The command of the guard hook, as `bin/lib/manifest.mjs` spells it (`GUARD_HOOK_COMMAND`); the same test holds the two together. */
 const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 
+/** The command of the share check, as `bin/lib/manifest.mjs` spells it (`SHARE_HOOK_COMMAND`); the same test holds the two together. */
+const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
+
 /** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
  * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
@@ -331,6 +334,7 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */

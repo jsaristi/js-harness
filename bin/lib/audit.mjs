@@ -78,13 +78,19 @@ export function ownShares(text, window = DEFAULT_CONTEXT_WINDOW) {
 const isOwnReply = (entry) => entry?.type === 'assistant' && !entry.isSidechain && entry.message !== null
   && typeof entry.message === 'object' && entry.message.model !== '<synthetic>';
 
-/** The share of the window the reply `entry` was sent with, or null when it records no usage. */
-function recordedShare(entry, window) {
+/** The tokens of context the reply `entry` was sent with, or null when it records no usage. */
+function recordedTokens(entry) {
   const usage = entry.message.usage;
   if (usage === null || typeof usage !== 'object' || !Number.isFinite(usage.input_tokens)) return null;
   const counted = (value) => (Number.isFinite(value) ? value : 0);
   const tokens = usage.input_tokens + counted(usage.cache_read_input_tokens) + counted(usage.cache_creation_input_tokens);
-  return tokens > 0 ? percentOf(tokens, window) : null;
+  return tokens > 0 ? tokens : null;
+}
+
+/** The share of the window the reply `entry` was sent with, or null when it records no usage. */
+function recordedShare(entry, window) {
+  const tokens = recordedTokens(entry);
+  return tokens === null ? null : percentOf(tokens, window);
 }
 
 // The window a get_usage read of the session itself reports: its result is the JSON of the read, whose `context`
@@ -106,6 +112,60 @@ function windowRead(entry) {
     }
   }
   return null;
+}
+
+/** The entry the JSON text `line` holds, or null when it is no entry. */
+function entryOf(line) {
+  try {
+    const entry = JSON.parse(line);
+    return entry !== null && typeof entry === 'object' ? entry : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the share check (T16) compares a reply with, read from the end of a transcript's `lines` (one JSON text each):
+ * the tokens and the text of the session's last own reply that records a usage, and the window of the session's last
+ * get_usage read, else `fallback`. Only the lines that can hold what is still missing are parsed, so a transcript of
+ * megabytes costs one parse per line it needs. Null when no own reply records a usage.
+ * @param {string[]} lines
+ * @param {number} [fallback]
+ * @returns {{ tokens: number, window: number, windowRead: boolean, text: string } | null}
+ */
+export function lastShare(lines, fallback = DEFAULT_CONTEXT_WINDOW) {
+  let reply = null;
+  let window = null;
+  for (let i = lines.length - 1; i >= 0 && (reply === null || window === null); i -= 1) {
+    const line = lines[i];
+    if (reply === null && line.includes('"assistant"')) {
+      const entry = entryOf(line);
+      const tokens = isOwnReply(entry) ? recordedTokens(entry) : null;
+      if (tokens !== null) {
+        const content = Array.isArray(entry.message.content) ? entry.message.content : [];
+        const text = content.filter((block) => block?.type === 'text' && typeof block.text === 'string').map((block) => block.text).join('\n');
+        reply = { tokens, text };
+      }
+    }
+    if (line.includes('contextWindow')) window = windowRead(entryOf(line));
+  }
+  return reply === null ? null : { tokens: reply.tokens, window: window ?? fallback, windowRead: window !== null, text: reply.text };
+}
+
+/**
+ * Why a reply whose `text` states the session's own context share is to be corrected, or null: a stated share more
+ * than 2 points from the share `tokens` make of `window` (the tolerance the audit measured, `SHARE_TOLERANCE`).
+ * @param {string} text the reply's text
+ * @param {{ tokens: number, window: number }} recorded what the transcript records, from `lastShare`
+ */
+export function shareRefusal(text, { tokens, window }) {
+  const recorded = percentOf(tokens, window);
+  const wrong = ownShares(text, window).find(({ stated }) => Math.abs(stated - recorded) > SHARE_TOLERANCE);
+  if (wrong === undefined) return null;
+  return `js-harness guard: this reply states your context at ${wrong.stated}%, and your transcript records ${recorded}% of a `
+    + `${Math.round(window / 1000)}k window (the window of your last get_usage read, else the default). The reply is already `
+    + 'sent: correct it in one line with the share mcp__ccd_session_mgmt__get_usage reads now, and say no share you have '
+    + 'not just read.';
 }
 
 /** `timestamp` as `HH:MM` in the local time `offsetMinutes` east of UTC, or null when it is no time. `offsetMinutes`
