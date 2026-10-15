@@ -290,7 +290,7 @@ Two independent read-only readers, 2026-10-15, neither the writer.
 - [ ] T2 (kind: build) `memory status`, its library, candidates and `--history`, tests first.
   Built (route: inline): `bin/memory.mjs`, `bin/lib/memory-hygiene.mjs`; 10 library and 6 CLI
   tests, red first; on this project it is due for no-pass, index-bytes, line-chars and one
-  orphan. Reviews pending
+  orphan. Reviewed: gentle-ai under budget, Codex 4 findings fixed (T8); in PR #188 with T3, T5, T6
 - [ ] T3 (kind: build) `memory plan`, `verify`, `undo`, the lock, the journal and the install record.
   Built (route: inline): `bin/lib/memory-pass.mjs`, 15 library and 2 more CLI tests (the library's
   red was not run apart: the module was missing; the CLI's and the index-quote test's red were
@@ -298,8 +298,10 @@ Two independent read-only readers, 2026-10-15, neither the writer.
   the mechanical pass (each note gets its old index line verbatim, the index gets short lines)
   takes the index from 11,077 B to 3,920 B, verifies, leaves `status` with nothing due, and `undo`
   makes the copy byte-identical to the live folder (`diff -rq`). The install record of
-  `~/.js-harness/memory-hygiene/` waits on `bin/lib/manifest.mjs` (JH 8). Reviews pending
-- [ ] T4 (kind: build) The index rule in the guard hook (asked of JH 8 first)
+  `~/.js-harness/memory-hygiene/` waits on `bin/lib/manifest.mjs` (JH 8). Reviewed with T2; PR #188
+- [ ] T4 (kind: build) The index rule in the guard hook (asked of JH 8 first). PR #191 (draft), branch
+  `feat/guard-memory-index`: gentle-ai high (item 3), approved twice; verifier blocker fixed; Codex P2 fixed and
+  rechecked. Merges after #188
 - [ ] T5 (kind: build) The due line in the channel's hook and the board row (asked of their owner first)
 - [ ] T6 (kind: docs) The protocol section of the installed skill, with its incident and expiry; help text
 - [ ] T7 (kind: verify) The first pass on this project with T11's owner, after his answers, journaled and measured
@@ -369,3 +371,6 @@ Two independent read-only readers, 2026-10-15, neither the writer.
   keeps its after-state; undo reverses only the pass's own index changes (a line another session removed stays
   removed); a kept number counts only as a whole token ("88" is not in "1880"). Next: commit, `codex-review --base
   3fbfb31` (the recheck), push, ONE PR; then T4's chain.
+- Update: PR #188 (draft) holds T2, T3, T5, T6 (head 2e082ca); PR #191 (draft) holds T4 (head 2ad347e). Both are
+  drafts by the lead's freeze (only 183, 185, 186 merge until JH 10 lands 167). Next: T7, the live pass, after #188 is
+  reviewed by the lead: regenerate `new-index.md` for the 43 notes, then the deletion list goes to him through the lead.
