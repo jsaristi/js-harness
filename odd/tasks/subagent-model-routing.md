@@ -383,7 +383,8 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   line of intent a session appends before a shared action and the board prints, since "what a
   session plans to do next" is what the board says it cannot see.
 - 2026-10-10 — That proposal is superseded by what he decided the same day with the orchestrator,
-  read in `docs/ROADMAP.md` on `origin/main` ("Session channel (planned)") and in the relief
+  read in `docs/ROADMAP.md` on `origin/main` ("Session channel (planned)", moved on 2026-10-15
+  to `odd/tasks/session-channel.md`, section 16) and in the relief
   file `C:\Users\Oficina\.js-harness\relief\D--js-harness.md` (line 4, the charter): one
   orchestrator per project, the session titled "JH ORQ · js-harness", is the lead; a work
   session asks it for a turn by `SendMessage` before a gate, a test run, a trial batch or a
