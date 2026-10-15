@@ -2911,6 +2911,31 @@ test('the js-harness skill names js-harness wait: what it ends on, and that it r
   assert.ok(text.includes('run it in the background and stop it with TaskStop'));
 });
 
+// T6 of odd/tasks/memory-hygiene.md: the protocol of a pass ships with the skill, with its incident and its
+// expiry, and the description says when the skill applies, so the host loads it when a pass is due.
+test('the js-harness skill carries the memory hygiene protocol: when, what alone, what to the user, undo, expiry', () => {
+  const text = components[0].content('0.1.0');
+  assert.match(text, /^description: .*memory hygiene pass/m);
+  assert.ok(text.includes('## Memory hygiene'));
+  assert.ok(text.includes('2026-10-15'), 'it opens with its incident');
+  for (const step of ['`js-harness memory status`', '`js-harness memory plan', '`js-harness memory verify', '`js-harness memory undo']) {
+    assert.ok(text.includes(step), step);
+  }
+  assert.ok(text.includes('never delete a note on your own'));
+  assert.ok(text.includes('withdrawn after six passes in a row'));
+});
+
+// D3 of odd/tasks/memory-hygiene.md, settled by the user's words of 2026-10-15: the lead archives and opens
+// sessions itself where the host gives it the tool; TaskStop was seen to leave a background command's node alive.
+test('the skills say who archives and opens sessions, and to check that TaskStop left no process behind', () => {
+  const orchestrator = components[2].content('0.1.0');
+  assert.ok(orchestrator.includes('archives the old orchestrator itself when the host gives it a tool to archive sessions'));
+  assert.ok(orchestrator.includes('a work session whose work is fully finished'));
+  assert.ok(orchestrator.includes('When the host gives you a tool to start sessions, open the new session yourself'));
+  assert.ok(!orchestrator.includes('The user archives the old orchestrator only after that'));
+  assert.ok(components[0].content('0.1.0').includes('TaskStop has been seen to end the shell of a background command and leave its node process running'));
+});
+
 test('the orchestrator skill tells a work session never to end a turn waiting for a message, a compact or an event', () => {
   const text = components[2].content('0.1.0');
   assert.ok(text.includes("- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn."));

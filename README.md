@@ -59,6 +59,17 @@ set, a tests sensor that is `node --test` (directly or as the `test` script) run
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
 repository's GitHub workflow sets 2.
 
+When a `node --test` suite fails, the test files it names as failed run once more, alone. A
+file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,
+the quarantine ledger: one `### <test file>` entry with `- Owner:`, `- Expires: YYYY-MM-DD`
+and `- Failure: <id in docs/FAILURES.md>`, written by hand and committed. A file that passes
+on rerun with no entry still blocks, and the `rerun` row names the entry to add; one that
+fails again blocks as before, and so does a failure in a file that cannot be rerun (no test
+file, or a path with a character a shell reads): then nothing is rerun. A pass that rests on a
+quarantine proves no tree for `"sameTree": "skip"`, so the next gate runs the tests again. The
+`flaky` row fails a malformed ledger, an empty field included, and lists the expired entries,
+which no longer count.
+
 ```console
 $ js-harness check
 PASS  budget  122 estimated tokens (budget 1500)
@@ -69,6 +80,8 @@ INFO  payload claude  122 estimated tokens per turn from files (tools and hook o
 …
 INFO  sensors  no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json
 ```
+
+`js-harness check --subagents` adds one INFO row, `subagents`, for today's sub-agents of this project, read from the Claude Code records: each writer launch is compared with `subagent-writer-model`, each explorer, reviewer or verifier with `subagent-reader-model`, and every launch's effort with `subagent-effort`. It says how many ran off those rules and fails nothing. It is opt-in: the commit gate runs plain `check`, which reads no record, and a day of records is about 231 MB.
 
 ### js-harness gate
 
@@ -311,6 +324,25 @@ PR 137: run 38632863631 tested base 028d658; main c0364f8 has moved since by 6 p
 PR 137: refs/pull/137/merge still has 028d658 as its first parent, not main c0364f8: wait before reopening.
 ```
 
+### js-harness merge-queue
+
+Builds the candidate main would be: origin/main with each ready pull request merged into it in
+order of number, and names each one it leaves out and why. Ready means what `merge-ready` checks
+of the pull request itself, a Codex review record for every code commit, and no conflict with the
+candidate so far. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
+green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+A candidate red on this machine is bisected: the pull request that turns it red is left out and
+named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
+merge made on GitHub's side does not pass through it.
+
+```console
+$ js-harness merge-queue --dry-run
+PR 144 is left out: PR 144 is not mergeable (CONFLICTING).
+Candidate: main eb6abf7 with 2 pull requests merged in order: PR 137 (docs/gate-turn-guards-followups), PR 146 (fix/codegraph-home-files).
+Dry run: nothing was tested or pushed, and the candidate was removed.
+```
+
 ### js-harness functions
 
 Shows each function the project can turn off and on in `harness.json` under `"functions"`: its
@@ -352,6 +384,29 @@ $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
 ```
 
+### js-harness memory
+
+Keeps the project's Claude Code memory small and true. The index of that memory is read on every
+turn of every session, and in this repository it grew from 233 to 10,917 characters in 18 days with
+nothing watching it. `memory status` says whether a hygiene pass is due and why: no verified pass
+yet, the index over 4,000 bytes, a line over the host's 150 characters, a link to no file or a note
+with no line, a rule note written since the last pass, or 7 days since it with notes written since.
+It reads the main checkout's memory folder, so a worktree sees the same notes, and exits 1 when a
+pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
+of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
+user is lost and no file another session wrote is overwritten, and an undo that puts back only what
+nobody wrote since. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+
+```console
+$ js-harness memory status
+memory  ~/.claude/projects/D--js-harness/memory  index 10917 B (budget 4000)  41 lines  42 notes
+memory hygiene: due
+  no-pass  no verified pass recorded yet
+  index-bytes  the index is 10917 B, over 4000
+  line-chars  36 lines over 150 characters: 3, 4, 5, 7, ...
+  orphan  questions-through-the-question-tool.md
+```
+
 ### js-harness subagents
 
 Counts a day's sub-agents of the project by role (writer, explorer, reviewer, verifier), model
@@ -382,6 +437,45 @@ message itself.
 $ js-harness notify --to orchestrator --kind note "JH 1: the README's example of a notice"
 js-harness notify: recorded note for the orchestrator at 2026-10-14T09:24:29.740Z from session 9265156a in ~\.js-harness\channel\…
 address of the orchestrator: no single one now (sessions --address exit 1): …
+```
+
+### js-harness wake
+
+A boot kills every background command of every session, and the transcripts do not say so: a
+wait the boot killed still reads as running. After a boot, `wake` lists the sessions of the
+project that were open before it (an entry in the 12 hours before), each with the command that
+prints its stored opening and the `js-harness wait` calls the boot killed. With `--notify` it
+leaves each session whose title names a role a note, which the inbox hook tells it on its next
+tool call: its waits are gone, read the opening, re-arm only its declared waits. The
+orchestrator gets the list of sessions to wake with `send_message`, since no command can put a
+prompt into an idle session. A second run after the same boot records nothing.
+
+```console
+$ js-harness wake --notify
+The machine booted at 2026-10-15T04:52:10.000Z. 2 sessions were open before it (an entry in the 12 hours before).
+
+JH 5 · canal entre sesiones  (last entry 2026-10-15T04:51:00.000Z, e5376fe9-d1cc-4288-b9e9-cf533ba35a5a)
+  opening: js-harness sessions --opening 'JH 5 · canal entre sesiones'
+  waits the boot killed:
+    js-harness wait --pr 162 --for 60
+  tell it: The machine booted at 2026-10-15T04:52:10.000Z: the background waits and tasks of this session are gone. Read your opening: js-harness sessions --opening 'JH 5 · canal entre sesiones'. Then re-arm only these declared waits: 1) js-harness wait --pr 162 --for 60
+
+JH ORQ · js-harness  (last entry 2026-10-15T04:50:00.000Z, c47efdf7-a307-47ef-8644-cf01d1bc377c)
+  opening: none stored
+  waits the boot killed: none
+  tell it: The machine booted at 2026-10-15T04:52:10.000Z: the background waits and tasks of this session are gone. It has no stored opening: resume from its feature document. No declared wait was running: re-arm none.
+
+3 notes recorded in C:\Users\you\.js-harness\channel\D--js-harness.jsonl.
+```
+
+`js-harness wake --at-login` writes a file in the Windows Startup folder that runs
+`wake --notify` for this project at each login. It records the file in the machine manifest,
+so `uninstall` removes it; `--at-login --remove` removes it now. A file at that path that
+js-harness did not write, or one changed since, is kept.
+
+```console
+$ js-harness wake --at-login
+wake at login: on (wrote C:\Users\you\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\js-harness-wake-js-harness-0f3a5c2d9e1b.cmd); it runs at each login, and js-harness wake --at-login --remove removes it.
 ```
 
 ### js-harness wait

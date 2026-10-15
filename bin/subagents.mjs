@@ -52,7 +52,7 @@ const shiftDay = (day, delta) => new Date(Date.parse(`${day}T00:00:00Z`) + delta
 
 /** The records folders of this project: the main checkout's and each worktree's, as Claude Code names them
  * under `<config>/projects`, the ones that can be listed. */
-function recordFolders({ cwd, env, homedir, run }) {
+export function recordFolders({ cwd, env, homedir, run }) {
   const main = mainCheckout(run, cwd);
   const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: main, encoding: 'utf8' });
   const trees = listed.error || listed.status !== 0 ? [] : parseWorktreeList(listed.stdout).map((tree) => tree.path);
@@ -116,7 +116,7 @@ function recentFiles(dir, test, since) {
 
 /** The parent sessions' usage inside the window and their calls, and the sub-agents' records, of every
  * folder. `inWindow(timestamp)` says whether an entry's local day is one asked for. */
-async function readRecords(folders, { since, inWindow }) {
+export async function readRecords(folders, { since, inWindow }) {
   const sessionEntries = [];
   const calls = new Map();
   const records = [];

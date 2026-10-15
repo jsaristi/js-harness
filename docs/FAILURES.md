@@ -357,11 +357,23 @@ A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real
 hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
 when the test looked, in a change that touched nothing of the evals.
 - Class: machine
+- Seen: 2026-10-14 — JH 15's gate in WSL2, about 15:45, by the lead's notice of 2026-10-15 — `alive:
+  [false, true]`, the grandchild in state R at the assertion; the file passes alone
+- Seen: 2026-10-15 — JH 15's gate in WSL2, about 01:30, by the lead's notice — `alive: [false, true]`,
+  the grandchild in state R; the file passed in the gate of cfee7ae
 - Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
   `[false, false]` was expected, pid 22809; the only failing test of the run
 - Seen: 2026-10-15 — JH 8's gate of fix/launcher-at-start, in WSL2 — the second entry of `alive` true
   where false was expected, pid 22900 "answers" at the exit; the only failing test of the run, in a
   change that touched nothing of the evals, and one of the files the shadow would have skipped
+
+### eval-missing-login-workroot-kept
+A run on GitHub failed on one test of `evals/codex-configs.test.mjs`, "a missing login stops the trial
+before the agent starts", because the work root still held the trial's directory when the test read
+it, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-15 — PR 185's GitHub run 38705933668, on Linux, by the lead's notice — line 198,
+  `readdirSync(workRoot)` gave `['eval-m3TuMV']` where `[]` was expected: its cleanup had not ended
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
@@ -383,6 +395,19 @@ row"); that tells the load and stops nothing.
   odd/tasks/gate-log.md:590-596
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — the gate on the result of merging
   `main` in timed out at 1,206 s with 3,195 tests passed and none failed; run again, it passed
+
+### gate-mark-hides-failures
+Tests passed in the gate and failed when run by hand. They inherited the gate's mark of a held turn
+(`JS_HARNESS_GATE_HELD=1`), which changes what the code under test does, so no gate could see them fail.
+The gate also runs its tests in WSL, so a failure that only Windows shows is out of its sight too. Only a
+run by hand on Windows, out of a turn, sees both.
+- Class: unseen-state
+- Seen: 2026-10-15 — evals/review/compare.test.mjs — since e06cf68 ("run the review out of the gate
+  lock"), six tests of the review comparison failed when run by hand and passed in the gate. The failure
+  was taken for a Windows-only one until a bisect of the one test showed that the mark decided it, not
+  the platform
+- Control: check — evals/review/compare.test.mjs — "a cell out of a turn of the gate lock is refused before
+  anything is made, with the command that runs it" — since 2026-10-15
 
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
@@ -420,6 +445,9 @@ A test run or a count started while a gate, or a batch that measures durations, 
   odd/tasks/gate-lock.md:1033-1045
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:594-596 — a writer ran a count outside the lock for about
   four minutes beside a gate (its own report)
+- Seen: 2026-10-15 — docs/FAILURES.md, gate-mark-hides-failures — JH 9 and its bisecting sub-agent each
+  ran the whole of evals/review/compare.test.mjs (65 to 132 s) outside the lock, beside gates in line
+  (their own reports)
 - Control: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — since
   2026-10-11
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
