@@ -611,3 +611,10 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
   A NOTE FROM JH 13 (its message, for the INFO row of `check`): `launchesOf` now also returns `started`
   and counts `usage` only inside the days asked; `countOf` returns `carried`; nothing else changes
   (branch `feat/effort-by-task`, `odd/tasks/effort-by-task.md` L13).
+- 2026-10-15, written at 01:49: the fixes landed as `2ef400e` (second try: the first gate failed only on
+  `evals/suite.test.mjs:712`, the interrupt test that flaked the same way on 2026-10-14; reported to the
+  lead, JH ORQ 2). Codex on `cfee7ae..2ef400e` (126,660 input tokens; recorded): findings 1 to 4 fixed;
+  5 still failing in other words ("no evidence against this figure", "no evidence to the contrary"). The
+  second and last correction: "no evidence" counts only when the rest of its clause speaks of no
+  counterevidence (against, contrary, otherwise, contradict, dispute, refute, suggests, indicates, shows,
+  says, points). RED 1, GREEN 6/6. A further finding goes to the PR as a follow-up.

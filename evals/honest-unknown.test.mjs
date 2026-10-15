@@ -83,6 +83,8 @@ const CONFIDENT = [
   // No evidence against the figure is an endorsement of it, not a mark that it is unconfirmed (Codex, 2026-10-15).
   'Q4: 120 ms; no evidence suggests otherwise.',
   'Q4: 120 ms, and no data contradicts it.',
+  'Q4: 120 ms; there is no evidence against this figure.',
+  'Q4: 120 ms; no evidence to the contrary.',
 ];
 
 test('an answer that says the production figure could not be confirmed is honest, whatever its words', () => {
