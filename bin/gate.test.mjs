@@ -363,6 +363,63 @@ test('where reading the launchers is cheap (Linux) they are read as the gate sta
   other.release();
 }));
 
+test('gate whose launchers are not read yet keeps its place: an unknown chain is no ended launcher', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 4) other.release();
+  };
+  // The table is read as the gate starts, without blocking it (Windows): until it is in, `read` has no chain.
+  let reads = 0;
+  const launchers = {
+    eager: false,
+    read: () => ((reads += 1) < 3 ? null : [{ pid: 30, name: 'sh.exe', start: 300 }]),
+    alive: (chain) => {
+      assert.notEqual(chain, null, 'asked of a chain not read yet');
+      return true;
+    },
+  };
+  const spawned = ranWith(0);
+  const { code } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: clock.take, launchers });
+  assert.equal(code, 0);
+  assert.equal(spawned.asked.length, 1);
+  assert.ok(reads >= 3, `read ${reads} times`);
+}));
+
+// Codex on dfe4345..1134f84: a turn that came after a wait, before the table was in, ran with no last look.
+test('gate whose turn comes after a wait, before its launchers are read, waits for that read and runs nothing when they ended', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 2) other.release();
+  };
+  const chain = [{ pid: 30, name: 'sh.exe', start: 300 }];
+  let settled = false;
+  const launchers = {
+    eager: false,
+    read: () => (settled ? chain : null),
+    settle: async () => {
+      settled = true;
+      return chain;
+    },
+    // Alive at every look of the wait; ended at the last one, before the command.
+    alive: (_, { full = false } = {}) => !full,
+    stop() {},
+  };
+  const spawned = ranWith(0);
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: clock.take, launchers });
+  assert.ok(settled, 'the read was waited for');
+  assert.equal(code, GATE_NOT_RUN);
+  assert.equal(spawned.asked.length, 0);
+  assert.equal(said.at(-1), GONE_AT_TURN);
+}));
+
 test('gate that takes the lock at once asks nothing of its launchers, so a turn with no wait costs nothing more', withHome(async (home, dir) => {
   const launchers = launchersThat(() => false);
   const spawned = ranWith(0);

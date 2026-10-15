@@ -78,3 +78,24 @@ Nothing planned.
   and a chain read later would end at its adopter. `gate.test.mjs` 61/61 on Windows. In WSL2 run from
   `/mnt/d` three "real gate" tests time out on main too (`4edfa0e`, same three), so they are of that place,
   not of this change; the gate runs them from its mirror.
+- **L7** (2026-10-15 01:14): reopened by the lead's order (his 5853), on JH 5's note of 00:57: a gate started
+  from the Bash tool that had to wait for the lock gave up with 75 though its shell lived. Measured here:
+  from the Bash tool, foreground or background, the chain is node's sh <- the tool's sh <- a wrapper gone
+  within the first second, so the chain read at the second look ended `gone: true` and every wait was
+  refused. Reproduced end to end (`gate --home <tmp>` waiting for another gate, both started by one script
+  in the background): main exits 75 "the process that started this gate ended while it waited"; the fix
+  runs the command and exits 0. The fix: the launchers are read as the gate starts, never later; a parent
+  already gone then ended before the gate and is no launcher, so the chain ends with the shell it left
+  (`readLaunchers` marks no `gone` any more). On Windows the table is read beside the gate
+  (`startLaunchers`, PowerShell without blocking): until it is in the gate keeps its place, and a turn
+  taken at once stops the read. RED then GREEN: `launcher.test.mjs` (the measured chain; a real node whose
+  shell's parent ended reads alive, and gone once that shell ends on a stop file, since the repository's guard
+  forbids signalling a pid), `gate.test.mjs` (an unknown chain
+  keeps its place); 6/6 and 62/62. The real gate test caught `kill EINVAL` on a read already ended.
+- **L8** (2026-10-15 02:32): `1134f84`. gentle-ai, raised to high (item 4: the order of the table's read
+  against the wait of every session's gate): native review, lenses resilience and reliability, approved and
+  acknowledged (lineage `review-ee742770df9c120b`), seven non-blocking advisories. Codex `dfe4345..1134f84`:
+  incorrect, one P2 (152,310 input tokens): a turn that came after a wait, before the table was in, stopped
+  the read and ran with no last look. Corrected alone: such a turn waits for the read (`settle`), bounded at
+  20 s like the blocking read, after which the table is none. RED then GREEN in `bin/gate.test.mjs` (63/63);
+  the end-to-end case still exits 0.
