@@ -30,6 +30,7 @@ import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log.mjs';
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
+import { ruleValue } from './rules.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
@@ -1795,7 +1796,7 @@ test('the installed skill names check as the gate of a commit, and how it waits 
   // The lock is a line since 2026-10-11, and the bound of a wait is how long the lock may go without
   // changing hands: "60 minutes at most", which this pinned, is no longer what `--wait` means.
   assert.match(line, /waits for its turn, in the order the gates arrived/);
-  assert.match(line, /gives up once the lock has gone 60 minutes without changing hands \(`--wait <minutes>`\)/);
+  assert.ok(line.includes(`gives up once the lock has gone ${ruleValue('gate-wait', 'minutes')} minutes without changing hands (\`--wait <minutes>\`)`), line);
   assert.match(line, /refuses at once \(`--no-wait`\)/);
 });
 
@@ -1807,7 +1808,7 @@ test('the installed skill names gate, the command that runs anything else heavy 
   assert.match(line, /not a commit's gate/);
   assert.match(line, /waits for its turn/);
   assert.match(line, /`--wait <minutes>`, `--no-wait`/);
-  assert.match(line, /stopped after 30 minutes \(`--max <minutes>`\)/);
+  assert.ok(line.includes(`stopped after ${ruleValue('gate-max', 'minutes')} minutes (\`--max <minutes>\`)`), line);
   assert.match(line, /exit code is the command's/);
 });
 

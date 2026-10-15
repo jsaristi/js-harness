@@ -82,6 +82,15 @@ export const RULES = [
     "unit": "KiB"
   },
   {
+    "id": "gate-max",
+    "subject": "how long a command run under the gate lock may run before it is stopped with every process it started",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 30,
+    "unit": "minutes",
+    "flag": "--max"
+  },
+  {
     "id": "gate-wait",
     "subject": "how long a gate waits for its turn of the lock before it gives up, by default",
     "owner": "project",

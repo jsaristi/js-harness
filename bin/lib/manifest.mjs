@@ -9,6 +9,7 @@ import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
+import { ruleValue } from './rules.mjs';
 
 function skillContent(version) {
   return `---
@@ -24,8 +25,8 @@ js-harness commands:
 - \`js-harness upgrade\` — install the newer release of a folder of tarballs (\`--source <dir>\`), then sync; with no source it installs nothing.
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run. Where the project's \`codexReview\` switch is off at HEAD it starts nothing and records nothing.
-- \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone 60 minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
-- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after 30 minutes (\`--max <minutes>\`), and its exit code is the command's.
+- \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone ${ruleValue('gate-wait', 'minutes')} minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
+- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after ${ruleValue('gate-max', 'minutes')} minutes (\`--max <minutes>\`), and its exit code is the command's.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin). Where \`codexReview\` is off at the pushed commit it asks for none; the first push to a repository that holds no branch passes and says what went unread.
 - \`js-harness functions\` — each function a project can turn off and on (\`harness.json\` "functions": the code map, the TypeScript language server, the Codex review), its value here and why; \`functions apply\` makes the clone what they ask, \`functions set <name> <value>\` writes one.
 - \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired.

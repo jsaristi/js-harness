@@ -87,6 +87,10 @@
     "kind": "design",
     "path": "odd/tasks/gate-log.md"
   },
+  "gate-max": {
+    "kind": "design",
+    "path": "odd/tasks/gate-turn-guards.md"
+  },
   "gate-wait": {
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
