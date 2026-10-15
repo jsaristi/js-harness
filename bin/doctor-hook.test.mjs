@@ -412,3 +412,39 @@ test('doctor --hook starts no copy of js-harness for the hook commands its manif
     fs.rmSync(project, { recursive: true, force: true });
   }
 });
+
+// The host-update row (bin/lib/host-update.mjs) is added when the caller hands doctor the host check, as the
+// dispatcher does. Its notice stays a `systemMessage` (zero model tokens) and names the update after the usual text.
+test('doctor --hook names a host update since the last review and a downloaded version not applied, once', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home, project);
+    const fetchImpl = async (url) => ({
+      ok: true,
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : { tag_name: 'v0.0.1' }),
+    });
+    let versions = { found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' };
+    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32', host: () => versions };
+    const argv = ['--hook', '--home', home, '--cwd', project];
+
+    const baseline = await runHook(argv, {}, deps);
+    assert.equal(baseline.stdout, '', 'the first reading is the reviewed baseline: no gap, no notice');
+    const { at } = readCache(home).host.reviewed;
+    assert.deepEqual(readCache(home).host.reviewed, { desktop: '2.37337.1', code: '2.1.295', at });
+
+    versions = { found: true, desktop: '2.37337.1', staged: '2.42304.0', code: '2.1.295' };
+    const staged = await runHook(argv, {}, deps);
+    assert.deepEqual(JSON.parse(staged.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.42304.0 is downloaded and not applied)' });
+
+    versions = { found: true, desktop: '2.42304.0', staged: '2.42304.0', code: '2.1.299' };
+    const updated = await runHook(argv, {}, deps);
+    assert.equal(updated.code, 0);
+    assert.equal(updated.stderr, '');
+    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review)' });
+    assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});

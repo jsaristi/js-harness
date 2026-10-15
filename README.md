@@ -215,6 +215,14 @@ nothing was installed: no release of js-harness is tagged yet (versions are tagg
 Reports each tool of the stack: its version, whether Claude Code and Codex are configured for
 it, and the command that fixes what is missing. `--offline` skips the check for newer versions.
 
+Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bundled for its Code
+tab, read from the app's folder. The first reading is recorded as reviewed in the doctor cache.
+After an update, the row stays `stale` until the review is done, listing the old and new
+versions and the review steps: the two changelogs, the harness hooks, Remote Control, and a
+report to the user. `js-harness doctor --host-reviewed` records the review. The row also shows
+`outdated` when the app downloaded an update it has not applied: on Windows that waits until
+Claude is quit fully, the tray icon included.
+
 ```console
 $ js-harness doctor --offline
 tool            version   claude    codex     project   up to date
