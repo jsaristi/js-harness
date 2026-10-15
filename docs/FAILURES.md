@@ -359,6 +359,9 @@ when the test looked, in a change that touched nothing of the evals.
 - Class: machine
 - Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
   `[false, false]` was expected, pid 22809; the only failing test of the run
+- Seen: 2026-10-15 — JH 8's gate of fix/launcher-at-start, in WSL2 — the second entry of `alive` true
+  where false was expected, pid 22900 "answers" at the exit; the only failing test of the run, in a
+  change that touched nothing of the evals, and one of the files the shadow would have skipped
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit

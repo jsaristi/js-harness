@@ -363,6 +363,32 @@ test('where reading the launchers is cheap (Linux) they are read as the gate sta
   other.release();
 }));
 
+test('gate whose launchers are not read yet keeps its place: an unknown chain is no ended launcher', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 4) other.release();
+  };
+  // The table is read as the gate starts, without blocking it (Windows): until it is in, `read` has no chain.
+  let reads = 0;
+  const launchers = {
+    eager: false,
+    read: () => ((reads += 1) < 3 ? null : [{ pid: 30, name: 'sh.exe', start: 300 }]),
+    alive: (chain) => {
+      assert.notEqual(chain, null, 'asked of a chain not read yet');
+      return true;
+    },
+  };
+  const spawned = ranWith(0);
+  const { code } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: clock.take, launchers });
+  assert.equal(code, 0);
+  assert.equal(spawned.asked.length, 1);
+  assert.ok(reads >= 3, `read ${reads} times`);
+}));
+
 test('gate that takes the lock at once asks nothing of its launchers, so a turn with no wait costs nothing more', withHome(async (home, dir) => {
   const launchers = launchersThat(() => false);
   const spawned = ranWith(0);

@@ -31,15 +31,16 @@ test('the launchers are the parent and each shell above it, up to and with the f
   assert.deepEqual(readLaunchers({ ppid: 30, readTable: () => linux }).map((one) => one.pid), [30, 20]);
 });
 
-test('read after a launcher ended, the chain says so: a shell whose parent is missing, or started after it, has a parent that is gone', () => {
-  // The script's sh 20 was killed before the table was read: its stub 30 lives on, and 20 is in no row.
-  const killed = table([30, 20, 'sh.exe', 300], [10, 5, 'bash.exe', 100]);
-  const read = readLaunchers({ ppid: 30, readTable: () => killed });
-  assert.deepEqual(read, [{ pid: 30, name: 'sh.exe', start: 300 }, { pid: 20, name: null, start: null, gone: true }]);
-  assert.equal(launchersAlive(read, { exists: () => true, ppid: null }), false);
-  // Its pid was given since to a process that started after the stub.
+test('read as the gate starts, a parent already gone ended before it and is no launcher: the chain ends with the shell it left', () => {
+  // The Bash tool's chain, measured 2026-10-15: node's sh 30 <- the tool's sh 20 <- a wrapper 10 that ended
+  // within the first second, before any gate waited. Read as a gone launcher, it refused every wait.
+  const tool = table([30, 20, 'sh.exe', 300], [20, 10, 'sh.exe', 200]);
+  const read = readLaunchers({ ppid: 30, readTable: () => tool });
+  assert.deepEqual(read, [{ pid: 30, name: 'sh.exe', start: 300 }, { pid: 20, name: 'sh.exe', start: 200 }]);
+  assert.equal(launchersAlive(read, { exists: () => true, ppid: null, full: true, readTable: () => tool }), true);
+  // A parent pid given since to a process that started after its child is no parent of it either.
   const reused = table([30, 20, 'sh.exe', 300], [20, 5, 'notepad.exe', 400]);
-  assert.deepEqual(readLaunchers({ ppid: 30, readTable: () => reused }).at(-1), { pid: 20, name: null, start: null, gone: true });
+  assert.deepEqual(readLaunchers({ ppid: 30, readTable: () => reused }), [{ pid: 30, name: 'sh.exe', start: 300 }]);
   // A process that is no shell may have a parent that ended long ago: explorer's is, and that is no sign.
   assert.deepEqual(readLaunchers({ ppid: 5, readTable: () => table([5, 3, 'claude.exe', 50]) }), [{ pid: 5, name: 'claude.exe', start: 50 }]);
 });
@@ -79,6 +80,49 @@ test('the launchers are alive while every one exists; one gone is enough, and a 
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const hasSh = spawnSync('sh', ['-c', 'exit 0']).status === 0;
+
+test('a real node started by a shell whose own parent has ended sees its launchers alive, and gone once that shell ends', { skip: !hasSh && 'no sh on this machine', timeout: 60_000 }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-launcher-'));
+  const said = path.join(dir, 'said.txt');
+  const child = path.join(dir, 'child.mjs');
+  const middle = path.join(dir, 'middle.mjs');
+  const lib = path.join(here, 'launcher.mjs').replace(/\\/g, '/');
+  fs.writeFileSync(child, [
+    `import fs from 'node:fs';`,
+    `import { launchersAlive, readLaunchers } from 'file:///${lib.replace(/^\//, '')}';`,
+    `const launchers = readLaunchers();`,
+    `fs.writeFileSync(${JSON.stringify(said)}, (launchersAlive(launchers, { full: true }) ? 'alive ' : 'gone ') + launchers.length);`,
+    `const end = Date.now() + 40000;`,
+    `const look = () => { if (!launchersAlive(launchers)) { fs.writeFileSync(${JSON.stringify(said)}, 'gone'); process.exit(0); } if (Date.now() > end) process.exit(3); setTimeout(look, 200); };`,
+    `setTimeout(look, 200);`,
+  ].join('\n'));
+  // A process that starts the shell and ends, as the wrapper above the Bash tool's shell does; the shell waits
+  // for its parent to be gone before it starts node, and ends when this test writes `stop`, node still running
+  // (no pid is signalled: Windows reuses them). A builtin last, so the shell does not become another command.
+  const stop = path.join(dir, 'stop').replace(/\\/g, '/');
+  fs.writeFileSync(middle, [
+    `import { spawn } from 'node:child_process';`,
+    `const shell = spawn('sh', ['-c', 'sleep 2; "${process.execPath.replace(/\\/g, '/')}" "${child.replace(/\\/g, '/')}" & while [ ! -e "${stop}" ]; do sleep 1; done; true'], { stdio: 'ignore', detached: true });`,
+    `shell.unref();`,
+  ].join('\n'));
+  assert.equal(spawnSync(process.execPath, [middle]).status, 0);
+  try {
+    const until = async (ok, ms) => {
+      for (const end = Date.now() + ms; Date.now() < end; await new Promise((resolve) => setTimeout(resolve, 100))) if (ok()) return true;
+      return false;
+    };
+    const read = () => (fs.existsSync(said) ? fs.readFileSync(said, 'utf8') : '');
+    assert.ok(await until(() => /^(alive|gone) /.test(read()), 20_000), `the child never read its launchers: ${read()}`);
+    assert.match(read(), /^alive [1-9]/);
+    fs.writeFileSync(stop, '');
+    assert.ok(await until(() => read() === 'gone', 30_000), `the child did not see the shell end: ${read()}`);
+  } finally {
+    // The shell ends on `stop` alone: written here too, and given its second of sleep, before the folder goes.
+    fs.writeFileSync(stop, '');
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('a real node whose script shell is killed sees its launchers gone, though its own parent may live on', { skip: !hasSh && 'no sh on this machine', timeout: 60_000 }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-launcher-'));
