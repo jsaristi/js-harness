@@ -1593,6 +1593,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (found by Codex in `21686a5`, second priority): today a fence under an item that opens
     within three spaces and closes deeper is left open, and with the option off a checkbox
     shown in a fence indented past three spaces is counted as a step by `js-harness progress`
+  - [ ] T3f A level of the register for a failure with no control, measured: a failure whose
+    control was measured as not worth building keeps a state of its own, not "owed". The
+    lead's call of 2026-10-15 at 08:37, relayed by JH 15's notice of 08:44: `checked-not-read`
+    and `told-him-unverified` keep `Control: owed`, pointing at an unchecked task of
+    `odd/tasks/honesty-audit.md` (the general audit was measured not worth it, 2 or 3 of 14),
+    until the register has this level, "which is yours to add". Not designed yet
 - Moved on 2026-10-14 to "JH 12 · comandos y diagnóstico", by the lead's message to this
   session; their state is kept in `odd/tasks/commands-and-doctor.md`, and only there: T4 (every
   command that writes outside the repository refuses a flag it does not know; and the push row
@@ -1672,10 +1678,20 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       (`bin/contract.mjs:24`) is the host's documented `/goal` limit, a figure of the host like
       the window; the efforts a contract takes (`bin/lib/contract.mjs:34`) are read by nothing
       since a task's kind sets its effort (`odd/tasks/effort-by-task.md`, S1); the review's
-      session (`bin/codex-review.mjs:224`) is a name the run log writes, not a value. Left: the
-      last file of the design's list, `bin/lib/manifest.mjs`, which waits for JH 16's pull
-      request 191 (188 is on `main`); and two test files that still state the review's model
-      as a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
+      session (`bin/codex-review.mjs:224`) is a name the run log writes, not a value. The
+      gate log's two rules are on `main` (pull request 206). The last file of the design's
+      list, `bin/lib/manifest.mjs`, the js-harness skill, wrote four figures as literals: the
+      lock's wait and the bound of `gate --max` (commit `e5b7588`, pull request 213: the skill
+      reads `gate-wait` and the new `gate-max`, which `bin/gate.mjs` reads too, and check's
+      usage of `--wait` derives its 60), and how often `js-harness wait` checks and how long
+      it waits (commit `5f33fde`, pull request 216, stacked on 213: `wait-every` and
+      `wait-for`, read by `bin/wait.mjs`). Each passed the gate, gentle-ai assessed it as
+      medium and not due, and Codex's records cover `565c50f..e5b7588` and
+      `e5b7588..5f33fde`, each patch correct with no finding. Its 150 characters are the
+      host's limit of a memory index line, left. Left: the dispatcher's help
+      (`bin/js-harness.mjs:10`) still writes the gate's 60 and 30, a file pull requests 201
+      and 194 change, so it follows them; and two test files that still state the review's
+      model as a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
       `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free
     - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
@@ -2613,14 +2629,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
-**State for a resume, 2026-10-15 at 07:12 by `date`, at about 40 percent of the context.** Pull
-requests 190, 192, 196 and 193 are on `main` (`eec4ee3`); the lead landed them through
-`merge-queue --land`. The queue of values the second reader found is judged (the T16b line of
-`## Tasks`): only the gate log's two bounds are rules, and they are commit `2e47e6d` on
-`feat/rule-gate-log` (worktree `D:\js-harness-worktrees\rule-contract-timeout`), draft pull
-request 206 by the lead's order of 05:49, with Codex's record and no finding. Next: `bin/lib/manifest.mjs`, once JH 16's pull request
-191 lands (188 already has), told to the lead before it is touched; then T16b's last open item
-is JH 8's two test files.
+**State for a resume, 2026-10-15 at 09:12 by `date`.** Pull requests 206 and 207 are on
+`main`. `bin/lib/manifest.mjs` is done as pull requests 213 (ready, marked by the lead) and
+216 (draft, stacked on 213), both on branches of the worktree
+`D:\js-harness-worktrees\rule-contract-timeout`. Next: T3f, the register's level for a
+failure with no control, measured, designed first in this document; the dispatcher's help
+once pull requests 201 and 194 land; JH 8's two test files close T16b.
 
 **State for a resume, 2026-10-14 at about 15:00, at 89 percent of the context.** T16b is PAUSED by
 his order to fix the failures first (the lead's transcript ffe99ebf, lines 5906 and 5853). Parked:
