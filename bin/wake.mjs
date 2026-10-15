@@ -7,21 +7,54 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { appendNotice, findOpenings, newNotice, NOTICE_TEXT_MAX, openingCommand, readNotices } from './lib/channel.mjs';
+import { remoteId, UNSAFE_IN_BATCH } from './lib/remote.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { removeStartupFile, writeStartupFile } from './lib/startup-file.mjs';
+import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { WAKE_WINDOW_MS, wakePlan, wakeText } from './lib/wake.mjs';
 
 const USAGE = [
   'Usage: js-harness wake [--notify] [--boot-time <iso>] [--cwd <path>] [--claude-home <path>]',
+  '       js-harness wake --at-login [--remove] [--cwd <path>]',
   '',
   'Lists the sessions of the project that were open before the machine last booted (an entry in the 12 hours',
   'before it), each with the command that prints its stored opening and the `js-harness wait` calls the boot',
   'killed. With --notify it leaves each session whose title names a role a note in the channel, which the',
   'inbox hook tells it on its next tool call, and leaves the orchestrator the list of sessions to wake with',
   'send_message; a second run after the same boot records nothing. --boot-time replaces the boot the clock',
-  'and the uptime give.',
+  'and the uptime give. --at-login writes a file in the Windows Startup folder that runs wake --notify for this',
+  'project at each login, recorded in the machine manifest so that uninstall removes it; --at-login --remove',
+  'removes it now. A file there that js-harness did not write, or one changed since, is kept.',
 ].join('\n');
+
+/** This command's own file, which the Startup file runs. */
+const SELF = fileURLToPath(import.meta.url);
+
+/** The name of the Startup file of the project `id`. */
+const startupName = (id) => `js-harness-wake-${id}.cmd`;
+
+/** The text of the Startup file: a batch file whose one command runs `node <this file> --notify --cwd <root>`.
+ * Every line ends in CRLF, and a `chcp 65001` line comes first when the command holds a letter beyond ASCII
+ * (`loginLauncher` in bin/lib/remote.mjs says why). Throws, naming the value, when one holds what cmd.exe acts
+ * on: a file that runs something else at every login is worse than none. */
+function startupText({ node, root }) {
+  const values = { 'the node executable': node, 'this install of js-harness': SELF, 'the project folder': root };
+  for (const [label, value] of Object.entries(values)) {
+    const found = UNSAFE_IN_BATCH.exec(value);
+    if (found) throw new Error(`the Startup file cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and cmd.exe acts on & | < > ^ % " ! and control characters in a batch file`);
+  }
+  const quoted = quoteWindowsArg(node);
+  const command = windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, [SELF, '--notify', '--cwd', root]);
+  return [
+    '@echo off',
+    'rem Leaves each session of one project a note after a boot. Written by js-harness wake --at-login; js-harness wake --at-login --remove removes it.',
+    ...(/[^\x00-\x7f]/.test(command) ? ['chcp 65001 >nul'] : []),
+    command,
+    '',
+  ].join('\r\n');
+}
 
 /** Two reads of the boot an uptime gives differ by seconds; notes this close to the boot are of the same one. */
 const SAME_BOOT_MS = 2 * 60 * 1000;
@@ -29,17 +62,20 @@ const SAME_BOOT_MS = 2 * 60 * 1000;
 const BOOTED = /^The machine booted at (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z)/;
 
 function parseArgs(argv) {
-  const parsed = { notify: false };
+  const parsed = { notify: false, atLogin: false, remove: false };
+  const flags = new Map([['--notify', 'notify'], ['--at-login', 'atLogin'], ['--remove', 'remove']]);
   const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--boot-time', 'bootTime']]);
   for (let index = 0; index < argv.length; index++) {
     const token = argv[index];
-    if (token === '--notify') parsed.notify = true;
+    if (flags.has(token)) parsed[flags.get(token)] = true;
     else if (paths.has(token)) {
       const value = argv[++index];
       if (value === undefined || value.startsWith('--')) throw new Error(`${token} takes a value`);
       parsed[paths.get(token)] = value;
     } else throw new Error(`unknown argument: ${token}`);
   }
+  if (parsed.remove && !parsed.atLogin) throw new Error('--remove goes with --at-login');
+  if (parsed.atLogin && (parsed.notify || parsed.bootTime !== undefined || parsed.claudeHome !== undefined)) throw new Error('--at-login takes only --remove and --cwd: the file it writes runs wake --notify at each login');
   if (parsed.bootTime !== undefined && !Number.isFinite(Date.parse(parsed.bootTime))) throw new Error(`--boot-time takes a time, as 2026-10-15T04:52:00Z: ${parsed.bootTime}`);
   return parsed;
 }
@@ -84,6 +120,7 @@ export async function wakeMain(
     homedir = os.homedir,
     hostname = os.hostname,
     uptime = os.uptime,
+    execPath = process.execPath,
     run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 30000 }),
   } = {},
 ) {
@@ -96,6 +133,33 @@ export async function wakeMain(
   }
 
   const root = mainCheckout(run, path.resolve(parsed.cwd ?? defaultCwd));
+  if (parsed.atLogin) {
+    const home = env.JS_HARNESS_HOME || homedir();
+    const name = startupName(remoteId(root));
+    if (parsed.remove) {
+      const removed = removeStartupFile({ env, home, name });
+      if (removed.refusal) {
+        stderr(`js-harness wake: ${removed.refusal}.`);
+        return 1;
+      }
+      stdout(`wake at login: off (${removed.removed ? `removed ${removed.file}` : 'there was none'})`);
+      return 0;
+    }
+    let content;
+    try {
+      content = startupText({ node: execPath, root });
+    } catch (err) {
+      stderr(`js-harness wake: ${err.message}.`);
+      return 1;
+    }
+    const written = writeStartupFile({ env, home, name, content });
+    if (written.refusal) {
+      stderr(`js-harness wake: ${written.refusal}.`);
+      return 1;
+    }
+    stdout(`wake at login: on (${written.written ? 'wrote' : 'already there:'} ${written.file}); it runs at each login, and js-harness wake --at-login --remove removes it.`);
+    return 0;
+  }
   const slug = projectSlug(root);
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);

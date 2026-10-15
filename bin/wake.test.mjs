@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readNotices, writeOpening } from './lib/channel.mjs';
+import { readManifest } from './lib/manifest.mjs';
+import { remoteId } from './lib/remote.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { wakeMain } from './wake.mjs';
 
@@ -106,4 +108,53 @@ test('wake with a --boot-time that is no time, or an unknown flag, exits 2 with 
   assert.equal(await wakeMain(['--bogus'], options), 2);
   assert.match(err.join('\n'), /js-harness wake/);
   assert.equal(readNotices(home, slug).notices.length, 0);
+});
+
+/** A Startup folder under a fake APPDATA, beside the fixture's home, and `wake` run with both. */
+function atLogin() {
+  const { home, err } = fixture();
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-wake-login-'));
+  const appData = path.join(cwd, 'AppData');
+  const dir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+  fs.mkdirSync(dir, { recursive: true });
+  const out = [];
+  const options = { cwd, stdout: (text) => out.push(text), stderr: (text) => err.push(text), env: { APPDATA: appData, JS_HARNESS_HOME: home }, homedir: () => home, run: () => ({ status: 1, stdout: '', stderr: '' }), execPath: 'C:\\Program Files\\nodejs\\node.exe' };
+  const file = path.join(dir, `js-harness-wake-${remoteId(cwd)}.cmd`);
+  return { main: (...argv) => wakeMain(argv, options), out, err, home, file, dir };
+}
+
+test('wake --at-login writes the Startup file that runs wake --notify for this project, and records it for uninstall', async () => {
+  const { main, out, home, file } = atLogin();
+  assert.equal(await main('--at-login'), 0);
+  const text = fs.readFileSync(file, 'utf8');
+  assert.match(text, /^@echo off\r\n/);
+  assert.match(text, /"C:\\Program Files\\nodejs\\node\.exe" .*wake\.mjs --notify --cwd /);
+  assert.ok(text.endsWith('\r\n'), JSON.stringify(text));
+  const record = readManifest(home).optional.find((entry) => entry.path === file);
+  assert.ok(record, 'the file is recorded in the machine manifest');
+  assert.match(out.join('\n'), /runs at each login/);
+  // Again with nothing changed: nothing written, and it says the file is there.
+  out.length = 0;
+  assert.equal(await main('--at-login'), 0);
+  assert.match(out.join('\n'), /already there/);
+});
+
+test('wake --at-login --remove takes the file and its record away; a file js-harness did not write is kept with exit 1', async () => {
+  const { main, out, home, file, err } = atLogin();
+  assert.equal(await main('--at-login'), 0);
+  assert.equal(await main('--at-login', '--remove'), 0);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(readManifest(home)?.optional?.find((entry) => entry.path === file), undefined);
+  assert.match(out.join('\n'), /removed/);
+  fs.writeFileSync(file, 'the user\'s own');
+  assert.equal(await main('--at-login'), 1);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'the user\'s own');
+  assert.match(err.join('\n'), /a file js-harness did not write/);
+});
+
+test('--remove without --at-login, or --at-login with --notify, is a usage error that writes nothing', async () => {
+  const { main, file } = atLogin();
+  assert.equal(await main('--remove'), 2);
+  assert.equal(await main('--at-login', '--notify'), 2);
+  assert.equal(fs.existsSync(file), false);
 });

@@ -404,6 +404,16 @@ JH ORQ · js-harness  (last entry 2026-10-15T04:50:00.000Z, c47efdf7-a307-47ef-8
 3 notes recorded in C:\Users\you\.js-harness\channel\D--js-harness.jsonl.
 ```
 
+`js-harness wake --at-login` writes a file in the Windows Startup folder that runs
+`wake --notify` for this project at each login. It records the file in the machine manifest,
+so `uninstall` removes it; `--at-login --remove` removes it now. A file at that path that
+js-harness did not write, or one changed since, is kept.
+
+```console
+$ js-harness wake --at-login
+wake at login: on (wrote C:\Users\you\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\js-harness-wake-js-harness-0f3a5c2d9e1b.cmd); it runs at each login, and js-harness wake --at-login --remove removes it.
+```
+
 ### js-harness resume
 
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
