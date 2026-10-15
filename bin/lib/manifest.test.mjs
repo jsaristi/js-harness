@@ -861,6 +861,24 @@ test('install replaces its own entry left with an older matcher, in place, keeps
   }
 });
 
+// The state this machine was left in: the new entry already there, recorded, and older ones beside it, unrecorded.
+test('install takes out every older form of its own entry when the new one is already there, and adds no second', () => {
+  const home = makeTmpHome();
+  try {
+    const target = guardHook.target(home);
+    const theirs = { matcher: '*', hooks: [{ type: 'command', command: 'echo their-own-pre-tool-use', timeout: 10 }] };
+    const olderBash = { ...guardHook.entry(), matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash' };
+    const olderTimeout = { ...guardHook.entry(), hooks: [{ ...guardHook.entry().hooks[0], timeout: 3 }] };
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [olderBash, theirs, guardHook.entry(), olderTimeout] } }, null, 2)}\n`, 'utf8');
+
+    install(home, '0.2.0');
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry()]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('an update from an install made before the resume hook adds its entry, and uninstall still leaves the host file as it found it', () => {
   for (const created of [true, false]) {
     const home = makeTmpHome();
