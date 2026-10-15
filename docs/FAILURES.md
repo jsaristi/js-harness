@@ -352,6 +352,14 @@ on it.
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
+### eval-interrupt-process-alive
+A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
+hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
+when the test looked, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
+  `[false, false]` was expected, pid 22809; the only failing test of the run
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row
