@@ -11,10 +11,10 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null } = {}) {
   const out = [];
   const err = [];
-  const code = guardMain(args, {
+  const code = await guardMain(args, {
     readStdin: () => (typeof payload === 'string' ? payload : JSON.stringify(payload)),
     now: () => now,
     projectRoot: () => 'D:/project',
@@ -32,62 +32,94 @@ function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['
 
 const denied = (result) => JSON.parse(result.out).hookSpecificOutput;
 
-test('an Agent call on a model no rule gives is denied in this repository, and one on an alias passes', () => {
-  const refused = hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet' } });
+test('an Agent call on a model no rule gives is denied in this repository, and one on an alias passes', async () => {
+  const refused = await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet' } });
   assert.equal(refused.code, 0);
   assert.equal(denied(refused).permissionDecision, 'deny');
   assert.match(denied(refused).permissionDecisionReason, /"sonnet"/);
   for (const model of ['haiku', 'opus', undefined]) {
-    assert.deepEqual(hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model } }), { code: 0, out: '', err: '' }, String(model));
+    assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model } }), { code: 0, out: '', err: '' }, String(model));
   }
 });
 
-test('in a project without the rules, an Agent call on any model passes', () => {
-  assert.deepEqual(hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { model: 'sonnet' } }, { rulesText: null }), { code: 0, out: '', err: '' });
+test('in a project without the rules, an Agent call on any model passes', async () => {
+  assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { model: 'sonnet' } }, { rulesText: null }), { code: 0, out: '', err: '' });
 });
 
-test('a message to another session, by either tool, is denied when its stamped hour is off the clock', () => {
+test('a message to another session, by either tool, is denied when its stamped hour is off the clock', async () => {
   for (const tool_name of ['SendMessage', 'mcp__ccd_session_mgmt__send_message']) {
-    const refused = hook({ tool_name, tool_input: { to: 'x', session_id: 'y', message: 'From the lead, 14:48 local by date. Merged.' } });
+    const refused = await hook({ tool_name, tool_input: { to: 'x', session_id: 'y', message: 'From the lead, 14:48 local by date. Merged.' } });
     assert.equal(refused.code, 0, tool_name);
     assert.match(denied(refused).permissionDecisionReason, /stamps 14:48, and the clock says 14:44/, tool_name);
-    assert.deepEqual(hook({ tool_name, tool_input: { message: 'From the lead, 14:44 local. Merged.' } }), { code: 0, out: '', err: '' }, tool_name);
+    assert.deepEqual(await hook({ tool_name, tool_input: { message: 'From the lead, 14:44 local. Merged.' } }), { code: 0, out: '', err: '' }, tool_name);
   }
 });
 
-test('a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes', () => {
-  const refused = hook({ tool_name: 'Bash', tool_input: { command: 'git commit -m "fix the `check` row"' } });
+test('a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes', async () => {
+  const refused = await hook({ tool_name: 'Bash', tool_input: { command: 'git commit -m "fix the `check` row"' } });
   assert.equal(refused.code, 0);
   assert.equal(denied(refused).permissionDecision, 'deny');
   assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: backticks inside double quotes run as commands in bash \(`check`\)/);
   for (const command of ["git commit -m 'fix the `check` row'", 'echo "today is $(date)"']) {
-    assert.deepEqual(hook({ tool_name: 'Bash', tool_input: { command } }), { code: 0, out: '', err: '' }, command);
+    assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command } }), { code: 0, out: '', err: '' }, command);
   }
 });
 
-test('a node --test of several files outside a turn is denied while another gate holds the lock, with its warning unchanged', () => {
+test('a node --test of several files outside a turn is denied while another gate holds the lock, with its warning unchanged', async () => {
   const held = { pid: 4242, cwd: 'D:/js-harness-worktrees/other' };
   const command = 'node --test bin/a.test.mjs bin/b.test.mjs';
-  const refused = hook({ tool_name: 'Bash', tool_input: { command } }, { held });
+  const refused = await hook({ tool_name: 'Bash', tool_input: { command } }, { held });
   assert.equal(refused.code, 0);
   assert.equal(denied(refused).permissionDecisionReason, testRunWarning(command, { env: {}, holder: () => held }));
   assert.match(denied(refused).permissionDecisionReason, /holds the machine's gate lock/);
   const quiet = { code: 0, out: '', err: '' };
-  assert.deepEqual(hook({ tool_name: 'Bash', tool_input: { command } }), quiet, 'the lock is free');
-  assert.deepEqual(hook({ tool_name: 'Bash', tool_input: { command: 'node --test bin/a.test.mjs' } }, { held }), quiet, 'one file');
-  assert.deepEqual(hook({ tool_name: 'Bash', tool_input: { command: `js-harness gate -- ${command}` } }, { held }), quiet, 'in a turn');
+  assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command } }), quiet, 'the lock is free');
+  assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: 'node --test bin/a.test.mjs' } }, { held }), quiet, 'one file');
+  assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: `js-harness gate -- ${command}` } }, { held }), quiet, 'in a turn');
 });
 
-test('any other tool, an unreadable payload, or a failure inside passes silently with exit 0', () => {
+test('any other tool, an unreadable payload, or a failure inside passes silently with exit 0', async () => {
   const quiet = { code: 0, out: '', err: '' };
-  assert.deepEqual(hook({ tool_name: 'Bash', tool_input: { command: 'From the lead, 09:00 local.' } }), quiet);
-  assert.deepEqual(hook('not json'), quiet);
-  assert.deepEqual(hook(''), quiet);
-  assert.deepEqual(hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { model: 'sonnet' } }, { rulesText: 42 }), quiet);
+  assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: 'From the lead, 09:00 local.' } }), quiet);
+  assert.deepEqual(await hook('not json'), quiet);
+  assert.deepEqual(await hook(''), quiet);
+  assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { model: 'sonnet' } }, { rulesText: 42 }), quiet);
 });
 
-test('without --hook it prints its usage and exits 2', () => {
-  const result = hook({}, { args: [] });
+// T4 of odd/tasks/memory-hygiene.md: the memory index grew to lines of 844 characters, read on every turn; the host's
+// own limit is about 150 (the consolidate-memory skill). A Write or an Edit of a project's memory MEMORY.md that puts
+// a longer line there is refused when it is written, which is cheaper than any clean-up after it.
+const INDEX = 'C:/Users/u/.claude/projects/D--proj/memory/MEMORY.md';
+const longLine = `- [A](a.md) — ${'x'.repeat(140)}`;
+
+test('a Write or an Edit that puts an index line over 150 characters in a memory MEMORY.md is denied, naming the line', async () => {
+  const written = await hook({ tool_name: 'Write', tool_input: { file_path: INDEX, content: `- [B](b.md) — short\n${longLine}\n` } });
+  assert.equal(written.code, 0);
+  assert.equal(denied(written).permissionDecision, 'deny');
+  assert.match(denied(written).permissionDecisionReason, /^js-harness guard: line 2 of the memory index is 154 characters, over the host's 150/);
+  assert.match(denied(written).permissionDecisionReason, /put the detail in the note/);
+  const edited = await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX.replace(/\//g, '\\'), old_string: 'x', new_string: longLine } });
+  assert.equal(denied(edited).permissionDecision, 'deny');
+});
+
+test('short index lines, a note of the memory, and any other file pass, without reading the rules or the gate lock', async () => {
+  const quiet = { code: 0, out: '', err: '' };
+  const untouched = { readFile: () => assert.fail('rules read'), testRun: () => assert.fail('gate lock read') };
+  const calls = [
+    { tool_name: 'Write', tool_input: { file_path: INDEX, content: '- [B](b.md) — short\n' } },
+    { tool_name: 'Write', tool_input: { file_path: INDEX.replace('MEMORY.md', 'a.md'), content: `${longLine}\n` } },
+    { tool_name: 'Write', tool_input: { file_path: 'D:/proj/docs/MEMORY.md', content: `${longLine}\n` } },
+    { tool_name: 'Edit', tool_input: { file_path: 'D:/proj/src/a.js', old_string: 'a', new_string: longLine } },
+  ];
+  for (const payload of calls) {
+    const out = [];
+    const code = await guardMain(['--hook'], { readStdin: () => JSON.stringify(payload), stdout: (t) => out.push(t), stderr: () => {}, projectRoot: () => assert.fail('git asked'), ...untouched });
+    assert.deepEqual({ code, out: out.join(''), err: '' }, quiet, payload.tool_input.file_path);
+  }
+});
+
+test('without --hook it prints its usage and exits 2', async () => {
+  const result = await hook({}, { args: [] });
   assert.equal(result.code, 2);
   assert.match(result.err, /Usage: js-harness guard --hook/);
 });

@@ -416,12 +416,15 @@ Find there the document of the feature this session was working on, read its "Ne
 
 The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
 `PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
-session and on `Bash`. `guard --hook` reads the call on standard input and refuses four things:
-a sub-agent launched on a model the project's rules do not give; a message whose stamped hour is
-more than a minute off the clock; a shell command with backticks inside double quotes, which
-bash runs as commands; and a `node --test` of several files outside a gate turn while another
-gate holds the machine's lock. A refusal is printed as the hook's deny, with the reason and the
-right value; any other call runs as it was.
+session, on `Bash`, and on `Write` and `Edit`. `guard --hook` reads the call on standard input
+and refuses five things: a sub-agent launched on a model the project's rules do not give; a
+message whose stamped hour is more than a minute off the clock; a shell command with backticks
+inside double quotes, which bash runs as commands; a `node --test` of several files outside a
+gate turn while another gate holds the machine's lock; and a `Write` or `Edit` that puts a line
+over 150 characters, the host's own limit, in a project's memory index
+(`~/.claude/projects/<project>/memory/MEMORY.md`), which every session reads on every turn. A
+refusal is printed as the hook's deny, with the reason and the right value; any other call runs
+as it was. A `Write` or `Edit` of any other file loads nothing but that last check.
 
 It always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
 The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project

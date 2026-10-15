@@ -8,18 +8,27 @@
 //   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a `node --test` of
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
 //     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8).
+//   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters
+//     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4). The hook runs on every Write and Edit of
+//     every session, so that path loads nothing but that file: the modules of the other checks are imported only for
+//     the tools they check.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { allowedModels, backtickRefusal, denial, hourRefusal, modelRefusal } from './lib/guard.mjs';
-import { testRunWarning } from './lib/test-run-warning.mjs';
+import { memoryIndexRefusal } from './lib/memory-index-guard.mjs';
 
 const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  message whose stamped hour is more than a minute off the clock, a Bash command with backticks inside double\n'
-  + '  quotes, and a node --test of several files while another gate holds the lock; always exits 0\n';
+  + '  quotes, a node --test of several files while another gate holds the lock, and a Write or Edit that puts a line\n'
+  + '  over 150 characters in a memory index (MEMORY.md); always exits 0\n';
 
 const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);
+const FILE_TOOLS = new Set(['Write', 'Edit']);
+
+/** The hooks contract's answer that refuses the call, with `reason` shown to the agent (the same as
+ * bin/lib/guard.mjs's `denial`, written here so the Write and Edit path imports nothing more). */
+const denial = (reason) => ({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } });
 
 /** The top of the git work tree `cwd` is in, or `cwd` itself when git does not say. */
 function gitRoot(cwd) {
@@ -39,25 +48,31 @@ function rulesTextOf(root, readFile) {
 }
 
 /** Why the call of `payload` is refused, or null. */
-function refusalOf(payload, { now, projectRoot, readFile, testRun }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun }) {
+  const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
-  if (payload?.tool_name === 'Agent') {
+  if (FILE_TOOLS.has(tool)) return memoryIndexRefusal(tool, input);
+  if (tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
+  const { allowedModels, backtickRefusal, hourRefusal, modelRefusal } = await import('./lib/guard.mjs');
+  if (tool === 'Agent') {
     const root = projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
     return modelRefusal(input, allowedModels(rulesTextOf(root, readFile)));
   }
-  if (MESSAGE_TOOLS.has(payload?.tool_name)) return hourRefusal(input.message, now());
-  if (payload?.tool_name === 'Bash') return backtickRefusal(input.command) ?? testRun(String(input.command ?? ''));
-  return null;
+  if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
+  const backticks = backtickRefusal(input.command);
+  if (backticks !== null) return backticks;
+  const run = testRun ?? (await import('./lib/test-run-warning.mjs')).testRunWarning;
+  return run(String(input.command ?? ''));
 }
 
-export function guardMain(argv, {
+export async function guardMain(argv, {
   readStdin = () => fs.readFileSync(0, 'utf8'),
   now = () => new Date(),
   projectRoot = gitRoot,
   readFile = (file) => fs.readFileSync(file, 'utf8'),
   stdout = (text) => process.stdout.write(text),
   stderr = (text) => process.stderr.write(text),
-  testRun = (command) => testRunWarning(command),
+  testRun,
 } = {}) {
   if (argv.length !== 1 || argv[0] !== '--hook') {
     stderr(USAGE);
@@ -65,7 +80,7 @@ export function guardMain(argv, {
   }
   let reason = null;
   try {
-    reason = refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun });
+    reason = await refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun });
   } catch {
     return 0;
   }
