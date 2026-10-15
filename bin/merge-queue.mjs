@@ -25,7 +25,9 @@ of a queue/* branch pushed for it and removed after. When both are green, main i
 candidate, by fast-forward from the main it was built from. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. Exit 0 landed or nothing to land, 4 red, 3 main
-moved meanwhile (nothing pushed), 1 anything else.`;
+moved meanwhile (nothing pushed), 1 anything else.
+A landed pull request whose branch moved during the land is named after the landing: its new commits
+are not in main, so it needs another run of the queue.`;
 
 const TIMEOUT_MS = 60_000;
 
@@ -193,6 +195,18 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
     }
   }
   stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
+  // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
+  // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
+  const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
+  if (!refs.ok) {
+    stdout(`Could not read the heads of the landed pull requests (${refs.err.split('\n')[0] || 'git gave no reason'}): check none moved during the land.`);
+    return 0;
+  }
+  const heads = new Map(refs.out.split('\n').filter(Boolean).map((line) => line.split('\t').reverse()));
+  for (const pr of merged) {
+    const head = heads.get(`refs/heads/${pr.headRefName}`);
+    if (head && head !== pr.headRefOid) stdout(`PR ${pr.number} moved to ${head.slice(0, 7)} during the land; its new commits are not in main.`);
+  }
   return 0;
 }
 
