@@ -1990,6 +1990,19 @@ test('the orchestrator skill closes a work session with the notify command and k
   assert.doesNotMatch(text, /a notice not yet delivered/);
 });
 
+// The lead's loops have owners since PR 201: a fork killed the old lead's loops on 2026-10-15 and nothing said whose
+// they were. The skills name the command, and the lead restarts its own after a compaction and touches no other's.
+test('the skills name js-harness loop, and the lead restarts only the loops it owns', () => {
+  const orchestrator = components[2].content('0.1.0');
+  assert.ok(orchestrator.includes('- `js-harness loop run <name> --purpose "<what it is for>" --until "<what ends it>" -- <command>`, in the background'));
+  assert.ok(orchestrator.includes('`js-harness loop status` lists the project\'s loops with their owners'));
+  assert.ok(orchestrator.includes('- Loops have owners. At your start and after a compaction, run `js-harness loop status`.'));
+  assert.ok(orchestrator.includes('Never stop or restart a loop another session owns'));
+  assert.ok(orchestrator.includes('`--restart --take-over`'));
+  const harness = components[0].content('0.1.0');
+  assert.ok(harness.includes('- `js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)`'));
+});
+
 test('the js-harness skill names the command that writes a notice between sessions', () => {
   const text = components[0].content('0.1.0');
   assert.ok(text.includes('- `js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"`'));
