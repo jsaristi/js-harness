@@ -115,7 +115,15 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 - WSL2 runs of one file go through a script that refuses an empty name (2026-10-14: an empty variable in
   `wsl.exe -- sh -c` ran the whole suite outside a turn): `sh <scratchpad>/wsl-one-test.sh <worktree on
   /mnt> <file>`, with `MSYS_NO_PATHCONV=1`, node at `/home/oficina/.local/node/bin/node`.
-- T3a (18:5x, its commit queued in a gate turn): `checkSensor(..., { traces: { dir } })` runs the tests
+- T3b, the plan (19:2x): `runnerScript` (`bin/lib/gate-wsl.mjs:99`) gets `trace: { dir, results }` as WSL
+  paths and adds, beside `JS_HARNESS_CHECK_INNER=1` on its line 118, `JS_HARNESS_TRACE_ROOT="$mirror"`,
+  `JS_HARNESS_TRACE_DIR`, `JS_HARNESS_TRACE_RESULTS` and `NODE_OPTIONS` with
+  `--require="$mirror/bin/lib/trace-reads.cjs"` (the same file, synced). The traces of WSL2 go in
+  `traces/wsl-<distro>/`, apart from Windows'. Their `node` is WSL2's, so selection there asks that node
+  its version once per gate (`wsl.exe -d <distro> -- <node> -v`, about a second), never the Windows
+  process (every test would run for a mismatch), and never the newest trace (after an upgrade every trace
+  holds the old version and would pass for current: not sound). `wslRoute` passes them; `startShadow` drops its Windows-only guard.
+- T3a done, `d65a527`: `checkSensor(..., { traces: { dir } })` runs the tests
   sensor in shadow on Windows (`startShadow`/`endShadow` in `bin/check.mjs`): the whole suite under the
   tracer, the selection asked first, and the row's `shadow` and detail say what it would have skipped and
   which of those failed. `bin/check-shadow.test.mjs`, RED then GREEN 2/2. Next, T3b: the same in WSL2
