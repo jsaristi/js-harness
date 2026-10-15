@@ -95,5 +95,12 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
   skippable though a later pass was marked untraced; with one trace the later one replaced it. Corrected
   alone: any stored untraced pass makes the test run, whichever is newer (`bin/lib/select-tests.mjs`; RED
   then GREEN 9/9 in `bin/lib/select-tests.test.mjs`).
-- **Next step** (00:14): the Codex recheck from b3c1736, then push and the PR; one line to the lead when it
-  is ready. Then step 5, the flaky ledger.
+- **L5** (2026-10-15 00:24): the gate of 1f53479, the first to read the shared store: 90 of 125 test
+  files would have been skipped, none of them failed. Codex recheck `b3c1736..1f53479`: correct, 1 of 1
+  fixed (35,094 input tokens). gentle-ai assess of ac3fe14..1f53479: medium, not due (under_budget).
+  merge-tree against origin/main eab3eff clean. Pushed; PR 172. Risk: item 1 (the persisted layout of the
+  traces, and the old per-worktree folder deleted; a cache only the shadow reads).
+- **L6** (2026-10-15 00:45): PR 172 merged at 00:30 (5f7f8cd), with the code up to 1f53479. This record
+  (3898e03) was pushed to the branch after the merge and missed it: the push was chained to reading the
+  pull request's state, not conditional on it being open. It reaches main by a docs pull request of its own.
+- **Next step** (00:45): step 2 is done. Step 5 of the plan, the flaky ledger, is a feature of its own.
