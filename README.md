@@ -59,6 +59,14 @@ set, a tests sensor that is `node --test` (directly or as the `test` script) run
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
 repository's GitHub workflow sets 2.
 
+When a `node --test` suite fails, the test files it names as failed run once more, alone. A
+file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,
+the quarantine ledger: one `### <test file>` entry with `- Owner:`, `- Expires: YYYY-MM-DD`
+and `- Failure: <id in docs/FAILURES.md>`, written by hand and committed. A file that passes
+on rerun with no entry still blocks, and the `rerun` row names the entry to add; one that
+fails again blocks as before. The `flaky` row fails a malformed ledger and lists the expired
+entries, which no longer count.
+
 ```console
 $ js-harness check
 PASS  budget  122 estimated tokens (budget 1500)

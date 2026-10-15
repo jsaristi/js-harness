@@ -1,0 +1,26 @@
+# Flaky tests
+
+The quarantine ledger of the gate (odd/tasks/flaky-ledger.md). When the suite fails, the gate runs the
+failed test files once more, alone. A file that passes on that rerun does not block while it has a
+current entry here; it still runs in every gate. A file that passes on rerun and has no entry blocks,
+and the `rerun` row names the entry to add: an entry is written by hand and committed, so a quarantine
+is always in git.
+
+An entry is one `### <test file>` heading, the path from the top of the repository, with three lines:
+
+- `- Owner:` who fixes it, or decides to remove the entry.
+- `- Expires: YYYY-MM-DD` the last day it counts. After it, the file blocks again.
+- `- Failure:` the id of its entry in docs/FAILURES.md, where each time it failed is recorded.
+
+The gate's `flaky` row reads this file: a malformed entry, a path that is no test file of the
+repository, or a failure that docs/FAILURES.md does not hold fails the gate; an expired entry is listed.
+Other lines are for people.
+
+### evals/suite.test.mjs
+- Owner: JH 10
+- Expires: 2026-10-22
+- Failure: eval-interrupt-process-alive
+
+The test "an interrupt during a real trial against a hanging fake agent leaves nothing of it" finds the
+fake agent's grandchild still running at the suite's exit, under load. The fix owed is in the sweep:
+after its kills, it waits, bounded, until each killed process stops answering, before the exit.

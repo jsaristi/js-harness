@@ -22,7 +22,7 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gat
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { selectTests, testFilesOf } from './lib/select-tests.mjs';
-import { failedTestFiles } from './lib/flaky.mjs';
+import { checkLedger, failedTestFiles, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 
@@ -1345,6 +1345,13 @@ export async function checkSensors(cwd, deps = {}, lock) {
           if (files.length > 0) {
             const again = await checkSensor(cwd, { name: 'tests', command: `node --test ${files.join(' ')}` }, { ...deps, gateHeld, wsl, traces: null });
             row.rerun = { files, pass: again.pass, detail: again.detail };
+            // Design 3: the row passes only when the rerun did and every file it ran has a current entry.
+            const judged = judgeRerun(row.rerun, ledgerEntries(cwd), deps.today ?? localDay());
+            row.rerun.row = judged.row;
+            if (judged.pass) {
+              row.pass = true;
+              row.detail += `; its failed test ${files.length === 1 ? 'file' : 'files'} passed alone on rerun and ${files.length === 1 ? 'is' : 'are'} quarantined in docs/FLAKY.md (the rerun row)`;
+            }
           }
         }
         ran.push(row);
@@ -1356,12 +1363,12 @@ export async function checkSensors(cwd, deps = {}, lock) {
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
-      const failing = ({ pass, output }) => (pass ? [] : failingTests(output));
+      const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
       record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
-    return [...rows, ...ran, ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
+    return [...rows, ...ran, ...ran.flatMap((row) => (row.rerun ? [row.rerun.row] : [])), ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
   };
   if (!lock) return run();
   if (lock.held) {
@@ -1753,7 +1760,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), ...checkLedger(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
