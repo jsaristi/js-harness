@@ -447,6 +447,30 @@ Read as other: 5; effort or model inherited from the session: 14; call not found
 Read in 8.2 s
 ```
 
+### js-harness audit
+
+Counts, per session of a day, the two claims a transcript can check by itself, and prints each
+wrong one at its transcript and line: the hour a message to another session stamps in its
+opening, against the hour the entry was sent (more than a minute apart is wrong), and the share
+of its context a session states of itself, against the share its own reply records (more than 2
+points apart is wrong). The share is of the window the session's own last `get_usage` read
+reports, because sessions run on windows of different sizes. It reads the Claude Code records of
+the main checkout and each worktree and prints no text of any message.
+
+```console
+$ js-harness audit
+Audit, local day 2026-10-15 (UTC-05:00), 4 record folders: the hours messages stamp and the context shares sessions state, each against its transcript
+session   title                                    messages  stamped  wrong hour  shares  wrong share
+2ec5f55e  JH 15 · auditoría de honestidad                 7        1           0       8            4
+d3ecd893  JH 8 · turno y corte temprano del gate         11        3           0      10            2
+f7f03a7e  JH 10 · comprobación en GitHub                 29        0           0       4            0
+total                                                   367        7           0      84           40
+Wrong shares, more than 2 points from the share the reply records (transcript:line):
+  2ec5f55e-e2da-493b-8819-43b3c57394be:4725  stated 50%, recorded 64%
+  d3ecd893-952c-4591-a356-73f605c9fc90:15014  stated 36%, recorded 39%
+Read in 13.7 s
+```
+
 ### js-harness notify
 
 Appends one notice to the project's channel record under the home, with the time, the sender's
