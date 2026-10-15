@@ -1,15 +1,34 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt, SUITE_RAN } from './codex-review-prompt.mjs';
+import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt, SUITE_RAN } from './codex-review-prompt.mjs';
 import { NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 const FROM = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
+const TREE = 'c'.repeat(40);
 
 // --- the prompt ---
 
 test('the prompt is versioned', () => {
   assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v1');
+  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v2');
+});
+
+test('the prompt of a merge names the diff of the automatic merge and the merge by file, one part of one included, and is never that of a whole range', () => {
+  const text = reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 1, files: ['bin/a.mjs', 'odd name.txt'] }, merge: TREE });
+  assert.equal(
+    text,
+    [
+      `Review what was written in the merge commit ${HEAD}, whose first parent is ${FROM}: the resolution of its conflicts and any edit made in it. This review covers the files the command below names.`,
+      `Run \`git --literal-pathspecs diff --no-renames ${TREE} ${HEAD} -- bin/a.mjs 'odd name.txt'\` to inspect them: ${TREE} is the tree that merging its two parents again automatically gives, conflict markers included, so its output is what was written in the merge, and it is the whole change under review.`,
+      'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.',
+      'What the merge took unchanged from either parent was reviewed on its own branch: read them for context, and report nothing about them.',
+      '',
+    ].join('\n'),
+  );
+  assert.match(reviewPrompt({ from: FROM, head: HEAD, part: { index: 2, of: 3, files: ['c.mjs'] }, merge: TREE }), /This review covers part 2 of 3 of that review: the files the command below names\./);
+  assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, merge: TREE }), /The review of a merge is asked by its files/);
+  assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 1, files: ['c.mjs'] }, merge: 'HEAD^{tree}' }), /full object id/);
 });
 
 test('reviewPrompt names the committed range and the command that shows it', () => {
