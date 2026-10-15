@@ -88,9 +88,9 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 |----|-------|-------|--------|----------|
 | T1 | S2 | inline | done, `850cc9f` | `bin/lib/trace-reads.{cjs,mjs}`; RED (module missing), GREEN 5/5 on Windows and WSL2 |
 | T2 | S2 | inline | done, `850cc9f` | `bin/lib/select-tests.mjs`; RED (module missing), GREEN 5/5 on Windows and WSL2 |
-| T2b | S5 | inline | written, not committed | the key holds `os` and `env` (`TRACE_ENV`: TZ, LANG, LC_ALL, CI, NODE_ENV, FORCE_COLOR, NO_COLOR); a read of the home outside the temporary folder, or a `net` connection, marks a test untraced; the clock is marked by hand (`// js-harness: untraced (...)`), since `node:test` itself uses timers and any detection would mark every test. RED: the import of `TRACE_ENV`, and the selection's case; GREEN 8/8 and 6/6 |
-| T2c | S6 | inline | written, not committed | one test per seam: sync fs, a missing-file probe, readdir and a node child (the first test), fs.promises `readFile`/`stat`/`opendir` and a dynamic import (the seams test). The seams test passed with no change to the tracer: its RED was only the missing import of the file |
-| T3 | S2, S6 | inline | pending | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed |
+| T2b | S5 | inline | done, `bb3331f` | the key holds `os` and `env` (`TRACE_ENV`: TZ, LANG, LC_ALL, CI, NODE_ENV, FORCE_COLOR, NO_COLOR); a read of the home outside the temporary folder, or a `net` connection, marks a test untraced; the clock is marked by hand (`// js-harness: untraced (...)`), since `node:test` itself uses timers and any detection would mark every test. RED: the import of `TRACE_ENV`, and the selection's case; GREEN 8/8 and 6/6 |
+| T2c | S6 | inline | done, `bb3331f` | one test per seam: sync fs, a missing-file probe, readdir and a node child (the first test), fs.promises `readFile`/`stat`/`opendir` and a dynamic import (the seams test). The seams test passed with no change to the tracer: its RED was only the missing import of the file |
+| T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
 | T4 | S2, S3, S6 | inline | pending | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
@@ -104,8 +104,46 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   rule makes main's `bin/lib/test-run-warning.mjs` run as an empty test file at every gate (harmless, a
   process; rename it when that file is next touched). A real run of the tracer over `bin/progress.test.mjs`
   recorded its four reads (`bin/lib/progress.mjs`, `bin/progress.mjs`, itself, `package.json`).
+- **L5** (2026-10-14, T3b, read from the code and run here): what changed from the plan above.
+  - The runner loads the harness's own tracer through `/mnt` (`wslPath(TRACE_PRELOAD)`), not
+    `$mirror/bin/lib/trace-reads.cjs`: the mirror holds the project, which in an installed project is not
+    js-harness and has no such file; and the file selection hashes (`tracerHash`) is the harness's. Quoted
+    inside `NODE_OPTIONS` when its path has a space. `env -i` leaves no caller `NODE_OPTIONS` to keep.
+  - Selection in WSL2 asks with that distribution's node (`wslNodeVersion`, `wsl.exe -d <distro> --exec
+    <node>/node -v`: `v24.15.0` in 6.5 s from a cold WSL here, once per gate in shadow), `os: 'linux'` and
+    the runner's variables (`RUNNER_ENV`, the same object the runner's `env -i` line is built from). A node
+    that says no version, or a path WSL does not mount, runs no shadow.
+  - A suite sent to the mirror that fell back to Windows ran untraced: its gate has no shadow (counting it
+    would add a gate with zero failures that proved nothing).
+  - Keys are paths inside the root, so the mirror's keys are the tree's; `.git` and `node_modules`, which
+    the mirror leaves out, read as absent there and present in the tree: those tests always run
+    (conservative, never unsound).
+  - Places: `traces/windows/` and `traces/wsl-<distro>/` under the worktree's git dir
+    (`git rev-parse --absolute-git-dir`).
+  - `"exactTests": "shadow"` is honoured when the tests sensor runs `node --test` alone (`npm run test`
+    resolves to the `test` script); otherwise the row says why it has no shadow. Any other value fails the
+    gate: `"skip"` waits for S6's count (T4). The gate log's end line keeps
+    `shadow: { files, wouldSkip (a count), failedOfSkipped (names) }` per sensor; S6 reads
+    `failedOfSkipped` empty over at least 30 gates.
+- **L6** (2026-10-14 19:28, the first gate in shadow, in WSL2): the shadow ran (`0 of 119 test files would
+  have been skipped`) and 18 tests failed under the tracer, so nothing was committed. The tracer was not
+  invisible: its variables sat in `process.env`, so a test that copied it for a child carried the outer
+  `JS_HARNESS_TRACE_FOR` (an inner `node --test` then took itself for a child of another test), and tests
+  comparing a child's exact env saw extra keys; and its wrappers of `exec`/`execFile` lost
+  `util.promisify.custom`, so `promisify(execFile)` resolved with stdout alone (`scripts/count-git.test.mjs`).
+  Fixed test first (`bin/lib/trace-reads.test.mjs`, two tests, RED then GREEN 11/11): the tracer keeps its
+  variables to itself and gives NODE_OPTIONS back as it was (a child's, as its parent gave it, carried in
+  `JS_HARNESS_TRACE_NODE_OPTIONS`); every call shape gets the tracer's env, a callback after the args
+  included (with the variables hidden, a child that only inherited them would go unseen); `exec` and
+  `execFile` keep their promise form. The ten files of the 18 then passed under the tracer on Windows,
+  each alone, in one gate turn (19:36). This is S6 doing its work: shadow before any skip.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
+- Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
+  of their commit; that commit's own gate is the first to run in shadow in WSL2. Next: push
+  `feat/exact-tests` and open its pull request, Codex reviewing the slice from `c98b12d` within the
+  allowance, the gentle-ai line in the body; then T4's count from the gate log. The bullets below about
+  T3b's plan are history: L5 says what changed.
 - Done and committed on `feat/exact-tests`: T1 and T2 (`850cc9f`), T2b and T2c (`bb3331f`); every test
   file of them green on Windows and in WSL2 (run alone, one file each). Not pushed, no pull request, no
   Codex review yet: the slice is reviewed with T3, from `c98b12d`.

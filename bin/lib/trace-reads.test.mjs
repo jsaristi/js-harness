@@ -219,6 +219,78 @@ test('a test file that marks itself untraced is kept so, with its reason', () =>
   }
 });
 
+// Under the tracer a test sees the environment it would see without it: a test that copies process.env for a
+// child, or compares the env a child got, was measured to break otherwise (the first gate in shadow, 18 tests).
+const SEES_NOTHING = [
+  "import { test } from 'node:test';",
+  "import { spawnSync } from 'node:child_process';",
+  "const ours = (env) => Object.keys(env).filter((key) => key.startsWith('JS_HARNESS_TRACE_'));",
+  "test('clean', () => {",
+  "  if (ours(process.env).length > 0) throw new Error('the test sees ' + ours(process.env));",
+  "  if (process.env.NODE_OPTIONS !== '--max-old-space-size=300') throw new Error('NODE_OPTIONS is ' + process.env.NODE_OPTIONS);",
+  "  const env = { PATH: process.env.PATH, NODE_OPTIONS: '', ...(process.env.SystemRoot && { SystemRoot: process.env.SystemRoot }) };",
+  "  const child = spawnSync(process.execPath, ['lib/env.cjs'], { encoding: 'utf8', env });",
+  "  if (child.stdout.trim() !== '{\"keys\":[],\"options\":\"\"}') throw new Error('the child sees ' + child.stdout + child.stderr);",
+  "  const bare = spawnSync(process.execPath, ['lib/env.cjs'], { encoding: 'utf8' });",
+  "  if (bare.stdout.trim() !== '{\"keys\":[],\"options\":\"--max-old-space-size=300\"}') throw new Error('a child of the inherited env sees ' + bare.stdout + bare.stderr);",
+  "});",
+].join('\n');
+
+test('a traced test file and its node children see none of the tracer: no variable of its own, and NODE_OPTIONS as it was, yet the child is traced', () => {
+  const { root, traces, done } = project({
+    'package.json': '{"type":"module"}',
+    'test/env.test.mjs': SEES_NOTHING,
+    'lib/env.cjs': "require('node:fs').readFileSync(require('node:path').join(__dirname, 'seen.txt'));\nconsole.log(JSON.stringify({ keys: Object.keys(process.env).filter((key) => key.startsWith('JS_HARNESS_TRACE_')), options: process.env.NODE_OPTIONS ?? null }));\n",
+    'lib/seen.txt': 'seen',
+  });
+  try {
+    const env = { ...process.env, ...traceEnv({ root, dir: traces, existing: '--max-old-space-size=300' }) };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, ['--test', 'test/env.test.mjs'], { cwd: root, env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const trace = readTrace(traces, 'test/env.test.mjs');
+    assert.ok(trace.reads['lib/seen.txt'], JSON.stringify(trace.reads));
+  } finally {
+    done();
+  }
+});
+
+// Every call shape of child_process keeps its meaning under the tracer, and each node child it starts is traced:
+// with the tracer's variables out of process.env, a child that got no env of the tracer's would be unseen.
+const EVERY_SHAPE = [
+  "import { test } from 'node:test';",
+  "import assert from 'node:assert/strict';",
+  "import cp from 'node:child_process';",
+  "import { promisify } from 'node:util';",
+  "const node = process.execPath;",
+  "test('shapes', async () => {",
+  "  await new Promise((resolve, reject) => cp.execFile(node, ['lib/one.cjs'], (error, out) => (error ? reject(error) : resolve(assert.equal(out.trim(), 'one')))));",
+  "  const { stdout, stderr } = await promisify(cp.execFile)(node, ['lib/two.cjs']);",
+  "  assert.equal(stdout.trim(), 'two');",
+  "  assert.equal(stderr, '');",
+  "  const shell = await promisify(cp.exec)('\"' + node + '\" lib/three.cjs');",
+  "  assert.equal(shell.stdout.trim(), 'three');",
+  "  await new Promise((resolve) => cp.spawn(node, ['lib/four.cjs']).on('close', resolve));",
+  "});",
+].join('\n');
+
+test('every call shape of child_process keeps its meaning, promisify included, and each node child is traced', () => {
+  const child = (name) => `require('node:fs').readFileSync(require('node:path').join(__dirname, '${name}.txt'));\nconsole.log('${name}');\n`;
+  const { root, traces, done } = project({
+    'package.json': '{"type":"module"}',
+    'test/shapes.test.mjs': EVERY_SHAPE,
+    ...Object.fromEntries(['one', 'two', 'three', 'four'].flatMap((name) => [[`lib/${name}.cjs`, child(name)], [`lib/${name}.txt`, name]])),
+  });
+  try {
+    const result = runTests(root, traces, ['test/shapes.test.mjs']);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const { reads } = readTrace(traces, 'test/shapes.test.mjs');
+    for (const name of ['one', 'two', 'three', 'four']) assert.ok(reads[`lib/${name}.txt`], `${name}: ${JSON.stringify(Object.keys(reads))}`);
+  } finally {
+    done();
+  }
+});
+
 test('the tracer does nothing without its folder, and the preload is a file of its own beside this module', () => {
   assert.ok(fs.existsSync(TRACE_PRELOAD));
   const { root, traces, done } = project({ 'package.json': '{"type":"module"}', 'test/a.test.mjs': "import { test } from 'node:test';\ntest('a', () => {});\n" });

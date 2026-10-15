@@ -80,6 +80,13 @@ module.exports = { TRACER_VERSION, TRACE_ENV, traceEnvOf, hashOf, listingOf, sta
 const env = process.env;
 if (env.JS_HARNESS_TRACE_DIR && env.JS_HARNESS_TRACE_ROOT && !globalThis[INSTALLED] && !process.execArgv.includes('--test')) install();
 
+/** `value` of NODE_OPTIONS without the `--require` of this tracer, quoted or not; `null` when nothing is left. */
+function withoutPreload(value) {
+  if (typeof value !== 'string') return null;
+  const left = value.replace(/(^|\s)--require=("[^"]*trace-reads\.cjs"|\S*trace-reads\.cjs)(?=\s|$)/g, ' ').trim().replace(/\s+/g, ' ');
+  return left === '' ? null : left;
+}
+
 function install() {
   globalThis[INSTALLED] = true;
   const dir = env.JS_HARNESS_TRACE_DIR;
@@ -93,9 +100,22 @@ function install() {
     test = relative(process.argv[1]);
     if (test === null) return;
     run = `${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
-    env.JS_HARNESS_TRACE_FOR = test;
-    env.JS_HARNESS_TRACE_RUN = run;
   }
+  const results = env.JS_HARNESS_TRACE_RESULTS;
+  // The test sees the environment it would see untraced: the tracer's variables go from process.env, and
+  // NODE_OPTIONS is what it was before the preload was added (as a child's parent gave it, or without the
+  // `--require` of this file). A test that copies process.env for a child, or compares the env a child got,
+  // broke otherwise (18 tests at the first gate in shadow); the children get the tracer from `ourEnv`.
+  const before = env.JS_HARNESS_TRACE_NODE_OPTIONS;
+  for (const key of Object.keys(env)) if (key.startsWith('JS_HARNESS_TRACE_')) delete env[key];
+  let options;
+  try {
+    options = before === undefined ? withoutPreload(env.NODE_OPTIONS) : JSON.parse(before);
+  } catch {
+    options = withoutPreload(env.NODE_OPTIONS);
+  }
+  if (typeof options === 'string') env.NODE_OPTIONS = options;
+  else delete env.NODE_OPTIONS;
   const reads = new Set();
   let untraced = null;
   if (isTestFile) {
@@ -189,6 +209,8 @@ function install() {
       JS_HARNESS_TRACE_ROOT: root,
       JS_HARNESS_TRACE_FOR: test,
       JS_HARNESS_TRACE_RUN: run,
+      // What the child's NODE_OPTIONS is without the tracer, which its preload gives back before its code.
+      JS_HARNESS_TRACE_NODE_OPTIONS: JSON.stringify(base.NODE_OPTIONS ?? null),
     };
   };
   const isNode = (command) => command === process.execPath || /(^|[\\/])node(\.exe)?$/i.test(String(command));
@@ -215,15 +237,30 @@ function install() {
     const options = args[at] !== null && typeof args[at] === 'object' ? args[at] : undefined;
     const command = shell ? String(args[0]).trim().split(/\s+/)[0] : args[0];
     seen(command, shell ? String(args[0]).trim().split(/\s+/).slice(1) : list, options);
+    // Every shape gets the tracer's env, a callback after the args included: with the tracer's variables out of
+    // process.env, a child that inherited it would go unseen.
     const next = [...args];
+    const given = { env: ourEnv(undefined) };
     if (options) next[at] = { ...options, env: ourEnv(options.env) };
-    else if (!shell && at === 2 && args.length <= 2) next[2] = { env: ourEnv(undefined) };
-    else if (!shell && at === 1 && typeof args[1] !== 'function') next.splice(1, 0, [], { env: ourEnv(undefined) });
-    else if (shell && (args.length === 1 || typeof args[1] === 'function')) next.splice(1, 0, { env: ourEnv(undefined) });
+    else if (at < next.length && (next[at] === null || next[at] === undefined)) next[at] = given;
+    else if (!shell && at === 1) next.splice(1, 0, [], given);
+    else next.splice(at, 0, given);
     return original.apply(this, next);
+  };
+  const { promisify } = require('node:util');
+  /** The promise form `util.promisify` gives `exec` and `execFile`, `{ stdout, stderr }` and `.child`, on
+   * `wrapped`: node's own goes to the original function, and a plain wrapper would resolve with stdout alone. */
+  const promised = (wrapped) => function (...args) {
+    let child;
+    const promise = new Promise((resolve, reject) => {
+      child = wrapped.apply(this, [...args, (error, stdout, stderr) => (error ? reject(Object.assign(error, { stdout, stderr })) : resolve({ stdout, stderr }))]);
+    });
+    promise.child = child;
+    return promise;
   };
   for (const name of ['spawn', 'spawnSync', 'execFile', 'execFileSync']) childProcess[name] = withEnv(childProcess[name]);
   for (const name of ['exec', 'execSync']) childProcess[name] = withEnv(childProcess[name], { shell: true });
+  for (const name of ['exec', 'execFile']) childProcess[name][promisify.custom] = promised(childProcess[name]);
   const fork = childProcess.fork;
   childProcess.fork = function (modulePath, ...rest) {
     record(modulePath);
@@ -251,7 +288,7 @@ function install() {
         return;
       }
       // How this test file ended, for a gate in shadow (S6): which of the files selection would have skipped failed.
-      if (env.JS_HARNESS_TRACE_RESULTS) real.appendFileSync(env.JS_HARNESS_TRACE_RESULTS, `${JSON.stringify({ test, code })}\n`);
+      if (results) real.appendFileSync(results, `${JSON.stringify({ test, code })}\n`);
       const file = path.join(dir, traceName(test));
       let partNames = [];
       try {
