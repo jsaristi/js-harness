@@ -43,10 +43,18 @@ test('it runs for a pull request and for nothing else: no push, no schedule, no 
   assert.deepEqual(on.filter((line) => line.indent === on[0].indent).map((line) => line.text), ['pull_request:']);
 });
 
+test('a pull request runs once when it opens ready, is reopened or is marked ready, and never for a later push or a draft (his "C ahora, A después")', () => {
+  const event = below(workflowLines(), 'pull_request:');
+  // No `synchronize`: a push to an open pull request starts no run; its run is asked for by reopening it.
+  assert.ok(event.some((line) => line.text === 'types: [opened, reopened, ready_for_review]'), 'the kinds of event');
+  const job = below(below(workflowLines(), 'jobs:'), 'check:');
+  assert.ok(job.some((line) => line.text === 'if: github.event.pull_request.draft == false'), 'a draft runs nothing until it is marked ready');
+});
+
 test('the paths it ignores are the documents of harness.json, so a pull request of documents alone runs nothing', () => {
   const { documents } = JSON.parse(fs.readFileSync(path.join(ROOT, 'harness.json'), 'utf8'));
   const event = below(workflowLines(), 'pull_request:');
-  assert.deepEqual(event.filter((line) => line.indent === event[0].indent).map((line) => line.text), ['paths-ignore:'], 'the paths are its only filter');
+  assert.deepEqual(event.filter((line) => line.indent === event[0].indent).map((line) => line.text), ['types: [opened, reopened, ready_for_review]', 'paths-ignore:'], 'the kinds of event and the paths are its only filters');
   const ignored = below(event, 'paths-ignore:').map((line) => line.text);
   // A document is a path under one of the folders `documents` names; `**` is every path under a folder.
   assert.deepEqual(ignored, documents.map((folder) => `- '${folder}**'`));
@@ -65,11 +73,17 @@ test('one job on Linux, bounded at fifteen minutes, with no matrix: a run is one
   assert.deepEqual(jobs.filter((line) => line.indent === jobs[0].indent).map((line) => line.text), ['check:']);
   const job = below(lines, 'check:');
   const keys = job.filter((line) => line.indent === job[0].indent).map((line) => line.text);
-  assert.deepEqual(keys, ['name: check on Linux', 'runs-on: ubuntu-latest', 'timeout-minutes: 15', 'steps:']);
+  assert.deepEqual(keys, ['name: check on Linux', 'if: github.event.pull_request.draft == false', 'runs-on: ubuntu-latest', 'timeout-minutes: 15', 'steps:']);
 });
 
 test('a second push to a pull request stops the run of the first', () => {
   assert.deepEqual(below(workflowLines(), 'concurrency:').map((line) => line.text), ['group: gate-${{ github.event.pull_request.number }}', 'cancel-in-progress: true']);
+});
+
+test('the gate on GitHub runs the test files two at a time: its runner has 2 logical processors, where node --test runs one', () => {
+  // Step 4 of the parallel-gate plan; the variable is check's, since node takes no --test-concurrency in NODE_OPTIONS.
+  const gate = below(below(workflowLines(), 'steps:'), '- name: The gate').map((line) => line.text);
+  assert.deepEqual(gate, ['env:', 'JS_HARNESS_TEST_CONCURRENCY: 2', 'run: node bin/check.mjs']);
 });
 
 test('every action is pinned to a commit, and the gate it runs is check', () => {

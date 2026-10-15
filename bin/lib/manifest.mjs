@@ -23,13 +23,16 @@ js-harness commands:
 - \`js-harness update\` — say whether a newer release exists; none is tagged before 1.0.0, so it says how to get the newest copy.
 - \`js-harness upgrade\` — install the newer release of a folder of tarballs (\`--source <dir>\`), then sync; with no source it installs nothing.
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
-- \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run.
+- \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run. Where the project's \`codexReview\` switch is off at HEAD it starts nothing and records nothing.
 - \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone 60 minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
 - \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after 30 minutes (\`--max <minutes>\`), and its exit code is the command's.
-- \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
+- \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin). Where \`codexReview\` is off at the pushed commit it asks for none; the first push to a repository that holds no branch passes and says what went unread.
+- \`js-harness functions\` — each function a project can turn off and on (\`harness.json\` "functions": the code map, the TypeScript language server, the Codex review), its value here and why; \`functions apply\` makes the clone what they ask, \`functions set <name> <value>\` writes one.
 - \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
+- \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed.
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -121,6 +124,7 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
+- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
 `;
 }
 
@@ -183,6 +187,12 @@ export const entryComponents = [
     pointer: ['hooks', 'PostToolUse'],
     entry: () => pauseHookEntry(),
   },
+  {
+    id: 'claude-guard-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'PreToolUse'],
+    entry: () => guardHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -227,6 +237,21 @@ function pauseHookEntry() {
   };
 }
 
+/** The command of the guard hook, guarded to exit 0 like the pause hook's: a refusal travels as the hooks contract's
+ * JSON on standard output, so an older js-harness that answers 2 to `guard` never blocks a tool call. */
+export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
+
+/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the three tools it checks: a sub-agent's
+ * launch, whose model it holds to the project's rules, and the two ways of sending a message to another session,
+ * whose stamped hour it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14). Claude Code only: the tool
+ * names are Claude Code's. Five seconds: it may ask git for the project's root once. */
+function guardHookEntry() {
+  return {
+    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash',
+    hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
 export function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
@@ -253,7 +278,8 @@ function deepEqual(a, b) {
  * must lead, along one of them, to what we wrote, and every key that ends a pointer must hold the empty array we
  * left behind after removing our entry. Any other key, even one with an empty-looking value like `{}` or `null`,
  * means this document is not ours alone to delete. Several pointers can share one file: the doctor's and the
- * resume hook's both hang from `hooks.SessionStart`, and the pause hook hangs from `hooks.PostToolUse`, so a file
+ * resume hook's both hang from `hooks.SessionStart`, the pause hook from `hooks.PostToolUse` and the guard hook
+ * from `hooks.PreToolUse`, so a file
  * js-harness created goes with the last of them. */
 function isOnlyOurPointerPaths(value, pointers) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -576,7 +602,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks'];
+const ON_REQUEST = ['optional', 'tasks', 'settings'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -610,6 +636,116 @@ function forgetRecord(home, key, matches, listDir) {
     writeManifest(home, rest);
   }
   return true;
+}
+
+// ---- settings ---------------------------------------------------------------------------------------------------------
+
+/** Claude Code's setting for messages between sessions, and the value `install --accept-session-messages` gives it:
+ * with `accept`, a message from a session of another permission class arrives instead of being held (his choice of
+ * 2026-10-11, and his answer of 2026-10-14 that `install` writes it on an explicit flag; T5 of
+ * odd/tasks/commands-and-doctor.md). It is a security setting, so nothing writes it without that flag. */
+export const SESSION_MESSAGES = { key: 'crossSessionInbound', value: 'accept' };
+
+/** The user settings of Claude Code under `home`, where `SESSION_MESSAGES` is read. */
+export function userSettingsPath(home) {
+  return path.join(home, '.claude', 'settings.json');
+}
+
+/** Reads a JSON settings file as `{ data, style }`, `style` being what `serializeJson` needs to write it back as it
+ * was; a missing file is an empty object written with two spaces. Throws with the reason a file cannot be taken. */
+function readSettings(target) {
+  const existed = fs.existsSync(target);
+  const raw = existed ? fs.readFileSync(target, 'utf8') : '{}';
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error('malformed JSON');
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Error('not a JSON object');
+  return { data, existed, raw, style: { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: existed ? detectIndent(raw) : 2 } };
+}
+
+/** Sets `SESSION_MESSAGES` in the user settings and records it in the manifest's `settings` array as `{ path, key,
+ * value, had, previous, createdFile }`, what was there before (`had: false` when the key was not, `createdFile` when
+ * the file was not). Returns `{ status, path }`:
+ * `written`, with `was`, the value it replaced (`null` for none); `already` when it already holds the value
+ * (recorded all the same, so `uninstall` knows to leave it); `skipped` with a `reason` when the file cannot be
+ * read, is no JSON object or cannot be written, and then nothing is written or recorded. A second call keeps the first record, which holds what the user had. Like the other records kept on
+ * request, `install` and `sync` carry it forward and `uninstall` puts the value back (`restoreSettings`). */
+export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord } = {}) {
+  const target = userSettingsPath(home);
+  const { key, value } = SESSION_MESSAGES;
+  let settings;
+  try {
+    settings = readSettings(target);
+  } catch (err) {
+    return { status: 'skipped', path: target, reason: err.message };
+  }
+  const { data, existed, style } = settings;
+  const matches = (entry) => entry.path === target && entry.key === key;
+  const record = { path: target, key, value, had: Object.hasOwn(data, key), previous: data[key] ?? null, createdFile: !existed };
+  // Recorded only once the file holds the value: a write that fails leaves no record that would later have
+  // `uninstall` take a value the user set by hand for one this command wrote.
+  const keep = () => {
+    if (!readManifest(home)?.settings?.some(matches)) recordIt(home, 'settings', record, matches);
+  };
+  if (data[key] === value) {
+    keep();
+    return { status: 'already', path: target };
+  }
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    writeFile(target, serializeJson({ ...data, [key]: value }, style), 'utf8');
+  } catch (err) {
+    return { status: 'skipped', path: target, reason: `not writable (${err.code ?? err.message})` };
+  }
+  // A setting nothing records could never be put back (Codex's finding of 2026-10-14): when the record cannot
+  // be written, the file goes back to the bytes it had, or away when this made it.
+  try {
+    keep();
+  } catch (err) {
+    if (existed) fs.writeFileSync(target, settings.raw, 'utf8');
+    else fs.rmSync(target, { force: true });
+    return { status: 'skipped', path: target, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was put back` };
+  }
+  return { status: 'written', path: target, was: record.previous };
+}
+
+/** Puts back each setting the manifest records, as `{ restored, kept }` (paths): a value still the one recorded is
+ * set back to what was there before, or its key removed when there was none, and a file left holding nothing it did
+ * not hold before is removed (`createdFile`, and nothing else in it), with the folders it leaves empty; a value the
+ * user changed since is theirs and is kept, and so is a file that cannot be read. A record whose value was already
+ * there before is left with nothing to do. */
+function restoreSettings(manifest, home, listDir) {
+  const restored = [];
+  const kept = [];
+  for (const record of manifest.settings ?? []) {
+    if (record.had && record.previous === record.value) continue;
+    let settings;
+    try {
+      settings = readSettings(record.path);
+    } catch {
+      kept.push(record.path);
+      continue;
+    }
+    const { data, existed, style } = settings;
+    if (!existed) continue;
+    if (data[record.key] !== record.value) {
+      kept.push(record.path);
+      continue;
+    }
+    if (record.had) data[record.key] = record.previous;
+    else delete data[record.key];
+    if (record.createdFile && Object.keys(data).length === 0) {
+      fs.rmSync(record.path);
+      removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
+    } else {
+      fs.writeFileSync(record.path, serializeJson(data, style), 'utf8');
+    }
+    restored.push(record.path);
+  }
+  return { restored, kept };
 }
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
@@ -972,6 +1108,10 @@ export function uninstall(home, deps = {}) {
     keptOptional.push({ path: file.path, ...why });
   }
 
+  // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
+  // are taken out: a settings file install made is then removed with its last entry, as without the setting.
+  const settings = restoreSettings(manifest, home, listDir);
+
   const entriesRemoved = [];
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {
@@ -1012,7 +1152,9 @@ export function uninstall(home, deps = {}) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+  // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
+  const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

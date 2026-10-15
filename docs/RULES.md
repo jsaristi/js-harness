@@ -73,14 +73,14 @@ The effort every sub-agent is launched with: high.
 The model of a sub-agent that explores, reviews or verifies: claude-opus-5-5.
 - Passed on a call as `opus`.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-11.
 
 ### subagent-writer-model
 The model of a sub-agent that writes scoped code, in this repository: claude-haiku-5-5.
 - Passed on a call as `haiku`.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
 
 ### work-sessions

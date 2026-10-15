@@ -81,3 +81,28 @@ Nothing planned: both orders come from the lead with his word quoted.
   push (the push printed would not be a fast-forward); a push or a merge counts only as a command the
   shell runs, not as words in an argument (`echo git push && node --test` is refused). The recheck is
   Codex on the fix's range alone; a new finding there is a follow-up, not another round.
+- **L4** (2026-10-14): commit `64cc3df` (the three fixes), its gate passed in WSL2. Codex's recheck of
+  `9ed9f60..64cc3df` (102,118 input tokens) found one new P2: a push or a merge with a shell operator
+  right after it (`git push;`, `git push&&echo`) is not recognized, so its turn is refused while a push
+  waits. It fails closed (the turn is refused and the push command printed) and cannot make a failing
+  run pass, so by the lead's bound it is a follow-up, not another round: F1 below. Pushed at 05:11:06 by
+  `date`, pull request 124.
+
+- **L5** (2026-10-14): main moved twice under pull request 124. The first merge (`fa05ba2`, of
+  `3cf8635`) was clean; its tree is the one `git merge-tree` gives, the lead's rule for a merge commit, so
+  the README sentence and this log went to a documents commit of their own, whose gate then failed on
+  `bin/lib/remote.test.mjs:923`, a test on the real timer, on a commit that touched only documents: they
+  come here, in a documents pull request from main. The second merge (`40b9d55`, of `2a29285`) had one
+  conflict in the orchestrator skill (`bin/lib/manifest.mjs`), resolved by keeping both sides; as code
+  written in a merge it needed a Codex record: Codex over `2a29285..40b9d55` (175,025 input tokens)
+  found two new P2, both edges where the guard fails open; by the lead's bound they are F2 and F3. Pushed
+  at 06:01:51 by `date`.
+
+## Follow-ups
+
+- **F1** · `isPushOrMerge` ends a command word at whitespace or the end only: take `;`, `&`, `|` and `)`
+  as ends too (Codex's recheck, `bin/lib/push-waits.mjs:32`).
+- **F2** · `isPushOrMerge` reads a `;` or `&&` inside a quoted argument as the start of a command, so
+  `node -e "x; git push"` runs while a push waits (Codex, `bin/lib/push-waits.mjs:32`).
+- **F3** · the open pull request is asked by the local branch name; a branch that tracks a remote branch
+  of another name is never found (Codex, `bin/lib/push-waits.mjs:67`): ask with the remote branch name.

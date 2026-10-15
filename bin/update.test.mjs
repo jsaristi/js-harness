@@ -1016,7 +1016,9 @@ test('status rejects --global with --cwd, an unknown flag and a missing value wi
   }
 });
 
-test('updateMain and upgradeMain keep ignoring flags they do not know (parsing unchanged)', async () => {
+// `upgrade` refuses a flag it does not know since T1 of odd/tasks/commands-and-doctor.md
+// (`bin/writing-flags.test.mjs`); `update` writes nothing and keeps ignoring one.
+test('updateMain keeps ignoring flags it does not know (parsing unchanged)', async () => {
   const original = console.log;
   console.log = () => {};
   try {

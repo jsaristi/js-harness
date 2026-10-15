@@ -1006,6 +1006,25 @@ test('the real-home comparison ignores case on win32 only', () => {
   }
 });
 
+// --- codegraph's project cell: `n/a` where the project's codeMap switch is off, so no index fix is offered ---
+
+test('codegraph project cell is n/a where codeMap is off, and reads the index otherwise', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-stack-codemap-'));
+  try {
+    const cell = findTool('codegraph').project;
+    const off = { codeMap: { value: 'off' } };
+    assert.equal(cell({ project, functions: off }), 'n/a');
+    assert.equal(cell({ project, functions: { codeMap: { value: 'on-demand' } } }), 'missing');
+    assert.equal(cell({ project }), 'missing');
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    assert.equal(cell({ project, functions: off }), 'n/a');
+    assert.equal(cell({ project, functions: { codeMap: { value: 'always' } } }), 'ok');
+    assert.equal(cell({ project }), 'ok');
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // --- when: the codex row is shown unless the project's codexReview switch is off (an unresolved switch shows it) ---
 
 test('codex has a when that hides it only for codexReview off', () => {
@@ -1023,7 +1042,7 @@ test('probeStack leaves the codex row out only when codexReview resolves off, an
     const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
     const off = ids({ codexReview: { value: 'off' } });
     assert.equal(off.includes('codex'), false);
-    assert.deepEqual(off, ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'claude-account', 'remote-server']);
+    assert.deepEqual(off, ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server']);
     assert.equal(ids({ codexReview: { value: 'on' } }).includes('codex'), true);
     assert.equal(ids(undefined).includes('codex'), true, 'with no switches resolved the row is shown');
   } finally {
@@ -1170,7 +1189,7 @@ test('probeStack returns one row per tool, in order, then one per check, never t
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'claude-account', 'remote-server'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {
@@ -1207,14 +1226,14 @@ function accountState(seed, platform = 'win32') {
     const spawn = () => {
       throw new Error('the account check runs nothing');
     };
-    return checks[0].configured({ home, platform, spawn }).claude;
+    return checks.find((check) => check.id === 'claude-account').configured({ home, platform, spawn }).claude;
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 }
 
 test('checks carries the Claude account check and then the remote server one, apart from the tools', () => {
-  assert.deepEqual(checks.map((check) => check.id), ['claude-account', 'remote-server', 'hook-commands']);
+  assert.deepEqual(checks.map((check) => check.id), ['memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands']);
   assert.equal(tools.some((tool) => ['claude-account', 'remote-server'].includes(tool.id)), false);
 });
 
@@ -1287,7 +1306,7 @@ test('the claude-account row has only a claude cell, the sign-in command as its 
   const home = makeTmpHome('js-harness-stack-account-');
   try {
     seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT });
-    const row = probeTool(checks[0], { home, project: home, spawn: fakeSpawnMissing(), platform: 'win32' });
+    const row = probeTool(checks.find((check) => check.id === 'claude-account'), { home, project: home, spawn: fakeSpawnMissing(), platform: 'win32' });
     assert.deepEqual(row, {
       id: 'claude-account',
       version: null,

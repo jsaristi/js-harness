@@ -143,6 +143,16 @@ test('the functions of a project whose harness.json cannot be read: the error, a
   );
 });
 
+test('from a folder below the top, the working tree and a commit are read whole, and harness.json at the top', (t) => {
+  const root = repo(t, { 'src/app.js': 'x', 'docs/notes.md': 'y', 'harness.json': '{ "functions": { "codeMap": "off" } }\n' });
+  const head = commit(root);
+  write(root, { 'src/new.js': 'z' });
+  const git = gitIn(path.join(root, 'docs'));
+  assert.deepEqual(workingTree(git).paths.sort(), ['docs/notes.md', 'harness.json', 'src/app.js', 'src/new.js']);
+  assert.deepEqual(commitTree(git, head).paths.sort(), ['docs/notes.md', 'harness.json', 'src/app.js']);
+  assert.deepEqual(harnessOfCommit(git, head), { declared: { functions: { codeMap: 'off' } } });
+});
+
 test('a harness.json that is there and cannot be read is an error, not a throw and not a project that declares nothing', (t) => {
   const root = folder(t);
   fs.mkdirSync(path.join(root, 'harness.json'));

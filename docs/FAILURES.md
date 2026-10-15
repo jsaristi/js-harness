@@ -69,8 +69,8 @@ commits of `main` and answer with a range many times too large.
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — `main` had moved without being merged
   in, and an assessment asked with `--base-ref origin/main` counted 2,552 lines that were not the
   branch's; the branch point as the base gave the real range
-- Control: owed — odd/tasks/commands-and-doctor.md — "The push row hints the merge commit as the base
-  after `main`"
+- Control: check — bin/check-codex-reviews.test.mjs — "after main is merged in, the push row hints
+  the base the plain row sizes" — since 2026-10-14
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
@@ -160,6 +160,16 @@ session's claim.
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
+### citations-test-reads-clock
+A test of citations cited a fresh commit's short hash, which a citation must hold a digit and a
+letter to be (`bin/lib/citations.mjs:11`): about one run in 27 the hash came out all digits, was no
+citation, and the test failed by the clock alone.
+- Class: tool
+- Seen: 2026-10-14 — odd/tasks/exact-tests.md, L9 — two gates of feat/exact-tests (19:28 and 19:56)
+  failed it, the second in shadow, where selection would have skipped it
+- Control: check — bin/check-citations.test.mjs — "only the lines a staged change adds to a feature
+  document are read, and each unresolved citation is a line" — since 2026-10-14
+
 ### cli-updated-itself
 A tool of the measured stack updated itself and nobody saw it until a measurement was about to run
 on it.
@@ -212,8 +222,8 @@ A session ran a command it did not know, to read its help, and the command acted
   installed four files and a hook entry on his machine
 - Seen: 2026-10-12 — relief file, line 409 — JH 8 ran `check --help` and it started a gate, which
   went to wait and was stopped before it ran anything (claimed)
-- Control: owed — odd/tasks/commands-and-doctor.md — "The five lenient commands above refuse an
-  unknown"
+- Control: check — bin/writing-flags.test.mjs — "exits 2, names the flag and writes nothing" — since
+  2026-10-14
 
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at
@@ -274,8 +284,8 @@ session can neither be told nor tell, and each notice becomes his paste.
   (given at line 134, pasted at line 143)
 - Seen: 2026-10-13 — relief file, line 550 — three messages of JH 7, written between 00:52 and
   01:10, reached the lead after 04:20, held by the host
-- Control: owed — odd/tasks/session-channel.md — "The row `session-classes` of `doctor`, with the
-  exact fix in its line"
+- Control: check — bin/doctor.test.mjs — "as the session-classes gap, whose fix is the install
+  flag" — since 2026-10-14
 - Proof: a practice step: a notice read with no message sent (owed: nothing prints it yet)
 
 ### design-not-faithful
@@ -284,7 +294,8 @@ his and named files that do not exist.
 - Class: delivery
 - Seen: 2026-10-10 — relief file, line 181 — four blocking items found by a reader that did not
   write it; also odd/tasks/rule-hierarchy.md:768
-- Control: owed — odd/tasks/commands-and-doctor.md — "The row `citations`, INFO"
+- Control: check — bin/check-citations.test.mjs — "each unresolved citation is a line" — since
+  2026-10-14
 
 ### diagnostic-whole-gate
 A retry command ran a whole gate as a diagnostic after a failed commit, twenty minutes of the
@@ -340,6 +351,14 @@ on it.
   the first read after 26 percent at about 04:30
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
+
+### eval-interrupt-process-alive
+A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
+hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
+when the test looked, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
+  `[false, false]` was expected, pid 22809; the only failing test of the run
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
@@ -459,6 +478,8 @@ exactly.
   `.codegraph/telemetry.json`, beside the empty `.claude/`, `.codex/` and `AppData/Roaming/`; the
   fix (record what `codegraph init` creates, or remove those two files on uninstall) is JH 9's, in
   docs/todo.md
+- Control: check — bin/lib/project.test.mjs — "runCodegraphInit runs codegraph with DO_NOT_TRACK=1, so it
+  writes nothing under the home, on every platform" — since 2026-10-14
 
 ### installed-copy-stale
 The command on PATH was an old copy with no way to tell: the version reads 0.1.0 before and after,
@@ -769,8 +790,9 @@ it or did not follow it.
   odd/tasks/rule-hierarchy.md:15-18
 - Seen: 2026-10-10 — relief file, line 137 — a rule changed in a memory note; a session with the new
   note loaded still proposed the cut (line 138)
-- Control: owed — odd/tasks/commands-and-doctor.md — "The row `memory-rules` of `doctor`"
-- Proof: `doctor`: no `memory-rules` gap (owed: nothing prints it yet)
+- Control: check — bin/doctor.test.mjs — "reports the rule notes of the project memory as the
+  memory-rules gap" — since 2026-10-14
+- Proof: `doctor`: no `memory-rules` gap
 
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken

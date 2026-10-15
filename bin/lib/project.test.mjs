@@ -1796,6 +1796,14 @@ test('agentsTemplate serves a project with code and one without', () => {
   assert.match(template, /A behavior change arrives with the test that proves it, written first; a finding, with the\nevidence that proves it\./);
 });
 
+// His answer to question 4 (odd/tasks/on-demand-functions.md, S9): with the Codex review off, gentle-ai reviews
+// high and medium risk, a written rule that nothing enforces at a push.
+test('agentsTemplate writes the rule of a project whose Codex review is off', () => {
+  const template = agentsTemplate('project');
+  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), gentle-ai reviews every change of medium\nor high risk\.$/m);
+  assert.ok(template.length < 1200, `template is ${template.length} chars`);
+});
+
 // --- runCodegraphInit spawn shape ---
 // T2b Codex P2 (shell expansion): the root path is never embedded in the command line — it is
 // passed as the child's own `cwd`, with the command always the literal `.` — so a root containing
@@ -1833,6 +1841,23 @@ test('runCodegraphInit spawns plain argv with no shell and cwd:root off win32', 
   assert.deepEqual(calls[0].args, ['init', '--yes', '.']);
   assert.equal(calls[0].opts.shell, false);
   assert.equal(calls[0].opts.cwd, root);
+});
+
+// codegraph writes a telemetry queue and an update-check cache under the home on `init` unless DO_NOT_TRACK is set
+// (measured on codegraph 1.6.0: `.codegraph/telemetry-queue.jsonl` and `.codegraph/telemetry.json`). No manifest
+// records them, so `uninstall --global` left them (docs/FAILURES.md, init-leaves-codegraph-files): the harness asks
+// it to write nothing there, on both spawn shapes, and keeps the rest of the environment.
+test('runCodegraphInit runs codegraph with DO_NOT_TRACK=1, so it writes nothing under the home, on every platform', () => {
+  for (const platform of ['win32', 'linux']) {
+    const calls = [];
+    const spawn = (cmd, args, opts) => {
+      calls.push(opts);
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    runCodegraphInit('/some/project', { spawn, platform });
+    assert.equal(calls[0].env.DO_NOT_TRACK, '1', platform);
+    assert.equal(calls[0].env.PATH ?? calls[0].env.Path, process.env.PATH ?? process.env.Path, platform);
+  }
 });
 
 test('runCodegraphInit reports ok:false with a reason on a non-zero exit', () => {

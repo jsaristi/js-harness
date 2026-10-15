@@ -794,3 +794,5 @@ Feature document on `docs/gate-on-github-exchange` (worktree `D:/js-harness-work
 off `main` `9546fb7`. T1 to T6 are done and on `main`. T7 is closed and taken: he first answered
 "No por ahora", then, at line 5394, "Sí, tomemos el intercambio con verde de GitHub" (Progress).
 Read the orchestrator's answers first, then Next.
+
+- 2026-10-15 · **Fewer runs: his choice "C ahora, A después (Recomendada)"** (tapped, the orchestrator's transcript c47efdf7, line 4991, read with `sessions --quote`). gate.yml runs on `pull_request` only for `opened`, `reopened` and `ready_for_review`, and its job skips a draft: a later push (`synchronize`) starts no run, and a fresh run is asked for by reopening, as merge-ready says. October had 343 minutes in 90 runs; one run a branch would have been about 155. No `workflow_dispatch`: a run asked for by hand tests no merge (merge-ready reads "Merge <head> into <base>" from its checkout) and spends minutes. A, no run per pull request, waits for the first real `--land` of the merge queue. Branch ci/gate-on-ready, by JH 10.

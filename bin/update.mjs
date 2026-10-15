@@ -10,8 +10,10 @@ import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
 import { INSTALL_NEWEST, latestFromSource, splitCommand, installArgs, isNewer } from './lib/version.mjs';
+import { unknownArgument } from './lib/args.mjs';
 
 const PKG_NAME = 'js-harness';
+const UPGRADE_USAGE = 'Usage: js-harness upgrade [--home <path>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
 
 function parseArgs(argv, env) {
   const get = (flag) => {
@@ -276,6 +278,13 @@ function pathCopyRefusal(spawn, version) {
 }
 
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
+  // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
+  // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
+  const unknown = unknownArgument(argv, { valued: ['--home', '--source', '--prefix', '--pm'] });
+  if (unknown !== null) {
+    console.error(`unknown argument: ${unknown}\n\n${UPGRADE_USAGE}`);
+    return 2;
+  }
   const opts = parseArgs(argv, env);
   if (!opts.source) {
     console.error(`nothing was installed: ${NO_RELEASE}`);

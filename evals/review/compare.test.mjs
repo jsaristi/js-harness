@@ -104,6 +104,9 @@ function fakeRepository(m, extra = {}) {
   git(root, 'config', 'core.autocrlf', 'false');
   fs.writeFileSync(path.join(root, 'odd', 'tasks', 'feature.md'), FEATURE_DOC, 'utf8');
   fs.writeFileSync(path.join(root, 'f.txt'), 'one\n', 'utf8');
+  // A repository with no program reads the Codex review's switch as off and `codex-review` starts nothing
+  // (odd/tasks/on-demand-functions.md, S7): it holds one, unchanged by the range, so a cell's review runs.
+  fs.writeFileSync(path.join(root, 'tool.js'), 'export const tool = 1;\n', 'utf8');
   for (const [name, content] of Object.entries(extra)) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), content, 'utf8');

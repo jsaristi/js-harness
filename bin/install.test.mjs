@@ -159,7 +159,7 @@ test('installMain refuses a word it does not know before it writes anything: exi
       for (const words of [argv, ['--home', home, ...argv], [...argv, '--home', home]]) {
         const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
         assert.equal(code, 2, words.join(' '));
-        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>]`], words.join(' '));
+        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]`], words.join(' '));
         assert.deepEqual(outLines, [], words.join(' '));
         assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
       }
@@ -175,7 +175,7 @@ test('installMain refuses --home with no path after it: exit 2, and nothing is w
     for (const words of [['--home'], ['--home', '--home', home]]) {
       const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
       assert.equal(code, 2, words.join(' '));
-      assert.deepEqual(errLines, ['--home requires a value\n\nUsage: js-harness install [--home <path>]'], words.join(' '));
+      assert.deepEqual(errLines, ['--home requires a value\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]'], words.join(' '));
       assert.deepEqual(outLines, [], words.join(' '));
       assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
     }
@@ -311,10 +311,11 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
       `registered hook entry in ${settings}: js-harness resume --hook (SessionStart, matcher compact)`,
       `registered hook entry in ${hooks}: js-harness resume --hook (SessionStart, matcher compact)`,
       `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUse)`,
+      `registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash)`,
     ]);
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
-    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
+    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
     assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
