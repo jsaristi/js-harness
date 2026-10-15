@@ -1610,6 +1610,12 @@ and 3.
   lead reads a session at that moment before it says what waits for him there; a notice
   when a stretch ends
 - [ ] T9 `--measures`
+- [ ] T9b A review of 1c9358f (the relief stamp's seconds), which `codex-review` refused to
+  recheck a second time. Codex's P2 on edf9e75 was "a relief line in the notice's minute is
+  misjudged"; 60618c3 took each bound to its minute and Codex found it still open (10:05:05
+  before a 10:05:10 notice read as kept); 1c9358f writes the seconds and calls a minute-only
+  line of a bound minute not known. Owed: one independent review of that range, read before
+  T9 is ticked
 - [x] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
 - [ ] T11 The real stretch of "Done when", recorded
