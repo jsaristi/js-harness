@@ -135,7 +135,8 @@ const USAGE =
   '       node evals/review/compare.mjs --cell <config>:<range> [--force] [--dry-run] [--keep-checkout]\n' +
   `Cells: ${cellNames(CELLS.filter((cell) => !isRetired(cell.config)))}.\n` +
   `Retired, kept as readings and not run: ${cellNames(CELLS.filter((cell) => isRetired(cell.config)))}.\n` +
-  'One cell an invocation: each is one Codex review, a call to the model. --dry-run prints what a cell would start and starts nothing.';
+  'One cell an invocation: each is one Codex review, a call to the model. --dry-run prints what a cell would start and starts nothing.\n' +
+  'A cell runs in a turn of the machine\'s gate lock: js-harness gate -- node evals/review/compare.mjs --cell <config>:<range>.';
 
 /** The file of a cell's reading in `readingsDir`. */
 export function readingFile(readingsDir, config, range) {
@@ -602,6 +603,17 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
 
   if (recorded && !args.force) {
     error(`Cell ${cell} is already recorded in ${file}; --force runs it again and replaces that reading.`);
+    return 1;
+  }
+
+  // A cell runs in a turn of the machine's gate lock (`JS_HARNESS_GATE_HELD`, set by `js-harness gate`). Out of
+  // one, codex-review asks its own prompt and keeps Codex from the project's tests (e06cf68), so a `lean` cell
+  // would be measured as a configuration other than its name, and a reading of it would say what it is not.
+  if (env.JS_HARNESS_GATE_HELD !== '1') {
+    error(
+      `Cell ${cell} runs in a turn of the machine's gate lock: out of one, codex-review asks its own prompt and keeps Codex ` +
+        `from the tests, which is not the cell. Run it as: js-harness gate -- node evals/review/compare.mjs ${argv.join(' ')}`,
+    );
     return 1;
   }
 

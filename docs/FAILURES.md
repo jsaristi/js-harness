@@ -384,6 +384,19 @@ row"); that tells the load and stops nothing.
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — the gate on the result of merging
   `main` in timed out at 1,206 s with 3,195 tests passed and none failed; run again, it passed
 
+### gate-mark-hides-failures
+Tests passed in the gate and failed when run by hand. They inherited the gate's mark of a held turn
+(`JS_HARNESS_GATE_HELD=1`), which changes what the code under test does, so no gate could see them fail.
+The gate also runs its tests in WSL, so a failure that only Windows shows is out of its sight too. Only a
+run by hand on Windows, out of a turn, sees both.
+- Class: unseen-state
+- Seen: 2026-10-15 — evals/review/compare.test.mjs — since e06cf68 ("run the review out of the gate
+  lock"), six tests of the review comparison failed when run by hand and passed in the gate. The failure
+  was taken for a Windows-only one until a bisect of the one test showed that the mark decided it, not
+  the platform
+- Control: check — evals/review/compare.test.mjs — "a cell out of a turn of the gate lock is refused before
+  anything is made, with the command that runs it" — since 2026-10-15
+
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
 - Class: unseen-state
@@ -420,6 +433,9 @@ A test run or a count started while a gate, or a batch that measures durations, 
   odd/tasks/gate-lock.md:1033-1045
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:594-596 — a writer ran a count outside the lock for about
   four minutes beside a gate (its own report)
+- Seen: 2026-10-15 — docs/FAILURES.md, gate-mark-hides-failures — JH 9 and its bisecting sub-agent each
+  ran the whole of evals/review/compare.test.mjs (65 to 132 s) outside the lock, beside gates in line
+  (their own reports)
 - Control: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — since
   2026-10-11
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
