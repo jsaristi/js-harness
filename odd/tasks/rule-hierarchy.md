@@ -2604,7 +2604,7 @@ are delivered as drafts, since main is frozen until the lead says pull request 1
 `feat/rule-contract-timeout` was rebased onto `149e1d8`, its import conflict resolved inside
 the commit (`b7e1681`), and it is pull request 190. `feat/rule-review-timeout` was rebuilt on it:
 the staged merge was dropped, the work was reapplied as a patch, and it was committed (`8f1b080`)
-as pull request 192. At 05:45, `bin/check.mjs` followed as pull request 196, stacked on 192,
+as pull request 192. At 05:44, `bin/check.mjs` followed as pull request 196, stacked on 192,
 with the lead's leave. All three carry Codex records and gentle-ai's "not due". Next:
 `bin/lib/manifest.mjs`, after JH 16's pull requests 188 and 191 land, since they change it.
 Once 167 lands, mark 190, 192 and 196 ready, in that order.
