@@ -112,13 +112,36 @@ desktop browser pane (about 10k), then the smaller ones.
 - D6. Hide the skills this project never uses, if Claude Code offers a filter.
 - D7. Pay for a before/after eval run for each cut (S7 point 2), or accept a cut on its measured saving alone.
 
+His answers, tapped 2026-10-15 in the lead's question tool (transcript e152c9d8, lines 493 and 500; L4):
+D1 100,000; D2 yes, when #4036 ships; D3 no, the browser pane stays; D4 and D5 both off; D6 yes, if
+there is a filter; D7 accept each cut on its measured saving, no paid eval. So point 3 of "How each cut
+is made" is replaced, for this feature, by the measured saving.
+
+## What was changed outside this repository, and how to undo it
+| Change | Where | Saving (headless `/context`) | Undo | Backup |
+|---|---|---|---|---|
+| context7 off for this project (D5) | `~/.claude.json`, `projects["D:/js-harness"].disabledMcpServers` gets `"context7"` | 1.8k deferred (1.9k with its server instructions) | `/mcp enable context7` in a session of `D:\js-harness`, or remove the entry | `~/.js-harness/backups/claude.json.before-fixed-load-20261015T063515` |
+| Claude Docs connector off for this project (D4) | the same list gets `"claude.ai Claude Docs"` (its own name; `claude_ai_Claude_Docs` is the tool prefix and does not match) | 0.6k loaded, 1.6k deferred | `/mcp enable claude.ai Claude Docs`, or remove the entry | the same file |
+| Ten skills hidden from the model, still callable by him as `/name` (D6) | `D:\js-harness\.claude\settings.local.json`, `skillOverrides`: go-testing, gentle-ai-bench, docx, pptx, xlsx, pdf, google-workspace, morning, import-memory, keybindings-help, each `"user-invocable-only"` | 1.9k (Skills 7.0k to 5.1k) | remove the `skillOverrides` key, or set one skill to `"on"` | `~/.js-harness/backups/js-harness.settings.local.json.before-fixed-load-20261015T063830` |
+
+`/mcp disable` is refused in a headless session ("Reconnect, enable, and disable aren't available in this
+session"), so the list was written as the toggle writes it (Claude Code's own help text: "persists to
+`disabledMcpServers` in the project entry of `~/.claude.json` — reversible with `/mcp enable`"). Both
+switches are per project: worktrees under `D:\js-harness-worktrees` are other projects, but every work
+session starts in `D:\js-harness`. The desktop app adds its own Docs connector under another name; whether
+this switch reaches it shows in the `fixed load` row of the next desktop session.
+
 ## Tasks
 - [x] T1 (kind: design) Measure the fixed load per category and owner; one recommendation per category (this document)
 - [x] T2 (kind: build) The `fixed load` row of `check`, test-first (S5, S6): RED (no module), GREEN 9 of 9
 - [x] T3 (kind: docs) README's check rows and ROADMAP F2
-- [ ] T4 (kind: verify) Gate, gentle-ai review, Codex review, draft PR; decisions D1-D6 sent to the lead
+- [x] T4 (kind: build) His decisions applied: D4, D5, D6 made and measured, each with its undo and backup; D1 is the code's budget; D2 waits on #4036; D3 is nothing
+- [ ] T5 (kind: verify) Gate, gentle-ai review, Codex review, PR ready, the lead told
+- [ ] T6 (kind: build) When gentle-ai #4036 ships (D2): back up `~/.claude/CLAUDE.md`, exclude the orchestrator and agent-routing blocks through gentle-ai, measure before and after
 
 ## Log
 - L1 (2026-10-15 05:52, the lead's notice to session 20): "Lead: GO. Your feature: the fixed context load of a session (~119k before any message; his concern 05:50). Full brief: C:/Users/Oficina/AppData/Roaming/Claude/side-session-notes/local_a8ef1e36-0003-4a3d-b6b5-9d18df61ab3e/jh20-brief-fixed-load.md"
 - L2 (05:57) Per-project MCP enablement (brief, done when 2) is not built: every MCP server here is either the app's or his `~/.claude.json`'s, so any switch is a change outside this repo. It goes to him as D4 and D5; the harness records it only if he says yes.
 - L3 (06:08) The row first took the lowest first turn; the headless `claude -p` run of the measurement (78,719 tokens, fewer tools) became the lowest at once and hid the desktop load. It takes the median now (S5), which neither a headless run nor a long first message moves; on this machine the row reads 95,570 (two of the five sessions are from 2026-10-11, before today's load grew).
+- L4 (06:2x, his answers through the lead, verified with `js-harness sessions --quote e152c9d8-53bc-4366-8fa5-526b1576bcb6 493` and `500`): D1 "100.000 (Recomendado)"; D2 "Sí, cuando salga (Recomendado)"; D3 "No, dejarlo (Recomendado)"; D4/D5 "Ambos off (Recomendado)"; D6 "Sí, si hay filtro (Recomendado)"; D7 "Por ahorro medido (Recomendado)". The lead's note with them: "after gentle-ai #4036 ships, back up ~/.claude/CLAUDE.md, then remove the orchestrator and agent-routing blocks; not before"; "the browser pane stays (the web fallback ladder uses it)"; "turn off context7 and the Claude Docs connector for js-harness only, and record how to undo each"; "hide unused skills only if Claude Code has a filter; if not, note it and do nothing"; "no paid eval; accept each cut on its measured saving".
+- L5 (06:35-06:39) D5, D4 and D6 made and measured with the headless `/context` from `D:\js-harness`: 63.5k before; MCP tools loaded 1.2k to 0.57k, deferred 11.1k to 7.7k; Skills 7.0k to 5.1k. Claude Code's filter is `skillOverrides` (on, name-only, user-invocable-only, off); `user-invocable-only` moves a skill out of the model's list without removing it (S7 point 1). The table above lists each change, its undo and its backup.
