@@ -234,6 +234,15 @@ test('with the Codex review off, a medium change is due for gentle-ai review (S9
   );
 });
 
+test('with the Codex review off, a high change gentle-ai calls not due is due too (S9: high and medium)', async (t) => {
+  const { checkReview } = await import('./check.mjs');
+  const off = repo(t, { 'bin/a.mjs': '', 'harness.json': '{ "functions": { "codexReview": "off" } }\n' });
+  assert.equal(
+    checkReview(off, { spawn: gentleAi('on', 'high') }).detail,
+    'high risk, 2 paths, 40 lines: review due (high risk and the Codex review is off here)',
+  );
+});
+
 test('with gentle-ai review off and the Codex review off, the row says no review reads the code', async (t) => {
   const { checkReview } = await import('./check.mjs');
   const off = repo(t, { 'bin/a.mjs': '', 'harness.json': '{ "functions": { "codexReview": "off" } }\n' });

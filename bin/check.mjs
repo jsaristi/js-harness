@@ -1426,8 +1426,10 @@ export function checkReview(cwd, { spawn = spawnSync, git = spawnSync, timeout =
   }
 
   const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
-  const dueHere = !due && codexOff && risk === 'medium';
-  const why = dueHere ? 'medium risk and the Codex review is off here' : dueReason;
+  // His answer (S9) is high and medium: gentle-ai may call a high change not due (under its budget), and with
+  // no Codex review it is due all the same.
+  const dueHere = !due && codexOff && (risk === 'medium' || risk === 'high');
+  const why = dueHere ? `${risk} risk and the Codex review is off here` : dueReason;
   const detail = `${risk} risk, ${count(paths, 'path')}, ${count(changed, 'line')}: review ${due || dueHere ? 'due' : 'not due'} (${why})`;
   const next = assessed.next_transition?.command;
   if (due && typeof next === 'string') lines.push(`next: ${next}`);
@@ -1594,7 +1596,9 @@ function firstPushRow(cwd, head, { spawn, remote }) {
   if (gitOut(spawn, cwd, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/${remote}/`]) !== '') return null;
   let listed;
   try {
-    listed = spawn('git', ['ls-remote', '--heads', remote], { cwd, encoding: 'utf8', timeout: 60000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+    // Asked only where no ref of the remote is here, so once a project; a remote that does not answer in 20 s is
+    // no first push, and the row fails as before rather than hold the push.
+    listed = spawn('git', ['ls-remote', '--heads', remote], { cwd, encoding: 'utf8', timeout: 20000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
   } catch {
     return null;
   }
@@ -1700,9 +1704,10 @@ function reviewSize(spawn, cwd, from, tip, merge = null) {
 export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {
   const row = (detail, lines) => ({ name: 'codex-review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
   const cannotTell = (why) => row(`cannot tell how much code waits for a Codex review: ${why}`);
-  const here = codexSwitchHere(cwd, spawn);
-  if (here.value === 'off') return row(`the Codex review is off here (${here.because}): no code waits for one`);
   try {
+    // Inside the guard: the switch is read from files and git as the rest is, and fails nothing either.
+    const here = codexSwitchHere(cwd, spawn);
+    if (here.value === 'off') return row(`the Codex review is off here (${here.because}): no code waits for one`);
     return codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
   } catch (err) {
     return cannotTell(`reading the commits, their Codex review records or the size of their review failed (${err instanceof Error ? err.message : String(err)})`);

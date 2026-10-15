@@ -951,3 +951,12 @@ item of `docs/todo.md`: what `codegraph init` writes under the home (`.codegraph
   5. The debt row's git processes are bounded by a test of `main` (12). The top of the repository is found
      by walking up to `.git`, not by asking git, so the switch costs the row one process (`ls-files`).
   Slice 3 goes as one commit: `bin/check.mjs` holds units 1 to 5 and S10 together.
+- **L25** (2026-10-15) Slice 3 is commit `09e605f`. The commit assessed as medium, not due. I raised it to high
+  (item 2: it changes what the pre-push guard refuses). gentle-ai reviewed it with three lenses (risk,
+  resilience, reliability) and APPROVED it; the approval was acknowledged (lineage `review-b242ccf2f9db84d0`).
+  Its three advisories are fixed in a commit of their own:
+  - a high change gentle-ai calls not due is due too where the Codex review is off (S9 says high and
+    medium); its test was seen red;
+  - the debt row reads the switch inside its guard;
+  - `ls-remote` waits 20 s, not 60.
+  Codex's plan for the range: about 500,000 input tokens, inside the 816,000 allowance.
