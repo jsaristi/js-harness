@@ -12,6 +12,10 @@ An entry is one `### <test file>` heading, the path from the top of the reposito
 - `- Expires: YYYY-MM-DD` the last day it counts. After it, the file blocks again.
 - `- Failure:` the id of its entry in docs/FAILURES.md, where each time it failed is recorded.
 
+The heading form is a contract with another reader: the exact-tests selection (odd/tasks/exact-tests.md)
+reads only the `### <path>` headings, expired entries included, to keep a quarantined file from being
+skipped. A change to that form is agreed with it first.
+
 The gate's `flaky` row reads this file: a malformed entry, a path that is no test file of the
 repository, or a failure that docs/FAILURES.md does not hold fails the gate; an expired entry is listed.
 Other lines are for people.
