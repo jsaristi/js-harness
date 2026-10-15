@@ -327,7 +327,11 @@ export const tools = [
       claude: claudeJsonMcpServer(home, 'codegraph', project).state,
       codex: hasCodexMcpServer(home, 'codegraph') ? 'ok' : 'missing',
     }),
-    project: ({ project }) => (project && fs.existsSync(path.join(project, '.codegraph')) ? 'ok' : 'missing'),
+    // Where the project's codeMap switch is off, no index is wanted: `n/a`, which is no gap, so no init is offered.
+    project: ({ project, functions }) => {
+      if (functions?.codeMap?.value === 'off') return 'n/a';
+      return project && fs.existsSync(path.join(project, '.codegraph')) ? 'ok' : 'missing';
+    },
     // Never `codegraph upgrade` (user rule): codegraph's own fix is its npm install, both for
     // `installed` and `upToDate` — npm is also how an outdated codegraph gets upgraded. `project`
     // carries the actual resolved root (`deps.project`, already resolved by `resolveProjectRoot`

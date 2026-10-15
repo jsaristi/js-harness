@@ -1340,8 +1340,9 @@ test('main prints the codex-review row last, as information, and runs its git th
     const rows = output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
     assert.match(rows.at(-2), /^INFO {2}review /);
     assert.match(rows.at(-1), /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /);
-    // The questions of this row, and before them the one a gate asks of its working tree before its sensors.
-    assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status) /.test(line)), asked.join('\n'));
+    // The questions of this row, and before them the one a gate asks of its working tree before its sensors,
+    // and the names of its files, which the switches of harness.json "functions" are resolved from.
+    assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status|ls-files) /.test(line)), asked.join('\n'));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

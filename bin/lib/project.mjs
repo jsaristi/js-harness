@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { sha256 } from './manifest.mjs';
 import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
-import { applySettings, isValidSettingsRecord, planFunctions } from './project-apply.mjs';
+import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel } from './project-apply.mjs';
 
 /** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what a
  * copy older than the switches cannot undo (its `settings`); such a copy deletes a manifest it does not
@@ -357,6 +357,8 @@ export function agentsTemplate(root) {
 ## What good looks like
 A behavior change arrives with the test that proves it, written first; a finding, with the
 evidence that proves it. A claim about this project carries its evidence.
+Where the Codex review is off (\`js-harness functions\`), gentle-ai reviews every change of medium
+or high risk.
 
 ## Constraints
 - <a real constraint> — <the reason behind it>
@@ -1828,4 +1830,63 @@ export function applyProjectFunctions(cwd, version, deps = {}) {
   const codegraph = indexThere ? { createdDir: false, status: 'exists' } : { ...NO_INDEX };
   const empty = { version, scope: 'functions', files: [], kept: [], codegraph, dirs: [] };
   return updateRecorded(root, empty, gitDirs(root, spawn), steps);
+}
+
+/** The switch a settings key belongs to, for the words of a difference. */
+const SWITCH_OF_KEY = { paste: 'codeMap', languageServer: 'languageServer' };
+
+/** The value at `pointer` of `data`, or `undefined`. */
+function valueAt(data, pointer) {
+  return pointer.reduce((object, key) => (object !== null && typeof object === 'object' && Object.hasOwn(object, key) ? object[key] : undefined), data);
+}
+
+/** The JSON of `file`, or `fallback` where it is not there or cannot be read: a read-only report reports no
+ * failure of its own. A byte-order mark is no part of the JSON. */
+function jsonOr(file, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+  } catch {
+    return fallback;
+  }
+}
+
+/** What this clone lacks of what its switches ask, read-only, for the gate's `functions` row: one line a
+ * difference, in the words of the switch that asks it, which `functions apply` would make good. `[]` where the
+ * clone is what they ask, outside a repository, or where the switches cannot be read (that is the row's
+ * failure, not a difference). A key that holds another value is apply's to report, never to change, so only a
+ * key that is not there counts; a pre-push hook of the project's own counts as there. */
+export function clonePending(cwd, { spawn = spawnSync } = {}) {
+  const root = gitTopLevel(cwd, spawn);
+  if (!root) return [];
+  const { plan, resolved } = functionsPlan(root, spawn);
+  if (!plan) return [];
+  const lines = [];
+  const say = (name, text) => lines.push(`${name} ${resolved[name].value}: ${text}`);
+  const manifestPath = resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
+  const manifest = jsonOr(manifestPath, null);
+  // A clone the harness never set up (no `init`, no `functions apply`) has nothing to drift from.
+  if (manifest === null) return [];
+
+  if (plan.index === 'make') say('codeMap', 'no code map index here (.codegraph)');
+  if (plan.index === 'remove' && manifest?.codegraph?.createdDir === true) say('codeMap', 'the code map index js-harness made is still here');
+
+  const settings = jsonOr(path.join(root, ...SETTINGS_FILE.split('/')), {});
+  for (const key of plan.settings) {
+    const { pointer, value } = SETTINGS_KEYS[key];
+    if (valueAt(settings, pointer) === undefined) say(SWITCH_OF_KEY[key], `${settingLabel(pointer)} is not ${JSON.stringify(value)}`);
+  }
+  const records = Array.isArray(manifest?.settings) ? manifest.settings.filter(isValidSettingsRecord) : [];
+  for (const record of records) {
+    if (plan.settings.includes(record.key)) continue;
+    if (JSON.stringify(valueAt(settings, record.pointer)) === JSON.stringify(record.value)) {
+      say(SWITCH_OF_KEY[record.key], `${settingLabel(record.pointer)} is still ${JSON.stringify(record.value)}`);
+    }
+  }
+
+  const hookPath = resolveGitPath(root, 'hooks/pre-push', spawn);
+  const hookThere = Boolean(hookPath) && fs.existsSync(hookPath);
+  const recorded = Array.isArray(manifest?.files) && manifest.files.some((f) => typeof f?.path === 'string' && f.path.split('/').pop() === 'pre-push');
+  if (plan.prePush && !hookThere) say('codexReview', 'no push check in the pre-push hook');
+  if (!plan.prePush && recorded && hookThere) say('codexReview', 'the push check js-harness wrote is still in the pre-push hook');
+  return lines;
 }

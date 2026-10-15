@@ -889,6 +889,25 @@ test('doctorMain on auto shows the codex row only for a project with a program f
   }
 });
 
+test('doctorMain shows codegraph project n/a, with no gap and no init offered, where codeMap is off', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeJson(path.join(project, 'harness.json'), { functions: { codeMap: 'off' } });
+    const spawn = fakeSpawn({ codexLogin: 'in' });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    const row = JSON.parse(output).find((r) => r.id === 'codegraph');
+    assert.equal(row.project, 'n/a');
+    assert.equal(row.gaps.some((gap) => gap.dimension === 'project'), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('doctorMain keeps the codex row when codexReview is declared on, with no program file', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

@@ -176,6 +176,7 @@ import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexRev
 import {
   classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
+import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
 import { killTree } from './lib/process-tree.mjs';
@@ -1201,6 +1202,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   if (!head) {
     error(`Cannot resolve HEAD to a commit in ${root}.`);
     return 1;
+  }
+  // A project that has the review off at the head it would review asks no record of it (the push row reads the
+  // same switch at the same commit), so a review or a plan starts nothing. A skip still records: no state may
+  // exist in which the push asks for a record this command refuses to write (odd/tasks/on-demand-functions.md).
+  if (args.unavailable === undefined) {
+    const at = gitIn(root, spawn);
+    const { resolved } = functionsOf(harnessOfCommit(at, head), commitTree(at, head));
+    if (resolved.codexReview.value === 'off') {
+      log(`The Codex review is off at ${head.slice(0, 7)} (${resolved.codexReview.because}): nothing to review, and nothing was started or recorded.`);
+      return 0;
+    }
   }
 
   // What HEAD and the tracked tree are now, for the two checks that hold a session and a review to the range:
