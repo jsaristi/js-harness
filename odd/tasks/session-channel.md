@@ -2832,6 +2832,14 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `start_session`. T11 (line 3680): "Con teléfono, cuando salga (Recomendada)": T11 stays open
   until his next time away, and "Done when" keeps its phone clause. Layer 3 is unblocked.
   The same day, T9's relief slice is draft pull request 229 and T9b is ticked.
+- 2026-10-15, after 18:20 local, T9 (JH 5), branch `feat/t9-measures`. T9b's first advisory
+  fixed, test first: `keptByRelief` answers `{ known: false, undecided: true }` for a
+  minute-only line in a bound's minute, and `keptEither` answers not known when a reader is
+  undecided and none says kept, so git's "not kept" beside such a line is no longer a miss. A
+  relief file that cannot be read defers nothing: with no relief file, git's "not kept" is
+  still a miss, since that reader read no line that could be the state. The other two
+  advisories (the same second as a bound; the repeated hour when the clocks go back) stay as
+  they are: both need a line written in the bound's own second or in that one hour of the year.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

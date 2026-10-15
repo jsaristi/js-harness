@@ -91,8 +91,8 @@ test('keptByRelief compares a stamp with seconds exactly, and calls a minute-onl
   assert.deepEqual(kept(`${withSeconds(3, 40)} after the notice, same minute\n`), { known: true, kept: true });
   assert.deepEqual(kept(`${withSeconds(3, 5)} before the notice, same minute\n`), { known: true, kept: false });
   assert.deepEqual(kept(`${withSeconds(6, 30)} after the boundary, same minute\n`), { known: true, kept: false });
-  assert.deepEqual(kept(`${minuteOnly(3)} the notice's minute, no seconds\n`), { known: false });
-  assert.deepEqual(kept(`${minuteOnly(6)} the boundary's minute, no seconds\n`), { known: false });
+  assert.deepEqual(kept(`${minuteOnly(3)} the notice's minute, no seconds\n`), { known: false, undecided: true });
+  assert.deepEqual(kept(`${minuteOnly(6)} the boundary's minute, no seconds\n`), { known: false, undecided: true });
   assert.deepEqual(kept(`${minuteOnly(5)} inside, no seconds\n${minuteOnly(3)} ambiguous\n`), { known: true, kept: true });
   assert.deepEqual(kept(`${minuteOnly(2)} before\n${minuteOnly(7)} after\n`), { known: true, kept: false });
 });
@@ -147,6 +147,22 @@ test('keptEither says kept when any known reader says kept, and kept false only 
     throw new Error('boom');
   }, unknown)(query), { known: false }, 'a reader that throws is unknown, not a miss');
   assert.deepEqual(keptEither()(query), { known: false }, 'no reader is unknown');
+});
+
+// T9b's first advisory: a hand-written relief line in a bound's minute may be the state kept, so git's "not kept"
+// beside it is not a miss. A reader that could not be read at all (no relief file) defers nothing.
+test('keptEither knows nothing when a reader is undecided and none says kept, and an unreadable reader defers no miss', () => {
+  const query = { document: '/p/odd/tasks/x.md', after: at(3), before: at(6) };
+  const yes = () => ({ known: true, kept: true });
+  const no = () => ({ known: true, kept: false });
+  const undecided = () => ({ known: false, undecided: true });
+  const unreadable = () => ({ known: false });
+  assert.deepEqual(keptEither(no, undecided)(query), { known: false }, 'git not kept, the relief line in a bound minute');
+  assert.deepEqual(keptEither(yes, undecided)(query), { known: true, kept: true }, 'a kept answer decides');
+  assert.deepEqual(keptEither(no, unreadable)(query), { known: true, kept: false }, 'no relief file is still a miss');
+  const minuteOnly = (minute) => reliefStamp(Date.parse(at(minute))).replace(/(\d{2}:\d{2}):\d{2} local/, '$1 local');
+  const relief = keptByRelief(() => `${minuteOnly(3)} hand-written in the notice's minute\n`, RELIEF);
+  assert.deepEqual(keptEither(no, relief)(query), { known: false }, 'through the real relief reader');
 });
 
 // --- measuresLines ---

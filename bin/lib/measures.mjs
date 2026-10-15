@@ -72,8 +72,9 @@ function reliefSpan(line) {
  * `readFile(file)` and answers `{ known: true, kept }`, `kept` being whether a line is stamped after `after` (the
  * notice; `null` is open) and at or before `before` (the boundary), compared as instants. A line stamped with minutes
  * only, whose minute holds a bound, cannot say which side of it it fell on: when no line decides, such a line makes the
- * answer `{ known: false }`, never kept. A stamp that does not parse proves nothing. `{ known: false }` too when the
- * file cannot be read, ENOENT included, or a bound does not parse. */
+ * answer `{ known: false, undecided: true }`, never kept, since that line may be the state kept (`keptEither` lets no
+ * other reader call it a miss). A stamp that does not parse proves nothing. `{ known: false }` when the file cannot be
+ * read, ENOENT included, or a bound does not parse. */
 export function keptByRelief(readFile, file) {
   return ({ after, before } = {}) => {
     const unknown = { known: false };
@@ -93,13 +94,14 @@ export function keptByRelief(readFile, file) {
       if (span.from > from && span.to <= to) return { known: true, kept: true };
       if (span.to > from && span.from <= to) ambiguous = true;
     }
-    return ambiguous ? unknown : { known: true, kept: false };
+    return ambiguous ? { known: false, undecided: true } : { known: true, kept: false };
   };
 }
 
-/** One reader that answers what `readers` answer together: `{ known: true, kept: true }` when a known reader says kept,
- * `{ known: true, kept: false }` when a reader is known and none says kept, and `{ known: false }` when none is known.
- * A reader that throws, or answers nothing, is not known. */
+/** One reader that answers what `readers` answer together: `{ known: true, kept: true }` when a known reader says kept;
+ * `{ known: false }` when none does and a reader is undecided (it read a line that may be the state kept, so another
+ * reader's "not kept" is no miss); `{ known: true, kept: false }` when a reader is known and none says kept; and
+ * `{ known: false }` when none is known. A reader that throws, or answers nothing, is not known and decides nothing. */
 export function keptEither(...readers) {
   return (query) => {
     const answers = readers.map((reader) => {
@@ -110,6 +112,7 @@ export function keptEither(...readers) {
       }
     });
     if (answers.some((answer) => answer?.known === true && answer.kept === true)) return { known: true, kept: true };
+    if (answers.some((answer) => answer?.undecided === true)) return { known: false };
     if (answers.some((answer) => answer?.known === true)) return { known: true, kept: false };
     return { known: false };
   };
