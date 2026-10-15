@@ -833,6 +833,34 @@ test('sync replaces a guard entry recorded with the older matcher by the new one
 
 const deepEqualJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+// After #191 landed, an update of this machine's copy ran `install`, which recorded the new guard entry and left the
+// older one (matcher ...|Bash) in settings.json, unrecorded, so the guard ran twice on Agent, SendMessage and Bash.
+// An entry whose one hook runs the harness's own command at the same pointer is the harness's, whatever its matcher
+// or timeout: install puts the new entry in its place, and leaves every other entry as it was.
+test('install replaces its own entry left with an older matcher, in place, keeps the others, and records one', () => {
+  const home = makeTmpHome();
+  try {
+    const target = guardHook.target(home);
+    const olderMatcher = 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash';
+    const theirs = { matcher: '*', hooks: [{ type: 'command', command: 'echo their-own-pre-tool-use', timeout: 10 }] };
+    const sameMatcherTheirs = { matcher: olderMatcher, hooks: [{ type: 'command', command: 'echo mine', timeout: 5 }] };
+    const sharedWithTheirs = { matcher: 'Bash', hooks: [guardHook.entry().hooks[0], { type: 'command', command: 'echo also-mine' }] };
+    const older = { ...guardHook.entry(), matcher: olderMatcher };
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [theirs, older, sameMatcherTheirs, sharedWithTheirs] } }, null, 2)}\n`, 'utf8');
+
+    const manifest = install(home, '0.2.0');
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), sameMatcherTheirs, sharedWithTheirs]);
+    assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), [guardHook.entry()]);
+
+    const bytes = fs.readFileSync(target, 'utf8');
+    install(home, '0.2.0');
+    assert.equal(fs.readFileSync(target, 'utf8'), bytes, 'a second install changes nothing');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('an update from an install made before the resume hook adds its entry, and uninstall still leaves the host file as it found it', () => {
   for (const created of [true, false]) {
     const home = makeTmpHome();
