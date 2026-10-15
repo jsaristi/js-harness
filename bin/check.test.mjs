@@ -6,7 +6,9 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
@@ -26,7 +28,7 @@ test('estimateTokens divides length by 4, rounding up', () => {
 test('checkBudget passes at exactly the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6000)); // 1500 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(TOKEN_BUDGET * 4)); // the budget, exactly
     const row = checkBudget(dir);
     assert.equal(row.pass, true);
   } finally {
@@ -37,7 +39,7 @@ test('checkBudget passes at exactly the token limit', () => {
 test('checkBudget fails over the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004)); // 1501 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4)); // one token over it
     const row = checkBudget(dir);
     assert.equal(row.pass, false);
   } finally {
@@ -59,7 +61,7 @@ test('checkBudget fails with a clear message when AGENTS.md is missing', () => {
 test('main exits 1 when a row fails (budget over limit, tests skipped)', async () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
     const code = await main(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
     assert.equal(code, 1);
   } finally {
@@ -451,7 +453,7 @@ test('checkSensor gives every sensor a 20 minute timeout by default', async () =
     return { status: 0, stdout: '', stderr: '' };
   };
   await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
-  assert.equal(options.timeout, 20 * 60 * 1000);
+  assert.equal(options.timeout, SENSOR_TIMEOUT_MS);
 });
 
 /** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
@@ -1074,6 +1076,31 @@ test('a project list that cannot be read fails the rules row and stops nothing e
   }
 });
 
+// --- flaky row: the quarantine ledger, when the project keeps one (./lib/flaky.mjs) ---
+
+test('main runs the flaky row with the static rows when the project keeps docs/FLAKY.md, and a malformed ledger makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.mkdirSync(path.join(dir, 'bin'));
+    fs.writeFileSync(path.join(dir, 'bin', 'a.test.mjs'), '');
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    const read = await runCheck(['--cwd', dir], env);
+    assert.equal(read.code, 0);
+    assert.match(read.output, /^PASS {2}flaky {2}docs\/FLAKY\.md quarantines 1 test file, 1 of them current; /m);
+
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n');
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}flaky {2}docs\/FLAKY\.md is not read: 2 faults to repair in that file$/m);
+    assert.match(refused.output, /^ {6}bin\/a\.test\.mjs: no "- Expires:" line$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- failures row: the register of failures, when the project keeps one (./failures.mjs) ---
 
 test('main runs the failures row first, before budget, when the project keeps a register, prints the entries that are not settled, and a register it cannot read makes it exit 1', async () => {
@@ -1623,7 +1650,7 @@ test('main waits for the gate that holds the lock, says once on stderr whose it 
   const names = rowsOf(output).map((row) => row.split('  ')[1]);
   assert.deepEqual(names.slice(names.indexOf('gate'), names.indexOf('tests') + 1), ['gate', 'load', 'tests'], output);
   // The wait is not the sensor's time: its own bound starts when it does, whole.
-  assert.deepEqual(timeouts, [20 * 60 * 1000]);
+  assert.deepEqual(timeouts, [SENSOR_TIMEOUT_MS]);
   assert.equal(readGateHolder(home, { now: clock.now }), null);
 }));
 
@@ -3312,8 +3339,8 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
 // changes when a failure is known, never what a commit proves: such a gate was red before, and is red now.
 
 /** Puts the AGENTS.md of `dir` over its budget: the static row a test fails by itself. */
-const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
-const BUDGET_FAILS = 'FAIL  budget  1501 estimated tokens (budget 1500)';
+const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
+const BUDGET_FAILS = `FAIL  budget  ${TOKEN_BUDGET + 1} estimated tokens (budget ${TOKEN_BUDGET})`;
 const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load'];
 const namesOf = (output) => rowsOf(output).map((row) => row.split('  ')[1]);
 
@@ -4325,6 +4352,27 @@ test('a folder that is not the index has no key: with an untracked file, an unst
   }
 });
 
+test('a gate whose tests passed only by a quarantine proves no tree, so the next gate runs them again (odd/tasks/flaky-ledger.md)', async () => {
+  const quarantined = sameTreeRepo({ sameTree: 'skip', sensors: { tests: 'node --test' } });
+  try {
+    fs.mkdirSync(path.join(quarantined.repo, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'bin', 'a.test.mjs'), '');
+    fs.mkdirSync(path.join(quarantined.repo, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    git(quarantined.repo, 'add', '-A');
+    git(quarantined.repo, ...commitAs, '-m', 'a quarantined test file');
+    const red = { status: 1, signal: null, stdout: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ one (1ms)\n', stderr: '' };
+    let call = 0;
+    quarantined.sensor.answer = () => (call++ % 2 === 0 ? red : { status: 0, signal: null, stdout: '', stderr: '' });
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal(quarantined.sensorRuns(), 4, 'each gate ran the suite and its rerun');
+    assert.deepEqual(quarantined.events().filter((event) => event.event === 'end').map((event) => [event.result, 'code' in event]), [['pass', false], ['pass', false]]);
+  } finally {
+    quarantined.remove();
+  }
+});
+
 test('a gate proves no tree when a sensor failed, or when a tracked file changed while the sensors ran', async () => {
   const failing = sameTreeRepo();
   try {
@@ -4892,3 +4940,117 @@ test('a gate whose sensors fail keeps the names of their failing tests in its en
     { name: 'more', pass: true, failing: undefined },
   ]);
 }));
+
+// The sub-agents row of `check --subagents` (odd/tasks/honesty-audit.md, T13). Plain check runs none of it.
+const SUBAGENT_NOW = Date.parse('2026-10-14T20:00:00Z'); // 15:00 in Bogota, UTC-5
+const BOGOTA_OFFSET = -300;
+const recordLine = (entries) => `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`;
+const turnAt = (stamp, model) => ({ type: 'assistant', timestamp: stamp, effort: 'high', message: { id: `m-${stamp}`, model, usage: { input_tokens: 10, output_tokens: 1 }, content: [] } });
+
+/** `run` answering git as a main checkout at `dir` with no other worktree, as `recordFolders` asks it. */
+function gitOf(dir) {
+  return (command, args) => {
+    if (args[0] === 'rev-parse') return { status: 0, stdout: `${path.join(dir, '.git')}\n` };
+    if (args[0] === 'worktree') return { status: 0, stdout: `worktree ${dir}\nHEAD abc\nbranch refs/heads/main\n\n` };
+    return { status: 1, stdout: '' };
+  };
+}
+
+/** A project of today's sub-agents: a writer on haiku and an explorer on sonnet, the explorer off the reader's
+ * rule (opus). `rules` gives the project the harness's rules file, the one the rules are read from; `records`
+ * gives it a config folder with the records. */
+function subagentProject({ rules = true, records = true } = {}) {
+  const dir = makeTmpDir();
+  const config = makeTmpDir();
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+  if (rules) {
+    fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+    fs.copyFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib', 'rules-data.mjs'), path.join(dir, 'bin', 'lib', 'rules-data.mjs'));
+  }
+  if (records) {
+    const folder = path.join(config, 'projects', projectSlug(dir));
+    const agents = path.join(folder, 's1', 'subagents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(folder, 's1.jsonl'), recordLine([turnAt('2026-10-14T14:00:00Z', 'claude-opus-5-5')]));
+    const agent = (id, meta, model, stamp) => {
+      fs.writeFileSync(path.join(agents, `agent-${id}.jsonl`), recordLine([turnAt(stamp, model)]));
+      fs.writeFileSync(path.join(agents, `agent-${id}.meta.json`), JSON.stringify(meta));
+    };
+    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, 'claude-haiku-5-5', '2026-10-14T14:02:00Z');
+    agent('e1', { agentType: 'Explore', description: 'Map things' }, 'claude-sonnet-5-5', '2026-10-14T14:03:00Z');
+  }
+  return { dir, config, cleanup: () => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(config, { recursive: true, force: true }); } };
+}
+
+/** The deps `main` takes for the sub-agents row, with the day and the machine's zone fixed. */
+const subagentDeps = (project, extra = {}) => ({ run: gitOf(project.dir), now: () => SUBAGENT_NOW, offsetMinutes: BOGOTA_OFFSET, ...extra });
+
+/** The lines of `output` that open the sub-agents row. */
+const subagentRows = (output) => output.split('\n').filter((line) => line.startsWith('INFO  subagents  ') || line.startsWith('PASS  subagents  ') || line.startsWith('FAIL  subagents  '));
+
+test('plain check prints no subagents row and reads no record', async () => {
+  const project = subagentProject();
+  const gitCalls = [];
+  const run = gitOf(project.dir);
+  try {
+    const { code, output } = await runCheck(['--cwd', project.dir], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project, { run: (command, args, options) => { gitCalls.push(args); return run(command, args, options); } }));
+    assert.equal(subagentRows(output).length, 0, output);
+    assert.equal(gitCalls.filter((args) => args[0] === 'worktree').length, 0, JSON.stringify(gitCalls));
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents prints an INFO subagents row that counts today\'s launches against the rules', async () => {
+  const project = subagentProject();
+  try {
+    const { code, output, errOutput } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    assert.equal(errOutput, '', output);
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /2 launches today: 1 on a model off the rules/, output);
+    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('subagent-reader-model')), output);
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says the sub-agent rules are not in force here, and compares nothing', async () => {
+  const project = subagentProject({ rules: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /not in force/, output);
+    assert.doesNotMatch(row, /launches today/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says no sub-agent launched today when the project has no records folder', async () => {
+  const project = subagentProject({ records: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  no sub-agent launched today: no Claude Code records folder/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says what it cannot tell when reading the records throws, and fails nothing', async () => {
+  const project = subagentProject();
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1' }, subagentDeps(project, { homedir: () => { throw new Error('no home directory here'); } }));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  cannot tell: .*no home directory here/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+

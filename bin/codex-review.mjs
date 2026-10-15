@@ -680,8 +680,9 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
 }
 
 // Reviews seen so far took 1 to 15 minutes; a run past this has stalled (a hung sandboxed command,
-// a network stall), and without a bound the command would wait forever.
-const REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
+// a network stall), and without a bound the command would wait forever. The bound is the declared rule
+// `review-timeout` (bin/lib/rules-data.mjs).
+export const REVIEW_TIMEOUT_MS = ruleValue('review-timeout', 'minutes') * 60 * 1000;
 
 // What a review that did not stand ends with. A review that failed is run again; the explicit skip is for a
 // machine where Codex cannot run (`NO_CODEX`, `SKIP_IS_THE_WAY_OUT`). The command does not tell a spent usage

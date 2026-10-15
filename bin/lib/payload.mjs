@@ -1,7 +1,10 @@
 // Per-turn context payload measurement for Claude Code and Codex — see
-// odd/tasks/f2-context-diet.md. Read-only: every function here reads files, never runs a hook.
+// odd/tasks/f2-context-diet.md. Read-only: every function here reads files, never runs a hook; the
+// one process it starts is `git rev-parse`, to find the main checkout whose memory index loads.
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mainCheckout } from './sessions.mjs';
 
 /** Rough token estimate: ~4 chars per token. */
 export function estimateTokens(text) {
@@ -34,10 +37,13 @@ function readJson(filePath) {
   }
 }
 
-/** The auto-memory index slug for `cwd`: `path.resolve(cwd)` with every character outside
- * `[A-Za-z0-9]` replaced by `-` (e.g. `D:\js-harness` -> `D--js-harness`). */
+/** The auto-memory index slug for `cwd`: its main checkout's absolute path with every character
+ * outside `[A-Za-z0-9]` replaced by `-` (e.g. `D:\js-harness` -> `D--js-harness`). Claude Code keeps
+ * one memory for a repository, so a linked worktree reads its main checkout's index, as
+ * `memory-rules.mjs` does; outside a repository the folder itself is the project. */
 function memorySlug(cwd) {
-  return path.resolve(cwd).replace(/[^A-Za-z0-9]/g, '-');
+  const run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true });
+  return path.resolve(mainCheckout(run, path.resolve(cwd))).replace(/[^A-Za-z0-9]/g, '-');
 }
 
 /** The `name:` field from a file's leading `---`-delimited YAML frontmatter, or `null` if there is
