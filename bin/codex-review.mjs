@@ -1267,7 +1267,16 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return names === null ? null : names.split('\0').filter(Boolean);
     };
     const anchor = recheckAnchor({ from, records, back: back.split('\n').filter(Boolean), changedBetween });
-    return recheckState({ from: anchor, records, runs: readRunLog() });
+    // Whether the range's head holds `commit`; exit 1 of `--is-ancestor` is a no, anything else unknown.
+    const holds = (commit) => {
+      try {
+        const asked = spawn('git', ['merge-base', '--is-ancestor', commit, head], { cwd: root, encoding: 'utf8' });
+        return asked?.error || asked === undefined ? null : asked.status === 0 ? true : asked.status === 1 ? false : null;
+      } catch {
+        return null;
+      }
+    };
+    return recheckState({ from: anchor, records, runs: readRunLog(), holds });
   };
 
   /** Where this run starts, once the Codex review records have been read against its range, `given..head`

@@ -68,6 +68,21 @@ test('the findings of a review are rechecked once: from its own head again, afte
   assert.deepEqual(recheckState({ from: B, records, runs }), { kind: 'refused', of: B, open: 0 });
 });
 
+test('from the head of a rechecked review, a range whose head holds the recheck is refused; one that forked before it is a review, and one nobody can tell is refused', () => {
+  const found = [finding('[P2] Drops a record')];
+  const records = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r2', recheckOf: B })];
+  const runs = [runLine('r1', { answer: { findings: found, verdict: 'incorrect' } }), runLine('r2', { recheck: { of: B, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } })];
+  const asked = [];
+  const holds = (answer) => (commit) => {
+    asked.push(commit);
+    return answer;
+  };
+  assert.deepEqual(recheckState({ from: B, records, runs, holds: holds(true) }), { kind: 'refused', of: B, open: 0 });
+  assert.deepEqual(recheckState({ from: B, records, runs, holds: holds(false) }), { kind: 'review' });
+  assert.deepEqual(recheckState({ from: B, records, runs, holds: holds(null) }), { kind: 'refused', of: B, open: 0 });
+  assert.deepEqual(asked, [C, C, C], 'asked of the head of the recheck');
+});
+
 test('a review that called the patch correct and found only P3 findings owes no correction, so the range after it is a review', () => {
   const nits = [finding('A nit', { severity: 'P3' }), finding('No priority', { severity: null })];
   const correct = recheckState({ from: B, records: [record(A, B, { run: 'r1' })], runs: [runLine('r1', { answer: { findings: nits, verdict: 'correct' } })] });

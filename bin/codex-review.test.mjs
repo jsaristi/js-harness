@@ -6419,6 +6419,25 @@ test('a second recheck of the same findings is refused before anything runs, and
   assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records, runs]);
 });
 
+test('a branch forked at the head of a rechecked review, without the recheck, is new code and is reviewed as any other (L8 of merge-queue)', async () => {
+  const { root, head } = await reviewedThenCorrected();
+  const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
+  assert.equal(second.code, 0, second.err);
+  // Another line from the reviewed head, which holds none of the correction the recheck read.
+  git(root, 'checkout', '-q', '-b', 'forked', head);
+  fs.writeFileSync(path.join(root, 'g.txt'), 'new code\n', 'utf8');
+  git(root, 'add', 'g.txt');
+  git(root, 'commit', '-qm', 'new code on a fork');
+  const fake = fakeCodex(reviewed(root, head));
+  const forked = await run(['--base', head, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
+  assert.equal(forked.code, 0, forked.err);
+  assert.equal(fake.calls.length, 1, 'Codex reviewed it');
+  // Codex's own `--base` review, as any plain range gets in a turn: no prompt on stdin, so no recheck one.
+  assert.ok(!(fake.calls[0].child.received?.text ?? '').includes('## A recheck of earlier findings'), 'no recheck prompt');
+  const record = readCodexReviews(root).at(-1);
+  assert.deepEqual([record.base, record.head, record.recheckOf], [head, git(root, 'rev-parse', 'HEAD'), undefined]);
+});
+
 test('a recheck that fixed everything and blocks nothing leaves the next range a review as any other', async () => {
   const { root, head, fixed } = await reviewedThenCorrected();
   const allFixed = { findings: [], overall_correctness: 'patch is correct', overall_explanation: 'Each finding is fixed.' };

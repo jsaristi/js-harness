@@ -91,10 +91,12 @@ export function recheckAnchor({ from, records, back, changedBetween }) {
  * - `{ kind: 'refused', of, open }`: a second recheck of the findings of the review that ended at `of`,
  *   whose first recheck left `open` findings not fixed, blocking or unmarked (`null` when its counts were
  *   not kept, which is taken as open). It is refused: from the head of that recheck when it left some open,
- *   and from `of` itself whatever it left, since those findings were rechecked already.
+ *   and from `of` itself whatever it left, since those findings were rechecked already, unless `holds`
+ *   (whether the range's head holds a commit: `true`, `false`, or `null` when git cannot say) says the
+ *   range's head does not hold that recheck's head: then it forked before the recheck, and is a review.
  *
  * The last reviewed record that ends at `from` decides, since a later one is the later word on that head. */
-export function recheckState({ from, records, runs }) {
+export function recheckState({ from, records, runs, holds = () => null }) {
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
   const linesOf = (rec) => recordRuns(rec).map((id) => (id === null ? null : runs.findLast((one) => one?.id === id) ?? null));
   const openOf = (rec) => {
@@ -109,7 +111,10 @@ export function recheckState({ from, records, runs }) {
     return open === 0 ? { kind: 'review' } : { kind: 'refused', of: prior.recheckOf, open };
   }
   const rechecked = reviewed.filter((rec) => rec.recheckOf === from).at(-1);
-  if (rechecked !== undefined) return { kind: 'refused', of: from, open: openOf(rechecked) };
+  // A second recheck only on the line the recheck continues. A range whose head forked from `from` before
+  // the recheck holds none of the correction it read: its commits are new code, a review as any other
+  // (L8 of odd/tasks/merge-queue.md). Unknown is refused, as before.
+  if (rechecked !== undefined) return holds(rechecked.head) === false ? { kind: 'review' } : { kind: 'refused', of: from, open: openOf(rechecked) };
   const lines = linesOf(prior);
   if (lines.length === 0 || lines.includes(null)) return { kind: 'review' };
   const answers = lines.map(runAnswer);
