@@ -137,9 +137,19 @@ export function subagentRowLines(result, expected) {
   if (result.unknownModel > 0) parts.push(`${result.unknownModel} with an unknown model`);
   if (result.unknownEffort > 0) parts.push(`${result.unknownEffort} at an unknown effort`);
 
+  // Launches of role other are not compared, so no claim covers them: they are named apart (Codex, 2026-10-15).
+  const unexamined = result.other > 0 ? `; ${result.other} not compared (role other)` : '';
   let detail;
   if (parts.length > 0) {
-    detail = `${count}: ${parts.join(', ')}`;
+    detail = `${count}: ${parts.join(', ')}${unexamined}`;
+  } else if (result.other > 0) {
+    const checked = [];
+    if ((result.byRole.writer.launches > 0 && modelRule(rules.writerModel) !== null)
+      || (result.byRole.reader.launches > 0 && modelRule(rules.readerModel) !== null)) {
+      checked.push("on the rules' models");
+    }
+    if (effort !== null) checked.push(`at ${effort}`);
+    detail = `${count}, the ${result.compared} compared all ${checked.join(' and ')}${unexamined}`;
   } else {
     const checked = [];
     if ((result.byRole.writer.launches > 0 && modelRule(rules.writerModel) !== null)

@@ -204,3 +204,10 @@ test('a single launch is said in the singular, and a launch no rule covers is no
   assert.equal(result.compared, 0);
   assert.equal(subagentRowLines(result, none).detail, '1 launch today, none compared with a rule');
 });
+
+// A launch of role other is not compared, so the row never counts it among those on the rules (Codex, 2026-10-15).
+test('an other launch is named as not compared and kept out of the all-on-the-rules claim', () => {
+  const launches = [launch({ role: 'writer' }), launch({ role: 'other', modelRan: 'claude-sonnet-5-5', effortRan: 'low' })];
+  const { detail } = subagentRowLines(compareLaunches(launches, RULES), RULES);
+  assert.match(detail, /^2 launches today, the 1 compared all on the rules' models and at high; 1 not compared \(role other\)$/);
+});
