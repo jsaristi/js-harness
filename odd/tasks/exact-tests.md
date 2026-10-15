@@ -95,7 +95,7 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 | T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
 | T3c | S6 | inline | done, `bfb64df`; its range recorded as a refused second recheck (L10) | `assertUntraced` in `bin/lib/trace-reads.test.mjs` accepts the hooks fallback for every reason it asserts (the marker of the clock is set before that fallback, so it holds as it is). No RED: this node has the hooks, and a half simulation would not be the node it stands for; GREEN 13/13. | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
 | T3d | S6 | inline | done, committed after T3c (`bfb64df`) in the gate turn of its own commit, reviewed by Codex from `bfb64df` | L9: the citations test made deterministic (fixed commit dates; no RED: the flake is one run in 27, three runs green) and the shadow's results a folder with a file per test file (RED then GREEN) |
-| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; the switch waits for it | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
+| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; T4a and T4b done (`e0af24e`, L14), T4c delegated; the switch waits for 30 | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
 - **L1** (2026-10-14): S1 to S4, verbatim. The lead's order of the queue puts this after Codex out of the
@@ -205,6 +205,34 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   (`bin/lib/trace-reads.test.mjs`). Asked of the lead: count from the last failing gate (21 to go) with the
   skip never applied to a test the flaky ledger (JH 10, step 5) tags, per the result memory's S1 ("tagged
   nondeterministic tests never cached"), or leave known flakes out of the count. Next: the lead's answer.
+- **L14** (2026-10-15 03:39, the lead's answer, verbatim): "your reading, adopted. It keeps S6 literal and is
+  stricter: 30 consecutive counting gates with no failing skipped test, counted from the last failure (9
+  now), and the skip never applies to a test the flaky ledger tags (result-memory S1's rule carried over).
+  No known flake is left out of the count. Meanwhile, build T4's switch so it is ready to flip, test first:
+  the skip path, the ledger exclusion read from JH 10's ledger [...], and a check row that says the running
+  count. The flip itself happens only when the count reaches 30, with the gate-log numbers in the PR body."
+  The ledger's format is JH 10's (branch `feat/flaky-ledger`): `docs/FLAKY.md`, one `### <test file>`
+  heading per entry; T4 reads the headings alone, expired or not. Done, RED then GREEN each, in `e0af24e`:
+  T4b, `selectTests` takes `flaky` and `flakyTestsOf(root)` reads the headings, the shadow passes them, so a
+  named file is never a would-skip (`bin/lib/select-tests.test.mjs` 11/11, `bin/check-shadow.test.mjs` 4/4);
+  T4a, `s6Count(events)` and the `exact tests` row (`checkExactCount`, informs only;
+  `bin/check-exact-tests.test.mjs` 6/6). That commit's own gate: "S6: 16 of 30 gates in a row would have
+  skipped a test file and saw none of those fail, since the gate of 2026-10-15 01:58 where
+  evals/suite.test.mjs failed". Next: T4c, the skip path behind `"exactTests": "skip"`, harness.json left at
+  `"shadow"`, given to a bounded writer (route: delegated, the long-session backstop) with the decisions of
+  its brief: a `skip` field on the row and the end line and never `shadow`, the whole suite for `full`, for
+  a path outside `[A-Za-z0-9._/-]` or a command over 7000 characters and for a WSL fallback; an empty run
+  passes; a passing skip gate still writes the tree key. The flip is a later pull request at 30.
+- **L15** (2026-10-15 03:58): T4c written by the writer, RED then GREEN per decision (its report): one
+  helper `testsCommandLine` builds the command with the concurrency and the files; `skipPlan` runs the whole
+  suite for `full`, a path outside `[A-Za-z0-9._/-]`, a command over 7000 characters, no test file, or a WSL2
+  selection that could not be asked; an empty run passes with nothing spawned (in WSL2 it says `ranIn: 'wsl'`,
+  so the tree key, whose traces are WSL2's, is still written); a WSL2 fallback runs the whole suite untraced;
+  the row and the end line carry `skip: { files, skipped }` and never `shadow`; in skip mode the `exact tests`
+  row says the count stopped. Added after its report: a path that starts with a dash runs the whole suite
+  (node would read it as an option), RED then GREEN. Files alone: `check-exact-tests` 10/10, `check-shadow`
+  10/10, `check-shadow-wsl` 4/4, `check-test-concurrency` 4/4, `gate-wsl-trace` 3/3, `select-tests` 11/11,
+  `check.test.mjs` 205/205 (the writer's run). harness.json stays `"shadow"`.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
