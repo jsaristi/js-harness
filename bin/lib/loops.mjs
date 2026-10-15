@@ -85,31 +85,80 @@ export function writeRecord(file, record, { exclusive = false } = {}) {
   }
 }
 
-const sameRun = (a, b) => a.pid === b.pid && a.createdAt === b.createdAt;
+/** A lock older than this was left by a session that died holding it. The longest hold is a stop: up to ten
+ * looks at the process table, each a few seconds on Windows. */
+export const LOCK_STALE_MS = 120000;
+const LOCK_TRY_MS = 250;
+const LOCK_TRIES = 600;
 
-/** Removes the record only while it is still the one `record` is (the same process). It moves the file aside
- * first, which only one session can do, and reads what it moved: a record another session wrote meanwhile (a new
- * claim of the name) is put back and the answer is false. True when `record`'s file was removed or was gone. */
-export function removeRecordOf(file, record, { readFile } = {}) {
-  const moved = besideOf(file, 'aside');
-  try {
-    fs.renameSync(file, moved);
-  } catch (err) {
-    if (err.code === 'ENOENT') return true;
-    throw err;
+export class LockHeldError extends Error {}
+
+/** Runs `body` while holding the lock of the record `file` (`<file>.lock`, created exclusively), so reading,
+ * reclaiming, claiming and removing a record are one step for one session at a time: a name is never seen free
+ * while another session is deciding about it. Waits for the lock, breaks it once it is older than
+ * LOCK_STALE_MS, and throws LockHeldError after LOCK_TRIES tries. The lock's age is the file's own time against
+ * this machine's clock, never a fake one. */
+export async function withRecordLock(file, body, { sleep, clock = Date.now } = {}) {
+  const lock = `${file}.lock`;
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  for (let tries = 0; ; tries += 1) {
+    try {
+      fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' });
+      break;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+    if (breakStaleLock(lock, clock)) continue;
+    if (tries >= LOCK_TRIES) throw new LockHeldError(`the lock ${lock} stayed held for ${(LOCK_TRIES * LOCK_TRY_MS) / 1000} s`);
+    await sleep(LOCK_TRY_MS);
   }
-  const read = readRecord(moved, { readFile });
-  if (read.record && sameRun(read.record, record)) {
-    fs.rmSync(moved, { force: true });
+  try {
+    return await body();
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
+}
+
+/** Removes a lock older than LOCK_STALE_MS. It moves the lock aside first, so of two sessions breaking it only one
+ * does, and puts back a lock that turns out to be new (taken in between). A lock is held for seconds, so only a
+ * session that died inside it leaves an old one. */
+function breakStaleLock(lock, clock) {
+  const old = (file) => {
+    try {
+      return clock() - fs.statSync(file).mtimeMs > LOCK_STALE_MS;
+    } catch {
+      return false;
+    }
+  };
+  if (!old(lock)) return false;
+  const moved = besideOf(lock, 'aside');
+  try {
+    fs.renameSync(lock, moved);
+  } catch {
     return true;
   }
-  try {
-    fs.linkSync(moved, file);
-  } catch {
-    // a third session claimed the name in between: its record stands
+  if (!old(moved)) {
+    try {
+      fs.linkSync(moved, lock);
+    } catch {
+      // taken again meanwhile: that lock stands
+    }
   }
   fs.rmSync(moved, { force: true });
-  return false;
+  return true;
+}
+
+const sameRun = (a, b) => a.pid === b.pid && a.createdAt === b.createdAt;
+
+/** Removes the record only while it is still the one `record` is (the same process): a loop that was taken over
+ * and started again by another session has a new record, which is not this one's to remove. Call it inside
+ * withRecordLock. True when `record`'s file was removed or was gone. */
+export function removeRecordOf(file, record, { readFile } = {}) {
+  const now = readRecord(file, { readFile });
+  if (now.record && !sameRun(now.record, record)) return false;
+  if (now.unreadable) return false;
+  fs.rmSync(file, { force: true });
+  return true;
 }
 
 const known = (value) => typeof value === 'number' && Number.isFinite(value);

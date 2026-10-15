@@ -48,7 +48,7 @@ const liveRecord = (name, owner, extra = {}) => ({
 });
 
 /** The seams of one call. `table` is the process table each look returns, one after another, the last again. */
-function world({ cwd, home, tables = [[]], onLook = () => {}, killAnswer = (targets) => ({ killed: targets.map((t) => t.pid), gone: [], running: [] }) }) {
+function world({ cwd, home, tables = [[]], onLook = () => {}, onSleep = () => {}, killAnswer = (targets) => ({ killed: targets.map((t) => t.pid), gone: [], running: [] }) }) {
   const state = { out: [], err: [], kills: [], looks: 0 };
   const deps = {
     cwd,
@@ -67,7 +67,10 @@ function world({ cwd, home, tables = [[]], onLook = () => {}, killAnswer = (targ
       state.kills.push(targets);
       return killAnswer(targets);
     },
-    sleep: async () => {},
+    sleep: async () => {
+      state.sleeps = (state.sleeps ?? 0) + 1;
+      onSleep(state.sleeps);
+    },
   };
   return { state, deps };
 }
@@ -222,6 +225,52 @@ test('run does not remove a live claim another session wrote after it read the s
   assert.match(state.err.join('\n'), /another keeper was started meanwhile/);
   assert.equal(JSON.parse(fs.readFileSync(p.record('keeper'), 'utf8')).pid, 6000, "the other session's claim is still there");
   assert.deepEqual(fs.readdirSync(path.dirname(p.record('keeper'))), ['keeper.json'], 'nothing is left beside it');
+});
+
+test("run waits while another session holds the name's lock, then reads what that session left", async () => {
+  const p = place();
+  writeRecord(p.record('keeper'), liveRecord('keeper', OTHER));
+  const lock = `${p.record('keeper')}.lock`;
+  fs.writeFileSync(lock, 'held');
+  const fresh = liveRecord('keeper', OTHER, { pid: 6000, createdAt: 3_000_000, child: null });
+  // The other session, inside its lock, reclaims the stale record and claims the name; then it lets go.
+  const onSleep = (sleeps) => {
+    if (sleeps !== 1) return;
+    writeRecord(p.record('keeper'), fresh);
+    fs.rmSync(lock);
+  };
+  const { state, deps } = world({ ...p, tables: [[self, { pid: 6000, ppid: 1, createdAt: 3_000_000 }]], onSleep });
+  const code = await loopMain(['run', 'keeper', '--purpose', 'PR keeper', '--until', '5 hours', '--', process.execPath, '-e', 'process.exit(0)'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
+  assert.equal(code, 2);
+  assert.match(state.err.join('\n'), /keeper runs, owned by bbbbbbbb/);
+  assert.equal(JSON.parse(fs.readFileSync(p.record('keeper'), 'utf8')).pid, 6000);
+  assert.equal(fs.existsSync(lock), false);
+});
+
+test('run gives up with exit 1 when the lock of the name stays held, and claims nothing', async () => {
+  const p = place();
+  const lock = `${p.record('keeper')}.lock`;
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  fs.writeFileSync(lock, 'held');
+  const { state, deps } = world({ ...p, tables: [[self]] });
+  const code = await loopMain(['run', 'keeper', '--purpose', 'PR keeper', '--until', '5 hours', '--', process.execPath, '-e', 'process.exit(0)'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
+  assert.equal(code, 1);
+  assert.match(state.err.join('\n'), /lock/);
+  assert.equal(fs.existsSync(p.record('keeper')), false);
+  assert.equal(fs.existsSync(lock), true, "another session's lock is not this run's to remove");
+});
+
+test('a lock left by a session that died in it is broken once it is old, and the run goes on', async () => {
+  const p = place();
+  const lock = `${p.record('keeper')}.lock`;
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  fs.writeFileSync(lock, 'held');
+  const old = new Date(Date.now() - 10 * 60000);
+  fs.utimesSync(lock, old, old);
+  const { deps } = world({ ...p, tables: [[self]] });
+  const code = await loopMain(['run', 'keeper', '--purpose', 'PR keeper', '--until', '5 hours', '--', process.execPath, '-e', 'process.exit(0)'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
+  assert.equal(code, 0);
+  assert.deepEqual(fs.readdirSync(path.dirname(lock)), [], 'neither the record nor a lock is left');
 });
 
 test('a stop that leaves a descendant alive keeps it in the record, so the next stop reaches it', async () => {

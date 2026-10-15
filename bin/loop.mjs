@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   LOOP_NAME,
   LOOP_SCHEMA,
+  LockHeldError,
   killTargets,
   loopRecordPath,
   loopsFolder,
@@ -18,6 +19,7 @@ import {
   stateOf,
   survivorsOf,
   targetsOf,
+  withRecordLock,
   writeRecord,
 } from './lib/loops.mjs';
 import { readNotices, recordPath } from './lib/channel.mjs';
@@ -173,15 +175,22 @@ async function stopLoop(ctx, name, file, record, snapshot, { caller, takeOver })
   return 1;
 }
 
-async function runLoop(ctx, parsed, file) {
-  const { name, flags } = parsed;
-  const owner = flags.owner ?? ctx.env.CLAUDE_CODE_SESSION_ID ?? null;
-  if (!owner) {
-    ctx.err('js-harness loop: the owner is not known: give --owner <session id>, or run it from a session (CLAUDE_CODE_SESSION_ID); nothing started');
-    return 2;
+/** `body` under the lock of the record `file`; when the lock stays held, says so with `consequence` and gives 1. */
+async function locked(ctx, file, consequence, body) {
+  try {
+    return await withRecordLock(file, body, { sleep: ctx.sleep });
+  } catch (err) {
+    if (!(err instanceof LockHeldError)) throw err;
+    ctx.err(`js-harness loop: ${err.message}, so another session is deciding about this loop; ${consequence}`);
+    return 1;
   }
-  // The record first, then the table: a record names processes that existed before it was written, so a live
-  // loop's processes are in a table taken after the read.
+}
+
+/** Under the record's lock: reads the record, then the process table (a record names processes that existed
+ * before it was written, so a live loop's processes are in a table taken after the read), reclaims a stale record
+ * or stops a live one on --restart, and claims the name. Returns the new record, or an exit code. */
+async function claimLoop(ctx, parsed, file, owner) {
+  const { name, flags } = parsed;
   const existing = readRecord(file);
   if (existing.unreadable) {
     ctx.err(`js-harness loop: the record ${file} cannot be read (${existing.unreadable}); nothing started. Look at it, then remove it by hand`);
@@ -237,6 +246,19 @@ async function runLoop(ctx, parsed, file) {
     ctx.err(`js-harness loop: another ${name} was started meanwhile; nothing started`);
     return 2;
   }
+  return record;
+}
+
+async function runLoop(ctx, parsed, file) {
+  const { name, flags } = parsed;
+  const owner = flags.owner ?? ctx.env.CLAUDE_CODE_SESSION_ID ?? null;
+  if (!owner) {
+    ctx.err('js-harness loop: the owner is not known: give --owner <session id>, or run it from a session (CLAUDE_CODE_SESSION_ID); nothing started');
+    return 2;
+  }
+  const claim = await locked(ctx, file, 'nothing started', () => claimLoop(ctx, parsed, file, owner));
+  if (typeof claim === 'number') return claim;
+  const record = claim;
 
   const [command, ...args] = resolveCommand(parsed.command);
   const child = ctx.spawn(command, args, { cwd: ctx.cwd, env: ctx.env, stdio: 'inherit', windowsHide: true });
@@ -245,17 +267,20 @@ async function runLoop(ctx, parsed, file) {
     child.once('exit', (code, signal) => resolve({ code, signal }));
   });
   if (child.pid !== undefined) {
-    record.child = { pid: child.pid, createdAt: null };
-    writeRecord(file, record);
+    // Until the record names the command, a stop still finds it as a descendant of this process.
+    let createdAt = null;
     try {
       const entry = ctx.snapshot().find((row) => row.pid === child.pid);
-      if (entry && typeof entry.createdAt === 'number') {
-        record.child.createdAt = entry.createdAt;
-        if (readRecord(file).record?.pid === ctx.pid) writeRecord(file, record);
-      }
+      if (entry && typeof entry.createdAt === 'number') createdAt = entry.createdAt;
     } catch {
-      // without the command's creation time, a stop still finds it as a descendant of this process
+      // the command stays a descendant of this process, which the record names
     }
+    const named = { ...record, child: { pid: child.pid, createdAt } };
+    await locked(ctx, file, 'the record does not name the command', () => {
+      if (readRecord(file).record?.pid !== ctx.pid || readRecord(file).record?.createdAt !== record.createdAt) return;
+      writeRecord(file, named);
+      record.child = named.child;
+    });
     ctx.out(`js-harness loop: ${name} runs (pid ${ctx.pid}, command pid ${child.pid}), owned by ${short(owner)}: ${flags.purpose}; until ${flags.until}. Stop it with js-harness loop stop ${name}`);
   }
   // Through the child's handle, never by its number: Windows reuses pids (bin/lib/process-tree.mjs). What the
@@ -271,7 +296,7 @@ async function runLoop(ctx, parsed, file) {
   for (const signal of signals) process.on(signal, forward);
   const outcome = await ended;
   for (const signal of signals) process.off(signal, forward);
-  removeRecordOf(file, record);
+  await locked(ctx, file, 'its record is left, and reads stale', () => removeRecordOf(file, record));
   if (outcome.error) {
     ctx.err(`js-harness loop: ${name}'s command could not start (${outcome.error.message}); its record removed`);
     return 1;
@@ -446,24 +471,30 @@ export async function loopMain(
   const file = loopRecordPath(home, slug, parsed.name);
   if (parsed.verb === 'run') return runLoop(ctx, parsed, file);
 
-  const read = readRecord(file);
-  if (read.missing) {
+  if (readRecord(file).missing) {
     stdout(`js-harness loop: no loop named ${parsed.name} is recorded for this project; nothing to stop`);
     return 0;
   }
-  if (read.unreadable) {
-    stderr(`js-harness loop: the record ${file} cannot be read (${read.unreadable}); nothing was stopped`);
-    return 1;
-  }
-  let table;
-  try {
-    table = snapshot();
-  } catch (err) {
-    stderr(`js-harness loop: the process table could not be read (${err.message}); nothing was stopped`);
-    return 1;
-  }
-  const caller = parsed.flags.owner ?? env.CLAUDE_CODE_SESSION_ID ?? null;
-  return stopLoop(ctx, parsed.name, file, read.record, table, { caller, takeOver: Boolean(parsed.flags['take-over']) });
+  return locked(ctx, file, 'nothing was stopped', async () => {
+    const read = readRecord(file);
+    if (read.missing) {
+      stdout(`js-harness loop: ${parsed.name} ended meanwhile; nothing to stop`);
+      return 0;
+    }
+    if (read.unreadable) {
+      stderr(`js-harness loop: the record ${file} cannot be read (${read.unreadable}); nothing was stopped`);
+      return 1;
+    }
+    let table;
+    try {
+      table = snapshot();
+    } catch (err) {
+      stderr(`js-harness loop: the process table could not be read (${err.message}); nothing was stopped`);
+      return 1;
+    }
+    const caller = parsed.flags.owner ?? env.CLAUDE_CODE_SESSION_ID ?? null;
+    return stopLoop(ctx, parsed.name, file, read.record, table, { caller, takeOver: Boolean(parsed.flags['take-over']) });
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
