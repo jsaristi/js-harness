@@ -109,6 +109,26 @@ test('a run leaves the configuration of the repository as it found it: the candi
   assert.equal(git(root, 'config', '--local', '--list'), before);
 });
 
+test('a pull request GitHub has not yet computed (mergeable UNKNOWN, about a minute after main moves) is decided by its merge into the candidate; CONFLICTING is still left out', async () => {
+  // Batch 4 lost 6 ready pull requests to UNKNOWN (the lead, 2026-10-15): the merge into the candidate is the
+  // queue's own test of whether a pull request merges, so a mergeable GitHub has not computed waits for it.
+  const { root, main, heads } = makeQueueRepo();
+  const prs = [
+    pr(1, 'feat/a', heads['feat/a'], { mergeable: 'UNKNOWN' }),
+    pr(2, 'feat/b', heads['feat/b']),
+    pr(3, 'feat/c', heads['feat/c'], { mergeable: 'UNKNOWN' }),
+    pr(4, 'feat/d', heads['feat/d'], { mergeable: 'CONFLICTING' }),
+  ];
+  const { code, out } = await dryRun(root, prs);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out, [
+    'PR 4 is left out: PR 4 is not mergeable (CONFLICTING).',
+    'PR 3 is left out: it conflicts with the candidate so far in a.txt.',
+    `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
+    'Dry run: nothing was tested or pushed, and the candidate was removed.',
+  ]);
+});
+
 test('a merge that fails with no conflict says what git said, not that it conflicts', async () => {
   const { root, heads } = makeQueueRepo();
   const { code, out } = await dryRun(root, [pr(1, 'feat/a', 'f'.repeat(40))]);
