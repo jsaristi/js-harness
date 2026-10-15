@@ -10,6 +10,15 @@ import { hashOf, readTrace, TRACE_ENV, TRACE_PRELOAD, TRACER_VERSION, traceEnv }
 /** Whether this node has `module.registerHooks`, by which the tracer sees imports (Node 22.15 and later). */
 const HOOKS = typeof nodeModule.registerHooks === 'function';
 
+/** The reason a trace is untraced, as `reason` says where this node has module hooks; without them the tracer
+ * marks every test untraced for that first, and later reasons do not replace it (T3c, Codex 2026-10-14).
+ * `null` asserts a traced test. */
+function assertUntraced(trace, reason, message) {
+  if (!HOOKS) return assert.match(trace?.untraced ?? '', /has no module\.registerHooks/, message);
+  if (reason === null) return assert.equal(trace?.untraced, null, message);
+  return typeof reason === 'string' ? assert.equal(trace?.untraced, reason, message) : assert.match(trace?.untraced ?? '', reason, message);
+}
+
 // The tracer of exact test selection (odd/tasks/exact-tests.md, T1): a preload carried in NODE_OPTIONS that
 // records what each test file really read, and writes it when the file passed.
 
@@ -62,8 +71,7 @@ test('a test file that passed leaves its trace: what it read, probed, listed and
     assert.equal(trace.node, process.version);
     assert.equal(trace.tracer, TRACER_VERSION);
     // A node of the engines field (>=22) without module hooks marks every test untraced, on purpose (Codex, 2026-10-14).
-    if (HOOKS) assert.equal(trace.untraced, null);
-    else assert.match(trace.untraced, /has no module\.registerHooks/);
+    assertUntraced(trace, null);
     const reads = trace.reads;
     assert.equal(reads['test/all.test.mjs'], hashOf(path.join(root, 'test/all.test.mjs')));
     assert.equal(reads['fixtures/data.txt'], hashOf(path.join(root, 'fixtures/data.txt')));
@@ -134,10 +142,10 @@ test('a home file named by a URL, a recursive listing, an import that did not re
     delete env.NODE_TEST_CONTEXT;
     const result = spawnSync(process.execPath, ['--test', ...Object.keys(UNFOLLOWED)], { cwd: root, env, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.match(readTrace(traces, 'test/home-url.test.mjs').untraced ?? '', /reads the home/);
-    assert.match(readTrace(traces, 'test/recursive.test.mjs').untraced ?? '', /recursive/);
-    if (HOOKS) assert.match(readTrace(traces, 'test/optional.test.mjs').untraced ?? '', /did not resolve: \.\/not-there\.mjs/);
-    assert.match(readTrace(traces, 'test/compound.test.mjs').untraced ?? '', /shell/);
+    assertUntraced(readTrace(traces, 'test/home-url.test.mjs'), /reads the home/);
+    assertUntraced(readTrace(traces, 'test/recursive.test.mjs'), /recursive/);
+    assertUntraced(readTrace(traces, 'test/optional.test.mjs'), /did not resolve: \.\/not-there\.mjs/);
+    assertUntraced(readTrace(traces, 'test/compound.test.mjs'), /shell/);
   } finally {
     done();
     fs.rmSync(base, { recursive: true, force: true });
@@ -196,26 +204,31 @@ test('a test that reads the home outside the temporary folder, or opens a networ
     delete env.NODE_TEST_CONTEXT;
     const result = spawnSync(process.execPath, ['--test', 'test/home.test.mjs', 'test/net.test.mjs'], { cwd: root, env, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.match(readTrace(traces, 'test/home.test.mjs').untraced ?? '', /reads the home/);
-    assert.match(readTrace(traces, 'test/net.test.mjs').untraced ?? '', /network/);
+    assertUntraced(readTrace(traces, 'test/home.test.mjs'), /reads the home/);
+    assertUntraced(readTrace(traces, 'test/net.test.mjs'), /network/);
   } finally {
     done();
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
 
-test('with a results file, every test file adds how it ended, failed or passed, for the shadow count (S6)', () => {
+// A file of its own for each test file, not lines appended to one: at the gate of 19:56 (2026-10-14, in WSL2)
+// a test file that passed had no end in the shared file; appends of processes at once through /mnt are the
+// likely cause (inferred, not measured), and a file each leaves nothing to interleave.
+test('with a results folder, every test file writes how it ended, failed or passed, in a file of its own, for the shadow count (S6)', () => {
   const { root, traces, done } = project({
     'package.json': '{"type":"module"}',
     'test/ok.test.mjs': "import { test } from 'node:test';\ntest('ok', () => {});\n",
     'test/red.test.mjs': "import { test } from 'node:test';\ntest('red', () => { throw new Error('red'); });\n",
   });
-  const results = path.join(traces, 'results.jsonl');
+  const results = path.join(traces, 'results');
   try {
     const env = { ...process.env, ...traceEnv({ root, dir: traces, results }) };
     delete env.NODE_TEST_CONTEXT;
     assert.notEqual(spawnSync(process.execPath, ['--test', 'test/ok.test.mjs', 'test/red.test.mjs'], { cwd: root, env, encoding: 'utf8' }).status, 0);
-    const ended = fs.readFileSync(results, 'utf8').trim().split('\n').map((line) => JSON.parse(line)).sort((a, b) => a.test.localeCompare(b.test));
+    const files = fs.readdirSync(results);
+    assert.equal(files.length, 2, files.join(', '));
+    const ended = files.map((name) => JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'))).sort((a, b) => a.test.localeCompare(b.test));
     assert.deepEqual(ended.map(({ test: file, code }) => [file, code === 0]), [['test/ok.test.mjs', true], ['test/red.test.mjs', false]]);
   } finally {
     done();
@@ -247,8 +260,8 @@ test('a test whose child is no node and runs in the repository itself is untrace
   });
   try {
     assert.equal(runTests(root, traces, ['test/git.test.mjs', 'test/elsewhere.test.mjs']).status, 0);
-    assert.match(readTrace(traces, 'test/git.test.mjs').untraced, /git.*runs in the repository/);
-    assert.equal(readTrace(traces, 'test/elsewhere.test.mjs').untraced, null, 'a child out of the repository reads nothing of it');
+    assertUntraced(readTrace(traces, 'test/git.test.mjs'), /git.*runs in the repository/);
+    assertUntraced(readTrace(traces, 'test/elsewhere.test.mjs'), null, 'a child out of the repository reads nothing of it');
   } finally {
     done();
   }

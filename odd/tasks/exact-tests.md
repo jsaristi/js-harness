@@ -91,8 +91,9 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 | T2b | S5 | inline | done, `bb3331f` | the key holds `os` and `env` (`TRACE_ENV`: TZ, LANG, LC_ALL, CI, NODE_ENV, FORCE_COLOR, NO_COLOR); a read of the home outside the temporary folder, or a `net` connection, marks a test untraced; the clock is marked by hand (`// js-harness: untraced (...)`), since `node:test` itself uses timers and any detection would mark every test. RED: the import of `TRACE_ENV`, and the selection's case; GREEN 8/8 and 6/6 |
 | T2c | S6 | inline | done, `bb3331f` | one test per seam: sync fs, a missing-file probe, readdir and a node child (the first test), fs.promises `readFile`/`stat`/`opendir` and a dynamic import (the seams test). The seams test passed with no change to the tracer: its RED was only the missing import of the file |
 | T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
-| T3c | S6 | inline | pending, a follow-up | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
-| T4 | S2, S3, S6 | inline | pending | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
+| T3c | S6 | inline | done, `bfb64df`; its range recorded as a refused second recheck (L10) | `assertUntraced` in `bin/lib/trace-reads.test.mjs` accepts the hooks fallback for every reason it asserts (the marker of the clock is set before that fallback, so it holds as it is). No RED: this node has the hooks, and a half simulation would not be the node it stands for; GREEN 13/13. | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
+| T3d | S6 | inline | done, committed after T3c (`bfb64df`) in the gate turn of its own commit, reviewed by Codex from `bfb64df` | L9: the citations test made deterministic (fixed commit dates; no RED: the flake is one run in 27, three runs green) and the shadow's results a folder with a file per test file (RED then GREEN) |
+| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; after waits for S6's count | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
 - **L1** (2026-10-14): S1 to S4, verbatim. The lead's order of the queue puts this after Codex out of the
@@ -156,6 +157,34 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 - **L8** (2026-10-14 19:52): the corrections committed `710a0cb`, gate green in WSL2 in shadow. Codex's
   recheck of `1532bc2..710a0cb`: 7 of 8 fixed, finding 8 not fixed (T3c, above). The branch is pushed and
   its pull request opened with `710a0cb` as its last code commit, which the reviews cover; T3c follows.
+- **L9** (2026-10-14 19:56): the gate of T3c's commit was the first whose traces were current (the tracer
+  unchanged since `710a0cb`): `shadow: 93 of 119 test files would have been skipped, and 2 of them did not
+  pass: bin/check-citations.test.mjs, bin/lib/test-run-warning.test.mjs`. S6 doing its work again; nothing
+  was committed. Two causes:
+  - `bin/check-citations.test.mjs` failed for real, by the clock: it cites a fresh commit's short hash, and
+    a citation must hold a digit and a letter (`bin/lib/citations.mjs:11`), which an all-digit hash (about
+    one run in 27) is not. It read the clock through git, where no trace can see it; it failed at 19:28 too.
+    Fixed by fixing the commit dates of its repositories (three runs green), and recorded in
+    `docs/FAILURES.md` as `citations-test-reads-clock` (a test of `main`, exposed here).
+  - `bin/lib/test-run-warning.test.mjs` passed (its tests are green in the log) yet had no end in the shared
+    results file. Inferred, not measured: appends of test-file processes at once through WSL's `/mnt` lost
+    its line. Now each test file writes its result in a file of its own, in a results folder
+    (`bin/lib/trace-reads.test.mjs`, RED then GREEN 13/13; `bin/check-shadow*.test.mjs` 3/3 and 2/2).
+  - For T4 (a proposal, not yet a spec): a gate whose `wouldSkip` is 0 skips nothing and so proves nothing
+    of soundness; S6's 30 gates should be counted among gates that would have skipped some file. Every
+    change of the tracer changes `tracerHash`, so the count restarts after it, as it must.
+- **L10** (2026-10-14 20:07): T3c and T3d were first committed together (`2b84848`, never pushed), and
+  Codex refused the range: from the head of a recheck that left a finding open, a range is a second
+  recheck, recorded as a skip, so T3d's new code would have gone unreviewed. Split: T3c alone is
+  `bfb64df`, its range `fbff1a2..bfb64df` recorded as `--unavailable "second recheck refused: T3c ..."`;
+  T3d is the next commit, reviewed by Codex from `bfb64df`. The lesson, which `bin/lib/codex-review-recheck.mjs`
+  already says: commit a recheck's correction alone, and new work after it.
+- **L11** (2026-10-14 20:12, T4 begun): the measure before is the one in "Why" (46 gates on 2026-10-14:
+  median 137 s, p90 240 s, median wait 30 minutes). The checks of the five gates in shadow this evening
+  took 101, 108, 154, 142 and 126 s (`js-harness gate log --last 12`, the "in its parent's turn" lines):
+  inside that spread, so the shadow costs no time that five samples can see. The measure after waits for
+  selection to skip, which waits for S6's count; how that count is read (only gates whose `wouldSkip` is
+  above 0, L9) is asked of the lead, not yet answered. PR 163 holds T1 to T3d, pushed at `c80a76e`.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn

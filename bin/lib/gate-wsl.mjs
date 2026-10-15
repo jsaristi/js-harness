@@ -99,7 +99,7 @@ const word = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
  * Exit 97 is a mirror that could not be had or synced, before the mark. LF ends: bash reads no CR. */
 export function runnerScript({ source, mirror, node, command, held, heldVariable, seconds, lockSeconds = 60, trace = null }) {
   // The tests sensor in shadow (odd/tasks/exact-tests.md, T3b): the tracer runs in the mirror, its traces and
-  // results go to `trace.dir` and `trace.results`, `/mnt` paths the Windows side reads after the run. The
+  // results go to `trace.dir` and the folder `trace.results`, `/mnt` paths the Windows side reads after the run. The
   // tracer is the harness's own, `trace.preload` through `/mnt`: the mirror holds the project, which may not be
   // this one, and the file selection hashes is that one. `env -i` leaves no NODE_OPTIONS of the caller to keep.
   const preload = trace && (/\s/.test(trace.preload) ? `"${trace.preload}"` : trace.preload);

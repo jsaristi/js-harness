@@ -160,6 +160,16 @@ session's claim.
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
+### citations-test-reads-clock
+A test of citations cited a fresh commit's short hash, which a citation must hold a digit and a
+letter to be (`bin/lib/citations.mjs:11`): about one run in 27 the hash came out all digits, was no
+citation, and the test failed by the clock alone.
+- Class: tool
+- Seen: 2026-10-14 — odd/tasks/exact-tests.md, L9 — two gates of feat/exact-tests (19:28 and 19:56)
+  failed it, the second in shadow, where selection would have skipped it
+- Control: check — bin/check-citations.test.mjs — "only the lines a staged change adds to a feature
+  document are read, and each unresolved citation is a line" — since 2026-10-14
+
 ### cli-updated-itself
 A tool of the measured stack updated itself and nobody saw it until a measurement was about to run
 on it.

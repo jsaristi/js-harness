@@ -310,7 +310,12 @@ function install() {
         return;
       }
       // How this test file ended, for a gate in shadow (S6): which of the files selection would have skipped failed.
-      if (results) real.appendFileSync(results, `${JSON.stringify({ test, code })}\n`);
+      // A file of its own, written whole: one shared file lost the end of a test file that passed, likely to
+      // appends of processes at once through WSL's /mnt (inferred, 2026-10-14).
+      if (results) {
+        real.mkdirSync(results, { recursive: true });
+        real.writeFileSync(path.join(results, `${process.pid}-${crypto.randomBytes(4).toString('hex')}.json`), JSON.stringify({ test, code }));
+      }
       const file = path.join(dir, traceName(test));
       let partNames = [];
       try {
