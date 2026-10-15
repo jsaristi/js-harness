@@ -363,11 +363,14 @@ export function runProcess({
       child.stderr.destroy();
       // A group sent SIGKILL can still run for a moment under load; the run ends once it is gone, or says what was
       // still running at the bound, as a Windows kill does (`killProcesses`).
+      // Whatever the wait answers or throws, the run resolves: a wait that fails is reported, never a hang.
       Promise.resolve()
         .then(() => settling(child))
         .then((left) => {
-          if (left.length > 0) sweepError ??= new Error(`still running after the kill: pid ${left.join(', ')}`);
-        }, (error) => {
+          if (!Array.isArray(left)) throw new Error(`the wait after the kill answered ${JSON.stringify(left)}, not a list of pids`);
+          if (left.length > 0) throw new Error(`still running after the kill: pid ${left.join(', ')}`);
+        })
+        .catch((error) => {
           sweepError ??= error;
         })
         .then(() => resolve({ ...out, ...exit, timedOut, ...(aborted && { aborted }), ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) }));

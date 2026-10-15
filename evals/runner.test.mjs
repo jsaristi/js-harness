@@ -1093,6 +1093,18 @@ test('a run ends only after what it killed is gone, and one that outlives the bo
   assert.equal(run.aborted, true);
 });
 
+test('a wait after the kill that fails, or answers no list, is reported as a sweep error and the run still ends', { timeout: 5000 }, async () => {
+  const end = (settle) => {
+    const child = stubChild();
+    const pending = runProcess({ command: 'agent', input: 'prompt', timeoutMs: 60000, spawn: () => child, kill: () => {}, killSurvivors: () => {}, settle });
+    child.emit('exit', 0, null);
+    child.emit('close', 0, null);
+    return pending;
+  };
+  assert.equal((await end(async () => { throw new Error('permission denied'); })).sweepError, 'permission denied');
+  assert.equal((await end(async () => undefined)).sweepError, 'the wait after the kill answered undefined, not a list of pids');
+});
+
 test('an abort that comes after the child exited kills no tree, and a signal that is already aborted spawns nothing', async () => {
   const child = stubChild();
   const calls = [];

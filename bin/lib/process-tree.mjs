@@ -330,13 +330,15 @@ export async function waitGroupGone(pgid, { ms = 2000, every = 50, now = Date.no
 }
 
 /** What a run waits for after it killed `child`'s tree: on POSIX the child's group (`waitGroupGone`), on Windows
- * nothing, where each kill already waits for its process (`killProcesses`). A system with no /proc to read is not
- * waited for. Resolves to the pids still running. */
+ * nothing, where each kill already waits for its process (`killProcesses`). A system with no /proc to read
+ * (`ENOENT`) is not waited for; a lookup that fails for another reason proves nothing gone, and rejects. Resolves
+ * to the pids still running. */
 export async function settleGroup(child, { platform = process.platform, wait = waitGroupGone } = {}) {
   if (platform === 'win32' || !child?.pid) return [];
   try {
     return await wait(child.pid);
-  } catch {
-    return [];
+  } catch (error) {
+    if (error?.code === 'ENOENT') return [];
+    throw error;
   }
 }

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  CLOCK_TOLERANCE_MS, groupMembers, identifyProcesses, killProcesses, killSurvivors, killTree, parseSnapshot, resolveRoot, selectDescendants, selectTrees, takeSnapshot, waitGroupGone,
+  CLOCK_TOLERANCE_MS, groupMembers, identifyProcesses, killProcesses, killSurvivors, killTree, parseSnapshot, resolveRoot, selectDescendants, selectTrees, settleGroup, takeSnapshot, waitGroupGone,
 } from './process-tree.mjs';
 import { createReaper, sweepLater, sweptLater } from './process-tree.testkit.mjs';
 
@@ -755,4 +755,20 @@ test('waiting for a killed group ends as soon as it is gone, and past its bound 
   const left = await waitGroupGone(100, { ms: 2000, every: 50, now: () => clock, sleep, members: () => [101] });
   assert.deepEqual(left, [101]);
   assert.equal(clock, 2000, 'it waits its whole bound and no longer');
+});
+
+test('settling a killed child waits for its group on POSIX, nothing on Windows, and a POSIX system with no /proc is not waited for', async () => {
+  const waited = [];
+  const wait = async (pgid) => { waited.push(pgid); return [7]; };
+  assert.deepEqual(await settleGroup({ pid: 42 }, { platform: 'linux', wait }), [7]);
+  assert.deepEqual(waited, [42]);
+  assert.deepEqual(await settleGroup({ pid: 42 }, { platform: 'win32', wait }), [], 'a Windows kill already waits for each process');
+  assert.deepEqual(await settleGroup({}, { platform: 'linux', wait }), [], 'a child that never started has no group');
+  const noProc = Object.assign(new Error('no /proc'), { code: 'ENOENT' });
+  assert.deepEqual(await settleGroup({ pid: 42 }, { platform: 'darwin', wait: async () => { throw noProc; } }), []);
+});
+
+test('a lookup of the group that fails for another reason is no proof the group is gone: it rejects', async () => {
+  const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+  await assert.rejects(settleGroup({ pid: 42 }, { platform: 'linux', wait: async () => { throw denied; } }), /permission denied/);
 });
