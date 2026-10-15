@@ -67,6 +67,10 @@
       "by": "session"
     }
   },
+  "contract-run-timeout": {
+    "kind": "design",
+    "path": "odd/tasks/task-contract.md"
+  },
   "control-phrase-min": {
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"

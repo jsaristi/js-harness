@@ -41,6 +41,15 @@ export const RULES = [
     "flag": "--context-pause"
   },
   {
+    "id": "contract-run-timeout",
+    "subject": "how long each done-when command of a contract run may run, unless the run says otherwise",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 30,
+    "unit": "minutes",
+    "flag": "--timeout"
+  },
+  {
     "id": "control-phrase-min",
     "subject": "the shortest phrase by which a control or a rule in prose is found in its file",
     "owner": "project",
