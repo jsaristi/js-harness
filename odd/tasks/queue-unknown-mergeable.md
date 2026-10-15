@@ -36,3 +36,6 @@ test of whether it merges.
 ## Log
 - L1. 2026-10-15 08:14, the lead's order, quoted in S1.
 - L2. 2026-10-15, decided by the merge rather than re-read: re-reading costs a wait of up to a minute on every batch after a landing and can still end UNKNOWN, while the queue already runs `git merge --no-ff` of each pull request into the candidate (bin/merge-queue.mjs, the loop over `candidates`), which names the conflicting files. A pull request that conflicts with main conflicts with a candidate that starts at main, so nothing GitHub would have said is lost.
+- L3. 2026-10-15 08:28: gate green on ebc9db3; gentle-ai assessment medium, review not due (under_budget); Codex on
+  62d3b12..ebc9db3: "the patch is correct (confidence 0.97)", no findings, recorded. Draft PR 210 opened; the lead
+  is told. Next step: none here; the lead decides when 210 goes ready.
