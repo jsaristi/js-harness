@@ -1693,14 +1693,14 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     and 254 by a reader that did not write it (twelve fixes, all taken), and the nine places
     where it differs from the eight points, pulls two ways or stays open told to the
     orchestrator
-  - [ ] T16b The homes and the list: how a rule is declared, designed and read by a reader
+  - [x] T16b The homes and the list: how a rule is declared, designed and read by a reader
     that did not write it; then the declarations of the rules that have a value today, and
     `docs/RULES.md` rendered from them
     - [x] First part: the design, the library, the check, the command, fourteen rules with
       their sources and the rendered list (commits `859a797`, `8ada9cc`, `8668dfc`, `79f9bbf`
       and the correction `331090b`; gentle-ai approved each code commit and Codex's records
       cover `859a797..6a721cc` and `b0ccff1..331090b`)
-    - [ ] Second part: each constant reads its declaration, one file at a time, each told to
+    - [x] Second part: each constant reads its declaration, one file at a time, each told to
       the orchestrator before it is touched. Done: the four bounds whose files were free
       (commit `21b391f`); the context pause, declared as `context-pause` and read by
       `bin/lib/sessions.mjs` (commit `ca83a3d` on `feat/rules-context-pause`; gentle-ai
@@ -1751,7 +1751,15 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       `gate-wait` and `gate-max` on `feat/rule-dispatcher-help`, its own pull request); and two
       test files that still state the review's
       model as a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
-      `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free
+      `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free. Since then: 216
+      moved onto `main` as 4cf6844 (Codex 0.97) after 213 landed, and landed; the dispatcher's
+      help landed as pull request 230 (b1c2451, Codex 0.97), with `rules check` passing on
+      `main` cd89253 after both. JH 8 was archived, and the lead gave its two files to this
+      session: the fixtures' model is `gpt-fixture`, and the binding test that keeps
+      `bin/codex-review.test.mjs` free of the model now covers both files. It was red on
+      `main`'s files (19 lines). Draft pull request 232 (`feat/rule-review-fixtures`, 41ee91f):
+      gate green, gentle-ai medium not due, Codex correct (0.97), no findings, recorded. This
+      part was checked off when 232 landed (main 10e29e6, 2026-10-15 at 15:04 by `date`)
     - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
       `docs/model-effort.md`, and with T13 the checking half of B3 (the orchestrator's
@@ -2688,6 +2696,20 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**State for a resume, 2026-10-15 at 15:05 by `date`.** Pull request 232 landed (`main`
+10e29e6): T16b is checked off, its three parts done. Next: T16c, the one command that changes a
+rule, designed and read by a reader that did not write it before it is built.
+
+**State for a resume, 2026-10-15 at 14:44 by `date`, at the context pause (88 percent).** On
+`main` (e000fc6): T3f (219), 216, the dispatcher's help (230) and this document (231). The
+register's two entries are `measured` on `main`, rewritten by JH 15 before it was archived
+(`js-harness failures` shows both). Open: draft pull request 232 (`feat/rule-review-fixtures`,
+worktree `D:\js-harness-worktrees\rule-dispatcher-help`, 41ee91f, every check passed), the
+last part of T16b; check off T16b's second part, and T16b, when it lands. Next: T16c, the one
+command that changes a rule, designed and read by a reader that did not write it before it is
+built. The worktrees `rule-skill-wait` (detached at `main`) and `rule-contract-timeout` hold
+no work and can be removed.
+
 **State for a resume, 2026-10-15 at 13:48 by `date`.** T3f is built: draft pull request 219
 (`feat/register-measured`, worktree `D:\js-harness-worktrees\rule-contract-timeout`, 43b395f),
 gate green, gentle-ai not due, Codex recorded; the lead and JH 15 were told, and JH 15 rewrites
