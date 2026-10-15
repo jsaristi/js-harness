@@ -211,3 +211,9 @@ turning the overflow on for a project other than this one.
   (pricing and credit pricing pages); gate-log measure as in Why.
 - L3 2026-10-15: two independent readers attacked version 1 (binding; cost and operations). Version 2
   takes every blocker and should-fix; what each changed is in "Changes from the readers".
+- L4 2026-10-15 03:03: PARKED by his answer, tapped to the lead about 03:03: "Tests afectados primero
+  (Recomendada)". JH 8 turns exact tests live first; this design stays as it is until he decides to pay
+  for credits. Why: on free credits the overflow relieves about 10 long waits a day, some 150 of about
+  3,000 minutes of waiting (about 5 percent), and never the suites inside `gate --` turns; exact tests
+  shorten every run at no credit. Meanwhile PR 155 merged into main (3e682ea), so T0 now waits only for
+  the `overflow` job and filter. No PR from this branch.
