@@ -449,6 +449,32 @@ reads the files the entries name. `bin/check.mjs` gains an import and one call, 
 `bin/js-harness.mjs` one usage line and one entry; both were told to the orchestrator first,
 because other sessions change those files while this is built (Progress, 2026-10-11).
 
+### A failure with no control, measured (T3f)
+Draft of 2026-10-15, by this session, not yet read by a reader that did not write it.
+
+The need. The lead's call of 08:37, relayed by JH 15: a control can be measured and found not
+worth building. The general honesty audit caught 2 or 3 of 14 (`odd/tasks/honesty-audit.md`).
+Today the register has no word for that. `owed` says a control will be built, and `owed, stale`
+says the box was checked, so the two entries keep a promise nobody means to keep.
+
+The shape. A fourth form of `Control`, beside `owed` and the three levels in place:
+`measured — <path> — "<phrase>" — since <YYYY-MM-DD>`. The path and the phrase name where the
+measurement is written, a line of a feature document or of a report, so it may be a `.md` file.
+The date is the day it was measured. It is not a placement level: it says no control sits
+anywhere, and why.
+
+The states, computed as the others are. `measured` (settled): the phrase is in the file, and no
+sighting is dated after `since`. `measured, seen again` (not settled): a sighting came after the
+measurement, so its count is out of date; the answer is to measure again (a new `since`) or to
+build the control. `control lost`, as today: the phrase is gone from the file. The checkbox does
+not matter, since a measurement is not a task. `STATES` grows from seven to nine, and the row and
+the command count the two new ones like the rest.
+
+What changes. `bin/lib/failures.mjs` (the parser, `CONTROL_SHAPES`, `entryState`, `STATES`,
+`SETTLED`), its tests written first, and the header of `docs/FAILURES.md`, which explains the
+shapes. Nothing is migrated: JH 15 rewrites its two entries once this lands. Out of scope: a
+command that writes the measurement.
+
 ### One home for every rule (T16)
 The need, what was measured, a first design, and the protocol he approved on 2026-10-11. The
 homes' declarations, the command and the row are not designed yet: each is designed, and read
@@ -2632,8 +2658,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 **State for a resume, 2026-10-15 at 09:12 by `date`.** Pull requests 206 and 207 are on
 `main`. `bin/lib/manifest.mjs` is done as pull requests 213 (ready, marked by the lead) and
 216 (draft, stacked on 213), both on branches of the worktree
-`D:\js-harness-worktrees\rule-contract-timeout`. Next: T3f, the register's level for a
-failure with no control, measured, designed first in this document; the dispatcher's help
+`D:\js-harness-worktrees\rule-contract-timeout`. At 09:16, T3f's design is drafted ("A failure
+with no control, measured (T3f)" under `## Design`), not yet read. Next: a reader that did not
+write it attacks it and looks for what it lacks; then it is built test first in
+`bin/lib/failures.mjs`, told to the lead before `docs/FAILURES.md` is touched; the dispatcher's help
 once pull requests 201 and 194 land; JH 8's two test files close T16b.
 
 **State for a resume, 2026-10-14 at about 15:00, at 89 percent of the context.** T16b is PAUSED by
