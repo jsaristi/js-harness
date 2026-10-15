@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
 import { beforeProgress, checkRules } from './lib/rules-check.mjs';
+import { countFindings } from './lib/rules-scan.mjs';
 import { renderList, rulesHash, ruleHere, ruleOf } from './lib/rules.mjs';
 import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
 import { readRecords } from './lib/rules-applied-read.mjs';
@@ -263,11 +264,20 @@ async function projectForm(parsed, top, { run, stdout, stderr }) {
   return 0;
 }
 
-/** The check: PASS with the count line, or FAIL with each finding indented; the notes follow, and the exit is 0 only
- * with no finding. */
-function checkList({ findings, notes }, stdout) {
+/** The line that follows a passing check: how many findings each rule with patterns has in the texts in force, and
+ * how many rules in force carry none and are not scanned (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)").
+ * It is information and never a finding, so a first pattern does not turn the check red. */
+function patternsLine({ counts, unscanned }) {
+  const named = Object.entries(counts).map(([id, count]) => `${id} ${count}`);
+  return `patterns: ${named.length === 0 ? 'none' : named.join(', ')}; unscanned: ${unscanned.length}`;
+}
+
+/** The check: PASS with the count line and the patterns line, or FAIL with each finding indented; the notes follow,
+ * and the exit is 0 only with no finding. */
+function checkList({ findings, notes }, stdout, counted) {
   if (findings.length === 0) {
     stdout(`PASS  rules  ${countLine()}`);
+    stdout(patternsLine(counted));
   } else {
     stdout(`FAIL  rules  ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'}`);
     for (const finding of findings) stdout(`      ${finding}`);
@@ -462,7 +472,10 @@ export async function rulesMain(argv, {
   }
 
   if (parsed.command === 'id') return showRule(parsed.id, { sources: read.sources, readers: result.readers }, stdout, stderr);
-  if (parsed.command === 'check') return checkList(result, stdout);
+  if (parsed.command === 'check') {
+    const inForce = [...read.codeFiles, ...read.textFiles, ...['AGENTS.md', 'README.md'].map((file) => ({ path: file, text: read.readFile(file) })).filter((file) => file.text !== null)];
+    return checkList(result, stdout, countFindings(RULES, inForce));
+  }
   return renderLists(root, { sources: read.sources, ...result }, stdout, stderr);
 }
 
