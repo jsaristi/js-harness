@@ -99,3 +99,11 @@ Nothing planned.
   the read and ran with no last look. Corrected alone: such a turn waits for the read (`settle`), bounded at
   20 s like the blocking read, after which the table is none. RED then GREEN in `bin/gate.test.mjs` (63/63);
   the end-to-end case still exits 0.
+- **L9** (2026-10-15 02:54): `2d1ba09`; Codex recheck `1134f84..2d1ba09` correct, 1 of 1 fixed (47,845
+  input tokens). PR 180. The seven advisories of the native review, which gave ids and no text, read from
+  their ids and places: the two on a read with no bound were met by `2d1ba09` (20 s); the untested read beside
+  the gate gets a Windows test of `startLaunchers` against this machine's table (settle, and a read stopped
+  first), written after the code, so no RED; the two on a launcher that ends inside the first second are a
+  window kept and now said in `startLaunchers`, since no table tells when a process ended; the stop not
+  reached on a throw is left, as `takeGateTurn` catches the lock's errors and a read left over ends by
+  itself within a second; the real test's timing is left as it is.

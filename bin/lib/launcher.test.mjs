@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { launchersAlive, readLaunchers } from './launcher.mjs';
+import { launchersAlive, readLaunchers, startLaunchers } from './launcher.mjs';
 
 // The launchers of a gate (odd/tasks/orphan-gate.md): the processes whose end leaves it an orphan, read once
 // when it starts and asked again while it waits.
@@ -43,6 +43,20 @@ test('read as the gate starts, a parent already gone ended before it and is no l
   assert.deepEqual(readLaunchers({ ppid: 30, readTable: () => reused }), [{ pid: 30, name: 'sh.exe', start: 300 }]);
   // A process that is no shell may have a parent that ended long ago: explorer's is, and that is no sign.
   assert.deepEqual(readLaunchers({ ppid: 5, readTable: () => table([5, 3, 'claude.exe', 50]) }), [{ pid: 5, name: 'claude.exe', start: 50 }]);
+});
+
+// The read beside the gate, against this machine's own table (the native review's advisory on 1134f84).
+test('on Windows the table comes in beside the gate: settle gives the chain read at start, and a read stopped first leaves the parent alone', { skip: process.platform !== 'win32' && 'Windows only', timeout: 60_000 }, async () => {
+  const soon = startLaunchers({ ppid: process.ppid });
+  assert.equal(soon.read(), null, 'nothing is in at once');
+  const chain = await soon.settle();
+  assert.equal(chain[0].pid, process.ppid);
+  assert.equal(typeof chain[0].start, 'number', JSON.stringify(chain));
+  assert.deepEqual(soon.read(), chain);
+  soon.stop();
+  const stopped = startLaunchers({ ppid: process.ppid });
+  stopped.stop();
+  assert.deepEqual(await stopped.settle(), [{ pid: process.ppid, name: null, start: null }]);
 });
 
 test('a table that cannot be read, or that lacks the parent, leaves the parent alone, by its pid', () => {
