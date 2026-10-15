@@ -2585,6 +2585,29 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   (`--restart`, `--take-over`, never another session's loop); and a line in the `js-harness`
   skill's command list, which named no `loop`. Proof: one test RED first, then
   `node --test bin/lib/manifest.test.mjs` 142 passed, 0 failed. T8 owes nothing more.
+- 2026-10-15, T12, on `docs/session-channel-t12` (from origin/main 8f25db3). What moved where:
+  the roadmap's "Session channel" material that this document did not hold (the section's
+  opening, the problem and his example, what exists, points 1 to 6 with point 6's reasoning,
+  the advice on width and his answer, the reasoning of the lead with the measure "relieved more
+  than once in a working day", the charter, the opening by paste, the context with the measure
+  "no task reopened because a cut lost what it needed", the live handover, the two classes, the
+  test owed and the limits, Codex's included) is now section 16 of this document, word for
+  word; one sentence names the host's compaction share by its constant instead of its number,
+  since point 9's rule and its tests refuse the number here. `docs/ROADMAP.md`, "Session
+  channel", keeps a pointer to section 16, then the order he asked for (items 1 to 5: the board,
+  the gate, the channel, the rule hierarchy and the practice project, the accounts) under a
+  heading of its own and the fact on the gate on GitHub, unchanged. References repointed:
+  section 11's charter home and its "stands as", "Why", "Constraints"; `odd/tasks/gate-lock.md`,
+  `odd/tasks/gate-on-github.md`, `odd/tasks/subagent-model-routing.md` and
+  `docs/sweep-2026-10-11.md` (item A2 24). Failures in `docs/FAILURES.md`:
+  `block-referred-by-hour` from owed (to T12's own phrase) to controlled by
+  `bin/notify.test.mjs`, the notice as a record, the control its row in
+  `odd/tasks/rule-hierarchy.md` names; `wake-with-no-news` from owed, stale to controlled by
+  `bin/sessions.test.mjs:2095`; `hours-guessed` from seen again to owed to the new T12b, the
+  guard of messages (`bin/guard.test.mjs:54`) named in its proof; `cross-session-message-held`
+  keeps its control, and its proof names the journey's step `channel` (draft pull request
+  199). `opening-pasted-no-line`, `context-cut-by-percentage`, `wait-not-attributable` and
+  `stopped-work-shown-live` were controlled already and are unchanged.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
