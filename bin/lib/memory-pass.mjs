@@ -135,6 +135,12 @@ export function verifyPass({ folder, stateDir, stamp, homes = '', approved = [],
   if (journal.some((line) => line.includes('"kind":"verify"') && line.includes(`"stamp":"${stamp}"`))) {
     throw new PassError(`pass ${stamp} is already verified; plan a new pass for more changes`);
   }
+  // Only the pass holding the lock records an after-state: one undone, or overtaken by the next pass, would
+  // take another session's writes as its own, and its undo would overwrite them.
+  const held = readOrNull(lockFile(stateDir));
+  if (held === null || JSON.parse(held.toString('utf8')).stamp !== stamp) {
+    throw new PassError(`pass ${stamp} does not hold the lock (undone, or another pass started); plan a new pass`);
+  }
   const after = hashes(folder);
   const writeSet = new Set(manifest.writeSet);
   const problems = [];

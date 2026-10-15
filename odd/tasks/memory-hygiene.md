@@ -303,6 +303,10 @@ Two independent read-only readers, 2026-10-15, neither the writer.
 - [ ] T5 (kind: build) The due line in the channel's hook and the board row (asked of their owner first)
 - [ ] T6 (kind: docs) The protocol section of the installed skill, with its incident and expiry; help text
 - [ ] T7 (kind: verify) The first pass on this project with T11's owner, after his answers, journaled and measured
+- [ ] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
+  the active lock before recording after-state"): the fix (verify refuses a stamp that does not hold the lock) is
+  committed after b3dac0f with its test, and a second recheck is refused by design; a Codex review of the next
+  slice that touches `bin/lib/memory-pass.mjs` reads it
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para

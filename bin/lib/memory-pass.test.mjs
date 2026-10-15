@@ -231,3 +231,19 @@ test('a number kept only inside a longer number counts as lost', () => {
     assert.match(verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }).problems.join('\n'), /lost "88"/);
   });
 });
+
+test('verify of a pass that no longer holds the lock is refused and leaves its after-state as it was', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n- [B](b.md) — b\n', 'a.md': note('user', 'a'), 'b.md': note('user', 'b') }, ({ folder, stateDir, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW });
+    write('b.md', note('user', 'b written outside the write set'));
+    assert.equal(verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }).ok, false);
+    write('b.md', note('user', 'b'));
+    undoPass({ folder, stateDir, stamp, now: NOW });
+    const afterFile = path.join(stateDir, 'snapshots', stamp, 'after.json');
+    const recorded = fs.readFileSync(afterFile, 'utf8');
+    planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW + 60_000 });
+    write('a.md', note('user', 'a written by the next pass'));
+    assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW + 60_000 }), /does not hold the lock/);
+    assert.equal(fs.readFileSync(afterFile, 'utf8'), recorded);
+  });
+});
