@@ -153,7 +153,11 @@ check said or before its answer was read.
 A gate failed on one test of `bin/check.test.mjs`, "checkSensor kills a background process the command
 left behind, and still passes", in a change that the test does not read, and the file passed alone. In
 WSL2 the test's command is `node child.js &`: the survivor is the shell's background child, and the test
-asserts the sensor returns within 60 s, passes, and that the survivor is gone within its bound.
+asserts the sensor returns within 60 s, passes, and that the survivor is gone within its bound. The
+cause, reproduced in WSL2 by a survivor that writes its pid after 2.5 s: once the shell exits, the sensor
+waits for the pipes only for its grace (`PIPE_GRACE_MS`, 2 s, `bin/check.mjs`) and then kills what the
+shell left, so a survivor slower than that to start dies before it writes its pid. The test's shell now
+waits for the pid before it exits.
 - Class: machine
 - Seen: 2026-10-15 — gate df5cd3cb of `D:\js-harness-worktrees\honesty-audit` (JH 15), in WSL2, end at
   15:48Z, by the gate log and the lead's notice — the only failing test of the run; its commit on
@@ -161,7 +165,8 @@ asserts the sensor returns within 60 s, passes, and that the survivor is gone wi
   `commit-pilot.log`, lines 5650 to 5663, read here): after 2,033 ms, `ENOENT ... survivor.pid` from the
   `readFileSync` of line 517, so the survivor never wrote its pid file; likely (not yet proven) the
   shell exits at once and the sensor kills what it left before a node slowed by load has started
-- Control: owed — odd/tasks/exact-tests.md — "Still open in T4"
+- Control: check — bin/check.test.mjs — "checkSensor kills a background process the command left behind,
+  and still passes" — since 2026-10-15
 
 ### checked-not-read
 A record or a message said "checked" for something that had not been read, or that was another
