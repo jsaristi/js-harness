@@ -87,7 +87,7 @@ shape the hook reads).
 ## Tasks
 - [x] T1 (kind: build) `js-harness fetch <url>`: refuses what is not a public page, asks r.jina.ai, says read or blocked with the next rung (S1, S3). Inline. RED: `node --test bin/fetch.test.mjs` failed, no module; GREEN: 8/8
 - [x] T2 (kind: build) the web notice in `resume --pause` after a blocked WebFetch (S3). Inline. RED: 3 of the 4 new tests failed; GREEN: `node --test bin/resume.test.mjs` 84/84
-- [ ] T3 (kind: verify) `npm run check`, gentle-ai and Codex reviews recorded, a draft pull request. Done but gentle-ai: gate green, Codex recorded on both commits, draft PR open; gentle-ai stopped on its own defect (L5)
+- [x] T3 (kind: verify) `npm run check`, gentle-ai and Codex reviews recorded, a draft pull request. Gate green, Codex recorded on every code commit, gentle-ai approved on its second lineage (L12), PR ready
 - [ ] T4 (kind: build) a `PostToolUseFailure` entry for WebFetch's tool error, if Sebastián wants it (S4): not started
 
 ## Log
@@ -155,3 +155,10 @@ shape the hook reads).
   inside `js-harness gate --max 20 --` at 16:30:09 and ended `operation_timeout` again ("context deadline
   exceeded", `pre_native`, nothing mutated) after 27 s, by `gate log`; the gate measured 4.9 of 8 cores busy
   before it (powershell, svchost, MsMpEng). No further retry; the pull request stays a draft.
+- **L12** (2026-10-15): the Stop hook's own STATUS then got through and offered a START for the branch's
+  range (base `23708b1`). Sebastián answered the lead at about 16:37 (JH ORQ transcript `e152c9d8`, line
+  4063, the question tool): "Sí, corré esa revisión (Recomendada)". That START ran once, unchanged, inside
+  the gate, then the `granted` invocation: lineage `review-a1066bfd475895c4`, tier medium, 624 lines, one
+  lens (reliability). Approved and acknowledged (`authority: burned`), with two non-blocking suggestions,
+  left as later work: the dispatcher's `fetch` entry has no test of its own, and a JSON error from
+  r.jina.ai without a `message` field gives a reason that stops at the status.
