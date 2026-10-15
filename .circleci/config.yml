@@ -26,8 +26,10 @@ jobs:
           command: node -e "const os = require('node:os'); console.log(process.version, os.platform(), os.release(), os.availableParallelism() + ' logical processors', Math.round(os.totalmem() / 2 ** 30) + ' GB')"
       - run:
           name: The gate
-          # Medium is 2 vCPUs, where node --test runs one test file fewer than the processors the container
-          # reports; node takes no --test-concurrency in NODE_OPTIONS, so check adds it, as it did on GitHub.
+          # Two test files at a time, as the GitHub run had them: node's default is one fewer than the
+          # processors the container reports, which a Docker executor may count as its host's, and medium is
+          # 2 vCPUs (unmeasured here: "What the runner is" prints the count). node takes no
+          # --test-concurrency in NODE_OPTIONS, so check adds it.
           environment:
             JS_HARNESS_TEST_CONCURRENCY: 2
           command: node bin/check.mjs
