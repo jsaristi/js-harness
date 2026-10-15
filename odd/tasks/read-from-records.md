@@ -307,7 +307,14 @@ What each change counts as:
   head holds that recheck's head, or git cannot say; a fork before the recheck is a review as any
   other. RED then GREEN: one test in bin/lib/codex-review-recheck.test.mjs (holds true, false, null)
   and one by the command in bin/codex-review.test.mjs; the recheck tests 19 of 19, the refusals of
-  the same line unchanged.
+  the same line unchanged. Codex: b51b245..ab913c9 correct (0.92), 137,933 input tokens. An
+  independent verifier (a guard is loosened: risk item 2) found no blocker; both new tests fail on
+  b51b245; the tests now also hold `received === null`, the run line, and that `holds` is not asked
+  from the recheck's own head. Open for Sebastián, through the orchestrator: a correction amended
+  after its recheck (`reset --hard` to the reviewed head, another fix) now gets a plain review from
+  that head where it was refused before, since ancestry cannot tell it from a fork; findings are still
+  rechecked once and stay in the run log. Whether that needs a guard of its own (the files the old
+  findings name, say) is his decision.
 
 ## Resume here
 Worktree D:/js-harness-worktrees/read-from-records, branch feat/read-from-records, pushed at 95a3294 (PR 128). T0 is done; T1 and T2 are written (the design's second version, 0eaf5d0); T3 to T5 are not started. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design. The session was cut at 76 percent of context after T0 closed.

@@ -6433,7 +6433,10 @@ test('a branch forked at the head of a rechecked review, without the recheck, is
   assert.equal(forked.code, 0, forked.err);
   assert.equal(fake.calls.length, 1, 'Codex reviewed it');
   // Codex's own `--base` review, as any plain range gets in a turn: no prompt on stdin, so no recheck one.
-  assert.ok(!(fake.calls[0].child.received?.text ?? '').includes('## A recheck of earlier findings'), 'no recheck prompt');
+  assert.equal(fake.calls[0].child.received, null, 'no prompt of its own, so no recheck prompt');
+  assert.ok(!forked.out.includes('This range is a recheck'), forked.out);
+  const line = readCodexReviewRuns(root).at(-1);
+  assert.deepEqual([line.recheck, line.prompt], [undefined, 'codex']);
   const record = readCodexReviews(root).at(-1);
   assert.deepEqual([record.base, record.head, record.recheckOf], [head, git(root, 'rev-parse', 'HEAD'), undefined]);
 });

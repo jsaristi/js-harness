@@ -81,6 +81,10 @@ test('from the head of a rechecked review, a range whose head holds the recheck 
   assert.deepEqual(recheckState({ from: B, records, runs, holds: holds(false) }), { kind: 'review' });
   assert.deepEqual(recheckState({ from: B, records, runs, holds: holds(null) }), { kind: 'refused', of: B, open: 0 });
   assert.deepEqual(asked, [C, C, C], 'asked of the head of the recheck');
+  // From the recheck's own head the records decide alone: its head is the range's start, held by any head.
+  asked.length = 0;
+  assert.deepEqual(recheckState({ from: C, records, runs, holds: holds(false) }), { kind: 'review' });
+  assert.deepEqual(asked, [], 'not asked from the head of the recheck');
 });
 
 test('a review that called the patch correct and found only P3 findings owes no correction, so the range after it is a review', () => {

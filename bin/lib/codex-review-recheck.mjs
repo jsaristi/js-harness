@@ -113,7 +113,7 @@ export function recheckState({ from, records, runs, holds = () => null }) {
   const rechecked = reviewed.filter((rec) => rec.recheckOf === from).at(-1);
   // A second recheck only on the line the recheck continues. A range whose head forked from `from` before
   // the recheck holds none of the correction it read: its commits are new code, a review as any other
-  // (L8 of odd/tasks/merge-queue.md). Unknown is refused, as before.
+  // (L8 of odd/tasks/merge-queue.md, pull request 167). Unknown is refused, as before.
   if (rechecked !== undefined) return holds(rechecked.head) === false ? { kind: 'review' } : { kind: 'refused', of: from, open: openOf(rechecked) };
   const lines = linesOf(prior);
   if (lines.length === 0 || lines.includes(null)) return { kind: 'review' };
