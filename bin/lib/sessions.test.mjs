@@ -4596,3 +4596,21 @@ test('boardChanges says a new miss of the last automatic compaction once, and sa
   assert.deepEqual(changes({ sessions: [] }, withMiss(miss(2, 'c1', ['told']))), [`session aaaaaaaa "title a" appeared (working)`], 'a session that appears is not compared');
   assert.deepEqual(changes({ sessions: [{ id: A, unavailable: 'EACCES' }] }, withMiss(miss(2, 'c1', ['told']))), [`session aaaaaaaa "title a" appeared (working): its transcript could not be read until now`], 'an unreadable look is not compared');
 });
+
+test('watchBaseline keeps the miss a failed reader leaves unknown, so the same compaction is said once across the failed read', () => {
+  const look = (compactionMiss) => boardOf({ sessions: [seen(A, 'working', { compactionMiss })] });
+  const missed = (uuid, facts) => ({ at: before(150), uuid, missed: facts, unknown: [] });
+  const said = (facts) => `session aaaaaaaa "title a": its last automatic compaction missed ${facts}`;
+  const chain = (boards) => {
+    const chained = [];
+    let baseline = look(null);
+    for (const board of boards) {
+      chained.push(...lib.boardChanges(baseline, board));
+      baseline = lib.watchBaseline(baseline, board);
+    }
+    return chained;
+  };
+  assert.deepEqual(lib.watchBaseline(look(missed('u1', ['told'])), look(null)).sessions[0].compactionMiss, missed('u1', ['told']), 'a null read keeps the miss the look before named');
+  assert.deepEqual(chain([look(missed('u1', ['told'])), look(null), look(missed('u1', ['told']))]), [said('told')], 'the same compaction after a failed read is not said again');
+  assert.deepEqual(chain([look(missed('u1', ['told'])), look(missed('u2', ['announced']))]), [said('told'), said('announced')], 'a new compaction that misses is said');
+});

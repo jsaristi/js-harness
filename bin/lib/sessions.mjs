@@ -2497,6 +2497,17 @@ function lastReadSessions(older, newer) {
   });
 }
 
+/** `sessions` with the miss of the look before kept where they read none: a reader that fails leaves the miss of a
+ * compaction unknown (`null`), and a miss the look before named keeps its identity until a newer miss replaces it,
+ * so the same compaction is not said again once the reader answers. */
+function keptMisses(older, sessions) {
+  const earlier = byKey(older.sessions.filter((session) => !session.unavailable), 'id');
+  return sessions.map((session) => {
+    const was = earlier.get(session.id)?.compactionMiss ?? null;
+    return (session.compactionMiss ?? null) === null && was !== null ? { ...session, compactionMiss: was } : session;
+  });
+}
+
 /** The questions the person closed without answering between two boards, one line each: who asked and
  * the text. A closed question is the one change of the list that calls for a decision, since it has to be
  * put to him again; one that is on his screen waits for him, and one he answers leaves the list. A
@@ -2674,7 +2685,7 @@ export function watchBaseline(older, newer) {
     const old = byKey(previous.items.filter((plan) => !plan.unavailable), 'path');
     return { ...tree.plans, items: tree.plans.items.map((plan) => (plan.unavailable ? (old.get(plan.path) ?? plan) : plan)) };
   };
-  const lastRead = lastReadSessions(older, newer);
+  const lastRead = keptMisses(older, lastReadSessions(older, newer));
   return {
     ...newer,
     sessions: lastRead,
