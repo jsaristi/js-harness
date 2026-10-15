@@ -90,10 +90,15 @@ of being repeated, and he had to search for it from the phone.
 - Class: asked-of-him
 - Aka: failure 3 (odd/tasks/rule-hierarchy.md; relief file, line 143)
 - Seen: 2026-10-10 — relief file, line 142 — his words: "no me aparece el bloque del JH2"
-- Control: owed — odd/tasks/session-channel.md — "The failures this feature owns closed with their
-  proofs"
+- Control: check — bin/notify.test.mjs — "record with the clock, the sender, the role, the kind, the
+  text and where it ran, then prints the address" — since 2026-10-11
 - Proof: notices carried by his paste, counted by the board: 0 in the stretch of its "Done when"
-  (owed: nothing prints it yet)
+  (owed: T9 and T11 of odd/tasks/session-channel.md; nothing prints it yet)
+- Was: owed — odd/tasks/session-channel.md — "The failures this feature owns closed with their
+  proofs" — replaced on 2026-10-15, when T12 closed, by the control the failure's row names in
+  odd/tasks/rule-hierarchy.md ("no block for another session; a notice is a record"): a notice
+  between sessions is a line of the record since pull request 59 (2026-10-11), not a block he
+  carries
 
 ### board-read-loads-gate
 A read of the board is heavy enough to slow a gate, and watches and waiting scripts read it while
@@ -285,7 +290,9 @@ session can neither be told nor tell, and each notice becomes his paste.
   01:10, reached the lead after 04:20, held by the host
 - Control: check — bin/doctor.test.mjs — "as the session-classes gap, whose fix is the install
   flag" — since 2026-10-14
-- Proof: a practice step: a notice read with no message sent (owed: nothing prints it yet)
+- Proof: a practice step: a notice read with no message sent (owed: the journey's step `channel`,
+  `scripts/practice-lib.mjs` JOURNEY, ran "13 of 13 steps passed" on b0d0af2 in draft pull request
+  199, not on main yet; odd/tasks/session-channel.md, Progress, 2026-10-15 06:27)
 
 ### design-not-faithful
 A design document passed gentle-ai and its own contract and still dropped or misstated decisions of
@@ -499,8 +506,18 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
   05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
   relief line, not a feature document
-- Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
-  of the clock, and says the command wrote it" — since 2026-10-11
+- Control: check — bin/guard.test.mjs — "a Write or an Edit of a Markdown file whose line opens with
+  today and an hour ahead of the clock is denied" — since 2026-10-15
+- Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
+  either tool, is denied when its stamped hour is off the clock", on main since pull request 157
+  (2026-10-14); a feature document or a committed block: the control above
+  (bin/lib/document-hour-guard.mjs, T12b), which refuses only an hour ahead of the clock, since a
+  document also records earlier events
+- Was: owed — odd/tasks/session-channel.md — "An hour a session writes in a feature document or a
+  block it commits is read from the clock" — from 2026-10-15 until T12b was built the same day
+- Was: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
+  of the clock, and says the command wrote it" — since 2026-10-11; seen again on 2026-10-12 to
+  2026-10-14 in messages and a feature document, which it does not stamp; replaced on 2026-10-15
 
 ### init-leaves-codegraph-files
 `init` runs `codegraph init`, which writes files under the home that no manifest records, so
@@ -1106,5 +1123,11 @@ context until it has to be relieved.
   percent, each with a hook block of about 16 KB (a reading, not measured)
 - Seen: 2026-10-11 — relief file, line 217 — twelve points of context in an hour, most of it wakes
   with no news
-- Control: owed — odd/tasks/session-channel.md — "the watch wakes on a notice for the orchestrator"
-- Proof: reliefs per working day, from `relieved` lines: at most one (owed: nothing prints it yet)
+- Control: check — bin/sessions.test.mjs — "--watch does not return for a notice to another role,
+  nor for one the watching session wrote itself" — since 2026-10-11
+- Proof: reliefs per working day, from `relieved` lines: at most one (owed: T9 of
+  odd/tasks/session-channel.md; nothing prints it yet)
+- Was: owed — odd/tasks/session-channel.md — "the watch wakes on a notice for the orchestrator" —
+  stale once T4 was checked off; replaced on 2026-10-15 by the tests T4 left, merged in pull
+  request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
+  another role and for its own, and :2080 wakes it for a notice to the orchestrator
