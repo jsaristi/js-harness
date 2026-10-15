@@ -230,7 +230,8 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     assert.deepEqual(
       rows.map((r) => r.id),
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'],
+      // `unseen` is the row the dispatcher wires in (doctor's `unseen` dependency): last, after the checks.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -311,6 +312,33 @@ test('--help lists sessions, and sessions with a flag it does not know exits 2 w
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown argument: --bogus/);
   assert.match(result.stderr, /Usage: js-harness sessions/);
+});
+
+test('--help lists unseen after sessions, and unseen with a flag it does not know exits 2 with its usage through the dispatcher', () => {
+  assert.match(run(['--help']).stdout, /^ {2}unseen\s+.*out of his sight.*exit 1.*to clear/m);
+  const result = run(['unseen', '--bogus']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /unknown argument: --bogus/);
+  assert.match(result.stderr, /Usage: js-harness unseen/);
+});
+
+// Hermetic: the child runs in an empty temp folder outside any repository, so the project it reads is that
+// folder, which no scheduled task and no transcript names; the Claude home is an empty temp folder too.
+test('unseen dispatches from a temp folder with nothing opened out of his sight: exit 0 and its one line last', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-unseen-cwd-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-unseen-home-'));
+  try {
+    const result = spawnSync(process.execPath, [dispatcher, 'unseen', '--claude-home', home], {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, JS_HARNESS_CHECK_INNER: '1' },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim().split('\n').at(-1), 'unseen: nothing opened out of his sight');
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // Hermetic: an empty temp `--claude-home`, so the command stops at "no sessions folder" before it would

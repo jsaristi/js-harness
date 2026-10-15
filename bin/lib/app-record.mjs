@@ -37,7 +37,8 @@ function orgFolders(root, readdir) {
   return listing(readdir, base).flatMap((account) => listing(readdir, path.join(base, account)).map((org) => path.join(base, account, org)));
 }
 
-/** The app's session records by `cliSessionId`: `{ where, effort, scheduledTaskId, archived, title }`. `where` is
+/** The app's session records by `cliSessionId`: `{ where, effort, scheduledTaskId, archived, title, cwd }`, `cwd` the
+ * folder the session runs in (null when the record names none). `where` is
  * `'archived'` when the app archived it, `'routines'` when a scheduled task opened it, else `'sessions'`. */
 export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   const sessions = new Map();
@@ -54,6 +55,7 @@ export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) 
         scheduledTaskId,
         archived,
         title: typeof data.title === 'string' ? data.title : null,
+        cwd: typeof data.cwd === 'string' && data.cwd !== '' ? data.cwd : null,
       });
     }
   }

@@ -396,6 +396,46 @@ function readRelief(file, readFile) {
   }
 }
 
+/** The sessions of a project's folder whose transcript changed in the last `hours`, read as the board reads them,
+ * `{ generatedAt, since, sessions, record }`: the sessions most recent first (each one's facts, or `unavailable`
+ * with the reason), where the window starts (ms), and the channel's record as its reader gives it. Or `{ unlisted }`
+ * when the folder could not be listed, with the system's code for why, or its message when it gave no code.
+ * `ENOENT` is a project with no sessions folder; any other is a folder that may hold sessions and did not show
+ * them, which is not the same answer to every caller (`--address`). `unseen` reads its sessions through this too,
+ * so the two never parse a transcript in two ways. `io` is `{ readFile, readdir, stat, readFacts }`. */
+export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io }) {
+  let names;
+  try {
+    names = io.readdir(projectDir);
+  } catch (err) {
+    return { unlisted: err.code ?? err.message };
+  }
+  const generatedAt = now();
+  const since = generatedAt - hours * 3600 * 1000;
+  const where = { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault };
+  const read = [];
+  for (const name of names) {
+    if (!name.endsWith('.jsonl')) continue;
+    const id = name.slice(0, -'.jsonl'.length);
+    let changedAt;
+    try {
+      changedAt = io.stat(path.join(projectDir, name)).mtimeMs;
+    } catch (err) {
+      // A transcript whose date cannot be read cannot be placed outside the window either: it is listed.
+      read.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
+      continue;
+    }
+    if (changedAt >= since) read.push(readSession(id, new Date(changedAt).toISOString(), where, io));
+  }
+  const record = readNotices(harnessHome, slug, { readFile: io.readFile });
+  const sessions = titledByReadings(read, record.readings);
+  // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
+  const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
+  sessions.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : 0));
+  for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
+  return { generatedAt, since, sessions, record };
+}
+
 export async function sessionsMain(
   argv,
   {
@@ -461,39 +501,21 @@ export async function sessionsMain(
    * `record` is the channel's record as its reader gives it (`readNotices`), read in the same look: a
    * session whose transcript carries no title has the one of the opening it read (`titledByReadings`),
    * so it is on the board, and holds its role, under that title. */
-  const lookAtSessions = () => {
-    let names;
-    try {
-      names = readdir(projectDir);
-    } catch (err) {
-      return { unlisted: err.code ?? err.message };
-    }
-
-    const generatedAt = now();
-    const since = generatedAt - parsed.hours * 3600 * 1000;
-    const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail, contextWindow: parsed.contextWindow, contextPause: parsed.contextPause, contextCompactionDefault: parsed.contextCompactionDefault };
-    const read = [];
-    for (const name of names) {
-      if (!name.endsWith('.jsonl')) continue;
-      const id = name.slice(0, -'.jsonl'.length);
-      let changedAt;
-      try {
-        changedAt = stat(path.join(projectDir, name)).mtimeMs;
-      } catch (err) {
-        // A transcript whose date cannot be read cannot be placed outside the window either: it is listed.
-        read.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
-        continue;
-      }
-      if (changedAt >= since) read.push(readSession(id, new Date(changedAt).toISOString(), where, io));
-    }
-    const record = readNotices(harnessHome, slug, { readFile });
-    const sessions = titledByReadings(read, record.readings);
-    // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
-    const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
-    sessions.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : 0));
-    for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
-    return { generatedAt, since, sessions, record };
-  };
+  const lookAtSessions = () =>
+    readSessionsWindow({
+      projectDir,
+      slug,
+      harnessHome,
+      hours: parsed.hours,
+      now,
+      tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug),
+      tail: parsed.tail,
+      contextWindow: parsed.contextWindow,
+      contextPause: parsed.contextPause,
+      contextCompactionDefault: parsed.contextCompactionDefault,
+      self,
+      io,
+    });
 
   const noFolder = (code) => `js-harness sessions: no sessions folder for ${root}: ${projectDir} (${code})`;
 

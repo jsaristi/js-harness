@@ -47,9 +47,21 @@ test('appSessions maps each session record by its cliSessionId to where it sits:
     record('local_3.json', { cliSessionId: 'c-plain', isArchived: false, scheduledTaskId: '' }),
   ]));
   const sessions = lib.appSessions(ROOT, root);
-  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old' });
-  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null });
+  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null });
+  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null });
   assert.equal(sessions.get('c-plain').where, 'sessions', 'an empty scheduledTaskId is no routine');
+});
+
+test('appSessions carries each record\'s cwd: the folder the session runs in, or null when the record has none', () => {
+  const root = fakeFs(Object.fromEntries([
+    record('local_1.json', { cliSessionId: 'c-here', isArchived: false, cwd: 'D:\\harness' }),
+    record('local_2.json', { cliSessionId: 'c-empty', isArchived: false, cwd: '' }),
+    record('local_3.json', { cliSessionId: 'c-number', isArchived: false, cwd: 7 }),
+  ]));
+  const sessions = lib.appSessions(ROOT, root);
+  assert.equal(sessions.get('c-here').cwd, 'D:\\harness');
+  assert.equal(sessions.get('c-empty').cwd, null);
+  assert.equal(sessions.get('c-number').cwd, null);
 });
 
 test('appSessions skips a file that is not JSON or has no cliSessionId, and reads no other file of the folder', () => {
