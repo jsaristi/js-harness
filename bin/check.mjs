@@ -25,6 +25,7 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gat
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { selectTests, testFilesOf } from './lib/select-tests.mjs';
+import { checkLedger, failedTestFiles, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './lib/project-functions.mjs';
@@ -1355,21 +1356,40 @@ export async function checkSensors(cwd, deps = {}, lock) {
         const row = await checkSensor(cwd, asked, { ...deps, gateHeld, wsl, traces: dir ? { dir } : null });
         if (tests !== null && tests !== 'node --test') row.detail += `; harness.json "exactTests" is "shadow", but the tests run by \`${tests}\`, not \`node --test\`: no shadow`;
         if (concurrent !== null && concurrent !== 'node --test') row.detail += `; ${TEST_CONCURRENCY_ENV} is ${concurrency.value}, but the tests run by \`${concurrent}\`, not \`node --test\`: they run as written`;
+        // A red suite of `node --test` that names its failed test files runs them once more, alone and
+        // untraced, by the same route (odd/tasks/flaky-ledger.md, Design 2). A timeout names nothing it
+        // can trust, and a suite of another command has no files to give.
+        if (sensor.name === 'tests' && !row.pass && !row.timedOut && testsCommand(cwd, sensor.command) === 'node --test') {
+          const files = failedTestFiles(row.output, testFilesOf(cwd));
+          if (files.length > 0) {
+            const again = await checkSensor(cwd, { name: 'tests', command: `node --test ${files.join(' ')}` }, { ...deps, gateHeld, wsl, traces: null });
+            row.rerun = { files, pass: again.pass, detail: again.detail };
+            // Design 3: the row passes only when the rerun did and every file it ran has a current entry.
+            const judged = judgeRerun(row.rerun, ledgerEntries(cwd), deps.today ?? localDay());
+            row.rerun.row = judged.row;
+            if (judged.pass) {
+              row.pass = true;
+              row.detail += `; its failed test ${files.length === 1 ? 'file' : 'files'} passed alone on rerun and ${files.length === 1 ? 'is' : 'are'} quarantined in docs/FLAKY.md (the rerun row)`;
+            }
+          }
+        }
         ran.push(row);
       }
       result = sensorsResult(ran);
       // A sensor that came back to Windows ran where its key does not say: it proves no tree.
       const ranWhereKeyed = ran.every((row) => (place ? row.ranIn === 'wsl' : !row.ranIn));
-      if (result === 'pass' && key !== null && ranWhereKeyed && keyNow() === key) code = key;
+      // Nor does a pass that rests on a quarantine: its entry expires, and a proof of the tree would not.
+      const quarantined = ran.some((row) => row.rerun);
+      if (result === 'pass' && key !== null && ranWhereKeyed && !quarantined && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
-      const failing = ({ pass, output }) => (pass ? [] : failingTests(output));
+      const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
       record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
-    return [...rows, ...ran, ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
+    return [...rows, ...ran, ...ran.flatMap((row) => (row.rerun ? [row.rerun.row] : [])), ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
   };
   if (!lock) return run();
   if (lock.held) {
@@ -2016,6 +2036,9 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
     : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home)];
+
+  // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
+  if (!push) rows.push(...checkLedger(cwd));
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.

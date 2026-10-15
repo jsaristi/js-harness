@@ -1075,6 +1075,31 @@ test('a project list that cannot be read fails the rules row and stops nothing e
   }
 });
 
+// --- flaky row: the quarantine ledger, when the project keeps one (./lib/flaky.mjs) ---
+
+test('main runs the flaky row with the static rows when the project keeps docs/FLAKY.md, and a malformed ledger makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.mkdirSync(path.join(dir, 'bin'));
+    fs.writeFileSync(path.join(dir, 'bin', 'a.test.mjs'), '');
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    const read = await runCheck(['--cwd', dir], env);
+    assert.equal(read.code, 0);
+    assert.match(read.output, /^PASS {2}flaky {2}docs\/FLAKY\.md quarantines 1 test file, 1 of them current; /m);
+
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n');
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}flaky {2}docs\/FLAKY\.md is not read: 2 faults to repair in that file$/m);
+    assert.match(refused.output, /^ {6}bin\/a\.test\.mjs: no "- Expires:" line$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- failures row: the register of failures, when the project keeps one (./failures.mjs) ---
 
 test('main runs the failures row first, before budget, when the project keeps a register, prints the entries that are not settled, and a register it cannot read makes it exit 1', async () => {
@@ -4323,6 +4348,27 @@ test('a folder that is not the index has no key: with an untracked file, an unst
     } finally {
       remove();
     }
+  }
+});
+
+test('a gate whose tests passed only by a quarantine proves no tree, so the next gate runs them again (odd/tasks/flaky-ledger.md)', async () => {
+  const quarantined = sameTreeRepo({ sameTree: 'skip', sensors: { tests: 'node --test' } });
+  try {
+    fs.mkdirSync(path.join(quarantined.repo, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'bin', 'a.test.mjs'), '');
+    fs.mkdirSync(path.join(quarantined.repo, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    git(quarantined.repo, 'add', '-A');
+    git(quarantined.repo, ...commitAs, '-m', 'a quarantined test file');
+    const red = { status: 1, signal: null, stdout: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ one (1ms)\n', stderr: '' };
+    let call = 0;
+    quarantined.sensor.answer = () => (call++ % 2 === 0 ? red : { status: 0, signal: null, stdout: '', stderr: '' });
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal(quarantined.sensorRuns(), 4, 'each gate ran the suite and its rerun');
+    assert.deepEqual(quarantined.events().filter((event) => event.event === 'end').map((event) => [event.result, 'code' in event]), [['pass', false], ['pass', false]]);
+  } finally {
+    quarantined.remove();
   }
 });
 
