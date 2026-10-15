@@ -4,8 +4,10 @@ import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
   pauseReplyLine, pauseHookInput, pauseHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
+  channelEnv, channelStepProblem, channelRecord,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
+import { recordPath } from '../bin/lib/channel.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
 
@@ -485,7 +487,7 @@ test('realHomeFiles names nothing of the gate log, which the gates of the user\'
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-test('the journey is the eleven steps of the feature document, the pause hook, the project rules and the host session, under ids that stay', () => {
+test('the journey is the eleven steps of the feature document, the pause hook, the channel, the project rules and the host session, under ids that stay', () => {
   // The ids go into record.jsonl, so a renamed one breaks every line already written: they are pinned here.
   assert.deepEqual(JOURNEY.map((step) => step.id), [
     'real-home-before',
@@ -498,6 +500,7 @@ test('the journey is the eleven steps of the feature document, the pause hook, t
     'project-uninstall',
     'global-uninstall',
     'pause-hook',
+    'channel',
     'host-loads',
     'real-home-after',
     'record',
@@ -1004,6 +1007,101 @@ test('pauseHookInput is the JSON the host sends the pause command on standard in
     cwd: '/made/up/project',
     hook_event_name: 'PostToolUse',
   });
+});
+
+// ---- the channel, as the installed project meets it (odd/tasks/session-channel.md, T10) --------------------------------
+
+const PRACTICE_HOME = WIN_LAYOUT.home;
+
+test('channelRecord is where notify records the notices of a project under a home, spelled as the harness spells it', () => {
+  assert.equal(channelRecord(WIN_HOME, 'D--js-harness-practice-project', 'win32'), 'C:\\Users\\Oficina\\.js-harness\\channel\\D--js-harness-practice-project.jsonl');
+  assert.equal(channelRecord('/home/someone', '-srv-practice-project', 'linux'), '/home/someone/.js-harness/channel/-srv-practice-project.jsonl');
+  // The step reads the real home's record by this spelling, to say the notice did not reach it: a spelling that drifted
+  // from the harness's would look at a file nothing writes and always find the real home clean.
+  for (const home of [WIN_HOME, POSIX_LAYOUT.home]) assert.equal(channelRecord(home, 'a-slug'), recordPath(home, 'a-slug'));
+});
+
+test('channelEnv gives the practice home as the harness home and the home, and drops the host session and its config', () => {
+  const base = { Path: 'C:\\bin', HOME: WIN_HOME, UserProfile: WIN_HOME, js_harness_home: 'C:\\elsewhere', Claude_Config_Dir: `${WIN_HOME}\\.claude`, CLAUDE_CODE_SESSION_ID: 'live-session', GIT_AUTHOR_NAME: 'Someone' };
+  const frozen = JSON.stringify(base);
+  assert.deepEqual(channelEnv(base, PRACTICE_HOME, 'win32'), {
+    Path: 'C:\\bin',
+    GIT_AUTHOR_NAME: 'Someone',
+    HOME: PRACTICE_HOME,
+    USERPROFILE: PRACTICE_HOME,
+    JS_HARNESS_HOME: PRACTICE_HOME,
+  });
+  assert.equal(JSON.stringify(base), frozen, 'the environment it is given is left as it was');
+});
+
+test('channelEnv on POSIX replaces the names as they are spelled, and keeps a name of another case', () => {
+  const base = { PATH: '/usr/bin', HOME: '/home/someone', Home: 'kept', CLAUDE_CONFIG_DIR: '/home/someone/.claude', CLAUDE_CODE_SESSION_ID: 'live-session' };
+  assert.deepEqual(channelEnv(base, POSIX_LAYOUT.home, 'linux'), {
+    PATH: '/usr/bin',
+    Home: 'kept',
+    HOME: POSIX_LAYOUT.home,
+    USERPROFILE: POSIX_LAYOUT.home,
+    JS_HARNESS_HOME: POSIX_LAYOUT.home,
+  });
+});
+
+// The two runs of the step, as `{ status, stdout, stderr }` of the child: `notify` records the notice, and the board
+// (`sessions --json`) shows it among the channel's last notices, read from the record under the practice home.
+const MARKER = 'practice-channel-0f3c9a';
+const RECORD = `${PRACTICE_HOME}\\.js-harness\\channel\\D--js-harness-practice-project.jsonl`;
+const boardOf = (channel) => ({ status: 0, stdout: `${JSON.stringify({ root: 'D:\\js-harness-practice\\project', channel }, null, 2)}\n`, stderr: '' });
+const RIGHT_CHANNEL = {
+  notify: { status: 0, stdout: `js-harness notify: recorded note for the orchestrator in ${RECORD}\n`, stderr: '' },
+  board: boardOf({ path: RECORD, skipped: 0, noticeCount: 3, notices: [{ kind: 'note', text: 'an earlier run' }, { kind: 'note', text: `the practice journey's notice ${MARKER}` }] }),
+  marker: MARKER,
+  home: PRACTICE_HOME,
+  realRecord: null,
+  platform: 'win32',
+};
+
+test('channelStepProblem finds nothing wrong when notify recorded the notice and the board shows it from the practice home', () => {
+  assert.equal(channelStepProblem(RIGHT_CHANNEL), null);
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, realRecord: '{"text":"a notice of his own"}\n' }), null, 'a real record of his own, without the marker');
+});
+
+test('channelStepProblem says notify failed, with how it ended and the first line of its stderr', () => {
+  const usage = { status: 2, stdout: '', stderr: 'a notice takes --to and --kind\n\nUsage: js-harness notify ...\n' };
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, notify: usage }), 'js-harness notify failed (exit 2): a notice takes --to and --kind');
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, notify: { status: 1, stdout: '', stderr: '' } }), 'js-harness notify failed (exit 1): it printed nothing on stderr');
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, notify: { status: null, error: new Error('spawnSync node ETIMEDOUT'), stdout: '', stderr: '' } }), 'js-harness notify failed (spawnSync node ETIMEDOUT): it printed nothing on stderr');
+});
+
+test('channelStepProblem says the notice reached the real home when its record holds the marker', () => {
+  const reached = `{"kind":"note","text":"the practice journey's notice ${MARKER}"}\n`;
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, realRecord: reached }), `the real home's channel record holds ${MARKER}: the notice reached the real home`);
+});
+
+test('channelStepProblem says the board failed, with how it ended and the first line of its stderr', () => {
+  const noFolder = { status: 1, stdout: '', stderr: 'js-harness sessions: no sessions folder for D:\\js-harness-practice\\project (ENOENT)\n' };
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, board: noFolder }), 'js-harness sessions --json failed (exit 1): js-harness sessions: no sessions folder for D:\\js-harness-practice\\project (ENOENT)');
+});
+
+test('channelStepProblem says the board printed text that is not JSON, and shows its first line', () => {
+  const text = { status: 0, stdout: 'SESSIONS of D:\\js-harness-practice\\project\nnone\n', stderr: '' };
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, board: text }), 'js-harness sessions --json printed text that is not JSON: SESSIONS of D:\\js-harness-practice\\project');
+});
+
+test('channelStepProblem says the board shows no list of channel notices when its JSON has none', () => {
+  const named = 'the board shows no channel notices: its JSON has no channel.notices list';
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, board: { status: 0, stdout: '{"root":"D:\\\\p"}\n', stderr: '' } }), named);
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, board: boardOf({ path: RECORD, notices: 'none' }) }), named);
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, board: { status: 0, stdout: 'null\n', stderr: '' } }), named);
+});
+
+test('channelStepProblem says the board read a record outside the practice home, and where', () => {
+  const real = `${WIN_HOME}\\.js-harness\\channel\\D--js-harness-practice-project.jsonl`;
+  const elsewhere = boardOf({ path: real, noticeCount: 1, notices: [{ kind: 'note', text: MARKER }] });
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, board: elsewhere }), `the board read the channel's record at ${real}, outside the practice home ${PRACTICE_HOME}`);
+});
+
+test('channelStepProblem says no notice on the board holds the marker, and how many of the record it shows', () => {
+  const without = boardOf({ path: RECORD, noticeCount: 7, notices: [{ kind: 'note', text: 'an earlier run' }, { kind: 'opened', text: 'another' }] });
+  assert.equal(channelStepProblem({ ...RIGHT_CHANNEL, board: without }), `no notice on the board holds ${MARKER}: it shows 2 of the 7 notices of ${RECORD}`);
 });
 
 // ---- the project's own rules (odd/tasks/project-rules.md, T6) ----------------------------------------------------------

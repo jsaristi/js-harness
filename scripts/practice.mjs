@@ -13,11 +13,11 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
-import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf } from '../bin/lib/sessions.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf, projectSlug } from '../bin/lib/sessions.mjs';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
-  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
+  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, channelEnv, channelStepProblem, channelRecord, PRACTICE_RULES, practiceRuleFiles, listWithout,
   HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
 } from './practice-lib.mjs';
 import { agentsTemplate } from '../bin/lib/project.mjs';
@@ -185,6 +185,10 @@ const npmIn = (ctx, cwd, ...args) => withOutput(npm(ctx.npmCli, [...args, '--cac
 /** The pause command run as the host runs its `PostToolUse` hook: the installed entry file, `resume --pause`, the hook
  * input on standard input and `cwd` as the folder of the call. `input` is the JSON text of `pauseHookInput`. */
 const pauseHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'resume', '--pause'], { ...childOptions(ctx, cwd), input }));
+
+/** One command of the installed candidate for the step `channel`: in the practice project, with `channelEnv`, where the
+ * home, the harness's home and the Claude home are all the practice home's and no live session is named. */
+const channelCommand = (ctx, ...args) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), ...args], { ...childOptions(ctx, ctx.layout.project), env: channelEnv(ctx.env, ctx.layout.home) }));
 
 /** The tokens of a made-up reply that is past the context pause: the share the host compacts at, which is above the
  * pause's share of the same window, so the reply passes the pause and is not yet a compaction. Built from the constants
@@ -617,6 +621,42 @@ const STEPS = {
     const problem = pauseHookProblem({ first, second, outside: elsewhere });
     assertThat(problem === null, problem);
     return `the first run printed one PostToolUse notice of ${first.stdout.trim().length} characters; the second run printed nothing, and so did the run from ${outside}, where no harness.json lies above; all three exited 0`;
+  },
+
+  channel: (ctx) => {
+    const { project, home } = ctx.layout;
+    // The Claude home is the practice home's, where `install` wrote the host's settings: the board lists the sessions
+    // folder of the project there, and refuses a project that has none, so the step gives it one when no host session of
+    // an earlier run left it, and removes only what it made.
+    const claudeHome = path.join(home, '.claude');
+    const slug = projectSlug(path.resolve(project));
+    const sessionsFolder = path.join(claudeHome, 'projects', slug);
+    // New for each run, so the board's last notices can only show it because this run recorded it. The sender is a
+    // made-up session as well: `channelEnv` drops the id of the session that started the run.
+    const marker = `practice-channel-${randomUUID()}`;
+    const self = `practice-channel-${randomUUID()}`;
+    let notify;
+    let board;
+    // The first folder `mkdirSync` had to create (`projects` itself on a home no host session used yet), or `undefined`.
+    let made;
+    try {
+      made = fs.mkdirSync(sessionsFolder, { recursive: true });
+      notify = channelCommand(ctx, 'notify', '--to', 'orchestrator', '--kind', 'note', '--self', self, '--claude-home', claudeHome, `the practice journey's notice ${marker}`);
+      board = channelCommand(ctx, 'sessions', '--json', '--claude-home', claudeHome);
+    } finally {
+      if (made !== undefined) fs.rmSync(made, { recursive: true, force: true });
+    }
+    // The real home's record of the same project: a notice that ignored the practice home would be there.
+    const realFile = channelRecord(ctx.realHome, slug);
+    const realRecord = readIfThere(realFile)?.toString('utf8') ?? null;
+    const problem = channelStepProblem({ notify, board, marker, home, realRecord });
+    assertThat(problem === null, problem);
+    const { channel } = JSON.parse(board.stdout);
+    return [
+      tail(notify.stdout, 4),
+      `js-harness sessions --json shows ${channel.notices.length} of the ${channel.noticeCount} notices of ${channel.path}, one of them holding ${marker}`,
+      `${realFile} ${realRecord === null ? 'is not there' : 'does not hold it'}`,
+    ].join('\n');
   },
 
   'host-loads': (ctx) => {

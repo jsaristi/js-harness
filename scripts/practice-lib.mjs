@@ -450,7 +450,8 @@ export function gateLogFolder(home, platform = process.platform) {
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-/** The journey of `run`, in order: the ten steps of the feature document ("The journey"), and `pause-hook`, which that document does not list yet. An `id` goes into
+/** The journey of `run`, in order: the steps of the feature document ("The journey"), with `pause-hook` and `channel`
+ * (odd/tasks/session-channel.md, T10), the two the session channel adds. An `id` goes into
  * the record, so it never changes once a line was written with it; a feature that changes what a project
  * receives adds its own step here, with its test. */
 export const JOURNEY = Object.freeze([
@@ -464,6 +465,7 @@ export const JOURNEY = Object.freeze([
   { id: 'project-uninstall', title: 'uninstall removes what init wrote and nothing the project owns; init again' },
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
+  { id: 'channel', title: 'a notice recorded in the installed project is read back on its board, and nothing reaches the real home' },
   { id: 'host-loads', title: 'a real Claude Code session in the project loads the skills and AGENTS.md, runs the three hook entries, and leaves nothing in the real home' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
@@ -846,5 +848,71 @@ export function pauseHookProblem({ first, second, outside }) {
   if (outside.status !== 0) return `the run outside a project exited ${outside.status}, not 0`;
   const elsewhere = (outside.stdout ?? '').replace(/\r?\n$/, '');
   if (elsewhere.trim() !== '') return `the run outside a project printed ${elsewhere}, though no harness.json is above its folder`;
+  return null;
+}
+
+// ---- the channel, as the installed project meets it (odd/tasks/session-channel.md, T10) ----
+
+// The names `channelEnv` replaces: the two a child reads its home from (`os.homedir()` takes USERPROFILE on Windows and
+// HOME elsewhere), the harness's home, and the two by which a command started from a live session reaches that
+// session's files: its id (`notify` reads the sender's transcript by it) and its config folder (the Claude home both
+// commands read the sessions from when no `--claude-home` is given).
+const CHANNEL_REPLACED = ['HOME', 'USERPROFILE', 'JS_HARNESS_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_SESSION_ID'];
+
+/** Where `notify` records the notices of the project `slug` under the home `home` (`recordPath` of
+ * `bin/lib/channel.mjs`). Spelled here, as `gateLogFolder` is, because the practice looks at the candidate from outside;
+ * a test holds the two spellings together. The step reads the real home's record by it, to show the notice is not there. */
+export function channelRecord(home, slug, platform = process.platform) {
+  return pathFor(platform).join(home, '.js-harness', 'channel', `${slug}.jsonl`);
+}
+
+/** The environment of the two commands of the step `channel`, as a new object; `baseEnv` (the practice's `childEnv`)
+ * is left as it is. `notify` and the board find the record under the harness home, which is `JS_HARNESS_HOME` or the
+ * user's home: both are the practice home here, so a command that ignored the one would still write and read there,
+ * and never in the real home. The host session's id and config folder are dropped, so the session that starts a run
+ * is never taken for the sender and its transcripts are never read. Windows does not tell names apart by case: every
+ * spelling of a replaced name goes, and the result holds each once. */
+export function channelEnv(baseEnv, home, platform = process.platform) {
+  const windows = platform === 'win32';
+  const replaced = (name) => CHANNEL_REPLACED.includes(windows ? name.toUpperCase() : name);
+  return {
+    ...Object.fromEntries(Object.entries(baseEnv).filter(([name]) => !replaced(name))),
+    HOME: home,
+    USERPROFILE: home,
+    JS_HARNESS_HOME: home,
+  };
+}
+
+/** How a child of the step ended, for its message: the spawn error, or its exit code. */
+const endedAs = (result) => (result.error ? result.error.message : `exit ${result.status}`);
+/** The first line of `text` that is not blank, or `null`. */
+const firstLine = (text) => String(text ?? '').split(/\r?\n/).find((line) => line.trim() !== '') ?? null;
+const failedRun = (what, result) => `${what} failed (${endedAs(result)}): ${firstLine(result.stderr) ?? 'it printed nothing on stderr'}`;
+
+/** What is wrong with the step `channel`, or `null` when nothing is. `notify` is the run of the installed
+ * `js-harness notify --to orchestrator --kind note "<a line holding marker>"` in the practice project, and `board` the
+ * run of `js-harness sessions --json` after it, each `{ status, stdout, stderr, error? }` of the child. `notify` must
+ * exit 0; the real home's record of the project (`realRecord`, its text, or `null` when there is none) must not hold
+ * `marker`; the board must exit 0 and print JSON whose `channel` was read from a record under the practice home `home`
+ * and lists, among its last notices, one whose text holds `marker`. The real home is looked at before the board: a
+ * notice written there instead would otherwise read only as a board that does not show it. One line names what failed. */
+export function channelStepProblem({ notify, board, marker, home, realRecord = null, platform = process.platform }) {
+  if (notify.error || notify.status !== 0) return failedRun('js-harness notify', notify);
+  if (typeof realRecord === 'string' && realRecord.includes(marker)) return `the real home's channel record holds ${marker}: the notice reached the real home`;
+  if (board.error || board.status !== 0) return failedRun('js-harness sessions --json', board);
+  let parsed;
+  try {
+    parsed = JSON.parse(board.stdout);
+  } catch {
+    return `js-harness sessions --json printed text that is not JSON: ${firstLine(board.stdout) ?? '(nothing)'}`;
+  }
+  const channel = parsed?.channel;
+  if (!Array.isArray(channel?.notices)) return 'the board shows no channel notices: its JSON has no channel.notices list';
+  if (typeof channel.path !== 'string' || !isInside(home, channel.path, platform)) {
+    return `the board read the channel's record at ${channel.path}, outside the practice home ${home}`;
+  }
+  if (!channel.notices.some((notice) => typeof notice?.text === 'string' && notice.text.includes(marker))) {
+    return `no notice on the board holds ${marker}: it shows ${channel.notices.length} of the ${channel.noticeCount} notices of ${channel.path}`;
+  }
   return null;
 }
