@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkSensor, runSensor } from './check.mjs';
+import { checkSensor, onCi, runSensor } from './check.mjs';
+
+// The suite runs on CI too, where `CI` is set and skip mode runs the whole suite (L18): these tests pin a
+// gate off CI, and the one that reads the variable sets it itself.
+delete process.env.CI;
 
 // The tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): it runs the whole suite under the tracer, asks
 // the selection first, and says which files it would have skipped and which of those failed.
@@ -126,6 +130,49 @@ test('in skip mode an npm suite with a pretest or posttest script runs whole whe
     assert.deepEqual(commands, ['npm run test']);
     assert.match(whole.detail, /; exact tests: the whole suite ran, since package\.json has a pretest or posttest script, which no trace proves$/);
   } finally {
+    done();
+  }
+});
+
+// The lead's condition on the flip (odd/tasks/exact-tests.md, L18): the merge queue's candidate run on
+// CircleCI, `node bin/check.mjs` on a fresh checkout, stays the whole suite. CircleCI and GitHub Actions both
+// set `CI`.
+test('in skip mode a gate on CI runs the whole suite, and the row says why', async () => {
+  const { root, dir, done } = project();
+  try {
+    await checkSensor(root, sensor, { traces: skip(dir) });
+    const { commands, spawn } = recording();
+    const whole = await checkSensor(root, sensor, { traces: skip(dir), spawn, ci: true });
+    assert.deepEqual(commands, ['node --test']);
+    assert.deepEqual(whole.skip, { files: 2, skipped: 0 });
+    assert.match(whole.detail, /; exact tests: the whole suite ran, since a CI run runs the whole suite \(the CI variable is set\)$/);
+  } finally {
+    done();
+  }
+});
+
+test('a CI variable that is set says a gate is on CI, and one that is unset, empty, "false" or "0" says it is not', () => {
+  for (const value of ['true', 'TRUE', '1', 'yes']) assert.equal(onCi({ CI: value }), true, `CI=${value}`);
+  for (const value of [undefined, '', ' ', 'false', 'False', '0']) assert.equal(onCi({ CI: value }), false, `CI=${value}`);
+});
+
+// `CI` is in the key of a trace (S5), so the passing traces are written under the value each case asks with.
+test('a gate reads the CI variable of its environment', async () => {
+  const { root, dir, done } = project();
+  const before = process.env.CI;
+  try {
+    process.env.CI = 'false';
+    await checkSensor(root, sensor, { traces: skip(dir) });
+    const off = recording();
+    await checkSensor(root, sensor, { traces: skip(dir), spawn: off.spawn });
+    assert.deepEqual(off.commands, []);
+    process.env.CI = 'true';
+    const on = recording();
+    await checkSensor(root, sensor, { traces: skip(dir), spawn: on.spawn });
+    assert.deepEqual(on.commands, ['node --test']);
+  } finally {
+    if (before === undefined) delete process.env.CI;
+    else process.env.CI = before;
     done();
   }
 });

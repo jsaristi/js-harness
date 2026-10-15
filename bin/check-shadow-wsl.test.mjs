@@ -8,6 +8,10 @@ import { checkSensor } from './check.mjs';
 import { SYNCED_MARK } from './lib/gate-wsl.mjs';
 import { TRACER_VERSION, TRACE_PRELOAD, hashOf, traceEnvOf } from './lib/trace-reads.mjs';
 
+// The suite runs on CI too, where `CI` is set and skip mode runs the whole suite (L18): these tests pin a
+// gate off CI.
+delete process.env.CI;
+
 const { traceFolder, writeTrace } = createRequire(import.meta.url)('./lib/trace-reads.cjs');
 
 // The tests sensor in shadow in WSL2 (odd/tasks/exact-tests.md, T3b): the suite runs in the mirror under the

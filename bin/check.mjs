@@ -814,7 +814,7 @@ export function failingTests(output) {
   return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
 }
 
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion, concurrency = null } = {}) {
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion, concurrency = null, ci = onCi(process.env) } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -858,7 +858,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // run (`skipPlan`), so they refresh their traces, and the row counts what was skipped, never as a shadow.
   const skipping = exact && traces.mode === 'skip';
   const shadow = skipping ? null : started;
-  const plan = skipping ? skipPlan(started, cwd, sensor.command, concurrency) : null;
+  const plan = skipping ? skipPlan(started, cwd, sensor.command, concurrency, ci) : null;
   // The command as written, which the row says, and the one that runs: with the files to run after it.
   const written = testsCommandLine(sensor.command, { concurrency });
   const asked = plan?.files ? testsCommandLine(sensor.command, { concurrency, files: plan.files }) : written;
@@ -949,11 +949,21 @@ const PLAIN_PATH = /^[A-Za-z0-9._/-]+$/;
  * kept below it on every system, so a selection runs the same way wherever it is asked. */
 const COMMAND_LINE_MAX = 7000;
 
+/** Whether `env` says the gate runs on CI: CircleCI and GitHub Actions both set `CI`, and a `CI` of `false`
+ * or `0` says it does not. */
+export function onCi(env) {
+  const value = env.CI?.trim().toLowerCase();
+  return Boolean(value) && value !== 'false' && value !== '0';
+}
+
 /** What a tests sensor in skip mode runs (odd/tasks/exact-tests.md, T4c), from `started`, the selection
  * `startShadow` asked (`null` where WSL2's could not be asked): `{ tests, files }`, the files to run; `{ tests,
  * none: true }`, none; or `{ tests, whole }`, why the whole suite runs instead, traced as in shadow. `tests` is
- * the count of the test files. */
-function skipPlan(started, cwd, command, concurrency) {
+ * the count of the test files. On CI (`ci`), the whole suite runs. */
+function skipPlan(started, cwd, command, concurrency, ci) {
+  // The merge queue's candidate run on CI checks the tree a fresh checkout gives, which is what lands: it
+  // runs every test file (odd/tasks/exact-tests.md, L18).
+  if (ci) return { tests: started?.tests.length ?? testFilesOf(path.resolve(cwd)).length, whole: 'a CI run runs the whole suite (the CI variable is set)' };
   if (!started) return { tests: testFilesOf(path.resolve(cwd)).length, whole: 'the node of WSL2 said no version, or WSL mounts no folder of its traces' };
   const { tests, run, full } = started;
   const of = { tests: tests.length };
@@ -1079,7 +1089,7 @@ const aheadSaid = (line) => (line?.ahead > 1 ? `; ${line.ahead} gates are ahead 
 /** What `--wait <minutes>` and `--no-wait` mean, for the usage of `check` and of `js-harness gate`, which
  * take the two flags alike. The bound is not on the whole of a wait (`takeGateLock`). */
 export const GATE_WAIT_USAGE =
-  "       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (60 when not given); --no-wait: refuse at once instead of waiting";
+  `       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (${GATE_WAIT_MS / 60_000} when not given); --no-wait: refuse at once instead of waiting`;
 
 /** The sentence of a refusal of the lock (`takeGateLock`), for a gate that was given `waitMinutes`: which
  * gate it was refused for, and whether that gate held the lock or waited ahead of this one for it. A wait

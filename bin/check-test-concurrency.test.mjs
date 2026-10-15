@@ -6,6 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { checkSensors } from './check.mjs';
 
+// The suite runs on CI too, where `CI` is set and skip mode runs the whole suite (L18): these tests pin a
+// gate off CI.
+delete process.env.CI;
+
 // `JS_HARNESS_TEST_CONCURRENCY` (step 4 of the parallel-gate plan): GitHub's runner has 2 logical processors,
 // where `node --test` runs one test file at a time (its default is one fewer than the processors), and the
 // flag cannot go in NODE_OPTIONS ("--test-concurrency= is not allowed in NODE_OPTIONS", node 24). So the

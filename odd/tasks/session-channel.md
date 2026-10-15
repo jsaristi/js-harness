@@ -2578,6 +2578,13 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   notice of 05:44 keeps it, as matching his rules, with no question to him. Moved onto main
   `eec4ee3` at 07:02: the line on starting from the fixed prompt keeps main's new wording on who
   archives the old orchestrator, with "say that you lead".
+- 2026-10-15 08:20 (date), T8's owed half, by JH 19: PR 195 landed (`c4fd0bf`) and PR 201
+  (`js-harness loop`) landed (`882ce3f`), so the loop text JH 18 sent goes in, on
+  `feat/orchestrator-skill-loop`: a "What you run" bullet for `loop run`, `status` and `stop`;
+  a relief bullet for the lead's loops at its start, after a compaction and at a handover
+  (`--restart`, `--take-over`, never another session's loop); and a line in the `js-harness`
+  skill's command list, which named no `loop`. Proof: one test RED first, then
+  `node --test bin/lib/manifest.test.mjs` 142 passed, 0 failed. T8 owes nothing more.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
