@@ -4547,3 +4547,70 @@ test('mainCheckout asks git for the working tree of a git dir kept apart from it
   assert.equal(lib.mainCheckout(linked.run, here), meta);
   assert.equal(lib.mainCheckout(revParse({ '--git-common-dir': meta }).run, here), meta);
 });
+
+// --- the last automatic compaction that misses a fact (session channel, T9) ---
+
+const compactionEntry = (uuid, trigger, minute) => ({ type: 'system', subtype: 'compact_boundary', uuid, ...base(minute), compactMetadata: { trigger, preTokens: 900, postTokens: 300 } });
+const editEntry = (id, minute) => call(id, 'Edit', { file_path: 'odd/tasks/board.md', old_string: 'x', new_string: 'y' }, minute);
+const miss = (minutes, uuid, missed, unknown = []) => ({ at: before(minutes * 60), uuid, missed, unknown });
+
+test('compactionMissOf calls no reader for a session with no automatic compaction', () => {
+  const calls = [];
+  const readers = {
+    told: (after, at) => calls.push(['told', after, at]),
+    kept: (query) => calls.push(['kept', query]),
+  };
+  const none = transcript(prompt('go', 1), reply('done', 5));
+  const manual = transcript(prompt('go', 1), editEntry('e1', 2), reply('done', 5), compactionEntry('m1', 'manual', 6), reply('again', 8));
+  assert.equal(lib.compactionMissOf(none, readers), null);
+  assert.equal(lib.compactionMissOf(manual, readers), null);
+  assert.deepEqual(calls, []);
+});
+
+test('compactionMissOf names the facts the last automatic compaction misses, and not the ones it cannot know', () => {
+  const text = transcript(prompt('go', 1), editEntry('e1', 2), reply('Saved.', 3), compactionEntry('b1', 'auto', 6), reply('working again', 8));
+  const told = () => ({ known: true, at: at(2) });
+  assert.deepEqual(lib.compactionMissOf(text, { told, kept: () => ({ known: true, kept: false }) }), { at: at(6), uuid: 'b1', missed: ['kept', 'announced'], unknown: [] });
+  assert.deepEqual(lib.compactionMissOf(text, { told, kept: () => ({ known: false }) }), { at: at(6), uuid: 'b1', missed: ['announced'], unknown: ['kept'] }, 'a reader that cannot answer is unknown, never a miss');
+  assert.equal(lib.compactionMissOf(text, { told: () => { throw new Error('no state'); }, kept: () => ({ known: true, kept: false }) }), null, 'a reader that throws leaves nothing to miss');
+  const announced = transcript(prompt('go', 1), editEntry('e1', 2), reply('```\n/compact\n```', 3), compactionEntry('b1', 'auto', 6), reply('working again', 8));
+  assert.equal(lib.compactionMissOf(announced, { told, kept: () => ({ known: true, kept: true }) }), null, 'a last automatic compaction that misses nothing has no miss');
+});
+
+test('renderBoard prints the miss of the last automatic compaction under its session, with what it could not know', () => {
+  const lines = (compactionMiss) => lib.renderBoard({ ...BOARD, sessions: [seen(A, 'working', { compactionMiss })] }, { now: NOW }).filter((line) => line.includes('last automatic compaction'));
+  assert.deepEqual(lines(miss(10, 'b1', ['told', 'announced'])), ['    last automatic compaction 10m ago: missed told, announced']);
+  assert.deepEqual(lines(miss(10, 'b1', ['kept'], ['announced'])), ['    last automatic compaction 10m ago: missed kept; not known: announced']);
+  assert.deepEqual(lines(miss(10, 'b1', [], ['kept'])), [], 'only facts not known say nothing');
+  assert.deepEqual(lines(null), []);
+});
+
+test('boardChanges says a new miss of the last automatic compaction once, and says a later compaction that misses again', () => {
+  const said = `session aaaaaaaa "title a": its last automatic compaction missed told`;
+  const withMiss = (compactionMiss) => ({ sessions: [seen(A, 'working', { compactionMiss })] });
+  assert.deepEqual(changes(withMiss(null), withMiss(miss(2, 'c1', ['told']))), [said]);
+  assert.deepEqual(changes(withMiss(miss(2, 'c1', ['told'])), withMiss(miss(2, 'c1', ['told']))), [], 'the same compaction is not said twice');
+  assert.deepEqual(changes(withMiss(miss(2, 'c1', ['told'])), withMiss(miss(1, 'c2', ['told']))), [said], 'a later compaction that misses is said');
+  assert.deepEqual(changes(withMiss(miss(2, 'c1', ['told'])), withMiss(null)), [], 'a compaction that misses nothing is not said');
+  assert.deepEqual(changes(withMiss(null), withMiss(miss(2, 'c1', ['told'])), { self: A }), [], 'the watching session is never said');
+  assert.deepEqual(changes({ sessions: [] }, withMiss(miss(2, 'c1', ['told']))), [`session aaaaaaaa "title a" appeared (working)`], 'a session that appears is not compared');
+  assert.deepEqual(changes({ sessions: [{ id: A, unavailable: 'EACCES' }] }, withMiss(miss(2, 'c1', ['told']))), [`session aaaaaaaa "title a" appeared (working): its transcript could not be read until now`], 'an unreadable look is not compared');
+});
+
+test('watchBaseline keeps the miss a failed reader leaves unknown, so the same compaction is said once across the failed read', () => {
+  const look = (compactionMiss) => boardOf({ sessions: [seen(A, 'working', { compactionMiss })] });
+  const missed = (uuid, facts) => ({ at: before(150), uuid, missed: facts, unknown: [] });
+  const said = (facts) => `session aaaaaaaa "title a": its last automatic compaction missed ${facts}`;
+  const chain = (boards) => {
+    const chained = [];
+    let baseline = look(null);
+    for (const board of boards) {
+      chained.push(...lib.boardChanges(baseline, board));
+      baseline = lib.watchBaseline(baseline, board);
+    }
+    return chained;
+  };
+  assert.deepEqual(lib.watchBaseline(look(missed('u1', ['told'])), look(null)).sessions[0].compactionMiss, missed('u1', ['told']), 'a null read keeps the miss the look before named');
+  assert.deepEqual(chain([look(missed('u1', ['told'])), look(null), look(missed('u1', ['told']))]), [said('told')], 'the same compaction after a failed read is not said again');
+  assert.deepEqual(chain([look(missed('u1', ['told'])), look(missed('u2', ['announced']))]), [said('told'), said('announced')], 'a new compaction that misses is said');
+});

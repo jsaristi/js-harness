@@ -2131,11 +2131,14 @@ function announcedOf(counted, { after, before, toldAt }) {
 
 /** Each compaction of `text` once, oldest first, with what the transcript holds of the stretch before it:
  * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, announced, verdict }`. The readers
- * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each. */
-export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT } = {}) {
+ * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each.
+ * With `lastAutomaticOnly`, only the newest automatic compaction is judged: the readers are asked for it alone, and
+ * every other compaction has no verdict. */
+export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT, lastAutomaticOnly = false } = {}) {
   const counted = firstAppearances(text);
   const boundaries = boundariesOf(counted);
   const wrote = writesOf(counted);
+  const judged = lastAutomaticOnly ? boundaries.filter((boundary) => boundary.automatic).at(-1) : undefined;
   return boundaries.map((boundary, index) => {
     const { uuid, at, automatic, before, line } = boundary;
     const after = boundaries[index - 1]?.at ?? null;
@@ -2143,7 +2146,7 @@ export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => N
     const inThisFile = counted.some(({ entry, at: when }) => isOwnReply(entry) && within(when, stretch));
     const document = documentBefore(wrote, at);
     const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, announced: null, verdict: null };
-    if (!automatic || !inThisFile) return item;
+    if (!automatic || !inThisFile || (lastAutomaticOnly && boundary !== judged)) return item;
     const toldState = toldOf(told, after, at);
     const keptState = toldState.at === null || document === null ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
     const announced = toldState.at === null ? null : announcedOf(counted, { after, before: at, toldAt: toldState.at });
@@ -2160,6 +2163,20 @@ export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => N
       verdict: { ...verdicts, missing: ['told', 'kept', 'announced'].filter((name) => verdicts[name] === false) },
     };
   });
+}
+
+/** The miss of the session's last automatic compaction, as the board says it, or `null`: the session has no automatic
+ * compaction judged in `text`, or the judged one misses no fact. `{ at, uuid, missed, unknown }`: `missed` the facts
+ * that are false, `unknown` the facts a reader could not answer (never a miss). The readers are asked only for that
+ * compaction, and not at all when the text names no automatic one. */
+export function compactionMissOf(text, readers) {
+  if (!text.includes('compact_boundary') || !text.includes('"auto"')) return null;
+  const measures = compactionMeasures(text, { ...readers, lastAutomaticOnly: true });
+  const judged = measures.filter((measure) => measure.automatic).at(-1);
+  if (!judged?.verdict || judged.verdict.missing.length === 0) return null;
+  const { verdict } = judged;
+  const unknown = ['told', 'kept', 'announced'].filter((name) => verdict[name] === null);
+  return { at: judged.at, uuid: judged.uuid, missed: verdict.missing, unknown };
 }
 
 // ---- what changed between two boards ------------------------------------------------------------------
@@ -2255,6 +2272,13 @@ function isNewCompaction(was, now) {
   return was.uuid !== null && now.uuid !== null ? was.uuid !== now.uuid : was.at !== now.at;
 }
 
+/** Whether `now`, a session's miss of its last automatic compaction (`compactionMissOf`), is one the earlier look did not
+ * have: none before, or another compaction than the one it named. */
+function isNewMiss(was, now) {
+  if (was === null) return true;
+  return (was.uuid ?? was.at) !== (now.uuid ?? now.at);
+}
+
 /** How long the call a session waits on has had no result, in ms, when the board may say so, else `null`: the
  * session works and has not ended (`ended`), and its last call (`pendingCall`) is not a question, whose calls are
  * in "Open questions". A call of the agent tool is measured from the later of its launch and the last write of
@@ -2321,6 +2345,11 @@ function sessionChanges(before, after, self) {
     // kept has none to compare with (`undefined`), so nothing is said of the compactions it already had.
     if (was && was.lastCompaction !== undefined && session.lastCompaction && isNewCompaction(was.lastCompaction, session.lastCompaction)) {
       lines.push(compactionLine(session, sizes, Date.parse(after.generatedAt)));
+    }
+    // Once, when the last automatic compaction of the session misses a fact (`compactionMissOf`); the same compaction is
+    // not said twice, and a board kept before the field has no miss to compare with (`null`).
+    if (was && session.compactionMiss && session.compactionMiss.missed.length > 0 && isNewMiss(was.compactionMiss ?? null, session.compactionMiss)) {
+      lines.push(`${sessionLabel(session)}: its last automatic compaction missed ${session.compactionMiss.missed.join(', ')}`);
     }
     // Once, when it reaches the pause: what it does there is its own judgment, and the line carries what
     // that judgment needs. A last task that no longer fits is said in it and wakes nobody by itself.
@@ -2465,6 +2494,17 @@ function lastReadSessions(older, newer) {
     if (!session.unavailable) return session;
     const kept = read.get(session.id);
     return kept ? { ...kept, readAt: kept.readAt ?? older.generatedAt } : session;
+  });
+}
+
+/** `sessions` with the miss of the look before kept where they read none: a reader that fails leaves the miss of a
+ * compaction unknown (`null`), and a miss the look before named keeps its identity until a newer miss replaces it,
+ * so the same compaction is not said again once the reader answers. */
+function keptMisses(older, sessions) {
+  const earlier = byKey(older.sessions.filter((session) => !session.unavailable), 'id');
+  return sessions.map((session) => {
+    const was = earlier.get(session.id)?.compactionMiss ?? null;
+    return (session.compactionMiss ?? null) === null && was !== null ? { ...session, compactionMiss: was } : session;
   });
 }
 
@@ -2645,7 +2685,7 @@ export function watchBaseline(older, newer) {
     const old = byKey(previous.items.filter((plan) => !plan.unavailable), 'path');
     return { ...tree.plans, items: tree.plans.items.map((plan) => (plan.unavailable ? (old.get(plan.path) ?? plan) : plan)) };
   };
-  const lastRead = lastReadSessions(older, newer);
+  const lastRead = keptMisses(older, lastReadSessions(older, newer));
   return {
     ...newer,
     sessions: lastRead,
@@ -2777,6 +2817,13 @@ function sessionLines(session, now, sizes, ended) {
   lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}`);
   // A line of its own: it is the one read to judge whether what is left of a task fits.
   lines.push(`  ${contextText(session, sizes)}`);
+  // The last automatic compaction misses a fact the proof is owed (`compactionMissOf`): said once under the block, with
+  // what the reader could not know. Nothing when it misses none, or when the facts it misses are only unknown.
+  const miss = session.compactionMiss;
+  if (miss && miss.missed.length > 0) {
+    const unknown = miss.unknown.length > 0 ? `; not known: ${miss.unknown.join(', ')}` : '';
+    lines.push(`    last automatic compaction ${ago(miss.at, now)}: missed ${miss.missed.join(', ')}${unknown}`);
+  }
   // A tool call that has had no result for the limit: the host may be holding it for approval, or it hangs.
   const held = pendingAge(session, now, ended);
   if (held !== null && held >= PENDING_CALL_LIMIT_MS) {
