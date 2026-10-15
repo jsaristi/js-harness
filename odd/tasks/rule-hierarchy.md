@@ -1656,11 +1656,26 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       `sensor-timeout` and `agents-budget`, read by `bin/check.mjs` (commit `64e2e6b`, draft
       pull request 196, stacked on 192; `git merge-tree` against the three branches that
       change that file: two clean, `feat/flaky-ledger` conflicting only in `docs/FAILURES.md`,
-      as it does with `main`; Codex's record covers `8f1b080..64e2e6b`, no finding). Left: the
-      last file of the design's list, `bin/lib/manifest.mjs`, open in JH 16's pull requests 188
-      and 191, so it waits for them; and the queue of values the second reader found
-      ("What T16b builds", item 2); and two test files that still state the review's model as
-      a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
+      as it does with `main`; Codex's record covers `8f1b080..64e2e6b`, no finding). All three
+      are on `main` since 2026-10-15 (`eec4ee3`). The queue of values the second reader found
+      ("What T16b builds", item 2), judged by the design's test (a value is a rule when a
+      text in force states it or a person decided it): the gate log's size and its command
+      cut are stated in `docs/ROADMAP.md:897-898`, so they are declared as `gate-log-size` and
+      `gate-log-command` and read by `bin/lib/gate-log.mjs` (commit `2e47e6d`, draft pull request 206; gentle-ai
+      medium and not due; Codex's record covers `eec4ee3..2e47e6d`, no finding).
+      The shortest phrase of a control was declared before, as `control-phrase-min`. The rest
+      stay in code, each for its reason: the channel's four limits (`bin/lib/channel.mjs:38-47`),
+      the runs a plan needs (`bin/lib/codex-review-plan.mjs:53,56`), the prompt's bound
+      (`bin/lib/codex-review-prompt.mjs:51`) and the board's timeout (`bin/sessions.mjs:87`)
+      are tuning that no text states and no person chose; the exit code of a wait that gave up
+      (`bin/gate.mjs:50`) is sysexits' `EX_TEMPFAIL`, a code of an interface; the goal's length
+      (`bin/contract.mjs:24`) is the host's documented `/goal` limit, a figure of the host like
+      the window; the efforts a contract takes (`bin/lib/contract.mjs:34`) are read by nothing
+      since a task's kind sets its effort (`odd/tasks/effort-by-task.md`, S1); the review's
+      session (`bin/codex-review.mjs:224`) is a name the run log writes, not a value. Left: the
+      last file of the design's list, `bin/lib/manifest.mjs`, which waits for JH 16's pull
+      request 191 (188 is on `main`); and two test files that still state the review's model
+      as a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
       `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free
     - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
@@ -2598,20 +2613,14 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
-**State for a resume, 2026-10-15 at 05:19 by `date`, at about 62 percent of the context.** The
-lead lifted the pause on 2026-10-15 ("he ordered everything unblocked"). The two parked branches
-are delivered as drafts, since main is frozen until the lead says pull request 167 landed:
-`feat/rule-contract-timeout` was rebased onto `149e1d8`, its import conflict resolved inside
-the commit (`b7e1681`), and it is pull request 190. `feat/rule-review-timeout` was rebuilt on it:
-the staged merge was dropped, the work was reapplied as a patch, and it was committed (`8f1b080`)
-as pull request 192. At 05:44, `bin/check.mjs` followed as pull request 196, stacked on 192,
-with the lead's leave. All three carry Codex records and gentle-ai's "not due". Next:
-`bin/lib/manifest.mjs`, after JH 16's pull requests 188 and 191 land, since they change it.
-Pull request 167 landed at 05:47 (main `d34f1d6`), and code now reaches main only through
-`merge-queue --land`. The lead's order of 05:49: these stay drafts until its batch 1 (183, 185,
-186, flaky-ledger, sweep-waits) is on main; then the lead marks them ready and lands them, not
-this session. `git merge-tree` of `d34f1d6` with 196's stack exits 0, so the stack is rebased
-once, after batch 1, since each rebase renews the commit ids and their three Codex records.
+**State for a resume, 2026-10-15 at 07:12 by `date`, at about 40 percent of the context.** Pull
+requests 190, 192, 196 and 193 are on `main` (`eec4ee3`); the lead landed them through
+`merge-queue --land`. The queue of values the second reader found is judged (the T16b line of
+`## Tasks`): only the gate log's two bounds are rules, and they are commit `2e47e6d` on
+`feat/rule-gate-log` (worktree `D:\js-harness-worktrees\rule-contract-timeout`), draft pull
+request 206 by the lead's order of 05:49, with Codex's record and no finding. Next: `bin/lib/manifest.mjs`, once JH 16's pull request
+191 lands (188 already has), told to the lead before it is touched; then T16b's last open item
+is JH 8's two test files.
 
 **State for a resume, 2026-10-14 at about 15:00, at 89 percent of the context.** T16b is PAUSED by
 his order to fix the failures first (the lead's transcript ffe99ebf, lines 5906 and 5853). Parked:
