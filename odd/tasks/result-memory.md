@@ -69,7 +69,7 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
 | T1 | S1, S2 | inline | done: T1a a181685; T1b (per-key traces, newest 8, failure removes all; L2) | several traces per test by content key, and selection matching any |
-| T2 | S1 | inline | pending | the store under the git common dir, shared by the worktrees; the old per-worktree folder removed |
+| T2 | S1 | inline | done (L3) | the store under the git common dir, shared by the worktrees; the old per-worktree folder removed |
 
 ## Log
 - **L1** (2026-10-14 20:52): the lead's order, verbatim: "Next from his approved plan
@@ -83,7 +83,13 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
   `readTrace` its newest; `startShadow` passes `readTraces`. RED: no export `readTraces`; GREEN: 15/15
   `trace-reads.test.mjs`, 8/8 `select-tests`, 3/3 `check-shadow`, 2/2 `check-shadow-wsl`, 3/3
   `check-exact-tests`, each alone. The pruning test was written with the implementation, not RED first.
-- **Next step** (00:02): T2, the store under `git rev-parse --git-common-dir` + `/js-harness/traces/<place>/`
-  (`tracesDir` in `bin/check.mjs`), shared by the worktrees; the old per-worktree folder removed by the
-  first gate that writes. Then Codex from the branch base, the gentle-ai assess, merge-tree against main,
-  push and the PR.
+- **L3** (2026-10-15 00:07): T2 done. `tracesDir` in `bin/check.mjs` asks `git rev-parse --absolute-git-dir
+  --git-common-dir` and keeps the traces under `<common dir>/js-harness/traces/`; in a linked worktree it
+  removes the folder under its own git dir. RED (`bin/check-exact-tests.test.mjs`, a linked worktree with
+  the same content skipped 0 of 2 after the main one's gate), checked again with the old `tracesDir`
+  after a first RED that also came from `core.autocrlf` (the linked checkout wrote CRLF where the test had
+  written LF; the test repository now sets it false); GREEN 4/4, and 3/3 `check-shadow`, 2/2
+  `check-shadow-wsl`.
+- **Next step** (00:07): Codex from the branch base (ac3fe14) within the allowance (`codex-review --plan`),
+  the gentle-ai assess, merge-tree against main (12c9a3e), push and the PR; one line to the lead when it
+  is ready.
