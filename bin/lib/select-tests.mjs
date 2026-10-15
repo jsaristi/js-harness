@@ -30,7 +30,9 @@ export function selectTests({ tests, readTraces, readTrace, stateOf, node = proc
   for (const test of tests) {
     const traces = tracesOf(test);
     const reasons = traces.map(reasonOf);
-    const reason = traces.length === 0 ? 'no trace of a passing run' : reasons.includes(null) ? null : reasons[0];
+    // An untraced pass, newer or older, says the test can reach what no trace sees: it runs (S5).
+    const untraced = traces.find((trace) => trace.untraced);
+    const reason = traces.length === 0 ? 'no trace of a passing run' : untraced ? reasonOf(untraced) : reasons.includes(null) ? null : reasons[0];
     // package.json changed since every passing run of this test that recorded it: the whole suite.
     const recorded = traces.filter((trace) => 'package.json' in trace.reads);
     if (recorded.length > 0 && recorded.every((trace) => now('package.json') !== trace.reads['package.json'])) full ??= 'package.json changed';

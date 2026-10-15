@@ -90,6 +90,10 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
   after a first RED that also came from `core.autocrlf` (the linked checkout wrote CRLF where the test had
   written LF; the test repository now sets it false); GREEN 4/4, and 3/3 `check-shadow`, 2/2
   `check-shadow-wsl`.
-- **Next step** (00:07): Codex from the branch base (ac3fe14) within the allowance (`codex-review --plan`),
-  the gentle-ai assess, merge-tree against main (12c9a3e), push and the PR; one line to the lead when it
-  is ready.
+- **L4** (2026-10-15 00:14): Codex on 1a48435..b3c1736: incorrect, one P2 (177,247 input tokens, inside the
+  300,000 allowance). Kept side by side, an older traced pass with the same inputs could make a test
+  skippable though a later pass was marked untraced; with one trace the later one replaced it. Corrected
+  alone: any stored untraced pass makes the test run, whichever is newer (`bin/lib/select-tests.mjs`; RED
+  then GREEN 9/9 in `bin/lib/select-tests.test.mjs`).
+- **Next step** (00:14): the Codex recheck from b3c1736, then push and the PR; one line to the lead when it
+  is ready. Then step 5, the flaky ledger.

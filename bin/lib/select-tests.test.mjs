@@ -87,6 +87,20 @@ test('a test is skipped when any of its stored traces matches now, and runs, say
   assert.equal(selectTests({ tests: ['a.test.mjs'], readTraces: () => [], stateOf: () => 'absent' }).why.get('a.test.mjs'), 'no trace of a passing run');
 });
 
+// A pass seen to reach a world no trace sees (S5) speaks for the test, whatever its other passes recorded:
+// the same inputs may reach it again (Codex, 1a48435..b3c1736).
+test('a test with an untraced pass among its stored traces runs, whichever pass is newer', () => {
+  const now = { 'a.test.mjs': 'h-a', 'package.json': 'h-p' };
+  const reads = { 'a.test.mjs': 'h-a', 'package.json': 'h-p' };
+  const traced = traceOf('a.test.mjs', reads);
+  const untraced = { ...traceOf('a.test.mjs', reads), untraced: 'it opens a network connection' };
+  for (const order of [[untraced, traced], [traced, untraced]]) {
+    const asked = selectTests({ tests: ['a.test.mjs'], readTraces: () => order, stateOf: (key) => now[key] ?? 'absent' });
+    assert.deepEqual(asked.skipped, []);
+    assert.equal(asked.why.get('a.test.mjs'), 'untraced: it opens a network connection');
+  }
+});
+
 test('a changed package.json is the whole suite, whatever the traces say', () => {
   const now = { 'a.test.mjs': 'h-a', 'package.json': 'h-new' };
   const traces = [traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'package.json': 'h-old' })];
