@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
-import { appendNotice, findOpenings, newNotice, readNotices, writeOpening } from './lib/channel.mjs';
+import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
 import { measuresTotal } from './lib/measures.mjs';
 import { statePath } from './lib/pause.mjs';
 import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
@@ -2363,6 +2363,49 @@ test('--measures exits 0 with the total alone when nothing was compacted, and 1 
   assert.equal(none.code, 1);
   assert.equal(none.stdout, '');
   assert.equal(none.stderr, `js-harness sessions: no sessions folder for ${machine.root}: ${machine.projectDir} (ENOENT)`);
+}));
+
+/** Two sessions of the project with one automatic compaction each, told the pause and announced, whose document was
+ * edited and never committed: the orchestrator (A, "JH ORQ · js-harness") and a work session (B, "JH 2 · board"). The
+ * relief file, where the orchestrator keeps its state, has one line inside both stretches, written as `notify` writes it. */
+function writeReliefed(machine) {
+  const { projectDir } = machine;
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  for (const [id, title, seconds] of [[SESSION_A, 'JH ORQ · js-harness', 60], [SESSION_B, 'JH 2 · board', 90]]) {
+    writeAt(
+      path.join(projectDir, `${id}.jsonl`),
+      jsonl(
+        { type: 'custom-title', customTitle: title, sessionId: id },
+        prompt('go', 900),
+        call('toolu_e1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+        reply(`Saved.\n\n${COMPACT_BLOCK}`, 700),
+        boundary('b1', 'auto', 600),
+      ),
+      seconds,
+    );
+    const state = statePath(machine.userHome, id);
+    fs.mkdirSync(path.dirname(state), { recursive: true });
+    fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told: [{ at: before(750).toISOString(), tokens: 400000 }], written: before(500).toISOString() }));
+  }
+  fs.mkdirSync(path.dirname(machine.relief), { recursive: true });
+  fs.writeFileSync(machine.relief, `${reliefStamp(before(650).getTime())} the orchestrator's note of the stretch\n`);
+  return { document };
+}
+
+test('--measures keeps an orchestrator\'s compaction by a line of its relief file, and a work session\'s with the same line is still a miss', withMachine(async (machine) => {
+  writeReliefed(machine);
+  const measuring = measuringRun(machine, () => ok(''));
+  const { code, stdout, stderr } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(stdout.split('\n'), [
+    'aaaaaaaa  JH ORQ · js-harness',
+    `  ${before(600).toISOString()}  automatic  told yes  kept yes  announced yes`,
+    'bbbbbbbb  JH 2 · board',
+    `  ${before(600).toISOString()}  automatic  told yes  kept no  announced yes`,
+    '2 automatic compactions judged in 2 sessions: 1 misses a fact (kept 1)',
+  ]);
+  assert.equal(measuring.logs.length, 2, 'the feature document of each session is asked, as before');
 }));
 
 // --- the last automatic compaction that misses a fact, on the board (session channel, T9) ---

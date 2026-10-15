@@ -518,9 +518,10 @@ test('a relief line is stamped with the local date and time of the clock, and sa
   const ms = Date.parse('2026-10-11T11:15:42.000Z');
   const local = new Date(ms);
   const two = (number) => String(number).padStart(2, '0');
-  const expected = `${local.getFullYear()}-${two(local.getMonth() + 1)}-${two(local.getDate())} ${two(local.getHours())}:${two(local.getMinutes())} local (notify).`;
+  // The seconds are written since 2026-10-15: the measure of a compaction compares a line with the notice, which has them.
+  const expected = `${local.getFullYear()}-${two(local.getMonth() + 1)}-${two(local.getDate())} ${two(local.getHours())}:${two(local.getMinutes())}:${two(local.getSeconds())} local (notify).`;
   assert.equal(channel.reliefStamp(ms), expected);
-  assert.match(channel.reliefStamp(ms), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2} local \(notify\)\.$/);
+  assert.match(channel.reliefStamp(ms), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} local \(notify\)\.$/);
 });
 
 test('appendRelief adds one stamped line to the relief file, creating it and its folder, after whatever it holds', withHome((home) => {

@@ -1610,6 +1610,18 @@ and 3.
   lead reads a session at that moment before it says what waits for him there; a notice
   when a stretch ends
 - [ ] T9 `--measures`
+- [x] T9b A review of 1c9358f (the relief stamp's seconds), which `codex-review` refused to
+  recheck a second time. Codex's P2 on edf9e75 was "a relief line in the notice's minute is
+  misjudged"; 60618c3 took each bound to its minute and Codex found it still open (10:05:05
+  before a 10:05:10 notice read as kept); 1c9358f writes the seconds and calls a minute-only
+  line of a bound minute not known. Owed: one independent review of that range, read before
+  T9 is ticked. Done 2026-10-15: an independent read-only reviewer gave PASS, no blocker
+  (probes with seconds, minute-only lines, open bounds, midnight; `keptByRelief` is the one
+  parser of the stamp in `bin`). Its three advisories stay with T9: `keptEither` turns an
+  ambiguous relief answer into a miss when git says not kept (a hand-written line in a bound's
+  minute); a line in the same second as a bound is still undecided at second resolution; and a
+  local time that occurs twice when the clocks go back is read as its first occurrence, as
+  before this change
 - [x] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
 - [ ] T11 The real stretch of "Done when", recorded

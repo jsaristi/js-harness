@@ -50,6 +50,71 @@ export function keptByGitLog(run) {
   };
 }
 
+/** The span a line of the relief file is stamped with, `{ from, to }` in ms, both included: `YYYY-MM-DD HH:MM:SS local`
+ * as `reliefStamp` (bin/lib/channel.mjs) writes it since 2026-10-15, one instant; `YYYY-MM-DD HH:MM local` as it wrote
+ * before and as a hand-written line does, the whole minute. In the local time of the machine that wrote it. `null` for
+ * a line that does not start with such a stamp, or whose date or hour the calendar does not have: a line whose hour is
+ * not known proves nothing. */
+const RELIEF_STAMP = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))? local\b/;
+function reliefSpan(line) {
+  const match = RELIEF_STAMP.exec(line);
+  if (match === null) return null;
+  const [year, month, day, hour, minute] = match.slice(1, 6).map(Number);
+  const second = match[6] === undefined ? 0 : Number(match[6]);
+  const at = new Date(year, month - 1, day, hour, minute, second);
+  const same = at.getFullYear() === year && at.getMonth() === month - 1 && at.getDate() === day && at.getHours() === hour
+    && at.getMinutes() === minute && at.getSeconds() === second;
+  if (!same) return null;
+  return { from: at.getTime(), to: match[6] === undefined ? at.getTime() + 59999 : at.getTime() };
+}
+
+/** A reader of the orchestrator's relief file for `compactionMeasures`: for `{ after, before }` it reads `file` through
+ * `readFile(file)` and answers `{ known: true, kept }`, `kept` being whether a line is stamped after `after` (the
+ * notice; `null` is open) and at or before `before` (the boundary), compared as instants. A line stamped with minutes
+ * only, whose minute holds a bound, cannot say which side of it it fell on: when no line decides, such a line makes the
+ * answer `{ known: false }`, never kept. A stamp that does not parse proves nothing. `{ known: false }` too when the
+ * file cannot be read, ENOENT included, or a bound does not parse. */
+export function keptByRelief(readFile, file) {
+  return ({ after, before } = {}) => {
+    const unknown = { known: false };
+    const from = boundOf(after ?? null, -Infinity);
+    const to = boundOf(before ?? null, Infinity);
+    if (Number.isNaN(from) || Number.isNaN(to)) return unknown;
+    let text;
+    try {
+      text = readFile(file);
+    } catch {
+      return unknown;
+    }
+    let ambiguous = false;
+    for (const line of String(text).split(/\r?\n/)) {
+      const span = reliefSpan(line);
+      if (span === null) continue;
+      if (span.from > from && span.to <= to) return { known: true, kept: true };
+      if (span.to > from && span.from <= to) ambiguous = true;
+    }
+    return ambiguous ? unknown : { known: true, kept: false };
+  };
+}
+
+/** One reader that answers what `readers` answer together: `{ known: true, kept: true }` when a known reader says kept,
+ * `{ known: true, kept: false }` when a reader is known and none says kept, and `{ known: false }` when none is known.
+ * A reader that throws, or answers nothing, is not known. */
+export function keptEither(...readers) {
+  return (query) => {
+    const answers = readers.map((reader) => {
+      try {
+        return reader(query);
+      } catch {
+        return { known: false };
+      }
+    });
+    if (answers.some((answer) => answer?.known === true && answer.kept === true)) return { known: true, kept: true };
+    if (answers.some((answer) => answer?.known === true)) return { known: true, kept: false };
+    return { known: false };
+  };
+}
+
 const FACTS = ['told', 'kept', 'announced'];
 
 /** Whether a compaction carries a verdict: one the host made, with the stretch before it in this transcript. */

@@ -385,10 +385,11 @@ const two = (number) => String(number).padStart(2, '0');
 
 /** How a line of the relief file starts when the command writes it: the local date and time of `ms`, as
  * the lines an orchestrator wrote by hand start (`2026-10-11 06:15 local (date).`), and `(notify)` where
- * those name the source of their hour, so a stamped line is told from one whose hour was typed. */
+ * those name the source of their hour, so a stamped line is told from one whose hour was typed. The seconds are
+ * written too (since 2026-10-15): the measure of a compaction compares a line with the notice, which has them. */
 export function reliefStamp(ms) {
   const at = new Date(ms);
-  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())} local (notify).`;
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}:${two(at.getSeconds())} local (notify).`;
 }
 
 /** Appends `line` to the relief file of the project `slug` under `home`, stamped with the clock's time
