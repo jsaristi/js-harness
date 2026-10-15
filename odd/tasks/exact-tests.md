@@ -238,6 +238,15 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   was left, so those scripts, which no trace proves, never ran. Corrected alone: that case runs the whole
   suite (`bin/check-shadow.test.mjs`, RED then GREEN 11/11). gentle-ai raised to high (item 5); its bound
   STATUS timed out twice under load. Next: Codex recheck from `74e2734`, one more STATUS, the PR.
+- **L17** (2026-10-15, after batch 2): PR 187 conflicted with main in `bin/check.mjs`, against the flaky
+  ledger (PR 197): the select-tests import, and the end of a gate, where the ledger's `quarantined` and
+  `failing` lines sit next to this branch's `skip` field of `record?.end`. Moving the change away was not
+  clean (the record line is adjacent to the ledger's `failing` line, so any edit there conflicts), and
+  `codex-review` reviews a merge's resolution alone, so main `eec4ee3` was merged once, on the lead's word,
+  in `891187d`: a quarantined pass writes no tree key in skip mode either, and the gate log keeps rerun
+  failures and skip counts side by side. Gate green; its `exact tests` row: 50 of 30 since 01:58. Codex
+  `56fa14e..891187d` (the resolution, 21 lines, 112,002 input tokens, inside 300,000): correct, 0.95.
+  gentle-ai: medium, not due (under budget).
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
