@@ -533,15 +533,19 @@ Find there the document of the feature this session was working on, read its "Ne
 The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
 `PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
 session, on `Bash`, and on `Write` and `Edit`. `guard --hook` reads the call on standard input
-and refuses five things: a sub-agent launched on a model the project's rules do not give; a
+and refuses six things: a sub-agent launched on a model the project's rules do not give; a
 message whose stamped hour is more than a minute off the clock; a shell command with backticks
 inside double quotes, which bash runs as commands; a `node --test` of several files outside a
 gate turn while another gate holds the machine's lock; and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
 (`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
-which every session reads on every turn. A
+which every session reads on every turn; and a `Write` or `Edit` of a Markdown file that brings a
+line stamping today's date with an hour more than a minute ahead of the clock, where the line
+opens with the date or the date follows "written" (`- 2026-10-14 14:50 — T3 done.` written at
+14:44). A document also records earlier events, so an hour behind the clock passes. A
 refusal is printed as the hook's deny, with the reason and the right value; any other call runs
-as it was. A `Write` or `Edit` of any other file loads nothing but that last check. An `Edit` is
+as it was. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a
+Markdown file the hour check besides. An `Edit` is
 judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
 line that was already long there is left to the memory hygiene pass rather than blocking the edit.
 

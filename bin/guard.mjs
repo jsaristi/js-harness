@@ -12,7 +12,8 @@
 //     call leaves (read from disk for an Edit) and only when the call brings it
 //     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4). The hook runs on every Write and Edit of
 //     every session, so that path loads nothing but that file: the modules of the other checks are imported only for
-//     the tools they check.
+//     the tools they check. Then, for a Markdown file, a line that stamps today's date with an hour ahead of the clock
+//     (bin/lib/document-hour-guard.mjs; odd/tasks/session-channel.md, T12b), imported only for a `.md` path.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,7 +23,8 @@ const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  message whose stamped hour is more than a minute off the clock, a Bash command with backticks inside double\n'
   + '  quotes, a node --test of several files while another gate holds the lock, and a Write or Edit that puts a line\n'
-  + '  over 150 characters in a memory index (MEMORY.md); always exits 0\n';
+  + '  over 150 characters in a memory index (MEMORY.md) or a line in a Markdown file that stamps today with an hour\n'
+  + '  ahead of the clock; always exits 0\n';
 
 const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);
 const FILE_TOOLS = new Set(['Write', 'Edit']);
@@ -52,7 +54,11 @@ function rulesTextOf(root, readFile) {
 async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
-  if (FILE_TOOLS.has(tool)) return memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
+  if (FILE_TOOLS.has(tool)) {
+    const index = memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
+    if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
+    return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now());
+  }
   if (tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
   const { allowedModels, backtickRefusal, hourRefusal, modelRefusal } = await import('./lib/guard.mjs');
   if (tool === 'Agent') {

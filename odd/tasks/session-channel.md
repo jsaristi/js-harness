@@ -1446,9 +1446,14 @@ reader, and that table names this feature as their owner.
   Done: section 16 holds the roadmap's channel material word for word, the roadmap keeps a
   pointer and the order, and the seven failures are settled (Progress, 2026-10-15), branch
   docs/session-channel-t12.
-- [ ] T12b An hour a session writes in a feature document or a block it commits is read from the
+- [x] T12b An hour a session writes in a feature document or a block it commits is read from the
   clock, and a check refuses one off it, as `bin/guard.test.mjs` refuses a message whose stamped
-  hour is off the clock (failure `hours-guessed`, seen 2026-10-14 in a committed block)
+  hour is off the clock (failure `hours-guessed`, seen 2026-10-14 in a committed block) Done:
+  the guard's Write and Edit path refuses, in a Markdown file, a line that opens with today's
+  date, or names it after "written", with an hour more than a minute ahead of the clock
+  (bin/lib/document-hour-guard.mjs; tests in bin/guard.test.mjs, RED then GREEN). Only ahead:
+  a document also records earlier events, and the guessed hours ran ahead. Branch
+  docs/session-channel-t12.
 - T13, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). Effort by task, not by document (B2 of the proposal "Model and effort by kind of
   work", version 2; his "Sí, que entre al plan" of 2026-10-11, Progress 22:25). Today a
   contract holds one `## Effort` for a whole feature (`bin/lib/contract.mjs:25-32`) and a

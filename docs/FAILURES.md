@@ -508,11 +508,15 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
   05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
   relief line, not a feature document
-- Control: owed — odd/tasks/session-channel.md — "An hour a session writes in a feature document or
-  a block it commits is read from the clock"
+- Control: check — bin/guard.test.mjs — "a Write or an Edit of a Markdown file whose line opens with
+  today and an hour ahead of the clock is denied" — since 2026-10-15
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
   either tool, is denied when its stamped hour is off the clock", on main since pull request 157
-  (2026-10-14); a feature document or a committed block: nothing checks it yet (T12b)
+  (2026-10-14); a feature document or a committed block: the control above
+  (bin/lib/document-hour-guard.mjs, T12b), which refuses only an hour ahead of the clock, since a
+  document also records earlier events
+- Was: owed — odd/tasks/session-channel.md — "An hour a session writes in a feature document or a
+  block it commits is read from the clock" — from 2026-10-15 until T12b was built the same day
 - Was: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
   of the clock, and says the command wrote it" — since 2026-10-11; seen again on 2026-10-12 to
   2026-10-14 in messages and a feature document, which it does not stamp; replaced on 2026-10-15
