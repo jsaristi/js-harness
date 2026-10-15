@@ -2046,12 +2046,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       Codex's records). What it leaves, named: a row of `check` or `doctor` that calls the
       command, whose files are open in other features; the hook that refuses a launch (T13),
       which is his to approve
-  - [ ] T16c The one command that changes a rule: designed on 2026-10-15 and read by two
+  - [x] T16c The one command that changes a rule: designed on 2026-10-15 and read by two
     readers (the attack and what was missing), "The one command that changes a rule (T16c)";
     route inline, the parent writes it (no writer trigger: one unit, a session well under the
     backstop). Built on `feat/rules-change`: 3f48e4b, ff3bbf4, d9e0925, 0acb6bf, then the
-    verifier's fixes a5877e4 and Codex's fixes 6986330; pull request 238, draft. Checked off
-    when it lands
+    verifier's fixes a5877e4 and Codex's fixes 6986330; pull request 238, landed on 2026-10-15
+    (`main` e7e97df), its design as pull request 234 (d2441d5)
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
     its sensors
@@ -3015,6 +3015,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     - the date fixtures depended on the host's time zone.
 
 ## Next step
+**State for a resume, 2026-10-15 at 18:21 by `date`.** Pull requests 238 and 234 landed
+(`main` e7e97df and d2441d5): T16c is checked off. Its prerequisite for T16d, the gate's stop
+before its sensors, is built (`docs/ROADMAP.md:801`, 2026-10-11). Next: T16d, the row `rules`,
+designed the way T16c was: a read-only map of what exists, the design here, two readers that did
+not write it, then the build, tests first.
+
 **State for a resume, 2026-10-15, after T16c was built.** T16c is pull request 238, draft
 (`feat/rules-change`, worktree `D:\js-harness-worktrees\rules-change`, 6986330), every
 check passed: the gate, the verifier, gentle-ai (two lineages, both acknowledged) and Codex
