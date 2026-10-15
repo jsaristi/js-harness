@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { estimateTokens } from '../check.mjs';
 import { measurePayload } from './payload.mjs';
 
@@ -329,6 +330,30 @@ test('memory index slug for a POSIX cwd matches path.resolve with non-alnum char
     const { hosts } = measurePayload({ home, cwd });
     const memory = findSource(hosts[0], 'memory index');
     assert.equal(memory.path, path.join(home, '.claude', 'projects', expectedSlug, 'memory', 'MEMORY.md'));
+  });
+});
+
+// Claude Code keeps one memory for a repository, under its main checkout's slug: a worktree has no
+// memory folder of its own, so measured from one the index must still be the main checkout's.
+test('memory index from a linked worktree is the main checkout\'s', () => {
+  withFixture((home, root) => {
+    const git = (args, cwd) => {
+      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+    };
+    const main = path.join(root, 'main');
+    const worktree = path.join(root, 'wt');
+    fs.mkdirSync(main);
+    git(['init', '-q'], main);
+    git(['commit', '-q', '--allow-empty', '-m', 'init'], main);
+    git(['worktree', 'add', '-q', worktree], main);
+    const memoryIndex = 'm'.repeat(20);
+    const slug = fs.realpathSync(main).replace(/[^A-Za-z0-9]/g, '-');
+    write(path.join(home, '.claude', 'projects', slug, 'memory', 'MEMORY.md'), memoryIndex);
+
+    const memory = findSource(measurePayload({ home, cwd: worktree }).hosts[0], 'memory index');
+    assert.equal(memory.path, path.join(home, '.claude', 'projects', slug, 'memory', 'MEMORY.md'));
+    assert.equal(memory.tokens, estimateTokens(memoryIndex));
   });
 });
 

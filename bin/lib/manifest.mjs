@@ -13,7 +13,7 @@ import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 function skillContent(version) {
   return `---
 name: js-harness
-description: Install, update, and check js-harness (v${version}) status and commands.
+description: Install, update, and check js-harness (v${version}) status and commands, and run a memory hygiene pass when one is due.
 ---
 
 js-harness commands:
@@ -31,11 +31,33 @@ js-harness commands:
 - \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
-- \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed.
+- \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
 - \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
+
+## Memory hygiene
+
+It exists because on 2026-10-15 one project's memory index had grown from 233 to 10,917 characters in 18
+days, read on every turn of every session, with rules kept where nothing acts on them. Memory holds facts of
+the machine; a rule belongs in a check, a line of \`AGENTS.md\` or a protocol.
+
+- \`js-harness memory status\` says whether a pass is due and why (exit 1 when due). Run a pass at a task
+  boundary, never while a gate runs: the orchestrator when there is one, otherwise the session that was told.
+- \`js-harness memory plan <note>...\` takes the lock, snapshots the folder and names every file the pass may
+  change, create or delete. Edit only those.
+- Alone you may: shorten an index line to 150 characters, moving what it held into its note; add the line of
+  a note that has none; drop a line whose file is gone. Everything else goes to the user, one question at a
+  time through the orchestrator: a rule note leaves memory only after the user's words in it are in the
+  repository (the rules' sources, the roadmap or a feature document), and never delete a note on your own:
+  the deletions are asked as one list. A contradiction their newer dated words settle is settled by them and
+  told in the recap.
+- \`js-harness memory verify <stamp> [--approved <note>,...]\` checks the pass and records what it left; it
+  refuses a lost quotation, a deletion not approved, or a file another session wrote meanwhile. Fix and verify
+  again, or \`js-harness memory undo <stamp>\`, which puts back only what nobody wrote since.
+- Report the index bytes before and after, what was checked, what was not, and what waits for the user.
+- This protocol is withdrawn after six passes in a row with nothing due but the clock and nobody using it.
 `;
 }
 
@@ -79,7 +101,7 @@ What you run:
 What you may do:
 - You read. What you write is your relief file and notices (\`js-harness notify\`).
 - You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last.
-- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is.
+- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is. When the host gives you a tool to start sessions, open the new session yourself with that message, on your own judgment and within the room the gate leaves.
 - A pull request that changes code is merged on a green run of the project's CI whose checkout says it tested \`Merge <head> into <base>\`, with that base the default branch as origin has it now. A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today. The merge's message names the run, the base it tested and the head.
 - A pull request that changes only documentation (the docs folder and the feature documents; never the agents' instructions or the harness's configuration) is merged without waiting for that run, when \`git merge-tree\` of the default branch and the head is clean.
 - Where the project has no such run, check before a merge that its gate proved the tree the merge will produce: the head contains the default branch, or \`git merge-tree\` of the default branch and the head gives the head's own tree. Failing both, it is merged only when every commit of the default branch the head lacks touches only documentation and none of the files the pull request changes.
@@ -110,7 +132,7 @@ Relief, not compaction. You hold nothing the files do not, so you are replaced i
 You are the orchestrator of this project's sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.
 \`\`\`
 
-- When you start from that prompt, read the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you are watching. The user archives the old orchestrator only after that, so there are never two.
+- When you start from that prompt, read the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you are watching. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): archived without asking, and named in the recap.
 - When you come back from a compaction, do what a new orchestrator does: the files are the record, your summary is not.
 
 ## A work session

@@ -1284,6 +1284,22 @@ test('a note to this session in the channel is said once by the hook, under the 
   assert.deepEqual((await runPause(machine, input)).lines, [], 'said once');
 }));
 
+// D5 of odd/tasks/memory-hygiene.md: a memory hygiene pass that is due is said on this hook, which a model reads (a
+// SessionStart systemMessage reaches only the person), once a day for the project, whichever session calls first.
+test('a memory hygiene pass that is due is said once a day by the hook', withMachine(async (machine) => {
+  const memory = path.join(machine.home, '.claude', 'projects', projectSlug(machine.root), 'memory');
+  fs.mkdirSync(memory, { recursive: true });
+  fs.writeFileSync(path.join(memory, 'MEMORY.md'), `- [A](a.md) — ${'x'.repeat(200)}\n`);
+  fs.writeFileSync(path.join(memory, 'a.md'), '---\nmetadata:\n  type: user\n---\n\nfact\n');
+  const input = pauseInput(machine, UNDER);
+  const first = await runPause(machine, input);
+  assert.equal(first.lines.length, 1);
+  const context = JSON.parse(first.lines[0]).hookSpecificOutput.additionalContext;
+  assert.match(context, /^js-harness: a memory hygiene pass is due for this project \(no-pass, line-chars\)/);
+  assert.match(context, /js-harness memory status/);
+  assert.deepEqual((await runPause(machine, input)).lines, [], 'said once that day');
+}));
+
 test('past the pause with a note waiting, the hook says both in one line: the pause first, then the note', withMachine(async (machine) => {
   noteTo(machine, '5', 'both at once');
   const first = await runPause(machine, titledPauseInput(machine, PAUSED, 'JH 5 · canal entre sesiones'));

@@ -4,7 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { REVIEW_EFFORT, REVIEW_MODEL } from '../codex-review.mjs';
+import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from '../check.mjs';
+import { REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS } from '../codex-review.mjs';
+import { DEFAULT_TIMEOUT_MINUTES } from '../contract.mjs';
 import { GATE_WAIT_MS } from './gate-lock.mjs';
 import { ruleValue } from './rules.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, PERSON_PRESENT_MS } from './sessions.mjs';
@@ -12,6 +14,22 @@ import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, PERS
 test('the model and the effort of a Codex review are the declared ones', () => {
   assert.equal(REVIEW_MODEL, ruleValue('review-model'));
   assert.equal(REVIEW_EFFORT, ruleValue('review-effort'));
+});
+
+test('the timeout of a Codex review is the declared review-timeout in milliseconds', () => {
+  assert.equal(REVIEW_TIMEOUT_MS, ruleValue('review-timeout', 'minutes') * 60_000);
+});
+
+test('the bound of a sensor of the gate is the declared sensor-timeout in milliseconds', () => {
+  assert.equal(SENSOR_TIMEOUT_MS, ruleValue('sensor-timeout', 'minutes') * 60_000);
+});
+
+test('the budget AGENTS.md is held to is the declared agents-budget', () => {
+  assert.equal(TOKEN_BUDGET, ruleValue('agents-budget', 'estimated tokens'));
+});
+
+test('the timeout of a done-when command of a contract run is the declared contract-run-timeout', () => {
+  assert.equal(DEFAULT_TIMEOUT_MINUTES, ruleValue('contract-run-timeout', 'minutes'));
 });
 
 test('the wait of a gate lock is the declared gate-wait in milliseconds, and a whole number above 0', () => {
