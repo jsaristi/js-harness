@@ -333,7 +333,8 @@ That block shows the shape only: the lines of the seed are written from the reco
   sighting is settled by keeping both lines, in either order. Two lines with the same date and
   the same evidence are one sighting: two sessions that read the same record do not count it
   twice.
-- `Control` is absent, owed or in place.
+- `Control` is absent, owed, in place or measured (the last, T3f, is told under "A failure with
+  no control, measured (T3f)").
   Owed: `owed — <document> — "<phrase>"`, where the phrase is found in a list item of that
   document that is not checked off: the task that will build the control, in a feature document
   or in the roadmap. A phrase and not a task number, because the roadmap's steps carry none.
@@ -450,7 +451,9 @@ reads the files the entries name. `bin/check.mjs` gains an import and one call, 
 because other sessions change those files while this is built (Progress, 2026-10-11).
 
 ### A failure with no control, measured (T3f)
-Draft of 2026-10-15, by this session, not yet read by a reader that did not write it.
+Drafted on 2026-10-15 by this session, read at 09:21 by a reader that did not write it; its
+changes, listed below, win over the draft where they differ (ten states, not nine, and a
+measurement whose phrase is gone is `measure lost`, not `control lost`).
 
 The need. The lead's call of 08:37, relayed by JH 15: a control can be measured and found not
 worth building. The general honesty audit caught 2 or 3 of 14 (`odd/tasks/honesty-audit.md`).
@@ -1644,12 +1647,15 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (found by Codex in `21686a5`, second priority): today a fence under an item that opens
     within three spaces and closes deeper is left open, and with the option off a checkbox
     shown in a fence indented past three spaces is counted as a step by `js-harness progress`
-  - [ ] T3f A level of the register for a failure with no control, measured: a failure whose
+  - [x] T3f A level of the register for a failure with no control, measured: a failure whose
     control was measured as not worth building keeps a state of its own, not "owed". The
     lead's call of 2026-10-15 at 08:37, relayed by JH 15's notice of 08:44: `checked-not-read`
     and `told-him-unverified` keep `Control: owed`, pointing at an unchecked task of
     `odd/tasks/honesty-audit.md` (the general audit was measured not worth it, 2 or 3 of 14),
-    until the register has this level, "which is yours to add". Not designed yet
+    until the register has this level, "which is yours to add". Designed under "A failure with
+    no control, measured (T3f)"; built test first as draft pull request 219
+    (`feat/register-measured`, 43b395f): gate green, gentle-ai medium not due, Codex correct
+    (0.88), no findings, 151,069 input tokens, recorded. Landed: merged 2026-10-15T15:37:10Z by gh, 43b395f on main; JH 15 told
 - Moved on 2026-10-14 to "JH 12 · comandos y diagnóstico", by the lead's message to this
   session; their state is kept in `odd/tasks/commands-and-doctor.md`, and only there: T4 (every
   command that writes outside the repository refuses a flag it does not know; and the push row
@@ -1741,7 +1747,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       `e5b7588..5f33fde`, each patch correct with no finding. Its 150 characters are the
       host's limit of a memory index line, left. Left: the dispatcher's help
       (`bin/js-harness.mjs:10`) still writes the gate's 60 and 30, a file pull requests 201
-      and 194 change, so it follows them; and two test files that still state the review's
+      and 194 change, so it follows them (both found merged on 2026-10-15, before 09:57 by `date`; the help reads
+      `gate-wait` and `gate-max` on `feat/rule-dispatcher-help`, its own pull request); and two
+      test files that still state the review's
       model as a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
       `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free
     - [x] Third part: model and effort as rules, as "Model and effort as rules" designs it:
@@ -2680,6 +2688,19 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**State for a resume, 2026-10-15 at 13:48 by `date`.** T3f is built: draft pull request 219
+(`feat/register-measured`, worktree `D:\js-harness-worktrees\rule-contract-timeout`, 43b395f),
+gate green, gentle-ai not due, Codex recorded; the lead and JH 15 were told, and JH 15 rewrites
+its two entries once it lands. Pull request 216 was left out of the lead's lands after 213
+landed (a conflict of adjacency in `bin/lib/manifest.mjs`); its change moved onto `main`
+eabff8f as one commit, 4cf6844 (worktree `D:\js-harness-worktrees\rule-skill-wait`), with the
+same patch lines, a new Codex record (0.97), and it is MERGEABLE, the lead told. The dispatcher's
+help reads `gate-wait` and `gate-max` on `feat/rule-dispatcher-help` (worktree
+`D:\js-harness-worktrees\rule-dispatcher-help`, b1c2451, gate green), merge-tree clean against
+`main` and against 216; its Codex review passed (0.97, recorded) and it is draft pull request 230, the lead told.
+Once 216 and it both land, `js-harness rules check` on `main` says whether `docs/RULES.md`
+needs a render. Left of T16b: JH 8's two test files.
+
 **State for a resume, 2026-10-15 at 09:12 by `date`.** Pull requests 206 and 207 are on
 `main`. `bin/lib/manifest.mjs` is done as pull requests 213 (ready, marked by the lead) and
 216 (draft, stacked on 213), both on branches of the worktree
