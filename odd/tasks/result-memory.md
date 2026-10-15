@@ -95,5 +95,10 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
   skippable though a later pass was marked untraced; with one trace the later one replaced it. Corrected
   alone: any stored untraced pass makes the test run, whichever is newer (`bin/lib/select-tests.mjs`; RED
   then GREEN 9/9 in `bin/lib/select-tests.test.mjs`).
-- **Next step** (00:14): the Codex recheck from b3c1736, then push and the PR; one line to the lead when it
-  is ready. Then step 5, the flaky ledger.
+- **L5** (2026-10-15 00:24): the gate of 1f53479, the first to read the shared store: 90 of 125 test
+  files would have been skipped, none of them failed. Codex recheck `b3c1736..1f53479`: correct, 1 of 1
+  fixed (35,094 input tokens). gentle-ai assess of ac3fe14..1f53479: medium, not due (under_budget).
+  merge-tree against origin/main eab3eff clean. Pushed; PR 172. Risk: item 1 (the persisted layout of the
+  traces, and the old per-worktree folder deleted; a cache only the shadow reads).
+- **Next step** (00:24): PR 172 waits for his merge (code). After it, step 5 of the plan, the flaky ledger,
+  a feature of its own.
