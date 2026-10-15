@@ -1,6 +1,7 @@
 // `js-harness rules change <id>`: the one command that changes a rule (odd/tasks/rule-hierarchy.md, "The one command
-// that changes a rule (T16c)"). It reads the list in force from origin/main, computes the change (./rules-change.mjs),
-// checks its source against the transcripts and the new list against the repository (./rules-check.mjs), and only then
+// that changes a rule (T16c)"). It reads the branch's list with the rule's declaration in force on origin/main,
+// computes the change (./rules-change.mjs), checks its source against the transcripts and the new list against the
+// repository (./rules-check.mjs), and only then
 // writes the declaration, the sources and docs/RULES.md, and appends one line to the relief file. It never commits:
 // the commit, the gate, the reviews and the pull request are the session's. It runs only in the checkout it changes.
 import fs from 'node:fs';
@@ -98,21 +99,49 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       throw new RuleChangeError(`${branch} is not based on ${BASE}: git rebase ${BASE}`);
     }
 
-    // The one open change: another rule/ branch whose declarations are not those of origin/main.
-    const baseBlob = out(['rev-parse', `${BASE}:${DATA}`]);
-    const refs = out(['for-each-ref', '--format=%(refname:short)', 'refs/heads/rule/', 'refs/remotes/origin/rule/']).split(/\r?\n/).filter(Boolean);
-    for (const ref of refs) {
-      if (ref === branch || ref === `origin/${branch}`) continue;
-      const blob = git(['rev-parse', `${ref}:${DATA}`]);
-      if (blob.status === 0 && String(blob.stdout).trim() !== baseBlob) {
-        throw new RuleChangeError(`${ref} holds a rule change not on ${BASE}: one change is open at a time`);
-      }
-    }
-
     // The list and the sources in force, from origin/main.
     const base = rulesOfText(out(['show', `${BASE}:${DATA}`]));
     const baseSources = JSON.parse(out(['show', `${BASE}:${SOURCES}`]));
     const before = base.find((rule) => rule.id === id);
+
+    // The one open change: another rule/ branch holding a declaration it changed that origin/main does not hold.
+    // Only the ids a branch changed since its merge base count, so a branch landed by a merge (its tip is the base)
+    // or by a squash (main holds what it changed) is no open change, even after later changes land.
+    const declarations = (rules) => new Map(rules.map((rule) => [rule.id, JSON.stringify(rule)]));
+    const inForce = declarations(base);
+    const listAt = (rev) => {
+      const shown = git(['show', `${rev}:${DATA}`]);
+      return shown.status === 0 ? declarations(rulesOfText(String(shown.stdout))) : new Map();
+    };
+    const refs = out(['for-each-ref', '--format=%(refname:short)', 'refs/heads/rule/', 'refs/remotes/origin/rule/']).split(/\r?\n/).filter(Boolean);
+    for (const ref of refs) {
+      if (ref === branch || ref === `origin/${branch}`) continue;
+      const fork = git(['merge-base', ref, BASE]);
+      const forked = fork.status === 0 ? listAt(String(fork.stdout).trim()) : new Map();
+      let held = [...listAt(ref)].filter(([ruleId, text]) => forked.get(ruleId) !== text && inForce.get(ruleId) !== text);
+      // A squash that a later change of the same id superseded: origin/main held the declaration in some commit since.
+      if (held.length > 0 && fork.status === 0) {
+        const since = out(['log', '--format=%H', `${String(fork.stdout).trim()}..${BASE}`, '--', DATA]).split(/\r?\n/).filter(Boolean);
+        for (const commit of since) {
+          const then = listAt(commit);
+          held = held.filter(([ruleId, text]) => then.get(ruleId) !== text);
+          if (held.length === 0) break;
+        }
+      }
+      if (held.length > 0) {
+        const clear = ref.startsWith('origin/') ? `git push origin --delete ${ref.slice('origin/'.length)}` : `git branch -D ${ref}`;
+        throw new RuleChangeError(`${ref} holds a rule change not on ${BASE} (${held.map(([ruleId]) => ruleId).join(', ')}): one change is open at a time; when it has landed or is dropped, ${clear}`);
+      }
+    }
+
+    // The list the change starts from: this branch's, so a second id on it keeps the first, with the declaration of
+    // `id` taken from origin/main, so a run again on an id corrects it instead of stacking on a value never in force.
+    const head = rulesOfText(out(['show', `HEAD:${DATA}`]));
+    const headSources = JSON.parse(out(['show', `HEAD:${SOURCES}`]));
+    const start = [...head.filter((rule) => rule.id !== id), ...(before === undefined ? [] : [before])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const startSources = { ...headSources };
+    if (Object.hasOwn(baseSources, id)) startSources[id] = baseSources[id];
+    else delete startSources[id];
     const today = dayOf(now());
 
     let change = null;
@@ -124,8 +153,8 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       }
       if (change === null || typeof change !== 'object' || Array.isArray(change)) throw new RuleChangeError('the change is a JSON object');
     }
-    const { list, rule, what } = checkSource ? { list: base, rule: before, what: 'source checked' } : changedList(base, id, change, { today });
-    if (rule === undefined) throw new RuleChangeError(`no rule "${id}" is declared on ${BASE}`);
+    const { list, rule, what } = checkSource ? { list: head, rule: head.find((item) => item.id === id), what: 'source checked' } : changedList(start, id, change, { today });
+    if (rule === undefined) throw new RuleChangeError(`no rule "${id}" is declared on ${branch}`);
     if (before?.path === 'AGENTS.md' || rule.path === 'AGENTS.md') {
       throw new RuleChangeError('a phrase of AGENTS.md changes only by its approved draft (letter G), which is not built');
     }
@@ -136,12 +165,15 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     const status = git(['status', '--porcelain', '-uall']);
     if (status.status !== 0) throw new RuleChangeError('git status failed');
     const outside = changedPaths(String(status.stdout ?? '')).filter((file) => !homes.has(file));
-    if (outside.length > 0) throw new RuleChangeError(`the tree holds changes outside the rule's home: ${outside.join(', ')}`);
+    if (outside.length > 0) {
+      const written = outside.some((file) => [DATA, SOURCES, LIST].includes(file)) ? '; commit the change already written before the next one' : '';
+      throw new RuleChangeError(`the tree holds changes outside the rule's home: ${outside.join(', ')}${written}`);
+    }
 
     // The source, read from its transcripts and checked.
     let given;
     if (checkSource) {
-      const stored = baseSources[id];
+      const stored = headSources[id];
       if (stored?.kind !== 'words') throw new RuleChangeError(`the source of "${id}" is not his words, so there is nothing to check against a transcript`);
       given = { kind: 'words', quotes: stored.quotes.map((quote) => ({ session: quote.session, line: quote.line, excerpt: quote.quote })), reading: stored.reading, accepted: stored.accepted };
     } else {
@@ -153,7 +185,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
     };
     const source = sourceOf(given, { owner: rule.owner, today, transcriptOf, exists: (file) => fs.existsSync(path.join(top, file)) });
-    const sources = sortedKeys({ ...baseSources, [id]: source });
+    const sources = sortedKeys({ ...startSources, [id]: source });
 
     // The new list, checked against the repository before anything is written.
     const dataText = writeRules(list);

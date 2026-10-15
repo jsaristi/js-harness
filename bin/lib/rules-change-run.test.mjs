@@ -242,3 +242,94 @@ test('a change of the input that is not JSON, or no id, is refused', async () =>
   assert.match(err.join('\n'), /not JSON/);
   assert.equal(await rulesMain(['change'], { root: repo.dir, cwd: repo.dir, stdout: () => {}, stderr: () => {} }), 2);
 });
+
+const ruleOf = (repo, id) => rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs')).find((rule) => rule.id === id);
+
+test('a second id on the same branch keeps the first, and a run again on an id starts from origin/main', async () => {
+  const repo = repository();
+  assert.equal((await change(repo, ['gate-wait'], { value: 30, source: DESIGN })).code, 0);
+  git(repo.dir, 'commit', '-q', '-am', 'gate-wait');
+  const second = await change(repo, ['control-phrase-min'], { value: 14, source: DESIGN });
+  assert.equal(second.code, 0, second.err);
+  assert.deepEqual([ruleOf(repo, 'gate-wait').value, ruleOf(repo, 'gate-wait').was], [30, [{ value: 60, until: TODAY }]]);
+  assert.equal(ruleOf(repo, 'control-phrase-min').value, 14);
+  git(repo.dir, 'commit', '-q', '-am', 'control-phrase-min');
+
+  const again = await change(repo, ['gate-wait'], { value: 45, source: DESIGN });
+  assert.equal(again.code, 0, again.err);
+  assert.match(again.out, /60 minutes to 45 minutes/);
+  assert.deepEqual(ruleOf(repo, 'gate-wait').was, [{ value: 60, until: TODAY }]);
+  assert.equal(ruleOf(repo, 'control-phrase-min').value, 14);
+});
+
+test('a split declares its successor on the branch, then retires the rule it splits', async () => {
+  const repo = repository();
+  const successor = await change(repo, ['gate-wait-short'], { value: 10, unit: 'minutes', set: { subject: 'the short wait for a turn', owner: 'project' }, source: DESIGN });
+  assert.equal(successor.code, 0, successor.err);
+  git(repo.dir, 'commit', '-q', '-am', 'the successor');
+  const retired = await change(repo, ['gate-wait'], { retire: { successors: ['gate-wait-short'] }, source: DESIGN });
+  assert.equal(retired.code, 0, retired.err);
+  assert.equal(ruleOf(repo, 'gate-wait-short').value, 10);
+  assert.deepEqual(ruleOf(repo, 'gate-wait').successors, ['gate-wait-short']);
+});
+
+test('a rule/ branch landed by a merge or a squash is no open change, after later changes land too', async () => {
+  const repo = repository();
+  const landed = (branch, value, squash) => {
+    git(repo.dir, 'switch', '-q', '-c', branch, 'origin/main');
+    write(repo.dir, 'bin/lib/rules-data.mjs', writeRules(rulesOfText(git(repo.dir, 'show', 'origin/main:bin/lib/rules-data.mjs')).map((rule) => (rule.id === 'gate-wait' ? { ...rule, value } : rule))));
+    git(repo.dir, 'commit', '-q', '-am', branch);
+    git(repo.dir, 'switch', '-q', 'main');
+    if (squash) {
+      git(repo.dir, 'merge', '-q', '--squash', branch);
+      git(repo.dir, 'commit', '-q', '-m', `squash ${branch}`);
+    } else {
+      git(repo.dir, 'merge', '-q', '--no-ff', '-m', `merge ${branch}`, branch);
+    }
+    git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  };
+  landed('rule/first', 45, false);
+  landed('rule/second', 50, true);
+  landed('rule/third', 55, false);
+  git(repo.dir, 'switch', '-q', '-c', 'rule/next', 'origin/main');
+  const result = await change(repo, ['control-phrase-min', '--dry-run'], { value: 14, source: DESIGN });
+  assert.equal(result.code, 0, result.err);
+});
+
+test('an open change on origin is refused, and the refusal says how to clear it', async () => {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', '-c', 'rule/remote', 'main');
+  write(repo.dir, 'bin/lib/rules-data.mjs', writeRules(LIST.map((rule) => (rule.id === 'gate-wait' ? { ...rule, value: 45 } : rule))));
+  git(repo.dir, 'commit', '-q', '-am', 'a remote change');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/rule/remote', 'HEAD');
+  git(repo.dir, 'switch', '-q', 'rule/gate-wait');
+  git(repo.dir, 'branch', '-q', '-D', 'rule/remote');
+  const result = await change(repo, ['gate-wait', '--dry-run'], { value: 30, source: DESIGN });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /origin\/rule\/remote holds a rule change not on origin\/main.*git push origin --delete rule\/remote/s);
+});
+
+test('an id in use is refused as a new rule', async () => {
+  const repo = repository();
+  const result = await change(repo, ['gate-wait'], { value: 20, set: { subject: 'another wait', owner: 'project' }, source: DESIGN });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /"gate-wait" is in use/);
+});
+
+test('a second run before the first is committed says to commit it', async () => {
+  const repo = repository();
+  assert.equal((await change(repo, ['gate-wait'], { value: 30, source: DESIGN })).code, 0);
+  const result = await change(repo, ['control-phrase-min'], { value: 14, source: DESIGN });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /commit the change already written/);
+});
+
+test('a bound is checked against its new value, and AGENTS.md is refused as a new home', async () => {
+  const repo = repository();
+  const bound = await change(repo, ['control-phrase-min'], { value: 40, source: DESIGN });
+  assert.equal(bound.code, 1);
+  assert.match(bound.err, /proto-text/);
+  const home = await change(repo, ['proto-text'], { path: 'AGENTS.md', phrases: ['He decides spend, anything irreversible'], source: DESIGN });
+  assert.equal(home.code, 1);
+  assert.match(home.err, /AGENTS.md changes only by its approved draft/);
+});

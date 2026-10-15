@@ -114,6 +114,10 @@ export function changedList(list, id, change, { today }) {
     }
     throw new RuleChangeError(`"${id}" is retired since ${rule.retired}: a retired rule does not change`);
   }
+  // A new rule gives its subject and its owner; given both, an id in force is taken for a new rule and refused.
+  if (change.set?.subject !== undefined && change.set?.owner !== undefined) {
+    throw new RuleChangeError(`"${id}" is in use: a new rule takes a new id, and a rule in force changes its subject and its owner in two changes`);
+  }
 
   let what = 'form';
   if (body === 'value') {
