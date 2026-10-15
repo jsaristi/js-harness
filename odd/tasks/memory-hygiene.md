@@ -67,7 +67,6 @@ global `~/.claude/CLAUDE.md`, whose diet is F2's (`S5`, "Options for F2" below).
   harness writes (the four purge scripts of the predecessor).
 
 ## Ask me before
-- The two values that are his choice (D1): the index's byte budget and the cadence of a pass.
 - The deletion of the notes whose words reached a home: one question, with the list in a file.
 - The real ties among contradictions, one at a time through the lead, the recommendation first.
 - Anything toward gentle-ai upstream ("Options for F2").
@@ -192,14 +191,14 @@ must land somewhere at once; the guard adds one line saying it is a rule waiting
 ### D2 When a pass is due (sensor)
 `js-harness memory status` reads the project's memory folder (the main checkout's slug, as
 `bin/lib/memory-rules.mjs` does, so a worktree reads the same notes) and is due when any holds:
-1. the index is over its byte budget: proposed 4,000 B, about the draft's 3,120 with room for
-   eight more lines (his choice);
+1. the index is over its byte budget: 4,000 B, about the draft's 3,120 with room for eight more
+   lines (his choice, 2026-10-15, L4);
 2. an index line is over 150 characters (code points);
 3. an index link names no file, or a note has no line;
 4. a note of type `feedback` or `project` exists that was not there at the last pass: a rule
    waiting for a home;
-5. the cadence: proposed 7 days since the last verified pass, with at least one note written
-   since (his choice). "The last pass" is the stamp `memory verify` records, so a pass's own
+5. the cadence: 7 days since the last verified pass, with at least one note written since (his
+   choice, 2026-10-15, L4). "The last pass" is the stamp `memory verify` records, so a pass's own
    writes do not make it due again. With no journal (a fresh install) the folder is due once.
 A note's size, the names it cites that no longer exist (re-checked with the resolver of
 `bin/lib/citations.mjs`), and pairs of notes that cite the same rule id are printed as
@@ -286,9 +285,20 @@ Two independent read-only readers, 2026-10-15, neither the writer.
   measure over time (`--history`); reuse `citations.mjs` (D2). Taken: all.
 
 ## Tasks
-- [ ] T1 (kind: design) This document: measured, audited, attacked by two readers (done), sent to the lead
-- [ ] T2 (kind: build) `memory status`, its library, candidates and `--history`, tests first
-- [ ] T3 (kind: build) `memory plan`, `verify`, `undo`, the lock, the journal and the install record
+- [x] T1 (kind: design) This document: measured, audited, attacked by two readers, sent to the
+  lead, approved by him (commit `5397771`, L4)
+- [ ] T2 (kind: build) `memory status`, its library, candidates and `--history`, tests first.
+  Built (route: inline): `bin/memory.mjs`, `bin/lib/memory-hygiene.mjs`; 10 library and 6 CLI
+  tests, red first; on this project it is due for no-pass, index-bytes, line-chars and one
+  orphan. Reviews pending
+- [ ] T3 (kind: build) `memory plan`, `verify`, `undo`, the lock, the journal and the install record.
+  Built (route: inline): `bin/lib/memory-pass.mjs`, 15 library and 2 more CLI tests (the library's
+  red was not run apart: the module was missing; the CLI's and the index-quote test's red were
+  seen). On a copy of the live folder (43 notes): an unchanged pass reports no quotation falsely;
+  the mechanical pass (each note gets its old index line verbatim, the index gets short lines)
+  takes the index from 11,077 B to 3,920 B, verifies, leaves `status` with nothing due, and `undo`
+  makes the copy byte-identical to the live folder (`diff -rq`). The install record of
+  `~/.js-harness/memory-hygiene/` waits on `bin/lib/manifest.mjs` (JH 8). Reviews pending
 - [ ] T4 (kind: build) The index rule in the guard hook (asked of JH 8 first)
 - [ ] T5 (kind: build) The due line in the channel's hook and the board row (asked of their owner first)
 - [ ] T6 (kind: docs) The protocol section of the installed skill, with its incident and expiry; help text
@@ -306,3 +316,10 @@ Two independent read-only readers, 2026-10-15, neither the writer.
   design"). Version 2: rule notes leave memory by T11 instead of becoming pointers, the guard
   prevents index bloat, the due line goes where a model reads it, undo works on a declared write
   set under a lock, "Options for F2" added.
+- L4 2026-10-15 about 03:03, his answers to the lead's three questions, tapped (the lead's
+  transcript 987548fe): "Sí, construilo (Recomendada)" to build version 2; "Sí, 4.000 bytes
+  (Recomendada)" for the index budget; "Cada 7 días (Recomendada)" for the cadence. The lead's
+  routing the same message: slices after the payload fix, test first, gentle-ai then Codex per
+  slice; JH 7 is paused, so T11's moves come through the lead; JH 8 owns `guard.mjs` and the
+  manifest and is asked first; the three contradictions in shipped text are this feature's, in
+  D3, settled by his words of 2026-10-15; the deletions go to him as one list.

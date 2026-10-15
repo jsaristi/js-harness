@@ -352,6 +352,29 @@ $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
 ```
 
+### js-harness memory
+
+Keeps the project's Claude Code memory small and true. The index of that memory is read on every
+turn of every session, and in this repository it grew from 233 to 10,917 characters in 18 days with
+nothing watching it. `memory status` says whether a hygiene pass is due and why: no verified pass
+yet, the index over 4,000 bytes, a line over the host's 150 characters, a link to no file or a note
+with no line, a rule note written since the last pass, or 7 days since it with notes written since.
+It reads the main checkout's memory folder, so a worktree sees the same notes, and exits 1 when a
+pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
+of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
+user is lost and no file another session wrote is overwritten, and an undo that puts back only what
+nobody wrote since. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+
+```console
+$ js-harness memory status
+memory  ~/.claude/projects/D--js-harness/memory  index 10917 B (budget 4000)  41 lines  42 notes
+memory hygiene: due
+  no-pass  no verified pass recorded yet
+  index-bytes  the index is 10917 B, over 4000
+  line-chars  36 lines over 150 characters: 3, 4, 5, 7, ...
+  orphan  questions-through-the-question-tool.md
+```
+
 ### js-harness subagents
 
 Counts a day's sub-agents of the project by role (writer, explorer, reviewer, verifier), model
