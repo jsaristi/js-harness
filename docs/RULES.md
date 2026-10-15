@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `f15940b13531`. In force: 24 (14 of Sebastián, 10 of the project). Retired: 0.
+Hash `bf71969b9c12`. In force: 26 (14 of Sebastián, 12 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -105,6 +105,16 @@ How long each done-when command of a contract run may run, unless the run says o
 The shortest phrase by which a control or a rule in prose is found in its file: 12 characters.
 - Read by: `bin/lib/failures.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
+
+### gate-log-command
+The longest command a line of the gate log holds, since what follows gate -- can hold a secret: 120 characters.
+- Read by: `bin/lib/gate-log.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-log.md`.
+
+### gate-log-size
+The size past which the gate log is renamed over its older file, so the log stays near a megabyte: 512 KiB.
+- Read by: `bin/lib/gate-log.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-log.md`.
 
 ### gate-wait
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.

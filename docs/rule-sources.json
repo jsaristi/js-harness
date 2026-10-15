@@ -79,6 +79,14 @@
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"
   },
+  "gate-log-command": {
+    "kind": "design",
+    "path": "odd/tasks/gate-log.md"
+  },
+  "gate-log-size": {
+    "kind": "design",
+    "path": "odd/tasks/gate-log.md"
+  },
   "gate-wait": {
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
