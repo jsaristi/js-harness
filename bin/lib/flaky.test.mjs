@@ -135,3 +135,17 @@ test('a rerun that failed blocks, whatever the ledger says', () => {
 test('the day is the local calendar day', () => {
   assert.equal(localDay(new Date(2026, 9, 5, 23, 59)), '2026-10-05');
 });
+
+test('an owner or a failure left empty is a fault, as a missing one is', () => {
+  const read = parseLedger(ledger(entry('bin/a.test.mjs', { owner: '' }), entry('evals/suite.test.mjs', { failure: ' ' })));
+  assert.deepEqual(read.entries, []);
+  assert.deepEqual(read.errors, ['bin/a.test.mjs: "- Owner:" is empty', 'evals/suite.test.mjs: "- Failure:" is empty']);
+});
+
+test('a failure in a file that cannot be rerun safely, or in no test file of the suite, means no rerun at all', () => {
+  const files = [...FILES, 'test/my suite.test.mjs', 'bin/$(x).test.mjs'];
+  // A rerun of the other files alone could pass and hide this failure, so none is rerun and the suite blocks.
+  assert.deepEqual(failedTestFiles(`${SPEC}\ntest at test/my suite.test.mjs:1:1\n✖ three (1ms)`, files), []);
+  assert.deepEqual(failedTestFiles(`${SPEC}\ntest at bin/$(x).test.mjs:1:1\n✖ three (1ms)`, files), []);
+  assert.deepEqual(failedTestFiles(`${SPEC}\ntest at lib/helper.mjs:4:2\n✖ three (1ms)`, files), []);
+});

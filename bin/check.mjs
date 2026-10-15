@@ -1359,7 +1359,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
       result = sensorsResult(ran);
       // A sensor that came back to Windows ran where its key does not say: it proves no tree.
       const ranWhereKeyed = ran.every((row) => (place ? row.ranIn === 'wsl' : !row.ranIn));
-      if (result === 'pass' && key !== null && ranWhereKeyed && keyNow() === key) code = key;
+      // Nor does a pass that rests on a quarantine: its entry expires, and a proof of the tree would not.
+      const quarantined = ran.some((row) => row.rerun);
+      if (result === 'pass' && key !== null && ranWhereKeyed && !quarantined && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).

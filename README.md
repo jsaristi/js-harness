@@ -64,8 +64,11 @@ file that passes on that rerun does not block while it has a current entry in `d
 the quarantine ledger: one `### <test file>` entry with `- Owner:`, `- Expires: YYYY-MM-DD`
 and `- Failure: <id in docs/FAILURES.md>`, written by hand and committed. A file that passes
 on rerun with no entry still blocks, and the `rerun` row names the entry to add; one that
-fails again blocks as before. The `flaky` row fails a malformed ledger and lists the expired
-entries, which no longer count.
+fails again blocks as before, and so does a failure in a file that cannot be rerun (no test
+file, or a path with a character a shell reads): then nothing is rerun. A pass that rests on a
+quarantine proves no tree for `"sameTree": "skip"`, so the next gate runs the tests again. The
+`flaky` row fails a malformed ledger, an empty field included, and lists the expired entries,
+which no longer count.
 
 ```console
 $ js-harness check

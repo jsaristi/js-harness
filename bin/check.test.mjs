@@ -4240,6 +4240,27 @@ test('a folder that is not the index has no key: with an untracked file, an unst
   }
 });
 
+test('a gate whose tests passed only by a quarantine proves no tree, so the next gate runs them again (odd/tasks/flaky-ledger.md)', async () => {
+  const quarantined = sameTreeRepo({ sameTree: 'skip', sensors: { tests: 'node --test' } });
+  try {
+    fs.mkdirSync(path.join(quarantined.repo, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'bin', 'a.test.mjs'), '');
+    fs.mkdirSync(path.join(quarantined.repo, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    git(quarantined.repo, 'add', '-A');
+    git(quarantined.repo, ...commitAs, '-m', 'a quarantined test file');
+    const red = { status: 1, signal: null, stdout: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ one (1ms)\n', stderr: '' };
+    let call = 0;
+    quarantined.sensor.answer = () => (call++ % 2 === 0 ? red : { status: 0, signal: null, stdout: '', stderr: '' });
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal(quarantined.sensorRuns(), 4, 'each gate ran the suite and its rerun');
+    assert.deepEqual(quarantined.events().filter((event) => event.event === 'end').map((event) => [event.result, 'code' in event]), [['pass', false], ['pass', false]]);
+  } finally {
+    quarantined.remove();
+  }
+});
+
 test('a gate proves no tree when a sensor failed, or when a tracked file changed while the sensors ran', async () => {
   const failing = sameTreeRepo();
   try {

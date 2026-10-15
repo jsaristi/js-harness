@@ -7,12 +7,15 @@ import { testFilesOf } from './select-tests.mjs';
 
 // The colours a reporter may write, which would hide the words around them.
 const COLOUR = /\u001b\[[0-9;]*m/g;
+// The characters of a path the rerun names on its command line unquoted: none that a shell reads.
+const SAFE_PATH = /^[A-Za-z0-9._/-]+$/;
 
 /** The test files a red run of node's spec reporter names, in the order it names them, each once: the
  * `test at <path>:<line>:<col>` lines after its `✖ failing tests:` summary, with `\` read as `/`, kept only
- * when the path is one of `testFiles` (paths from the repository's root). A `test at` line before the summary
- * is a test's own output, and a path that is no test file (a helper) is none of the suite's, so neither is
- * rerun: a red run that names no file blocks as it is. */
+ * when every path is one of `testFiles` (paths from the repository's root) and holds only characters no shell
+ * reads (`SAFE_PATH`), since the rerun is a command line on every route. A `test at` line before the summary is
+ * a test's own output. One failure in a file that is no test of the suite (a helper) or not safe to name means
+ * no file at all: a rerun of the others alone could pass and hide it, so the red run blocks as it is. */
 export function failedTestFiles(output, testFiles) {
   const text = String(output ?? '').replace(COLOUR, '');
   const at = text.indexOf('✖ failing tests:');
@@ -23,7 +26,8 @@ export function failedTestFiles(output, testFiles) {
     const found = /^test at (.+):\d+:\d+$/.exec(line.trim());
     if (!found) continue;
     const file = found[1].replace(/\\/g, '/');
-    if (known.has(file) && !named.includes(file)) named.push(file);
+    if (!known.has(file) || !SAFE_PATH.test(file)) return [];
+    if (!named.includes(file)) named.push(file);
   }
   return named;
 }
@@ -82,6 +86,10 @@ export function parseLedger(markdown) {
     const [, name, value] = field;
     if (!FIELDS.includes(name)) open.errors.push(`${open.file}: "- ${name}:" is no field of an entry, which has "- Owner:", "- Expires:" and "- Failure:"`);
     else if (name in open.fields) open.errors.push(`${open.file}: "- ${name}:" is written twice`);
+    else if (value.trim() === '') {
+      open.fields[name] = value;
+      open.errors.push(`${open.file}: "- ${name}:" is empty`);
+    }
     else if (name === 'Expires' && !isDay(value)) {
       open.fields[name] = value;
       open.errors.push(`${open.file}: in Expires, "${value}" is no date: a date is written YYYY-MM-DD`);
