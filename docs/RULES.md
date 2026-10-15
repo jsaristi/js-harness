@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `ff8dfa14efc2`. In force: 21 (14 of Sebastián, 7 of the project). Retired: 0.
+Hash `6d806ce4c8b9`. In force: 22 (14 of Sebastián, 8 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -125,6 +125,11 @@ The most changed lines one part of a Codex review holds, by default: 400 changed
 The most parts a Codex review runs in without being told its count: 6 parts. The flag `--max-parts` overrides it for one run.
 - Read by: `bin/lib/codex-review-plan.mjs`.
 - Since 2026-10-09. Row: reports. Source: design, `odd/tasks/codex-review-cost.md`.
+
+### review-timeout
+How long a Codex review may run before it is stopped as stalled: 30 minutes.
+- Read by: `bin/codex-review.mjs`.
+- Since 2026-10-14. Row: reports. Source: design, `odd/tasks/codex-exec-review.md`.
 
 ## Retired
 

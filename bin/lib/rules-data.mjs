@@ -126,6 +126,14 @@ export const RULES = [
     "flag": "--max-parts"
   },
   {
+    "id": "review-timeout",
+    "subject": "how long a Codex review may run before it is stopped as stalled",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 30,
+    "unit": "minutes"
+  },
+  {
     "id": "reviewed-commit-lines",
     "subject": "about how many changed lines a commit that will be reviewed stays under",
     "owner": "sebastian",
