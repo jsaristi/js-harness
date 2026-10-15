@@ -815,7 +815,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   if (shadowed) {
     const { files, wouldSkip, failedOfSkipped } = shadowed;
     detail += `; shadow: ${wouldSkip.length} of ${files} test files would have been skipped`;
-    if (failedOfSkipped.length > 0) detail += `, and ${failedOfSkipped.length} of them failed: ${failedOfSkipped.join(', ')}`;
+    if (failedOfSkipped.length > 0) detail += `, and ${failedOfSkipped.length} of them did not pass: ${failedOfSkipped.join(', ')}`;
   }
   return { name, pass, detail, ...(shadowed && { shadow: shadowed }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
 }
@@ -847,24 +847,30 @@ function wslShadow(cwd, dir, { wsl, wslPath, wslNode }) {
 }
 
 /** What the gate log's end line keeps of a shadow: the count of the files selection would have skipped, and
- * the names of those of them that failed, the count S6 reads (zero over at least 30 gates). */
+ * the names of those of them that did not pass, the count S6 reads (zero over at least 30 gates). */
 const shadowCounts = ({ files, wouldSkip, failedOfSkipped }) => ({ files, wouldSkip: wouldSkip.length, failedOfSkipped });
 
 /** The end of it: `{ files, wouldSkip, failedOfSkipped }`, the files that selection would have skipped and
- * those of them whose run ended with a code other than 0. The results file goes. */
+ * those of them that did not pass: whose run ended with a code other than 0, or left no end at all (killed,
+ * timed out, or a results file that cannot be read), since a run not seen to pass is no evidence for S6
+ * (Codex, 2026-10-14). The results file goes. */
 function endShadow({ tests, skipped, results }) {
-  const failed = new Set();
+  const passed = new Set();
   try {
     for (const line of fs.readFileSync(results, 'utf8').split('\n')) {
       if (line.trim() === '') continue;
-      const ended = JSON.parse(line);
-      if (ended.code !== 0) failed.add(ended.test);
+      try {
+        const ended = JSON.parse(line);
+        if (ended.code === 0) passed.add(ended.test);
+      } catch {
+        // a line cut short: its file is not seen to pass
+      }
     }
   } catch {
-    // no file ended, or the file cannot be read: nothing is known to have failed
+    // no file ended, or the file cannot be read: none is seen to pass
   }
   fs.rmSync(results, { force: true });
-  return { files: tests.length, wouldSkip: skipped, failedOfSkipped: skipped.filter((one) => failed.has(one)) };
+  return { files: tests.length, wouldSkip: skipped, failedOfSkipped: skipped.filter((one) => !passed.has(one)) };
 }
 
 /** How one sensor runs in WSL2: `{ command }`, the command that runs the runner script it wrote into the

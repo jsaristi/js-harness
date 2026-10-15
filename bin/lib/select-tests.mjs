@@ -50,12 +50,15 @@ function changedRead(reads, now) {
 
 /** The names `node --test` takes for a test file by default (Node 24's patterns); any script under a
  * folder named `test` is one too. */
-const TEST_NAME = /(\.test|-test|_test)\.[cm]?js$|^test-.+\.[cm]?js$|^test\.[cm]?js$/;
-const SCRIPT = /\.[cm]?js$/;
+const testName = (ext) => new RegExp(`(\\.test|-test|_test)\\.${ext}$|^test-.+\\.${ext}$|^test\\.${ext}$`);
 const SKIPPED_FOLDERS = new Set(['node_modules', '.git']);
 
-/** The test files of `root` that `node --test` with no file finds, from the root, `/`-separated, in order. */
-export function testFilesOf(root) {
+/** The test files of `root` that `node --test` with no file finds, from the root, `/`-separated, in order.
+ * Where node strips types (`typescript`, this node's by default), the `.ts`, `.mts` and `.cts` ones too. */
+export function testFilesOf(root, { typescript = Boolean(process.features?.typescript) } = {}) {
+  const ext = typescript ? '[cm]?[jt]s' : '[cm]?js';
+  const TEST_NAME = testName(ext);
+  const SCRIPT = new RegExp(`\\.${ext}$`);
   const found = [];
   const walk = (dir, rel, inTest) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

@@ -42,7 +42,27 @@ test('in shadow the whole suite runs, and the row counts what selection would ha
     }
     assert.equal(third.pass, false);
     assert.deepEqual(third.shadow.failedOfSkipped, ['b.test.mjs']);
-    assert.match(third.detail, /shadow: 2 of 2 test files would have been skipped, and 1 of them failed: b\.test\.mjs/);
+    assert.match(third.detail, /shadow: 2 of 2 test files would have been skipped, and 1 of them did not pass: b\.test\.mjs/);
+  } finally {
+    done();
+  }
+});
+
+test('a file selection would have skipped that left no end of its run, killed or timed out, counts as one that did not pass (Codex, 2026-10-14)', async () => {
+  const { root, dir, done } = project();
+  // `b` kills itself when KILL is set: its tracer's exit handler never runs, so no result line is written.
+  fs.writeFileSync(path.join(root, 'b.test.mjs'), "import { test } from 'node:test';\ntest('b', () => { if (process.env.KILL) process.kill(process.pid, 'SIGKILL'); });\n");
+  try {
+    await checkSensor(root, sensor, { traces: { dir } });
+    process.env.KILL = '1';
+    let killed;
+    try {
+      killed = await checkSensor(root, sensor, { traces: { dir } });
+    } finally {
+      delete process.env.KILL;
+    }
+    assert.equal(killed.pass, false);
+    assert.deepEqual(killed.shadow.failedOfSkipped, ['b.test.mjs']);
   } finally {
     done();
   }

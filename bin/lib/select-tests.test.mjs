@@ -80,6 +80,20 @@ test('a changed package.json is the whole suite, whatever the traces say', () =>
   assert.deepEqual(chosen.skipped, []);
 });
 
+test('where node strips types, the TypeScript test files are found too, as node --test finds them (Codex, 2026-10-14)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-select-ts-'));
+  try {
+    for (const file of ['a.test.ts', 'b.test.mts', 'c-test.cts', 'test/d.ts', 'e.test.mjs', 'f.ts']) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      fs.writeFileSync(path.join(root, file), '');
+    }
+    assert.deepEqual(testFilesOf(root, { typescript: true }), ['a.test.ts', 'b.test.mts', 'c-test.cts', 'e.test.mjs', 'test/d.ts']);
+    assert.deepEqual(testFilesOf(root, { typescript: false }), ['e.test.mjs']);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('the test files are the ones node --test finds by its default patterns, out of node_modules and .git', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-select-'));
   try {

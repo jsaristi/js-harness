@@ -124,14 +124,20 @@ function install() {
     if (marked) untraced = marked[1];
   }
 
-  /** The path relative to the root, `/`-separated, or `null` for one outside the repository. */
-  function relative(target) {
+  /** The absolute path a path argument names, a string, a `file:` URL or a Buffer; `null` for anything else. */
+  function pathOf(target) {
     let file = target;
     if (file instanceof URL) file = file.protocol === 'file:' ? require('node:url').fileURLToPath(file) : null;
     else if (Buffer.isBuffer(file)) file = file.toString();
     else if (typeof file === 'string' && file.startsWith('file:')) file = require('node:url').fileURLToPath(file);
-    if (typeof file !== 'string' || file === '') return null;
-    const rel = path.relative(root, path.resolve(file));
+    return typeof file === 'string' && file !== '' ? path.resolve(file) : null;
+  }
+
+  /** The path relative to the root, `/`-separated, or `null` for one outside the repository. */
+  function relative(target) {
+    const full = pathOf(target);
+    if (full === null) return null;
+    const rel = path.relative(root, full);
     if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
     return rel.split(path.sep).join('/');
   }
@@ -147,7 +153,7 @@ function install() {
   const record = (target, listed = false) => {
     const rel = relative(target);
     if (rel === null) {
-      const full = typeof target === 'string' ? path.resolve(target) : null;
+      const full = pathOf(target);
       if (full !== null && !within(full, temp) && within(full, home)) untraced ??= `it reads the home: ${full}`;
       return;
     }
@@ -159,6 +165,8 @@ function install() {
     if (typeof original !== 'function') return original;
     const wrapped = function (target, ...rest) {
       if (typeof target !== 'number') record(target, listed);
+      // A listing's hash holds its first level: what a recursive one sees below that, no trace follows.
+      if (listed && rest[0] !== null && typeof rest[0] === 'object' && rest[0].recursive) untraced ??= 'it lists a folder recursively';
       return original.call(this, target, ...rest);
     };
     for (const key of Reflect.ownKeys(original)) {
@@ -183,6 +191,16 @@ function install() {
   // Imports and requires, which do not go through `fs` as a module sees it.
   if (typeof nodeModule.registerHooks === 'function') {
     nodeModule.registerHooks({
+      // A module that did not resolve was looked for where no read was recorded: if it appears, the test
+      // changes, so the test is untraced.
+      resolve(specifier, context, nextResolve) {
+        try {
+          return nextResolve(specifier, context);
+        } catch (error) {
+          untraced ??= `an import or require did not resolve: ${specifier}`;
+          throw error;
+        }
+      },
       load(url, context, nextLoad) {
         if (url.startsWith('file:')) record(url);
         return nextLoad(url, context);
@@ -236,6 +254,10 @@ function install() {
     const { list, at } = shell ? { list: [], at: 1 } : split(args);
     const options = args[at] !== null && typeof args[at] === 'object' ? args[at] : undefined;
     const command = shell ? String(args[0]).trim().split(/\s+/)[0] : args[0];
+    // A shell string is judged by its first word alone, so one that chains, pipes, redirects or substitutes
+    // may run what no trace sees after a node: such a test is untraced (Codex, 2026-10-14).
+    const line = shell ? String(args[0]) : options?.shell ? [args[0], ...list].join(' ') : null;
+    if (line !== null && /[;&|`$<>()\n]/.test(line)) untraced ??= 'it runs a shell string that does more than start one command';
     seen(command, shell ? String(args[0]).trim().split(/\s+/).slice(1) : list, options);
     // Every shape gets the tracer's env, a callback after the args included: with the tracer's variables out of
     // process.env, a child that inherited it would go unseen.
@@ -311,7 +333,8 @@ function install() {
         }
       }
       reads.add(relative(process.argv[1]));
-      if (real.statSync(path.join(root, 'package.json'), { throwIfNoEntry: false })) reads.add('package.json');
+      // Always, `absent` where there is none: a package.json that appears changes how every module is read.
+      reads.add('package.json');
       const states = {};
       for (const key of [...reads].sort()) states[key] = stateOf(root, key);
       const trace = { v: 1, test, tracer: TRACER_VERSION, tracerHash: hashOf(__filename), node: process.version, os: process.platform, env: traceEnvOf(env), untraced, reads: states };

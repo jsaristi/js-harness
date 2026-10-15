@@ -137,6 +137,21 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   included (with the variables hidden, a child that only inherited them would go unseen); `exec` and
   `execFile` keep their promise form. The ten files of the 18 then passed under the tracer on Windows,
   each alone, in one gate turn (19:36). This is S6 doing its work: shadow before any skip.
+- **L7** (2026-10-14 19:45): T3 committed `1532bc2`, its gate the first in shadow to pass (WSL2, `0 of 119
+  test files would have been skipped`). gentle-ai: medium, not due (under_budget). Codex over
+  `c98b12d..1532bc2` (833,202 input tokens, allowance 1,521,600): eight P2, no P0 or P1, all fixed in one
+  batch, each test first (RED then GREEN): a home file named by a URL or Buffer, a recursive listing, an
+  import or require that did not resolve, and a shell string that chains, pipes or redirects each mark a
+  test untraced (`bin/lib/trace-reads.test.mjs`, 13/13); `package.json` is always a read, `absent` where
+  there is none, so one that appears runs everything; `testFilesOf` finds `.ts`/`.mts`/`.cts` where node
+  strips types (`process.features.typescript`; WSL2's node is taken to strip as Windows' does, the same
+  version here; selection-tests 7/7); a file selection would have skipped that left no end of its run
+  (killed, timed out, an unreadable results file) counts as one that did not pass
+  (`bin/check-shadow.test.mjs`, 3/3), and the row says "did not pass"; the tests that see imports hold
+  only where `module.registerHooks` exists (Node 22.15+), and assert the untraced fallback elsewhere (no RED
+  here: this node has the hooks). The leftover `eval-relroot-40620-194/` was removed: `evals/runner.test.mjs:1422`
+  makes it under the cwd and removes it when it ends, so it was a run cut short at 17:11, most likely the one
+  stopped at 17:13.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn

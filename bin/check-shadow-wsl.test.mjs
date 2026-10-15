@@ -69,7 +69,7 @@ test('in WSL2 the runner carries the tracer, its traces go to a folder of that d
     // The traces are of the mirror's node: the same node there skips both, and b, which failed, is counted.
     const second = await checkSensor(root, sensor, options());
     assert.deepEqual(second.shadow, { files: 2, wouldSkip: ['a.test.mjs', 'b.test.mjs'], failedOfSkipped: ['b.test.mjs'] });
-    assert.match(second.detail, /in WSL2 \(Ubuntu\); shadow: 2 of 2 test files would have been skipped, and 1 of them failed: b\.test\.mjs$/);
+    assert.match(second.detail, /in WSL2 \(Ubuntu\); shadow: 2 of 2 test files would have been skipped, and 1 of them did not pass: b\.test\.mjs$/);
     // After an upgrade of the mirror's node every trace is of the old one: nothing would be skipped.
     const third = await checkSensor(root, sensor, options({ wslNode: () => 'v25.0.0' }));
     assert.deepEqual(third.shadow.wouldSkip, []);

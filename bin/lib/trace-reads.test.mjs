@@ -4,7 +4,11 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import nodeModule from 'node:module';
 import { hashOf, readTrace, TRACE_ENV, TRACE_PRELOAD, TRACER_VERSION, traceEnv } from './trace-reads.mjs';
+
+/** Whether this node has `module.registerHooks`, by which the tracer sees imports (Node 22.15 and later). */
+const HOOKS = typeof nodeModule.registerHooks === 'function';
 
 // The tracer of exact test selection (odd/tasks/exact-tests.md, T1): a preload carried in NODE_OPTIONS that
 // records what each test file really read, and writes it when the file passed.
@@ -57,13 +61,15 @@ test('a test file that passed leaves its trace: what it read, probed, listed and
     assert.equal(trace.test, 'test/all.test.mjs');
     assert.equal(trace.node, process.version);
     assert.equal(trace.tracer, TRACER_VERSION);
-    assert.equal(trace.untraced, null);
+    // A node of the engines field (>=22) without module hooks marks every test untraced, on purpose (Codex, 2026-10-14).
+    if (HOOKS) assert.equal(trace.untraced, null);
+    else assert.match(trace.untraced, /has no module\.registerHooks/);
     const reads = trace.reads;
     assert.equal(reads['test/all.test.mjs'], hashOf(path.join(root, 'test/all.test.mjs')));
     assert.equal(reads['fixtures/data.txt'], hashOf(path.join(root, 'fixtures/data.txt')));
     assert.equal(reads['fixtures/not-there.txt'], 'absent');
     assert.match(reads['fixtures/'], /^listing:[0-9a-f]{64}$/);
-    assert.equal(reads['lib/two.mjs'], hashOf(path.join(root, 'lib/two.mjs')));
+    if (HOOKS) assert.equal(reads['lib/two.mjs'], hashOf(path.join(root, 'lib/two.mjs')));
     assert.equal(reads['lib/child.cjs'], hashOf(path.join(root, 'lib/child.cjs')), 'the child node is a read of its script');
     assert.equal(reads['fixtures/child.txt'], hashOf(path.join(root, 'fixtures/child.txt')), 'and what the child read is the test\'s');
     assert.equal(reads['package.json'], hashOf(path.join(root, 'package.json')));
@@ -100,7 +106,49 @@ test('each seam is seen: fs.promises, a dynamic import, a stat through fs/promis
     assert.equal(reads['fixtures/p.txt'], hashOf(path.join(root, 'fixtures/p.txt')), 'fs.promises.readFile');
     assert.equal(reads['fixtures/s.txt'], hashOf(path.join(root, 'fixtures/s.txt')), 'fs.promises.stat');
     assert.match(reads['more/'], /^listing:/, 'fs.promises.opendir');
-    assert.equal(reads['lib/three.mjs'], hashOf(path.join(root, 'lib/three.mjs')), 'a dynamic import');
+    if (HOOKS) assert.equal(reads['lib/three.mjs'], hashOf(path.join(root, 'lib/three.mjs')), 'a dynamic import');
+  } finally {
+    done();
+  }
+});
+
+// Reads no trace can follow make a test untraced, so it always runs (Codex, 2026-10-14, four P2): a home file
+// named by a URL, a recursive listing (its listing hash holds the first level only), an import that did not
+// resolve (a module that appears later changes the test), and a shell string that does more than start node.
+const UNFOLLOWED = {
+  'test/home-url.test.mjs': "import { test } from 'node:test';\nimport fs from 'node:fs';\nimport os from 'node:os';\nimport path from 'node:path';\nimport { pathToFileURL } from 'node:url';\ntest('home', () => { fs.existsSync(pathToFileURL(path.join(os.homedir(), 'settings.json'))); });\n",
+  'test/recursive.test.mjs': "import { test } from 'node:test';\nimport fs from 'node:fs';\ntest('deep', () => { fs.readdirSync('fixtures', { recursive: true }); });\n",
+  'test/optional.test.mjs': "import { test } from 'node:test';\ntest('optional', async () => { await import('./not-there.mjs').catch(() => null); });\n",
+  'test/compound.test.mjs': "import { test } from 'node:test';\nimport os from 'node:os';\nimport { execSync } from 'node:child_process';\ntest('compound', () => { execSync('node -e 0 && node -e 0', { cwd: os.tmpdir() }); });\n",
+};
+
+test('a home file named by a URL, a recursive listing, an import that did not resolve, or a compound shell string marks a test untraced', () => {
+  const { root, traces, done } = project({ 'package.json': '{"type":"module"}', 'fixtures/deep/x.txt': 'x', ...UNFOLLOWED });
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
+  const home = path.join(base, 'home');
+  const temp = path.join(base, 'temp');
+  fs.mkdirSync(home);
+  fs.mkdirSync(temp);
+  try {
+    const env = { ...process.env, ...traceEnv({ root, dir: traces }), HOME: home, USERPROFILE: home, TMPDIR: temp, TEMP: temp, TMP: temp };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, ['--test', ...Object.keys(UNFOLLOWED)], { cwd: root, env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(readTrace(traces, 'test/home-url.test.mjs').untraced ?? '', /reads the home/);
+    assert.match(readTrace(traces, 'test/recursive.test.mjs').untraced ?? '', /recursive/);
+    if (HOOKS) assert.match(readTrace(traces, 'test/optional.test.mjs').untraced ?? '', /did not resolve: \.\/not-there\.mjs/);
+    assert.match(readTrace(traces, 'test/compound.test.mjs').untraced ?? '', /shell/);
+  } finally {
+    done();
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('a repository with no package.json records it as absent, so one that appears changes the trace', () => {
+  const { root, traces, done } = project({ 'test/a.test.mjs': "import { test } from 'node:test';\ntest('a', () => {});\n" });
+  try {
+    assert.equal(runTests(root, traces, ['test/a.test.mjs']).status, 0);
+    assert.equal(readTrace(traces, 'test/a.test.mjs').reads['package.json'], 'absent');
   } finally {
     done();
   }
