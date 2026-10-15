@@ -92,6 +92,12 @@ test('the note says the waits are gone, names the opening and lists the declared
   assert.match(text, /re-arm only these declared waits/);
 });
 
+test('a wait written on several lines is told on one, its lines joined as the shell runs them', () => {
+  const text = wakeText({ title: 'JH 2 · x', opening: null, waits: ['cd /d/project\n  js-harness wait --pr 162\r\n'], killed: 0 }, BOOT);
+  assert.ok(!/[\r\n]/.test(text), JSON.stringify(text));
+  assert.ok(text.includes('1) cd /d/project ; js-harness wait --pr 162'), text);
+});
+
 test('the note of a session with no wait says to re-arm none, and a long list is cut to fit a notice with the count left out', () => {
   const none = wakeText({ title: 'JH 2 · x', opening: null, waits: [], killed: 0 }, BOOT);
   assert.match(none, /no declared wait was running: re-arm none/i);

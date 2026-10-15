@@ -85,6 +85,12 @@ export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () =>
   return plan.sort((a, b) => timeOf(b.lastAt) - timeOf(a.lastAt));
 }
 
+/** A command line as one line: a notice holds no line break (`newNotice`), and the shell runs a command
+ * written on several lines as its lines joined by `;`, so that is how they are told. */
+export function oneLineCommand(command) {
+  return command.split(/[\r\n]+/).map((line) => line.trim()).filter((line) => line !== '').join(' ; ');
+}
+
 /** The note a session of the plan is left (`wakePlan`): the boot, that its background waits and tasks are
  * gone, what to read to resume, and the declared waits to re-arm, as many as fit a notice, then how many
  * were left out. */
@@ -94,7 +100,7 @@ export function wakeText({ opening, waits }, bootAt) {
   if (waits.length === 0) return `${head}${read}No declared wait was running: re-arm none.`;
   const lead = `${head}${read}Then re-arm only these declared waits: `;
   for (let count = waits.length; count >= 0; count--) {
-    const shown = waits.slice(0, count).map((wait, index) => `${index + 1}) ${wait}`).join(' ');
+    const shown = waits.slice(0, count).map((wait, index) => `${index + 1}) ${oneLineCommand(wait)}`).join(' ');
     const rest = waits.length - count;
     const text = `${lead}${shown}${rest === 0 ? '' : `${count === 0 ? '' : ' '}and ${rest} more: js-harness wake lists them.`}`;
     if (text.length <= NOTICE_TEXT_MAX) return text;

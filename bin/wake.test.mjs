@@ -79,6 +79,26 @@ test('wake --notify leaves each titled session its note and the orchestrator the
   assert.match(out.join('\n'), /already recorded for this boot/);
 });
 
+test('a wait written on several lines does not stop --notify, and every note is recorded', async () => {
+  const { main, home, slug } = fixture();
+  const dir = path.join(path.dirname(home), 'claude', 'projects', slug);
+  fs.appendFileSync(path.join(dir, 'aaaa1111.jsonl'), background('t9', 'b9', 'cd /d/project\njs-harness wait --pr 7', at(4, 31)).join('\n') + '\n');
+  assert.equal(await main('--notify'), 0);
+  const toFive = readNotices(home, slug).notices.find((one) => one.to.number === 5);
+  assert.ok(toFive.text.includes('cd /d/project ; js-harness wait --pr 7'), toFive.text);
+});
+
+test('a list of sessions too long for one notice keeps the command that prints them all, and says how many it left out', async () => {
+  const { main, home, slug } = fixture();
+  const dir = path.join(path.dirname(home), 'claude', 'projects', slug);
+  for (let n = 10; n < 40; n++) fs.writeFileSync(path.join(dir, `s${n}.jsonl`), [titled(`JH ${n} · a session with a rather long purpose to fill the list`), prompt('x', at(4, 20))].join('\n') + '\n');
+  assert.equal(await main('--notify'), 0);
+  const list = readNotices(home, slug).notices.find((one) => one.to.role === 'orchestrator' && /send_message/.test(one.text));
+  assert.ok(list.text.length <= 500, String(list.text.length));
+  assert.match(list.text, /and \d+ more/i);
+  assert.match(list.text, /js-harness wake --boot-time 2026-10-15T04:52:00\.000Z prints what to tell each\.$/);
+});
+
 test('wake with a --boot-time that is no time, or an unknown flag, exits 2 with usage and records nothing', async () => {
   const { home, slug, err } = fixture();
   const options = { stderr: (text) => err.push(text), stdout: () => {}, env: { JS_HARNESS_HOME: home }, homedir: () => home };

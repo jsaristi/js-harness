@@ -47,18 +47,30 @@ function parseArgs(argv) {
 /** How a session of the plan is named in a list: its title, or the start of its id when it has none. */
 const nameOf = (one) => one.title ?? `session ${one.id.slice(0, 8)}`;
 
-/** The orchestrator's note: the sessions open before the boot, whom to wake, and those no note reaches. */
+/** The orchestrator's note: the sessions open before the boot, whom to wake, and those no note reaches. A list
+ * too long for a notice names as many as fit and says how many it left out; the command that prints them all
+ * always ends it, since a session left out of the list stays idle until someone messages it. */
 function listText(plan, bootAt) {
   const noted = plan.filter((one) => one.role !== null).map(nameOf);
   const unreached = plan.filter((one) => one.role === null).map(nameOf);
-  const parts = [
-    `The machine booted at ${bootAt}: ${plan.length} session${plan.length === 1 ? ' was' : 's were'} open before it.`,
-    noted.length === 0 ? '' : ` Each of these has its note, told on its next tool call; wake each with send_message: ${noted.join('; ')}.`,
-    unreached.length === 0 ? '' : ` No note reaches (no role in the title): ${unreached.join('; ')}.`,
-    ` js-harness wake --boot-time ${bootAt} prints what to tell each.`,
-  ];
-  const text = parts.join('');
-  return text.length <= NOTICE_TEXT_MAX ? text : `${text.slice(0, NOTICE_TEXT_MAX - 1)}…`;
+  const head = `The machine booted at ${bootAt}: ${plan.length} session${plan.length === 1 ? ' was' : 's were'} open before it.`;
+  const tail = ` js-harness wake --boot-time ${bootAt} prints what to tell each.`;
+  const text = (notedCount, unreachedCount) => {
+    const left = noted.length - notedCount + unreached.length - unreachedCount;
+    return [
+      head,
+      notedCount === 0 ? '' : ` Each of these has its note, told on its next tool call; wake each with send_message: ${noted.slice(0, notedCount).join('; ')}.`,
+      unreachedCount === 0 ? '' : ` No note reaches (no role in the title): ${unreached.slice(0, unreachedCount).join('; ')}.`,
+      left === 0 ? '' : ` And ${left} more.`,
+      tail,
+    ].join('');
+  };
+  // The sessions no note reaches come first: the orchestrator is the only one who can tell them.
+  let unreachedCount = unreached.length;
+  let notedCount = noted.length;
+  while (text(notedCount, unreachedCount).length > NOTICE_TEXT_MAX && notedCount > 0) notedCount -= 1;
+  while (text(notedCount, unreachedCount).length > NOTICE_TEXT_MAX && unreachedCount > 0) unreachedCount -= 1;
+  return text(notedCount, unreachedCount);
 }
 
 export async function wakeMain(
@@ -151,9 +163,11 @@ export async function wakeMain(
     ...plan.filter((one) => one.role !== null).map((one) => ({ to: one.role.role === 'orchestrator' ? 'orchestrator' : String(one.role.number), text: wakeText(one, bootAt) })),
     { to: 'orchestrator', text: listText(plan, bootAt) },
   ];
-  for (const note of notes) {
-    appendNotice(harnessHome, slug, newNotice({ at: new Date(now()).toISOString(), from, to: note.to, kind: 'note', text: note.text }));
-  }
+  // Every notice is made before the first is written: one the record would refuse must not leave the boot
+  // half told, since a later run takes any note of this boot as all of them.
+  const at = new Date(now()).toISOString();
+  const notices = notes.map((note) => newNotice({ at, from, to: note.to, kind: 'note', text: note.text }));
+  for (const notice of notices) appendNotice(harnessHome, slug, notice);
   stdout(`${notes.length} notes recorded in ${record.path}.`);
   return 0;
 }
