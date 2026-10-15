@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { keptByGitLog, measuresLines, measuresTotal } from './measures.mjs';
+import { keptByGitLog, keptByRelief, keptEither, measuresLines, measuresTotal } from './measures.mjs';
+import { reliefStamp } from './channel.mjs';
 
 // The kept reader is driven by a fake `run` shaped like spawnSync's result, and the lines by measures shaped
 // like `compactionMeasures` gives them: nothing here runs git or reads a transcript.
@@ -63,6 +64,73 @@ test('keptByGitLog knows nothing when git fails, cannot start, throws, or there 
   assert.deepEqual(never.calls, [], 'no document, no git');
   assert.deepEqual(keptByGitLog(recording(ok(`${at(5)}\n`)).run)({ ...query, before: 'soon' }), unknown);
   assert.deepEqual(keptByGitLog(recording(ok(`${at(5)}\n`)).run)({ ...query, after: 'earlier' }), unknown);
+});
+
+// --- keptByRelief ---
+
+/** A line of the relief file stamped at minute `minute` of the test's hour, as `notify --relief` writes it. */
+const stampOf = (minute) => reliefStamp(Date.parse(at(minute)));
+const RELIEF = '/home/me/.js-harness/relief/proj.md';
+
+test('keptByRelief keeps the stretch when a line of the relief file is stamped after the notice and at or before the boundary', () => {
+  const kept = (text, after = at(3), before = at(6)) => keptByRelief(() => text, RELIEF)({ after, before });
+  assert.deepEqual(kept(`${stampOf(1)} earlier\n${stampOf(5)} inside\n`), { known: true, kept: true });
+  assert.deepEqual(kept(`${stampOf(6)} at the boundary\n`), { known: true, kept: true }, 'a line at the boundary itself is before it');
+  assert.deepEqual(kept(`${stampOf(3)} at the notice\n`), { known: true, kept: false }, 'a line at the notice is not after it');
+  assert.deepEqual(kept(`${stampOf(7)} late\n${stampOf(2)} early\n`), { known: true, kept: false });
+  assert.deepEqual(kept(''), { known: true, kept: false }, 'a relief file with no line of the stretch was not kept');
+});
+
+test('keptByRelief reads the stamp as the local time the line was written, in the same form the command writes, and a hand-written one too', () => {
+  const handWritten = `${stampOf(5).replace('(notify)', '(date)')} hand-written\n`;
+  assert.deepEqual(keptByRelief(() => handWritten, RELIEF)({ after: at(3), before: at(6) }), { known: true, kept: true });
+});
+
+test('keptByRelief ignores a line whose stamp does not parse, and reads a stretch with no start as open', () => {
+  const noise = [
+    '2026-01-01 orchestrator until now: a line with only its date',
+    `${stampOf(5).replace(' local', '')} a stamp with no local time`,
+    '2026-02-30 10:05 local (date). a day the calendar does not have',
+    `note ${stampOf(5)} a line that starts with other text`,
+    '2026-01-01 25:99 local (date). an hour the clock does not have',
+  ].join('\n');
+  assert.deepEqual(keptByRelief(() => `${noise}\n`, RELIEF)({ after: at(3), before: at(6) }), { known: true, kept: false }, 'no stamp that parses falls in the stretch');
+  assert.deepEqual(keptByRelief(() => `${stampOf(1)} early\n`, RELIEF)({ after: null, before: at(6) }), { known: true, kept: true });
+});
+
+test('keptByRelief knows nothing when the file cannot be read, ENOENT included, or a bound does not parse', () => {
+  const unknown = { known: false };
+  const query = { after: at(3), before: at(6) };
+  const missing = keptByRelief(() => {
+    throw Object.assign(new Error('no such file'), { code: 'ENOENT' });
+  }, RELIEF);
+  assert.deepEqual(missing(query), unknown);
+  let reads = 0;
+  const counted = keptByRelief(() => {
+    reads += 1;
+    return `${stampOf(5)} inside\n`;
+  }, RELIEF);
+  assert.deepEqual(counted({ ...query, before: 'soon' }), unknown);
+  assert.deepEqual(counted({ ...query, after: 'earlier' }), unknown);
+  assert.equal(reads, 0, 'a bound that does not parse is not read');
+});
+
+// --- keptEither ---
+
+test('keptEither says kept when any known reader says kept, and kept false only when a reader is known and none says kept', () => {
+  const query = { document: '/p/odd/tasks/x.md', after: at(3), before: at(6) };
+  const yes = () => ({ known: true, kept: true });
+  const no = () => ({ known: true, kept: false });
+  const unknown = () => ({ known: false });
+  assert.deepEqual(keptEither(unknown, yes)(query), { known: true, kept: true }, 'git unknown, the relief line kept');
+  assert.deepEqual(keptEither(no, yes)(query), { known: true, kept: true });
+  assert.deepEqual(keptEither(no, no)(query), { known: true, kept: false }, 'neither kept');
+  assert.deepEqual(keptEither(unknown, no)(query), { known: true, kept: false }, 'one known and not kept is a miss');
+  assert.deepEqual(keptEither(unknown, unknown)(query), { known: false }, 'none known is unknown');
+  assert.deepEqual(keptEither(() => {
+    throw new Error('boom');
+  }, unknown)(query), { known: false }, 'a reader that throws is unknown, not a miss');
+  assert.deepEqual(keptEither()(query), { known: false }, 'no reader is unknown');
 });
 
 // --- measuresLines ---

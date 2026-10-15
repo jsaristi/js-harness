@@ -43,7 +43,8 @@
 // the session asked with the host's question tool, tapped or typed.
 // `--measures` judges each compaction of the transcripts in the window once (odd/tasks/session-channel.md,
 // section 14): told, from the state the pause hook keeps (`toldBetween`, bin/lib/pause.mjs); kept, from the
-// commits of the feature document (`keptByGitLog`, bin/lib/measures.mjs); announced, from the transcript.
+// commits of the feature document (`keptByGitLog`, bin/lib/measures.mjs) and, for the orchestrator alone, from a
+// line of its relief file (`keptByRelief`); announced, from the transcript.
 // It runs `git log` of that document and nothing else of the machine: no worktree, pull request or gate.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -53,9 +54,9 @@ import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
-import { keptByGitLog, measuresLines, measuresTotal } from './lib/measures.mjs';
+import { keptByGitLog, keptByRelief, keptEither, measuresLines, measuresTotal } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -86,7 +87,8 @@ const USAGE = [
   '       js-harness sessions --measures [--hours <n>] [--json] [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
   '         prints, for each compaction of the transcripts in the window, whether the user asked for it and, for one the host',
   '         made, three facts: told (the session was told the pause before it), kept (the feature document has a commit',
-  '         between the notice and the compaction) and announced (a reply after the notice holds the /compact block),',
+  '         between the notice and the compaction, or for the orchestrator a line of its relief file there) and announced',
+  '         (a reply after the notice holds the /compact block),',
   '         each yes, no or unknown, then how many miss a fact; exit 0 when it printed, 1 when there is no sessions folder',
 ].join('\n');
 
@@ -336,7 +338,7 @@ function workFile(work, { sessionDir, tasksDir }, io) {
 /** One session of the board: its transcript's facts plus, for each piece of work with no recorded end,
  * the last write of its file. A transcript that cannot be read, or that the reader cannot turn into
  * facts, is a session with `unavailable` and the reason: one transcript never costs the whole board. */
-function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders }, io) {
+function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders, readings }, io) {
   let text;
   try {
     text = io.readFile(path.join(projectDir, `${id}.jsonl`));
@@ -353,16 +355,34 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindo
   for (const work of facts.work) {
     if (!work.ended) work.file = workFile(work, folders, io);
   }
-  return { id, modifiedAt, ...facts, compactionMiss: missOf(text, id, measureReaders) };
+  return { id, modifiedAt, ...facts, compactionMiss: missOf(text, id, measureReaders, roleOfSession(id, facts, readings)) };
+}
+
+/** The role a session holds for its relief line, from the title the board gives it (the transcript's, or the opening it
+ * read, `titledByReadings`), so the board and `--measures` judge a session alike; `null` for a title outside the shape. */
+function roleOfSession(id, facts, readings = []) {
+  const [titled] = titledByReadings([{ id, title: facts.title ?? null, titleSource: facts.titleSource ?? null }], readings);
+  return hasTitle(titled) ? (roleOfTitle(titled.title)?.role ?? null) : null;
+}
+
+/** The readers of one session's compactions (`compactionMeasures`): an orchestrator keeps its state in its feature
+ * document or its relief file (`keptEither`), any other session in its feature document alone. */
+function readersOf(id, role, readers) {
+  const orchestrator = role === 'orchestrator' && readers.relief !== undefined;
+  return {
+    told: (after, at) => readers.told(id, after, at),
+    kept: orchestrator ? keptEither(readers.kept, readers.relief) : readers.kept,
+    keptWithoutDocument: orchestrator,
+  };
 }
 
 /** The miss of the session's last automatic compaction (`compactionMissOf`), judged by the readers `--measures` uses;
  * `null` when no readers are given, or the transcript has no automatic compaction that misses a fact. A judgment that
  * throws is no miss: the board says nothing of it, and `--measures` says what it cannot read. */
-function missOf(text, id, readers) {
+function missOf(text, id, readers, role) {
   if (readers === undefined) return null;
   try {
-    return compactionMissOf(text, { told: (after, at) => readers.told(id, after, at), kept: readers.kept });
+    return compactionMissOf(text, readersOf(id, role, readers));
   } catch {
     return null;
   }
@@ -370,31 +390,30 @@ function missOf(text, id, readers) {
 
 /** The measures of one session's compactions (`compactionMeasures`): `{ id, modifiedAt, title, titleSource,
  * measures }`, or `{ id, modifiedAt, unavailable }` with the reason when the transcript cannot be read, which
- * is said and never skipped: a total that left one out would claim more than was read. The board's title
- * names the block, and is read only for a transcript that holds a compaction, since it parses the whole
- * file again; a transcript the board's reader cannot turn into facts is measured all the same, by its id. */
-function measureSession(id, modifiedAt, file, readers, io) {
+ * is said and never skipped: a total that left one out would claim more than was read. The facts are read first,
+ * for the role that decides which state a compaction is kept in; the title is shown only for a transcript that holds
+ * a compaction. A transcript the board's reader cannot turn into facts is measured all the same, by its id. */
+function measureSession(id, modifiedAt, file, readers, io, readings) {
   let text;
   try {
     text = io.readFile(file);
   } catch (err) {
     return { id, modifiedAt, unavailable: err.code ?? err.message };
   }
+  let facts = {};
+  try {
+    facts = io.readFacts(text);
+  } catch {
+    // the block is named by the id, and its role is not known
+  }
   let measures;
   try {
-    measures = compactionMeasures(text, { told: (after, at) => readers.told(id, after, at), kept: readers.kept });
+    measures = compactionMeasures(text, readersOf(id, roleOfSession(id, facts, readings), readers));
   } catch (err) {
     return { id, modifiedAt, unavailable: `its transcript could not be read into measures: ${err.message}` };
   }
-  let facts = {};
-  if (measures.length > 0) {
-    try {
-      facts = io.readFacts(text);
-    } catch {
-      // the block is named by the id
-    }
-  }
-  return { id, modifiedAt, title: facts.title ?? null, titleSource: facts.titleSource ?? null, measures };
+  const shown = measures.length > 0 ? facts : {};
+  return { id, modifiedAt, title: shown.title ?? null, titleSource: shown.titleSource ?? null, measures };
 }
 
 /** The relief file at `file` as the board shows it: `{ path, exists: true, lineCount, lines }`, `{ path,
@@ -426,7 +445,8 @@ export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, 
   }
   const generatedAt = now();
   const since = generatedAt - hours * 3600 * 1000;
-  const where = { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders };
+  const record = readNotices(harnessHome, slug, { readFile: io.readFile });
+  const where = { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders, readings: record.readings };
   const read = [];
   for (const name of names) {
     if (!name.endsWith('.jsonl')) continue;
@@ -441,7 +461,6 @@ export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, 
     }
     if (changedAt >= since) read.push(readSession(id, new Date(changedAt).toISOString(), where, io));
   }
-  const record = readNotices(harnessHome, slug, { readFile: io.readFile });
   const sessions = titledByReadings(read, record.readings);
   // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
   const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
@@ -494,21 +513,23 @@ export async function sessionsMain(
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
   const io = { readFile, readdir, stat, readFacts };
-  // The readers of a compaction's measures (odd/tasks/session-channel.md, section 14): told from the pause's state, kept
-  // from the commits of the feature document. The board judges each session's last automatic compaction with them and
-  // `--measures` every compaction, so the two never read a fact in two ways.
   const pauseTmp = parsed.tmp ?? tmpdir();
   const stateFiles = { readFileSync: readFile, statSync: stat };
-  const measureReaders = {
-    told: (sessionId, after, at) => toldBetween({ home: harnessHome, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
-    kept: keptByGitLog(run),
-  };
   // Where the session that orchestrates this project keeps its notes: one file per project under the
   // harness home, which is JS_HARNESS_HOME or the user's home. An empty JS_HARNESS_HOME is no home here:
   // joined as it is, it would put the file under the folder the command runs in. A relative `--relief` is
   // read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
   const harnessHome = env.JS_HARNESS_HOME || homedir();
   const reliefFile = path.resolve(defaultCwd, parsed.relief ?? reliefPath(harnessHome, slug));
+  // The readers of a compaction's measures (odd/tasks/session-channel.md, section 14): told from the pause's state, kept
+  // from the commits of the feature document and, for the orchestrator (`readersOf`), its relief file. The board judges
+  // each session's last automatic compaction with them and `--measures` every compaction, so the two never read a fact
+  // in two ways.
+  const measureReaders = {
+    told: (sessionId, after, at) => toldBetween({ home: harnessHome, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
+    kept: keptByGitLog(run),
+    relief: keptByRelief(readFile, reliefFile),
+  };
   // The machine's gate lock is under the same home, read through the same three functions as every other
   // file of the board, so a test hands it a folder of its own.
   const lockFiles = { readdirSync: readdir, statSync: stat, readFileSync: readFile };
@@ -835,6 +856,7 @@ export async function sessionsMain(
     }
     const generatedAt = now();
     const since = generatedAt - parsed.hours * 3600 * 1000;
+    const readings = readNotices(harnessHome, slug, { readFile }).readings;
     const measured = [];
     for (const name of names) {
       if (!name.endsWith('.jsonl')) continue;
@@ -848,10 +870,10 @@ export async function sessionsMain(
         measured.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
         continue;
       }
-      if (changedAt >= since) measured.push(measureSession(id, new Date(changedAt).toISOString(), file, measureReaders, io));
+      if (changedAt >= since) measured.push(measureSession(id, new Date(changedAt).toISOString(), file, measureReaders, io, readings));
     }
     // A session opened from the phone has its title from the opening it read, as on the board.
-    const sessions = titledByReadings(measured, readNotices(harnessHome, slug, { readFile }).readings);
+    const sessions = titledByReadings(measured, readings);
     sessions.sort((a, b) => ((a.modifiedAt ?? '') < (b.modifiedAt ?? '') ? 1 : (a.modifiedAt ?? '') > (b.modifiedAt ?? '') ? -1 : 0));
     if (parsed.json) {
       stdout(JSON.stringify({ root, projectDir, hours: parsed.hours, generatedAt: new Date(generatedAt).toISOString(), sessions, total: measuresTotal(sessions) }, null, 2));

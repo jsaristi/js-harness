@@ -50,6 +50,63 @@ export function keptByGitLog(run) {
   };
 }
 
+/** The instant a line of the relief file is stamped with: `YYYY-MM-DD HH:MM local`, in the local time of the machine
+ * that wrote it, as `reliefStamp` (bin/lib/channel.mjs) writes it. `NaN` for a line that does not start with such a
+ * stamp, or whose date or hour the calendar does not have: a line whose hour is not known proves nothing. */
+const RELIEF_STAMP = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) local\b/;
+function reliefInstant(line) {
+  const match = RELIEF_STAMP.exec(line);
+  if (match === null) return NaN;
+  const [year, month, day, hour, minute] = match.slice(1).map(Number);
+  const at = new Date(year, month - 1, day, hour, minute);
+  const same = at.getFullYear() === year && at.getMonth() === month - 1 && at.getDate() === day && at.getHours() === hour && at.getMinutes() === minute;
+  return same ? at.getTime() : NaN;
+}
+
+/** A reader of the orchestrator's relief file for `compactionMeasures`: for `{ after, before }` it reads `file` through
+ * `readFile(file)` and answers `{ known: true, kept }`, `kept` being whether a line is stamped after `after` (the notice;
+ * `null` is open) and at or before `before` (the boundary), compared as instants. A stamp that does not parse proves
+ * nothing. `{ known: false }` when the file cannot be read, ENOENT included, or a bound does not parse. */
+export function keptByRelief(readFile, file) {
+  return ({ after, before } = {}) => {
+    const unknown = { known: false };
+    const from = boundOf(after ?? null, -Infinity);
+    const to = boundOf(before ?? null, Infinity);
+    if (Number.isNaN(from) || Number.isNaN(to)) return unknown;
+    let text;
+    try {
+      text = readFile(file);
+    } catch {
+      return unknown;
+    }
+    const kept = String(text)
+      .split(/\r?\n/)
+      .some((line) => {
+        const time = reliefInstant(line);
+        return time > from && time <= to;
+      });
+    return { known: true, kept };
+  };
+}
+
+/** One reader that answers what `readers` answer together: `{ known: true, kept: true }` when a known reader says kept,
+ * `{ known: true, kept: false }` when a reader is known and none says kept, and `{ known: false }` when none is known.
+ * A reader that throws, or answers nothing, is not known. */
+export function keptEither(...readers) {
+  return (query) => {
+    const answers = readers.map((reader) => {
+      try {
+        return reader(query);
+      } catch {
+        return { known: false };
+      }
+    });
+    if (answers.some((answer) => answer?.known === true && answer.kept === true)) return { known: true, kept: true };
+    if (answers.some((answer) => answer?.known === true)) return { known: true, kept: false };
+    return { known: false };
+  };
+}
+
 const FACTS = ['told', 'kept', 'announced'];
 
 /** Whether a compaction carries a verdict: one the host made, with the stretch before it in this transcript. */

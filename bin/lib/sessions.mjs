@@ -2133,8 +2133,10 @@ function announcedOf(counted, { after, before, toldAt }) {
  * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, announced, verdict }`. The readers
  * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each.
  * With `lastAutomaticOnly`, only the newest automatic compaction is judged: the readers are asked for it alone, and
- * every other compaction has no verdict. */
-export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT, lastAutomaticOnly = false } = {}) {
+ * every other compaction has no verdict. `kept` is asked with the stretch's `document` only when the stretch has one,
+ * unless `keptWithoutDocument`: the orchestrator's state is also its relief file, which needs no document, so its
+ * `kept` is asked for every stretch the notice reached (with `document` `null` when there is none). */
+export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT, lastAutomaticOnly = false, keptWithoutDocument = false } = {}) {
   const counted = firstAppearances(text);
   const boundaries = boundariesOf(counted);
   const wrote = writesOf(counted);
@@ -2148,7 +2150,7 @@ export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => N
     const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, announced: null, verdict: null };
     if (!automatic || !inThisFile || (lastAutomaticOnly && boundary !== judged)) return item;
     const toldState = toldOf(told, after, at);
-    const keptState = toldState.at === null || document === null ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
+    const keptState = toldState.at === null || (document === null && !keptWithoutDocument) ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
     const announced = toldState.at === null ? null : announcedOf(counted, { after, before: at, toldAt: toldState.at });
     const verdicts = {
       told: toldState.known ? toldState.at !== null : null,
