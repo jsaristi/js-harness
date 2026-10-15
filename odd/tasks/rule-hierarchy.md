@@ -3197,10 +3197,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 ## Next step
 **State for a resume, 2026-10-15 at 18:45, T16d being built.** The design is draft pull request
 241. The build is on `feat/rules-row` (worktree `D:js-harness-worktreesules-row`, from `main`
-b0093b8), inline, tests first. Unit 1 is done: `patternOf` and `{amount}` in `bin/lib/rules.mjs`,
-with `readRules` refusing a pattern with no `{amount}` or one matching an empty line (its commit
-is going through the gate). Next units, in order:
-1. the scan and the counts in `bin/lib/rules-check.mjs`, with its two findings;
+b0093b8), inline, tests first. Unit 1 is done (0b292bc): `patternOf` and `{amount}` in `bin/lib/rules.mjs`, with `readRules`
+refusing a pattern with no `{amount}` or one matching an empty line. Unit 2, the scan, is
+`bin/lib/rules-scan.mjs` (`inForceLines`, `scanLines`, `countFindings`; its commit is going through
+the gate). Next units, in order:
+1. `rules check` prints the counts (`bin/rules.mjs` `checkList`) and gains its two findings;
 2. the row in `checkOwnRules`;
 3. the command's three keys;
 4. the help.
