@@ -7,7 +7,7 @@ Branch: `feat/on-demand-functions`, in the linked worktree
 (app session `local_11c45a36-0115-4c92-b865-f1dc3f68c3c1`) · Runner: `node --test` · Delivery:
 ask-on-risk
 
-State 2026-10-15 00:13 (this machine's clock): slice 3 RESUMED (L21), its units 1 to 5 on feat/on-demand-functions-3, now based on `main` at `eab3eff`. Slices 1 and 2 are on main
+State 2026-10-15 (this machine's clock): slice 3 is `09e605f` + `28a6cad` on feat/on-demand-functions-3, based on `main` at `eab3eff`, reviewed by gentle-ai (approved) and Codex (correct), going to its pull request (L25, L26). Every task is checked off. Slices 1 and 2 are on main
 (pull requests 111 and 131; L17 to L19). Next: slice 3, in a branch of its own
 ("The order of the build"): the `bin/check.mjs` rows, `codex-review` reading the switch, the S9 review row,
 `doctor`'s codegraph row (T6's rest), then the texts (T8) and the first push (S10).
@@ -960,3 +960,7 @@ item of `docs/todo.md`: what `codegraph init` writes under the home (`.codegraph
   - the debt row reads the switch inside its guard;
   - `ls-remote` waits 20 s, not 60.
   Codex's plan for the range: about 500,000 input tokens, inside the 816,000 allowance.
+- **L26** (2026-10-15) The fixes are commit `28a6cad`, assessed medium and not due. Codex reviewed
+  `eab3eff..28a6cad` in 2 parts. Its verdict on both: the patch is correct (0.86 and 0.85), no findings.
+  It used 392,796 input tokens and recorded the review. Next: push `feat/on-demand-functions-3`, open the pull
+  request, and tell the lead (now "JH ORQ 2 · js-harness").
