@@ -1,0 +1,191 @@
+// The owner records of a project's loops, and the process look that says whether a loop is alive. Zero deps.
+//
+// A loop is a long-running command a session keeps in its background (the lead's PR keeper, its heartbeat, its
+// channel watch). Its record names the session that owns it, the process that runs it and the command it started,
+// each by pid AND creation time, as bin/lib/process-tree.mjs names a process: Windows reuses pids fast, so a pid
+// alone may name a stranger. A record whose processes are all gone (or whose pids now belong to processes created
+// at another time) is stale, whatever its owner was.
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync as spawnChildSync } from 'node:child_process';
+import { killProcesses, selectDescendants, takeSnapshot } from './process-tree.mjs';
+
+export const LOOP_SCHEMA = 'js-harness.loop/v1';
+
+/** A loop's name: lower case letters, digits and dashes, as it is also the name of its record file. */
+export const LOOP_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** The folder of a project's loop records under the harness home, next to its channel and gate log. */
+export function loopsFolder(home, slug) {
+  return path.join(home, '.js-harness', 'loops', slug);
+}
+
+export function loopRecordPath(home, slug, name) {
+  return path.join(loopsFolder(home, slug), `${name}.json`);
+}
+
+/** The record at `file`: `{ record }`, `{ missing: true }`, or `{ unreadable: <why> }` for a file that is there
+ * and is not a loop record (records are written whole, by rename, so a half-written one is not expected). */
+export function readRecord(file, { readFile = (f) => fs.readFileSync(f, 'utf8') } = {}) {
+  let text;
+  try {
+    text = readFile(file);
+  } catch (err) {
+    return err.code === 'ENOENT' ? { missing: true } : { unreadable: err.message };
+  }
+  try {
+    const record = JSON.parse(text);
+    if (record?.schema !== LOOP_SCHEMA || typeof record.name !== 'string') return { unreadable: `not a ${LOOP_SCHEMA} record` };
+    return { record };
+  } catch (err) {
+    return { unreadable: err.message };
+  }
+}
+
+/** Every record of the folder, by name: `[{ name, file, record } | { name, file, unreadable }]`. */
+export function readRecords(folder, { readdir = (d) => fs.readdirSync(d), readFile } = {}) {
+  let names;
+  try {
+    names = readdir(folder);
+  } catch (err) {
+    if (err.code === 'ENOENT') return [];
+    throw err;
+  }
+  return names
+    .filter((entry) => entry.endsWith('.json'))
+    .map((entry) => entry.slice(0, -'.json'.length))
+    .sort()
+    .map((name) => {
+      const file = path.join(folder, `${name}.json`);
+      const read = readRecord(file, { readFile });
+      return read.record ? { name, file, record: read.record } : { name, file, unreadable: read.unreadable ?? 'gone' };
+    });
+}
+
+/** Writes the whole record by rename, so a reader never sees half of it. `exclusive` creates it only when no
+ * record of that name is there (the claim of a new loop) and throws EEXIST otherwise. */
+export function writeRecord(file, record, { exclusive = false } = {}) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const text = `${JSON.stringify(record, null, 2)}\n`;
+  if (exclusive) {
+    fs.writeFileSync(file, text, { flag: 'wx' });
+    return;
+  }
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, text);
+  fs.renameSync(temporary, file);
+}
+
+/** Removes the record only while it is still the one `record` is (the same process): a loop that was taken over
+ * and started again by another session has a new record, which is not this one's to remove. */
+export function removeRecordOf(file, record, { readFile } = {}) {
+  const now = readRecord(file, { readFile });
+  if (now.record && (now.record.pid !== record.pid || now.record.createdAt !== record.createdAt)) return false;
+  fs.rmSync(file, { force: true });
+  return true;
+}
+
+const known = (value) => typeof value === 'number' && Number.isFinite(value);
+
+/** The processes a record names as its own: the one that runs the loop and the command it started. */
+function rootsOf(record) {
+  return [{ pid: record.pid, createdAt: record.createdAt }, record.child ?? null].filter((root) => root !== null && Number.isInteger(root.pid) && known(root.createdAt));
+}
+
+const isSame = (entry, root) => entry.pid === root.pid && entry.createdAt === root.createdAt;
+
+/** `alive` when a process the record names is in the snapshot with the same creation time, else `stale`. */
+export function stateOf(record, snapshot) {
+  return rootsOf(record).some((root) => snapshot.some((entry) => isSame(entry, root))) ? 'alive' : 'stale';
+}
+
+/** Every process of the loop: each live root and its descendants (pid and creation time both proven), once. */
+export function targetsOf(record, snapshot) {
+  const createdAt = new Map(snapshot.map((entry) => [entry.pid, entry.createdAt]));
+  const pids = [];
+  for (const root of rootsOf(record)) {
+    if (!snapshot.some((entry) => isSame(entry, root))) continue;
+    for (const pid of selectDescendants(snapshot, root)) if (!pids.includes(pid)) pids.push(pid);
+  }
+  return pids.map((pid) => ({ pid, createdAt: createdAt.get(pid) }));
+}
+
+/** The targets that are still the same processes in a later snapshot. */
+export function survivorsOf(targets, snapshot) {
+  return targets.filter((target) => snapshot.some((entry) => isSame(entry, target))).map((target) => target.pid);
+}
+
+// ---- the process table of this machine ------------------------------------------------------------------------
+
+/** One line of `/proc/<pid>/stat` as `{ pid, ppid, createdAt, name }`, `createdAt` being the start time in clock
+ * ticks since boot: a number that orders processes as their creation does, which is all `selectDescendants` asks.
+ * A zombie (state Z) has exited and is left out. */
+export function parseProcStat(text) {
+  const open = text.indexOf('(');
+  const close = text.lastIndexOf(')');
+  if (open < 0 || close < open) return null;
+  const fields = text.slice(close + 2).split(' ');
+  if (fields[0] === 'Z') return null;
+  const pid = Number(text.slice(0, open).trim());
+  const ppid = Number(fields[1]);
+  const createdAt = Number(fields[19]);
+  if (!Number.isInteger(pid) || !Number.isInteger(ppid) || !Number.isFinite(createdAt)) return null;
+  return { pid, ppid, createdAt, name: text.slice(open + 1, close) };
+}
+
+function linuxSnapshot() {
+  const rows = [];
+  for (const entry of fs.readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      const row = parseProcStat(fs.readFileSync(`/proc/${entry}/stat`, 'utf8'));
+      if (row) rows.push(row);
+    } catch {
+      // the process exited between the listing and the read
+    }
+  }
+  if (rows.length === 0) throw new Error('/proc listed no process: it cannot be trusted to prove a loop gone');
+  return rows;
+}
+
+function psSnapshot(sync) {
+  const result = sync('ps', ['-A', '-o', 'pid=,ppid=,stat=,lstart='], { encoding: 'utf8' });
+  if (result.error || result.status !== 0) throw new Error(`ps failed: ${result.error?.message ?? String(result.stderr).trim()}`);
+  const rows = [];
+  for (const line of String(result.stdout).split('\n')) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
+    if (!match || match[3].startsWith('Z')) continue;
+    rows.push({ pid: Number(match[1]), ppid: Number(match[2]), createdAt: Date.parse(match[4]), name: '' });
+  }
+  if (rows.length === 0) throw new Error('ps listed no process: it cannot be trusted to prove a loop gone');
+  return rows;
+}
+
+/** The process table: `[{ pid, ppid, createdAt, name }]`. Throws when it cannot be read: "gone" is never read
+ * from "could not look". */
+export function snapshotProcesses({ platform = process.platform, spawnSync: sync = spawnChildSync } = {}) {
+  if (platform === 'win32') return takeSnapshot({ spawnSync: sync });
+  if (platform === 'linux') return linuxSnapshot();
+  return psSnapshot(sync);
+}
+
+/** Kills each target that is still the process the snapshot saw. Windows: through a handle whose start time is
+ * checked (`killProcesses`). POSIX: a fresh look first, then SIGKILL to each pid that still started then. */
+export function killTargets(targets, { platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill } = {}) {
+  if (platform === 'win32') return killProcesses(targets, { spawnSync: sync });
+  const snapshot = snapshotProcesses({ platform, spawnSync: sync });
+  const outcome = { killed: [], gone: [], running: [] };
+  for (const target of targets) {
+    if (!snapshot.some((entry) => isSame(entry, target))) {
+      outcome.gone.push(target.pid);
+      continue;
+    }
+    try {
+      kill(target.pid, 'SIGKILL');
+      outcome.killed.push(target.pid);
+    } catch {
+      outcome.gone.push(target.pid);
+    }
+  }
+  return outcome;
+}

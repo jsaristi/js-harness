@@ -115,6 +115,26 @@ registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionS
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 ```
 
+### js-harness loop
+
+Runs a session's long background loops (the orchestrator's heartbeat, its channel watch, a merge
+keeper) under an owner record, so two sessions never stop each other's loops. `run` keeps the
+command in the foreground of a background task, so its end still wakes the session, and records the
+owner session, its own process and the command's by pid and creation time, the purpose and what
+ends it. `stop` refuses a live loop another session owns unless `--take-over`, and exits 0 only when
+a second look at the process table finds none of its processes left. `heartbeat` and
+`channel-watch` are bodies for `run`.
+
+```console
+$ js-harness loop run heartbeat --purpose "wake the lead on a stall" --until "30 min with no gate or channel write" -- js-harness loop heartbeat
+js-harness loop: heartbeat runs (pid 60332, command pid 65396), owned by 053e19d7: wake the lead on a stall; until 30 min with no gate or channel write. Stop it with js-harness loop stop heartbeat
+$ js-harness loop status
+heartbeat  alive  053e19d7  pid 60332  since 05:17  wake the lead on a stall — until 30 min with no gate or channel write
+$ js-harness loop stop heartbeat        # from another session
+js-harness loop: heartbeat is owned by 053e19d7, not by 220663e4 (pid 60332, since 05:17: wake the lead on a stall); nothing was stopped. Give --take-over only when that session is told and the loop is to be yours
+$ js-harness loop stop heartbeat        # from its owner
+js-harness loop: stopped heartbeat: 2 processes, none left (looked at 05:18)
+```
 ### js-harness sync
 
 Inside a project, moves it to the version its `harness.json` pins. With `--global`, or outside a
