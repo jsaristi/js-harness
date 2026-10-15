@@ -2283,7 +2283,10 @@ test('roleNamed reads the role an --address asks for: the orchestrator by either
 const C = 'cccccccc-3333-4333-8333-333333333333';
 const D = 'dddddddd-4444-4444-8444-444444444444';
 const member = (id, title, seconds, more = {}) => ({ id, title, titleSource: 'custom-title', state: 'waiting', lastEntryAt: before(seconds), cwd: 'D:\\proj', gitBranch: 'main', permissionMode: 'bypassPermissions', work: [], tail: [], ...more });
-const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], record: null, ...more });
+const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], record: null, opened: 'unknown', where: 'unknown', effort: null, ...more });
+// The app's records (`appSessions`), by the transcript's id: one in Routines for a scheduled task, one in Sessions.
+const inRoutines = (more = {}) => ({ where: 'routines', effort: null, scheduledTaskId: 'task-1', archived: false, title: null, ...more });
+const inSessions = (more = {}) => ({ where: 'sessions', effort: null, scheduledTaskId: null, archived: false, title: null, ...more });
 
 test('rosterOf gives one row per title, with its role, what it is for, its mode, where it works and when it last wrote', () => {
   const roster = lib.rosterOf([member(A, 'JH 2 · the board', 60, { permissionMode: 'auto', cwd: 'C:\\elsewhere', gitBranch: 'feat/x' }), member(B, 'JH ORQ · proj', 600)]);
@@ -2296,6 +2299,51 @@ test('rosterOf gives one row per title, with its role, what it is for, its mode,
     outside: 0,
   });
   assert.deepEqual(lib.rosterOf([]), { rows: [], unread: 0, outside: 0 });
+});
+
+test('rosterOf opened: the earliest member that is not unknown, else scheduled when a member\'s app record names a task, else unknown', () => {
+  const opened = (sessions, app = new Map()) => lib.rosterOf(sessions, { app }).rows[0].opened;
+  const latest = member(A, 'JH 2 · the board', 60, { opened: 'session' });
+  assert.equal(opened([latest, member(B, 'JH 2 · the board', 7200, { opened: 'his' })]), 'his', 'the earliest one, not the latest');
+  assert.equal(opened([latest, member(B, 'JH 2 · the board', 7200, { opened: 'unknown' })]), 'session', 'an earlier unknown is passed over');
+  assert.equal(opened([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inRoutines()]])), 'scheduled', 'a scheduled task in the app record');
+  assert.equal(opened([latest, member(B, 'JH 2 · the board', 7200, { opened: 'unknown' })], new Map([[B, inRoutines()]])), 'session', 'an opener read from the transcript is not overruled by the record');
+  assert.equal(opened([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inSessions()]])), 'unknown', 'a record with no task is not a scheduled session');
+  assert.equal(opened([member(A, 'JH 2 · the board', 60)]), 'unknown', 'a member with no opener and no record says unknown');
+});
+
+test('rosterOf where: the app record of the latest member that has one, else not-in-app for a command, else unknown', () => {
+  const where = (sessions, app = new Map()) => lib.rosterOf(sessions, { app }).rows[0].where;
+  const latest = member(A, 'JH 2 · the board', 60, { opened: 'session' });
+  const older = member(B, 'JH 2 · the board', 7200, { opened: 'his' });
+  assert.equal(where([latest, older], new Map([[B, inSessions({ where: 'archived', archived: true })]])), 'archived', 'the record of the one member that has one');
+  assert.equal(where([latest, older], new Map([[A, inRoutines()], [B, inSessions()]])), 'routines', 'the record of the latest member that has one');
+  assert.equal(where([member(A, 'JH 2 · the board', 60, { opened: 'command' })]), 'not-in-app', 'a command with no record is not in the app');
+  assert.equal(where([member(A, 'JH 2 · the board', 60, { opened: 'command' })], new Map([[A, inSessions()]])), 'sessions', 'a command with a record says where the record does');
+  assert.equal(where([latest]), 'unknown', 'a session he opened with no record says unknown');
+});
+
+test('rosterOf effort: the latest member\'s effort that is a string, else the app record\'s, else null', () => {
+  const effort = (sessions, app = new Map()) => lib.rosterOf(sessions, { app }).rows[0].effort;
+  assert.equal(effort([member(A, 'JH 2 · the board', 60, { effort: 'high' }), member(B, 'JH 2 · the board', 600, { effort: 'low' })]), 'high', 'the latest');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60, { effort: null }), member(B, 'JH 2 · the board', 600, { effort: 'low' })]), 'low', 'an older one counts when the latest records none');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60)], new Map([[A, inRoutines({ effort: 'medium' })]])), 'medium', 'the app record when no member records one');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60, { effort: 'high' })], new Map([[A, inRoutines({ effort: 'low' })]])), 'high', 'the transcript before the app record');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60)]), null, 'none says null');
+});
+
+test('the roster line after the mode line says how a row was opened and where it is, marks what is not in his sidebar, and marks an effort below high', () => {
+  // The line is the fourth of a row's: the header, the mode line (unchanged), then this one.
+  const opener = (sessions, app) => rosterSection(sessions, { app })[3];
+  const mode = 'bypassPermissions';
+  assert.equal(rosterSection([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], { app: new Map([[A, inSessions({ effort: 'high' })]]) })[2], `    mode ${mode}  folder D:\\proj  branch main  transcript aaaaaaaa`, 'the mode line is unchanged');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], new Map([[A, inSessions({ effort: 'high' })]])), '    opened by him  in Sessions  effort high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'low' })], new Map([[A, inSessions({ effort: 'low' })]])), '    opened by him  in Sessions  effort low', 'an effort below high is not marked for his own session');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inRoutines({ effort: 'medium' })]])), '    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR  effort below high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'command', effort: 'low' })]), '    opened by a command  not in the app  effort low  NOT IN HIS SIDEBAR  effort below high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'session', effort: 'medium' })], new Map([[A, inSessions({ effort: 'medium' })]])), '    opened by a session  in Sessions  effort medium  effort below high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], new Map([[A, inSessions({ where: 'archived', archived: true, effort: 'high' })]])), '    opened by him  archived  effort high', 'archived is not marked');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60)]), '    opened unknown  where unknown  effort unknown');
 });
 
 // The app appends entries with no time to a transcript it opens (`cost-state`, seen on 2026-10-11 in two
@@ -2412,15 +2460,20 @@ test('renderBoard prints the roster after the sessions: a row per title with its
     'Roster',
     '  orchestrator  JH ORQ · proj  silent since 10m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript aaaaaaaa',
+    '    opened unknown  where unknown  effort unknown',
     '  work 2  JH 2 · the board  this session, last entry 5s ago',
     // `folder`, as the entries record it, and not `worktree`: a session that reaches one by `cd` records another.
     '    mode auto  folder D:\\proj-worktrees\\board  branch feat/board  feature session-board  transcripts bbbbbbbb (5s ago), cccccccc (2h 05m ago)',
+    '    opened unknown  where unknown  effort unknown',
     '  no role  fix the review  silent since 1m ago  (it has no title: this is the start of its first prompt)',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript eeeeeeee',
+    '    opened unknown  where unknown  effort unknown',
     '  no role  Board feature  silent since 3d ago  (its title is not "<code> <role> · <what it does>")',
     '    mode unknown  folder unknown  branch unknown  transcript dddddddd',
+    '    opened unknown  where unknown  effort unknown',
     '  no role  (no title)  silent, no entry of it has a time  (it has no title)',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript ffffffff',
+    '    opened unknown  where unknown  effort unknown',
     '  1 transcript that could not be read is in no row',
     `  ${lib.ROSTER_NOT_KNOWN}`,
   ]);
@@ -2902,18 +2955,23 @@ test('renderBoard: a row of the roster says what the record says of its session,
   assert.deepEqual(section.slice(1, -1), [
     '  orchestrator  JH ORQ · proj  relieved 30m ago, last entry 1m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript aaaaaaaa',
+    '    opened unknown  where unknown  effort unknown',
     '    record: relieved 30m ago: JH ORQ nueva · proj has the role now  notices written from D:\\proj on main',
     '  work 2  JH 2 · the board  this session, closed 10m ago, last entry 2m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript bbbbbbbb',
+    '    opened unknown  where unknown  effort unknown',
     '    record: closed 10m ago: delivered  notices written from D:\\proj-worktrees\\board on feat/board',
     '  work 3  JH 3 · the lock  silent since 3m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript cccccccc',
+    '    opened unknown  where unknown  effort unknown',
     `    record: waiting since 11m ago: on the gate of JH 2 ${'z'.repeat(139)}…  notices written from D:\\proj-worktrees\\lock, no branch read`,
     '  work 4  JH 4 · the roster  closed 1h 00m ago, last entry 4m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript dddddddd',
+    '    opened unknown  where unknown  effort unknown',
     '    record: closed 1h 00m ago: delivered; nothing more goes to this session',
     '  work 6  JH 6 · from the phone  silent since 30s ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript eeeeeeee  title from the opening it read',
+    '    opened unknown  where unknown  effort unknown',
   ]);
   assert.match(lib.ROSTER_NOT_KNOWN, /one session the app restarted or several sessions under one title/);
   assert.match(lib.ROSTER_NOT_KNOWN, /unless a notice of the session says it/);

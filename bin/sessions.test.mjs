@@ -1345,6 +1345,24 @@ function writeRoster(machine) {
   writeTitled(machine, SESSION_C, 'JH ORQ · long ago', 13 * 3600);
 }
 
+test('the board says how a scheduled session was opened, where it sits and its effort, and that it is not in his sidebar', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
+  const routines = new Map([[SESSION_E, { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null }]]);
+  const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => routines });
+  assert.equal(code, 0, stderr);
+  const lines = stdout.split('\n');
+  const opener = lines.indexOf('    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR  effort below high');
+  assert.notEqual(opener, -1, stdout);
+  assert.equal(lines[opener - 1], '    mode bypassPermissions  folder C:\\proj  branch main  transcript eeeeeeee');
+}));
+
+test('the board reads no app record when the reader fails: the row says unknown, and the board still prints', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
+  const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => { throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); } });
+  assert.equal(code, 0, stderr);
+  assert.ok(stdout.split('\n').includes('    opened unknown  where unknown  effort unknown'), stdout);
+}));
+
 test('the board has a roster after the sessions: a row per title with its role, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   writeAt(path.join(machine.worktree, 'odd', 'tasks', 'board.md'), BOARD_PLAN, 300);
@@ -1354,8 +1372,10 @@ test('the board has a roster after the sessions: a row per title with its role, 
     'Roster',
     `  orchestrator  ${ORCHESTRATOR}  silent since 10m ago`,
     '    mode bypassPermissions  folder C:\\proj  branch main  transcript aaaaaaaa',
+    '    opened unknown  where unknown  effort unknown',
     `  work 5  ${WORKER}  this session, last entry 1m ago`,
     `    mode auto  folder ${machine.worktree}  branch feat/board  feature board  transcript bbbbbbbb`,
+    '    opened unknown  where unknown  effort unknown',
     `  ${ROSTER_NOT_KNOWN}`,
     '',
   ]);
