@@ -95,7 +95,7 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 | T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
 | T3c | S6 | inline | done, `bfb64df`; its range recorded as a refused second recheck (L10) | `assertUntraced` in `bin/lib/trace-reads.test.mjs` accepts the hooks fallback for every reason it asserts (the marker of the clock is set before that fallback, so it holds as it is). No RED: this node has the hooks, and a half simulation would not be the node it stands for; GREEN 13/13. | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
 | T3d | S6 | inline | done, committed after T3c (`bfb64df`) in the gate turn of its own commit, reviewed by Codex from `bfb64df` | L9: the citations test made deterministic (fixed commit dates; no RED: the flake is one run in 27, three runs green) and the shadow's results a folder with a file per test file (RED then GREEN) |
-| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; T4a and T4b done (`e0af24e`, L14), T4c delegated; the switch waits for 30 | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
+| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; T4a and T4b done (`e0af24e`, L14), T4c done (PR 187); the CI run stays whole (`3299a2b`, L18); switched on at 65 of 30 (L19); pending: gate time and wait after the flip, from the gate log | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
 - **L1** (2026-10-14): S1 to S4, verbatim. The lead's order of the queue puts this after Codex out of the
@@ -259,6 +259,13 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   `CI` at their top, since the suite itself runs on CI. Files alone: `check-shadow` 14/14,
   `check-exact-tests` 10/10, `check-test-concurrency` 4/4, `check-shadow-wsl` 4/4. Then the flip,
   `harness.json` `"exactTests": "skip"`, in its own commit.
+- **L19** (2026-10-15 08:30): the flip, `harness.json` `"exactTests": "skip"`. S6's count read from the gate log
+  (`log.1.jsonl`, `log.jsonl`): 103 gates in shadow from 00:28Z to 13:29Z, 87 that would have skipped a file
+  (median 73 percent of the files, 36 to 81); 2 saw a file selection would have skipped fail (00:56Z:
+  `bin/check-citations.test.mjs`, `bin/lib/test-run-warning.test.mjs`; 06:58Z: `evals/suite.test.mjs`, a
+  known flake now in `docs/FLAKY.md`); since 06:58Z, 65 counting gates in a row, all clean (S6 asks 30; the
+  row said 67 of 30 at `3299a2b`). Still open in T4: the gate time and wait after the flip, against the
+  before of L11, from the gate log once skip gates have run.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
