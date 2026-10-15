@@ -1647,7 +1647,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (found by Codex in `21686a5`, second priority): today a fence under an item that opens
     within three spaces and closes deeper is left open, and with the option off a checkbox
     shown in a fence indented past three spaces is counted as a step by `js-harness progress`
-  - [ ] T3f A level of the register for a failure with no control, measured: a failure whose
+  - [x] T3f A level of the register for a failure with no control, measured: a failure whose
     control was measured as not worth building keeps a state of its own, not "owed". The
     lead's call of 2026-10-15 at 08:37, relayed by JH 15's notice of 08:44: `checked-not-read`
     and `told-him-unverified` keep `Control: owed`, pointing at an unchecked task of
@@ -1655,7 +1655,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     until the register has this level, "which is yours to add". Designed under "A failure with
     no control, measured (T3f)"; built test first as draft pull request 219
     (`feat/register-measured`, 43b395f): gate green, gentle-ai medium not due, Codex correct
-    (0.88), no findings, 151,069 input tokens, recorded. Checked off when it lands
+    (0.88), no findings, 151,069 input tokens, recorded. Landed: merged 2026-10-15T15:37:10Z by gh, 43b395f on main; JH 15 told
 - Moved on 2026-10-14 to "JH 12 · comandos y diagnóstico", by the lead's message to this
   session; their state is kept in `odd/tasks/commands-and-doctor.md`, and only there: T4 (every
   command that writes outside the repository refuses a flag it does not know; and the push row
