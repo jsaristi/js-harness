@@ -736,6 +736,20 @@ test('prepare ignores the system git config: one a commit would honour does not 
   }
 });
 
+test('the fixture commit starts no git maintenance: nothing of it writes in the workspace once prepare has returned', () => {
+  // A commit runs `git maintenance run --auto --detach`, which writes in .git/objects after the commit has
+  // ended (measured on git 2.53: 20 of 20 times, 0 of 20 with maintenance.auto=false). A trial that stops in
+  // prepare removes its workspace at once, and a writer still in it races that removal: the flaky failure
+  // eval-missing-login-workroot-kept (docs/FAILURES.md). GIT_TRACE names every command git starts.
+  const trace = path.join(tmp('trace'), 'git-trace.txt');
+  const workspace = tmp('ws');
+  writeFixtureFiles(workspace);
+  prepareSandbox({ home: path.join(tmp('maintenance'), 'home'), workspace, env: { GIT_TRACE: trace }, engramPort: PORT });
+  const lines = fs.readFileSync(trace, 'utf8').split(/\r?\n/);
+  assert.ok(lines.some((line) => /built-in: git .*commit/.test(line)), 'the trace holds the fixture commit');
+  assert.deepEqual(lines.filter((line) => /maintenance|\bgc\b/.test(line)), [], 'no maintenance and no gc is started');
+});
+
 test('the agent keeps the system git config: GIT_CONFIG_NOSYSTEM is set for the fixture commit only, never in the sandbox env', () => {
   assert.ok(!SANDBOX_ALLOWLIST.includes('GIT_CONFIG_NOSYSTEM'));
   // What the agent gets is the effective child env, so that is what is asserted: `sandboxEnv` lists an

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { selectTests, testFilesOf } from './select-tests.mjs';
+import { flakyTestsOf, selectTests, testFilesOf } from './select-tests.mjs';
 import { TRACE_PRELOAD, TRACER_VERSION, hashOf, traceEnvOf } from './trace-reads.mjs';
 
 // The selection of exact test selection (odd/tasks/exact-tests.md, T2): which test files a gate runs, from
@@ -98,6 +98,31 @@ test('a test with an untraced pass among its stored traces runs, whichever pass 
     const asked = selectTests({ tests: ['a.test.mjs'], readTraces: () => order, stateOf: (key) => now[key] ?? 'absent' });
     assert.deepEqual(asked.skipped, []);
     assert.equal(asked.why.get('a.test.mjs'), 'untraced: it opens a network connection');
+  }
+});
+
+// T4 (exact-tests.md L14): a test the flaky ledger names is never skipped, so a known flake neither hides its
+// failure nor counts as one selection would have skipped (the result memory's S1, "tagged nondeterministic
+// tests never cached").
+test('a test the flaky ledger names runs though its trace matches, and says why', () => {
+  const now = { 'a.test.mjs': 'h-a', 'b.test.mjs': 'h-b' };
+  const traces = [traceOf('a.test.mjs', { 'a.test.mjs': 'h-a' }), traceOf('b.test.mjs', { 'b.test.mjs': 'h-b' })];
+  const byTest = new Map(traces.map((one) => [one.test, one]));
+  const chosen = selectTests({ tests: ['a.test.mjs', 'b.test.mjs'], readTrace: (one) => byTest.get(one) ?? null, stateOf: (key) => now[key] ?? 'absent', flaky: new Set(['a.test.mjs']) });
+  assert.deepEqual(chosen.skipped, ['b.test.mjs']);
+  assert.deepEqual(chosen.run, ['a.test.mjs']);
+  assert.equal(chosen.why.get('a.test.mjs'), 'named in docs/FLAKY.md, the flaky ledger');
+});
+
+test('the flaky ledger names its test files by its "### <file>" headings, expired or not; no ledger names none', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-flaky-'));
+  try {
+    assert.deepEqual([...flakyTestsOf(dir)], []);
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '# Flaky tests\n\nText with ### inside a line.\n\n### evals/suite.test.mjs\n- Owner: JH 10\n- Expires: 2026-10-22\n- Failure: x\n\n### bin/old.test.mjs \r\n- Expires: 2020-01-01\n');
+    assert.deepEqual([...flakyTestsOf(dir)].sort(), ['bin/old.test.mjs', 'evals/suite.test.mjs']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

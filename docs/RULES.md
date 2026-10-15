@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `f15940b13531`. In force: 24 (14 of Sebastián, 10 of the project). Retired: 0.
+Hash `74811fa90454`. In force: 29 (14 of Sebastián, 15 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -106,9 +106,24 @@ The shortest phrase by which a control or a rule in prose is found in its file: 
 - Read by: `bin/lib/failures.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
 
+### gate-log-command
+The longest command a line of the gate log holds, since what follows gate -- can hold a secret: 120 characters.
+- Read by: `bin/lib/gate-log.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-log.md`.
+
+### gate-log-size
+The size past which the gate log is renamed over its older file, so the log stays near a megabyte: 512 KiB.
+- Read by: `bin/lib/gate-log.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-log.md`.
+
+### gate-max
+How long a command run under the gate lock may run before it is stopped with every process it started: 30 minutes. The flag `--max` overrides it for one run.
+- Read by: `bin/gate.mjs`, `bin/js-harness.mjs`, `bin/lib/manifest.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-turn-guards.md`.
+
 ### gate-wait
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
-- Read by: `bin/lib/gate-lock.mjs`.
+- Read by: `bin/js-harness.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
 
 ### person-present
@@ -140,6 +155,16 @@ How long a Codex review may run before it is stopped as stalled: 30 minutes.
 How long one sensor of the gate may run before it is stopped and the commit refused: 20 minutes.
 - Read by: `bin/check.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `odd/tasks/remote-control.md`.
+
+### wait-every
+How often js-harness wait checks its condition, unless --every says otherwise: 120 seconds. The flag `--every` overrides it for one run.
+- Read by: `bin/lib/manifest.mjs`, `bin/wait.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/session-channel.md`.
+
+### wait-for
+How long js-harness wait waits before it says the time ran out, unless --for says otherwise: 480 minutes. The flag `--for` overrides it for one run.
+- Read by: `bin/lib/manifest.mjs`, `bin/wait.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/session-channel.md`.
 
 ## Retired
 

@@ -9,5 +9,5 @@
   },
   "sameTree": "skip",
   "sensorsInWsl": true,
-  "exactTests": "shadow"
+  "exactTests": "skip"
 }

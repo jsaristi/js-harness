@@ -95,7 +95,7 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 | T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
 | T3c | S6 | inline | done, `bfb64df`; its range recorded as a refused second recheck (L10) | `assertUntraced` in `bin/lib/trace-reads.test.mjs` accepts the hooks fallback for every reason it asserts (the marker of the clock is set before that fallback, so it holds as it is). No RED: this node has the hooks, and a half simulation would not be the node it stands for; GREEN 13/13. | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
 | T3d | S6 | inline | done, committed after T3c (`bfb64df`) in the gate turn of its own commit, reviewed by Codex from `bfb64df` | L9: the citations test made deterministic (fixed commit dates; no RED: the flake is one run in 27, three runs green) and the shadow's results a folder with a file per test file (RED then GREEN) |
-| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; after waits for S6's count | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
+| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; T4a and T4b done (`e0af24e`, L14), T4c done (PR 187); the CI run stays whole (`3299a2b`, L18); switched on at 65 of 30 (L19); after measured (L20 to L22): nine skip gates, median 184 s in the tests sensor, 109 s at best, the floor of the 28 files that always run; the tracer costs nothing visible; check.test.mjs left untraced (19 s at most, L21) | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
 - **L1** (2026-10-14): S1 to S4, verbatim. The lead's order of the queue puts this after Codex out of the
@@ -193,6 +193,118 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   `failedOfSkipped` empty. PR 163 merged at 19:58 with `fbff1a2`; the three commits after it went in as
   PR 164 (merged 20:19). Next, from the same plan: step 4 (CI `node --test` with `--test-concurrency=2`),
   then step 2 (a result memory shared by the worktrees, keyed per S5).
+- **L13** (2026-10-15 02:58, T4 resumed by the lead's order: "the top priority now"): S6's count, read from
+  the gate log (`~/.js-harness/gate-log/log.1.jsonl` and `log.jsonl`, every end line whose tests row has a
+  shadow; 00:28Z to 07:53Z, all after the result memory shared the traces): 47 gates with a shadow, 31 with
+  `wouldSkip` above 0 (a median of 75 percent of the files), 29 of them clean and 2 with a skipped file
+  that failed. 00:56Z: `bin/check-citations.test.mjs`, a real clock dependency through git's commit dates
+  (fixed by fixed dates, PR 164), and `bin/lib/test-run-warning.test.mjs`, a results line lost by the counter
+  itself (fixed by a results file per test). 06:58Z: `evals/suite.test.mjs`, the machine flake
+  `eval-interrupt-process-alive` of `docs/FAILURES.md`, in a change that touched no eval. Since the last of
+  them, 9 counting gates, all clean. Read literally, S6 is not met (2 of 31 failed); its seam tests exist
+  (`bin/lib/trace-reads.test.mjs`). Asked of the lead: count from the last failing gate (21 to go) with the
+  skip never applied to a test the flaky ledger (JH 10, step 5) tags, per the result memory's S1 ("tagged
+  nondeterministic tests never cached"), or leave known flakes out of the count. Next: the lead's answer.
+- **L14** (2026-10-15 03:39, the lead's answer, verbatim): "your reading, adopted. It keeps S6 literal and is
+  stricter: 30 consecutive counting gates with no failing skipped test, counted from the last failure (9
+  now), and the skip never applies to a test the flaky ledger tags (result-memory S1's rule carried over).
+  No known flake is left out of the count. Meanwhile, build T4's switch so it is ready to flip, test first:
+  the skip path, the ledger exclusion read from JH 10's ledger [...], and a check row that says the running
+  count. The flip itself happens only when the count reaches 30, with the gate-log numbers in the PR body."
+  The ledger's format is JH 10's (branch `feat/flaky-ledger`): `docs/FLAKY.md`, one `### <test file>`
+  heading per entry; T4 reads the headings alone, expired or not. Done, RED then GREEN each, in `e0af24e`:
+  T4b, `selectTests` takes `flaky` and `flakyTestsOf(root)` reads the headings, the shadow passes them, so a
+  named file is never a would-skip (`bin/lib/select-tests.test.mjs` 11/11, `bin/check-shadow.test.mjs` 4/4);
+  T4a, `s6Count(events)` and the `exact tests` row (`checkExactCount`, informs only;
+  `bin/check-exact-tests.test.mjs` 6/6). That commit's own gate: "S6: 16 of 30 gates in a row would have
+  skipped a test file and saw none of those fail, since the gate of 2026-10-15 01:58 where
+  evals/suite.test.mjs failed". Next: T4c, the skip path behind `"exactTests": "skip"`, harness.json left at
+  `"shadow"`, given to a bounded writer (route: delegated, the long-session backstop) with the decisions of
+  its brief: a `skip` field on the row and the end line and never `shadow`, the whole suite for `full`, for
+  a path outside `[A-Za-z0-9._/-]` or a command over 7000 characters and for a WSL fallback; an empty run
+  passes; a passing skip gate still writes the tree key. The flip is a later pull request at 30.
+- **L15** (2026-10-15 03:58): T4c written by the writer, RED then GREEN per decision (its report): one
+  helper `testsCommandLine` builds the command with the concurrency and the files; `skipPlan` runs the whole
+  suite for `full`, a path outside `[A-Za-z0-9._/-]`, a command over 7000 characters, no test file, or a WSL2
+  selection that could not be asked; an empty run passes with nothing spawned (in WSL2 it says `ranIn: 'wsl'`,
+  so the tree key, whose traces are WSL2's, is still written); a WSL2 fallback runs the whole suite untraced;
+  the row and the end line carry `skip: { files, skipped }` and never `shadow`; in skip mode the `exact tests`
+  row says the count stopped. Added after its report: a path that starts with a dash runs the whole suite
+  (node would read it as an option), RED then GREEN. Files alone: `check-exact-tests` 10/10, `check-shadow`
+  10/10, `check-shadow-wsl` 4/4, `check-test-concurrency` 4/4, `gate-wsl-trace` 3/3, `select-tests` 11/11,
+  `check.test.mjs` 205/205 (the writer's run). harness.json stays `"shadow"`.
+- **L16** (2026-10-15 04:18): Codex `859b0bd..74e2734` (585,739 input tokens, inside 638,400): part 1
+  correct, part 2 incorrect, one P2: an npm suite with a pretest or posttest script ran nothing when no file
+  was left, so those scripts, which no trace proves, never ran. Corrected alone: that case runs the whole
+  suite (`bin/check-shadow.test.mjs`, RED then GREEN 11/11). gentle-ai raised to high (item 5); its bound
+  STATUS timed out twice under load. Next: Codex recheck from `74e2734`, one more STATUS, the PR.
+- **L17** (2026-10-15, after batch 2): PR 187 conflicted with main in `bin/check.mjs`, against the flaky
+  ledger (PR 197): the select-tests import, and the end of a gate, where the ledger's `quarantined` and
+  `failing` lines sit next to this branch's `skip` field of `record?.end`. Moving the change away was not
+  clean (the record line is adjacent to the ledger's `failing` line, so any edit there conflicts), and
+  `codex-review` reviews a merge's resolution alone, so main `eec4ee3` was merged once, on the lead's word,
+  in `891187d`: a quarantined pass writes no tree key in skip mode either, and the gate log keeps rerun
+  failures and skip counts side by side. Gate green; its `exact tests` row: 50 of 30 since 01:58. Codex
+  `56fa14e..891187d` (the resolution, 21 lines, 112,002 input tokens, inside 300,000): correct, 0.95.
+  gentle-ai: medium, not due (under budget).
+- **L18** (2026-10-15 08:30): PR 187 merged (08:19). The lead, 07:44: "Flip: GO, per S6 ... the count is met
+  (50 of 30, zero failing tests selection would have skipped). Open it as its own PR with its gate, gentle-ai
+  and Codex, quote the count's read in its body and the doc's Log". And 07:45: "The flip must keep the queue's
+  CircleCI candidate run whole (test it), or it waits for A's answer. Say which in the PR." It keeps it whole:
+  CircleCI (`.circleci/config.yml`, `node bin/check.mjs` on a fresh checkout of a `queue/` branch) and GitHub
+  Actions both set `CI`, and in skip mode a gate where `CI` is set and not `false` or `0` (`onCi`) runs the
+  whole suite, traced as in shadow, and the row says so. Test first in `bin/check-shadow.test.mjs`: the first
+  form of the two tests failed (RED, 2 of 13), then 14/14; `CI` is one of the variables a trace keys on (S5),
+  so the wiring test writes its traces under the value it asks with. The four skip-mode test files delete
+  `CI` at their top, since the suite itself runs on CI. Files alone: `check-shadow` 14/14,
+  `check-exact-tests` 10/10, `check-test-concurrency` 4/4, `check-shadow-wsl` 4/4. Then the flip,
+  `harness.json` `"exactTests": "skip"`, in its own commit.
+- **L19** (2026-10-15 08:30): the flip, `harness.json` `"exactTests": "skip"`. S6's count read from the gate log
+  (`log.1.jsonl`, `log.jsonl`): 103 gates in shadow from 00:28Z to 13:29Z, 87 that would have skipped a file
+  (median 73 percent of the files, 36 to 81); 2 saw a file selection would have skipped fail (00:56Z:
+  `bin/check-citations.test.mjs`, `bin/lib/test-run-warning.test.mjs`; 06:58Z: `evals/suite.test.mjs`, a
+  known flake now in `docs/FLAKY.md`); since 06:58Z, 65 counting gates in a row, all clean (S6 asks 30; the
+  row said 67 of 30 at `3299a2b`). Still open in T4: the gate time and wait after the flip, against the
+  before of L11, from the gate log once skip gates have run.
+- **L20** (2026-10-15 10:15): PR 214 merged (09:42). The first measure after, from the gate log: the two skip
+  gates so far took 256 and 253 s from start to end, their tests sensor 248 and 241 s, skipping 111 of 146 and
+  76 of 148 files; the 114 shadow gates of 2026-10-15 took a median 214 s (p90 292 s), their tests sensor 205 s
+  (p90 277 s). So skipping most files has not shortened the gate yet. Why, measured: a TAP run of the whole
+  suite on Windows (8 processors, 1451 s, slower than the gate's WSL2 run, so for the ranking alone) puts the
+  longest tests in `evals/runner.test.mjs` (215 s), `bin/remote.test.mjs` (118 s), `evals/home.test.mjs`
+  (95 s), `evals/suite.test.mjs` (78 s), `evals/ports.test.mjs` (73 s) and `bin/loop.test.mjs` (71 s); and
+  the files selection can never skip are among the heaviest: `bin/check.test.mjs` is untraced ("it runs a
+  shell string that does more than start one command"), as are `evals/home.test.mjs` (a child `lsof`),
+  `evals/ports.test.mjs` (a network connection) and `evals/codex-configs.test.mjs` (it reads the home), and
+  `evals/suite.test.mjs` is in the flaky ledger. Under a concurrency of a few files, the gate lasts about as
+  long as its longest files, which always run. Two samples are few; the measure stays open in T4, and the
+  next step, which files to make provable first (`bin/check.test.mjs` the largest), is asked of the lead.
+- **L21** (2026-10-15 10:58): the lead, 10:30: "make them traceable, starting with bin/check.test.mjs ...
+  First a short diagnosis in the doc ... If the diagnosis shows the gain is small (under ~30 s a gate),
+  stop there and tell me." The diagnosis. What leaves it untraced, by a copy of the tracer that logs every
+  shell string that marks it (`bin/lib/trace-reads.cjs:314`, which keeps only the first): seven call
+  sites on Windows, all `node -e "..."` whose `(`, `)` or `;` sit inside double quotes, two of them chained
+  by `||` (lines 652 and 854); in WSL2 also the `node child.js &` of line 511. Those tests take 8 of its
+  294 s on Windows. The gain, timed in WSL2 in this worktree's mirror (8 processors, node v24.15.0, the
+  default concurrency): the 28 files that always run (untraced or in the flaky ledger) 123 s, the same
+  without `bin/check.test.mjs` 104 s, the file alone 52 s. So a traced `bin/check.test.mjs` saves about
+  19 s in a gate where it could be skipped, and 146 of the 283 commits since 2026-10-14 touched a file it
+  reads: about 10 s a gate. Under the lead's 30 s: stopped there. Unexplained and not measured yet: the
+  first skip gates spent 248 and 241 s in their tests sensor, twice the 123 s of those 28 files run here
+  untraced, with only seven more files; the tracer's own cost is the first suspect.
+- **L22** (2026-10-15 11:17): the lead, 11:02: "GO on measuring the tracer's cost, the same 28 files traced
+  and untraced in WSL2 under a gate turn, numbers into T4." In one gate turn, the 28 always-run files in
+  WSL2: untraced 125 s, traced 97 s (29 traces written), untraced again 82 s. Two untraced runs differ by
+  43 s, more than any difference the tracer makes, so its cost does not show: it is not the suspect. What
+  the gate log shows instead, with nine skip gates now (each with the load the gate sampled at its start):
+  the first two, 248 and 241 s, ran on a machine 62 and 84 percent busy; the seven that skipped files
+  spent 109 to 248 s in their tests sensor, median 184 s, and the two that skipped none ran 251 and 291 s.
+  The two that skipped 114 and 116 files took 114 and 109 s, about the 28 always-run files' time: that is
+  the floor selection leaves, and the load of the moment moves a gate more than selection does. JH 15's
+  WSL2 failure of `bin/check.test.mjs` (docs/FAILURES.md, `check-survivor-test-fails`) was its survivor
+  test, killed at the end of the sensor's 2 s pipe grace before a slowed survivor wrote its pid: fixed in
+  the test, on the lead's word, in its own pull request, with no quarantine, since an entry in
+  `docs/FLAKY.md` would keep the file from ever being skipped.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn

@@ -57,7 +57,7 @@ Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the decl
 runs it, so a red check means the commit is not ready yet. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
-repository's GitHub workflow sets 2.
+repository's CircleCI run of the merge queue's candidates sets 2.
 
 When a `node --test` suite fails, the test files it names as failed run once more, alone. A
 file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,
@@ -128,6 +128,26 @@ registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionS
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 ```
 
+### js-harness loop
+
+Runs a session's long background loops (the orchestrator's heartbeat, its channel watch, a merge
+keeper) under an owner record, so two sessions never stop each other's loops. `run` keeps the
+command in the foreground of a background task, so its end still wakes the session, and records the
+owner session, its own process and the command's by pid and creation time, the purpose and what
+ends it. `stop` refuses a live loop another session owns unless `--take-over`, and exits 0 only when
+a second look at the process table finds none of its processes left. `heartbeat` and
+`channel-watch` are bodies for `run`.
+
+```console
+$ js-harness loop run heartbeat --purpose "wake the lead on a stall" --until "30 min with no gate or channel write" -- js-harness loop heartbeat
+js-harness loop: heartbeat runs (pid 60332, command pid 65396), owned by 053e19d7: wake the lead on a stall; until 30 min with no gate or channel write. Stop it with js-harness loop stop heartbeat
+$ js-harness loop status
+heartbeat  alive  053e19d7  pid 60332  since 05:17  wake the lead on a stall — until 30 min with no gate or channel write
+$ js-harness loop stop heartbeat        # from another session
+js-harness loop: heartbeat is owned by 053e19d7, not by 220663e4 (pid 60332, since 05:17: wake the lead on a stall); nothing was stopped. Give --take-over only when that session is told and the loop is to be yours
+$ js-harness loop stop heartbeat        # from its owner
+js-harness loop: stopped heartbeat: 2 processes, none left (looked at 05:18)
+```
 ### js-harness sync
 
 Inside a project, moves it to the version its `harness.json` pins. With `--global`, or outside a
@@ -308,30 +328,15 @@ Left out of the review: 5 Markdown documents, 818 changed lines.
 Allowance of this plan: 872,400 input tokens, the larger of 300,000 a review and 1,200 a changed line, for the 727 changed lines it reads. Its estimate, about 470,000, is inside it. …
 ```
 
-### js-harness merge-ready
-
-Says whether a pull request may be merged on its GitHub run, and merges nothing: open, not a
-draft, mergeable, on main, a gentle-ai line in its body, the latest run of its head green, and
-the base that run tested (from its checkout log) is today's main, or behind it only by documents
-with a clean merge. Exit 0 ready, 3 stale, 4 run missing, pending or red, 1 otherwise. A stale
-pull request gets a fresh run by closing and reopening it, once GitHub has recomputed its merge
-against main, which it says. One that conflicts with main is told the files, and to move its own
-change out of them in a small commit before merging main: a clean merge costs no review of its own.
-
-```console
-$ js-harness merge-ready 137
-PR 137: run 38632863631 tested base 028d658; main c0364f8 has moved since by 6 paths that are not documents (bin/check.mjs, bin/check.test.mjs, evals/arms.mjs, ...): stale.
-PR 137: refs/pull/137/merge still has 028d658 as its first parent, not main c0364f8: wait before reopening.
-```
-
 ### js-harness merge-queue
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in
-order of number, and names each one it leaves out and why. Ready means what `merge-ready` checks
-of the pull request itself, a Codex review record for every code commit, and no conflict with the
-candidate so far. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+order of number, and names each one it leaves out and why. Ready means the pull request is open,
+not a draft, mergeable, on main and with a gentle-ai line in its body, has a Codex review record for
+every code commit, and merges into the candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
 green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+That CircleCI run is the repository's only CI run: no GitHub workflow runs for a pull request.
 A candidate red on this machine is bisected: the pull request that turns it red is left out and
 named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
@@ -377,11 +382,32 @@ The board of the project's recent Claude Code sessions: each one's state, contex
 last reply, the worktrees and their feature plans, the running gates and the open pull
 requests. It only reads. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
-<transcript> <line>` prints one message the user sent.
+<transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
+the host made, whether the session was told the pause, committed its feature document (the
+orchestrator may write a line in its relief file instead) and announced the compaction, and how
+many compactions miss one of those facts. Under each roster row's
+mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
+and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
 
 ```console
 $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
+```
+
+### js-harness unseen
+
+What the desktop app opened for this project out of his sidebar: an enabled scheduled task whose
+folder is this project (the app runs it in Routines), and a session a schedule opened that sits in
+Routines and is not archived. Each one to clear is named as `FAIL`, and the command exits 1. A
+disabled task, a leftover scheduled-task folder, and a session a command opened (`js-harness remote`)
+are `INFO`. It only reads; `doctor` reports the same count as its `unseen` row. `--records-only` reads
+the app's session records and no transcript, which is the fast path `doctor` uses at each session start.
+
+```console
+$ js-harness unseen
+FAIL  enabled scheduled task jh-wake runs in D:\my-project: the app opens its sessions in Routines
+INFO  disabled scheduled task jh-old runs in D:\my-project: it opens no session
+unseen: 1 to clear
 ```
 
 ### js-harness memory
@@ -425,6 +451,30 @@ total                                               54   2502      6420288   132
 Their share of the day's tokens: input 19%, cache write 29%, cache read 8%, output 23%
 Read as other: 5; effort or model inherited from the session: 14; call not found: 1; carried over from the day before: 0
 Read in 8.2 s
+```
+
+### js-harness audit
+
+Counts, per session of a day, the two claims a transcript can check by itself, and prints each
+wrong one at its transcript and line: the hour a message to another session stamps in its
+opening, against the hour the entry was sent (more than a minute apart is wrong), and the share
+of its context a session states of itself, against the share its own reply records (more than 2
+points apart is wrong). The share is of the window the session's own last `get_usage` read
+reports, because sessions run on windows of different sizes. It reads the Claude Code records of
+the main checkout and each worktree and prints no text of any message.
+
+```console
+$ js-harness audit
+Audit, local day 2026-10-15 (UTC-05:00), 4 record folders: the hours messages stamp and the context shares sessions state, each against its transcript
+session   title                                    messages  stamped  wrong hour  shares  wrong share
+2ec5f55e  JH 15 · auditoría de honestidad                 7        1           0       8            4
+d3ecd893  JH 8 · turno y corte temprano del gate         11        3           0      10            2
+f7f03a7e  JH 10 · comprobación en GitHub                 29        0           0       4            0
+total                                                   367        7           0      84           40
+Wrong shares, more than 2 points from the share the reply records (transcript:line):
+  2ec5f55e-e2da-493b-8819-43b3c57394be:4725  stated 50%, recorded 64%
+  d3ecd893-952c-4591-a356-73f605c9fc90:15014  stated 36%, recorded 39%
+Read in 13.7 s
 ```
 
 ### js-harness notify
@@ -510,12 +560,23 @@ Find there the document of the feature this session was working on, read its "Ne
 
 The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
 `PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
-session and on `Bash`. `guard --hook` reads the call on standard input and refuses four things:
-a sub-agent launched on a model the project's rules do not give; a message whose stamped hour is
-more than a minute off the clock; a shell command with backticks inside double quotes, which
-bash runs as commands; and a `node --test` of several files outside a gate turn while another
-gate holds the machine's lock. A refusal is printed as the hook's deny, with the reason and the
-right value; any other call runs as it was.
+session, on `Bash`, and on `Write` and `Edit`. `guard --hook` reads the call on standard input
+and refuses six things: a sub-agent launched on a model the project's rules do not give; a
+message whose stamped hour is more than a minute off the clock; a shell command with backticks
+inside double quotes, which bash runs as commands; a `node --test` of several files outside a
+gate turn while another gate holds the machine's lock; and a `Write` or `Edit` that puts a line
+over 150 characters, the host's own limit, in a project's memory index
+(`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
+which every session reads on every turn; and a `Write` or `Edit` of a Markdown file that brings a
+line stamping today's date with an hour more than a minute ahead of the clock, where the line
+opens with the date or the date follows "written" (`- 2026-10-14 14:50 — T3 done.` written at
+14:44). A document also records earlier events, so an hour behind the clock passes; an `Edit` is
+judged by the lines of the file it leaves that were not already there. A
+refusal is printed as the hook's deny, with the reason and the right value; any other call runs
+as it was. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a
+Markdown file the hour check besides. An `Edit` is
+judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
+line that was already long there is left to the memory hygiene pass rather than blocking the edit.
 
 It always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
 The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project

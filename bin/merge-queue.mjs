@@ -9,13 +9,14 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkCodexReviews } from './check.mjs';
-import { pullRequestProblems } from './lib/merge-ready.mjs';
+import { pullRequestProblems } from './lib/pull-request.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
 number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
-review record for every code commit, and no conflict with the candidate so far. It names each pull
+review record for every code commit, and no conflict with the candidate so far. A pull request GitHub
+has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
 request it leaves out and why.
 
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
@@ -24,7 +25,9 @@ of a queue/* branch pushed for it and removed after. When both are green, main i
 candidate, by fast-forward from the main it was built from. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. Exit 0 landed or nothing to land, 4 red, 3 main
-moved meanwhile (nothing pushed), 1 anything else.`;
+moved meanwhile (nothing pushed), 1 anything else.
+A landed pull request whose branch moved during the land is named after the landing: its new commits
+are not in main, so it needs another run of the queue.`;
 
 const TIMEOUT_MS = 60_000;
 
@@ -192,6 +195,18 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
     }
   }
   stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
+  // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
+  // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
+  const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
+  if (!refs.ok) {
+    stdout(`Could not read the heads of the landed pull requests (${refs.err.split('\n')[0] || 'git gave no reason'}): check none moved during the land.`);
+    return 0;
+  }
+  const heads = new Map(refs.out.split('\n').filter(Boolean).map((line) => line.split('\t').reverse()));
+  for (const pr of merged) {
+    const head = heads.get(`refs/heads/${pr.headRefName}`);
+    if (head && head !== pr.headRefOid) stdout(`PR ${pr.number} moved to ${head.slice(0, 7)} during the land; its new commits are not in main.`);
+  }
   return 0;
 }
 
@@ -227,7 +242,9 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
   // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later.
   const candidates = [];
   for (const pr of [...listed].sort((a, b) => a.number - b.number)) {
-    const problems = pullRequestProblems(pr);
+    // UNKNOWN is GitHub not having computed the merge yet, for about a minute after main moves: the merge into
+    // the candidate below is the queue's own test of it, so it decides. CONFLICTING is GitHub's answer.
+    const problems = pullRequestProblems(pr.mergeable === 'UNKNOWN' ? { ...pr, mergeable: 'MERGEABLE' } : pr);
     if (problems.length) {
       stdout(`PR ${pr.number} is left out: ${problems.join(' ')}`);
       continue;

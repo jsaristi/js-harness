@@ -79,6 +79,18 @@
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"
   },
+  "gate-log-command": {
+    "kind": "design",
+    "path": "odd/tasks/gate-log.md"
+  },
+  "gate-log-size": {
+    "kind": "design",
+    "path": "odd/tasks/gate-log.md"
+  },
+  "gate-max": {
+    "kind": "design",
+    "path": "odd/tasks/gate-turn-guards.md"
+  },
   "gate-wait": {
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
@@ -283,6 +295,14 @@
       "date": "2026-10-11",
       "by": "session"
     }
+  },
+  "wait-every": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
+  },
+  "wait-for": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
   },
   "work-sessions": {
     "kind": "words",

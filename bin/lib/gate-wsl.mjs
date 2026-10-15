@@ -82,8 +82,9 @@ export function mirrorName(windowsPath) {
   return `${base}-${hash}`;
 }
 
-/** A text as one word of bash. */
-const word = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
+/** A text as one word of bash. Exported for the files a tests sensor in skip mode runs in the mirror
+ * (odd/tasks/exact-tests.md, T4c): each a word of the command that `runnerScript` quotes again as a whole. */
+export const word = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
 
 /** The script that runs one sensor in WSL2: it syncs the mirror from `source` (a `/mnt` path), prints
  * `SYNCED_MARK`, and runs `command` there with nothing of the caller's environment but a Linux home of

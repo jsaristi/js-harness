@@ -21,7 +21,7 @@ repository, or a failure that docs/FAILURES.md does not hold fails the gate; an 
 Other lines are for people.
 
 ### evals/suite.test.mjs
-- Owner: JH 10
+- Owner: JH 21
 - Expires: 2026-10-22
 - Failure: eval-interrupt-process-alive
 
@@ -30,7 +30,7 @@ fake agent's grandchild still running at the suite's exit, under load. The fix i
 after its kills, a run waits, bounded, until the killed process group is gone.
 
 ### evals/codex-configs.test.mjs
-- Owner: JH 10
+- Owner: JH 21
 - Expires: 2026-10-22
 - Failure: eval-missing-login-workroot-kept
 

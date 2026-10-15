@@ -66,6 +66,31 @@ export const RULES = [
     "unit": "characters"
   },
   {
+    "id": "gate-log-command",
+    "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 120,
+    "unit": "characters"
+  },
+  {
+    "id": "gate-log-size",
+    "subject": "the size past which the gate log is renamed over its older file, so the log stays near a megabyte",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 512,
+    "unit": "KiB"
+  },
+  {
+    "id": "gate-max",
+    "subject": "how long a command run under the gate lock may run before it is stopped with every process it started",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 30,
+    "unit": "minutes",
+    "flag": "--max"
+  },
+  {
     "id": "gate-wait",
     "subject": "how long a gate waits for its turn of the lock before it gives up, by default",
     "owner": "project",
@@ -199,6 +224,24 @@ export const RULES = [
     "since": "2026-10-11",
     "value": "claude-haiku-5-5",
     "alias": "haiku"
+  },
+  {
+    "id": "wait-every",
+    "subject": "how often js-harness wait checks its condition, unless --every says otherwise",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 120,
+    "unit": "seconds",
+    "flag": "--every"
+  },
+  {
+    "id": "wait-for",
+    "subject": "how long js-harness wait waits before it says the time ran out, unless --for says otherwise",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 480,
+    "unit": "minutes",
+    "flag": "--for"
   },
   {
     "id": "work-sessions",

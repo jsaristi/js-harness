@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
-import { appendNotice, findOpenings, newNotice, readNotices, writeOpening } from './lib/channel.mjs';
+import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
+import { measuresTotal } from './lib/measures.mjs';
+import { statePath } from './lib/pause.mjs';
 import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
@@ -177,6 +179,10 @@ const USAGE_ERRORS = [
   ['--opening'], ['--opening', ''], ['--opening', '--json'], ['--opening', 'JH 5', '--json'], ['--opening', 'JH 5', '--watch'], ['--opening', 'JH 5', '--address', '5'], ['--address', '5', '--opening', 'JH 5'],
   ['--quote'], ['--quote', 'aaaaaaaa'], ['--quote', 'aaaaaaaa', '0'], ['--quote', 'aaaaaaaa', 'last'], ['--quote', 'aaaaaaaa', '1.5'], ['--quote', 'aaaaaaaa', '--json'], ['--quote', 'aaaaaaaa', HUGE],
   ['--quote', 'abc', '5'], ['--quote', '', '5'], ['--quote', 'aaaaaaaa', '5', '--json'], ['--quote', 'aaaaaaaa', '5', '--watch'], ['--quote', 'aaaaaaaa', '5', '--opening', 'JH 5'], ['--address', '5', '--quote', 'aaaaaaaa', '5'],
+  // Session channel, T9: --measures prints the measures of the compactions, once: there is nothing in them to
+  // watch, and it is not an address, an opening or a quote either.
+  ['--measures', '--watch'], ['--watch', '--measures'], ['--measures', '--address', '5'], ['--address', 'ORQ', '--measures'], ['--measures', '--opening', 'JH 5'],
+  ['--quote', 'aaaaaaaa', '5', '--measures'],
 ];
 
 /** A usage case as the name of its test says it: its arguments, a long run of digits as its length, so
@@ -216,6 +222,12 @@ test('the usage says what --opening and --quote take, what each prints and what 
   assert.match(usage, /--opening \[--\] "<title>"\|"<code> <role>"[\s\S]*prints the opening stored for that session[\s\S]*records in the channel which session read it[\s\S]*exit 0 for one,\s+1 for none,\s+2 for several or when it cannot tell/);
   assert.match(usage, /--quote <transcript file or session id> <line>[\s\S]*only when the user sent it, with its time[\s\S]*exit 1[\s\S]*another session's message, a task notification, a meta or assistant entry,\s+or no such line[\s\S]*2 when it cannot look/);
   assert.match(usage, /the user's answer to a question the session asked with the host's question tool is the user's too[\s\S]*the question, the options shown and whether they tapped one or typed their own[\s\S]*a question the user closed without answering is exit 1/);
+});
+
+test('the usage says what --measures prints', async () => {
+  const err = [];
+  assert.equal(await sessionsMain(['--measures', '--watch'], { stdout: () => {}, stderr: (line) => err.push(line) }), 2);
+  assert.match(err.join('\n'), /--measures \[--hours <n>\] \[--json\][\s\S]*for each compaction of the transcripts in the window[\s\S]*told[\s\S]*kept[\s\S]*announced/);
 });
 
 // --- where the sessions are ---
@@ -1333,6 +1345,24 @@ function writeRoster(machine) {
   writeTitled(machine, SESSION_C, 'JH ORQ · long ago', 13 * 3600);
 }
 
+test('the board says how a scheduled session was opened, where it sits and its effort, and that it is not in his sidebar', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
+  const routines = new Map([[SESSION_E, { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null }]]);
+  const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => routines });
+  assert.equal(code, 0, stderr);
+  const lines = stdout.split('\n');
+  const opener = lines.indexOf('    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR  effort below high');
+  assert.notEqual(opener, -1, stdout);
+  assert.equal(lines[opener - 1], '    mode bypassPermissions  folder C:\\proj  branch main  transcript eeeeeeee');
+}));
+
+test('the board reads no app record when the reader fails: the row says unknown, and the board still prints', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
+  const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => { throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); } });
+  assert.equal(code, 0, stderr);
+  assert.ok(stdout.split('\n').includes('    opened unknown  where unknown  effort unknown'), stdout);
+}));
+
 test('the board has a roster after the sessions: a row per title with its role, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   writeAt(path.join(machine.worktree, 'odd', 'tasks', 'board.md'), BOARD_PLAN, 300);
@@ -1342,8 +1372,10 @@ test('the board has a roster after the sessions: a row per title with its role, 
     'Roster',
     `  orchestrator  ${ORCHESTRATOR}  silent since 10m ago`,
     '    mode bypassPermissions  folder C:\\proj  branch main  transcript aaaaaaaa',
+    '    opened unknown  where unknown  effort unknown',
     `  work 5  ${WORKER}  this session, last entry 1m ago`,
     `    mode auto  folder ${machine.worktree}  branch feat/board  feature board  transcript bbbbbbbb`,
+    '    opened unknown  where unknown  effort unknown',
     `  ${ROSTER_NOT_KNOWN}`,
     '',
   ]);
@@ -2204,4 +2236,231 @@ test('reading an opening is the one thing sessionsMain writes: a line of the rec
   const now = fs.readFileSync(record, 'utf8').split('\n');
   assert.deepEqual([now.slice(0, lines.length - 1), now.length], [lines.slice(0, -1), lines.length + 1], 'what the record held is as it was, and one line was added');
   assert.equal(JSON.parse(now.at(-2)).schema, 'js-harness.channel-reading/v1');
+}));
+
+// --- the measures of the compactions (session channel, T9) ---
+
+const COMPACT_BLOCK = '```\n/compact\n```';
+const boundary = (uuid, trigger, seconds) => ({ type: 'system', subtype: 'compact_boundary', uuid, ...entry(seconds), compactMetadata: { trigger, preTokens: 900, postTokens: 300 } });
+
+/** Three sessions for the measure. A was told the pause, committed its feature document and announced the
+ * compaction the host then made; after it, the host compacted it again with no telling in that stretch. B
+ * had a compaction the user asked for. C was compacted thirteen hours ago, outside the default window. A
+ * was told by the state the pause hook keeps under the harness home, written here as the hook writes it. */
+function writeMeasured(machine) {
+  const { projectDir } = machine;
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  writeAt(
+    path.join(projectDir, `${SESSION_A}.jsonl`),
+    jsonl(
+      { type: 'custom-title', customTitle: 'Board feature', sessionId: SESSION_A },
+      prompt('go', 900),
+      call('toolu_e1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+      reply(`Saved.\n\n${COMPACT_BLOCK}`, 700),
+      boundary('b1', 'auto', 600),
+      reply('working again', 300),
+      boundary('b2', 'auto', 100),
+    ),
+    60,
+  );
+  writeAt(path.join(projectDir, `${SESSION_B}.jsonl`), jsonl(prompt('fix it', 400), reply('ok', 350), boundary('b3', 'manual', 300)), 3000);
+  writeAt(path.join(projectDir, `${SESSION_C}.jsonl`), jsonl(prompt('an older session', 13 * 3600 + 60), reply('done', 13 * 3600 + 30), boundary('b4', 'auto', 13 * 3600)), 13 * 3600);
+  const state = statePath(machine.userHome, SESSION_A);
+  fs.mkdirSync(path.dirname(state), { recursive: true });
+  fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told: [{ at: before(750).toISOString(), tokens: 400000 }], written: before(500).toISOString() }));
+  return { document };
+}
+
+/** A `run` that answers `git -C <folder> log` with `log` and every other command as `fakeRun` does,
+ * recording the log calls apart. */
+function measuringRun(machine, log) {
+  const fake = fakeRun(machine);
+  const logs = [];
+  const run = (command, args, options) => {
+    if (command === 'git' && args[0] === '-C' && args[2] === 'log') {
+      logs.push(args);
+      return log(args);
+    }
+    return fake.run(command, args, options);
+  };
+  return { run, logs, calls: fake.calls };
+}
+
+const neverListed = () => {
+  throw new Error('the measures list no process');
+};
+
+test('--measures prints, per session of the window with a compaction, each one with its three facts read from the pause\'s state and the document\'s commits, then the total', withMachine(async (machine) => {
+  const { document } = writeMeasured(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n${before(5000).toISOString()}\n`));
+  const { code, stdout, stderr } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(stdout.split('\n'), [
+    'aaaaaaaa  Board feature',
+    `  ${before(600).toISOString()}  automatic  told yes  kept yes  announced yes`,
+    `  ${before(100).toISOString()}  automatic  told no  kept unknown  announced unknown`,
+    'bbbbbbbb  fix it',
+    `  ${before(300).toISOString()}  asked`,
+    '2 automatic compactions judged in 1 session: 1 misses a fact (told 1); 1 with a fact not known; 1 asked, not judged',
+  ]);
+  assert.deepEqual(measuring.logs, [['-C', path.dirname(document), 'log', '--format=%cI', '--', 'board.md']], 'git log is asked once, for the compaction whose pause was told');
+  assert.deepEqual(measuring.calls.map((made) => made.args[0]), ['rev-parse'], 'no worktree, pull request or gate is read for the measures');
+}));
+
+test('--measures reads a stretch whose document has no commit after the notice as not kept, and one git cannot read as not known', withMachine(async (machine) => {
+  writeMeasured(machine);
+  const late = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok(`${before(5000).toISOString()}\n`)).run, listProcesses: neverListed });
+  assert.equal(late.stdout.split('\n')[1], `  ${before(600).toISOString()}  automatic  told yes  kept no  announced yes`);
+  assert.match(late.stdout.split('\n').at(-1), /^2 automatic compactions judged in 1 session: 2 miss a fact \(told 1, kept 1\)/);
+  const failing = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })).run, listProcesses: neverListed });
+  assert.equal(failing.code, 0);
+  assert.equal(failing.stdout.split('\n')[1], `  ${before(600).toISOString()}  automatic  told yes  kept unknown  announced yes`);
+}));
+
+test('--measures --hours widens the window, and --json gives the same measures and total as data', withMachine(async (machine) => {
+  writeMeasured(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n`));
+  const { code, stdout } = await runSessions(machine, ['--measures', '--json', '--hours', '14'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  const data = JSON.parse(stdout);
+  assert.equal(data.hours, 14);
+  assert.equal(data.generatedAt, new Date(NOW).toISOString());
+  assert.deepEqual(data.sessions.map((session) => [session.id, session.title, session.measures.map((measure) => measure.uuid)]), [
+    [SESSION_A, 'Board feature', ['b1', 'b2']],
+    [SESSION_B, 'fix it', ['b3']],
+    [SESSION_C, 'an older session', ['b4']],
+  ]);
+  assert.deepEqual(data.sessions[0].measures[0].verdict, { told: true, kept: true, announced: true, missing: [] });
+  // C's pause was never told: no state is kept for it, so its told fact is not known and nothing else is asked.
+  assert.deepEqual(data.sessions[2].measures[0].verdict, { told: null, kept: null, announced: null, missing: [] });
+  assert.deepEqual(data.total, measuresTotal(data.sessions));
+  assert.deepEqual(data.total, { judged: 3, sessions: 2, missing: 1, facts: { told: 1, kept: 0, announced: 0 }, unknown: 2, asked: 1, elsewhere: 0, unreadable: 0 });
+}));
+
+test('--measures says a transcript it cannot read, and still prints the others', withMachine(async (machine) => {
+  writeMeasured(machine);
+  const unreadable = path.join(machine.projectDir, `${SESSION_B}.jsonl`);
+  const readFile = (file) => {
+    if (file === unreadable) throw Object.assign(new Error('denied'), { code: 'EACCES' });
+    return fs.readFileSync(file, 'utf8');
+  };
+  const { code, stdout } = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok(`${before(650).toISOString()}\n`)).run, listProcesses: neverListed, readFile });
+  assert.equal(code, 0);
+  const lines = stdout.split('\n');
+  assert.ok(lines.includes(`${SESSION_B}  unavailable: EACCES`), stdout);
+  assert.equal(lines[0], 'aaaaaaaa  Board feature');
+  assert.match(lines.at(-1), /; 1 transcript could not be read$/);
+}));
+
+test('--measures exits 0 with the total alone when nothing was compacted, and 1 when the project has no sessions folder', withMachine(async (machine) => {
+  writeAt(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('go', 900), reply('done', 800)), 60);
+  const quiet = await runSessions(machine, ['--measures'], { listProcesses: neverListed });
+  assert.equal(quiet.code, 0);
+  assert.equal(quiet.stdout, '0 automatic compactions judged in 0 sessions: 0 miss a fact');
+  fs.rmSync(machine.projectDir, { recursive: true });
+  const none = await runSessions(machine, ['--measures'], { listProcesses: neverListed });
+  assert.equal(none.code, 1);
+  assert.equal(none.stdout, '');
+  assert.equal(none.stderr, `js-harness sessions: no sessions folder for ${machine.root}: ${machine.projectDir} (ENOENT)`);
+}));
+
+/** Two sessions of the project with one automatic compaction each, told the pause and announced, whose document was
+ * edited and never committed: the orchestrator (A, "JH ORQ · js-harness") and a work session (B, "JH 2 · board"). The
+ * relief file, where the orchestrator keeps its state, has one line inside both stretches, written as `notify` writes it. */
+function writeReliefed(machine) {
+  const { projectDir } = machine;
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  for (const [id, title, seconds] of [[SESSION_A, 'JH ORQ · js-harness', 60], [SESSION_B, 'JH 2 · board', 90]]) {
+    writeAt(
+      path.join(projectDir, `${id}.jsonl`),
+      jsonl(
+        { type: 'custom-title', customTitle: title, sessionId: id },
+        prompt('go', 900),
+        call('toolu_e1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+        reply(`Saved.\n\n${COMPACT_BLOCK}`, 700),
+        boundary('b1', 'auto', 600),
+      ),
+      seconds,
+    );
+    const state = statePath(machine.userHome, id);
+    fs.mkdirSync(path.dirname(state), { recursive: true });
+    fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told: [{ at: before(750).toISOString(), tokens: 400000 }], written: before(500).toISOString() }));
+  }
+  fs.mkdirSync(path.dirname(machine.relief), { recursive: true });
+  fs.writeFileSync(machine.relief, `${reliefStamp(before(650).getTime())} the orchestrator's note of the stretch\n`);
+  return { document };
+}
+
+test('--measures keeps an orchestrator\'s compaction by a line of its relief file, and a work session\'s with the same line is still a miss', withMachine(async (machine) => {
+  writeReliefed(machine);
+  const measuring = measuringRun(machine, () => ok(''));
+  const { code, stdout, stderr } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(stdout.split('\n'), [
+    'aaaaaaaa  JH ORQ · js-harness',
+    `  ${before(600).toISOString()}  automatic  told yes  kept yes  announced yes`,
+    'bbbbbbbb  JH 2 · board',
+    `  ${before(600).toISOString()}  automatic  told yes  kept no  announced yes`,
+    '2 automatic compactions judged in 2 sessions: 1 misses a fact (kept 1)',
+  ]);
+  assert.equal(measuring.logs.length, 2, 'the feature document of each session is asked, as before');
+}));
+
+// --- the last automatic compaction that misses a fact, on the board (session channel, T9) ---
+
+/** Session A's last automatic compaction, told the pause and kept in the document, but never announced: no reply
+ * of the stretch holds the block of the bare `/compact`. */
+function writeMissing(machine) {
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  writeAt(
+    path.join(machine.projectDir, `${SESSION_A}.jsonl`),
+    jsonl(
+      { type: 'custom-title', customTitle: 'Board feature', sessionId: SESSION_A },
+      prompt('go', 900),
+      call('toolu_m1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+      reply('Saved.', 700),
+      boundary('b1', 'auto', 600),
+      reply('working again', 300),
+    ),
+    60,
+  );
+  const state = statePath(machine.userHome, SESSION_A);
+  fs.mkdirSync(path.dirname(state), { recursive: true });
+  fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told: [{ at: before(750).toISOString(), tokens: 400000 }], written: before(500).toISOString() }));
+}
+
+const missLines = (stdout) => stdout.split('\n').filter((line) => line.includes('last automatic compaction'));
+
+test('the board marks the last automatic compaction of a session that misses a fact, and --json carries it', withMachine(async (machine) => {
+  writeMissing(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n`));
+  const { code, stdout, stderr } = await runSessions(machine, [], { run: measuring.run });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(missLines(stdout), ['    last automatic compaction 10m ago: missed announced']);
+  const json = await runSessions(machine, ['--json'], { run: measuringRun(machine, () => ok(`${before(650).toISOString()}\n`)).run });
+  const session = JSON.parse(json.stdout).sessions.find((item) => item.id === SESSION_A);
+  assert.deepEqual(session.compactionMiss, { at: before(600).toISOString(), uuid: 'b1', missed: ['announced'], unknown: [] });
+}));
+
+test('the board says a fact that its reader cannot answer as not known, and never as missed', withMachine(async (machine) => {
+  writeMissing(machine);
+  const failing = measuringRun(machine, () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' }));
+  const { code, stdout } = await runSessions(machine, [], { run: failing.run });
+  assert.equal(code, 0);
+  assert.deepEqual(missLines(stdout), ['    last automatic compaction 10m ago: missed announced; not known: kept']);
+}));
+
+test('the board calls no measure reader for a session with no automatic compaction, and its --json says none', withMachine(async (machine) => {
+  writeSessions(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n`));
+  const { code, stdout } = await runSessions(machine, [], { run: measuring.run });
+  assert.equal(code, 0);
+  assert.deepEqual(measuring.logs, []);
+  assert.deepEqual(missLines(stdout), []);
+  const json = await runSessions(machine, ['--json'], { run: measuringRun(machine, () => ok('')).run });
+  assert.ok(JSON.parse(json.stdout).sessions.length > 0);
+  for (const session of JSON.parse(json.stdout).sessions) assert.equal(session.compactionMiss, null, session.id);
 }));

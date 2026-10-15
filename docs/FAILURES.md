@@ -90,10 +90,15 @@ of being repeated, and he had to search for it from the phone.
 - Class: asked-of-him
 - Aka: failure 3 (odd/tasks/rule-hierarchy.md; relief file, line 143)
 - Seen: 2026-10-10 — relief file, line 142 — his words: "no me aparece el bloque del JH2"
-- Control: owed — odd/tasks/session-channel.md — "The failures this feature owns closed with their
-  proofs"
+- Control: check — bin/notify.test.mjs — "record with the clock, the sender, the role, the kind, the
+  text and where it ran, then prints the address" — since 2026-10-11
 - Proof: notices carried by his paste, counted by the board: 0 in the stretch of its "Done when"
-  (owed: nothing prints it yet)
+  (owed: T9 and T11 of odd/tasks/session-channel.md; nothing prints it yet)
+- Was: owed — odd/tasks/session-channel.md — "The failures this feature owns closed with their
+  proofs" — replaced on 2026-10-15, when T12 closed, by the control the failure's row names in
+  odd/tasks/rule-hierarchy.md ("no block for another session; a notice is a record"): a notice
+  between sessions is a line of the record since pull request 59 (2026-10-11), not a block he
+  carries
 
 ### board-read-loads-gate
 A read of the board is heavy enough to slow a gate, and watches and waiting scripts read it while
@@ -144,6 +149,25 @@ check said or before its answer was read.
   nothing went out that its check would have stopped
 - Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
 
+### check-survivor-test-fails
+A gate failed on one test of `bin/check.test.mjs`, "checkSensor kills a background process the command
+left behind, and still passes", in a change that the test does not read, and the file passed alone. In
+WSL2 the test's command is `node child.js &`: the survivor is the shell's background child, and the test
+asserts the sensor returns within 60 s, passes, and that the survivor is gone within its bound. The
+cause, reproduced in WSL2 by a survivor that writes its pid after 2.5 s: once the shell exits, the sensor
+waits for the pipes only for its grace (`PIPE_GRACE_MS`, 2 s, `bin/check.mjs`) and then kills what the
+shell left, so a survivor slower than that to start dies before it writes its pid. The test's shell now
+waits for the pid before it exits.
+- Class: machine
+- Seen: 2026-10-15 — gate df5cd3cb of `D:\js-harness-worktrees\honesty-audit` (JH 15), in WSL2, end at
+  15:48Z, by the gate log and the lead's notice — the only failing test of the run; its commit on
+  feat/honesty-eval was refused, and the file passed alone on rerun — its output (JH 15's scratchpad
+  `commit-pilot.log`, lines 5650 to 5663, read here): after 2,033 ms, `ENOENT ... survivor.pid` from the
+  `readFileSync` of line 517, so the survivor never wrote its pid file; likely (not yet proven) the
+  shell exits at once and the sensor kills what it left before a node slowed by load has started
+- Control: check — bin/check.test.mjs — "checkSensor kills a background process the command left behind,
+  and still passes" — since 2026-10-15
+
 ### checked-not-read
 A record or a message said "checked" for something that had not been read, or that was another
 session's claim.
@@ -157,8 +181,7 @@ session's claim.
 - Seen: 2026-10-11 — relief file, line 290 — a transcript line cited as his words from a text search,
   without reading the entry's type: it was a queue entry with the same text (the orchestrator's own
   report)
-- Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
-  first"
+- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### citations-test-reads-clock
 A test of citations cited a fresh commit's short hash, which a citation must hold a digit and a
@@ -286,7 +309,9 @@ session can neither be told nor tell, and each notice becomes his paste.
   01:10, reached the lead after 04:20, held by the host
 - Control: check — bin/doctor.test.mjs — "as the session-classes gap, whose fix is the install
   flag" — since 2026-10-14
-- Proof: a practice step: a notice read with no message sent (owed: nothing prints it yet)
+- Proof: a practice step: a notice read with no message sent (owed: the journey's step `channel`,
+  `scripts/practice-lib.mjs` JOURNEY, ran "13 of 13 steps passed" on b0d0af2 in draft pull request
+  199, not on main yet; odd/tasks/session-channel.md, Progress, 2026-10-15 06:27)
 
 ### design-not-faithful
 A design document passed gentle-ai and its own contract and still dropped or misstated decisions of
@@ -349,8 +374,7 @@ on it.
 - Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
   06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
   the first read after 26 percent at about 04:30
-- Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
-  first"
+- Control: owed — odd/tasks/honesty-audit.md — "The share check, his call"
 
 ### eval-interrupt-process-alive
 A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
@@ -374,6 +398,11 @@ it, in a change that touched nothing of the evals.
 - Class: machine
 - Seen: 2026-10-15 — PR 185's GitHub run 38705933668, on Linux, by the lead's notice — line 198,
   `readdirSync(workRoot)` gave `['eval-m3TuMV']` where `[]` was expected: its cleanup had not ended
+- Seen: 2026-10-15 — PR 185's GitHub run 38722955417, on Linux, by the lead's message to JH 21 —
+  `actual: [ 'eval-k9fHPH' ]` where `[]` was expected, under `--test-concurrency=2`; the only failing
+  test of the run (odd/tasks/drop-github-gate.md L2)
+- Control: check — evals/configs.test.mjs — "the fixture commit starts no git maintenance: nothing of
+  it writes in the workspace once prepare has returned" — since 2026-10-15
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
@@ -496,8 +525,18 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
   05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
   relief line, not a feature document
-- Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
-  of the clock, and says the command wrote it" — since 2026-10-11
+- Control: check — bin/guard.test.mjs — "a Write or an Edit of a Markdown file whose line opens with
+  today and an hour ahead of the clock is denied" — since 2026-10-15
+- Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
+  either tool, is denied when its stamped hour is off the clock", on main since pull request 157
+  (2026-10-14); a feature document or a committed block: the control above
+  (bin/lib/document-hour-guard.mjs, T12b), which refuses only an hour ahead of the clock, since a
+  document also records earlier events
+- Was: owed — odd/tasks/session-channel.md — "An hour a session writes in a feature document or a
+  block it commits is read from the clock" — from 2026-10-15 until T12b was built the same day
+- Was: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
+  of the clock, and says the command wrote it" — since 2026-10-11; seen again on 2026-10-12 to
+  2026-10-14 in messages and a feature document, which it does not stamp; replaced on 2026-10-15
 
 ### init-leaves-codegraph-files
 `init` runs `codegraph init`, which writes files under the home that no manifest records, so
@@ -859,6 +898,19 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
   start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
   is armed before he leaves, in the orchestrator skill (JH 5)
 
+### session-opened-unseen
+A session was opened where he does not see it: a scheduled task opened it in the app's Routines, at
+the medium effort it inherited, and the board showed it like any other.
+- Class: unseen-state
+- Seen: 2026-10-12 — transcript 130317af, line 3443 — he was told to archive sessions he could not
+  find: "pero ninguna de esas las veo en el tablero de claude desktop, deben estar en otra parte y
+  ese es el problema"; the two sessions, cbca9769 and dd949a0e, ran at medium (measured
+  2026-10-15, odd/tasks/session-channel.md, section 17)
+- Control: check — bin/sessions.test.mjs — "the board says how a scheduled session was opened,
+  where it sits and its effort, and that it is not in his sidebar" — since 2026-10-15
+- Proof: owed — the command of T16's layer 2, which names such a session or task until none is
+  left, exiting 0 on this machine; and layer 3's refusal after one real try
+
 ### session-state-misreported
 A session was reported to him as waiting for his prompt while it still had a commit in the gate and
 a sub-agent running.
@@ -1017,8 +1069,7 @@ was not so.
   reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
   taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
   a gate now names the processes that spent the processor before its command
-- Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
-  first"
+- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
 Sessions ended their turn waiting for his `/compact` or for a message while he was away, so nothing
@@ -1104,5 +1155,11 @@ context until it has to be relieved.
   percent, each with a hook block of about 16 KB (a reading, not measured)
 - Seen: 2026-10-11 — relief file, line 217 — twelve points of context in an hour, most of it wakes
   with no news
-- Control: owed — odd/tasks/session-channel.md — "the watch wakes on a notice for the orchestrator"
-- Proof: reliefs per working day, from `relieved` lines: at most one (owed: nothing prints it yet)
+- Control: check — bin/sessions.test.mjs — "--watch does not return for a notice to another role,
+  nor for one the watching session wrote itself" — since 2026-10-11
+- Proof: reliefs per working day, from `relieved` lines: at most one (owed: T9 of
+  odd/tasks/session-channel.md; nothing prints it yet)
+- Was: owed — odd/tasks/session-channel.md — "the watch wakes on a notice for the orchestrator" —
+  stale once T4 was checked off; replaced on 2026-10-15 by the tests T4 left, merged in pull
+  request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
+  another role and for its own, and :2080 wakes it for a notice to the orchestrator

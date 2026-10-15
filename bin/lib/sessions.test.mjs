@@ -87,6 +87,63 @@ test('sessionFacts reports the lines it skipped', () => {
   assert.equal(lib.sessionFacts(transcript(prompt('go', 1), 'not json')).skippedLines, 1);
 });
 
+// --- sessionFacts: how the session was opened, and its effort (T16 slice 1a) ---
+
+// The first prompt of a transcript says how the session was opened: the desktop app's own entry, a command, the
+// SDK's first prompt, or a scheduled run. Its shape is the one of the host's entries (`turnOrigin`, `entrypoint`,
+// `turnPosition`), which the fixtures below invent.
+const typed = (fields, minute = 1) => ({ ...prompt('go', minute), ...fields });
+const openedBy = (...entries) => lib.sessionFacts(transcript(...entries)).opened;
+
+test('sessionFacts says a session his prompt opened in the desktop app was opened by him', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' })), 'his');
+});
+
+test('sessionFacts says a session a command opened was opened by a command, even when a person sent its prompt', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'human', entrypoint: 'sdk-cli' })), 'command');
+  assert.equal(openedBy(typed({ turnOrigin: 'human', entrypoint: 'cli' })), 'command');
+});
+
+test('sessionFacts says a scheduled run is scheduled, never a command, even when it ran from the SDK CLI', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'scheduled', entrypoint: 'sdk-cli' })), 'scheduled');
+  assert.equal(openedBy(typed({ origin: { kind: 'task', subkind: 'scheduled-trigger' }, entrypoint: 'sdk-cli' })), 'scheduled');
+});
+
+test('sessionFacts says a session the SDK opened with its first prompt was opened by a session', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'sdk', turnPosition: { promptIndex: 0 } })), 'session');
+});
+
+test('sessionFacts says unknown for an SDK prompt with no turn position, and for a transcript with no prompt', () => {
+  assert.equal(openedBy(typed({ turnOrigin: 'sdk' })), 'unknown');
+  assert.equal(openedBy(reply('an answer with no prompt', 1)), 'unknown');
+  assert.equal(openedBy(typed({ isCompactSummary: true, turnOrigin: 'human', entrypoint: 'claude-desktop' })), 'unknown');
+});
+
+test('sessionFacts skips a meta entry and a tool result before the first prompt, and only the first prompt decides', () => {
+  const meta = typed({ isMeta: true, turnOrigin: 'sdk', turnPosition: { promptIndex: 0 } }, 2);
+  const carrier = { type: 'user', ...base(3), turnOrigin: 'human', entrypoint: 'sdk-cli', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_x', content: 'ok' }] } };
+  assert.equal(openedBy(meta, carrier, typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' }, 4), typed({ turnOrigin: 'human', entrypoint: 'sdk-cli' }, 5)), 'his');
+});
+
+// Codex on 4d910da: a transcript that starts at a compaction lost its opening prompt, so the first message after it
+// is a later turn, and a scheduled session resumed by his message would read as his.
+test('sessionFacts says unknown for a transcript whose first prompt comes after a compaction', () => {
+  const summary = typed({ isCompactSummary: true, turnOrigin: 'human', entrypoint: 'sdk-cli' }, 1);
+  const boundary = { type: 'system', subtype: 'compact_boundary', ...base(1), compactMetadata: { trigger: 'auto', preTokens: 10, postTokens: 2 } };
+  const his = typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' }, 4);
+  assert.equal(openedBy(summary, his), 'unknown');
+  assert.equal(openedBy(boundary, his), 'unknown');
+  assert.equal(openedBy(his, boundary, typed({ turnOrigin: 'scheduled' }, 6)), 'his');
+});
+
+test('sessionFacts gives the effort of the last assistant entry that has one, and null when none has', () => {
+  const high = { ...reply('a', 2), effort: 'high' };
+  const low = { ...reply('b', 3), effort: 'low' };
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), high, low, reply('c', 4))).effort, 'low');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), high, reply('c', 4))).effort, 'high');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('no effort here', 2))).effort, null);
+});
+
 // --- sessionFacts: background work ---
 
 test('a background Bash call is listed with the task id its tool result records, its description and its launch time', () => {
@@ -2226,7 +2283,10 @@ test('roleNamed reads the role an --address asks for: the orchestrator by either
 const C = 'cccccccc-3333-4333-8333-333333333333';
 const D = 'dddddddd-4444-4444-8444-444444444444';
 const member = (id, title, seconds, more = {}) => ({ id, title, titleSource: 'custom-title', state: 'waiting', lastEntryAt: before(seconds), cwd: 'D:\\proj', gitBranch: 'main', permissionMode: 'bypassPermissions', work: [], tail: [], ...more });
-const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], record: null, ...more });
+const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], record: null, opened: 'unknown', where: 'unknown', effort: null, ...more });
+// The app's records (`appSessions`), by the transcript's id: one in Routines for a scheduled task, one in Sessions.
+const inRoutines = (more = {}) => ({ where: 'routines', effort: null, scheduledTaskId: 'task-1', archived: false, title: null, ...more });
+const inSessions = (more = {}) => ({ where: 'sessions', effort: null, scheduledTaskId: null, archived: false, title: null, ...more });
 
 test('rosterOf gives one row per title, with its role, what it is for, its mode, where it works and when it last wrote', () => {
   const roster = lib.rosterOf([member(A, 'JH 2 · the board', 60, { permissionMode: 'auto', cwd: 'C:\\elsewhere', gitBranch: 'feat/x' }), member(B, 'JH ORQ · proj', 600)]);
@@ -2239,6 +2299,51 @@ test('rosterOf gives one row per title, with its role, what it is for, its mode,
     outside: 0,
   });
   assert.deepEqual(lib.rosterOf([]), { rows: [], unread: 0, outside: 0 });
+});
+
+test('rosterOf opened: the earliest member that is not unknown, else scheduled when a member\'s app record names a task, else unknown', () => {
+  const opened = (sessions, app = new Map()) => lib.rosterOf(sessions, { app }).rows[0].opened;
+  const latest = member(A, 'JH 2 · the board', 60, { opened: 'session' });
+  assert.equal(opened([latest, member(B, 'JH 2 · the board', 7200, { opened: 'his' })]), 'his', 'the earliest one, not the latest');
+  assert.equal(opened([latest, member(B, 'JH 2 · the board', 7200, { opened: 'unknown' })]), 'session', 'an earlier unknown is passed over');
+  assert.equal(opened([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inRoutines()]])), 'scheduled', 'a scheduled task in the app record');
+  assert.equal(opened([latest, member(B, 'JH 2 · the board', 7200, { opened: 'unknown' })], new Map([[B, inRoutines()]])), 'session', 'an opener read from the transcript is not overruled by the record');
+  assert.equal(opened([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inSessions()]])), 'unknown', 'a record with no task is not a scheduled session');
+  assert.equal(opened([member(A, 'JH 2 · the board', 60)]), 'unknown', 'a member with no opener and no record says unknown');
+});
+
+test('rosterOf where: the app record of the latest member that has one, else not-in-app for a command, else unknown', () => {
+  const where = (sessions, app = new Map()) => lib.rosterOf(sessions, { app }).rows[0].where;
+  const latest = member(A, 'JH 2 · the board', 60, { opened: 'session' });
+  const older = member(B, 'JH 2 · the board', 7200, { opened: 'his' });
+  assert.equal(where([latest, older], new Map([[B, inSessions({ where: 'archived', archived: true })]])), 'archived', 'the record of the one member that has one');
+  assert.equal(where([latest, older], new Map([[A, inRoutines()], [B, inSessions()]])), 'routines', 'the record of the latest member that has one');
+  assert.equal(where([member(A, 'JH 2 · the board', 60, { opened: 'command' })]), 'not-in-app', 'a command with no record is not in the app');
+  assert.equal(where([member(A, 'JH 2 · the board', 60, { opened: 'command' })], new Map([[A, inSessions()]])), 'sessions', 'a command with a record says where the record does');
+  assert.equal(where([latest]), 'unknown', 'a session he opened with no record says unknown');
+});
+
+test('rosterOf effort: the latest member\'s effort that is a string, else the app record\'s, else null', () => {
+  const effort = (sessions, app = new Map()) => lib.rosterOf(sessions, { app }).rows[0].effort;
+  assert.equal(effort([member(A, 'JH 2 · the board', 60, { effort: 'high' }), member(B, 'JH 2 · the board', 600, { effort: 'low' })]), 'high', 'the latest');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60, { effort: null }), member(B, 'JH 2 · the board', 600, { effort: 'low' })]), 'low', 'an older one counts when the latest records none');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60)], new Map([[A, inRoutines({ effort: 'medium' })]])), 'medium', 'the app record when no member records one');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60, { effort: 'high' })], new Map([[A, inRoutines({ effort: 'low' })]])), 'high', 'the transcript before the app record');
+  assert.equal(effort([member(A, 'JH 2 · the board', 60)]), null, 'none says null');
+});
+
+test('the roster line after the mode line says how a row was opened and where it is, marks what is not in his sidebar, and marks an effort below high', () => {
+  // The line is the fourth of a row's: the header, the mode line (unchanged), then this one.
+  const opener = (sessions, app) => rosterSection(sessions, { app })[3];
+  const mode = 'bypassPermissions';
+  assert.equal(rosterSection([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], { app: new Map([[A, inSessions({ effort: 'high' })]]) })[2], `    mode ${mode}  folder D:\\proj  branch main  transcript aaaaaaaa`, 'the mode line is unchanged');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], new Map([[A, inSessions({ effort: 'high' })]])), '    opened by him  in Sessions  effort high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'low' })], new Map([[A, inSessions({ effort: 'low' })]])), '    opened by him  in Sessions  effort low', 'an effort below high is not marked for his own session');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inRoutines({ effort: 'medium' })]])), '    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR  effort below high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'command', effort: 'low' })]), '    opened by a command  not in the app  effort low  NOT IN HIS SIDEBAR  effort below high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'session', effort: 'medium' })], new Map([[A, inSessions({ effort: 'medium' })]])), '    opened by a session  in Sessions  effort medium  effort below high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], new Map([[A, inSessions({ where: 'archived', archived: true, effort: 'high' })]])), '    opened by him  archived  effort high', 'archived is not marked');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60)]), '    opened unknown  where unknown  effort unknown');
 });
 
 // The app appends entries with no time to a transcript it opens (`cost-state`, seen on 2026-10-11 in two
@@ -2355,15 +2460,20 @@ test('renderBoard prints the roster after the sessions: a row per title with its
     'Roster',
     '  orchestrator  JH ORQ · proj  silent since 10m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript aaaaaaaa',
+    '    opened unknown  where unknown  effort unknown',
     '  work 2  JH 2 · the board  this session, last entry 5s ago',
     // `folder`, as the entries record it, and not `worktree`: a session that reaches one by `cd` records another.
     '    mode auto  folder D:\\proj-worktrees\\board  branch feat/board  feature session-board  transcripts bbbbbbbb (5s ago), cccccccc (2h 05m ago)',
+    '    opened unknown  where unknown  effort unknown',
     '  no role  fix the review  silent since 1m ago  (it has no title: this is the start of its first prompt)',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript eeeeeeee',
+    '    opened unknown  where unknown  effort unknown',
     '  no role  Board feature  silent since 3d ago  (its title is not "<code> <role> · <what it does>")',
     '    mode unknown  folder unknown  branch unknown  transcript dddddddd',
+    '    opened unknown  where unknown  effort unknown',
     '  no role  (no title)  silent, no entry of it has a time  (it has no title)',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript ffffffff',
+    '    opened unknown  where unknown  effort unknown',
     '  1 transcript that could not be read is in no row',
     `  ${lib.ROSTER_NOT_KNOWN}`,
   ]);
@@ -2845,18 +2955,23 @@ test('renderBoard: a row of the roster says what the record says of its session,
   assert.deepEqual(section.slice(1, -1), [
     '  orchestrator  JH ORQ · proj  relieved 30m ago, last entry 1m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript aaaaaaaa',
+    '    opened unknown  where unknown  effort unknown',
     '    record: relieved 30m ago: JH ORQ nueva · proj has the role now  notices written from D:\\proj on main',
     '  work 2  JH 2 · the board  this session, closed 10m ago, last entry 2m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript bbbbbbbb',
+    '    opened unknown  where unknown  effort unknown',
     '    record: closed 10m ago: delivered  notices written from D:\\proj-worktrees\\board on feat/board',
     '  work 3  JH 3 · the lock  silent since 3m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript cccccccc',
+    '    opened unknown  where unknown  effort unknown',
     `    record: waiting since 11m ago: on the gate of JH 2 ${'z'.repeat(139)}…  notices written from D:\\proj-worktrees\\lock, no branch read`,
     '  work 4  JH 4 · the roster  closed 1h 00m ago, last entry 4m ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript dddddddd',
+    '    opened unknown  where unknown  effort unknown',
     '    record: closed 1h 00m ago: delivered; nothing more goes to this session',
     '  work 6  JH 6 · from the phone  silent since 30s ago',
     '    mode bypassPermissions  folder D:\\proj  branch main  transcript eeeeeeee  title from the opening it read',
+    '    opened unknown  where unknown  effort unknown',
   ]);
   assert.match(lib.ROSTER_NOT_KNOWN, /one session the app restarted or several sessions under one title/);
   assert.match(lib.ROSTER_NOT_KNOWN, /unless a notice of the session says it/);
@@ -4431,4 +4546,71 @@ test('mainCheckout asks git for the working tree of a git dir kept apart from it
   const linked = revParse({ '--git-common-dir': meta, [`--git-dir --show-toplevel @ ${here}`]: `${nodePath.join(meta, 'worktrees', 'board')}\n${here}` });
   assert.equal(lib.mainCheckout(linked.run, here), meta);
   assert.equal(lib.mainCheckout(revParse({ '--git-common-dir': meta }).run, here), meta);
+});
+
+// --- the last automatic compaction that misses a fact (session channel, T9) ---
+
+const compactionEntry = (uuid, trigger, minute) => ({ type: 'system', subtype: 'compact_boundary', uuid, ...base(minute), compactMetadata: { trigger, preTokens: 900, postTokens: 300 } });
+const editEntry = (id, minute) => call(id, 'Edit', { file_path: 'odd/tasks/board.md', old_string: 'x', new_string: 'y' }, minute);
+const miss = (minutes, uuid, missed, unknown = []) => ({ at: before(minutes * 60), uuid, missed, unknown });
+
+test('compactionMissOf calls no reader for a session with no automatic compaction', () => {
+  const calls = [];
+  const readers = {
+    told: (after, at) => calls.push(['told', after, at]),
+    kept: (query) => calls.push(['kept', query]),
+  };
+  const none = transcript(prompt('go', 1), reply('done', 5));
+  const manual = transcript(prompt('go', 1), editEntry('e1', 2), reply('done', 5), compactionEntry('m1', 'manual', 6), reply('again', 8));
+  assert.equal(lib.compactionMissOf(none, readers), null);
+  assert.equal(lib.compactionMissOf(manual, readers), null);
+  assert.deepEqual(calls, []);
+});
+
+test('compactionMissOf names the facts the last automatic compaction misses, and not the ones it cannot know', () => {
+  const text = transcript(prompt('go', 1), editEntry('e1', 2), reply('Saved.', 3), compactionEntry('b1', 'auto', 6), reply('working again', 8));
+  const told = () => ({ known: true, at: at(2) });
+  assert.deepEqual(lib.compactionMissOf(text, { told, kept: () => ({ known: true, kept: false }) }), { at: at(6), uuid: 'b1', missed: ['kept', 'announced'], unknown: [] });
+  assert.deepEqual(lib.compactionMissOf(text, { told, kept: () => ({ known: false }) }), { at: at(6), uuid: 'b1', missed: ['announced'], unknown: ['kept'] }, 'a reader that cannot answer is unknown, never a miss');
+  assert.equal(lib.compactionMissOf(text, { told: () => { throw new Error('no state'); }, kept: () => ({ known: true, kept: false }) }), null, 'a reader that throws leaves nothing to miss');
+  const announced = transcript(prompt('go', 1), editEntry('e1', 2), reply('```\n/compact\n```', 3), compactionEntry('b1', 'auto', 6), reply('working again', 8));
+  assert.equal(lib.compactionMissOf(announced, { told, kept: () => ({ known: true, kept: true }) }), null, 'a last automatic compaction that misses nothing has no miss');
+});
+
+test('renderBoard prints the miss of the last automatic compaction under its session, with what it could not know', () => {
+  const lines = (compactionMiss) => lib.renderBoard({ ...BOARD, sessions: [seen(A, 'working', { compactionMiss })] }, { now: NOW }).filter((line) => line.includes('last automatic compaction'));
+  assert.deepEqual(lines(miss(10, 'b1', ['told', 'announced'])), ['    last automatic compaction 10m ago: missed told, announced']);
+  assert.deepEqual(lines(miss(10, 'b1', ['kept'], ['announced'])), ['    last automatic compaction 10m ago: missed kept; not known: announced']);
+  assert.deepEqual(lines(miss(10, 'b1', [], ['kept'])), [], 'only facts not known say nothing');
+  assert.deepEqual(lines(null), []);
+});
+
+test('boardChanges says a new miss of the last automatic compaction once, and says a later compaction that misses again', () => {
+  const said = `session aaaaaaaa "title a": its last automatic compaction missed told`;
+  const withMiss = (compactionMiss) => ({ sessions: [seen(A, 'working', { compactionMiss })] });
+  assert.deepEqual(changes(withMiss(null), withMiss(miss(2, 'c1', ['told']))), [said]);
+  assert.deepEqual(changes(withMiss(miss(2, 'c1', ['told'])), withMiss(miss(2, 'c1', ['told']))), [], 'the same compaction is not said twice');
+  assert.deepEqual(changes(withMiss(miss(2, 'c1', ['told'])), withMiss(miss(1, 'c2', ['told']))), [said], 'a later compaction that misses is said');
+  assert.deepEqual(changes(withMiss(miss(2, 'c1', ['told'])), withMiss(null)), [], 'a compaction that misses nothing is not said');
+  assert.deepEqual(changes(withMiss(null), withMiss(miss(2, 'c1', ['told'])), { self: A }), [], 'the watching session is never said');
+  assert.deepEqual(changes({ sessions: [] }, withMiss(miss(2, 'c1', ['told']))), [`session aaaaaaaa "title a" appeared (working)`], 'a session that appears is not compared');
+  assert.deepEqual(changes({ sessions: [{ id: A, unavailable: 'EACCES' }] }, withMiss(miss(2, 'c1', ['told']))), [`session aaaaaaaa "title a" appeared (working): its transcript could not be read until now`], 'an unreadable look is not compared');
+});
+
+test('watchBaseline keeps the miss a failed reader leaves unknown, so the same compaction is said once across the failed read', () => {
+  const look = (compactionMiss) => boardOf({ sessions: [seen(A, 'working', { compactionMiss })] });
+  const missed = (uuid, facts) => ({ at: before(150), uuid, missed: facts, unknown: [] });
+  const said = (facts) => `session aaaaaaaa "title a": its last automatic compaction missed ${facts}`;
+  const chain = (boards) => {
+    const chained = [];
+    let baseline = look(null);
+    for (const board of boards) {
+      chained.push(...lib.boardChanges(baseline, board));
+      baseline = lib.watchBaseline(baseline, board);
+    }
+    return chained;
+  };
+  assert.deepEqual(lib.watchBaseline(look(missed('u1', ['told'])), look(null)).sessions[0].compactionMiss, missed('u1', ['told']), 'a null read keeps the miss the look before named');
+  assert.deepEqual(chain([look(missed('u1', ['told'])), look(null), look(missed('u1', ['told']))]), [said('told')], 'the same compaction after a failed read is not said again');
+  assert.deepEqual(chain([look(missed('u1', ['told'])), look(missed('u2', ['announced']))]), [said('told'), said('announced')], 'a new compaction that misses is said');
 });

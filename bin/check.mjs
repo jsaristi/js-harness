@@ -25,10 +25,10 @@ import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
-import { selectTests, testFilesOf } from './lib/select-tests.mjs';
+import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { checkLedger, failedTestFiles, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
-import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
+import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, word as bashWord, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
 import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
@@ -428,15 +428,16 @@ export function discoverSensorsInWsl(cwd) {
   return { value: false, error: `harness.json "sensorsInWsl" must be true or false; it is ${JSON.stringify(declared.sensorsInWsl)}` };
 }
 
-/** Whether the project runs its tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): `harness.json`
- * `"exactTests": "shadow"`. `{ value }`, `null` when it says nothing, or `{ value: null, error }` for another
- * value: `"skip"`, which will let selection decide, is honoured only once the count of S6 holds (T4). */
+/** How the project runs its tests sensor with exact test selection (odd/tasks/exact-tests.md): `harness.json`
+ * `"exactTests": "shadow"`, the whole suite under the tracer with what selection would have skipped counted (T3,
+ * S6), or `"skip"`, only the files selection runs (T4c), the switch a project commits once S6's count holds.
+ * `{ value }`, `null` when it says nothing, or `{ value: null, error }` for another value. */
 export function discoverExactTests(cwd) {
   const { declared, error } = readHarness(cwd);
   if (error) return { value: null, error };
   if (!declared || !('exactTests' in declared)) return { value: null };
-  if (declared.exactTests === 'shadow') return { value: 'shadow' };
-  return { value: null, error: `harness.json "exactTests" must be "shadow"; it is ${JSON.stringify(declared.exactTests)}` };
+  if (declared.exactTests === 'shadow' || declared.exactTests === 'skip') return { value: declared.exactTests };
+  return { value: null, error: `harness.json "exactTests" must be "shadow" or "skip"; it is ${JSON.stringify(declared.exactTests)}` };
 }
 
 /** The variable that runs a tests sensor of `node --test` that many test files at a time, for a machine whose
@@ -453,8 +454,14 @@ export function discoverTestConcurrency(env = process.env) {
   return { value: null, error: `${TEST_CONCURRENCY_ENV} must be a whole number above 0; it is ${JSON.stringify(value)}` };
 }
 
-/** `command`, a tests sensor of `node --test`, with `--test-concurrency=<count>`: after `--` for the `test` script. */
-const withConcurrency = (command, count) => (/^npm (run )?test$/.test(command) ? `${command} -- --test-concurrency=${count}` : `${command} --test-concurrency=${count}`);
+/** `command`, a tests sensor of `node --test`, with `--test-concurrency=<concurrency>` where it is given and then
+ * `files`, each through `quote`: after one `--` for the `test` script. The one place both are added, so a skip
+ * gate's file list and the concurrency of step 4 never make two `--` (odd/tasks/exact-tests.md, T4c). */
+function testsCommandLine(command, { concurrency = null, files = [], quote = (file) => file } = {}) {
+  const added = [...(concurrency === null ? [] : [`--test-concurrency=${concurrency}`]), ...files.map(quote)];
+  if (added.length === 0) return command;
+  return /^npm (run )?test$/.test(command) ? `${command} -- ${added.join(' ')}` : `${command} ${added.join(' ')}`;
+}
 
 /** What the tests sensor runs when it is `npm run test` or `npm test`: the project's `test` script; else
  * the command itself. Shadow traces `node --test` alone, which finds the test files selection is asked of. */
@@ -479,6 +486,48 @@ function tracesDir(cwd, spawn = spawnSync) {
   } catch {
     return null; // no git on PATH
   }
+}
+
+/** S6's running count (odd/tasks/exact-tests.md, L14, the reading the lead adopted): of the gate log's
+ * `events`, the end lines whose tests row has a shadow that would have skipped a file (`wouldSkip` above 0),
+ * read in the order they ended, and how many of them are in a row since the last whose skipped files did not
+ * all pass. `{ run, last }`, `last` that gate's `{ at, files }` or `null`. Thirty in a row switch the skip on. */
+export function s6Count(events) {
+  const ends = events.filter((event) => event?.event === 'end' && typeof event.at === 'string' && Array.isArray(event.sensors));
+  ends.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  let run = 0;
+  let last = null;
+  for (const end of ends) {
+    for (const sensor of end.sensors) {
+      // A gate in skip mode (T4c) carries `skip`, never `shadow`: a file it skipped could not fail, and counting it
+      // would raise the count with no proof. Its tests row is passed over here even were both ever written.
+      if (sensor?.skip) continue;
+      const shadow = sensor?.shadow;
+      if (!shadow || !(shadow.wouldSkip > 0)) continue;
+      const failed = Array.isArray(shadow.failedOfSkipped) ? shadow.failedOfSkipped : [];
+      if (failed.length > 0) {
+        run = 0;
+        last = { at: end.at, files: failed };
+      } else run += 1;
+    }
+  }
+  return { run, last };
+}
+
+/** The gates in a row S6 asks for before the skip is switched on. */
+const S6_GATES = 30;
+
+/** The `exact tests` row of a project that says `exactTests` in harness.json: S6's running count, read from
+ * the gate log of `home`. It informs only, as `payload` does: the switch is a commit of harness.json, made
+ * with these numbers. A project that says nothing of `exactTests` has no row; one in skip mode (T4c) has a row that
+ * says so, since its gates count nothing for S6 any more. */
+export function checkExactCount(cwd, home) {
+  const exact = discoverExactTests(cwd);
+  if (exact.value === null) return [];
+  if (exact.value === 'skip') return [{ name: 'exact tests', pass: true, detail: 'skip: on since harness.json says so; S6\'s count stopped at the switch' }];
+  const { run, last } = s6Count(readGateLog(home).events);
+  const since = last ? `, since the gate of ${rowTime(last.at)} where ${last.files.join(', ')} failed` : '';
+  return [{ name: 'exact tests', pass: true, detail: `S6: ${run} of ${S6_GATES} gates in a row would have skipped a test file and saw none of those fail${since}; the skip is switched on at ${S6_GATES}` }];
 }
 
 /** `iso` as a row says it: the local day and time, to the minute. */
@@ -765,7 +814,7 @@ export function failingTests(output) {
   return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
 }
 
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion } = {}) {
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion, concurrency = null, ci = onCi(process.env) } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -800,9 +849,19 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // the selection is asked first, so the row can say what it would have skipped and which of those failed.
   // In WSL2 (T3b) the tracer runs in the mirror: the runner sets its variables, the traces of that place have a
   // folder of their own, and selection is asked with the node, the system and the variables there. A node that
-  // cannot be asked, or a tree WSL does not mount, runs no shadow.
+  // cannot be asked, or a tree WSL does not mount, runs no shadow, and in skip mode the whole suite.
+  // `concurrency` is step 4's `--test-concurrency`, given where the suite is `node --test` (`checkSensors`).
   const inWsl = Boolean(wsl?.distro && platform === 'win32');
-  const shadow = sensor.name === 'tests' && traces?.dir ? (inWsl ? wslShadow(cwd, traces.dir, { wsl, wslPath, wslNode }) : startShadow(cwd, path.join(traces.dir, platform === 'win32' ? 'windows' : platform), { env })) : null;
+  const exact = sensor.name === 'tests' && Boolean(traces?.dir);
+  const started = exact ? (inWsl ? wslShadow(cwd, traces.dir, { wsl, wslPath, wslNode }) : startShadow(cwd, path.join(traces.dir, platform === 'win32' ? 'windows' : platform), { env })) : null;
+  // Skip mode (T4c, `"exactTests": "skip"`): the same start, traced as in shadow, but only selection's `run` files
+  // run (`skipPlan`), so they refresh their traces, and the row counts what was skipped, never as a shadow.
+  const skipping = exact && traces.mode === 'skip';
+  const shadow = skipping ? null : started;
+  const plan = skipping ? skipPlan(started, cwd, sensor.command, concurrency, ci) : null;
+  // The command as written, which the row says, and the one that runs: with the files to run after it.
+  const written = testsCommandLine(sensor.command, { concurrency });
+  const asked = plan?.files ? testsCommandLine(sensor.command, { concurrency, files: plan.files }) : written;
   let result;
   // Where the machine opted in (`wsl`, on Windows alone), the sensor runs first in WSL2 from a mirror of
   // the tree (`wslRoute`). It runs on Windows instead where it never reached the mirror, and `fellBack`
@@ -811,8 +870,13 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   let fellBack;
   const startedAt = Date.now();
   try {
-    const route = wsl?.distro && platform === 'win32' ? wslRoute(cwd, home, sensor, { wsl, wslPath, gateHeld, sensorTimeout, trace: shadow?.mounted }) : null;
-    if (route?.command) {
+    // In WSL2 the files to run are words of the runner's sh, quoted inside the word of the whole command.
+    const mirrored = { ...sensor, command: plan?.files ? testsCommandLine(sensor.command, { concurrency, files: plan.files, quote: bashWord }) : written };
+    // A run of no file starts nothing, here or in WSL2: every test file is proven by a stored passing trace.
+    const route = !plan?.none && wsl?.distro && platform === 'win32' ? wslRoute(cwd, home, mirrored, { wsl, wslPath, gateHeld, sensorTimeout, trace: started?.mounted }) : null;
+    if (plan?.none) {
+      result = { status: 0, signal: null, stdout: '', stderr: '' };
+    } else if (route?.command) {
       result = await spawn(route.command, { cwd, env, timeout: sensorTimeout });
       const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
       const synced = syncedMs(output);
@@ -829,7 +893,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
     } else if (route) {
       fellBack = route.why;
     }
-    if (!ranIn) result = await spawn(sensor.command, { cwd, env, timeout: sensorTimeout });
+    // A suite of the mirror that falls back runs whole on Windows, untraced: its selection was asked of the
+    // traces of WSL2, which say nothing of this place.
+    if (!ranIn && !plan?.none) result = await spawn(route ? written : asked, { cwd, env, timeout: sensorTimeout });
   } finally {
     // Best effort: on Windows a survivor can still hold the home as its cwd, and that must not fail check.
     try {
@@ -839,7 +905,8 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
     }
   }
   const seconds = Math.round((Date.now() - startedAt) / 100) / 10;
-  const { name, command } = sensor;
+  const { name } = sensor;
+  const command = written;
   const pass = !result.error && result.status === 0;
   const timedOut = result.error?.code === 'ETIMEDOUT';
   let detail = `${command} passed`;
@@ -857,26 +924,77 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
   // A suite of the mirror that fell back to Windows ran untraced: it says nothing of what was skipped.
   const shadowed = shadow && !(shadow.mounted && !ranIn) ? endShadow(shadow) : null;
-  if (shadow && !shadowed) fs.rmSync(shadow.results, { recursive: true, force: true });
+  if (started && !shadowed) fs.rmSync(started.results, { recursive: true, force: true });
   if (shadowed) {
     const { files, wouldSkip, failedOfSkipped } = shadowed;
     detail += `; shadow: ${wouldSkip.length} of ${files} test files would have been skipped`;
     if (failedOfSkipped.length > 0) detail += `, and ${failedOfSkipped.length} of them did not pass: ${failedOfSkipped.join(', ')}`;
   }
-  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+  // Skip mode's count: of the test files, how many did not run. A suite of the mirror that fell back ran whole.
+  const whole = plan && (plan.whole ?? (fellBack && plan.files ? 'it ran on Windows, where selection asked the traces of WSL2' : null));
+  const skip = plan && { files: plan.tests, skipped: whole ? 0 : plan.none ? plan.tests : plan.tests - plan.files.length };
+  if (plan?.none) detail = `${command} ran no test file; exact tests: skipped all ${plan.tests} test files, each proven by a stored passing trace`;
+  else if (whole) detail += `; exact tests: the whole suite ran, since ${whole}`;
+  else if (plan) detail += `; exact tests: skipped ${skip.skipped} of ${skip.files} test files`;
+  // A run of none in WSL2 is proven by the traces of the mirror, the place its tree key names (`checkSensors`).
+  const provenIn = ranIn || (plan?.none && inWsl);
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+}
+
+/** Characters a test file's path may hold to be named on the command line of a skip gate: node takes each
+ * argument of `--test` as a glob, and cmd.exe cannot quote `%`, so any other runs the whole suite instead. */
+const PLAIN_PATH = /^[A-Za-z0-9._/-]+$/;
+
+/** The longest command line a skip gate names its files on: cmd.exe takes 8191 characters, and the bound is
+ * kept below it on every system, so a selection runs the same way wherever it is asked. */
+const COMMAND_LINE_MAX = 7000;
+
+/** Whether `env` says the gate runs on CI: CircleCI and GitHub Actions both set `CI`, and a `CI` of `false`
+ * or `0` says it does not. */
+export function onCi(env) {
+  const value = env.CI?.trim().toLowerCase();
+  return Boolean(value) && value !== 'false' && value !== '0';
+}
+
+/** What a tests sensor in skip mode runs (odd/tasks/exact-tests.md, T4c), from `started`, the selection
+ * `startShadow` asked (`null` where WSL2's could not be asked): `{ tests, files }`, the files to run; `{ tests,
+ * none: true }`, none; or `{ tests, whole }`, why the whole suite runs instead, traced as in shadow. `tests` is
+ * the count of the test files. On CI (`ci`), the whole suite runs. */
+function skipPlan(started, cwd, command, concurrency, ci) {
+  // The merge queue's candidate run on CI checks the tree a fresh checkout gives, which is what lands: it
+  // runs every test file (odd/tasks/exact-tests.md, L18).
+  if (ci) return { tests: started?.tests.length ?? testFilesOf(path.resolve(cwd)).length, whole: 'a CI run runs the whole suite (the CI variable is set)' };
+  if (!started) return { tests: testFilesOf(path.resolve(cwd)).length, whole: 'the node of WSL2 said no version, or WSL mounts no folder of its traces' };
+  const { tests, run, full } = started;
+  const of = { tests: tests.length };
+  if (full) return { ...of, whole: full };
+  if (tests.length === 0) return { ...of, whole: 'no test file was found' };
+  const odd = run.find((file) => !PLAIN_PATH.test(file));
+  if (odd !== undefined) return { ...of, whole: `${JSON.stringify(odd)} holds a character outside [A-Za-z0-9._/-]` };
+  const dashed = run.find((file) => file.startsWith('-'));
+  if (dashed !== undefined) return { ...of, whole: `${JSON.stringify(dashed)} starts with a dash, which node would read as an option` };
+  // npm runs pretest and posttest around the test script; a run of no file would run neither, and no trace
+  // proves them (Codex, 2026-10-15). With files, npm runs them as ever.
+  const scripts = /^npm /.test(command) ? readJson(cwd, 'package.json')?.value?.scripts ?? {} : {};
+  if (run.length === 0 && ('pretest' in scripts || 'posttest' in scripts)) return { ...of, whole: 'package.json has a pretest or posttest script, which no trace proves' };
+  if (run.length === 0) return { ...of, none: true };
+  if (testsCommandLine(command, { concurrency, files: run }).length > COMMAND_LINE_MAX) return { ...of, whole: `its command line would pass ${COMMAND_LINE_MAX} characters` };
+  return { ...of, files: run };
 }
 
 /** The start of a tests sensor in shadow: the selection asked of the traces in `dir`, under `place` (the
  * node, system and variables of where the suite runs, this process's by default), and `env` given the tracer
- * where given, with a results folder each test file writes how it ended into, a file of its own. */
+ * where given, with a results folder each test file writes how it ended into, a file of its own. Selection's
+ * `run` (the files the flaky ledger names among them) and `full`, the reason the whole suite runs or `null`,
+ * are what a gate in skip mode runs (T4c). */
 function startShadow(cwd, dir, { env = null, place = {} } = {}) {
   const root = path.resolve(cwd);
   const tests = testFilesOf(root);
-  const { skipped } = selectTests({ tests, readTraces: (one) => readTraces(dir, one), stateOf: (key) => stateOf(root, key), ...place });
+  const { run, skipped, full } = selectTests({ tests, readTraces: (one) => readTraces(dir, one), stateOf: (key) => stateOf(root, key), flaky: flakyTestsOf(root), ...place });
   fs.mkdirSync(dir, { recursive: true });
   const results = path.join(dir, `results-${process.pid}-${Date.now()}`);
   if (env) Object.assign(env, traceEnv({ root, dir, results, existing: env.NODE_OPTIONS }));
-  return { tests, skipped, results };
+  return { tests, run, skipped, full, results };
 }
 
 /** A shadow of the mirror in `wsl.distro`: its traces under `dir/wsl-<distro>`, the selection asked with the
@@ -971,7 +1089,7 @@ const aheadSaid = (line) => (line?.ahead > 1 ? `; ${line.ahead} gates are ahead 
 /** What `--wait <minutes>` and `--no-wait` mean, for the usage of `check` and of `js-harness gate`, which
  * take the two flags alike. The bound is not on the whole of a wait (`takeGateLock`). */
 export const GATE_WAIT_USAGE =
-  "       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (60 when not given); --no-wait: refuse at once instead of waiting";
+  `       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (${GATE_WAIT_MS / 60_000} when not given); --no-wait: refuse at once instead of waiting`;
 
 /** The sentence of a refusal of the lock (`takeGateLock`), for a gate that was given `waitMinutes`: which
  * gate it was refused for, and whether that gate held the lock or waited ahead of this one for it. A wait
@@ -1348,15 +1466,15 @@ export async function checkSensors(cwd, deps = {}, lock) {
     let code;
     try {
       for (const sensor of sensors) {
-        // The tests sensor in shadow, where the project says so and its suite is `node --test` alone; a
-        // suite of another command runs as it did, and its row says why it has no shadow.
-        const tests = exact.value === 'shadow' && sensor.name === 'tests' ? testsCommand(cwd, sensor.command) : null;
+        // The tests sensor in shadow or skip mode, where the project says so and its suite is `node --test`
+        // alone; a suite of another command runs as it did, and its row says why it has no exact tests.
+        const tests = exact.value !== null && sensor.name === 'tests' ? testsCommand(cwd, sensor.command) : null;
         const dir = tests === 'node --test' ? tracesDir(cwd, deps.git) : null;
-        // The tests sensor that many files at a time where the variable says so, when it is `node --test`.
+        // The tests sensor that many files at a time where the variable says so, when it is `node --test`;
+        // `checkSensor` adds the flag, with the files of a skip gate after it (`testsCommandLine`).
         const concurrent = concurrency.value !== null && sensor.name === 'tests' ? testsCommand(cwd, sensor.command) : null;
-        const asked = concurrent === 'node --test' ? { ...sensor, command: withConcurrency(sensor.command, concurrency.value) } : sensor;
-        const row = await checkSensor(cwd, asked, { ...deps, gateHeld, wsl, traces: dir ? { dir } : null });
-        if (tests !== null && tests !== 'node --test') row.detail += `; harness.json "exactTests" is "shadow", but the tests run by \`${tests}\`, not \`node --test\`: no shadow`;
+        const row = await checkSensor(cwd, sensor, { ...deps, gateHeld, wsl, traces: dir ? { dir, mode: exact.value } : null, concurrency: concurrent === 'node --test' ? concurrency.value : null });
+        if (tests !== null && tests !== 'node --test') row.detail += `; harness.json "exactTests" is "${exact.value}", but the tests run by \`${tests}\`, not \`node --test\`: ${exact.value === 'skip' ? 'no exact tests' : 'no shadow'}`;
         if (concurrent !== null && concurrent !== 'node --test') row.detail += `; ${TEST_CONCURRENCY_ENV} is ${concurrency.value}, but the tests run by \`${concurrent}\`, not \`node --test\`: they run as written`;
         // A red suite of `node --test` that names its failed test files runs them once more, alone and
         // untraced, by the same route (odd/tasks/flaky-ledger.md, Design 2). A timeout names nothing it
@@ -1382,12 +1500,15 @@ export async function checkSensors(cwd, deps = {}, lock) {
       const ranWhereKeyed = ran.every((row) => (place ? row.ranIn === 'wsl' : !row.ranIn));
       // Nor does a pass that rests on a quarantine: its entry expires, and a proof of the tree would not.
       const quarantined = ran.some((row) => row.rerun);
+      // A passing gate in skip mode writes the key too (odd/tasks/exact-tests.md, T4c): the files it skipped are
+      // proven by their stored passing traces, which is the premise of the switch S6's count earned.
       if (result === 'pass' && key !== null && ranWhereKeyed && !quarantined && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
+      // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
-      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }) })), code });
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
@@ -2037,7 +2158,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

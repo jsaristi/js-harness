@@ -76,7 +76,7 @@ local check, with what it leaves unproven on his machine said beside it.
 - Every code commit goes through the machine's gate with `js-harness gate`, and no test, board
   read or reviewer runs beside a gate that is running — because the lock is one for the machine.
 - Zero dependencies, every operating system, and each thing that ships judged twice: here, and
-  in a project that installed the harness (`docs/ROADMAP.md`, "Session channel") — because
+  in a project that installed the harness (`odd/tasks/session-channel.md`, section 16) — because
   `check` ships, and whether `init` writes a workflow is a product choice of his.
 - A Codex review runs without asking only inside the rate (`js-harness codex-review --plan` at
   most 1.05 times the larger of 300,000 input tokens and 1,200 a changed line); over it, the
