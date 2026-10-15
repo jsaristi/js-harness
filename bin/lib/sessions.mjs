@@ -348,6 +348,23 @@ function compactionOf(entry) {
   return { before: counted(said.preTokens), after: counted(said.postTokens), automatic: said.trigger === 'auto', at: entry.timestamp ?? null };
 }
 
+/** Whether a user entry only carries tool results: the host writes a call's result as such an entry, and it is no prompt. */
+const isToolResultCarrier = (entry) => {
+  const blocks = blocksOf(entry);
+  return blocks.length > 0 && blocks.every((block) => block.type === 'tool_result');
+};
+
+/** How a session was opened, read from its first prompt: `'scheduled'` for a scheduled run, `'command'` for one the SDK
+ * CLI or the CLI opened, `'his'` for one he typed in the desktop app, `'session'` for the first prompt the SDK gave a
+ * session, else `'unknown'`. A scheduled run is checked first: it can come from the SDK CLI too. */
+function openerOf(entry) {
+  if (entry.turnOrigin === 'scheduled' || entry.origin?.subkind === 'scheduled-trigger') return 'scheduled';
+  if (entry.entrypoint === 'sdk-cli' || entry.entrypoint === 'cli') return 'command';
+  if (entry.turnOrigin === 'human' && entry.entrypoint === 'claude-desktop') return 'his';
+  if (entry.turnOrigin === 'sdk' && entry.turnPosition?.promptIndex === 0) return 'session';
+  return 'unknown';
+}
+
 /** What the stretch of work `stretch` cost, as the board keeps a task: `{ tokens, startedBy, startedAt,
  * endedAt, compactions }`, or `{ unavailable }` with the reason when the transcript does not say.
  * `tokens` is how much the context grew from the instruction that started it to its last reply, added up
@@ -497,7 +514,10 @@ export function personAtOf(entries) {
  * question tool included: what the board says of a call that waits too long is `sessionLines`' rule.
  *
  * `personAt` is the time of the newest entry the person wrote, by `quoteOf`'s rule with the question calls of
- * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time. */
+ * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time.
+ *
+ * `opened` is how the session was opened (`openerOf`, read from its first prompt, `'unknown'` when there is none);
+ * `effort` is the effort of its last reply that records one, `null` when none does. */
 export function sessionFacts(
   text,
   {
@@ -532,6 +552,8 @@ export function sessionFacts(
   let stoppedHow = null;
   let lastReply = null;
   let context = null;
+  let opened = null; // how the session was opened, by its first prompt (`openerOf`)
+  let effort = null; // the effort of the session's last reply that records one
 
   for (const [index, entry] of entries.entries()) {
     context = contextOf(entry) ?? context;
@@ -590,6 +612,12 @@ export function sessionFacts(
       if (!received.has(key)) received.set(key, message);
     }
     firstPrompt ??= promptText(entry);
+    // A compaction before the first prompt means the transcript continues a session whose opening prompt it lost: the
+    // first message after it is a later turn and says nothing of how the session was opened.
+    const compacted = entry.isCompactSummary === true || (entry.type === 'system' && entry.subtype === 'compact_boundary');
+    if (opened === null && compacted) opened = 'unknown';
+    if (opened === null && entry.type === 'user' && !entry.isMeta && !isToolResultCarrier(entry)) opened = openerOf(entry);
+    if (isOwnReply(entry) && typeof entry.effort === 'string') effort = entry.effort;
     const said = turnOf(entry);
     if (said !== null) {
       turn = said;
@@ -704,6 +732,8 @@ export function sessionFacts(
     cwd,
     gitBranch,
     permissionMode,
+    opened: opened ?? 'unknown',
+    effort,
     received: [...received.values()],
     sent: [...sentByCall.values()],
     context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
@@ -1253,8 +1283,13 @@ function recordOfRows(rows, notices) {
  * A row has `title` and `titleSource`; what the title says, `code`, `role`, `number` and `purpose`
  * (`roleOfTitle`), all `null` for a title outside the shape; `self` when the session that asked is one of
  * its transcripts; `lastEntryAt`, the last entry of the latest; `permissionMode`, of the latest transcript
- * that records one; `cwd` and `gitBranch`, together, of the latest that records a folder; `worktree`, the
- * one of `worktrees` (the board's) that folder is, or `null`; `features`, the feature documents of that
+ * that records one; `opened`, the first opener of the earliest transcript that has one (`sessionFacts`), else
+ * `scheduled` when a transcript's app record (`app`, a `Map` from a transcript's id to its record, as
+ * `appSessions` gives it) names a scheduled task, else `unknown`; `where`, the app record's of the latest
+ * transcript that has one, else `not-in-app` for a command and `unknown` otherwise; `effort`, the latest
+ * transcript's that is a string, else the app record's, else `null`; `cwd` and `gitBranch`, together, of the
+ * latest that records a folder; `worktree`, the one of `worktrees` (the board's) that folder is, or `null`;
+ * `features`, the feature documents of that
  * worktree's branch (`readPlans`), named without folder or extension, when the worktree is still on the
  * branch the session recorded, and none otherwise; and `transcripts`, `[{ id, lastEntryAt }]`. The folder
  * is the one the entries record, which is where the session was opened: one that reaches a worktree by
@@ -1274,7 +1309,7 @@ function recordOfRows(rows, notices) {
  * 13 and 14 days old were in a window of 12 hours). So a transcript is in a row, and holds a role, only
  * when its last timed entry is in the window; the others, and those with no timed entry at all, are
  * counted in `outside`. With no `since` every transcript given is in a row. */
-export function rosterOf(sessions, { worktrees, since, record } = {}) {
+export function rosterOf(sessions, { worktrees, since, record, app } = {}) {
   const trees = worktrees?.available ? worktrees.items : [];
   const groups = new Map();
   let unread = 0;
@@ -1300,6 +1335,11 @@ export function rosterOf(sessions, { worktrees, since, record } = {}) {
     const placed = members.find((member) => typeof member.cwd === 'string') ?? latest;
     const tree = typeof placed.cwd === 'string' ? trees.find((item) => comparable(item.path) === comparable(placed.cwd)) : undefined;
     const sameBranch = typeof placed.gitBranch === 'string' && tree?.branch === placed.gitBranch;
+    // The app's record of the latest transcript that has one: where it sits, and its effort when no transcript records one.
+    const latestRecord = members.map((member) => app?.get(member.id)).find((item) => item !== undefined) ?? null;
+    const earliestOpener = [...members].reverse().find((member) => typeof member.opened === 'string' && member.opened !== 'unknown')?.opened;
+    const scheduled = members.some((member) => typeof app?.get(member.id)?.scheduledTaskId === 'string');
+    const opened = earliestOpener ?? (scheduled ? 'scheduled' : 'unknown');
     return {
       title: latest.title ?? null,
       // One transcript of the row that carries the title is enough for the row to have it from there.
@@ -1311,6 +1351,9 @@ export function rosterOf(sessions, { worktrees, since, record } = {}) {
       self: members.some((member) => member.self === true),
       lastEntryAt: latest.lastEntryAt ?? null,
       permissionMode: members.find((member) => typeof member.permissionMode === 'string')?.permissionMode ?? null,
+      opened,
+      where: latestRecord?.where ?? (opened === 'command' ? 'not-in-app' : 'unknown'),
+      effort: members.find((member) => typeof member.effort === 'string')?.effort ?? latestRecord?.effort ?? null,
       cwd: placed.cwd ?? null,
       gitBranch: placed.gitBranch ?? null,
       worktree: tree?.path ?? null,
@@ -2833,7 +2876,21 @@ function recordLine(record, now) {
   return parts.length === 0 ? [] : [`    record: ${parts.join('  ')}`];
 }
 
-/** The `Roster` section: two lines per row of `rosterOf`, and a third for a row the record says something
+const OPENED_WORDS = { his: 'opened by him', session: 'opened by a session', command: 'opened by a command', scheduled: 'opened by a scheduled task', unknown: 'opened unknown' };
+const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived: 'archived', 'not-in-app': 'not in the app', unknown: 'where unknown' };
+
+/** The line under a row's mode line: how its session was opened, where the app keeps it and its effort, then
+ * the marks that it is not in his sidebar (in Routines, or not in the app) and that its effort is below `high`
+ * (on a session he did not open himself). */
+function openerLine(row) {
+  const marks = [];
+  if (row.where === 'routines' || row.where === 'not-in-app') marks.push('NOT IN HIS SIDEBAR');
+  if ((row.effort === 'low' || row.effort === 'medium') && row.opened !== 'his') marks.push('effort below high');
+  const effort = row.effort === null ? 'effort unknown' : `effort ${row.effort}`;
+  return `    ${[OPENED_WORDS[row.opened] ?? OPENED_WORDS.unknown, WHERE_WORDS[row.where] ?? WHERE_WORDS.unknown, effort, ...marks].join('  ')}`;
+}
+
+/** The `Roster` section: per row of `rosterOf`, a title line, then the mode line with `openerLine` after it, and a further one for a row the record says something
  * of (`recordLine`). The first has the role, the title and how long the session has been silent, never
  * that it is alive, which no transcript says; the session that asked is the one exception, and is said
  * to be this one. A row whose last word in the record is `closed` or `relieved` says that, with its age,
@@ -2866,7 +2923,7 @@ function rosterLines(roster, now) {
     const transcripts = row.transcripts.length === 1 ? `transcript ${short(row.transcripts[0].id)}` : `transcripts ${row.transcripts.map((transcript) => `${short(transcript.id)} (${ago(transcript.lastEntryAt, now)})`).join(', ')}`;
     // A title no transcript of the row carries is the one of the opening its session read (`titledByReadings`).
     const read = row.titleSource === 'reading' ? '  title from the opening it read' : '';
-    lines.push(`    mode ${row.permissionMode ?? 'unknown'}  folder ${row.cwd ?? 'unknown'}  branch ${row.gitBranch ?? 'unknown'}${feature}  ${transcripts}${read}`, ...recordLine(row.record, now));
+    lines.push(`    mode ${row.permissionMode ?? 'unknown'}  folder ${row.cwd ?? 'unknown'}  branch ${row.gitBranch ?? 'unknown'}${feature}  ${transcripts}${read}`, openerLine(row), ...recordLine(row.record, now));
   }
   const orchestrators = roster.rows.filter((row) => row.role === 'orchestrator');
   if (orchestrators.length > 1) {

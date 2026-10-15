@@ -399,7 +399,9 @@ requests. It only reads. `--watch` waits until the board changes in a way that n
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
 the host made, whether the session was told the pause, committed its feature document and
-announced the compaction, and how many compactions miss one of those facts.
+announced the compaction, and how many compactions miss one of those facts. Under each roster row's
+mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
+and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
 
 ```console
 $ js-harness sessions --address orchestrator

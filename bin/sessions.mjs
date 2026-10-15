@@ -50,6 +50,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
+import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { keptByGitLog, measuresLines, measuresTotal } from './lib/measures.mjs';
@@ -419,6 +420,9 @@ export async function sessionsMain(
     stat = (absolute) => fs.statSync(absolute),
     // The transcript reader, replaceable so a test can make it fail on one transcript.
     readFacts = sessionFacts,
+    // The desktop app's records of the sessions (`appSessions`), replaceable so a test gives its own; a failure
+    // of the reader is no record (`look`), and the board says `unknown` for the sessions it would have placed.
+    readApp = () => appSessions(appRoot(env, platform, homedir())),
     // How a watch waits between two looks; with `now` it is all of its time, so a test waits for nothing.
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   } = {},
@@ -493,6 +497,15 @@ export async function sessionsMain(
 
   const noFolder = (code) => `js-harness sessions: no sessions folder for ${root}: ${projectDir} (${code})`;
 
+  /** The app's records of the sessions, read in each look: a reader that fails leaves none, and the rows say so. */
+  const readAppRecords = () => {
+    try {
+      return readApp();
+    } catch {
+      return new Map();
+    }
+  };
+
   /** One look at the machine: the board, or `null` (said on stderr) when the sessions folder could not be
    * listed: there is then no board to print, whatever the reason, and the line gives it. */
   const look = () => {
@@ -502,6 +515,7 @@ export async function sessionsMain(
       return null;
     }
     const { generatedAt, since, sessions, record } = seen;
+    const app = readAppRecords();
     const worktrees = readWorktrees(run, root, { readFile });
     // The processes first, the lock after: a gate that starts is a process for a moment before it stands
     // in line, and read the other way round more of them would be shown as not yet in line. The waiters
@@ -533,7 +547,7 @@ export async function sessionsMain(
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,
       // The window lists a transcript whose file changed; a row of the roster wants an entry of that time.
-      roster: rosterOf(sessions, { worktrees, since, record }),
+      roster: rosterOf(sessions, { worktrees, since, record, app }),
       // The record's last notices and the last messages between these sessions: `notify` writes the
       // first, the transcripts hold the second, and this command writes neither.
       channel: channelOf(record, sessions),
