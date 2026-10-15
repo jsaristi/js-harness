@@ -42,8 +42,8 @@ only those files, and all of them. Measured on Windows with an empty home and an
 
 - the project is left as it was: `git status` shows nothing;
 - the home keeps the empty folders `.claude/` and `.codex/`, and an empty `AppData/Roaming/`;
-- the home also keeps `.codegraph/`, two telemetry files that codegraph writes itself when
-  `init` runs `codegraph init`. js-harness did not write them, so it does not remove them.
+- the home keeps no `.codegraph/`: `init` runs `codegraph init` with `DO_NOT_TRACK=1`, so codegraph
+  writes no telemetry there (measured on codegraph 1.6.0).
 
 ## Commands
 
@@ -54,7 +54,10 @@ Every example below is the output of a real run. Paths are shortened: `~` is the
 
 Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the declared sensors
 (tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
-runs it, so a red check means the commit is not ready yet.
+runs it, so a red check means the commit is not ready yet. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
+set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
+at a time, for a machine where node's default, one fewer than its processors, is too few: this
+repository's GitHub workflow sets 2.
 
 ```console
 $ js-harness check
@@ -70,7 +73,10 @@ INFO  sensors  no sensors declared: add test, lint or typecheck scripts to packa
 ### js-harness gate
 
 Runs a heavy command under the machine's gate lock, one at a time with the gates of every
-project, and records the run in the machine's gate log. `gate log` prints the last runs.
+project, and records the run in the machine's gate log. `gate log` prints the last runs. A
+command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
+in has an open pull request and commits a push would take now, any command but that push or a merge
+is refused, with the push command printed.
 
 ```console
 $ js-harness gate --no-wait -- node -e "console.log('a heavy run, one at a time')"
@@ -289,6 +295,22 @@ Left out of the review: 5 Markdown documents, 818 changed lines.
 Allowance of this plan: 872,400 input tokens, the larger of 300,000 a review and 1,200 a changed line, for the 727 changed lines it reads. Its estimate, about 470,000, is inside it. …
 ```
 
+### js-harness merge-ready
+
+Says whether a pull request may be merged on its GitHub run, and merges nothing: open, not a
+draft, mergeable, on main, a gentle-ai line in its body, the latest run of its head green, and
+the base that run tested (from its checkout log) is today's main, or behind it only by documents
+with a clean merge. Exit 0 ready, 3 stale, 4 run missing, pending or red, 1 otherwise. A stale
+pull request gets a fresh run by closing and reopening it, once GitHub has recomputed its merge
+against main, which it says. One that conflicts with main is told the files, and to move its own
+change out of them in a small commit before merging main: a clean merge costs no review of its own.
+
+```console
+$ js-harness merge-ready 137
+PR 137: run 38632863631 tested base 028d658; main c0364f8 has moved since by 6 paths that are not documents (bin/check.mjs, bin/check.test.mjs, evals/arms.mjs, ...): stale.
+PR 137: refs/pull/137/merge still has 028d658 as its first parent, not main c0364f8: wait before reopening.
+```
+
 ### js-harness functions
 
 Shows each function the project can turn off and on in `harness.json` under `"functions"`: its
@@ -342,12 +364,25 @@ js-harness notify: recorded note for the orchestrator at 2026-10-14T09:24:29.740
 address of the orchestrator: no single one now (sessions --address exit 1): …
 ```
 
+### js-harness wait
+
+Waits in the background for one condition and ends when it holds: a pull request merged, a
+commit or a file content on `origin/main`, or a notice addressed to a session in the channel
+record. It says at start what it waits for and what ends it, so a session keeps working instead
+of ending its turn to wait.
+
+```console
+$ js-harness wait --pr 133 --for 1 --every 5
+js-harness wait: waits for the merge of pull request 133; ends when it holds, or after 1 minutes; stop it with TaskStop when it is no longer needed
+js-harness wait: the merge of pull request 133 holds (14:12)
+```
+
 ### js-harness resume
 
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
 document it works on and what to read there, so nobody pastes a resume prompt. It writes
-nothing and always exits 0. `resume --pause` is the hook of the context pause.
+nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet.
 
 ```console
 $ js-harness resume --hook < hook-input.json
@@ -355,4 +390,25 @@ js-harness resume: this session was just compacted. What follows is read from fi
 Session: title not known (the host gave the hook none and no session id a transcript could be found by)
 …
 Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.
+```
+
+### js-harness guard
+
+The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
+`PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
+session and on `Bash`. `guard --hook` reads the call on standard input and refuses four things:
+a sub-agent launched on a model the project's rules do not give; a message whose stamped hour is
+more than a minute off the clock; a shell command with backticks inside double quotes, which
+bash runs as commands; and a `node --test` of several files outside a gate turn while another
+gate holds the machine's lock. A refusal is printed as the hook's deny, with the reason and the
+right value; any other call runs as it was.
+
+It always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
+The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project
+that installs the harness has them off by default, so the model check applies only where the
+project sets them.
+
+```console
+$ js-harness guard --hook < send.json
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"js-harness guard: this message stamps 03:10, and the clock says 15:01. Stamp 15:01, or no hour: an hour in a message is read from the clock in the same step, or left out."}}
 ```

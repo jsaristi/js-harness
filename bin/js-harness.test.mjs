@@ -80,8 +80,16 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
   assert.match(result.stdout, /codex-review/);
 });
 
+test('guard is listed in --help and wired through the dispatcher', () => {
+  assert.match(run(['--help']).stdout, /guard {7}The PreToolUse hook/);
+  const result = run(['guard']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Usage: js-harness guard --hook/);
+});
+
 test('functions is listed in --help and wired through the dispatcher', () => {
   assert.match(run(['--help']).stdout, /functions {3}Show each function this project can turn off and on/);
+  assert.match(run(['--help']).stdout, /functions apply makes this clone what they ask.*functions set <name> <value>/);
   const result = run(['functions', '--no-such-flag']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown argument: --no-such-flag/);
@@ -222,7 +230,7 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     assert.deepEqual(
       rows.map((r) => r.id),
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'claude-account', 'remote-server', 'hook-commands'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -343,6 +351,19 @@ test('--help lists resume; without --hook it exits 2 with its usage, and the hoo
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// T20 (session channel): the command a session runs in the background until its condition holds.
+test('--help lists wait, and wait with no condition exits 2 with its usage through the dispatcher, checking nothing', () => {
+  assert.match(
+    run(['--help']).stdout,
+    /^ {2}wait\s+Wait in the background until one condition holds.*js-harness wait \(--pr.*--notice-to.*--every.*--for.*It checks at once.*exit 1.*TaskStop/m,
+  );
+  const result = run(['wait']);
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /^js-harness wait: a condition is required/);
+  assert.match(result.stderr, /Usage: js-harness wait \(--pr <number>/);
 });
 
 test('--help lists notify, and notify with nothing to write exits 2 with its usage through the dispatcher', () => {

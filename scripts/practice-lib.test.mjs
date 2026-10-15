@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, uninstalledHostProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
 } from './practice-lib.mjs';
+import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
 
@@ -31,6 +32,7 @@ test('practiceLayout gives every path of the practice folder from its root', () 
     releases: 'D:\\js-harness-practice\\releases',
     npmCache: 'D:\\js-harness-practice\\npm-cache',
     record: 'D:\\js-harness-practice\\record.jsonl',
+    hostHome: 'D:\\js-harness-practice\\host-home',
   });
   assert.equal(POSIX_LAYOUT.marker, '/srv/practice/practice.json');
   assert.equal(POSIX_LAYOUT.npmCache, '/srv/practice/npm-cache');
@@ -483,7 +485,7 @@ test('realHomeFiles names nothing of the gate log, which the gates of the user\'
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-test('the journey is the eleven steps of the feature document and the pause hook, under ids that stay', () => {
+test('the journey is the eleven steps of the feature document, the pause hook, the project rules and the host session, under ids that stay', () => {
   // The ids go into record.jsonl, so a renamed one breaks every line already written: they are pinned here.
   assert.deepEqual(JOURNEY.map((step) => step.id), [
     'real-home-before',
@@ -492,9 +494,11 @@ test('the journey is the eleven steps of the feature document and the pause hook
     'project-adopt',
     'commit-passes',
     'commit-refused',
+    'project-rules',
     'project-uninstall',
     'global-uninstall',
     'pause-hook',
+    'host-loads',
     'real-home-after',
     'record',
   ]);
@@ -532,7 +536,7 @@ test('walkJourney runs every step in order, each with the context and the result
     seen.push({ id, sameContext: handed === ctx, before: handed.results.map((step) => step.id) });
     return `${id} done`;
   }]));
-  assert.deepEqual(walkJourney({ steps, ctx }), { ok: true, passed: 11, failed: undefined, unreported: undefined });
+  assert.deepEqual(walkJourney({ steps, ctx }), { ok: true, passed: JOURNEY.length, failed: undefined, unreported: undefined });
   assert.deepEqual(ctx.results, IDS.map(done));
   // The record step reads the results of the steps before it while it runs: they are there by then.
   assert.deepEqual(seen, IDS.map((id, index) => ({ id, sameContext: true, before: IDS.slice(0, index) })));
@@ -547,10 +551,10 @@ test('walkJourney skips what follows a failed step, but for the comparison of th
 
 test('walkJourney says the run failed when a step that always runs fails', () => {
   const late = { results: [] };
-  assert.deepEqual(walkJourney({ steps: stepsWith('real-home-after'), ctx: late }), { ok: false, passed: 10, failed: 'real-home-after', unreported: undefined });
+  assert.deepEqual(walkJourney({ steps: stepsWith('real-home-after'), ctx: late }), { ok: false, passed: JOURNEY.length - 1, failed: 'real-home-after', unreported: undefined });
   assert.deepEqual(late.results, IDS.map((id) => (id === 'real-home-after' ? broke(id) : done(id))), 'the record still runs');
 
-  assert.deepEqual(walkJourney({ steps: stepsWith('record'), ctx: { results: [] } }), { ok: false, passed: 10, failed: 'record', unreported: undefined });
+  assert.deepEqual(walkJourney({ steps: stepsWith('record'), ctx: { results: [] } }), { ok: false, passed: JOURNEY.length - 1, failed: 'record', unreported: undefined });
 
   // Two failures: the first one is the one named, and the steps that always run are still not skipped.
   const both = { results: [] };
@@ -578,10 +582,9 @@ test('walkJourney hands report the facts of the line of every step, in order', (
   const lines = [];
   walkJourney({ steps: stepsWith('project-uninstall'), ctx: { results: [] }, report: (line) => lines.push(line) });
   assert.deepEqual(lines, [
-    ...IDS.slice(0, 6).map((id) => ({ status: 'PASS', id, title: titleOf(id), detail: `${id} done` })),
+    ...IDS.slice(0, IDS.indexOf('project-uninstall')).map((id) => ({ status: 'PASS', id, title: titleOf(id), detail: `${id} done` })),
     { status: 'FAIL', id: 'project-uninstall', title: titleOf('project-uninstall'), detail: 'project-uninstall broke' },
-    { status: 'SKIP', id: 'global-uninstall', title: titleOf('global-uninstall'), failed: 'project-uninstall' },
-    { status: 'SKIP', id: 'pause-hook', title: titleOf('pause-hook'), failed: 'project-uninstall' },
+    ...IDS.slice(IDS.indexOf('project-uninstall') + 1, IDS.indexOf('real-home-after')).map((id) => ({ status: 'SKIP', id, title: titleOf(id), failed: 'project-uninstall' })),
     { status: 'PASS', id: 'real-home-after', title: titleOf('real-home-after'), detail: 'real-home-after done' },
     { status: 'PASS', id: 'record', title: titleOf('record'), detail: 'record done' },
   ]);
@@ -621,9 +624,9 @@ test('walkJourney goes on when report throws, and says that a line could not be 
     if (calls === 2 || calls === 3) throw new Error(`write EPIPE ${calls}`);
   };
   // Every step still runs, the record included, and the steps are judged as they went; the first reason is kept.
-  assert.deepEqual(walkJourney({ steps: stepsWith(), ctx, report }), { ok: true, passed: 11, failed: undefined, unreported: 'write EPIPE 2' });
+  assert.deepEqual(walkJourney({ steps: stepsWith(), ctx, report }), { ok: true, passed: JOURNEY.length, failed: undefined, unreported: 'write EPIPE 2' });
   assert.deepEqual(ctx.results, IDS.map(done));
-  assert.equal(calls, 11);
+  assert.equal(calls, JOURNEY.length);
 });
 
 // ---- the record ------------------------------------------------------------------------------------------------------
@@ -663,7 +666,7 @@ test('a run is ok only when every step is ok and at least one ran', () => {
 });
 
 test('a run is ok only as the whole journey: every step of it, all ok', () => {
-  assert.equal(RUN.steps.length, 11);
+  assert.equal(RUN.steps.length, JOURNEY.length);
   assert.equal(okOf(RUN.steps), true);
   // A part of the journey that passed is not a run that passed: a step that was skipped is not in the line.
   assert.equal(okOf(RUN.steps.slice(0, 2)), false);
@@ -801,8 +804,9 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor and resum
     { event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' },
     { event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' },
     { event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' },
+    { event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', command: 'js-harness guard --hook || exit 0' },
   ]);
-  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude']]);
+  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude']]);
   assert.deepEqual(declared('claude'), listedFor('claude'));
   assert.deepEqual(declared('codex'), listedFor('codex'));
   assert.ok(Object.isFrozen(HARNESS_HOOKS));
@@ -1000,4 +1004,89 @@ test('pauseHookInput is the JSON the host sends the pause command on standard in
     cwd: '/made/up/project',
     hook_event_name: 'PostToolUse',
   });
+});
+
+// ---- the project's own rules (odd/tasks/project-rules.md, T6) ----------------------------------------------------------
+
+test('the practice rules hold on the files the step writes, with the test sensor of the practice project', () => {
+  const files = practiceRuleFiles();
+  assert.deepEqual(Object.keys(files).sort(), ['docs/conventions.md', 'docs/rules.json']);
+  const result = checkProjectRules({ text: files['docs/rules.json'], readFile: (file) => files[file] ?? null, sensors: ['tests'] });
+  assert.deepEqual(result.findings, []);
+  assert.deepEqual(result.rules.map((rule) => rule.id), [PRACTICE_RULES.prose, PRACTICE_RULES.sensor]);
+});
+
+test('the list without its prose rule is refused as a rule deleted since HEAD', () => {
+  const files = practiceRuleFiles();
+  const text = listWithout(files['docs/rules.json'], PRACTICE_RULES.prose);
+  const result = checkProjectRules({ text, headText: files['docs/rules.json'], readFile: (file) => files[file] ?? null, sensors: ['tests'] });
+  assert.deepEqual(result.findings, [`rule "${PRACTICE_RULES.prose}" is in the list of HEAD and gone from docs/rules.json: retire it (retired, successors) instead of deleting it`]);
+});
+
+test('the conventions without the phrase are refused as a phrase gone from its home', () => {
+  const files = practiceRuleFiles();
+  const conventions = files['docs/conventions.md'].replace(PRACTICE_RULES.phrase, 'Deploy as you like');
+  const result = checkProjectRules({ text: files['docs/rules.json'], readFile: (file) => (file === 'docs/conventions.md' ? conventions : files[file] ?? null), sensors: ['tests'] });
+  assert.deepEqual(result.findings, [`rule "${PRACTICE_RULES.prose}": docs/conventions.md no longer holds the phrase "${PRACTICE_RULES.phrase}"`]);
+});
+
+// ---- the host session (odd/tasks/practice-project.md, "T5: the step host-loads") --------------------------------------
+
+test('parseArgs reads --no-host and --only <step> on run, and refuses them elsewhere, together, or with an unknown step', () => {
+  assert.deepEqual(parseArgs(['run', '--root', WIN_ROOT, '--no-host'], 'win32'), { command: 'run', root: WIN_ROOT, noHost: true });
+  assert.deepEqual(parseArgs(['run', '--only', 'host-loads', '--root', WIN_ROOT], 'win32'), { command: 'run', root: WIN_ROOT, only: 'host-loads' });
+  assert.deepEqual(parseArgs(['setup', '--root', WIN_ROOT, '--no-host'], 'win32'), { error: '--no-host goes with run' });
+  assert.deepEqual(parseArgs(['setup', '--root', WIN_ROOT, '--only', 'host-loads'], 'win32'), { error: '--only goes with run' });
+  assert.deepEqual(parseArgs(['run', '--root', WIN_ROOT, '--only', 'nosuch'], 'win32'), { error: '--only names a step of the journey, and nosuch is none' });
+  assert.deepEqual(parseArgs(['run', '--root', WIN_ROOT, '--only'], 'win32'), { error: '--only needs a value: the id of a step' });
+  assert.deepEqual(parseArgs(['run', '--root', WIN_ROOT, '--only', 'host-loads', '--no-host'], 'win32'), { error: '--only and --no-host do not go together' });
+  assert.deepEqual(parseArgs(['run', '--root', WIN_ROOT, '--no-host', '--no-host'], 'win32'), { error: '--no-host was given twice' });
+});
+
+test('recordLine names the steps a run left out and what the host session cost, and such a run is not ok', () => {
+  const steps = RUN.steps.filter((step) => step.id !== HOST_STEP);
+  const left = JSON.parse(recordLine({ ...RUN, steps, left: [HOST_STEP] }));
+  assert.deepEqual(left.left, [HOST_STEP]);
+  assert.equal(left.ok, false);
+  const host = { version: '2.1.296 (Claude Code)', model: 'claude-haiku-5-5', inputTokens: 10, outputTokens: 2, cacheTokens: 0, costUsd: 0.01, durationMs: 900 };
+  assert.deepEqual(JSON.parse(recordLine({ ...RUN, host })).host, host);
+  assert.equal(Object.hasOwn(JSON.parse(recordLine(RUN)), 'host'), false);
+  assert.equal(Object.hasOwn(JSON.parse(recordLine(RUN)), 'left'), false);
+});
+
+const LIVE_SESSION = {
+  Path: 'C:\\Windows', USERPROFILE: 'C:\\Users\\me', HOME: 'C:\\Users\\me', CLAUDE_CODE_CHILD_SESSION: '1', CLAUDECODE: '1',
+  CLAUDE_CODE_ENTRYPOINT: 'claude-desktop', CLAUDE_CODE_MESSAGING_SOCKET: 'pipe', CLAUDE_CODE_MESSAGING_TOKEN: 'secret',
+  CLAUDE_PLUGIN_DATA: 'C:\\Users\\me\\data', ANTHROPIC_BASE_URL: 'http://x', JS_HARNESS_EVAL_OAUTH_TOKEN: 'tok', CLAUDE_CONFIG_DIR: 'C:\\Users\\me\\.claude',
+};
+
+test('the host session runs in an allowlist: the practice config, a scratch home, the candidate first on PATH, and the token', () => {
+  const env = hostEnv(WIN_LAYOUT, LIVE_SESSION, 'tok', 'win32');
+  assert.equal(env.CLAUDE_CONFIG_DIR, 'D:\\js-harness-practice\\home\\.claude');
+  assert.equal(env.JS_HARNESS_HOME, 'D:\\js-harness-practice\\home');
+  assert.equal(env.USERPROFILE, 'D:\\js-harness-practice\\host-home');
+  assert.equal(env.HOME, 'D:\\js-harness-practice\\host-home');
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, 'tok');
+  assert.equal(env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
+  const pathNames = Object.keys(env).filter((name) => name.toUpperCase() === 'PATH');
+  assert.equal(pathNames.length, 1);
+  assert.ok(env[pathNames[0]].startsWith(`${shimDir(WIN_LAYOUT.prefix, 'win32')};`), env[pathNames[0]]);
+  for (const name of ['CLAUDE_CODE_CHILD_SESSION', 'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_MESSAGING_SOCKET', 'CLAUDE_CODE_MESSAGING_TOKEN', 'CLAUDE_PLUGIN_DATA', 'ANTHROPIC_BASE_URL', 'JS_HARNESS_EVAL_OAUTH_TOKEN']) {
+    assert.equal(Object.hasOwn(env, name), false, name);
+  }
+  assert.equal(Object.values(env).includes(null), false);
+});
+
+test('after a second init, only an AGENTS.md that is the candidate template may differ from the commit', () => {
+  const template = '# project\n';
+  assert.equal(secondInitProblem('', template, template), null);
+  assert.equal(secondInitProblem(' M AGENTS.md', template, template), null);
+  assert.equal(secondInitProblem(' M AGENTS.md', '# edited\n', template), 'tracked files differ after the second js-harness init:\n M AGENTS.md');
+  assert.equal(secondInitProblem(' M AGENTS.md\n M add.mjs', template, template), 'tracked files differ after the second js-harness init:\n M AGENTS.md\n M add.mjs');
+});
+
+test('a text is redacted of the token wherever it appears, and left as it is with no token', () => {
+  assert.equal(redacted('a tok b tok', 'tok'), 'a <token> b <token>');
+  assert.equal(redacted('a b', undefined), 'a b');
+  assert.equal(redacted(undefined, 'tok'), '');
 });

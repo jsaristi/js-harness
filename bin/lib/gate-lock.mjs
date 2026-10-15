@@ -500,8 +500,10 @@ function unreadable(dir, { token, since, answer }) {
  * every beat hours old, and a live holder's timer fires before the next look. Its file is then removed
  * in one try. A busy answer there is likely the holder itself, touching its file as it comes back to
  * life, and the two stale readings only say what was true before the removal began: the wait goes on,
- * and the next look reads the beat again, under the same rule. `now`, `sleep` and `fileSystem` are
- * injectable, so a test moves the clock and steps between two file operations. */
+ * and the next look reads the beat again, under the same rule. `stillWanted` is asked at every look; when it
+ * answers no, the launcher of this gate has ended, and it gives up its place with `refused: 'launcher gone'`.
+ * `now`, `sleep` and `fileSystem` are injectable, so a test moves the clock and steps between two file
+ * operations. */
 export async function takeGateLock({
   home,
   cwd,
@@ -517,6 +519,7 @@ export async function takeGateLock({
   pollMs = GATE_POLL_MS,
   beatMs = GATE_BEAT_MS,
   fileSystem: io = fs,
+  stillWanted = () => true,
 }) {
   const root = gateDir(home);
   const dir = gateLockDir(home);
@@ -630,6 +633,14 @@ export async function takeGateLock({
   };
 
   for (;;) {
+    // Before anything of the look: a gate whose launcher has ended (`stillWanted`, ./launcher.mjs) is an
+    // orphan, whose turn would run a script nobody waits for (odd/tasks/orphan-gate.md). It gives up its place
+    // in the line and takes nothing, at the first look that finds it so, the head of the line included.
+    if (!stillWanted()) {
+      unstage();
+      const at = now();
+      return { refused: 'launcher gone', holder: null, line: null, waitedMs: at - startedWaiting, stillMs: at - boundFrom, besideOlder: besideOlderSinceCount };
+    }
     // The line first: this gate shows itself in it, and reads who is before it. Whatever fails here (its
     // file cannot be touched, its folder cannot be made, the gate folder cannot be listed) leaves a look
     // with nobody ahead: what follows is then the take as it was before the line, with its own answer to

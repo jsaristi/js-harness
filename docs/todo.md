@@ -11,10 +11,20 @@ matters, who holds it, and where it was seen.
 
 ## Faster
 
+- A test on the real timer failed a gate of a commit that touched only documents:
+  `bin/lib/remote.test.mjs:923`, "a server that never exits has its log trimmed while it runs, on the
+  real timer, and keeps writing whole lines after each trim" (assertion at line 953), in WSL2 at 05:39
+  on 2026-10-14, two minutes after the same test passed in the gate before it. Seen by JH 8; whose: the
+  owner of `remote`. A documents-only commit would not run it at all once the documents skip lands
+  (JH 8, next).
 - ~~A push that waits behind a turn it does not need (pull request 121, 16 minutes behind a measure),
   and a scripted turn that hangs with the lock (the pair measure, 24 minutes).~~ Placed: JH 8,
   `odd/tasks/gate-turn-guards.md`: `gate` refuses a turn while a push waits, and stops a command at
   30 minutes (`--max`); done when its pull request merges.
+- ~~A queued `gate --wait` left alive when its launcher was stopped (JH 5, 2026-10-14: a TaskStop killed
+  the shell, and the orphan would have committed a half-edited tree at its turn).~~ Placed: JH 8,
+  `odd/tasks/orphan-gate.md`: a waiting gate whose launcher ended gives up its place and runs nothing;
+  done when its pull request merges.
 - The antivirus (MsMpEng) takes one to two of the eight processors while a check runs (124 to 189
   percent of one processor, read 2026-10-13 22:07). His: nothing is changed without his word. JH 8
   measures what an exclusion of the suite's temporary folders would give before anything reaches him.
@@ -77,25 +87,27 @@ matters, who holds it, and where it was seen.
 
 ## Owed and not yet placed
 
-- The practice run with a real host session (practice-project T5): needed before 1.0.0. Held by
+- ~~The practice run with a real host session (practice-project T5): needed before 1.0.0. Held by
   "JH 11 · reglas del proyecto y prueba final" since 2026-10-13, by his answer "Una sexta sesión
-  (Recomendada)" (the lead's transcript `65318fd5`, line 13854, read with `sessions --quote`).
+  (Recomendada)" (the lead's transcript `65318fd5`, line 13854, read with `sessions --quote`).~~
+  Placed: built in pull request 134 (`feat/project-rules`, the step `host-loads`, 13 of 13 on
+  `1659801`); done when it merges.
 - Every writing command refuses an unknown flag: the one task a first user would meet; its order is
   not set. Moved on 2026-10-14 from rule-hierarchy T4 to JH 12's `odd/tasks/commands-and-doctor.md`
   (T1), not on `main` yet.
-- An installed project's own rules: held by JH 11 with the practice run, by the same answer (line
-  13854); it left JH 7's queue.
+- ~~An installed project's own rules: held by JH 11 with the practice run, by the same answer (line
+  13854); it left JH 7's queue.~~ Placed: built in pull request 134 (`odd/tasks/project-rules.md`);
+  done when it merges.
 - Which model the native gentle-ai review used (his answer of 2026-10-12, line 9776): read it from JH
   10's review of 2026-10-13 (lineage review-5ba00685b483e51f). The orchestrator.
 - ~~pnpm's pack refuses this checkout on Windows (ERR_PNPM_BIN_CRLF, `bin/js-harness.mjs` checked
   out with CRLF); whether an install by pnpm meets it is not measured. JH 7's register.~~ Placed on
   2026-10-14: `docs/FAILURES.md`, entry `pnpm-pack-refuses-crlf`.
-- What `codegraph init` writes under the home is recorded by no manifest, so `uninstall --global`
-  leaves `.codegraph/telemetry-queue.jsonl` and `.codegraph/telemetry.json`: it breaks the rule that
-  what the harness writes outside the repository is undone exactly. Fix: record what `codegraph
-  init` creates, or remove those two files on uninstall. JH 9 holds it (`init`, in
-  `bin/lib/project.mjs`) and takes it after its slice 2, by the lead's message of 2026-10-14. Seen
-  by the README's runs; register entry `init-leaves-codegraph-files`.
+- ~~What `codegraph init` writes under the home is recorded by no manifest, so `uninstall --global`
+  leaves `.codegraph/telemetry-queue.jsonl` and `.codegraph/telemetry.json`.~~ Fixed on 2026-10-14 by
+  writing nothing there: `init` runs `codegraph init` with `DO_NOT_TRACK=1` (measured on codegraph
+  1.6.0: without it both files appear in an empty home, with it none). Register entry
+  `init-leaves-codegraph-files`, with its control.
 - The installed copy on his machine is at ad7b37b; main has moved by many pull requests. Updating it
   is a change on his machine he approved once; to be done at a quiet moment, with its undo.
 - The Codex plugin's removal waits for JH 5's doctor row (his order). JH 5.
@@ -113,6 +125,10 @@ matters, who holds it, and where it was seen.
   `session-classes` row of `doctor` (JH 12, T5). The fix is `js-harness install
   --accept-session-messages`, which records the setting and is undone by `uninstall`; it needs his
   installed copy (ad7b37b) updated first, a change on his machine, his, with its undo.
+- A gate whose sensors ran in WSL2 keeps no name of a failing test: the gate log records `tests:
+  fail, 120.6 s, wsl` and the runner keeps no output, so a failure that does not come back cannot
+  be named afterwards. Seen 2026-10-14: JH 11's gate of 10:01 UTC failed one test in WSL2 and passed
+  on the retry, and its name was lost (`fix/flaky-tests`, `bin/lib/remote.test.mjs`). Held by JH 8.
 
 ## His to tidy, when he wants (nothing waits on them)
 

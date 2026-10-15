@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pauseNotice, readEnd, statePath, toldBetween } from './pause.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, shareOf } from './sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, shareOf } from './sessions.mjs';
 
 // Every test writes under a home of its own in the temp folder and reads synthetic transcripts: nothing
 // here reads or writes the real home. The figures are computed from the exported constants, never written.
@@ -177,12 +177,73 @@ test('the crossing: the first call at the pause says the share, the room and the
   assert.ok(notice.text.includes(`holds ${notice.share}% of its context window`), notice.text);
   assert.ok(notice.text.includes(`compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%`), notice.text);
   assert.ok(notice.text.includes(`about ${SAID(notice.room)} tokens are left`), notice.text);
-  // It ships to installed projects: it names what the user sends, not a convention of this repository.
-  assert.ok(notice.text.includes('with what they send to compact this session and the prompt that resumes it after'), notice.text);
   assert.doesNotMatch(notice.text, /two blocks of a cut|\b(he|his|him)\b/);
   assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
   assert.equal(stateOf(home).armed, false);
   assert.deepEqual(stateOf(home).told, [{ at: new Date(NOW).toISOString(), tokens: OVER }]);
+}));
+
+// The cut is handed to the user only while they are present: a session that stops for a /compact nobody sends
+// waits for hours, and the host compacts a session inside a turn anyway.
+const typed = (at, text = 'go on') => ({ type: 'user', origin: { kind: 'human' }, message: { role: 'user', content: text }, timestamp: new Date(at).toISOString() });
+const GIVE = 'give them, in your next reply, what they send to compact this session and the prompt that resumes it after';
+const KEEP = 'do not stop and give them nothing to send: the host compacts this session inside a turn';
+
+test('the crossing while the user wrote here minutes ago: the notice hands them the cut', inHome((home) => {
+  const transcript = write(home, 't.jsonl', [typed(NOW - 5 * 60000), reply(OVER)]);
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
+  assert.ok(notice.text.includes(`the user wrote here 5m ago: ${GIVE}`), notice.text);
+  assert.ok(!notice.text.includes(KEEP), notice.text);
+}));
+
+test('the crossing while the user is away, or never wrote in the end that is read: no cut, and the session goes on', inHome((home) => {
+  for (const entries of [[typed(NOW - 2 * 3600000), reply(OVER)], [reply(OVER)]]) {
+    const transcript = write(home, 't.jsonl', entries);
+    fs.rmSync(path.join(home, '.js-harness'), { recursive: true, force: true });
+    const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
+    assert.ok(notice.text.includes(KEEP), notice.text);
+    assert.ok(!notice.text.includes(GIVE), notice.text);
+    assert.ok(notice.text.includes('go on with the task'), notice.text);
+  }
+}));
+
+// From the pause on, the state is kept current after every step and the session stores the prompt that resumes it,
+// so a compaction by the host, in the middle of a task, resumes from minutes-old state; a last notice comes just
+// before the host compacts.
+const LAST = Math.round((COMPACTION * DEFAULT_CONTEXT_LAST_PERCENT) / DEFAULT_CONTEXT_COMPACTION_PERCENT);
+const OPENING = 'js-harness notify --opening "<this session\'s title>"';
+
+test('the pause notice says to keep the state current after every step, and to store the prompt that resumes the session', inHome((home) => {
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
+  assert.equal(notice.stage, 'pause');
+  assert.ok(notice.text.includes('write it after every step you finish, not once, and commit it with your next commit'), notice.text);
+  assert.ok(notice.text.includes(`Store the prompt that resumes you with ${OPENING}`), notice.text);
+}));
+
+test('the last notice: past the last point after the pause, once, says the compaction is near and to start nothing new', inHome((home) => {
+  assert.ok(DEFAULT_CONTEXT_PAUSE_PERCENT < DEFAULT_CONTEXT_LAST_PERCENT && DEFAULT_CONTEXT_LAST_PERCENT < DEFAULT_CONTEXT_COMPACTION_PERCENT);
+  assert.equal(DEFAULT_CONTEXT_COMPACTION_PERCENT - DEFAULT_CONTEXT_LAST_PERCENT, 3, 'three points of room: one large tool result eats two');
+  const options = { sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') };
+  assert.equal(pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(OVER)]) }).stage, 'pause');
+  const last = pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 500)]) });
+  assert.equal(last.stage, 'last');
+  assert.ok(last.text.includes(`about ${SAID(COMPACTION - (LAST + 500))} tokens are left`), last.text);
+  assert.ok(last.text.includes('The host compacts this session in a moment: write your state and store your resume prompt now, before anything else'), last.text);
+  assert.ok(last.text.includes('before anything else, then go on with the task: the compaction comes with your next requests, and never by waiting for it'), last.text);
+  assert.ok(!last.text.includes('start nothing new'), 'a session told to start nothing new can stop short of the compaction');
+  assert.ok(last.text.includes(OPENING), last.text);
+  assert.equal(pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 900)]) }), null, 'said once');
+}));
+
+test('a jump from under the pause past the last point gives the last notice alone, and under the pause both re-arm', inHome((home) => {
+  const options = { sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') };
+  const jump = pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 500)]) });
+  assert.equal(jump.stage, 'last');
+  assert.equal(pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 600)]) }), null);
+  assert.equal(pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(UNDER)]) }), null);
+  assert.equal(pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(OVER)]) }).stage, 'pause');
+  assert.equal(pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 500)]) }).stage, 'last');
 }));
 
 test('a new stretch: under the pause after a crossing the state re-arms and keeps what it told, and the next crossing tells again', inHome((home) => {

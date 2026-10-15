@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
@@ -1011,6 +1011,64 @@ test('main --push does not run the contracts row', async () => {
     writeTask(dir, 'bad.md', BAD_CONTRACT);
     const { output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
     assert.doesNotMatch(output, /contracts/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- rules row: a project's own rules, when it keeps a list (./lib/project-rules.mjs) ---
+
+test('main runs the rules row first, when a project keeps its own rules, and a rule that no longer holds makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), `- Never deploy by hand.\n${'a'.repeat(400)}`);
+    fs.mkdirSync(path.join(dir, 'docs'));
+    const rule = { id: 'no-direct-deploy', subject: 'a deploy goes through the pipeline', since: '2026-10-14', path: 'AGENTS.md', phrases: ['Never deploy by hand'] };
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), JSON.stringify({ format: 1, rules: [rule] }));
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    const namesOf = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line)).map((row) => row.split('  ')[1]);
+
+    const held = await runCheck(['--cwd', dir], env);
+    assert.equal(held.code, 0);
+    assert.deepEqual(namesOf(held.output).slice(0, 2), ['rules', 'budget']);
+    assert.match(held.output, /^PASS {2}rules {2}1 rule of the project holds \(docs\/rules\.json\)$/m);
+
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
+    assert.match(refused.output, /^ {6}rule "no-direct-deploy": AGENTS\.md no longer holds the phrase "Never deploy by hand"$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main has no rules row in a project that keeps no list of its own, nor in the harness repository', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    assert.doesNotMatch((await runCheck(['--cwd', dir], env)).output, /^(PASS|FAIL) {2}rules /m);
+    fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'bin', 'lib', 'rules-data.mjs'), 'export const RULES = [];\n');
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), '{ not json');
+    assert.doesNotMatch((await runCheck(['--cwd', dir], env)).output, /^(PASS|FAIL) {2}rules /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a project list that cannot be read fails the rules row and stops nothing else from printing', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), '﻿{ not json');
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir });
+    assert.equal(code, 1);
+    assert.match(output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
+    assert.match(output, /^PASS {2}budget /m);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2264,6 +2322,29 @@ test("a commit of documents alone runs the sensors of documents, in their order 
   }
 });
 
+// Codex, 2026-10-14: with nothing staged there is no commit to guard, and a check run by hand on a branch
+// whose commits differ from the trunk in documents alone must still run its sensors over the code edits it
+// has not staged. The other side is asked only of an index that holds a change.
+test('a check with nothing staged runs the sensors even where the branch differs from the trunk in documents alone', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    const git = (program, args) => {
+      git.asked.push(args.join(' '));
+      if (args[0] === 'rev-parse') return ok(args.includes('--show-prefix') ? '\n' : 'abc123\n');
+      // Nothing staged against its own branch; against the trunk, documents alone.
+      return ok(args.at(-1) === '-z' ? '' : 'docs/guide.md\0');
+    };
+    git.asked = [];
+    const spawn = recordedSensors();
+    await checkSensors(dir, { spawn, git });
+    assert.deepEqual(spawn.ran.map(([command]) => command), ['run-tests']);
+    assert.ok(!git.asked.some((asked) => asked.startsWith('diff') && asked.endsWith('origin/HEAD')), JSON.stringify(git.asked));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a commit that holds anything that is no document runs the project's sensors and none of the sensors of documents", async () => {
   const dir = makeTmpDir();
   try {
@@ -3428,7 +3509,7 @@ test('a failing static row stops nothing where no sensor would have run: a fault
   const git = stagedGit(['docs/guide.md', 'src/app.js']);
   const { asked, deps } = afterStaticRows({ ...log.deps, git });
   const { code, output } = await runCheck(argv, {}, deps);
-  assert.deepEqual([code, { ...asked, git: git.asked }], [1, { ...NOTHING_ASKED, git: ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z'] }]);
+  assert.deepEqual([code, { ...asked, git: git.asked }], [1, { ...NOTHING_ASKED, git: ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z', ...['origin/HEAD', 'origin/main', 'origin/master', 'MERGE_HEAD'].map((ref) => `git rev-parse --verify --quiet ${ref}^{commit}`)] }]);
   assert.deepEqual([namesOf(output), gateRows(output)], [[...STATIC_ROWS, 'gate'], [stoppedRow(['budget'])]]);
   assert.deepEqual(log.events.map(({ event }) => event), ['stopped']);
 }));
@@ -4349,6 +4430,67 @@ test('a merge git commits by itself goes through the gate: one that brings docum
   }
 });
 
+// The merge of the trunk into a branch of documents (odd/tasks/merge-documents-skip.md, S1): what the merge
+// holds differs from the side it merges only in declared documents, so no sensor runs, through the hook of a
+// merge git commits by itself and through `git commit` after `git merge --no-commit`. On 2026-10-14 such a
+// merge held the lock 10 minutes for nothing.
+test('a merge of the trunk into a branch of documents runs no sensor when the merge differs from the side it merges only in documents, by itself or committed by hand', async () => {
+  const { repo, marker, env, remove } = mergingRepo();
+  try {
+    const trunk = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD');
+    const run = (...args) => {
+      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: repo, env, encoding: 'utf8' });
+      return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+    };
+    const onTrunk = (file) => {
+      git(repo, 'checkout', '--quiet', trunk);
+      writeFile(repo, file, `written on the trunk\n`);
+      git(repo, 'add', file);
+      git(repo, ...commitAs, '--no-verify', '-m', `the trunk brings ${file}`);
+      git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    };
+    const merged = (side) => [
+      `INFO  sensors  no sensor ran (tests): the one path this commit changes against ${side} is a document declared in harness.json "documents"`,
+      'docs/guide.md',
+    ];
+
+    git(repo, 'checkout', '--quiet', '-b', 'documents', trunk);
+    writeFile(repo, 'docs/guide.md', 'written on documents\n');
+    git(repo, 'add', 'docs/guide.md');
+    git(repo, ...commitAs, '--no-verify', '-m', 'documents');
+    onTrunk('src/app.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    const byItself = run('merge', '--no-edit', trunk);
+    assert.equal(byItself.status, 0, byItself.said);
+    // git writes no MERGE_HEAD before the hook of a merge it commits by itself: the trunk is the side known there.
+    assert.deepEqual(sensorsRow(byItself.said), merged('origin/main'), byItself.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge that differs from the trunk in documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '1');
+
+    onTrunk('src/other.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    assert.equal(run('merge', '--no-commit', '--no-ff', trunk).status, 0);
+    const byHand = run('commit', '--quiet', '--no-edit');
+    assert.equal(byHand.status, 0, byHand.said);
+    assert.deepEqual(sensorsRow(byHand.said), merged('MERGE_HEAD'), byHand.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge committed by hand that differs from the trunk in documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
+
+    // A branch that holds code of its own differs from the trunk in more than documents: its merge runs them.
+    writeFile(repo, 'src/mine.js', 'written on documents\n');
+    git(repo, 'add', 'src/mine.js');
+    git(repo, ...commitAs, '--no-verify', '-m', 'code on documents');
+    onTrunk('src/third.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    const withCode = run('merge', '--no-edit', trunk);
+    assert.equal(withCode.status, 0, withCode.said);
+    assert.match(withCode.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that differs from both sides in code');
+  } finally {
+    remove();
+  }
+});
+
 test('a merge whose gate fails is not committed: git merge exits with a failure, the trunk stays where it was and the merge is left unfinished', async () => {
   const { repo, branch, merge, remove } = mergingRepo();
   try {
@@ -4617,4 +4759,51 @@ test('the mark of a time that ran out counts only beside the exit status of time
   const failed = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
   assert.equal(failed.code, 1);
   assert.match(failed.output, /^FAIL {2}tests {2}npm run test exited 1 in WSL2 \(Ubuntu\)$/m);
+}));
+
+// The names of the tests that failed are kept in the gate's end line (odd/tasks/gate-log-failing-tests.md,
+// S1): a WSL2 run's output lives in the mirror and the report, and on 2026-10-14 JH 11 could not get back
+// which test had failed once the report was gone.
+const SPEC_FAILURE = [
+  '✔ one that passes (2.1ms)',
+  '✖ the first that fails (12.5ms)',
+  'ℹ tests 3',
+  'ℹ fail 2',
+  '',
+  '✖ failing tests:',
+  '',
+  'test at bin/a.test.mjs:10:1',
+  '✖ the first that fails (12.5ms)',
+  '  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:',
+  '',
+  'test at bin/b.test.mjs:4:1',
+  '\u001b[31m✖ a second, in another file (3ms)\u001b[39m',
+  '  Error: boom',
+].join('\n');
+const TAP_FAILURE = ['TAP version 13', 'ok 1 - fine', '    not ok 1 - a subtest', 'not ok 2 - the one that fails', '# fail 1'].join('\n');
+
+test('failingTests reads the names of the failing tests in the spec form and, without it, the tap form; none for a pass or other output', () => {
+  assert.deepEqual(failingTests(SPEC_FAILURE), ['the first that fails', 'a second, in another file']);
+  assert.deepEqual(failingTests(TAP_FAILURE), ['the one that fails']);
+  assert.deepEqual(failingTests('ℹ pass 3\nℹ fail 0\n'), []);
+  assert.deepEqual(failingTests('npm ERR! missing script: test\n'), []);
+  // Twenty at most, each two hundred characters at most, and each once.
+  const many = ['✖ failing tests:', ...Array.from({ length: 25 }, (_, i) => `✖ test ${i} ${'x'.repeat(300)} (1ms)`), '✖ test 0 (1ms)'].join('\n');
+  const names = failingTests(many);
+  assert.equal(names.length, 20);
+  assert.ok(names.every((name) => name.length <= 200), JSON.stringify(names.map((name) => name.length)));
+});
+
+test('a gate whose sensors fail keeps the names of their failing tests in its end line, and a sensor that passes has none', () => withGate({ tests: 'run-tests', lint: 'run-lint', more: 'run-more' }, async (dir, home) => {
+  const outputs = { 'run-tests': { status: 1, stdout: SPEC_FAILURE }, 'run-lint': { status: 1, stdout: '', stderr: TAP_FAILURE }, 'run-more': { status: 0, stdout: 'ℹ pass 1\n' } };
+  const spawn = async (command) => ({ signal: null, stderr: '', ...outputs[command] });
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, ...log.deps }));
+  assert.equal(code, 1, output);
+  const end = log.events.find((event) => event.event === 'end');
+  assert.deepEqual(end.sensors.map(({ name, pass, failing }) => ({ name, pass, failing })), [
+    { name: 'tests', pass: false, failing: ['the first that fails', 'a second, in another file'] },
+    { name: 'lint', pass: false, failing: ['the one that fails'] },
+    { name: 'more', pass: true, failing: undefined },
+  ]);
 }));

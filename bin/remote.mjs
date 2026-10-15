@@ -30,6 +30,7 @@ import {
   SPAWN_MODES, cleanServerEnv, launcherFileName, locate, logNote, loginLauncher, lookUpProcesses, readPersistentEnv, readState, remoteFiles, remoteId,
   resolveClaude as findClaude, serverArgs, supervise, watchdogTask, watchdogTaskXml, whereabouts,
 } from './lib/remote.mjs';
+import { unknownArgument } from './lib/args.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 
@@ -1207,11 +1208,21 @@ async function runCommand(opts, context) {
 
 // ---- the hidden supervisor -------------------------------------------------------------------------------------------
 
+const SUPERVISE_FLAGS = { valued: ['--root', '--name', '--log', '--claude', '--permission-mode', '--spawn'], bare: ['--shell'] };
+
 /** `remote supervise --root <r> --name <n> --log <file> --claude <path> [--shell] [--permission-mode m]
  * [--spawn mode]`, run by `start` in a detached process: the server in a clean environment until a signal stops
  * it. That environment keeps what the user set persistently (read once from the registry; a read that fails
  * removes them all and says so in the log). Its stdio goes nowhere, so a failure is written to the log. */
-async function superviseMain(argv, env, { signals = process, supervise: run = supervise, readPersistentEnv: readPersistent = readPersistentEnv } = {}) {
+async function superviseMain(argv, env, { signals = process, supervise: run = supervise, readPersistentEnv: readPersistent = readPersistentEnv, error = console.error } = {}) {
+  // Only `start` runs this, with the flags below; any other is refused before the server starts, said on
+  // stderr for a person who types it, since the detached run's stdio goes nowhere (T1 of
+  // odd/tasks/commands-and-doctor.md).
+  const unknown = unknownArgument(argv, SUPERVISE_FLAGS);
+  if (unknown !== null) {
+    error(`unknown argument: ${unknown}`);
+    return 2;
+  }
   const values = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--shell') values['--shell'] = true;

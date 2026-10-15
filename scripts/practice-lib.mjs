@@ -13,6 +13,7 @@
 // The design is in odd/tasks/practice-project.md.
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { SANDBOX_ALLOWLIST, SANDBOX_SWITCHES } from '../evals/configs.mjs';
 
 /** The path rules of `platform`. Every function below takes the platform as a parameter and goes through
  * this, so the Windows and the POSIX behaviour can both be tested on one machine. */
@@ -44,6 +45,7 @@ export function practiceLayout(root, platform = process.platform) {
     releases: p.join(root, 'releases'),
     npmCache: p.join(root, 'npm-cache'),
     record: p.join(root, 'record.jsonl'),
+    hostHome: p.join(root, 'host-home'),
   };
 }
 
@@ -315,6 +317,9 @@ export function compareSnapshots(before, after) {
  * spellings together, as the gate log's folder is held. */
 const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
 
+/** The command of the guard hook, as `bin/lib/manifest.mjs` spells it (`GUARD_HOOK_COMMAND`); the same test holds the two together. */
+const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
+
 /** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
  * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
@@ -325,6 +330,7 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
@@ -454,12 +460,192 @@ export const JOURNEY = Object.freeze([
   { id: 'project-adopt', title: 'the project receives the harness: init the first time, status then sync afterwards' },
   { id: 'commit-passes', title: 'a commit that should pass goes through the hook and exists afterwards' },
   { id: 'commit-refused', title: 'a commit that breaks the test of the project is refused, and the file is restored' },
+  { id: 'project-rules', title: "the project's own rules are listed and checked, and a commit that drops one is refused" },
   { id: 'project-uninstall', title: 'uninstall removes what init wrote and nothing the project owns; init again' },
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
+  { id: 'host-loads', title: 'a real Claude Code session in the project loads the skills and AGENTS.md, runs the three hook entries, and leaves nothing in the real home' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
 ].map((step) => Object.freeze(step)));
+
+/** What is wrong after `uninstall` and a second `init` of the practice project, or `null`: no tracked file may differ
+ * from the commit, but for an `AGENTS.md` that is exactly the candidate's template (`template`). `init` writes the
+ * template of the copy that runs it, and the project committed the one of an earlier candidate, so a candidate that
+ * changes the template shows it here once; the next run's `commit-passes` commits it. */
+export function secondInitProblem(porcelainText, agentsText, template) {
+  const lines = porcelainText.split('\n').filter(Boolean);
+  const onlyTemplate = lines.length === 1 && lines[0] === ' M AGENTS.md' && agentsText === template;
+  return lines.length === 0 || onlyTemplate ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
+}
+
+/** The one step that starts a host session, and so spends a model: `run --no-host` leaves it out. */
+export const HOST_STEP = 'host-loads';
+
+/** The environment of the host session of `host-loads` (odd/tasks/practice-project.md, "T5: the step host-loads"):
+ * an allowlist, never `childEnv`, because the session that starts a run carries what must not reach a host it
+ * starts (`CLAUDE_CODE_CHILD_SESSION` turns its transcript off, the messaging socket and token of a live desktop
+ * session, `CLAUDE_PLUGIN_DATA`, another login). Only the evals' allowlisted names are inherited; their switches
+ * are set (no updater, telemetry or claude.ai connectors); the host's config is the practice home's `.claude`,
+ * where `install` wrote the skills and the hook entries; the harness's home is the practice home; every other
+ * home, temporary and cache folder is the scratch `hostHome`, emptied by the step; the candidate comes first on
+ * PATH; and the login is `token`, set here only. */
+export function hostEnv(layout, baseEnv, token, platform = process.platform) {
+  const p = pathFor(platform);
+  const windows = platform === 'win32';
+  const fold = (name) => (windows ? name.toUpperCase() : name);
+  const allowed = new Set(SANDBOX_ALLOWLIST.filter((name) => name !== 'CLAUDE_CODE_OAUTH_TOKEN').map(fold));
+  const inherited = Object.fromEntries(Object.entries(baseEnv).filter(([name, value]) => allowed.has(fold(name)) && typeof value === 'string'));
+  const scratch = layout.hostHome;
+  const temp = p.join(scratch, 'tmp');
+  const drive = windows ? { HOMEDRIVE: scratch.slice(0, 2), HOMEPATH: scratch.slice(2) } : {};
+  const pathName = Object.keys(inherited).filter((name) => fold(name) === 'PATH').sort()[0] ?? 'PATH';
+  return {
+    ...inherited,
+    [pathName]: [shimDir(layout.prefix, platform), inherited[pathName]].filter(Boolean).join(p.delimiter),
+    USERPROFILE: scratch,
+    HOME: scratch,
+    ...drive,
+    APPDATA: p.join(scratch, 'AppData', 'Roaming'),
+    LOCALAPPDATA: p.join(scratch, 'AppData', 'Local'),
+    TEMP: temp,
+    TMP: temp,
+    TMPDIR: temp,
+    XDG_CONFIG_HOME: p.join(scratch, '.config'),
+    XDG_DATA_HOME: p.join(scratch, '.local', 'share'),
+    XDG_STATE_HOME: p.join(scratch, '.local', 'state'),
+    XDG_CACHE_HOME: p.join(scratch, '.cache'),
+    CLAUDE_CONFIG_DIR: p.join(layout.home, '.claude'),
+    JS_HARNESS_HOME: layout.home,
+    ...SANDBOX_SWITCHES,
+    CLAUDE_CODE_OAUTH_TOKEN: token,
+  };
+}
+
+// The tools that read files: none may reach the first call, so the word of the run can only come from what loaded.
+const FILE_TOOLS = ['Read', 'Grep', 'Glob', 'Bash', 'PowerShell', 'NotebookRead', 'Task', 'Agent'];
+// The first words `js-harness resume --hook` prints after a compaction (bin/resume.mjs).
+const RESUME_WORDS = 'js-harness resume:';
+
+/** The parts of a host's `--output-format stream-json --verbose --include-hook-events` output the step reads: the
+ * `system/init` event, every `system/hook_response` as `{ name, exitCode, outcome, stdout }`, and the last result.
+ * A line that is not JSON is passed over. The names were read from Claude Code 2.1.296 (scripts/fixtures). */
+export function readHostStream(text) {
+  const events = [];
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    try {
+      const event = JSON.parse(line);
+      if (event !== null && typeof event === 'object') events.push(event);
+    } catch {
+      // Not an event of the stream.
+    }
+  }
+  const init = events.find((event) => event.type === 'system' && event.subtype === 'init') ?? null;
+  const hooks = events
+    .filter((event) => event.type === 'system' && event.subtype === 'hook_response')
+    .map((event) => ({ name: event.hook_name, exitCode: event.exit_code, outcome: event.outcome, stdout: String(event.stdout ?? '') }));
+  const result = events.filter((event) => event.type === 'result').at(-1) ?? null;
+  return { init, hooks, result };
+}
+
+/** What is wrong with one call of the host session, one sentence each; none when it proves what it is for.
+ * `load` (no tools, one turn): both skills listed, no file tool, every startup hook a success, and the answer holds
+ * `word`, which only the practice's AGENTS.md holds. `skill`: the pause entry ran after the skill and succeeded, and
+ * the answer quotes the skill. `compact`: the compact entry printed the words of `js-harness resume`. */
+export function hostCallProblems(kind, { init, hooks, result }, { word } = {}) {
+  const problems = [];
+  const succeeded = (hook) => hook.exitCode === 0 && hook.outcome === 'success';
+  const named = (name) => hooks.filter((hook) => hook.name === name);
+  if (kind === 'load') {
+    if (init === null) problems.push('the stream has no init event');
+    else {
+      for (const skill of ['js-harness', 'js-harness-orchestrator']) {
+        if (!(init.skills ?? []).includes(skill)) problems.push(`the session did not list the skill ${skill}`);
+      }
+      const readers = (init.tools ?? []).filter((tool) => FILE_TOOLS.includes(tool));
+      if (readers.length > 0) problems.push(`the session had a tool that reads files: ${readers.join(', ')}`);
+    }
+    const started = named('SessionStart:startup');
+    if (started.length === 0) problems.push('no SessionStart:startup hook ran');
+    for (const hook of started.filter((item) => !succeeded(item))) problems.push(`a SessionStart:startup hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
+  }
+  if (kind === 'skill') {
+    const after = named('PostToolUse:Skill');
+    if (after.length === 0) problems.push('no PostToolUse:Skill hook ran');
+    for (const hook of after.filter((item) => !succeeded(item))) problems.push(`a PostToolUse:Skill hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
+  }
+  if (kind === 'compact' && !named('SessionStart:compact').some((hook) => succeeded(hook) && hook.stdout.startsWith(RESUME_WORDS))) {
+    problems.push('no SessionStart:compact hook printed the words of js-harness resume');
+  }
+  if (result === null) {
+    problems.push('the stream has no result');
+    return problems;
+  }
+  if (result.subtype !== 'success' || result.is_error === true) problems.push(`the result is not a success (${result.subtype})`);
+  const answer = String(result.result ?? '');
+  if (kind === 'load') {
+    if (result.num_turns !== 1) problems.push(`the answer took ${result.num_turns} turns, so it could have read the file instead of what was loaded`);
+    if (!answer.toLowerCase().includes(String(word).toLowerCase())) problems.push(`the answer does not hold the word of the run (${word}), so AGENTS.md was not loaded`);
+  }
+  if (kind === 'skill' && !answer.includes('js-harness check --push')) {
+    problems.push('the answer does not quote the js-harness skill (its line js-harness check --push)');
+  }
+  return problems;
+}
+
+/** What the calls cost, summed from their results, with the host's version and the model the results name: the
+ * `host` of the record line. */
+export function hostCost(streams) {
+  const results = streams.map((stream) => stream.result).filter((result) => result !== null);
+  const sum = (read) => results.reduce((total, result) => total + (Number(read(result)) || 0), 0);
+  const first = streams.find((stream) => stream.init !== null)?.init;
+  return {
+    version: first?.claude_code_version ?? null,
+    model: Object.keys(results.find((result) => result.modelUsage)?.modelUsage ?? {})[0] ?? first?.model ?? null,
+    inputTokens: sum((result) => result.usage?.input_tokens),
+    outputTokens: sum((result) => result.usage?.output_tokens),
+    cacheTokens: sum((result) => (result.usage?.cache_creation_input_tokens ?? 0) + (result.usage?.cache_read_input_tokens ?? 0)),
+    costUsd: sum((result) => result.total_cost_usd),
+    durationMs: sum((result) => result.duration_ms),
+  };
+}
+
+/** `text` with every occurrence of `token` replaced by `<token>`, so that no detail, record or error the step
+ * hands on can carry the login. A missing text is empty; with no token the text is as it is. */
+export function redacted(text, token) {
+  const plain = text === undefined || text === null ? '' : String(text);
+  return typeof token === 'string' && token !== '' ? plain.split(token).join('<token>') : plain;
+}
+
+/** The two rules the practice project keeps of its own (odd/tasks/project-rules.md, T6): one in prose, found by its
+ * phrase in a file the project owns, and one its test sensor enforces. The home is not `AGENTS.md`, which `init`
+ * wrote: a rule's line there would make `uninstall` keep that file as changed, and the step `project-uninstall`
+ * proves that it removes it. */
+export const PRACTICE_RULES = Object.freeze({
+  prose: 'no-hand-deploy',
+  sensor: 'tests-pass',
+  phrase: 'Never deploy the practice project by hand',
+});
+
+/** The files of the practice project's own rules, by path from its top: its list and the home of its rule in
+ * prose. The step writes and commits them when they are not as here, so every run after the first finds them. */
+export function practiceRuleFiles() {
+  const rules = [
+    { id: PRACTICE_RULES.prose, subject: 'how the practice project is deployed', since: '2026-10-14', path: 'docs/conventions.md', phrases: [PRACTICE_RULES.phrase] },
+    { id: PRACTICE_RULES.sensor, subject: 'the tests of the practice project pass', since: '2026-10-14', sensor: 'tests' },
+  ];
+  return {
+    'docs/conventions.md': `# Conventions\n\n- ${PRACTICE_RULES.phrase}: it has no deploy, and the rule is here to be checked.\n`,
+    'docs/rules.json': `${JSON.stringify({ format: 1, rules }, null, 2)}\n`,
+  };
+}
+
+/** The list `text` without the rule `id`, written as the step writes a list: what a commit that deletes a rule
+ * instead of retiring it stages. */
+export function listWithout(text, id) {
+  const data = JSON.parse(text);
+  return `${JSON.stringify({ ...data, rules: data.rules.filter((rule) => rule.id !== id) }, null, 2)}\n`;
+}
 
 /** The steps that run whatever failed before them: the proof that the real home was left alone, and the
  * record of the run, matter most when something went wrong. */
@@ -535,14 +721,20 @@ export function adoptionCommands(initialized) {
  * each exactly once and no other. A step that was skipped is not in `steps`, so a run with a failure is
  * never ok, and neither is a part of the journey that happened to pass, nor a line with a step from
  * elsewhere in it: the line is the lasting proof of a run. The journey itself is not written into the line. */
-export function recordLine({ date, candidate, steps, node, platform, journey = JOURNEY }) {
+export function recordLine({ date, candidate, steps, node, platform, journey = JOURNEY, left, host }) {
   const results = steps.map(({ id, ok, detail }) => ({ id, ok, detail }));
   const once = ({ id }) => results.filter((step) => step.id === id).length === 1;
   // As many results as the journey has steps, and each of its ids once: so none of another journey.
   const whole = results.length > 0 && results.length === journey.length && journey.every(once);
   const ok = whole && results.every((step) => step.ok === true);
   const { branch, commit, dirty } = candidate;
-  return JSON.stringify({ date, ok, candidate: { branch, commit, dirty }, steps: results, node, platform });
+  // The steps a run was told to leave out (`--no-host`, `--only`) and what its host session cost, each only when
+  // there is one: a run that left a step out is not whole, so it is never ok.
+  return JSON.stringify({
+    date, ok, candidate: { branch, commit, dirty }, steps: results, node, platform,
+    ...(left !== undefined && left.length > 0 && { left }),
+    ...(host !== undefined && { host }),
+  });
 }
 
 // ---- the arguments ---------------------------------------------------------------------------------------------------
@@ -550,6 +742,8 @@ export function recordLine({ date, candidate, steps, node, platform, journey = J
 export const USAGE = `usage:
   node scripts/practice.mjs setup --root <dir>   create the practice folder
   node scripts/practice.mjs run --root <dir>     run the journey in it
+    --no-host        leave out host-loads, the one step that spends a model (the record says so)
+    --only <step>    run one step, on a folder that already holds a finished journey
 There is no default root.`;
 
 const COMMANDS = ['setup', 'run'];
@@ -570,8 +764,26 @@ export function parseArgs(argv = [], platform = process.platform) {
   if (!COMMANDS.includes(command)) return { error: `unknown command ${command}: expected setup or run` };
 
   let root;
+  let noHost = false;
+  let only;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
+    if (arg === '--no-host') {
+      if (command !== 'run') return { error: '--no-host goes with run' };
+      if (noHost) return { error: '--no-host was given twice' };
+      noHost = true;
+      continue;
+    }
+    if (arg === '--only') {
+      if (command !== 'run') return { error: '--only goes with run' };
+      if (only !== undefined) return { error: '--only was given twice' };
+      const step = rest[i + 1];
+      if (step === undefined || step === '' || step.startsWith('-')) return { error: '--only needs a value: the id of a step' };
+      if (!JOURNEY.some(({ id }) => id === step)) return { error: `--only names a step of the journey, and ${step} is none` };
+      only = step;
+      i += 1;
+      continue;
+    }
     if (arg !== '--root') return { error: `${arg.startsWith('-') ? 'unknown flag' : 'unexpected argument'} ${arg}` };
     if (root !== undefined) return { error: '--root was given twice' };
     const value = rest[i + 1];
@@ -579,10 +791,11 @@ export function parseArgs(argv = [], platform = process.platform) {
     root = value;
     i += 1;
   }
+  if (noHost && only !== undefined) return { error: '--only and --no-host do not go together' };
   if (root === undefined) return { error: `${command} needs --root <dir>: there is no default root` };
   const ofRoot = rootRefusal(root, platform);
   if (ofRoot !== null) return { error: ofRoot };
-  return { command, root };
+  return { command, root, ...(noHost && { noHost }), ...(only !== undefined && { only }) };
 }
 
 // ---- the context pause, as the hook of the installed command meets it ----

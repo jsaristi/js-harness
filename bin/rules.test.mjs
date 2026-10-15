@@ -22,8 +22,13 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
-/** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, and the sources. */
-const BASE = () => ({ 'bin/lib/rules-data.mjs': writeRules(RULES), 'docs/rule-sources.json': SOURCES_TEXT });
+/** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests. */
+const HOMES = Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
+  .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')]));
+
+/** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, the sources, and the
+ * home files of the rules in prose. */
+const BASE = () => ({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES), 'docs/rule-sources.json': SOURCES_TEXT });
 
 /** Writes `files` (path from the top of a project -> content) under `dir`. */
 function write(dir, files) {
@@ -76,7 +81,7 @@ test('check fails when docs/RULES.md is edited by hand, and says so in one findi
 });
 
 test('with no docs/ at all check passes, and its two notes say what it did not read', async () => {
-  await inProject({ 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
+  await inProject({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
     assert.deepEqual(await run(['check'], dir), {
       code: 0,
       out: [
@@ -90,7 +95,7 @@ test('with no docs/ at all check passes, and its two notes say what it did not r
 });
 
 test('render refuses without docs/rule-sources.json, names the root, and writes nothing', async () => {
-  await inProject({ 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
+  await inProject({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
     assert.deepEqual(await run(['render'], dir), {
       code: 1,
       out: [],

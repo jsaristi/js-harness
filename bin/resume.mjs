@@ -32,6 +32,7 @@ import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { pauseNotice, toldBetween } from './lib/pause.mjs';
 import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
@@ -44,7 +45,8 @@ const USAGE = [
   '         standard error. It always exits 0.',
   'Usage: js-harness resume --pause',
   '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
-  '         one JSON line with the notice the first time a stretch of work passes the pause, and nothing else.',
+  '         one JSON line with the notice the first time a stretch of work passes the pause, and the notices of the',
+  '         channel addressed to the session that it was not told yet, once each; nothing else.',
   '         It never fails and always exits 0.',
 ].join('\n');
 
@@ -897,21 +899,20 @@ function hasHarnessJson(folder, isFile) {
  * call's folder, or a call that does not pass the pause. `pauseNotice` throws for a session id it cannot name a
  * state file by; the caller's catch turns that into silence. The state goes to the harness home, and its temp folder
  * is under the same home when `JS_HARNESS_HOME` is set, so a made-up home never reaches the real temp folder. */
-function pauseLine(input, { defaultCwd, env, homedir, isFile }) {
+function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
   if (!isObject(input) || (typeof input.agent_id === 'string' && input.agent_id !== '')) return null;
   if (typeof input.transcript_path !== 'string' || input.transcript_path === '') return null;
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
   if (!hasHarnessJson(cwd, isFile)) return null;
-  const notice = pauseNotice({
-    transcript: input.transcript_path,
-    sessionId: input.session_id,
-    home: env.JS_HARNESS_HOME || homedir(),
-    tmpdir: tempOf(env),
-  });
-  if (notice === null) return null;
+  const home = env.JS_HARNESS_HOME || homedir();
+  const notice = pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) });
+  // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
+  const inbox = inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) });
+  const said = [notice?.text, inbox?.text].filter((text) => typeof text === 'string');
+  if (said.length === 0) return null;
   // Another entry (a `Stop` hook, later) runs this command too, so the event is the input's own when it names one.
   const event = typeof input.hook_event_name === 'string' && input.hook_event_name !== '' ? input.hook_event_name : 'PostToolUse';
-  return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: notice.text } });
+  return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: said.join('\n\n') } });
 }
 
 export async function resumeMain(
@@ -936,9 +937,14 @@ export async function resumeMain(
   } = {},
 ) {
   // `--pause` is the mode of a `PostToolUse` hook, so it takes no other argument: a hook never sends one, and a
-  // person who types one at a shell gets the usage.
+  // person who types one at a shell gets the usage. `--hook` takes none either: `install` writes it alone, so
+  // another one means the copy on the path is older than the install, and it is named (T1 of
+  // odd/tasks/commands-and-doctor.md); a SessionStart hook's exit 2 shows the line and stops nothing.
   const pause = argv.includes('--pause');
-  if (pause ? argv.length !== 1 : !argv.includes('--hook')) {
+  const mode = pause ? '--pause' : '--hook';
+  if (argv.length !== 1 || argv[0] !== mode) {
+    const unknown = argv.includes(mode) ? argv.find((token) => token !== mode) : undefined;
+    if (unknown !== undefined) stderr(`unknown argument: ${unknown}`);
     stderr(USAGE);
     return 2;
   }
@@ -966,7 +972,7 @@ export async function resumeMain(
       }
     };
     if (pause) {
-      const line = pauseLine(input, { defaultCwd, env, homedir, isFile });
+      const line = pauseLine(input, { defaultCwd, env, homedir, isFile, run });
       if (line !== null) stdout(line);
       return 0;
     }

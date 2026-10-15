@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `7963ae6d5597`. In force: 18 (13 of Sebastián, 5 of the project). Retired: 0.
+Hash `512cbc874f3f`. In force: 20 (14 of Sebastián, 6 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -29,6 +29,11 @@ The most input tokens a Codex review may cost for each changed line of its slice
 The share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts: 88 percent of the context window. The flag `--context-pause` overrides it for one run.
 - Read by: `bin/lib/sessions.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
+
+### questions-one-place
+Every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-14. Row: reports. Source: his words of 2026-10-13, 2026-10-13, checked by a session on 2026-10-14.
 
 ### review-effort
 The effort a Codex review runs at: medium.
@@ -68,14 +73,14 @@ The effort every sub-agent is launched with: high.
 The model of a sub-agent that explores, reviews or verifies: claude-opus-5-5.
 - Passed on a call as `opus`.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-11.
 
 ### subagent-writer-model
 The model of a sub-agent that writes scoped code, in this repository: claude-haiku-5-5.
 - Passed on a call as `haiku`.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
 
 ### work-sessions
@@ -95,6 +100,11 @@ The shortest phrase by which a control or a rule in prose is found in its file: 
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
 - Read by: `bin/lib/gate-lock.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
+
+### person-present
+How long after the user last wrote in a session a question is put to them at once with the question tool: 15 minutes.
+- Read by: none.
+- Since 2026-10-14. Row: reports. Source: design, `odd/tasks/session-channel.md`.
 
 ### review-part-files
 The most files one part of a Codex review holds: 40 files.

@@ -46,4 +46,8 @@ jobs:
       - name: What the runner is
         run: node -e "const os = require('node:os'); console.log(process.version, os.platform(), os.release(), os.availableParallelism() + ' logical processors', Math.round(os.totalmem() / 2 ** 30) + ' GB')"
       - name: The gate
+        # The runner has 2 logical processors, where node --test runs one test file at a time (its default is
+        # one fewer than the processors); node takes no --test-concurrency in NODE_OPTIONS, so check adds it.
+        env:
+          JS_HARNESS_TEST_CONCURRENCY: 2
         run: node bin/check.mjs

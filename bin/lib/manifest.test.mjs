@@ -729,7 +729,7 @@ const [, , claudeResume, codexResume] = entryComponents;
 const ourEntries = () => [claudeHook.entry(), claudeResume.entry()];
 
 test('entryComponents declare the resume hook for Claude and Codex: a SessionStart entry for the matcher compact', () => {
-  assert.equal(entryComponents.length, 5);
+  assert.equal(entryComponents.length, 6);
   assert.deepEqual([claudeResume.id, codexResume.id], ['claude-resume-hook', 'codex-resume-hook']);
   assert.deepEqual([claudeResume.pointer, codexResume.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
   assert.deepEqual([claudeResume.target('/h'), codexResume.target('/h')], [claudeHook.target('/h'), codexHook.target('/h')], 'the files the first entry is in');
@@ -750,10 +750,26 @@ test('entryComponents declare the pause hook for Claude Code only: a PostToolUse
   assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PostToolUse'), false, 'no Codex entry: a Codex session has no transcript the pause reads');
 });
 
-// What the Claude Code settings file holds of ours after an install: the two SessionStart entries and the pause hook's
-// PostToolUse one. Codex's hooks file holds the two SessionStart entries only.
+// --- The guard: a `PreToolUse` entry on the three tools it checks, in Claude Code's settings and nowhere else ---
+
+const guardHook = entryComponents.find((component) => component.id === 'claude-guard-hook');
+
+test('entryComponents declare the guard hook for Claude Code only: a PreToolUse entry on Agent and the two message tools, guarded to exit 0', () => {
+  assert.ok(guardHook, 'the claude-guard-hook component is declared');
+  assert.deepEqual(guardHook.pointer, ['hooks', 'PreToolUse']);
+  assert.deepEqual(guardHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
+  assert.deepEqual(guardHook.entry(), {
+    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash',
+    hooks: [{ type: 'command', command: 'js-harness guard --hook || exit 0', timeout: 5 }],
+  });
+  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
+});
+
+// What the Claude Code settings file holds of ours after an install: the two SessionStart entries, the pause hook's
+// PostToolUse one and the guard's PreToolUse one. Codex's hooks file holds the two SessionStart entries only.
 const ourPostToolUse = () => [pauseHook.entry()];
-const ourSettings = () => ({ hooks: { SessionStart: ourEntries(), PostToolUse: ourPostToolUse() } });
+const ourPreToolUse = () => [guardHook.entry()];
+const ourSettings = () => ({ hooks: { SessionStart: ourEntries(), PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse() } });
 
 test('install writes the resume entry beside the doctor\'s in each host file and records both; uninstall removes both and the file it created', () => {
   const home = makeTmpHome();
@@ -764,7 +780,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
       const isClaude = target === claudeFile;
       assert.deepEqual(readJson(target), isClaude ? ourSettings() : { hooks: { SessionStart: ourEntries() } }, target);
       const records = manifest.entries.filter((e) => e.path === target);
-      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse()] : ourEntries());
+      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse(), ...ourPreToolUse()] : ourEntries());
       // The file is the install's whichever entry made it: the last one removed is the one that deletes it.
       assert.deepEqual(records.map((record) => [record.createdFile, record.skipped]), records.map(() => [true, false]), target);
       assert.equal(records[1].sha256, sha256(JSON.stringify(claudeResume.entry())));
@@ -773,7 +789,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
 
     const result = uninstall(home);
     assert.deepEqual(result.entriesKept, []);
-    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
+    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
     assert.deepEqual([fs.existsSync(claudeHook.target(home)), fs.existsSync(codexHook.target(home))], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -802,11 +818,11 @@ test('an update from an install made before the resume hook adds its entry, and 
 
       const manifest = sync(home, '0.2.0');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
-      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created]]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', created]]);
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
-      else assert.deepEqual(readJson(target), { hooks: { SessionStart: [unrelated] } }, 'the PostToolUse list install made goes with its entry, and the user\'s SessionStart entry stays');
+      else assert.deepEqual(readJson(target), { hooks: { SessionStart: [unrelated] } }, 'the PostToolUse and PreToolUse lists install made go with their entries, and the user\'s SessionStart entry stays');
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
@@ -818,11 +834,11 @@ test('uninstall removes the entry that is still there when the user removed the 
   try {
     install(home, '0.1.0');
     const target = claudeHook.target(home);
-    // The user took the resume hook out by hand and put a hook of their own in the file; the pause hook is still there.
+    // The user took the resume hook out by hand and put a hook of their own in the file; the pause and guard hooks are still there.
     const theirs = { matcher: 'compact', hooks: [{ type: 'command', command: 'user command', timeout: 1 }] };
-    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs], PostToolUse: ourPostToolUse() } }, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs], PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse() } }, null, 2)}\n`, 'utf8');
     const result = uninstall(home);
-    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [2, 1]);
+    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [3, 1]);
     assert.deepEqual(readJson(target), { hooks: { SessionStart: [theirs] } }, 'the entries that were still ours are gone, and theirs stays');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -845,6 +861,27 @@ test('install writes the pause hook under hooks.PostToolUse of the Claude settin
     assert.equal(fs.readFileSync(settings, 'utf8'), before, 'a repeat install does not rewrite the file');
     assert.equal(readJson(settings).hooks.PostToolUse.length, 1, 'and adds no second copy');
     assert.equal(again.entries.filter((e) => e.path === settings && e.pointer.at(-1) === 'PostToolUse').length, 1);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('install writes the guard hook under hooks.PreToolUse of the Claude settings, records it once, and writes nothing to Codex', () => {
+  const home = makeTmpHome();
+  try {
+    const manifest = install(home, '0.1.0');
+    const settings = claudeHook.target(home);
+    assert.deepEqual(readJson(settings).hooks.PreToolUse, ourPreToolUse());
+    const record = manifest.entries.find((e) => e.path === settings && e.pointer.at(-1) === 'PreToolUse');
+    assert.deepEqual([record.pointer, record.entry, record.createdFile, record.skipped], [['hooks', 'PreToolUse'], guardHook.entry(), true, false]);
+    assert.equal(record.sha256, sha256(JSON.stringify(guardHook.entry())));
+    assert.equal(readJson(codexHook.target(home)).hooks.PreToolUse, undefined, 'the tool names are Claude Code\'s: Codex has no guard entry');
+
+    const before = fs.readFileSync(settings, 'utf8');
+    const again = install(home, '0.1.0');
+    assert.equal(fs.readFileSync(settings, 'utf8'), before, 'a repeat install does not rewrite the file');
+    assert.equal(readJson(settings).hooks.PreToolUse.length, 1, 'and adds no second copy');
+    assert.equal(again.entries.filter((e) => e.path === settings && e.pointer.at(-1) === 'PreToolUse').length, 1);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1156,8 +1193,8 @@ test('R3-001: install never clobbers a value of an unexpected shape, and reports
 
     const manifest = install(home, '0.1.0');
 
-    // The pause hook is a separate entry under its own key, so it is written; the SessionStart value is not touched.
-    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse() } }, 'the unexpected value is left as it is');
+    // The pause and guard hooks are separate entries under their own keys, so they are written; the SessionStart value is not touched.
+    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse(), PreToolUse: ourPreToolUse() } }, 'the unexpected value is left as it is');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
   } finally {
@@ -1479,12 +1516,12 @@ test('install records how many containers it made for each entry: 2 for a file w
     fs.writeFileSync(target, `${JSON.stringify({ theme: 'dark' }, null, 2)}\n`, 'utf8');
     const first = install(home, '0.1.0');
     const claude = (manifest) => manifest.entries.filter((e) => e.path === target).map((e) => [e.pointer.join('.'), e.createdContainers]);
-    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2]]);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2]], 'a repeat install keeps what the first one made');
+    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PreToolUse', 2]]);
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PreToolUse', 2]], 'a repeat install keeps what the first one made');
 
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [userStart] } }, null, 2)}\n`, 'utf8');
     uninstall(home);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1]], 'only the PostToolUse list was missing');
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1], ['hooks.PreToolUse', 1]], 'only the PostToolUse and PreToolUse lists were missing');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1569,7 +1606,7 @@ test('a manifest written before createdContainers existed is uninstalled as befo
     fs.writeFileSync(manifestPath(home), JSON.stringify(older, null, 2), 'utf8');
 
     uninstall(home);
-    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [] } });
+    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [], PreToolUse: [] } });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1687,6 +1724,18 @@ test('the installed skill names the --global forms for the machine and the proje
   assert.match(text, /refuse/);
   assert.doesNotMatch(text, /`js-harness (status|sync|uninstall)` /, 'no unqualified machine command left');
   assert.equal(components[1].content('0.1.0'), text, 'Claude and Codex read the same text');
+});
+
+// A merge resolved by hand once left its markers inside the skill's template, and every install would have
+// written them to both hosts (Codex, 2026-10-14, on PR 157).
+test('the installed skill holds no merge conflict marker, and names both wait and guard', () => {
+  for (const component of components.filter((c) => typeof c.content === 'function')) {
+    const text = component.content('0.1.0');
+    assert.doesNotMatch(text, /^(<{7}|={7}|>{7})( |\r?$)/m, component.id);
+  }
+  const text = components[0].content('0.1.0');
+  assert.match(text, /^- `js-harness wait /m);
+  assert.match(text, /^- `js-harness guard --hook`/m);
 });
 
 // The skill is where an agent learns the review record exists; without it `codex-review` is only
@@ -1830,6 +1879,20 @@ test('the orchestrator skill says what may run beside a running gate, and what a
   assert.ok(text.includes('a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute'));
   assert.ok(text.includes('`git merge-tree`'));
   assert.ok(text.includes('touches only documentation and none of the files the pull request changes'));
+});
+
+test('the orchestrator skill merges code on a green run of the merge with the current default branch, and documents on a clean merge-tree', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('- A pull request that changes code is merged on a green run of the project\'s CI whose checkout says it tested `Merge <head> into <base>`, with that base the default branch as origin has it now.'));
+  assert.ok(text.includes('A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today.'));
+  assert.ok(text.includes('The merge\'s message names the run, the base it tested and the head.'));
+  assert.ok(text.includes('- A pull request that changes only documentation (the docs folder and the feature documents; never the agents\' instructions or the harness\'s configuration) is merged without waiting for that run, when `git merge-tree` of the default branch and the head is clean.'));
+  assert.ok(text.includes('- Where the project has no such run,'), 'the gate rule stays for a project without CI');
+});
+
+test('the orchestrator skill lists what is checked before the user leaves', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('- Before the user leaves, check and say: every session that waits has a declared wait running in its background work, none ended its turn to wait for the user, and your own watch is running.'));
 });
 
 test('the js-harness skill names the command that writes a notice between sessions', () => {
@@ -2801,4 +2864,17 @@ test('a task the user edited still loses its record when there is no remote fold
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// T20 (session channel): a session waits in the background for what it waits on, and never ends a turn waiting.
+test('the js-harness skill names js-harness wait: what it ends on, and that it runs in the background', () => {
+  const text = components[0].content('0.1.0');
+  assert.ok(text.includes('- `js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)`'));
+  assert.ok(text.includes('ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role'));
+  assert.ok(text.includes('run it in the background and stop it with TaskStop'));
+});
+
+test('the orchestrator skill tells a work session never to end a turn waiting for a message, a compact or an event', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes("- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn."));
 });

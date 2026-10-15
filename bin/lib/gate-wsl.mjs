@@ -2,6 +2,7 @@
 // The same suite took 145 s on GitHub's Linux and 11 to 12 minutes on this machine's Windows, since
 // process starts and file reads are what Windows makes slow. Only the sensors move: the lock, the
 // gate log and every question to git stay on Windows, where the gate runs.
+import childProcess from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -96,7 +97,15 @@ const word = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
  * mirror compared by size and time. After the command, each path it left in the mirror is printed after
  * `LEFT_MARK`. A lock on the mirror (`flock`, `lockSeconds` at most) keeps two runs of one tree apart.
  * Exit 97 is a mirror that could not be had or synced, before the mark. LF ends: bash reads no CR. */
-export function runnerScript({ source, mirror, node, command, held, heldVariable, seconds, lockSeconds = 60 }) {
+export function runnerScript({ source, mirror, node, command, held, heldVariable, seconds, lockSeconds = 60, trace = null }) {
+  // The tests sensor in shadow (odd/tasks/exact-tests.md, T3b): the tracer runs in the mirror, its traces and
+  // results go to `trace.dir` and the folder `trace.results`, `/mnt` paths the Windows side reads after the run. The
+  // tracer is the harness's own, `trace.preload` through `/mnt`: the mirror holds the project, which may not be
+  // this one, and the file selection hashes is that one. `env -i` leaves no NODE_OPTIONS of the caller to keep.
+  const preload = trace && (/\s/.test(trace.preload) ? `"${trace.preload}"` : trace.preload);
+  const traced = trace
+    ? `JS_HARNESS_TRACE_ROOT="$mirror" JS_HARNESS_TRACE_DIR=${word(trace.dir)} JS_HARNESS_TRACE_RESULTS=${word(trace.results)} NODE_OPTIONS=${word(`--require=${preload}`)} `
+    : '';
   const sync = 'rsync -a --delete --delete-excluded --exclude=/.git --exclude=/.codegraph --exclude=node_modules';
   return [
     '#!/bin/bash',
@@ -114,8 +123,8 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     'home=$(mktemp -d) || exit 1',
     'cd "$mirror" || exit 1',
     'ran=$(date +%s%N)',
-    `env -i HOME="$home" LANG=C.UTF-8 TERM=dumb PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin' \\`,
-    `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}npm_config_cache="$home/.npm-cache" \\`,
+    `env -i HOME="$home" ${Object.entries(RUNNER_ENV).map(([key, value]) => `${key}=${value}`).join(' ')} PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin' \\`,
+    `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}${traced}npm_config_cache="$home/.npm-cache" \\`,
     `  timeout -k 10 ${seconds} bash -c ${word(command)}`,
     'code=$?',
     // Ends a line the command left open, so each mark below is a line of its own (Codex, 2026-10-14).
@@ -136,6 +145,19 @@ export const innerSeconds = (timeoutMs) => Math.max(1, Math.floor(timeoutMs / 10
 /** The command a sensor runs on Windows to run in WSL2: `runner` is the script's path as WSL mounts it. */
 export function wslCommand(distro, runner) {
   return `wsl.exe -d ${distro} --exec bash "${runner}"`;
+}
+
+/** The variables of the runner's command besides its home and `PATH`, which `env -i` leaves alone: what a
+ * trace taken in the mirror holds of the allowlist (odd/tasks/exact-tests.md, S5), so selection asks with them. */
+export const RUNNER_ENV = { LANG: 'C.UTF-8', TERM: 'dumb' };
+
+/** The version the node of `distro` under `node` (a folder of `PATH`) says, such as `v24.9.0`, or `null`
+ * where it says none in `timeoutMs`. Asked once per gate in shadow: a trace of the mirror is of that node,
+ * and the newest trace's would pass for current after an upgrade, when every trace is of the old one. */
+export function wslNodeVersion(distro, node, { spawnSync = childProcess.spawnSync, timeoutMs = 20000 } = {}) {
+  const asked = spawnSync('wsl.exe', ['-d', distro, '--exec', `${node.replace(/\/+$/, '')}/node`, '-v'], { encoding: 'utf8', timeout: timeoutMs, windowsHide: true });
+  const said = /^v\d+\.\d+\.\d+\S*$/.exec(String(asked.stdout ?? '').trim());
+  return asked.status === 0 && said ? said[0] : null;
 }
 
 /** The milliseconds of the sync the runner printed, or `null` where it printed no mark: the sensor never
