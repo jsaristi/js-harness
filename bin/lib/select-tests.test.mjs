@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { selectTests, testFilesOf } from './select-tests.mjs';
+import { flakyTestsOf, selectTests, testFilesOf } from './select-tests.mjs';
 import { TRACE_PRELOAD, TRACER_VERSION, hashOf, traceEnvOf } from './trace-reads.mjs';
 
 // The selection of exact test selection (odd/tasks/exact-tests.md, T2): which test files a gate runs, from
@@ -69,6 +69,61 @@ test('a test traced on another system, or with another value of an allowlisted v
   assert.deepEqual(ask({}).skipped, ['t.test.mjs']);
   assert.equal(ask({ os: 'win32' }).why.get('t.test.mjs'), 'traced on win32, not linux');
   assert.equal(ask({}, { env: traceEnvOf({ TZ: 'America/Bogota' }) }).why.get('t.test.mjs'), 'traced with TZ=UTC, not TZ=America/Bogota');
+});
+
+// The result memory (odd/tasks/result-memory.md, T1, S1): a test keeps several passing traces, one per content
+// key, from any worktree; one of them matching now is enough, and with none matching it runs.
+test('a test is skipped when any of its stored traces matches now, and runs, saying the newest one\'s reason, when none does', () => {
+  const now = { 'a.test.mjs': 'h-a', 'f.txt': 'h-2', 'package.json': 'h-p' };
+  const newest = traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'f.txt': 'h-3', 'package.json': 'h-p' });
+  const matching = traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'f.txt': 'h-2', 'package.json': 'h-p' });
+  const older = traceOf('a.test.mjs', { 'a.test.mjs': 'h-a', 'f.txt': 'h-1', 'package.json': 'h-p' });
+  const skip = selectTests({ tests: ['a.test.mjs'], readTraces: () => [newest, matching, older], stateOf: (key) => now[key] ?? 'absent' });
+  assert.deepEqual(skip.skipped, ['a.test.mjs']);
+  assert.equal(skip.full, null);
+  const run = selectTests({ tests: ['a.test.mjs'], readTraces: () => [newest, older], stateOf: (key) => now[key] ?? 'absent' });
+  assert.deepEqual(run.run, ['a.test.mjs']);
+  assert.match(run.why.get('a.test.mjs'), /f\.txt/);
+  assert.equal(selectTests({ tests: ['a.test.mjs'], readTraces: () => [], stateOf: () => 'absent' }).why.get('a.test.mjs'), 'no trace of a passing run');
+});
+
+// A pass seen to reach a world no trace sees (S5) speaks for the test, whatever its other passes recorded:
+// the same inputs may reach it again (Codex, 1a48435..b3c1736).
+test('a test with an untraced pass among its stored traces runs, whichever pass is newer', () => {
+  const now = { 'a.test.mjs': 'h-a', 'package.json': 'h-p' };
+  const reads = { 'a.test.mjs': 'h-a', 'package.json': 'h-p' };
+  const traced = traceOf('a.test.mjs', reads);
+  const untraced = { ...traceOf('a.test.mjs', reads), untraced: 'it opens a network connection' };
+  for (const order of [[untraced, traced], [traced, untraced]]) {
+    const asked = selectTests({ tests: ['a.test.mjs'], readTraces: () => order, stateOf: (key) => now[key] ?? 'absent' });
+    assert.deepEqual(asked.skipped, []);
+    assert.equal(asked.why.get('a.test.mjs'), 'untraced: it opens a network connection');
+  }
+});
+
+// T4 (exact-tests.md L14): a test the flaky ledger names is never skipped, so a known flake neither hides its
+// failure nor counts as one selection would have skipped (the result memory's S1, "tagged nondeterministic
+// tests never cached").
+test('a test the flaky ledger names runs though its trace matches, and says why', () => {
+  const now = { 'a.test.mjs': 'h-a', 'b.test.mjs': 'h-b' };
+  const traces = [traceOf('a.test.mjs', { 'a.test.mjs': 'h-a' }), traceOf('b.test.mjs', { 'b.test.mjs': 'h-b' })];
+  const byTest = new Map(traces.map((one) => [one.test, one]));
+  const chosen = selectTests({ tests: ['a.test.mjs', 'b.test.mjs'], readTrace: (one) => byTest.get(one) ?? null, stateOf: (key) => now[key] ?? 'absent', flaky: new Set(['a.test.mjs']) });
+  assert.deepEqual(chosen.skipped, ['b.test.mjs']);
+  assert.deepEqual(chosen.run, ['a.test.mjs']);
+  assert.equal(chosen.why.get('a.test.mjs'), 'named in docs/FLAKY.md, the flaky ledger');
+});
+
+test('the flaky ledger names its test files by its "### <file>" headings, expired or not; no ledger names none', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-flaky-'));
+  try {
+    assert.deepEqual([...flakyTestsOf(dir)], []);
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '# Flaky tests\n\nText with ### inside a line.\n\n### evals/suite.test.mjs\n- Owner: JH 10\n- Expires: 2026-10-22\n- Failure: x\n\n### bin/old.test.mjs \r\n- Expires: 2020-01-01\n');
+    assert.deepEqual([...flakyTestsOf(dir)].sort(), ['bin/old.test.mjs', 'evals/suite.test.mjs']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a changed package.json is the whole suite, whatever the traces say', () => {

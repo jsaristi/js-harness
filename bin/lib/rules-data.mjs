@@ -5,6 +5,14 @@
 // gives for the list, and a test holds it to that: a rule is changed there, never in another shape.
 export const RULES = [
   {
+    "id": "agents-budget",
+    "subject": "the most estimated tokens AGENTS.md may hold, since every session pays it on every turn",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 1500,
+    "unit": "estimated tokens"
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
@@ -41,12 +49,37 @@ export const RULES = [
     "flag": "--context-pause"
   },
   {
+    "id": "contract-run-timeout",
+    "subject": "how long each done-when command of a contract run may run, unless the run says otherwise",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 30,
+    "unit": "minutes",
+    "flag": "--timeout"
+  },
+  {
     "id": "control-phrase-min",
     "subject": "the shortest phrase by which a control or a rule in prose is found in its file",
     "owner": "project",
     "since": "2026-10-11",
     "value": 12,
     "unit": "characters"
+  },
+  {
+    "id": "gate-log-command",
+    "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 120,
+    "unit": "characters"
+  },
+  {
+    "id": "gate-log-size",
+    "subject": "the size past which the gate log is renamed over its older file, so the log stays near a megabyte",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 512,
+    "unit": "KiB"
   },
   {
     "id": "gate-wait",
@@ -117,6 +150,14 @@ export const RULES = [
     "flag": "--max-parts"
   },
   {
+    "id": "review-timeout",
+    "subject": "how long a Codex review may run before it is stopped as stalled",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 30,
+    "unit": "minutes"
+  },
+  {
     "id": "reviewed-commit-lines",
     "subject": "about how many changed lines a commit that will be reviewed stays under",
     "owner": "sebastian",
@@ -124,6 +165,14 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 1200,
     "unit": "changed lines"
+  },
+  {
+    "id": "sensor-timeout",
+    "subject": "how long one sensor of the gate may run before it is stopped and the commit refused",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 20,
+    "unit": "minutes"
   },
   {
     "id": "session-effort",

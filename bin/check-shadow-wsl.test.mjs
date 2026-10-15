@@ -8,7 +8,7 @@ import { checkSensor } from './check.mjs';
 import { SYNCED_MARK } from './lib/gate-wsl.mjs';
 import { TRACER_VERSION, TRACE_PRELOAD, hashOf, traceEnvOf } from './lib/trace-reads.mjs';
 
-const { traceName } = createRequire(import.meta.url)('./lib/trace-reads.cjs');
+const { traceFolder, writeTrace } = createRequire(import.meta.url)('./lib/trace-reads.cjs');
 
 // The tests sensor in shadow in WSL2 (odd/tasks/exact-tests.md, T3b): the suite runs in the mirror under the
 // tracer, the traces of that place have a folder of their own, and selection is asked with the node, the
@@ -44,7 +44,7 @@ function gate({ ended = {}, reached = true } = {}) {
     if (traceDir && results) {
       for (const one of ['a.test.mjs', 'b.test.mjs']) {
         const trace = { v: 1, test: one, tracer: TRACER_VERSION, tracerHash: hashOf(TRACE_PRELOAD), node: 'v24.9.0', os: 'linux', env: traceEnvOf({ LANG: 'C.UTF-8' }), untraced: null, reads: {} };
-        fs.writeFileSync(path.join(mounted.get(traceDir), traceName(one)), JSON.stringify(trace));
+        writeTrace(mounted.get(traceDir), trace);
         fs.mkdirSync(mounted.get(results), { recursive: true });
         fs.writeFileSync(path.join(mounted.get(results), `${one}.json`), JSON.stringify({ test: one, code: ended[one] ?? 0 }));
       }
@@ -66,7 +66,7 @@ test('in WSL2 the runner carries the tracer, its traces go to a folder of that d
     // The tracer is the harness's own, through the mount, whatever project the mirror holds.
     const preload = /NODE_OPTIONS='--require="?([^'"]*)"?'/.exec(calls[0].script)?.[1];
     assert.equal(mounted.get(preload), path.resolve(TRACE_PRELOAD));
-    assert.deepEqual(fs.readdirSync(path.join(dir, 'wsl-Ubuntu')).sort(), [traceName('a.test.mjs'), traceName('b.test.mjs')].sort());
+    assert.deepEqual(fs.readdirSync(path.join(dir, 'wsl-Ubuntu')).sort(), [traceFolder('a.test.mjs'), traceFolder('b.test.mjs')].sort());
     // The traces are of the mirror's node: the same node there skips both, and b, which failed, is counted.
     const second = await checkSensor(root, sensor, options());
     assert.deepEqual(second.shadow, { files: 2, wouldSkip: ['a.test.mjs', 'b.test.mjs'], failedOfSkipped: ['b.test.mjs'] });
@@ -74,6 +74,52 @@ test('in WSL2 the runner carries the tracer, its traces go to a folder of that d
     // After an upgrade of the mirror's node every trace is of the old one: nothing would be skipped.
     const third = await checkSensor(root, sensor, options({ wslNode: () => 'v25.0.0' }));
     assert.deepEqual(third.shadow.wouldSkip, []);
+  } finally {
+    done();
+  }
+});
+
+// Skip mode (T4c): the runner's command is the sensor's with the files to run, each a word of POSIX sh inside the
+// outer word of `bash -c`; a suite that falls back to Windows runs whole there, since selection asked the WSL2 traces.
+const skip = (dir) => ({ dir, mode: 'skip' });
+
+test('in skip mode in WSL2 the runner\'s command carries the files selection runs, and a run of none starts no runner', async () => {
+  const { root, dir, calls, options, done } = gate();
+  try {
+    // The flaky ledger names b: it always runs, and a, proven by its trace, is skipped from the second gate on.
+    fs.mkdirSync(path.join(root, 'docs'));
+    fs.writeFileSync(path.join(root, 'docs', 'FLAKY.md'), '# Flaky tests\n\n### b.test.mjs\n- Owner: x\n');
+    const first = await checkSensor(root, sensor, options({ traces: skip(dir) }));
+    assert.equal(first.pass, true, first.output);
+    assert.ok(calls[0].script.includes("bash -c 'node --test '\\''a.test.mjs'\\'' '\\''b.test.mjs'\\'''"), calls[0].script);
+    assert.match(calls[0].script, /JS_HARNESS_TRACE_DIR='[^']*\/wsl-Ubuntu' /);
+    const second = await checkSensor(root, sensor, options({ traces: skip(dir) }));
+    assert.ok(calls[1].script.includes("bash -c 'node --test '\\''b.test.mjs'\\'''"), calls[1].script);
+    assert.deepEqual(second.skip, { files: 2, skipped: 1 });
+    assert.match(second.detail, /^node --test passed in WSL2 \(Ubuntu, its mirror synced in 0\.9 s\); exact tests: skipped 1 of 2 test files$/);
+    assert.equal(second.shadow, undefined);
+    fs.rmSync(path.join(root, 'docs'), { recursive: true });
+    const third = await checkSensor(root, sensor, options({ traces: skip(dir) }));
+    assert.equal(calls.length, 2, 'no runner for a run of none');
+    assert.equal(third.pass, true);
+    assert.deepEqual(third.skip, { files: 2, skipped: 2 });
+    // Proven by the traces of WSL2, the place the tree key names.
+    assert.equal(third.ranIn, 'wsl');
+  } finally {
+    done();
+  }
+});
+
+test('in skip mode a suite of the mirror that falls back to Windows runs whole there, and the row says why', async () => {
+  const { root, dir, calls, options, done } = gate({ reached: false });
+  try {
+    const row = await checkSensor(root, sensor, options({ traces: skip(dir) }));
+    assert.equal(calls.length, 2);
+    assert.match(calls[0].script, /'\\''a\.test\.mjs'\\''/);
+    assert.equal(calls[1].command, 'node --test');
+    assert.equal(row.pass, true);
+    assert.deepEqual(row.skip, { files: 2, skipped: 0 });
+    assert.match(row.detail, /on Windows: WSL2 did not run it \(no distribution\); exact tests: the whole suite ran, since it ran on Windows, where selection asked the traces of WSL2$/);
   } finally {
     done();
   }

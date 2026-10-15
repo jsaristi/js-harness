@@ -1006,6 +1006,25 @@ test('the real-home comparison ignores case on win32 only', () => {
   }
 });
 
+// --- codegraph's project cell: `n/a` where the project's codeMap switch is off, so no index fix is offered ---
+
+test('codegraph project cell is n/a where codeMap is off, and reads the index otherwise', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-stack-codemap-'));
+  try {
+    const cell = findTool('codegraph').project;
+    const off = { codeMap: { value: 'off' } };
+    assert.equal(cell({ project, functions: off }), 'n/a');
+    assert.equal(cell({ project, functions: { codeMap: { value: 'on-demand' } } }), 'missing');
+    assert.equal(cell({ project }), 'missing');
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    assert.equal(cell({ project, functions: off }), 'n/a');
+    assert.equal(cell({ project, functions: { codeMap: { value: 'always' } } }), 'ok');
+    assert.equal(cell({ project }), 'ok');
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // --- when: the codex row is shown unless the project's codexReview switch is off (an unresolved switch shows it) ---
 
 test('codex has a when that hides it only for codexReview off', () => {

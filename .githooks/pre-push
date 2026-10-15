@@ -5,6 +5,17 @@
 root=$(git rev-parse --show-toplevel)
 status=0
 while read -r local_ref local_sha remote_ref remote_sha; do
+  # Main is pushed only by the merge queue, which says so (odd/tasks/merge-queue.md, S9): main tested as a
+  # candidate is main as pushed only when nothing else pushes it. A delete of main is refused with the rest.
+  case "$remote_ref" in
+    refs/heads/main)
+      if [ "${JS_HARNESS_MERGE_QUEUE:-}" != 1 ]; then
+        echo "pre-push: main is pushed only by js-harness merge-queue --land; push your branch, open its pull request, and let the queue land it." >&2
+        status=1
+        continue
+      fi
+      ;;
+  esac
   # A delete pushes nothing (its local sha is all zeros), so there is nothing to review.
   case "$local_sha" in *[!0]*) ;; *) continue ;; esac
   # The check gets /dev/null: a child that inherits stdin would read the rest of the ref list.

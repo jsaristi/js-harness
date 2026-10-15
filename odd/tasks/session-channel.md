@@ -1130,7 +1130,8 @@ reader, and that table names this feature as their owner.
   says of part (2) is in Progress, 2026-10-11 23:20
 - [x] T7, MOVED to JH 12 (2026-10-14, by the lead's message; its record is there now), and DONE there: PR 144 (feat/commands-and-doctor, c77ce5d), merged 2026-10-14 at 16:45 local; the state is in odd/tasks/commands-and-doctor.md L8. The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
-- [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
+- [x] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
+  DONE by JH 19 (Progress, 2026-10-15 05:16), `feat/orchestrator-skill-rewrite`.
   It closes the twelve items of the sweep about the skill's text (`docs/sweep-2026-10-11.md`,
   "JH 5", the two lists of `bin/lib/manifest.mjs`), which wait for it. Its text also carries
   the recap line of T13 to T15: one line a session with its mode and why (B5 of the proposal
@@ -1144,7 +1145,7 @@ reader, and that table names this feature as their owner.
   lead reads a session at that moment before it says what waits for him there; a notice
   when a stretch ends
 - [ ] T9 `--measures`
-- [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
+- [x] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
 - [ ] T11 The real stretch of "Done when", recorded
 - [ ] T12 The failures this feature owns closed with their proofs; the roadmap's section
@@ -1214,9 +1215,9 @@ reader, and that table names this feature as their owner.
   notice carries both read, never typed: JH 14 typed its share unread twice on 2026-10-14, and
   JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
   wording). After T18
-- [ ] T20 `js-harness wait`: one command a session runs in the background that ends when its condition holds (a pull request merged, by gh; origin/main holding a commit or a file content; a notice addressed to this session in the channel record), printing its purpose and its end at start (T18); and the skill and the hooks say that while he is not present a work session never ends a turn waiting for a message, his /compact or an event: it writes its state, arms `js-harness wait` and keeps working. His order of 2026-10-14, typed, read with `sessions --quote`, exit 0 (the lead's transcript `ffe99ebf`, line 5141): nothing ran from 06:40 to 13:34. The rule's wording is the lead's message of 13:58.
-- [ ] T21 The merge checks and the pre-leave list in the orchestrator skill: a code pull request merges on a green CI run whose checkout says `Merge <head> into <base>` with that base origin's default branch now (a stale run: close and reopen; the merge's message names the run, the base and the head); a documents-only one merges when `git merge-tree` is clean; the gate rule stays for a project with no CI; before the user leaves, every waiting session has a declared wait running, none ended its turn to wait for them, and the orchestrator's watch runs. His words: "Sí, tomemos el intercambio con verde de GitHub" (`ffe99ebf` line 5394) and "pausemos todo e implementemos las soluciones" (line 5906, 14:43, quoted by this session with `sessions --quote`); the wording is the lead's orders of 14:21 and 14:45. Branch `feat/orchestrator-merge-checks`, worktree `D:\js-harness-worktrees\merge-checks`, inline.
-- [ ] T22 The cut only while the user is here: the pause notice reads when the user last wrote (`personAtOf`, the end of the transcript it reads) and says by `cutRule` (15 minutes, as `askingRule`) to give the two blocks only then, and otherwise never to stop, since the host compacts inside a turn; AGENTS.md says the same in place of its old cut sentence, inside 1500 tokens. Same orders as T21. Widened by the lead's correction of 15:52 and 15:58, on his words "pero si se autocompacta en la mitad de una tarea creo que es malo" (`b878a67f` line 3189, 15:37) and "despues de la autocompactacion se le puede inyectar el siguiente prompt automaticamente?" (line 3535, 15:49), both quoted by this session: from the pause on, the notice says to write the state after every step (committed with the next commit) and to store the session's own resume prompt with `notify --opening` (what a compaction by the host or a new session under that title reads); a last notice, once a stretch, at `DEFAULT_CONTEXT_LAST_PERCENT` (three points under the compaction, the lead's 15:58 correction) says to write both now, before anything else, and then to go on with the task (never to wait for the compaction: Codex's P2 on cab5d69, since the host compacts with the next requests). Caveats sent to the lead: the last notice had about 10k tokens of room at two points, so it moved to three (about 15k), and a self-written opening replaces the lead's. Branch `feat/cut-while-present`, worktree `D:\js-harness-worktrees\cut-rule`, inline.
+- [x] T20 `js-harness wait`: one command a session runs in the background that ends when its condition holds (a pull request merged, by gh; origin/main holding a commit or a file content; a notice addressed to this session in the channel record), printing its purpose and its end at start (T18); and the skill and the hooks say that while he is not present a work session never ends a turn waiting for a message, his /compact or an event: it writes its state, arms `js-harness wait` and keeps working. His order of 2026-10-14, typed, read with `sessions --quote`, exit 0 (the lead's transcript `ffe99ebf`, line 5141): nothing ran from 06:40 to 13:34. The rule's wording is the lead's message of 13:58. Done: merged as PR 156, 3b9e681.
+- [x] T21 The merge checks and the pre-leave list in the orchestrator skill: a code pull request merges on a green CI run whose checkout says `Merge <head> into <base>` with that base origin's default branch now (a stale run: close and reopen; the merge's message names the run, the base and the head); a documents-only one merges when `git merge-tree` is clean; the gate rule stays for a project with no CI; before the user leaves, every waiting session has a declared wait running, none ended its turn to wait for them, and the orchestrator's watch runs. His words: "Sí, tomemos el intercambio con verde de GitHub" (`ffe99ebf` line 5394) and "pausemos todo e implementemos las soluciones" (line 5906, 14:43, quoted by this session with `sessions --quote`); the wording is the lead's orders of 14:21 and 14:45. Branch `feat/orchestrator-merge-checks`, worktree `D:\js-harness-worktrees\merge-checks`, inline. Done: merged as PR 149, eb6abf7.
+- [x] T22 The cut only while the user is here: the pause notice reads when the user last wrote (`personAtOf`, the end of the transcript it reads) and says by `cutRule` (15 minutes, as `askingRule`) to give the two blocks only then, and otherwise never to stop, since the host compacts inside a turn; AGENTS.md says the same in place of its old cut sentence, inside 1500 tokens. Same orders as T21. Widened by the lead's correction of 15:52 and 15:58, on his words "pero si se autocompacta en la mitad de una tarea creo que es malo" (`b878a67f` line 3189, 15:37) and "despues de la autocompactacion se le puede inyectar el siguiente prompt automaticamente?" (line 3535, 15:49), both quoted by this session: from the pause on, the notice says to write the state after every step (committed with the next commit) and to store the session's own resume prompt with `notify --opening` (what a compaction by the host or a new session under that title reads); a last notice, once a stretch, at `DEFAULT_CONTEXT_LAST_PERCENT` (three points under the compaction, the lead's 15:58 correction) says to write both now, before anything else, and then to go on with the task (never to wait for the compaction: Codex's P2 on cab5d69, since the host compacts with the next requests). Caveats sent to the lead: the last notice had about 10k tokens of room at two points, so it moved to three (about 15k), and a self-written opening replaces the lead's. Branch `feat/cut-while-present`, worktree `D:\js-harness-worktrees\cut-rule`, inline. Done: merged as PR 151, 34be88d.
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -1226,8 +1227,7 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
 | The yardstick of "the last task". A message that arrives while a session works starts a task since the round of fixes, and it closes the task before it even when that task's work is not over, so the last task can read far smaller than the work done and "it fits" leans towards true (gentle-ai's warning on `bin/lib/sessions.mjs`, `instructionBy`) | point 7, "Open"; Progress, 2026-10-11 19:57 to 20:42 and 22:20 to 23:57 | his decision, before T9 |
 | The refusal of a pause not below the compaction point also fires for a window so small that the two default shares round to one token, and names two flags nobody gave (gentle-ai's suggestion on `bin/sessions.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
 | The hint above the list of several openings says to ask with the title in double quotes, the quoting the hook's rule for a printed command rejects (gentle-ai's suggestion on `bin/resume.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
-| The text of the orchestrator skill: twelve items of the sweep | `docs/sweep-2026-10-11.md`, "JH 5", the two lists of `bin/lib/manifest.mjs` | T8 |
-| Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | his answer, asked through the lead |
+| Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | kept as compaction by default, a relief on request, by the lead's notice of 2026-10-15 05:44 (T8, Progress); no question to him |
 
 ## Progress
 - 2026-10-10, T0. Designed with `odd/tasks/rule-hierarchy.md`, whose Progress holds what was
@@ -2222,6 +2222,59 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `js-harness remote stop` in the project, and exits 1; before, it exited 0 and left the
   server and the folder without a word. Not in this slice: a start or a stop of the remote
   that is in progress at the instant of an uninstall is not looked for (its lock file).
+- 2026-10-15 04:18 local, T2, test owed 5, the half left open on 2026-10-11 (does a renamed
+  and live session keep answering to its old title). The live case: the lead's session
+  `local_a8ef1e36` was titled `JH ORQ 2 · js-harness` and then renamed `JH ORQ · js-harness`,
+  still open. `ListAgents` listed it only under the new title. A `SendMessage` to the old title
+  at 04:18 failed: "No agent named 'JH ORQ 2 · js-harness' is reachable. Did you mean: JH ORQ ·
+  js-harness?". So a title stops resolving once its session is renamed, even while that session
+  is live: the address is the current title alone, and a session that is told an old title
+  must look it up again (`sessions --address`, by role). Test 5 is done. Tests 1, 2, 3 and 6
+  still wait for him, so T2 stays open. T20, T21 and T22 are marked done in "Tasks" from their
+  merges: PR 156 (3b9e681), PR 149 (eb6abf7), PR 151 (34be88d).
+- 2026-10-15 05:36 local, T6b and T9 (JH 5).
+  - T6b is built on main in the shape of section 14's version 2: the pause notice, plus the
+    resume hook; that version left the `PreCompact` snapshot out. Part 3's measure was left
+    unwired: `compactionMeasures`, tested, and called by no command.
+  - T9's first slice wires it, draft PR 194 (feat/compaction-measures, 8729131).
+    `sessions --measures [--hours <n>] [--json]` prints, for each automatic compaction, told
+    (`toldBetween`), kept (a `git log` of the feature document) and announced. A closing line
+    counts those that miss a fact, with unknown facts counted apart.
+  - gentle-ai: medium, not due. Codex: correct in both parts (0.85, 0.91).
+  - On this machine's last 24 hours: 31 automatic compactions judged in 11 sessions, 19 miss
+    a fact (told 9, kept 4, announced 10); 13 with a fact not known.
+  - Left for T9: the board's mark for a session whose last automatic compaction misses a
+    fact, the relief-file line as a second way to "kept", and the other measures of section 12.
+  - T8 went to JH 19 by the lead's order.
+- 2026-10-15 06:27 local, T10 (JH 5): the practice journey's step `channel`, draft PR 199
+  (feat/journey-channel-step, b0d0af2). It runs the installed `notify` in the practice project, then
+  `sessions --json`, and passes when the board shows the notice's marker from the practice home's
+  record and the real home's record does not hold it. The journey on b0d0af2: "13 of 13 steps passed
+  (left out: host-loads); real home: unchanged". Codex: correct (0.88). gentle-ai: medium, not due.
+- 2026-10-15 05:16 (date), T8, done by JH 19, a reserve session the lead handed it to (its
+  brief, the lead's notice of 05:09), on `feat/orchestrator-skill-rewrite`. The orchestrator
+  skill (`bin/lib/manifest.mjs`) now describes the lead: "## The lead", whose "What you may
+  do" points at the charter at the head of the relief file instead of "You read"; "Interrupt
+  the user only when" with item 6 as the context pause by name, no number; "Otherwise keep
+  the work moving" in place of "Otherwise stay silent"; a section "## The recap" with the
+  line a session and its effort mode, the sessions to archive and stopped (a routine named
+  as one), the Codex meter read then, a session read before saying what waits there, the
+  notice that a stretch ended, the ask before the user leaves and the block held once while
+  away; "Compaction, and a relief only on request" in place of "Relief, not compaction", the
+  fixed prompt kept only for a relief the user asks for; the rotation rules of the lead's
+  relief file, 2026-10-15 04:26 to 04:57 (started and detached in a turn of the user's, never
+  a fork, the children detached before an archive, reserves opened before the user leaves);
+  the closing notice as `notify --kind closed`; notices out of the relief file's line. The
+  twelve items of the sweep (`docs/sweep-2026-10-11.md`, "JH 5", the two lists of
+  `bin/lib/manifest.mjs`) are checked off; the roadmap's sentence on the watchman skill is in
+  the past. Proof: five tests in `bin/lib/manifest.test.mjs`, RED before the text (5 failed,
+  10 passed), then `node --test bin/lib/manifest.test.mjs` 138 passed, 0 failed. Owed: the
+  paragraph on `js-harness loop` that JH 18 sends, after PR 201 (the command) is on main. The
+  open point on whether the lead is relieved or compacted (A3 89): the text takes the sweep's
+  fix for A1 2 and CD 4 (compaction by default, a relief only when he asks), and the lead's
+  notice of 05:44 keeps it, as matching his rules, with no question to him. Moved onto main
+  `eec4ee3` at 07:02: the line on starting from the fixed prompt keeps main's new wording on who
+  archives the old orchestrator, with "say that you lead".
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

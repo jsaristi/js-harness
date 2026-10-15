@@ -1648,9 +1648,17 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       of a Codex review read their rules and `codex-review --plan` reads the three rules of
       the allowance (commit `f2896a6`, pull request 93; gentle-ai not due, Codex's record
       covers `53826d8..f2896a6`, no finding). The command's test file states neither value
-      any more (branch `test/review-literals`). Left: the files of the design's list not
-      reached yet, `bin/check.mjs`, `bin/lib/manifest.mjs` and `bin/contract.mjs` with the four
-      values whose constant is not exported, and the queue of values the second reader found
+      any more (branch `test/review-literals`). On 2026-10-15, `contract-run-timeout`, read by
+      `bin/contract.mjs` (commit `b7e1681`, draft pull request 190), and `review-timeout`, read
+      by `bin/codex-review.mjs` (commit `8f1b080`, draft pull request 192, stacked on 190):
+      gentle-ai assessed both as medium and not due, and Codex's records cover
+      `149e1d8..b7e1681` and `b7e1681..8f1b080`, each patch correct with no finding. Then
+      `sensor-timeout` and `agents-budget`, read by `bin/check.mjs` (commit `64e2e6b`, draft
+      pull request 196, stacked on 192; `git merge-tree` against the three branches that
+      change that file: two clean, `feat/flaky-ledger` conflicting only in `docs/FAILURES.md`,
+      as it does with `main`; Codex's record covers `8f1b080..64e2e6b`, no finding). Left: the
+      last file of the design's list, `bin/lib/manifest.mjs`, open in JH 16's pull requests 188
+      and 191, so it waits for them; and the queue of values the second reader found
       ("What T16b builds", item 2); and two test files that still state the review's model as
       a fixture, `bin/lib/codex-review-plan.test.mjs` (17 lines) and
       `bin/lib/codex-review-runs.test.mjs` (11), which are JH 8's to free
@@ -2590,6 +2598,21 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     closing it takes, before any commit on it; nothing in its worktree is deleted.
 
 ## Next step
+**State for a resume, 2026-10-15 at 05:19 by `date`, at about 62 percent of the context.** The
+lead lifted the pause on 2026-10-15 ("he ordered everything unblocked"). The two parked branches
+are delivered as drafts, since main is frozen until the lead says pull request 167 landed:
+`feat/rule-contract-timeout` was rebased onto `149e1d8`, its import conflict resolved inside
+the commit (`b7e1681`), and it is pull request 190. `feat/rule-review-timeout` was rebuilt on it:
+the staged merge was dropped, the work was reapplied as a patch, and it was committed (`8f1b080`)
+as pull request 192. At 05:44, `bin/check.mjs` followed as pull request 196, stacked on 192,
+with the lead's leave. All three carry Codex records and gentle-ai's "not due". Next:
+`bin/lib/manifest.mjs`, after JH 16's pull requests 188 and 191 land, since they change it.
+Pull request 167 landed at 05:47 (main `d34f1d6`), and code now reaches main only through
+`merge-queue --land`. The lead's order of 05:49: these stay drafts until its batch 1 (183, 185,
+186, flaky-ledger, sweep-waits) is on main; then the lead marks them ready and lands them, not
+this session. `git merge-tree` of `d34f1d6` with 196's stack exits 0, so the stack is rebased
+once, after batch 1, since each rebase renews the commit ids and their three Codex records.
+
 **State for a resume, 2026-10-14 at about 15:00, at 89 percent of the context.** T16b is PAUSED by
 his order to fix the failures first (the lead's transcript ffe99ebf, lines 5906 and 5853). Parked:
 `feat/rule-contract-timeout` (worktree `rule-contract-timeout`, commit e3d3dee, stacked on pull

@@ -7,7 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { GATE_NOT_RUN, commandLineOf, gateMain } from './gate.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
-import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { GATE_COMMAND_MAX, appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 
 // `js-harness gate -- <command>` runs any command under the machine's gate lock, for the heavy runs that
 // are not a commit's gate. The lock itself is tested in lib/gate-lock.test.mjs and what `check` does with
@@ -361,6 +361,63 @@ test('where reading the launchers is cheap (Linux) they are read as the gate sta
   assert.equal(launchers.asked.reads, 1);
   assert.deepEqual(launchers.asked.order.slice(0, 2), ['read', 'take'], launchers.asked.order.join(' '));
   other.release();
+}));
+
+test('gate whose launchers are not read yet keeps its place: an unknown chain is no ended launcher', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 4) other.release();
+  };
+  // The table is read as the gate starts, without blocking it (Windows): until it is in, `read` has no chain.
+  let reads = 0;
+  const launchers = {
+    eager: false,
+    read: () => ((reads += 1) < 3 ? null : [{ pid: 30, name: 'sh.exe', start: 300 }]),
+    alive: (chain) => {
+      assert.notEqual(chain, null, 'asked of a chain not read yet');
+      return true;
+    },
+  };
+  const spawned = ranWith(0);
+  const { code } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: clock.take, launchers });
+  assert.equal(code, 0);
+  assert.equal(spawned.asked.length, 1);
+  assert.ok(reads >= 3, `read ${reads} times`);
+}));
+
+// Codex on dfe4345..1134f84: a turn that came after a wait, before the table was in, ran with no last look.
+test('gate whose turn comes after a wait, before its launchers are read, waits for that read and runs nothing when they ended', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 2) other.release();
+  };
+  const chain = [{ pid: 30, name: 'sh.exe', start: 300 }];
+  let settled = false;
+  const launchers = {
+    eager: false,
+    read: () => (settled ? chain : null),
+    settle: async () => {
+      settled = true;
+      return chain;
+    },
+    // Alive at every look of the wait; ended at the last one, before the command.
+    alive: (_, { full = false } = {}) => !full,
+    stop() {},
+  };
+  const spawned = ranWith(0);
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: clock.take, launchers });
+  assert.ok(settled, 'the read was waited for');
+  assert.equal(code, GATE_NOT_RUN);
+  assert.equal(spawned.asked.length, 0);
+  assert.equal(said.at(-1), GONE_AT_TURN);
 }));
 
 test('gate that takes the lock at once asks nothing of its launchers, so a turn with no wait costs nothing more', withHome(async (home, dir) => {
@@ -857,12 +914,12 @@ test('the end of a gate says how its command ended: its exit code, killed, or an
 }));
 
 // What comes after `--` can hold a secret, and the log is a file that stays.
-test('gate writes its command cut at 120 characters', withHome(async (home, dir) => {
+test('gate writes its command cut at the declared gate-log-command', withHome(async (home, dir) => {
   const log = capturedLog();
-  const secret = `--token=${'s'.repeat(200)}`;
+  const secret = `--token=${'s'.repeat(GATE_COMMAND_MAX + 80)}`;
   await runGate(['--home', home, '--cwd', dir, '--', 'node', 'deploy.mjs', secret], {}, { spawn: ranWith(0), ...log.deps });
-  assert.equal(log.events[0].command, `gate -- node deploy.mjs ${secret}`.slice(0, 120));
-  assert.equal(log.events[0].command.length, 120);
+  assert.equal(log.events[0].command, `gate -- node deploy.mjs ${secret}`.slice(0, GATE_COMMAND_MAX));
+  assert.equal(log.events[0].command.length, GATE_COMMAND_MAX);
 }));
 
 test('gate that waited for another writes in its start whose gate that was and for how long, and one that ran nothing writes one line that says why', withHome(async (home, dir) => {

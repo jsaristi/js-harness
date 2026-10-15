@@ -759,7 +759,7 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
   assert.deepEqual(guardHook.pointer, ['hooks', 'PreToolUse']);
   assert.deepEqual(guardHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(guardHook.entry(), {
-    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash',
+    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit',
     hooks: [{ type: 'command', command: 'js-harness guard --hook || exit 0', timeout: 5 }],
   });
   assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
@@ -796,6 +796,43 @@ test('install writes the resume entry beside the doctor\'s in each host file and
   }
 });
 
+// T4 of odd/tasks/memory-hygiene.md: the guard's matcher gained Write and Edit. An install made with the older matcher
+// is moved to the new entry by sync, with no second guard entry left behind, and uninstall takes the new one exactly.
+test('sync replaces a guard entry recorded with the older matcher by the new one, once, and uninstall removes it exactly', () => {
+  for (const created of [true, false]) {
+    const home = makeTmpHome();
+    try {
+      const target = guardHook.target(home);
+      const theirs = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo their-own-pre-tool-use', timeout: 5 }] };
+      if (!created) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [theirs] } }, null, 2)}\n`, 'utf8');
+      }
+      // The older install: the same entries, with the guard's matcher as it was before Write and Edit.
+      const olderEntry = { ...guardHook.entry(), matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash' };
+      const older = install(home, '0.1.0');
+      const data = readJson(target);
+      data.hooks.PreToolUse = data.hooks.PreToolUse.map((entry) => (deepEqualJson(entry, guardHook.entry()) ? olderEntry : entry));
+      fs.writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+      const olderRecords = older.entries.map((record) => (record.path === target && deepEqualJson(record.entry, guardHook.entry())
+        ? { ...record, entry: olderEntry, sha256: sha256(JSON.stringify(olderEntry)) } : record));
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: olderRecords }, null, 2), 'utf8');
+
+      const manifest = sync(home, '0.2.0');
+      assert.deepEqual(readJson(target).hooks.PreToolUse, created ? [guardHook.entry()] : [theirs, guardHook.entry()], 'one guard entry, the new one');
+      assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), [guardHook.entry()]);
+
+      uninstall(home);
+      if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
+      else assert.deepEqual(readJson(target), { hooks: { PreToolUse: [theirs] } }, 'only the user\'s own entry is left');
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+const deepEqualJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 test('an update from an install made before the resume hook adds its entry, and uninstall still leaves the host file as it found it', () => {
   for (const created of [true, false]) {
     const home = makeTmpHome();
@@ -818,7 +855,7 @@ test('an update from an install made before the resume hook adds its entry, and 
 
       const manifest = sync(home, '0.2.0');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
-      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', created]]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', created]]);
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
@@ -1895,6 +1932,64 @@ test('the orchestrator skill lists what is checked before the user leaves', () =
   assert.ok(text.includes('- Before the user leaves, check and say: every session that waits has a declared wait running in its background work, none ended its turn to wait for the user, and your own watch is running.'));
 });
 
+// T8 of odd/tasks/session-channel.md: the orchestrator is the lead, not a watchman, and the twelve items of the
+// sweep (docs/sweep-2026-10-11.md, "JH 5", the two lists of this file) said where the old text was wrong.
+test('the orchestrator skill describes the lead and its charter, not a watchman', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('\n## The lead\n'));
+  assert.ok(text.includes('What you do alone and what stays the user\'s is the charter the user approved'));
+  assert.ok(text.includes('- You never implement, never commit, never write in a worktree and never answer a question for the user'));
+  assert.ok(text.includes('Otherwise keep the work moving'));
+  // The watchman's lines (sweep A1 1, A2 4, CD 6).
+  assert.doesNotMatch(text, /- You read\./);
+  assert.doesNotMatch(text, /Otherwise stay silent/);
+  assert.doesNotMatch(text, /What you write is your relief file and notices/);
+});
+
+test('the orchestrator skill names the context pause and keeps the fixed prompt for a relief the user asks for', () => {
+  const text = components[2].content('0.1.0');
+  // Sweep A1 2, A1 3, A2 3, CD 3, CD 4: no limit is news, and the lead is compacted, not replaced for a share.
+  assert.doesNotMatch(text, /past the limit/);
+  assert.doesNotMatch(text, /passed the limit/);
+  assert.doesNotMatch(text, /Relief, not compaction/);
+  assert.doesNotMatch(text, /\d+ ?%|\d+ percent/, 'the pause is named by its rule, never by a number');
+  assert.ok(text.includes('\n6. a session reached the context pause and its state is not written.\n'));
+  assert.ok(text.includes('A compaction needs no one; a relief needs the user.'));
+  assert.ok(text.includes('Give this opening prompt only when the user asks for a new lead'));
+});
+
+// The rotation of 2026-10-15 (the lead's relief file, 04:26 to 04:57): a fork could not be detached, killed the old
+// lead's loops, and archiving a lead would have archived the new one with it.
+test('the orchestrator skill says how a lead is rotated: started and detached, never forked, children detached before an archive', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('- A new lead is started with the host\'s session-start tool in a turn the user\'s own message starts, and detached from the old lead at once'));
+  assert.ok(text.includes('- Never by a fork: an agent cannot detach a fork, and a fork inherits the old lead\'s context and stops its background work.'));
+  assert.ok(text.includes('- Before a lead is archived, detach every session it started: archiving a session archives its idle side sessions.'));
+  assert.ok(text.includes('- Before the user leaves, open the reserve sessions the stretch will need'));
+});
+
+test('the orchestrator skill says what every recap carries and how a block waits while the user is away', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('\n## The recap\n'));
+  for (const line of [
+    '- one line a session: its state, the effort mode its kind of work calls for and why;',
+    '- by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine;',
+    '- the Codex meter, read at that moment, when the project reviews with Codex;',
+    '- what waits for the user in a session, said only after reading that session at that moment;',
+    '- when a stretch or a session ends, that it ended and which session to return to.',
+    '- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.',
+    '- Before the user leaves, ask in that reply for everything the stretch will need',
+  ]) assert.ok(text.includes(line), line);
+});
+
+test('the orchestrator skill closes a work session with the notify command and keeps notices out of the relief file', () => {
+  const text = components[2].content('0.1.0');
+  // Sweep A1 16 and A1 17.
+  assert.ok(text.includes('- When you have finished, say so in your first line, and close with `js-harness notify --to orchestrator --kind closed "<what you delivered>"`'));
+  assert.doesNotMatch(text, /Your last prompt is the closing notice/);
+  assert.doesNotMatch(text, /a notice not yet delivered/);
+});
+
 test('the js-harness skill names the command that writes a notice between sessions', () => {
   const text = components[0].content('0.1.0');
   assert.ok(text.includes('- `js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"`'));
@@ -2872,6 +2967,31 @@ test('the js-harness skill names js-harness wait: what it ends on, and that it r
   assert.ok(text.includes('- `js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)`'));
   assert.ok(text.includes('ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role'));
   assert.ok(text.includes('run it in the background and stop it with TaskStop'));
+});
+
+// T6 of odd/tasks/memory-hygiene.md: the protocol of a pass ships with the skill, with its incident and its
+// expiry, and the description says when the skill applies, so the host loads it when a pass is due.
+test('the js-harness skill carries the memory hygiene protocol: when, what alone, what to the user, undo, expiry', () => {
+  const text = components[0].content('0.1.0');
+  assert.match(text, /^description: .*memory hygiene pass/m);
+  assert.ok(text.includes('## Memory hygiene'));
+  assert.ok(text.includes('2026-10-15'), 'it opens with its incident');
+  for (const step of ['`js-harness memory status`', '`js-harness memory plan', '`js-harness memory verify', '`js-harness memory undo']) {
+    assert.ok(text.includes(step), step);
+  }
+  assert.ok(text.includes('never delete a note on your own'));
+  assert.ok(text.includes('withdrawn after six passes in a row'));
+});
+
+// D3 of odd/tasks/memory-hygiene.md, settled by the user's words of 2026-10-15: the lead archives and opens
+// sessions itself where the host gives it the tool; TaskStop was seen to leave a background command's node alive.
+test('the skills say who archives and opens sessions, and to check that TaskStop left no process behind', () => {
+  const orchestrator = components[2].content('0.1.0');
+  assert.ok(orchestrator.includes('archives the old orchestrator itself when the host gives it a tool to archive sessions'));
+  assert.ok(orchestrator.includes('a work session whose work is fully finished'));
+  assert.ok(orchestrator.includes('When the host gives you a tool to start sessions, open the new session yourself'));
+  assert.ok(!orchestrator.includes('The user archives the old orchestrator only after that'));
+  assert.ok(components[0].content('0.1.0').includes('TaskStop has been seen to end the shell of a background command and leave its node process running'));
 });
 
 test('the orchestrator skill tells a work session never to end a turn waiting for a message, a compact or an event', () => {

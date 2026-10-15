@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `512cbc874f3f`. In force: 20 (14 of Sebastián, 6 of the project). Retired: 0.
+Hash `bf71969b9c12`. In force: 26 (14 of Sebastián, 12 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -91,10 +91,30 @@ The most work sessions open at one time: 3 sessions.
 
 ## The project's
 
+### agents-budget
+The most estimated tokens AGENTS.md may hold, since every session pays it on every turn: 1,500 estimated tokens.
+- Read by: `bin/check.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `docs/ROADMAP.md`.
+
+### contract-run-timeout
+How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.
+- Read by: `bin/contract.mjs`.
+- Since 2026-10-14. Row: reports. Source: design, `odd/tasks/task-contract.md`.
+
 ### control-phrase-min
 The shortest phrase by which a control or a rule in prose is found in its file: 12 characters.
 - Read by: `bin/lib/failures.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
+
+### gate-log-command
+The longest command a line of the gate log holds, since what follows gate -- can hold a secret: 120 characters.
+- Read by: `bin/lib/gate-log.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-log.md`.
+
+### gate-log-size
+The size past which the gate log is renamed over its older file, so the log stays near a megabyte: 512 KiB.
+- Read by: `bin/lib/gate-log.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-log.md`.
 
 ### gate-wait
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
@@ -120,6 +140,16 @@ The most changed lines one part of a Codex review holds, by default: 400 changed
 The most parts a Codex review runs in without being told its count: 6 parts. The flag `--max-parts` overrides it for one run.
 - Read by: `bin/lib/codex-review-plan.mjs`.
 - Since 2026-10-09. Row: reports. Source: design, `odd/tasks/codex-review-cost.md`.
+
+### review-timeout
+How long a Codex review may run before it is stopped as stalled: 30 minutes.
+- Read by: `bin/codex-review.mjs`.
+- Since 2026-10-14. Row: reports. Source: design, `odd/tasks/codex-exec-review.md`.
+
+### sensor-timeout
+How long one sensor of the gate may run before it is stopped and the commit refused: 20 minutes.
+- Read by: `bin/check.mjs`.
+- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/remote-control.md`.
 
 ## Retired
 

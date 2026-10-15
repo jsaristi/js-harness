@@ -41,6 +41,10 @@
 // entry at a line of a transcript only when the user sent it: the check a session runs before it takes
 // words another session carried as his. What he sent is what he typed, and what he answered to a question
 // the session asked with the host's question tool, tapped or typed.
+// `--measures` judges each compaction of the transcripts in the window once (odd/tasks/session-channel.md,
+// section 14): told, from the state the pause hook keeps (`toldBetween`, bin/lib/pause.mjs); kept, from the
+// commits of the feature document (`keptByGitLog`, bin/lib/measures.mjs); announced, from the transcript.
+// It runs `git log` of that document and nothing else of the machine: no worktree, pull request or gate.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,7 +52,9 @@ import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { keptByGitLog, measuresLines, measuresTotal } from './lib/measures.mjs';
+import { toldBetween } from './lib/pause.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -76,6 +82,11 @@ const USAGE = [
   '         the question, the options shown and whether they tapped one or typed their own; the result of any',
   '         other tool is not, and a question the user closed without answering is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
+  '       js-harness sessions --measures [--hours <n>] [--json] [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
+  '         prints, for each compaction of the transcripts in the window, whether the user asked for it and, for one the host',
+  '         made, three facts: told (the session was told the pause before it), kept (the feature document has a commit',
+  '         between the notice and the compaction) and announced (a reply after the notice holds the /compact block),',
+  '         each yes, no or unknown, then how many miss a fact; exit 0 when it printed, 1 when there is no sessions folder',
 ].join('\n');
 
 // How often a watch looks, and how long it waits before it returns with nothing, in seconds. A look is
@@ -124,7 +135,7 @@ const CONTEXT_MARKS = new Map([
 /** Walks argv token by token, like `progress`: anything that is not a known flag is a usage error, never
  * a token that is silently ignored. `--hours` is a number above zero, `--tail` a whole number from zero. */
 function parseArgs(argv) {
-  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, watch: false };
+  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, watch: false, measures: false };
   const marks = new Map([...CONTEXT_MARKS].map(([flag, mark]) => [flag, `${mark.percent}%`]));
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
   // would pass for flags.
@@ -132,7 +143,7 @@ function parseArgs(argv) {
   const waits = new Map([['--interval', 'interval'], ['--timeout', 'timeout']]);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
-    if (token === '--json' || token === '--watch') {
+    if (token === '--json' || token === '--watch' || token === '--measures') {
       parsed[token.slice(2)] = true;
       continue;
     }
@@ -195,12 +206,15 @@ function parseArgs(argv) {
     if (!parsed.watch && parsed[key] !== undefined) throw new SessionsArgError(`${flag} only applies with --watch`);
   }
   // An address is one title and an exit code: there is no board in it to watch, or to give as data. The
-  // same holds for an opening and for a quote, and each of the three is asked alone.
-  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript']].filter(([, asked]) => asked !== undefined);
+  // same holds for an opening and for a quote, and each of the three is asked alone. The measures of the
+  // compactions are asked alone too, and are data like the board, so `--json` gives them; but they are
+  // judged once from what the transcripts hold, and a watch would have nothing in them to wait for.
+  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript'], ['--measures', parsed.measures || undefined, 'the measures of the compactions']].filter(([, asked]) => asked !== undefined);
   if (answers.length > 1) throw new SessionsArgError(`${answers.map(([flag]) => flag).join(' and ')} are asked one at a time`);
   if (parsed.peek && parsed.opening === undefined) throw new SessionsArgError('--peek goes only with --opening: it reads an opening and records nothing');
   for (const [flag, , what] of answers) {
-    if (parsed.watch || parsed.json) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch or --json`);
+    if (flag === '--measures' && parsed.watch) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch`);
+    if (flag !== '--measures' && (parsed.watch || parsed.json)) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch or --json`);
   }
   // The marks are read last: as a percentage each is a share of the window, whichever flag came first.
   for (const [flag, mark] of CONTEXT_MARKS) {
@@ -339,6 +353,35 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindo
     if (!work.ended) work.file = workFile(work, folders, io);
   }
   return { id, modifiedAt, ...facts };
+}
+
+/** The measures of one session's compactions (`compactionMeasures`): `{ id, modifiedAt, title, titleSource,
+ * measures }`, or `{ id, modifiedAt, unavailable }` with the reason when the transcript cannot be read, which
+ * is said and never skipped: a total that left one out would claim more than was read. The board's title
+ * names the block, and is read only for a transcript that holds a compaction, since it parses the whole
+ * file again; a transcript the board's reader cannot turn into facts is measured all the same, by its id. */
+function measureSession(id, modifiedAt, file, readers, io) {
+  let text;
+  try {
+    text = io.readFile(file);
+  } catch (err) {
+    return { id, modifiedAt, unavailable: err.code ?? err.message };
+  }
+  let measures;
+  try {
+    measures = compactionMeasures(text, { told: (after, at) => readers.told(id, after, at), kept: readers.kept });
+  } catch (err) {
+    return { id, modifiedAt, unavailable: `its transcript could not be read into measures: ${err.message}` };
+  }
+  let facts = {};
+  if (measures.length > 0) {
+    try {
+      facts = io.readFacts(text);
+    } catch {
+      // the block is named by the id
+    }
+  }
+  return { id, modifiedAt, title: facts.title ?? null, titleSource: facts.titleSource ?? null, measures };
 }
 
 /** The relief file at `file` as the board shows it: `{ path, exists: true, lineCount, lines }`, `{ path,
@@ -714,6 +757,54 @@ export async function sessionsMain(
     if (unread.length > 0) stderr(`js-harness sessions: ${notRead} and ${unread.length === 1 ? 'is' : 'are'} not counted: ${unread.join(', ')}`);
     if (recordUnread !== null) stderr(`js-harness sessions: ${recordUnread}: a session known only by the opening it read is not counted`);
     return holders.length === 1 ? 0 : 2;
+  }
+
+  // The measures of the compactions (odd/tasks/session-channel.md, section 14), the proof the user is owed
+  // that the pause works: each compaction of the transcripts that changed in the window, judged once in the
+  // file that holds the stretch before it. Told is read from the pause's state under the harness home (or
+  // the temp folder, where the hook keeps it when the home cannot be written), kept from `git log` of the
+  // feature document the session last wrote, announced from the transcript. A sessions folder that cannot
+  // be listed is exit 1, as for the board: there is nothing to measure, whatever the reason.
+  if (parsed.measures) {
+    let names;
+    try {
+      names = readdir(projectDir);
+    } catch (err) {
+      stderr(noFolder(err.code ?? err.message));
+      return 1;
+    }
+    const generatedAt = now();
+    const since = generatedAt - parsed.hours * 3600 * 1000;
+    const stateFiles = { readFileSync: readFile, statSync: stat };
+    const pauseTmp = parsed.tmp ?? tmpdir();
+    const readers = {
+      told: (sessionId, after, at) => toldBetween({ home: harnessHome, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
+      kept: keptByGitLog(run),
+    };
+    const measured = [];
+    for (const name of names) {
+      if (!name.endsWith('.jsonl')) continue;
+      const id = name.slice(0, -'.jsonl'.length);
+      const file = path.join(projectDir, name);
+      let changedAt;
+      try {
+        changedAt = stat(file).mtimeMs;
+      } catch (err) {
+        // A transcript whose date cannot be read cannot be placed outside the window either: it is said.
+        measured.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
+        continue;
+      }
+      if (changedAt >= since) measured.push(measureSession(id, new Date(changedAt).toISOString(), file, readers, io));
+    }
+    // A session opened from the phone has its title from the opening it read, as on the board.
+    const sessions = titledByReadings(measured, readNotices(harnessHome, slug, { readFile }).readings);
+    sessions.sort((a, b) => ((a.modifiedAt ?? '') < (b.modifiedAt ?? '') ? 1 : (a.modifiedAt ?? '') > (b.modifiedAt ?? '') ? -1 : 0));
+    if (parsed.json) {
+      stdout(JSON.stringify({ root, projectDir, hours: parsed.hours, generatedAt: new Date(generatedAt).toISOString(), sessions, total: measuresTotal(sessions) }, null, 2));
+    } else {
+      for (const line of measuresLines(sessions)) stdout(line);
+    }
+    return 0;
   }
 
   const first = look();

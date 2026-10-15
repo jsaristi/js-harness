@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CONTRACT_TEMPLATE, isContract, parseContract, validateContract, doneWhen } from './contract.mjs';
+import { CONTRACT_TEMPLATE, isContract, parseContract, validateContract, doneWhen, tasksOf, taskModes, modeLine } from './contract.mjs';
 
 /** A complete contract; each test breaks one thing in it. */
 const GOOD = [
@@ -35,7 +35,8 @@ const GOOD = [
   '',
 ].join('\n');
 
-const SECTIONS = ['Goal', 'Why', 'Done when', 'In scope / Out of scope', 'Constraints', 'Effort', 'Ask me before'];
+// The sections a contract must have; `## Effort` is optional since a task's kind sets its effort.
+const SECTIONS = ['Goal', 'Why', 'Done when', 'In scope / Out of scope', 'Constraints', 'Ask me before'];
 
 /** `GOOD` with one section's body replaced (or the whole section dropped when `body` is null). */
 function withSection(title, body) {
@@ -47,12 +48,13 @@ test('the template fails validation: it is all placeholders', () => {
   const { ok, errors } = validateContract(CONTRACT_TEMPLATE);
   assert.equal(ok, false);
   assert.ok(errors.some((e) => /placeholder/.test(e)), errors.join('\n'));
-  assert.ok(errors.some((e) => /Effort/.test(e)), errors.join('\n'));
+  assert.ok(errors.some((e) => /^task T1 names the kind/.test(e)), errors.join('\n'));
 });
 
-test('the template is a contract with every section, in order', () => {
+test('the template is a contract with every section, in order, then a task line that names its kind', () => {
   assert.equal(isContract(CONTRACT_TEMPLATE), true);
-  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], SECTIONS);
+  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], [...SECTIONS, 'Tasks']);
+  assert.match(parseContract(CONTRACT_TEMPLATE).get('Tasks'), /^- \[ \] T1 \(kind: design \| build \| verify \| docs\)/);
 });
 
 test('a filled-in contract passes', () => {
@@ -237,4 +239,93 @@ test('a line that opens a fence with <!-- after the marker leaves no comment ope
   assert.match(parseContract(md).get('Goal'), /<!-- oops/);
   assert.equal(parseContract(md).get('Why'), 'Because the loop needs evidence.');
   assert.equal(validateContract(md).ok, true);
+});
+const TASKS = [
+  '## Tasks',
+  '- [x] T1 (kind: design) The design, read by two readers',
+  '- [ ] T2 (kind: build) The parser (route: inline)',
+  '  - [ ] T2a (kind: verify) Its measure',
+  '- [ ] T3 The rest, with no kind',
+  '- [ ] Not a task: no ID',
+  '```',
+  '- [ ] T9 (kind: build) inside a fence',
+  '```',
+].join('\n');
+
+/** A reader of the rules as a project that declares today's table gives them. */
+const DECLARED = {
+  'session-effort': { value: 'high' },
+  'subagent-writer-model': { value: 'claude-haiku-5-5', alias: 'haiku' },
+  'subagent-reader-model': { value: 'claude-opus-5-5', alias: 'opus' },
+  'subagent-effort': { value: 'high' },
+};
+const declared = (extra = {}) => (id) => ({ ...DECLARED, ...extra })[id] ?? null;
+
+test('tasksOf reads each checklist line that opens with an ID, outside fences, with its kind and box', () => {
+  assert.deepEqual(tasksOf(TASKS), [
+    { id: 'T1', kind: 'design', done: true },
+    { id: 'T2', kind: 'build', done: false },
+    { id: 'T2a', kind: 'verify', done: false },
+    { id: 'T3', kind: null, done: false },
+  ]);
+});
+
+test('the task ID is read as the session board reads it', () => {
+  // The board's `taskId` (bin/lib/sessions.mjs) is not exported; its pattern is copied here and held alike.
+  const board = /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/;
+  for (const text of ['T1 x', 'T16b: y', 'JH13 z', 'T1', 'Tx no', '12 no', 'T1· no']) {
+    const step = `- [ ] ${text}`;
+    assert.equal(tasksOf(step)[0]?.id ?? null, board.exec(text)?.[1] ?? null, text);
+  }
+});
+
+test('taskModes gives every kind the session effort, writers only to build and to no kind', () => {
+  const modes = taskModes(TASKS, declared());
+  assert.deepEqual(modes.map(({ id, effort, writerModel, readerModel, subagentEffort, off }) => [id, effort, writerModel, readerModel, subagentEffort, off]), [
+    ['T1', 'high', null, 'opus', 'high', null],
+    ['T2', 'high', 'haiku', 'opus', 'high', null],
+    ['T2a', 'high', null, 'opus', 'high', null],
+    ['T3', 'high', 'haiku', 'opus', 'high', null],
+  ]);
+});
+
+test('a kind with its own declared effort row takes it; the others keep the session effort', () => {
+  const modes = taskModes(TASKS, declared({ 'session-effort-build': { value: 'medium' } }));
+  assert.deepEqual(modes.map((m) => [m.id, m.effort]), [['T1', 'high'], ['T2', 'medium'], ['T2a', 'high'], ['T3', 'high']]);
+});
+
+test('a task with no kind takes the session rule, never the document\'s ## Effort', () => {
+  const doc = withSection('Effort', 'medium') + '\n## Tasks\n- [ ] T1 Something\n';
+  assert.equal(taskModes(doc, declared())[0].effort, 'high');
+});
+
+test('a project that declares no rules, or one ahead of this copy, gets off and no values', () => {
+  for (const off of ['elsewhere', 'behind']) {
+    const [mode] = taskModes('- [ ] T1 (kind: build) x', () => ({ off }));
+    assert.deepEqual(mode, { id: 'T1', kind: 'build', done: false, effort: null, writerModel: null, readerModel: null, subagentEffort: null, off });
+  }
+});
+
+test('modeLine prints the mode, the roles a kind launches, and the off reasons', () => {
+  const [design, build, , none] = taskModes(TASKS, declared());
+  assert.equal(modeLine(design), 'T1 (kind: design): session high; readers opus; every sub-agent at high');
+  assert.equal(modeLine(build), 'T2 (kind: build): session high; writers haiku, readers opus; every sub-agent at high');
+  assert.equal(modeLine(none), 'T3 (no kind): session high; writers haiku, readers opus; every sub-agent at high');
+  assert.equal(modeLine({ id: 'T4', kind: 'docs', off: 'elsewhere' }), 'T4 (kind: docs): no effort or model declared in this project');
+  assert.equal(modeLine({ id: 'T4', kind: null, off: 'behind' }), "T4 (no kind): this copy of the harness is older than the project's rules");
+});
+
+test('an unknown kind is a contract error naming the task and the kinds', () => {
+  const { ok, errors } = validateContract(`${GOOD}\n## Tasks\n- [ ] T3 (kind: bild) The parser\n`);
+  assert.equal(ok, false);
+  assert.ok(errors.includes('task T3 names the kind "bild": one of design, build, verify, docs'), errors.join('\n'));
+});
+
+test('## Effort is optional: a contract without it passes, one with a wrong value still fails', () => {
+  assert.deepEqual(validateContract(withSection('Effort', null)), { ok: true, errors: [] });
+  assert.equal(validateContract(withSection('Effort', 'low')).ok, false);
+});
+
+test('an empty ## Effort is still named as an empty section, as before it became optional', () => {
+  assert.deepEqual(validateContract(withSection('Effort', '')).errors, ['section "## Effort" is empty']);
 });
