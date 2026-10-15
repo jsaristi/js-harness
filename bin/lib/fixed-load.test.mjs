@@ -131,3 +131,23 @@ test('one headless run or one long first message does not move the median', () =
     assert.equal(measureFixedLoad({ home, cwd }).median, 108_000);
   });
 });
+
+test('a first turn after a line longer than one read, with characters cut across reads, is still found', () => {
+  withFixture((home, cwd) => {
+    // Far more than one 64 KiB read, in characters of two and four bytes, so reads end inside them.
+    const long = { type: 'user', message: { role: 'user', content: 'ñ🙂'.repeat(40_000) } };
+    transcript(home, cwd, 'long', [long, assistant(2, 60_000, 50_000)], 1);
+    assert.equal(measureFixedLoad({ home, cwd }).sessions[0].tokens, 110_002);
+  });
+});
+
+test('a transcript that cannot be read is skipped, and the row still informs', () => {
+  withFixture((home, cwd) => {
+    transcript(home, cwd, 'good', [user, assistant(2, 60_000, 50_000)], 2);
+    // A directory named like a transcript: it opens on POSIX and fails at the read.
+    fs.mkdirSync(path.join(home, '.claude', 'projects', slug(cwd), 'odd.jsonl'));
+    const row = fixedLoadRow(cwd, home);
+    assert.equal(row.pass, true);
+    assert.match(row.detail, /^110002 tokens at the first turn, median of the latest 1 session /);
+  });
+});

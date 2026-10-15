@@ -35,7 +35,10 @@ function mainCheckout(cwd) {
 }
 
 /** The input of the first assistant record of a transcript that is not a subagent's: `{ at, tokens }`, or
- * `null` when there is none yet. Reads in chunks and stops at that record, so a long session costs little. */
+ * `null` when there is none yet or the file cannot be read (the row informs; a read error never fails a
+ * gate). Reads in chunks and stops at that record, so a long session costs little. A line is kept as the
+ * byte pieces it arrived in and decoded once whole: a long line is not scanned again at every read, and a
+ * character cut between two reads is not broken. */
 function firstTurn(file) {
   let fd;
   try {
@@ -45,18 +48,24 @@ function firstTurn(file) {
   }
   try {
     const buffer = Buffer.alloc(CHUNK);
-    let rest = '';
+    let pieces = [];
     for (let offset = 0; offset < READ_LIMIT; ) {
       const read = fs.readSync(fd, buffer, 0, CHUNK, offset);
-      if (read === 0) return turnOf(rest);
+      if (read === 0) return turnOf(Buffer.concat(pieces).toString('utf8'));
       offset += read;
-      const lines = (rest + buffer.toString('utf8', 0, read)).split('\n');
-      rest = lines.pop();
-      for (const line of lines) {
-        const turn = turnOf(line);
+      let start = 0;
+      for (let end = buffer.indexOf(0x0a, start); end !== -1 && end < read; end = buffer.indexOf(0x0a, start)) {
+        pieces.push(buffer.subarray(start, end));
+        const turn = turnOf(Buffer.concat(pieces).toString('utf8'));
         if (turn) return turn;
+        pieces = [];
+        start = end + 1;
       }
+      // The buffer is read into again, so the unfinished line keeps a copy of its bytes.
+      if (start < read) pieces.push(Buffer.from(buffer.subarray(start, read)));
     }
+    return null;
+  } catch {
     return null;
   } finally {
     fs.closeSync(fd);
