@@ -946,6 +946,10 @@ function skipPlan(started, cwd, command, concurrency) {
   if (odd !== undefined) return { ...of, whole: `${JSON.stringify(odd)} holds a character outside [A-Za-z0-9._/-]` };
   const dashed = run.find((file) => file.startsWith('-'));
   if (dashed !== undefined) return { ...of, whole: `${JSON.stringify(dashed)} starts with a dash, which node would read as an option` };
+  // npm runs pretest and posttest around the test script; a run of no file would run neither, and no trace
+  // proves them (Codex, 2026-10-15). With files, npm runs them as ever.
+  const scripts = /^npm /.test(command) ? readJson(cwd, 'package.json')?.value?.scripts ?? {} : {};
+  if (run.length === 0 && ('pretest' in scripts || 'posttest' in scripts)) return { ...of, whole: 'package.json has a pretest or posttest script, which no trace proves' };
   if (run.length === 0) return { ...of, none: true };
   if (testsCommandLine(command, { concurrency, files: run }).length > COMMAND_LINE_MAX) return { ...of, whole: `its command line would pass ${COMMAND_LINE_MAX} characters` };
   return { ...of, files: run };

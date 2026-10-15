@@ -113,6 +113,23 @@ test('in skip mode only the file whose read changed runs, and the row says how m
   }
 });
 
+// Codex on 859b0bd..74e2734: npm runs a pretest and a posttest script around the test script, and a run of
+// no file would run neither, though no trace proves them.
+test('in skip mode an npm suite with a pretest or posttest script runs whole when no file is left to run', async () => {
+  const { root, dir, done } = project();
+  fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module","scripts":{"pretest":"node -e 0","test":"node --test"}}');
+  const npm = { name: 'tests', command: 'npm run test' };
+  try {
+    await checkSensor(root, npm, { traces: skip(dir) });
+    const { commands, spawn } = recording();
+    const whole = await checkSensor(root, npm, { traces: skip(dir), spawn });
+    assert.deepEqual(commands, ['npm run test']);
+    assert.match(whole.detail, /; exact tests: the whole suite ran, since package\.json has a pretest or posttest script, which no trace proves$/);
+  } finally {
+    done();
+  }
+});
+
 test('in skip mode a run list with nothing in it runs nothing and passes', async () => {
   const { root, dir, done } = project();
   try {

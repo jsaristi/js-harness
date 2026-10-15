@@ -233,6 +233,11 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   (node would read it as an option), RED then GREEN. Files alone: `check-exact-tests` 10/10, `check-shadow`
   10/10, `check-shadow-wsl` 4/4, `check-test-concurrency` 4/4, `gate-wsl-trace` 3/3, `select-tests` 11/11,
   `check.test.mjs` 205/205 (the writer's run). harness.json stays `"shadow"`.
+- **L16** (2026-10-15 04:18): Codex `859b0bd..74e2734` (585,739 input tokens, inside 638,400): part 1
+  correct, part 2 incorrect, one P2: an npm suite with a pretest or posttest script ran nothing when no file
+  was left, so those scripts, which no trace proves, never ran. Corrected alone: that case runs the whole
+  suite (`bin/check-shadow.test.mjs`, RED then GREEN 11/11). gentle-ai raised to high (item 5); its bound
+  STATUS timed out twice under load. Next: Codex recheck from `74e2734`, one more STATUS, the PR.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
