@@ -612,7 +612,11 @@ export function sessionFacts(
       if (!received.has(key)) received.set(key, message);
     }
     firstPrompt ??= promptText(entry);
-    if (opened === null && entry.type === 'user' && !entry.isMeta && !entry.isCompactSummary && !isToolResultCarrier(entry)) opened = openerOf(entry);
+    // A compaction before the first prompt means the transcript continues a session whose opening prompt it lost: the
+    // first message after it is a later turn and says nothing of how the session was opened.
+    const compacted = entry.isCompactSummary === true || (entry.type === 'system' && entry.subtype === 'compact_boundary');
+    if (opened === null && compacted) opened = 'unknown';
+    if (opened === null && entry.type === 'user' && !entry.isMeta && !isToolResultCarrier(entry)) opened = openerOf(entry);
     if (isOwnReply(entry) && typeof entry.effort === 'string') effort = entry.effort;
     const said = turnOf(entry);
     if (said !== null) {

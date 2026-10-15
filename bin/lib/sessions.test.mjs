@@ -119,11 +119,21 @@ test('sessionFacts says unknown for an SDK prompt with no turn position, and for
   assert.equal(openedBy(typed({ isCompactSummary: true, turnOrigin: 'human', entrypoint: 'claude-desktop' })), 'unknown');
 });
 
-test('sessionFacts skips a compaction summary, a meta entry and a tool result before the first prompt, and only the first prompt decides', () => {
-  const summary = typed({ isCompactSummary: true, turnOrigin: 'human', entrypoint: 'sdk-cli' }, 1);
+test('sessionFacts skips a meta entry and a tool result before the first prompt, and only the first prompt decides', () => {
   const meta = typed({ isMeta: true, turnOrigin: 'sdk', turnPosition: { promptIndex: 0 } }, 2);
   const carrier = { type: 'user', ...base(3), turnOrigin: 'human', entrypoint: 'sdk-cli', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_x', content: 'ok' }] } };
-  assert.equal(openedBy(summary, meta, carrier, typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' }, 4), typed({ turnOrigin: 'human', entrypoint: 'sdk-cli' }, 5)), 'his');
+  assert.equal(openedBy(meta, carrier, typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' }, 4), typed({ turnOrigin: 'human', entrypoint: 'sdk-cli' }, 5)), 'his');
+});
+
+// Codex on 4d910da: a transcript that starts at a compaction lost its opening prompt, so the first message after it
+// is a later turn, and a scheduled session resumed by his message would read as his.
+test('sessionFacts says unknown for a transcript whose first prompt comes after a compaction', () => {
+  const summary = typed({ isCompactSummary: true, turnOrigin: 'human', entrypoint: 'sdk-cli' }, 1);
+  const boundary = { type: 'system', subtype: 'compact_boundary', ...base(1), compactMetadata: { trigger: 'auto', preTokens: 10, postTokens: 2 } };
+  const his = typed({ turnOrigin: 'human', entrypoint: 'claude-desktop' }, 4);
+  assert.equal(openedBy(summary, his), 'unknown');
+  assert.equal(openedBy(boundary, his), 'unknown');
+  assert.equal(openedBy(his, boundary, typed({ turnOrigin: 'scheduled' }, 6)), 'his');
 });
 
 test('sessionFacts gives the effort of the last assistant entry that has one, and null when none has', () => {
