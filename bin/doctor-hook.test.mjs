@@ -443,6 +443,14 @@ test('doctor --hook names a host update since the last review and a downloaded v
     assert.equal(updated.stderr, '');
     assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review)' });
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');
+
+    // Another update before the review is recorded is a new notice, though the gap's state is the same (Codex, 2026-10-15).
+    versions = { found: true, desktop: '2.45000.0', staged: '2.45000.0', code: '2.1.301' };
+    const again = await runHook(argv, {}, deps);
+    assert.deepEqual(JSON.parse(again.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.45000.0 and its Code tab CLI 2.1.295 → 2.1.301 since the last review)' });
+    versions = { found: true, desktop: '2.45000.0', staged: '2.46000.0', code: '2.1.301' };
+    const stagedAgain = await runHook(argv, {}, deps);
+    assert.match(JSON.parse(stagedAgain.stdout).systemMessage, /Claude Desktop 2\.46000\.0 is downloaded and not applied\)$/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

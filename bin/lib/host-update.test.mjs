@@ -97,6 +97,17 @@ test('a Code tab CLI update alone names only the CLI and its changelog', () => {
   assert.ok(row.fix.claude.some((line) => line.startsWith('read the Claude Code CHANGELOG')));
 });
 
+test('a reviewed record with no CLI version takes the CLI read now as its baseline, so a later CLI update is seen (Codex, 2026-10-15)', () => {
+  const noCli = { desktop: '2.37337.1', code: null, at: '2026-10-15T00:00:00.000Z' };
+  const filled = hostUpdateRow({ found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' }, noCli, NOW);
+  assert.equal(filled.row.claude, 'ok');
+  assert.deepEqual(filled.record, { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T23:00:00.000Z' });
+  assert.equal(hostUpdateRow({ found: true, desktop: '2.37337.1', staged: null, code: '2.1.299' }, filled.record, NOW).row.change, 'the Code tab CLI 2.1.295 → 2.1.299');
+  const desktopToo = hostUpdateRow(current, noCli, NOW);
+  assert.equal(desktopToo.row.claude, 'stale', 'a desktop update is still due its review');
+  assert.equal(desktopToo.record, null, 'and its review records the CLI with it');
+});
+
 test('a staged version newer than the running one is outdated: downloaded and not applied, with the quit as its fix', () => {
   const { row } = hostUpdateRow({ found: true, desktop: '2.37337.1', staged: '2.42304.0', code: '2.1.295' }, reviewed, NOW);
   assert.equal(row.claude, 'ok');

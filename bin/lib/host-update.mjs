@@ -84,8 +84,11 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date()) {
   if (!versions.found) return { row, record: null };
   if (!versions.desktop) return { row: { ...row, installed: 'unknown', claude: 'unknown', upToDate: 'unknown' }, record: null };
   const read = { ...row, version: versions.desktop, installed: 'ok', claude: 'ok', upToDate: 'ok' };
-  const record = reviewed ? null : { desktop: versions.desktop, code: versions.code, at: now().toISOString() };
   const change = reviewed ? updateWords(reviewed, versions) : null;
+  // A record whose CLI was not read takes the one read now as its baseline, while the desktop is unchanged: without
+  // it no CLI update could ever be seen (Codex, 2026-10-15). With the desktop changed, its review records both.
+  const noCliYet = reviewed && reviewed.code === null && versions.code && !change;
+  const record = !reviewed || noCliYet ? { desktop: versions.desktop, code: versions.code, at: now().toISOString() } : null;
   if (change) {
     read.claude = 'stale';
     read.change = change;

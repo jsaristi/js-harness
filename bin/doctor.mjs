@@ -7,6 +7,7 @@
 // see odd/tasks/stack-doctor.md. Exit code is always 0 for a normal report: this is a report, not
 // a gate, and every probe underneath fails open into `unknown` rather than throwing. `--hook` (T3)
 // is the one exception with its own, stricter contract — see `hookMain` below.
+import crypto from 'node:crypto';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { probeStack, resolveProjectRoot, tools } from './lib/stack.mjs';
@@ -290,15 +291,16 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     const rows = await buildReport({ home, cwd, offline: false }, deps);
 
     const gaps = gapList(rows);
-    const digest = gapDigest(rows);
+    // A host update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md, Decided).
+    // Its versions enter the digest, so another update before the review is recorded is a new notice (Codex, 2026-10-15).
+    const host = hostNotice(rows.find((row) => row.id === 'host-update'));
+    const digest = host ? crypto.createHash('sha256').update(`${gapDigest(rows)}\n${host}`).digest('hex') : gapDigest(rows);
     const cache = readCache(home);
     const shouldNotify = gaps.length > 0 && digest !== cache.notified;
     writeCache(home, { ...cache, notified: digest });
 
     if (shouldNotify) {
       const plural = gaps.length === 1 ? '' : 's';
-      // A host update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md, Decided).
-      const host = hostNotice(rows.find((row) => row.id === 'host-update'));
       console.log(
         JSON.stringify({ systemMessage: `js-harness: ${gaps.length} stack gap${plural} — run js-harness doctor${host ? ` (${host})` : ''}` }),
       );
