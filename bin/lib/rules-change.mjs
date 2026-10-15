@@ -1,7 +1,9 @@
 // The change of one rule, computed: the list a change gives, from the list in force, with no file system and no
 // clock. `js-harness rules change` reads the list from origin/main, computes the change here, checks the result and
 // writes it (odd/tasks/rule-hierarchy.md, "The one command that changes a rule (T16c)"). Every key a change does not
-// name is kept as it is, so the command never drops what it was not asked to touch.
+// name is kept as it is, so the command never drops what it was not asked to touch. The source of a change is checked
+// here too, against transcripts the caller reads: a quotation is taken from the transcript, never from the change.
+import { PASTED_CONTENT, quoteOf } from './sessions.mjs';
 
 /** A change that cannot be made, with the reason a person reads. */
 export class RuleChangeError extends Error {}
@@ -140,4 +142,66 @@ export function changedList(list, id, change, { today }) {
   const changed = list.map(copy);
   changed[at] = rule;
   return { list: changed, rule, what };
+}
+
+// ---- the source -------------------------------------------------------------------------------------------
+
+/** `text` with every run of white space made one space, and trimmed: how a quotation is compared. */
+const squash = (text) => text.replace(/\s+/g, ' ').trim();
+
+/** The day of the time `at` (an ISO time) by this machine's clock, YYYY-MM-DD. */
+function localDay(at) {
+  const day = new Date(at);
+  const two = (n) => String(n).padStart(2, '0');
+  return `${day.getFullYear()}-${two(day.getMonth() + 1)}-${two(day.getDate())}`;
+}
+
+/** One quotation of his, as the sources file stores it, read from line `line` of the transcript of `session`. */
+function quotationOf({ session, line, excerpt }, transcriptOf) {
+  const text = transcriptOf(session);
+  if (text === null) throw new RuleChangeError(`no transcript "${session}" in the project's sessions folder`);
+  const quote = quoteOf(text, line);
+  if (!quote.person) throw new RuleChangeError(`line ${line} of ${session} is not his: ${quote.what}`);
+  if (quote.answered !== undefined && quote.answered.answers.some((answer) => answer.how === 'tapped')) {
+    throw new RuleChangeError(`line ${line} of ${session} is a tapped answer: the option's text was written by a session, not typed by him`);
+  }
+  if (quote.pastedOnly) throw new RuleChangeError(`line ${line} of ${session} is only a paste: nothing in it was typed by him`);
+  const typed = squash(quote.text.replace(PASTED_CONTENT, ' '));
+  if (typed === '') throw new RuleChangeError(`line ${line} of ${session} holds nothing he typed`);
+  if (quote.at === null || quote.at === undefined) throw new RuleChangeError(`line ${line} of ${session} holds no time, so its day is not known`);
+  let stored = typed;
+  if (excerpt !== undefined) {
+    stored = squash(String(excerpt));
+    if (stored === '' || !typed.includes(stored)) throw new RuleChangeError(`the excerpt "${stored}" is not in what he typed at line ${line} of ${session}`);
+  }
+  return { quote: stored, date: localDay(quote.at), session, line };
+}
+
+/** A text given and not blank, or a refusal naming `what` it is. */
+function given(value, what) {
+  if (typeof value !== 'string' || value.trim() === '') throw new RuleChangeError(`a source of his words needs ${what}`);
+  return value;
+}
+
+/**
+ * The source of a change as `docs/rule-sources.json` stores it, checked: his words read from their transcripts, or a
+ * design path that exists. `owner` is the rule's; `transcriptOf(session)` gives a transcript's text or `null`;
+ * `exists(path)` says whether a path of the repository is there. It throws a RuleChangeError at the first fault.
+ */
+export function sourceOf(source, { owner, today, transcriptOf, exists }) {
+  if (source?.kind === 'design') {
+    if (owner === 'sebastian') throw new RuleChangeError('a rule of his changes only with his words, not a design');
+    if (typeof source.path !== 'string' || !exists(source.path)) throw new RuleChangeError(`the design ${source?.path} does not exist in the repository`);
+    return { kind: 'design', path: source.path };
+  }
+  if (source?.kind !== 'words') throw new RuleChangeError('the source is words or design');
+  if (!Array.isArray(source.quotes) || source.quotes.length === 0) throw new RuleChangeError('a source of his words needs at least one quotation');
+  const quotes = source.quotes.map((quote) => quotationOf(quote, transcriptOf));
+  return {
+    kind: 'words',
+    quotes,
+    reading: given(source.reading, 'its reading'),
+    accepted: given(source.accepted, 'where he accepted the reading ("accepted")'),
+    checked: { date: today, by: 'command' },
+  };
 }

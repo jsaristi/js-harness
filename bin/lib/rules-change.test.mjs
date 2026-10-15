@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changedList, RuleChangeError } from './rules-change.mjs';
+import { changedList, RuleChangeError, sourceOf } from './rules-change.mjs';
 
 const TODAY = '2026-10-16';
 
@@ -154,4 +154,71 @@ test('on the real list, each kind of change gives a list readRules reads with no
     const { list } = changedList(RULES, id, change, { today: TODAY });
     assert.deepEqual(readRules(list, { declared: list }), [], `${id} ${JSON.stringify(change)}`);
   }
+});
+
+// ---- the source of a change ---------------------------------------------------------------------------
+
+const AT = '2026-10-15T17:00:00.000Z'; // midday in Colombia and in UTC alike, so the local day is the same day
+const said = (content) => JSON.stringify({ type: 'user', origin: { kind: 'human' }, timestamp: AT, message: { role: 'user', content } });
+const PASTE = '<pasted_content id="p1">a text he pasted, written by a session</pasted_content id="p1">';
+const TRANSCRIPT = [
+  said('Sí, la espera del gate queda en treinta minutos'),
+  JSON.stringify({ type: 'assistant', timestamp: AT, message: { role: 'assistant', content: [{ type: 'text', text: 'the session speaks' }] } }),
+  said(PASTE),
+  said(`${PASTE}\nY esto lo escribí yo, treinta minutos`),
+  JSON.stringify({ type: 'attachment', timestamp: AT, attachment: { type: 'queued_command', prompt: 'Lo mando mientras trabajás: treinta', origin: { kind: 'human' }, humanTurn: true, timestamp: AT } }),
+  JSON.stringify({ type: 'assistant', timestamp: AT, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'q1', name: 'AskUserQuestion', input: { questions: [{ question: '¿Treinta?', header: 'Espera', options: [{ label: 'Sí', description: 'treinta' }, { label: 'No', description: 'sesenta' }] }] } }] } }),
+  JSON.stringify({ type: 'user', timestamp: AT, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'q1', content: 'answered' }] }, toolUseResult: { answers: { '¿Treinta?': 'Sí' } } }),
+].join('\n');
+const TRANSCRIPTS = { s1: TRANSCRIPT };
+const transcriptOf = (session) => (Object.hasOwn(TRANSCRIPTS, session) ? TRANSCRIPTS[session] : null);
+const words = (quotes) => ({ kind: 'words', quotes, reading: 'he set the wait to thirty minutes', accepted: 'the line he typed says so' });
+const CONTEXT = { owner: 'project', today: TODAY, transcriptOf, exists: (file) => file === 'docs/ROADMAP.md' };
+
+test('a source of his words stores the quotation the transcript gives, its local day, and a check by the command', () => {
+  assert.deepEqual(sourceOf(words([{ session: 's1', line: 1 }]), CONTEXT), {
+    kind: 'words',
+    quotes: [{ quote: 'Sí, la espera del gate queda en treinta minutos', date: '2026-10-15', session: 's1', line: 1 }],
+    reading: 'he set the wait to thirty minutes', accepted: 'the line he typed says so', checked: { date: TODAY, by: 'command' },
+  });
+});
+
+test('an excerpt is stored when the typed words hold it, white space squashed, and refused when they do not', () => {
+  const { quotes } = sourceOf(words([{ session: 's1', line: 1, excerpt: 'queda  en treinta\nminutos' }]), CONTEXT);
+  assert.equal(quotes[0].quote, 'queda en treinta minutos');
+  refusal(() => sourceOf(words([{ session: 's1', line: 1, excerpt: 'queda en sesenta' }]), CONTEXT), /not in what he typed/);
+});
+
+test('of a message part pasted, only what he typed is stored, and a paste alone is refused', () => {
+  assert.equal(sourceOf(words([{ session: 's1', line: 4 }]), CONTEXT).quotes[0].quote, 'Y esto lo escribí yo, treinta minutos');
+  refusal(() => sourceOf(words([{ session: 's1', line: 3 }]), CONTEXT), /only a paste/);
+  refusal(() => sourceOf(words([{ session: 's1', line: 4, excerpt: 'written by a session' }]), CONTEXT), /not in what he typed/);
+});
+
+test('a message he queued while the session worked is his', () => {
+  assert.equal(sourceOf(words([{ session: 's1', line: 5 }]), CONTEXT).quotes[0].quote, 'Lo mando mientras trabajás: treinta');
+});
+
+test('a line that is not his, a tapped answer, a missing session and a line past the end are refused', () => {
+  refusal(() => sourceOf(words([{ session: 's1', line: 2 }]), CONTEXT), /line 2 of s1 is not his: an assistant entry/);
+  refusal(() => sourceOf(words([{ session: 's1', line: 7 }]), CONTEXT), /tapped/);
+  refusal(() => sourceOf(words([{ session: 's9', line: 1 }]), CONTEXT), /no transcript "s9"/);
+  refusal(() => sourceOf(words([{ session: 's1', line: 99 }]), CONTEXT), /line 99 of s1 is not his: no line/);
+});
+
+test('one bad quotation among several refuses the source', () => {
+  refusal(() => sourceOf(words([{ session: 's1', line: 1 }, { session: 's1', line: 2 }]), CONTEXT), /line 2 of s1/);
+});
+
+test('a source needs its reading and where he accepted it, and at least one quotation', () => {
+  refusal(() => sourceOf({ ...words([{ session: 's1', line: 1 }]), reading: ' ' }, CONTEXT), /reading/);
+  refusal(() => sourceOf({ ...words([{ session: 's1', line: 1 }]), accepted: undefined }, CONTEXT), /accepted/);
+  refusal(() => sourceOf(words([]), CONTEXT), /at least one quotation/);
+});
+
+test('a design source names a path that exists, and a rule of his takes his words only', () => {
+  assert.deepEqual(sourceOf({ kind: 'design', path: 'docs/ROADMAP.md' }, CONTEXT), { kind: 'design', path: 'docs/ROADMAP.md' });
+  refusal(() => sourceOf({ kind: 'design', path: 'docs/NOPE.md' }, CONTEXT), /docs\/NOPE.md does not exist/);
+  refusal(() => sourceOf({ kind: 'design', path: 'docs/ROADMAP.md' }, { ...CONTEXT, owner: 'sebastian' }), /his words/);
+  refusal(() => sourceOf({ kind: 'notes' }, CONTEXT), /words or design/);
 });
