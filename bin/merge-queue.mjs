@@ -89,16 +89,23 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
     // Bisected (S8): the candidate of the first k pull requests is the commit after the k-th merge, so the
     // shortest red prefix names the pull request that turns it red. It leaves, the ones after it are merged
     // again on the green prefix, and that candidate is landed as any other.
+    // A reset that fails leaves another tree in place, and its suite would judge the wrong pull request.
+    const resetTo = (commit, what) => {
+      const reset = gitIn(place, 'reset', '--quiet', '--hard', commit);
+      return reset.ok ? null : fail(`could not reset the candidate to ${what} (${reset.err.split('\n')[0] || 'git gave no reason'}): nothing was pushed.`);
+    };
     let [low, high] = [1, merged.length];
     while (low < high) {
       const mid = Math.floor((low + high) / 2);
-      gitIn(place, 'reset', '--quiet', '--hard', merged[mid - 1].merge);
+      const failed = resetTo(merged[mid - 1].merge, `the merge of PR ${merged[mid - 1].number}`);
+      if (failed !== null) return failed;
       if (suite(place).ok) low = mid + 1;
       else high = mid;
     }
     const culprit = merged[low - 1];
     stdout(`PR ${culprit.number} is left out: the candidate turns red on this machine when it is merged (${local.said}).`);
-    gitIn(place, 'reset', '--quiet', '--hard', low > 1 ? merged[low - 2].merge : main);
+    const failed = low > 1 ? resetTo(merged[low - 2].merge, `the merge of PR ${merged[low - 2].number}`) : resetTo(main, 'main');
+    if (failed !== null) return failed;
     const kept = merged.slice(0, low - 1);
     for (const pr of merged.slice(low)) {
       const again = gitIn(place, 'merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid);
@@ -140,7 +147,9 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
       await sleep(CI_POLL_MS);
     }
   } finally {
-    gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
+    const removed = gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
+    // Named, never silent: a queue branch origin keeps runs nothing more, and only a hand removes it.
+    if (!removed.ok) stdout(`Could not remove ${branch} from origin (${removed.err.split('\n')[0] || 'git gave no reason'}): remove it by hand.`);
   }
   if (ci.state === 'red') {
     stdout(`The candidate is red on CircleCI (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
@@ -155,11 +164,15 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
   const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
   if (!pushed.ok) {
     const now = gitIn(place, 'ls-remote', 'origin', 'refs/heads/main').out.split('\t')[0];
-    if (now && now !== main) {
+    // A push that reached origin and lost its answer, as a timeout loses it: main is the candidate, landed.
+    if (now === candidate) {
+      stdout(`The push of main reported a failure (${pushed.err.split('\n')[0] || 'git gave no reason'}), and origin's main is the candidate all the same.`);
+    } else if (now && now !== main) {
       stdout('Main moved while the candidate was tested: nothing was pushed to main; run the queue again.');
       return 3;
+    } else {
+      return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
     }
-    return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
   }
   stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
   return 0;

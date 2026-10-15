@@ -164,12 +164,16 @@ function landRunner(prs, checks, onChecks = () => {}) {
 
 const circle = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'circleci-checks' }, html_url: 'https://app.circleci.com/x' });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks } = {}) {
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks);
   const out = [];
-  const code = await mergeQueueMain(['--land', '--cwd', root], { run, covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   return { code, out, calls };
 }
+
+/** A runner that answers `answer(args)` for the git calls `match(args)` names, and runs the rest. */
+const failingGit = (match, answer) => (run) => (command, args, options) => (command === 'git' && match(args) ? answer(run, args, options) : run(command, args, options));
+const refused = () => ({ status: 1, stdout: '', stderr: 'fatal: refused by the test' });
 
 const remoteBranches = (origin) => git(origin, 'for-each-ref', '--format=%(refname:short)', 'refs/heads').split('\n').filter(Boolean).sort();
 
@@ -241,6 +245,47 @@ test('--land: a candidate red on this machine is bisected, the pull request that
   assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', heads['feat/a'], landed], { cwd: origin }).status, 0);
   assert.notEqual(spawnSync('git', ['merge-base', '--is-ancestor', heads['feat/b'], landed], { cwd: origin }).status, 0, 'PR 2 is not in main');
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1.`);
+});
+
+test('--land: a queue branch that origin keeps is named, so it can be removed by hand (verifier, 2026-10-14)', async () => {
+  const { root, origin, heads } = makeQueueRepo();
+  const wrap = failingGit((args) => args[0] === 'push' && args.includes('--delete'), refused);
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 0, out.join('\n'));
+  const [left] = remoteBranches(origin).filter((name) => name.startsWith('queue/'));
+  assert.ok(left, 'the delete was refused, so origin keeps the branch');
+  assert.ok(out.includes(`Could not remove ${left} from origin (fatal: refused by the test): remove it by hand.`), out.join('\n'));
+});
+
+test('--land: a push of main that reports a failure, while origin\'s main is the candidate, is a landing, not a main that moved (verifier, 2026-10-14)', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  // The push reaches origin, and its answer is lost, as a timeout loses it.
+  const wrap = failingGit((args) => args[0] === 'push' && args.includes('origin') && args.at(-1).endsWith(':refs/heads/main'), (run, args, options) => {
+    run('git', args, options);
+    return { status: null, error: new Error('spawnSync git ETIMEDOUT'), stdout: '', stderr: '' };
+  });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 0, out.join('\n'));
+  const landed = git(origin, 'rev-parse', 'main');
+  assert.notEqual(landed, main);
+  assert.ok(!out.some((line) => line.startsWith('Main moved')), out.join('\n'));
+  assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1.`);
+});
+
+test('--land: a bisection whose reset fails stops, tests nothing more and pushes nothing (verifier, 2026-10-14)', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const seen = [];
+  const suite = () => {
+    seen.push('suite');
+    return { ok: false, said: 'FAIL  tests' };
+  };
+  const wrap = failingGit((args) => args[0] === 'reset', refused);
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite, wrap });
+  assert.equal(code, 1, out.join('\n'));
+  assert.deepEqual(seen, ['suite'], 'the whole candidate only: a tree the reset did not make is never tested');
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.ok(!calls.some((line) => line.startsWith('git push')));
+  assert.match(out.join('\n'), /could not reset the candidate to the merge of PR 1 \(fatal: refused by the test\)/);
 });
 
 test('CircleCI is green only when every run of it succeeded: a skipped or neutral run is no run of the suite (Codex, 2026-10-14)', () => {
