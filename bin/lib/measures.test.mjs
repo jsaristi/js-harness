@@ -76,19 +76,25 @@ test('keptByRelief keeps the stretch when a line of the relief file is stamped a
   const kept = (text, after = at(3), before = at(6)) => keptByRelief(() => text, RELIEF)({ after, before });
   assert.deepEqual(kept(`${stampOf(1)} earlier\n${stampOf(5)} inside\n`), { known: true, kept: true });
   assert.deepEqual(kept(`${stampOf(6)} at the boundary\n`), { known: true, kept: true }, 'a line at the boundary itself is before it');
-  assert.deepEqual(kept(`${stampOf(3)} in the notice's minute\n`), { known: true, kept: true }, 'a stamp has minutes only: its minute may follow the notice');
+  assert.deepEqual(kept(`${stampOf(3)} at the notice\n`), { known: true, kept: false }, 'a line at the notice is not after it');
   assert.deepEqual(kept(`${stampOf(7)} late\n${stampOf(2)} early\n`), { known: true, kept: false });
   assert.deepEqual(kept(''), { known: true, kept: false }, 'a relief file with no line of the stretch was not kept');
 });
 
-// Codex on edf9e75: the stamp has minutes and the notice has seconds, so a line written in the notice's own minute was
-// read as before it, and a state kept read as missed.
-test('keptByRelief compares minute with minute: a line in the notice minute or the boundary minute counts', () => {
+// Codex on edf9e75 and 60618c3: a stamp with minutes only cannot say which side of the notice's second it fell on.
+// The command writes seconds now; an older line of the notice's or the boundary's minute is not known, never kept.
+test('keptByRelief compares a stamp with seconds exactly, and calls a minute-only line of a bound minute not known', () => {
   const second = (minute, s) => new Date(Date.parse(at(minute)) + s * 1000).toISOString();
   const kept = (text) => keptByRelief(() => text, RELIEF)({ after: second(3, 10), before: second(6, 20) });
-  assert.deepEqual(kept(`${stampOf(3)} written at 40 seconds past\n`), { known: true, kept: true });
-  assert.deepEqual(kept(`${stampOf(6)} in the boundary minute\n`), { known: true, kept: true });
-  assert.deepEqual(kept(`${stampOf(2)} the minute before\n${stampOf(7)} the minute after\n`), { known: true, kept: false });
+  const minuteOnly = (minute) => stampOf(minute).replace(/(\d{2}:\d{2}):\d{2} local/, '$1 local');
+  const withSeconds = (minute, s) => reliefStamp(Date.parse(at(minute)) + s * 1000);
+  assert.deepEqual(kept(`${withSeconds(3, 40)} after the notice, same minute\n`), { known: true, kept: true });
+  assert.deepEqual(kept(`${withSeconds(3, 5)} before the notice, same minute\n`), { known: true, kept: false });
+  assert.deepEqual(kept(`${withSeconds(6, 30)} after the boundary, same minute\n`), { known: true, kept: false });
+  assert.deepEqual(kept(`${minuteOnly(3)} the notice's minute, no seconds\n`), { known: false });
+  assert.deepEqual(kept(`${minuteOnly(6)} the boundary's minute, no seconds\n`), { known: false });
+  assert.deepEqual(kept(`${minuteOnly(5)} inside, no seconds\n${minuteOnly(3)} ambiguous\n`), { known: true, kept: true });
+  assert.deepEqual(kept(`${minuteOnly(2)} before\n${minuteOnly(7)} after\n`), { known: true, kept: false });
 });
 
 test('keptByRelief reads the stamp as the local time the line was written, in the same form the command writes, and a hand-written one too', () => {

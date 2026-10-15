@@ -50,23 +50,30 @@ export function keptByGitLog(run) {
   };
 }
 
-/** The instant a line of the relief file is stamped with: `YYYY-MM-DD HH:MM local`, in the local time of the machine
- * that wrote it, as `reliefStamp` (bin/lib/channel.mjs) writes it. `NaN` for a line that does not start with such a
- * stamp, or whose date or hour the calendar does not have: a line whose hour is not known proves nothing. */
-const RELIEF_STAMP = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) local\b/;
-function reliefInstant(line) {
+/** The span a line of the relief file is stamped with, `{ from, to }` in ms, both included: `YYYY-MM-DD HH:MM:SS local`
+ * as `reliefStamp` (bin/lib/channel.mjs) writes it since 2026-10-15, one instant; `YYYY-MM-DD HH:MM local` as it wrote
+ * before and as a hand-written line does, the whole minute. In the local time of the machine that wrote it. `null` for
+ * a line that does not start with such a stamp, or whose date or hour the calendar does not have: a line whose hour is
+ * not known proves nothing. */
+const RELIEF_STAMP = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))? local\b/;
+function reliefSpan(line) {
   const match = RELIEF_STAMP.exec(line);
-  if (match === null) return NaN;
-  const [year, month, day, hour, minute] = match.slice(1).map(Number);
-  const at = new Date(year, month - 1, day, hour, minute);
-  const same = at.getFullYear() === year && at.getMonth() === month - 1 && at.getDate() === day && at.getHours() === hour && at.getMinutes() === minute;
-  return same ? at.getTime() : NaN;
+  if (match === null) return null;
+  const [year, month, day, hour, minute] = match.slice(1, 6).map(Number);
+  const second = match[6] === undefined ? 0 : Number(match[6]);
+  const at = new Date(year, month - 1, day, hour, minute, second);
+  const same = at.getFullYear() === year && at.getMonth() === month - 1 && at.getDate() === day && at.getHours() === hour
+    && at.getMinutes() === minute && at.getSeconds() === second;
+  if (!same) return null;
+  return { from: at.getTime(), to: match[6] === undefined ? at.getTime() + 59999 : at.getTime() };
 }
 
 /** A reader of the orchestrator's relief file for `compactionMeasures`: for `{ after, before }` it reads `file` through
- * `readFile(file)` and answers `{ known: true, kept }`, `kept` being whether a line is stamped in or after the minute of
- * `after` (the notice; `null` is open) and in or before the minute of `before` (the boundary), compared as instants. A stamp that does not parse proves
- * nothing. `{ known: false }` when the file cannot be read, ENOENT included, or a bound does not parse. */
+ * `readFile(file)` and answers `{ known: true, kept }`, `kept` being whether a line is stamped after `after` (the
+ * notice; `null` is open) and at or before `before` (the boundary), compared as instants. A line stamped with minutes
+ * only, whose minute holds a bound, cannot say which side of it it fell on: when no line decides, such a line makes the
+ * answer `{ known: false }`, never kept. A stamp that does not parse proves nothing. `{ known: false }` too when the
+ * file cannot be read, ENOENT included, or a bound does not parse. */
 export function keptByRelief(readFile, file) {
   return ({ after, before } = {}) => {
     const unknown = { known: false };
@@ -79,16 +86,14 @@ export function keptByRelief(readFile, file) {
     } catch {
       return unknown;
     }
-    // A stamp names a minute and the bounds carry seconds: each bound is taken to its minute, and a line of the
-    // notice's minute or of the boundary's counts, since which side of the second it fell on cannot be read.
-    const minuteOf = (time) => Math.floor(time / 60000) * 60000;
-    const kept = String(text)
-      .split(/\r?\n/)
-      .some((line) => {
-        const time = reliefInstant(line);
-        return time >= minuteOf(from) && time <= minuteOf(to);
-      });
-    return { known: true, kept };
+    let ambiguous = false;
+    for (const line of String(text).split(/\r?\n/)) {
+      const span = reliefSpan(line);
+      if (span === null) continue;
+      if (span.from > from && span.to <= to) return { known: true, kept: true };
+      if (span.to > from && span.from <= to) ambiguous = true;
+    }
+    return ambiguous ? unknown : { known: true, kept: false };
   };
 }
 
