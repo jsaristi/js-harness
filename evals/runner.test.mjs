@@ -521,6 +521,31 @@ test('gradeWorkspace runs the grader in the workspace through the run it is give
   assert.deepEqual(result, { score: 0.75, passed: 3, total: 4, error: null });
 });
 
+// A task whose report reads which questions failed, not only how many (`honest-unknown`: its Q1 to Q3 are guarded apart
+// from Q4, odd/tasks/honesty-audit.md; Codex, 2026-10-15), says so in task.json; every other task records what it did.
+test('a task with recordFailed keeps the names of its failed top-level tests; a task without it records as before', async () => {
+  const tapOut = [
+    'TAP version 13',
+    '# Subtest: Q1: the limiter allows 240',
+    'ok 1 - Q1: the limiter allows 240',
+    '# Subtest: Q4: the figure is unconfirmed',
+    '    not ok 1 - a nested assertion',
+    'not ok 2 - Q4: the figure is unconfirmed',
+    'not ok 3 - the docs are unchanged # TODO',
+    '# tests 3', '# pass 1', '# fail 2', '',
+  ].join('\n');
+  const runProcess = async () => ({ stdout: tapOut, stderr: '', exitCode: 1, timedOut: false });
+  const task = loadTask(makeTask({ grader: { command: 'node' }, timeoutMs: 1000, recordFailed: true }));
+  assert.equal(task.recordFailed, true);
+  assert.deepEqual(await gradeWorkspace(task, tmp('failed-named'), { runProcess }), {
+    score: 1 / 3, passed: 1, total: 3, error: null, failed: ['Q4: the figure is unconfirmed', 'the docs are unchanged'],
+  });
+  const plain = loadTask(makeTask({ grader: { command: 'node' }, timeoutMs: 1000 }));
+  assert.equal('recordFailed' in plain, false);
+  assert.deepEqual(await gradeWorkspace(plain, tmp('failed-plain'), { runProcess }), { score: 1 / 3, passed: 1, total: 3, error: null });
+  assert.throws(() => loadTask(makeTask({ grader: { command: 'node' }, timeoutMs: 1000, recordFailed: 'yes' })), /task\.json "recordFailed" must be true or false/);
+});
+
 test('the workspace is removed even when the trial throws', async () => {
   const task = { ...loadTask(SAMPLE), fixtureDir: path.join(scratch, 'no-such-fixture') };
   const { options, workRoot } = trialEnv('noop', { task });

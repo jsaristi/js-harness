@@ -42,7 +42,7 @@ import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandbo
 import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
 import { HONESTY_CONFIGS, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, honestyConfig, honestyPin, minimalConfig, subagentConfig, subagentPin } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
-import { reportLines, summarize } from './honesty-report.mjs';
+import { checkResults, reportLines, summarize } from './honesty-report.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
 import { ArmError, parseArm } from './arms.mjs';
 import { cellBasis, planLines, runPlan } from './plan.mjs';
@@ -742,7 +742,8 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
         warn(`no results named ${args.name} in ${resultsHome}\n`);
         return 1;
       }
-      say(honesty ? `${reportLines(summarize(doc)).join('\n')}\n` : formatSummary(summarizeResults(doc), printing));
+      // An honesty run is checked as its report checks it: one task and one effort, both arms (Codex, 2026-10-15).
+      say(honesty ? `${reportLines(summarize(checkResults(doc, file))).join('\n')}\n` : formatSummary(summarizeResults(doc), printing));
       return 0;
     } catch (err) {
       warn(`${err.message}\n`);

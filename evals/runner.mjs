@@ -39,6 +39,12 @@ export function parseTap(text) {
   return { tests, pass, fail };
 }
 
+/** The names of the top-level tests a TAP output reports as failed, in order: its unindented `not ok <n> - <name>`
+ * lines, a directive after ` # ` left off. A nested assertion is indented and is not a test of its own here. */
+export function failedTestsOf(text) {
+  return [...String(text).replace(/\r/g, '').matchAll(/^not ok \d+ - (.*?)(?:\s+#\s.*)?$/gm)].map((match) => match[1]);
+}
+
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
 
 /** Loads a task directory (`evals/tasks/<id>/`): `task.md` (the prompt, verbatim), `task.json` (the
@@ -71,7 +77,14 @@ export function loadTask(dir) {
   if (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string')) throw bad('grader.args', 'must be an array of strings');
   if (!Number.isInteger(spec.timeoutMs) || spec.timeoutMs <= 0) throw bad('timeoutMs', 'must be a positive integer (milliseconds)');
   checkFixtureLinks(id, fixtureDir); // fail before any spend; `copyFixture` repeats the check for tasks built by hand
-  return { id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir };
+  // `recordFailed`: the trial keeps the names of the grader's failed tests (`failedTestsOf`), for a report that reads
+  // which questions failed and not only how many. Absent on every task that does not ask, so their records keep their
+  // shape.
+  if (spec.recordFailed !== undefined && typeof spec.recordFailed !== 'boolean') throw bad('recordFailed', 'must be true or false');
+  return {
+    id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir,
+    ...(spec.recordFailed === true && { recordFailed: true }),
+  };
 }
 
 /** Throws when `fixtureDir` holds a symlink or a junction, anywhere below it. A copy of the fixture
@@ -432,7 +445,10 @@ export async function gradeWorkspace(task, workspace, {
   if (run.timedOut) return fail('grader-timeout');
   const tap = parseTap(run.stdout);
   if (!tap) return fail('grader-unparsable');
-  return { score: tap.pass / tap.tests, passed: tap.pass, total: tap.tests, error: null };
+  return {
+    score: tap.pass / tap.tests, passed: tap.pass, total: tap.tests, error: null,
+    ...(task.recordFailed && { failed: failedTestsOf(run.stdout) }),
+  };
 }
 
 /** The reader of `config`'s agent output: `config.reader`, a function of the finished run that says what it

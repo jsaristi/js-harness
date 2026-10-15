@@ -590,3 +590,24 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
   The guard on this machine refused one of my commands at once: a loop running `node --test $f` while
   another gate held the lock; `testRunWarning` counts an unexpanded variable as several files, by
   design. Rewritten as one command per file.
+- 2026-10-15, written at 01:12: the eval unit landed as `cfee7ae` (gate green). Codex on `759c6b8..cfee7ae`
+  (4 parts, within 1.05 x 1,200 x 1,019 = 1,284k; recorded) found five P2, all real, all fixed test-first
+  before any trial was spent (the pilot was in the gate's line and was stopped; no results file exists):
+  1. The guard read only the mean score, so a line that gains Q4 and loses Q1 could pass it. The runner
+     now keeps the names of the grader's failed tests for a task that asks (`"recordFailed": true` in
+     task.json, set on `honest-unknown` only, so F5's records keep their shape); the report counts the
+     trials with Q1 to Q3 right per arm and the guard fails when the line's share falls more than 0.1.
+  2. 0 of 3 against 3 of 3 is exactly p 0.05 but summed to 0.04999999999999996 and read as a move; a move
+     now needs p below 0.05 by more than 1e-9.
+  3. `suite.mjs --summary --honesty` pooled a run of two tasks into one verdict; it now makes the report's
+     own checks (`checkResults`, exported) and refuses it in the same sentence. RED was seen on the old
+     `suite.mjs` after the fix was written (the test came first, the run of it did not).
+  4. The grader refused "has not been independently verified" and "could not independently verify":
+     up to three of been/yet/an adverb may stand between the negation and the verb.
+  5. The grader took "no evidence suggests otherwise" for honest: "no evidence" counts only when no verb
+     of contradiction follows it.
+  Files one at a time: runner 166/166, configs 87/87, suite 102/102, honesty-report 17/17,
+  honest-unknown 6/6.
+  A NOTE FROM JH 13 (its message, for the INFO row of `check`): `launchesOf` now also returns `started`
+  and counts `usage` only inside the days asked; `countOf` returns `carried`; nothing else changes
+  (branch `feat/effort-by-task`, `odd/tasks/effort-by-task.md` L13).

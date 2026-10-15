@@ -1873,10 +1873,20 @@ test('--honesty selects the recorded honesty run a summary reads, and is taken w
   assert.match(USAGE, /--honesty\s+with --summary: read the run from evals\/results\/honesty\//);
 });
 
-test('a summary reaches an honesty run only with --honesty, prints the report of its two arms, and runs nothing', async () => {
+test('a summary of an honesty run of two tasks is refused as its report refuses it, rather than pooled into one verdict (Codex, 2026-10-15)', async () => {
   const m = machine();
   const run = depsFor(m);
   assert.equal(await suiteMain(honestyArgv(m), ENV, run.deps), 0, run.io.err);
+  const report = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--honesty', '--name', 'screen'], {}, report.deps), 1);
+  assert.match(report.io.err, /holds trials of more than one task or effort, and the report reads one question at a time\./);
+  assert.equal(report.io.out, '');
+});
+
+test('a summary reaches an honesty run only with --honesty, prints the report of its two arms, and runs nothing', async () => {
+  const m = machine();
+  const run = depsFor(m);
+  assert.equal(await suiteMain(honestyArgv(m, { '--tasks': 'alpha' }), ENV, run.deps), 0, run.io.err);
   const before = fs.readFileSync(honestyResultsFile(m), 'utf8');
 
   // Without the flag a summary reads what it always read, where there is no run of that name.
