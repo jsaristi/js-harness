@@ -7,6 +7,10 @@ import path from 'node:path';
 import { checkExactCount, checkSensors, s6Count } from './check.mjs';
 import { appendGateEvent, GATE_LOG_VERSION } from './lib/gate-log.mjs';
 
+// The suite runs on CI too, where `CI` is set and skip mode runs the whole suite (L18): these tests pin a
+// gate off CI.
+delete process.env.CI;
+
 // `harness.json` "exactTests": "shadow" (odd/tasks/exact-tests.md, T3, S6): a gate's tests sensor runs the
 // whole suite under the tracer, its traces go under the git dir, and the end line of the gate log keeps what
 // selection would have skipped and which of those failed, the count S6 is read from.

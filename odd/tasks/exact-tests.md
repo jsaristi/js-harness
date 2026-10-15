@@ -247,6 +247,18 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   failures and skip counts side by side. Gate green; its `exact tests` row: 50 of 30 since 01:58. Codex
   `56fa14e..891187d` (the resolution, 21 lines, 112,002 input tokens, inside 300,000): correct, 0.95.
   gentle-ai: medium, not due (under budget).
+- **L18** (2026-10-15 08:30): PR 187 merged (08:19). The lead, 07:44: "Flip: GO, per S6 ... the count is met
+  (50 of 30, zero failing tests selection would have skipped). Open it as its own PR with its gate, gentle-ai
+  and Codex, quote the count's read in its body and the doc's Log". And 07:45: "The flip must keep the queue's
+  CircleCI candidate run whole (test it), or it waits for A's answer. Say which in the PR." It keeps it whole:
+  CircleCI (`.circleci/config.yml`, `node bin/check.mjs` on a fresh checkout of a `queue/` branch) and GitHub
+  Actions both set `CI`, and in skip mode a gate where `CI` is set and not `false` or `0` (`onCi`) runs the
+  whole suite, traced as in shadow, and the row says so. Test first in `bin/check-shadow.test.mjs`: the first
+  form of the two tests failed (RED, 2 of 13), then 14/14; `CI` is one of the variables a trace keys on (S5),
+  so the wiring test writes its traces under the value it asks with. The four skip-mode test files delete
+  `CI` at their top, since the suite itself runs on CI. Files alone: `check-shadow` 14/14,
+  `check-exact-tests` 10/10, `check-test-concurrency` 4/4, `check-shadow-wsl` 4/4. Then the flip,
+  `harness.json` `"exactTests": "skip"`, in its own commit.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
