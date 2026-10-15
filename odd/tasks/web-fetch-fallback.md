@@ -124,3 +124,9 @@ shape the hook reads).
 - **L7** (2026-10-15): commit `dccfa2a`, gate green. Codex recheck over `784c752..dccfa2a`, recorded: 3
   fixed, 0 not fixed, "the patch is correct" (36,709 input tokens). T3 waits on Sebastián's answer on the
   gentle-ai defect; the pull request stays a draft until then (the lead, 2026-10-15).
+- **L8** (2026-10-15): draft pull request jsaristi/js-harness#204 opened, then in conflict with main
+  (50 commits ahead): main had added the memory hygiene notice to the same hook and two commands to the
+  dispatcher. Merged in `1050643`: the hygiene notice stays the session's own, the web notice reaches
+  sub-agents too; `resume` 86/86, gate green. Codex read the resolution only (`5741be5..1050643`, 41
+  lines): "the patch is correct", 109,993 input tokens against a plan of about 33,000, inside the 300,000
+  allowance.
