@@ -1347,7 +1347,8 @@ advice: a test of the table, and a promise about rows of `check` and `doctor`.
 Designed on 2026-10-15, after a read-only explorer mapped what exists on `main` at 10e29e6. Two
 readers that did not write it then read the first draft, one to attack it and one to find what
 it lacks; this text is the draft with their findings, listed at its end. It builds letter C and
-what "Where the rest of the protocol lands" gives T16c. Not built.
+what "Where the rest of the protocol lands" gives T16c. Built on 2026-10-15 on `feat/rules-change`; what the
+verifier and the reviews changed is folded in below and listed under "Progress".
 
 What exists. These places come from the explorer's report and the readers', and this session
 checked three of them:
@@ -1416,9 +1417,11 @@ by hand.
   nothing he said is retyped by a session.
 
 **The kinds, and what each does to the declaration.** Every key the change does not name is
-kept as it is on `origin/main`. The change is always computed from `origin/main`'s declaration,
-never from the branch's, so a second run that corrects a first run does not push a value that
-never landed into `was`.
+kept as it is on `origin/main`. The change is always computed from `origin/main`'s declaration
+of the id, never from the branch's, so a second run that corrects a first run does not push a
+value that never landed into `was`. Every other rule is taken from the branch's last commit, so a
+second id on the same branch keeps the first (found by the verifier, 2026-10-15: computing the
+whole list from `origin/main` silently reverted the first id).
 - **A new value.**
   - The value in force moves into `was`, newest first, with `until` today, and `since` becomes
     today.
@@ -1434,7 +1437,8 @@ never landed into `was`.
 - **A form-only change.** `set` with no body moves neither `since` nor `was`, as "Model and
   effort as rules" asks of a change of form.
 - **A new rule.** It enters with `since` today. An id in use, or one used by a retired rule, is
-  refused, because an id is never reused.
+  refused, because an id is never reused. A new rule is told by `set` giving both `subject` and
+  `owner`, so a rule in force changes those two in two changes.
 - **A revert.** A new value whose value is in `was`, with its own source. An urgent change is
   the same command.
 - **A change of several ids.** A split needs its successors declared before the retirement, and
@@ -1453,8 +1457,14 @@ until the last check passes.
    - Otherwise it refuses and prints the `git` command that makes such a branch.
 2. **The one open change.**
    - An open change is a `rule/*` branch other than this one, local or on `origin` as last
-     fetched, whose `bin/lib/rules-data.mjs` differs from `origin/main`'s. That holds after a
-     squash merge and after commits added past a merge, so no lock outlives its change.
+     fetched, holding a declaration it changed since its merge base with `origin/main` that
+     `origin/main` never held since that base. A branch landed by a merge, by a squash, or with
+     commits added past its merge is then no open change, even after later changes land, so no
+     lock outlives its change. (The first reading, a branch whose file differs from
+     `origin/main`'s, held every landed branch as open once main moved on: found by the verifier,
+     2026-10-15.)
+   - The refusal says how to clear a branch that has landed or is dropped: `git branch -D`, or
+     `git push origin --delete` for one on `origin`.
    - The mark is computed and never stored, and the refusal names that branch.
    - Two runs on two branches before either commits both pass; that is under "Not guaranteed".
 3. **The source.**
@@ -1485,8 +1495,8 @@ until the last check passes.
    - The line reads: `` rule:<id> proposed on rule/<name>, not landed: <what>; source <kind>;
      supersedes relief line <n> ``.
    - `<what>` is `<old> to <new>` for a value, `text of <path>` for a text, `retired,
-     successors <ids or none>` for a retirement, `new` for a new rule, and `form` for a
-     form-only change.
+     successors <ids or none>` for a retirement, `new` for a new rule, `form` for a
+     form-only change, and `source checked` for `--check-source`.
    - `<n>` is the place, blank lines counted as the file counts them, of the last line the
      command wrote for this id: one holding `` rule:<id> proposed `` with no character of an id
      after the id. With no such line, it says `supersedes no relief line`.
@@ -2038,7 +2048,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       which is his to approve
   - [ ] T16c The one command that changes a rule: designed on 2026-10-15 and read by two
     readers (the attack and what was missing), "The one command that changes a rule (T16c)";
-    route inline, the parent writes it; not built
+    route inline, the parent writes it (no writer trigger: one unit, a session well under the
+    backstop). Built on `feat/rules-change`: 3f48e4b, ff3bbf4, d9e0925, 0acb6bf, then the
+    verifier's fixes a5877e4 and Codex's fixes 6986330; pull request 238, draft. Checked off
+    when it lands
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
     its sensors
@@ -2978,8 +2991,37 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   What was missing found twelve gaps, among them `set`, the form-only kind, computing from
   `origin/main`, the installed project and the help texts. All are folded into "The one command
   that changes a rule (T16c)". T16g, letter H, was added because it had no task. Not built.
+- 2026-10-15, T16c built on `feat/rules-change`, tests first, inline. Six commits, every gate
+  passed, WSL2 included.
+  - An independent verifier (it is item 1) probed every part of the design in a scratch clone.
+    It found two blockers, fixed in a5877e4 and rechecked fixed:
+    - a second id on one branch silently reverted the first, because the whole list came from
+      `origin/main`;
+    - a landed `rule/` branch counted as open once main moved on.
+    It also found a live id taken as a new rule, refused since.
+  - gentle-ai, raised to item 1: four lenses over 10e29e6..a5877e4, approved and acknowledged,
+    with 11 informational findings: the rollback's own result, the relief line after the write,
+    the sentinel strings of `what`, the list-finding prefixes, the size of `runChange`, a
+    second local-day helper, a doc comment of `lastLineFor`, and the pinned date of the tests.
+    The first two are fixed in 6986330; the rest are follow-ups, not blockers. 6986330 was
+    reviewed again with risk and resilience, approved and acknowledged, with one more
+    informational finding at the rollback (`bin/lib/rules-change-run.mjs:248-255`).
+  - Codex over 10e29e6..a5877e4 found five, fixed in 6986330 and rechecked fixed by Codex
+    (a5877e4..6986330, 5 of 5):
+    - a rule of his could be changed with a design source by giving it another owner;
+    - a failed relief append left the files written;
+    - AGENTS.md was refused only by its literal spelling;
+    - a design source could name a path outside the repository;
+    - the date fixtures depended on the host's time zone.
 
 ## Next step
+**State for a resume, 2026-10-15, after T16c was built.** T16c is pull request 238, draft
+(`feat/rules-change`, worktree `D:\js-harness-worktrees\rules-change`, 6986330), every
+check passed: the gate, the verifier, gentle-ai (two lineages, both acknowledged) and Codex
+(10e29e6..6986330 recorded). Its design is pull request 234, draft, on this branch. Next: both
+land through the lead's queue; check off T16c when 238 lands; then T16d, the row `rules`. The
+twelve informational findings of gentle-ai are follow-ups under "Progress", none open.
+
 **State for a resume, 2026-10-15, after T16c's design.** T16c is designed and its two
 readers' findings are folded in, on `docs/rule-hierarchy-t16c-design`; T16g, letter H, is
 added. Next: build T16c as the design says, tests first, telling the lead before each shared
