@@ -408,6 +408,22 @@ $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
 ```
 
+### js-harness unseen
+
+What the desktop app opened for this project out of his sidebar: an enabled scheduled task whose
+folder is this project (the app runs it in Routines), and a session a schedule opened that sits in
+Routines and is not archived. Each one to clear is named as `FAIL`, and the command exits 1. A
+disabled task, a leftover scheduled-task folder, and a session a command opened (`js-harness remote`)
+are `INFO`. It only reads; `doctor` reports the same count as its `unseen` row. `--records-only` reads
+the app's session records and no transcript, which is the fast path `doctor` uses at each session start.
+
+```console
+$ js-harness unseen
+FAIL  enabled scheduled task jh-wake runs in D:\my-project: the app opens its sessions in Routines
+INFO  disabled scheduled task jh-old runs in D:\my-project: it opens no session
+unseen: 1 to clear
+```
+
 ### js-harness memory
 
 Keeps the project's Claude Code memory small and true. The index of that memory is read on every

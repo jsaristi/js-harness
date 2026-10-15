@@ -1463,16 +1463,23 @@ one searched his words, the memory notes and the records.
 
 #### Layer 2 — told by a command, run by `doctor`, never in the commit gate
 
-- A read-only command of its own, `js-harness sessions-unseen` (name open). It exits 1 and names
+- A read-only command of its own, `js-harness unseen` (built 2026-10-15). It exits 1 and names
   each item below, and exits 0 when there are none:
   - (a) an enabled task in `scheduled-tasks.json` whose `cwd` is this project or under it. A
     disabled task, or a leftover `SKILL.md` folder with no registry entry, is listed as inert
     (INFO). When the registry is missing, a `SKILL.md` scan matches the project's absolute path
     only, never its name.
-  - (b) a session of this project that is `NOT IN HIS SIDEBAR` per layer 1 and not archived.
-    Without an app record it reads `unknown`, and `unknown` is a failure line, never a pass.
+  - (b) a session of this project that a scheduled task opened, or that sits in Routines, and
+    is not archived. Without an app record it reads `unknown`, and `unknown` is a failure line,
+    never a pass. Changed when built: a session opened by a command is INFO, not a failure,
+    since the `js-harness remote` server he uses from his phone opens sessions that way; the
+    board still marks it `NOT IN HIS SIDEBAR`.
 - `doctor`, which runs on `SessionStart` and notifies only on change, gains a row that runs it.
-  The orchestrator skill text gains one line: the lead runs it in its recap until it exits 0.
+  Changed when built: the full command reads a week of transcripts in about 11 s (measured
+  2026-10-15), too slow for every session start, so the row runs `unseen --records-only`,
+  which reads only the app's records (the registry, and each session record's `cwd`,
+  `scheduledTaskId` and `isArchived`). The orchestrator skill's line (the lead runs it in its
+  recap until it exits 0) is owed, for whoever next edits that text.
 - It is not a row of `check`. A gate row that fails on his machine would block every commit until
   he cleans up.
 
@@ -2784,6 +2791,14 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   24 h it read 10 rows by him archived, 6 by a session archived, 5 by a session in Sessions,
   3 by him in Sessions and 8 unknown in part. New failure entry `session-opened-unseen`. Next:
   layer 2, then layer 3 after his answers.
+- 2026-10-15, T16 layer 1 landed (pull request 226, main 650b659). Layer 2 on
+  `feat/session-unseen`: `js-harness unseen` (read-only) exits 1 for an enabled scheduled task
+  of this project and for a session a scheduled task opened, or one in Routines, that is not
+  archived; a disabled task, a leftover folder and a session opened by a command are INFO.
+  `doctor` runs `unseen --records-only`: measured 0.3 to 0.4 s against about 11 s for a week of
+  transcripts. On this machine it exits 0: the wake-up task is disabled, `jh-open-session-test`
+  is a leftover folder, and both scheduled sessions are archived. The two design changes are
+  in section 17, layer 2.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

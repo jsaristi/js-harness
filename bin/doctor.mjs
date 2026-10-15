@@ -170,13 +170,35 @@ export async function buildReport({ home, cwd, offline, interactive }, deps) {
 
   const localRows = probeStack({ home, project, spawn, platform, interactive, functions });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
-  return localRows.map((row) => {
+  const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
     // A tool's fix can depend on the latest version (gentle-ai's, across a Go major).
     const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest);
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
+  return deps.unseen ? [...rows, await unseenRow(deps.unseen, project)] : rows;
+}
+
+/** The unseen row (`js-harness unseen`): a check of the Claude app, not a tool, so nothing to install and one cell
+ * that carries the state. `stale` is a gap while an item is to clear, and its fix names the count and each item.
+ * `unknown` when the check cannot run: it fails open, like every probe here, and is no gap. */
+async function unseenRow(unseen, cwd) {
+  const row = { id: 'unseen', version: null, installed: 'n/a', claude: 'ok', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  let toClear;
+  try {
+    toClear = await unseen(cwd);
+  } catch {
+    return { ...row, claude: 'unknown' };
+  }
+  if (toClear.length === 0) return row;
+  return { ...row, claude: 'stale', fix: { claude: [`unseen: ${toClear.length} to clear: run js-harness unseen`, ...toClear] } };
+}
+
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen row. The check is loaded only here, so
+ * `doctorMain` alone keeps the rows its callers give it. */
+export function doctorCommand(argv) {
+  return doctorMain(argv, process.env, { unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd) });
 }
 
 export async function doctorMain(argv, env = process.env, deps = {}) {

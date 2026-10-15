@@ -47,9 +47,21 @@ test('appSessions maps each session record by its cliSessionId to where it sits:
     record('local_3.json', { cliSessionId: 'c-plain', isArchived: false, scheduledTaskId: '' }),
   ]));
   const sessions = lib.appSessions(ROOT, root);
-  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old' });
-  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null });
+  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null });
+  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null });
   assert.equal(sessions.get('c-plain').where, 'sessions', 'an empty scheduledTaskId is no routine');
+});
+
+test('appSessions carries each record\'s cwd: the folder the session runs in, or null when the record has none', () => {
+  const root = fakeFs(Object.fromEntries([
+    record('local_1.json', { cliSessionId: 'c-here', isArchived: false, cwd: 'D:\\harness' }),
+    record('local_2.json', { cliSessionId: 'c-empty', isArchived: false, cwd: '' }),
+    record('local_3.json', { cliSessionId: 'c-number', isArchived: false, cwd: 7 }),
+  ]));
+  const sessions = lib.appSessions(ROOT, root);
+  assert.equal(sessions.get('c-here').cwd, 'D:\\harness');
+  assert.equal(sessions.get('c-empty').cwd, null);
+  assert.equal(sessions.get('c-number').cwd, null);
 });
 
 test('appSessions skips a file that is not JSON or has no cliSessionId, and reads no other file of the folder', () => {
@@ -87,4 +99,24 @@ test('scheduledTasks is empty when the file is missing, is not JSON, or holds no
   assert.deepEqual(lib.scheduledTasks(ROOT, fakeFs({})), []);
   assert.deepEqual(lib.scheduledTasks(ROOT, fakeFs({ [nodePath.join(ACCOUNT, 'scheduled-tasks.json')]: '{ broken' })), []);
   assert.deepEqual(lib.scheduledTasks(ROOT, fakeFs({ [nodePath.join(ACCOUNT, 'scheduled-tasks.json')]: '{"scheduledTasks":{}}' })), []);
+});
+
+// The registry is read or not, apart from how many tasks it holds: an empty list is a registry that says nothing
+// is scheduled, while a missing or unparsable file says nothing about the tasks at all.
+test('scheduledRegistry says a registry was found when a file parses to a task list, even an empty one', () => {
+  const found = (text) => lib.scheduledRegistry(ROOT, fakeFs(text === undefined ? {} : { [nodePath.join(ACCOUNT, 'scheduled-tasks.json')]: text }));
+  assert.deepEqual(found('{"scheduledTasks":[]}'), { found: true, tasks: [] });
+  assert.deepEqual(found('{"scheduledTasks":[{"id":"task-a","cwd":"D:\\\\proj","enabled":true}]}'), { found: true, tasks: [{ id: 'task-a', cwd: 'D:\\proj', enabled: true }] });
+  assert.deepEqual(found(undefined), { found: false, tasks: [] }, 'no file');
+  assert.deepEqual(found('{ broken'), { found: false, tasks: [] }, 'a file that is not JSON');
+  assert.deepEqual(found('{"scheduledTasks":{}}'), { found: false, tasks: [] }, 'a file with no list');
+});
+
+test('scheduledRegistry is found when any account folder holds a registry', () => {
+  const other = nodePath.join(ROOT, 'claude-code-sessions', 'account-z', 'org-y', 'scheduled-tasks.json');
+  const root = fakeFs(Object.fromEntries([
+    [nodePath.join(ACCOUNT, 'scheduled-tasks.json'), '{ broken'],
+    [other, '{"scheduledTasks":[]}'],
+  ]));
+  assert.deepEqual(lib.scheduledRegistry(ROOT, root), { found: true, tasks: [] });
 });
