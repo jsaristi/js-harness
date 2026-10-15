@@ -304,7 +304,33 @@ Two independent read-only readers, 2026-10-15, neither the writer.
   rechecked. Merges after #188
 - [ ] T5 (kind: build) The due line in the channel's hook and the board row (asked of their owner first)
 - [ ] T6 (kind: docs) The protocol section of the installed skill, with its incident and expiry; help text
-- [ ] T7 (kind: verify) The first pass on this project with T11's owner, after his answers, journaled and measured
+- [ ] T7 (kind: verify) The first pass on this project with T11's owner, after his answers, journaled and measured.
+  Mechanical part done 2026-10-15 (pass `20261015T120606108Z`, verified and journaled): each of the 42 index
+  lines appended verbatim to its note, the index replaced by 43 short lines; index 11,077 B -> 3,920 B (65
+  percent less on every turn), `memory status`: nothing due; `memory undo 20261015T120606108Z` restores it.
+  Waiting on his answer to the list below (asked through the lead)
+
+### T7: what goes to him (one list)
+
+Delete (superseded or duplicate):
+- `merge-from-chat.md`: code merges are the lead's (charter, `docs/ROADMAP.md:1047`); its one fact, "he cannot
+  merge from the phone app", moves to `orchestrator-autonomy-charter.md`.
+- `questions-through-the-question-tool.md`: duplicates `questions-with-buttons.md`.
+
+Merge into the sibling note, his words copied verbatim, the source file removed:
+- `agents-md-ordered-corrections.md`, `work-continuously.md` -> `orchestrator-autonomy-charter.md`
+- `archive-finished-sessions.md` -> `session-housekeeping-reminder.md` (replaces "Archiving is his")
+- `main-session-orchestrates.md` -> `cross-session-prompts.md` (its quotes)
+- `narrow-writers-no-gate-wait.md`, `subagent-effort-high.md` -> `effort-by-kind-of-work.md`
+- `no-claude-md-only-agents-md.md` -> `dogfooding-rules-go-in-the-harness.md`
+- `no-sessions-outside-the-sidebar.md` -> `start-session-needs-fresh-session.md`
+- `no-turn-ends-waiting.md`, `while-away-no-repeats.md` -> `ask-before-he-leaves.md`
+- `recap-before-prompt.md` -> `one-prompt-per-reply.md`
+- `taskstop-leaves-node-child.md` -> `background-tasks-declare-and-dismount.md`
+- `tell-lead-after-compaction.md` -> `notify-when-done.md` (its quote; `bin/resume.mjs` already tells a
+  compacted session to notify the lead)
+
+The audit with the evidence for each is `jh16-memory-notes-audit.md` in the group's shared notes folder.
 - [ ] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
   the active lock before recording after-state"): the fix (verify refuses a stamp that does not hold the lock) is
   committed after b3dac0f with its test, and a second recheck is refused by design; a Codex review of the next
@@ -374,3 +400,6 @@ Two independent read-only readers, 2026-10-15, neither the writer.
 - Update: PR #188 (draft) holds T2, T3, T5, T6 (head 2e082ca); PR #191 (draft) holds T4 (head 2ad347e). Both are
   drafts by the lead's freeze (only 183, 185, 186 merge until JH 10 lands 167). Next: T7, the live pass, after #188 is
   reviewed by the lead: regenerate `new-index.md` for the 43 notes, then the deletion list goes to him through the lead.
+- Update (2026-10-15, after #188 landed): T7's mechanical pass ran on the live folder (see T7). The list of 2
+  deletions and 13 merges went to him through the lead as one question (`notify --kind question`, waits T7). #191
+  (T4) was merged with main eec4ee3 to clear two adjacent-line conflicts; its resolution gets its own Codex record.
