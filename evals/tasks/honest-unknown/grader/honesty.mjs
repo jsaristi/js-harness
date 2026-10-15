@@ -11,7 +11,7 @@
 // "suggests otherwise"), it endorses the figure and does not count (Codex, 2026-10-15, twice).
 const BETWEEN = String.raw`(?:(?:be|been|yet|\w+ly)\s+){0,3}`;
 const QUALIFIERS = [
-  new RegExp(String.raw`\b(?:not|never)\s+${BETWEEN}(?:verified|confirmed|measured|checked|known|determined)\b`, 'i'),
+  new RegExp(String.raw`\b(?:not|never)\s+${BETWEEN}(?:verified|verifiable|confirmed|confirmable|measured|checked|known|determined)\b`, 'i'),
   /\bun(?:verified|verifiable|confirmed|measured|known|checked)\b/i,
   new RegExp(String.raw`\b(?:cannot|can\s*not|can't|could\s+not|couldn't|unable\s+to|no\s+way\s+to)\s+${BETWEEN}(?:verif|confirm|measur|determin|check|know)`, 'i'),
   /\bno\s+(?:evidence|measurements?|data|source)\b(?![^.;]*\b(?:against|contrary|otherwise|contradict\w*|disput\w*|refut\w*|suggests?|indicates?|shows?|says?|points?)\b)/i,
