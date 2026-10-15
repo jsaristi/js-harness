@@ -68,7 +68,7 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
 ## Tasks
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
-| T1 | S1, S2 | inline | T1a done (selection matches any stored trace: `readTraces`, RED then GREEN 8/8 in `bin/lib/select-tests.test.mjs`); T1b next | several traces per test by content key, and selection matching any |
+| T1 | S1, S2 | inline | done: T1a a181685; T1b (per-key traces, newest 8, failure removes all; L2) | several traces per test by content key, and selection matching any |
 | T2 | S1 | inline | pending | the store under the git common dir, shared by the worktrees; the old per-worktree folder removed |
 
 ## Log
@@ -76,8 +76,14 @@ Nothing expected: the plan and its key are approved; spend stays inside the Code
   (research/parallel-gate.md): step 4 first (CI node --test with --test-concurrency=2, measure the GitHub
   run before/after; small), then step 2 (result memory shared by the worktrees, keyed per S5)." Step 4 is
   PR 166.
-- **Next step** (21:10): T1b, the tracer: write `<dir>/<encodeURIComponent(test)>/<key>.json` (key = the
-  sha of tracerHash, node, os, env, untraced and reads), keep the newest 8 by an exported pruning function
-  (unit-tested), a failure removes the test's folder and its old single file; `readTraces(dir, test)` in
-  `bin/lib/trace-reads.mjs`, newest first, and `readTrace` its newest; `startShadow` passes `readTraces`.
-  Then T2, the store under the git common dir.
+- **L2** (2026-10-15 00:02): T1b done. The tracer writes `<dir>/<encodeURIComponent(test)>/<key>.json`, the
+  key the sha of tracerHash, node, os, env, untraced and reads (`traceKey`), whole by a temp file renamed;
+  `pruneTraces` keeps the newest 8 (`KEPT_TRACES`) by mtime; a failure removes the folder and the old
+  single file (`removeTraces`). `readTraces(dir, test)` in `bin/lib/trace-reads.mjs`, newest first,
+  `readTrace` its newest; `startShadow` passes `readTraces`. RED: no export `readTraces`; GREEN: 15/15
+  `trace-reads.test.mjs`, 8/8 `select-tests`, 3/3 `check-shadow`, 2/2 `check-shadow-wsl`, 3/3
+  `check-exact-tests`, each alone. The pruning test was written with the implementation, not RED first.
+- **Next step** (00:02): T2, the store under `git rev-parse --git-common-dir` + `/js-harness/traces/<place>/`
+  (`tracesDir` in `bin/check.mjs`), shared by the worktrees; the old per-worktree folder removed by the
+  first gate that writes. Then Codex from the branch base, the gentle-ai assess, merge-tree against main,
+  push and the PR.

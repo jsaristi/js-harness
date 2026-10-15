@@ -39,13 +39,28 @@ export function traceEnv({ root, dir, existing = '', results = null }) {
   };
 }
 
-/** The trace of `test` (its path from the repository root, `/`-separated) in `dir`, or `null` when there is
- * none, it cannot be read, or it is of another tracer. */
-export function readTrace(dir, test) {
-  try {
-    const trace = JSON.parse(fs.readFileSync(path.join(dir, tracer.traceName(test)), 'utf8'));
-    return trace?.tracer === TRACER_VERSION && trace.test === test && trace.reads && typeof trace.reads === 'object' ? trace : null;
-  } catch {
-    return null;
+/** The stored passing traces of `test` (its path from the repository root, `/`-separated) in `dir`, newest
+ * first (the result memory, odd/tasks/result-memory.md); one that cannot be read or is of another tracer is
+ * left out. */
+export function readTraces(dir, test) {
+  const traces = [];
+  for (const file of tracer.traceFiles(path.join(dir, tracer.traceFolder(test)))) {
+    try {
+      const trace = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (trace?.tracer === TRACER_VERSION && trace.test === test && trace.reads && typeof trace.reads === 'object') traces.push(trace);
+    } catch {
+      // removed meanwhile, or not whole: no trace
+    }
   }
+  return traces;
 }
+
+/** The newest stored trace of `test` in `dir`, or `null` when there is none. */
+export function readTrace(dir, test) {
+  return readTraces(dir, test)[0] ?? null;
+}
+
+/** Writes a passing trace as the tracer does, and removes all but the newest `keep` of a test's traces. */
+export const writeTrace = tracer.writeTrace;
+export const pruneTraces = tracer.pruneTraces;
+export const KEPT_TRACES = tracer.KEPT_TRACES;

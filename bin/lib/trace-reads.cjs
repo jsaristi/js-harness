@@ -72,10 +72,64 @@ function stateOf(root, key) {
   return hashOf(full) ?? 'absent';
 }
 
-/** The file a test's trace is kept in, under `dir`. */
+/** The folder a test's traces are kept in, under `dir`: one file per content key (odd/tasks/result-memory.md). */
+const traceFolder = (test) => encodeURIComponent(test);
+
+/** The single file a test's trace was kept in before the result memory; a failure removes it too. */
 const traceName = (test) => `${encodeURIComponent(test)}.json`;
 
-module.exports = { TRACER_VERSION, TRACE_ENV, traceEnvOf, hashOf, listingOf, stateOf, traceName };
+/** How many passing traces of a test are kept: a bound on the folder, enough for the worktrees at work. */
+const KEPT_TRACES = 8;
+
+/** The content key of a trace: the hash of everything that makes it true now, so a pass with the same
+ * inputs replaces its own file and one with other inputs gets a file of its own. */
+function traceKey(trace) {
+  const { tracerHash, node, os, env, untraced, reads } = trace;
+  return crypto.createHash('sha256').update(JSON.stringify({ tracerHash, node, os, env, untraced, reads })).digest('hex').slice(0, 32);
+}
+
+/** The trace files in `folder`, newest first by when they were written, the name breaking a tie. */
+function traceFiles(folder) {
+  let names;
+  try {
+    names = real.readdirSync(folder).filter((name) => name.endsWith('.json'));
+  } catch {
+    return [];
+  }
+  const dated = [];
+  for (const name of names) {
+    try {
+      dated.push({ name, at: real.statSync(path.join(folder, name)).mtimeMs });
+    } catch {
+      // removed meanwhile
+    }
+  }
+  return dated.sort((a, b) => b.at - a.at || (a.name < b.name ? -1 : 1)).map(({ name }) => path.join(folder, name));
+}
+
+/** Removes all but the newest `keep` trace files of `folder`. */
+function pruneTraces(folder, keep = KEPT_TRACES) {
+  for (const file of traceFiles(folder).slice(keep)) real.rmSync(file, { force: true });
+}
+
+/** Writes a passing trace under `dir` in its key's file, whole (a temp file renamed), then prunes. */
+function writeTrace(dir, trace) {
+  const folder = path.join(dir, traceFolder(trace.test));
+  real.mkdirSync(folder, { recursive: true });
+  const file = path.join(folder, `${traceKey(trace)}.json`);
+  const temp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  real.writeFileSync(temp, `${JSON.stringify(trace)}\n`);
+  real.renameSync(temp, file);
+  pruneTraces(folder);
+}
+
+/** Removes every stored trace of `test` under `dir`: a test seen to fail is never skipped on an older pass. */
+function removeTraces(dir, test) {
+  real.rmSync(path.join(dir, traceFolder(test)), { recursive: true, force: true });
+  real.rmSync(path.join(dir, traceName(test)), { force: true });
+}
+
+module.exports = { TRACER_VERSION, TRACE_ENV, KEPT_TRACES, traceEnvOf, hashOf, listingOf, stateOf, traceFolder, traceName, traceKey, traceFiles, pruneTraces, writeTrace, removeTraces };
 
 const env = process.env;
 if (env.JS_HARNESS_TRACE_DIR && env.JS_HARNESS_TRACE_ROOT && !globalThis[INSTALLED] && !process.execArgv.includes('--test')) install();
@@ -316,7 +370,6 @@ function install() {
         real.mkdirSync(results, { recursive: true });
         real.writeFileSync(path.join(results, `${process.pid}-${crypto.randomBytes(4).toString('hex')}.json`), JSON.stringify({ test, code }));
       }
-      const file = path.join(dir, traceName(test));
       let partNames = [];
       try {
         partNames = real.readdirSync(parts);
@@ -324,7 +377,7 @@ function install() {
         // no child wrote any
       }
       if (code !== 0) {
-        real.rmSync(file, { force: true });
+        removeTraces(dir, test);
         real.rmSync(parts, { recursive: true, force: true });
         return;
       }
@@ -343,10 +396,9 @@ function install() {
       const states = {};
       for (const key of [...reads].sort()) states[key] = stateOf(root, key);
       const trace = { v: 1, test, tracer: TRACER_VERSION, tracerHash: hashOf(__filename), node: process.version, os: process.platform, env: traceEnvOf(env), untraced, reads: states };
-      real.mkdirSync(dir, { recursive: true });
-      const temp = `${file}.${process.pid}.tmp`;
-      real.writeFileSync(temp, `${JSON.stringify(trace)}\n`);
-      real.renameSync(temp, file);
+      writeTrace(dir, trace);
+      // The single file of before the result memory, left by an older tracer: its trace is the old one.
+      real.rmSync(path.join(dir, traceName(test)), { force: true });
       real.rmSync(parts, { recursive: true, force: true });
     } catch {
       // A trace that cannot be written is no trace: the test then runs at the next gate.

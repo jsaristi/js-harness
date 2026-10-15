@@ -8,7 +8,7 @@ import { checkSensor } from './check.mjs';
 import { SYNCED_MARK } from './lib/gate-wsl.mjs';
 import { TRACER_VERSION, TRACE_PRELOAD, hashOf, traceEnvOf } from './lib/trace-reads.mjs';
 
-const { traceName } = createRequire(import.meta.url)('./lib/trace-reads.cjs');
+const { traceFolder, writeTrace } = createRequire(import.meta.url)('./lib/trace-reads.cjs');
 
 // The tests sensor in shadow in WSL2 (odd/tasks/exact-tests.md, T3b): the suite runs in the mirror under the
 // tracer, the traces of that place have a folder of their own, and selection is asked with the node, the
@@ -44,7 +44,7 @@ function gate({ ended = {}, reached = true } = {}) {
     if (traceDir && results) {
       for (const one of ['a.test.mjs', 'b.test.mjs']) {
         const trace = { v: 1, test: one, tracer: TRACER_VERSION, tracerHash: hashOf(TRACE_PRELOAD), node: 'v24.9.0', os: 'linux', env: traceEnvOf({ LANG: 'C.UTF-8' }), untraced: null, reads: {} };
-        fs.writeFileSync(path.join(mounted.get(traceDir), traceName(one)), JSON.stringify(trace));
+        writeTrace(mounted.get(traceDir), trace);
         fs.mkdirSync(mounted.get(results), { recursive: true });
         fs.writeFileSync(path.join(mounted.get(results), `${one}.json`), JSON.stringify({ test: one, code: ended[one] ?? 0 }));
       }
@@ -66,7 +66,7 @@ test('in WSL2 the runner carries the tracer, its traces go to a folder of that d
     // The tracer is the harness's own, through the mount, whatever project the mirror holds.
     const preload = /NODE_OPTIONS='--require="?([^'"]*)"?'/.exec(calls[0].script)?.[1];
     assert.equal(mounted.get(preload), path.resolve(TRACE_PRELOAD));
-    assert.deepEqual(fs.readdirSync(path.join(dir, 'wsl-Ubuntu')).sort(), [traceName('a.test.mjs'), traceName('b.test.mjs')].sort());
+    assert.deepEqual(fs.readdirSync(path.join(dir, 'wsl-Ubuntu')).sort(), [traceFolder('a.test.mjs'), traceFolder('b.test.mjs')].sort());
     // The traces are of the mirror's node: the same node there skips both, and b, which failed, is counted.
     const second = await checkSensor(root, sensor, options());
     assert.deepEqual(second.shadow, { files: 2, wouldSkip: ['a.test.mjs', 'b.test.mjs'], failedOfSkipped: ['b.test.mjs'] });

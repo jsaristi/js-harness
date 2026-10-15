@@ -22,7 +22,7 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gat
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { selectTests, testFilesOf } from './lib/select-tests.mjs';
-import { TRACE_PRELOAD, readTrace, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
+import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 
 export { estimateTokens };
@@ -826,7 +826,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
 function startShadow(cwd, dir, { env = null, place = {} } = {}) {
   const root = path.resolve(cwd);
   const tests = testFilesOf(root);
-  const { skipped } = selectTests({ tests, readTrace: (one) => readTrace(dir, one), stateOf: (key) => stateOf(root, key), ...place });
+  const { skipped } = selectTests({ tests, readTraces: (one) => readTraces(dir, one), stateOf: (key) => stateOf(root, key), ...place });
   fs.mkdirSync(dir, { recursive: true });
   const results = path.join(dir, `results-${process.pid}-${Date.now()}`);
   if (env) Object.assign(env, traceEnv({ root, dir, results, existing: env.NODE_OPTIONS }));
