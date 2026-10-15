@@ -118,12 +118,12 @@ The size past which the gate log is renamed over its older file, so the log stay
 
 ### gate-max
 How long a command run under the gate lock may run before it is stopped with every process it started: 30 minutes. The flag `--max` overrides it for one run.
-- Read by: `bin/gate.mjs`, `bin/lib/manifest.mjs`.
+- Read by: `bin/gate.mjs`, `bin/js-harness.mjs`, `bin/lib/manifest.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-turn-guards.md`.
 
 ### gate-wait
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
-- Read by: `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`.
+- Read by: `bin/js-harness.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
 
 ### person-present
