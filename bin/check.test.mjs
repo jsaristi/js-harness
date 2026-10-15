@@ -506,9 +506,14 @@ test('checkSensor kills a background process the command left behind, and still 
   const dir = makeTmpDir();
   try {
     const pidFile = path.join(dir, 'survivor.pid');
-    fs.writeFileSync(path.join(dir, 'child.js'), `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 120000);`);
-    // The shell exits 0 at once; the survivor is its own child and inherits the output pipes.
-    const command = process.platform === 'win32' ? 'start /b node child.js' : 'node child.js &';
+    // The survivor starts slowly, as a node does on a loaded machine: a gate saw it killed when the pipe
+    // grace (`PIPE_GRACE_MS`, 2 s) ended, before it had written its pid (docs/FAILURES.md,
+    // check-survivor-test-fails).
+    fs.writeFileSync(path.join(dir, 'child.js'), `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)), 2500); setTimeout(() => {}, 120000);`);
+    // The shell exits 0 once the survivor has written its pid; the survivor is its own child and inherits
+    // the output pipes. The shell waits for it so the pipe grace starts only after the pid exists.
+    fs.writeFileSync(path.join(dir, 'wait.js'), `const fs = require('fs'); const until = Date.now() + 60000; (function wait() { if (fs.existsSync(${JSON.stringify(pidFile)}) || Date.now() > until) return; setTimeout(wait, 20); })();`);
+    const command = process.platform === 'win32' ? 'start /b node child.js & node wait.js' : 'node child.js & node wait.js';
     const started = Date.now();
     const row = await checkSensor(dir, { name: 'tests', command });
     assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
