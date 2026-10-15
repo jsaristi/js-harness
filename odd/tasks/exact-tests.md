@@ -95,7 +95,7 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 | T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
 | T3c | S6 | inline | done, `bfb64df`; its range recorded as a refused second recheck (L10) | `assertUntraced` in `bin/lib/trace-reads.test.mjs` accepts the hooks fallback for every reason it asserts (the marker of the clock is set before that fallback, so it holds as it is). No RED: this node has the hooks, and a half simulation would not be the node it stands for; GREEN 13/13. | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
 | T3d | S6 | inline | done, committed after T3c (`bfb64df`) in the gate turn of its own commit, reviewed by Codex from `bfb64df` | L9: the citations test made deterministic (fixed commit dates; no RED: the flake is one run in 27, three runs green) and the shadow's results a folder with a file per test file (RED then GREEN) |
-| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; after waits for S6's count | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
+| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; the switch waits for it | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
 - **L1** (2026-10-14): S1 to S4, verbatim. The lead's order of the queue puts this after Codex out of the
@@ -193,6 +193,18 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   `failedOfSkipped` empty. PR 163 merged at 19:58 with `fbff1a2`; the three commits after it went in as
   PR 164 (merged 20:19). Next, from the same plan: step 4 (CI `node --test` with `--test-concurrency=2`),
   then step 2 (a result memory shared by the worktrees, keyed per S5).
+- **L13** (2026-10-15 02:58, T4 resumed by the lead's order: "the top priority now"): S6's count, read from
+  the gate log (`~/.js-harness/gate-log/log.1.jsonl` and `log.jsonl`, every end line whose tests row has a
+  shadow; 00:28Z to 07:53Z, all after the result memory shared the traces): 47 gates with a shadow, 31 with
+  `wouldSkip` above 0 (a median of 75 percent of the files), 29 of them clean and 2 with a skipped file
+  that failed. 00:56Z: `bin/check-citations.test.mjs`, a real clock dependency through git's commit dates
+  (fixed by fixed dates, PR 164), and `bin/lib/test-run-warning.test.mjs`, a results line lost by the counter
+  itself (fixed by a results file per test). 06:58Z: `evals/suite.test.mjs`, the machine flake
+  `eval-interrupt-process-alive` of `docs/FAILURES.md`, in a change that touched no eval. Since the last of
+  them, 9 counting gates, all clean. Read literally, S6 is not met (2 of 31 failed); its seam tests exist
+  (`bin/lib/trace-reads.test.mjs`). Asked of the lead: count from the last failing gate (21 to go) with the
+  skip never applied to a test the flaky ledger (JH 10, step 5) tags, per the result memory's S1 ("tagged
+  nondeterministic tests never cached"), or leave known flakes out of the count. Next: the lead's answer.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
