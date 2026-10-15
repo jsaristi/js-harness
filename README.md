@@ -54,7 +54,10 @@ Every example below is the output of a real run. Paths are shortened: `~` is the
 
 Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the declared sensors
 (tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
-runs it, so a red check means the commit is not ready yet.
+runs it, so a red check means the commit is not ready yet. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
+set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
+at a time, for a machine where node's default, one fewer than its processors, is too few: this
+repository's GitHub workflow sets 2.
 
 ```console
 $ js-harness check
@@ -70,7 +73,10 @@ INFO  sensors  no sensors declared: add test, lint or typecheck scripts to packa
 ### js-harness gate
 
 Runs a heavy command under the machine's gate lock, one at a time with the gates of every
-project, and records the run in the machine's gate log. `gate log` prints the last runs.
+project, and records the run in the machine's gate log. `gate log` prints the last runs. A
+command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
+in has an open pull request and commits a push would take now, any command but that push or a merge
+is refused, with the push command printed.
 
 ```console
 $ js-harness gate --no-wait -- node -e "console.log('a heavy run, one at a time')"
@@ -210,7 +216,9 @@ Features  295/349  85%
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
 validates every contract, `run` runs a contract's done-when commands, and `goal` prints the
-`/goal` condition that runs them.
+`/goal` condition that runs them. Each task names its kind of work, `(kind: design | build |
+verify | docs)`; `modes` prints the effort and sub-agent models each open task calls for, from
+the project's rules, and `goal` prints the same lines on stderr.
 
 ```console
 $ js-harness contract template
@@ -294,7 +302,8 @@ draft, mergeable, on main, a gentle-ai line in its body, the latest run of its h
 the base that run tested (from its checkout log) is today's main, or behind it only by documents
 with a clean merge. Exit 0 ready, 3 stale, 4 run missing, pending or red, 1 otherwise. A stale
 pull request gets a fresh run by closing and reopening it, once GitHub has recomputed its merge
-against main, which it says.
+against main, which it says. One that conflicts with main is told the files, and to move its own
+change out of them in a small commit before merging main: a clean merge costs no review of its own.
 
 ```console
 $ js-harness merge-ready 137
@@ -362,6 +371,26 @@ $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
 ```
 
+### js-harness subagents
+
+Counts a day's sub-agents of the project by role (writer, explorer, reviewer, verifier), model
+and effort, with their tokens and the share of the day's tokens they took, so that what to
+measure next and how many to launch come from a count. It reads the Claude Code records of the
+main checkout and each worktree and keeps no text of any message; Codex is not counted.
+
+```console
+$ js-harness subagents --day 2026-10-14
+Sub-agents, local day 2026-10-14 (UTC-05:00), 2 record folders; Claude records only, Codex not counted
+role      model             effort asked/ran  launches  input  cache write  cache read   output
+explorer  claude-opus-5-5   high/high               23    932      2197153    37928674   274820
+writer    claude-haiku-5-5  high/high               11    646      1626090    46702162   397934
+…
+total                                               54   2502      6420288   132472395  1050507
+Their share of the day's tokens: input 19%, cache write 29%, cache read 8%, output 23%
+Read as other: 5; effort or model inherited from the session: 14; call not found: 1; carried over from the day before: 0
+Read in 8.2 s
+```
+
 ### js-harness notify
 
 Appends one notice to the project's channel record under the home, with the time, the sender's
@@ -392,7 +421,7 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
 document it works on and what to read there, so nobody pastes a resume prompt. It writes
-nothing and always exits 0. `resume --pause` is the hook of the context pause.
+nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet.
 
 ```console
 $ js-harness resume --hook < hook-input.json
@@ -400,4 +429,25 @@ js-harness resume: this session was just compacted. What follows is read from fi
 Session: title not known (the host gave the hook none and no session id a transcript could be found by)
 …
 Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.
+```
+
+### js-harness guard
+
+The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
+`PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
+session and on `Bash`. `guard --hook` reads the call on standard input and refuses four things:
+a sub-agent launched on a model the project's rules do not give; a message whose stamped hour is
+more than a minute off the clock; a shell command with backticks inside double quotes, which
+bash runs as commands; and a `node --test` of several files outside a gate turn while another
+gate holds the machine's lock. A refusal is printed as the hook's deny, with the reason and the
+right value; any other call runs as it was.
+
+It always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
+The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project
+that installs the harness has them off by default, so the model check applies only where the
+project sets them.
+
+```console
+$ js-harness guard --hook < send.json
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"js-harness guard: this message stamps 03:10, and the clock says 15:01. Stamp 15:01, or no hour: an hour in a message is read from the clock in the same step, or left out."}}
 ```

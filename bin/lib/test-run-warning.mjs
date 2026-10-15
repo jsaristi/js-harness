@@ -34,6 +34,10 @@ export function commandsOf(text) {
       word ??= { text: '', globbed: false };
       word.text += inside;
       i = close === -1 ? source.length : close;
+    } else if (char === '&' && (source[i - 1] === '>' || source[i - 1] === '<' || source[i + 1] === '>')) {
+      // `2>&1`, `<&0`, `&>out`: a descriptor redirection ends no command (Codex, 2026-10-14).
+      word ??= { text: '', globbed: false };
+      word.text += char;
     } else if (/[;&|()\n]/.test(char)) {
       endCommand();
     } else if (/\s/.test(char)) {
@@ -71,17 +75,54 @@ function filesOf(words) {
   for (let i = 0; i < rest.length; i += 1) {
     const { text, globbed } = rest[i];
     if (VALUED.has(text)) i += 1;
-    else if (!text.startsWith('-')) files += globbed ? Infinity : 1;
+    // A redirection is no file: `2>` (whose `&1` ended the command), `>` and its target, `>out.txt`.
+    else if (/^\d*[<>]/.test(text)) {
+      if (/^\d*[<>]+$/.test(text)) i += 1;
+    } else if (!text.startsWith('-')) files += globbed || text.includes('$') ? Infinity : 1;
   }
   return files;
+}
+
+// The words a command line can hide a test run behind: `wsl.exe ... -- <command>` (or `-e <command>`), a
+// shell's `-c "<command line>"`, and the keywords of a shell's `if`, `for` and `while` (JH 8, 2026-10-14: a
+// whole run inside `wsl.exe -- sh -c "for f in ...; do node --test $f; done"`, whose `$f` was empty).
+const WSL = /(^|[\\/])wsl(\.exe)?$/i;
+const SHELL = /(^|[\\/])(sh|bash|dash|zsh)(\.exe)?$/i;
+const KEYWORDS = new Set(['do', 'then', 'else', 'elif', '!', 'time', '{']);
+
+/** How many files the first `node --test` that `words` runs names (see `filesOf`), looking through
+ * `wsl.exe` and `sh -c`, or `null` where there is none. A script a shell runs is not read. */
+function scan(words, depth = 0) {
+  let at = 0;
+  while (at < words.length && KEYWORDS.has(words[at].text)) at += 1;
+  const rest = words.slice(at);
+  if (rest.length === 0 || depth > 4 || gateWraps(rest) !== null) return null;
+  if (WSL.test(rest[0].text)) {
+    const split = rest.findIndex((word) => ['--', '-e', '--exec'].includes(word.text));
+    return split === -1 ? null : scan(rest.slice(split + 1), depth + 1);
+  }
+  if (SHELL.test(rest[0].text)) {
+    // `-c` counts among the shell's options only, before a script or a `--`, and within a cluster such as
+    // `-cl` (Codex, 2026-10-14).
+    let flag = -1;
+    for (let index = 1; index < rest.length && /^-[a-zA-Z]+$/.test(rest[index].text); index += 1) {
+      if (rest[index].text.includes('c')) flag = index;
+    }
+    if (flag === -1 || rest[flag + 1] === undefined) return null;
+    for (const inner of commandsOf(rest[flag + 1].text)) {
+      const found = scan(inner, depth + 1);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  return filesOf(rest);
 }
 
 /** How many files the first `node --test` of `command` that runs outside `js-harness gate` names (see
  * `filesOf`), or `null` where there is none: a run that `js-harness gate --` wraps is in a turn. */
 export function testRunFiles(command) {
   for (const words of commandsOf(command)) {
-    if (gateWraps(words) !== null) continue;
-    const files = filesOf(words);
+    const files = scan(words);
     if (files !== null) return files;
   }
   return null;

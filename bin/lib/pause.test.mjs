@@ -212,6 +212,9 @@ test('the crossing while the user is away, or never wrote in the end that is rea
 // before the host compacts.
 const LAST = Math.round((COMPACTION * DEFAULT_CONTEXT_LAST_PERCENT) / DEFAULT_CONTEXT_COMPACTION_PERCENT);
 const OPENING = 'js-harness notify --opening "<this session\'s title>"';
+// The sentence both notices carry (S2 of odd/tasks/pause-no-idle.md): two sessions ended their turn waiting and
+// were never woken, since the host compacts only inside a turn.
+const NO_IDLE_TURN = 'Never end your turn idle: the host compacts only inside a turn, and a turn that ends with nothing running to wake it is never woken. When the work waits on something, write your state, then keep a declared wait running in the background (js-harness wait, which says what it waits for and when it ends, and wakes you when it holds), so the compaction happens inside a turn.';
 
 test('the pause notice says to keep the state current after every step, and to store the prompt that resumes the session', inHome((home) => {
   const transcript = write(home, 't.jsonl', [reply(OVER)]);
@@ -219,6 +222,16 @@ test('the pause notice says to keep the state current after every step, and to s
   assert.equal(notice.stage, 'pause');
   assert.ok(notice.text.includes('write it after every step you finish, not once, and commit it with your next commit'), notice.text);
   assert.ok(notice.text.includes(`Store the prompt that resumes you with ${OPENING}`), notice.text);
+}));
+
+test('both notices say never to end the turn idle, and to write the state and keep a declared wait running instead (odd/tasks/pause-no-idle.md)', inHome((home) => {
+  const options = { sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') };
+  const pause = pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(OVER)]) });
+  const last = pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(LAST + 500)]) });
+  assert.deepEqual([pause.stage, last.stage], ['pause', 'last']);
+  for (const notice of [pause, last]) {
+    assert.ok(notice.text.includes(NO_IDLE_TURN), notice.text);
+  }
 }));
 
 test('the last notice: past the last point after the pause, once, says the compaction is near and to start nothing new', inHome((home) => {

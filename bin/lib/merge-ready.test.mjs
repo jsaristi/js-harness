@@ -19,6 +19,19 @@ const facts = (over = {}) => ({
   ...over,
 });
 
+test('a pull request that conflicts with main names the files and says how to keep the merge of main clean (S7)', () => {
+  const no = mergeReadiness(facts({ pr: pr({ mergeable: 'CONFLICTING' }), conflicts: ['bin/check.mjs', 'README.md'] }));
+  assert.equal(no.code, 1);
+  assert.deepEqual(no.said, [
+    'PR 7 is not mergeable (CONFLICTING).',
+    `PR 7 conflicts with main bbbbbbb in bin/check.mjs, README.md. Before merging main into its branch, move the branch's own change out of those lines in a small commit of its own, with its own small Codex review, so that the merge is clean; a conflict resolved in the merge is reviewed by its diff with the automatic merge.`,
+  ]);
+  // Unknown or none: only the line it said before.
+  for (const conflicts of [null, []]) {
+    assert.deepEqual(mergeReadiness(facts({ pr: pr({ mergeable: 'CONFLICTING' }), conflicts })).said, ['PR 7 is not mergeable (CONFLICTING).']);
+  }
+});
+
 test('the tested merge is read from the checkout log line, by full ids', () => {
   const log = `check\tRun actions/checkout\t2026-10-14T07:08:13Z HEAD is now at eb6a57e Merge ${HEAD} into ${MAIN}\n`;
   assert.deepEqual(testedMerge(log), { head: HEAD, base: MAIN });

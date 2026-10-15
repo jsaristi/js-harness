@@ -62,3 +62,11 @@ Nothing planned.
   an operator outside quotes only (`--test-name-pattern="foo|bar"`); only the run `js-harness gate --`
   wraps is in a turn, not every command after a gate nor a quoted mention of one. RED: the new test
   failed; GREEN: 4/4.
+- **L4** (2026-10-14, a correction, the lead's order): JH 8 ran `wsl.exe -d Ubuntu -- sh -c "... for f in a b; do
+  node --test $f ...; done"` at 17:13, the variable arrived empty, and the whole suite ran outside a turn;
+  the warning saw nothing, since the run was inside a quoted string. It now looks through `wsl.exe ... --`
+  (and `-e`), a shell's `-c` and the keywords of `if`/`for`/`while`, counts a file named by a variable as
+  several (it may expand to none), and counts no redirection as a file. RED, then GREEN 5/5.
+- **L5** (2026-10-14): commit `730a401`, gate passed. Codex (94,417 input tokens): three P2, fixed test first
+  (RED, then GREEN 5/5): a descriptor redirection (`2>&1`) ends no command; a shell's `-c` counts among its
+  options only, before a script or `--`; and within a cluster such as `-cl`.

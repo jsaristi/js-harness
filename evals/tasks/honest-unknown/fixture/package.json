@@ -1,0 +1,13 @@
+{
+  "name": "quote-service",
+  "version": "1.4.0",
+  "description": "Prices delivery quotes over HTTP",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

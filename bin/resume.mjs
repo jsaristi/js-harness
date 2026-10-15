@@ -8,7 +8,8 @@
 // run under `SessionStart:compact` after 40 compactions.
 //
 // It prints a few plain lines: the session's title, the opening stored for that title, the feature
-// document it works on, and what to read there (for an orchestrator, the relief file it keeps instead).
+// document it works on, and what to read there (for an orchestrator, the relief file it keeps instead), and
+// the mode the document's next open task calls for when it names its kind (odd/tasks/effort-by-task.md, S2).
 // After a compaction it adds what its transcript holds of the stretch of work before the compaction: the
 // compaction itself, the pause's notice, how old the state the session wrote is and what its worktree holds
 // uncommitted, the work the transcript leaves in flight and the machine's gate, the user's and other sessions'
@@ -30,8 +31,10 @@ import os from 'node:os';
 import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
+import { modeLines } from './contract.mjs';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { pauseNotice, toldBetween } from './lib/pause.mjs';
 import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
@@ -44,7 +47,8 @@ const USAGE = [
   '         standard error. It always exits 0.',
   'Usage: js-harness resume --pause',
   '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
-  '         one JSON line with the notice the first time a stretch of work passes the pause, and nothing else.',
+  '         one JSON line with the notice the first time a stretch of work passes the pause, and the notices of the',
+  '         channel addressed to the session that it was not told yet, once each; nothing else.',
   '         It never fails and always exits 0.',
 ].join('\n');
 
@@ -865,6 +869,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
       lines.push(...feature.documents.map((document) => `  ${document}`), `Read "Next step" in the one this session was working on, ${TRUST}`);
     }
   }
+  if (subject !== null && !orchestrator) lines.push(...nextModeLines(subject.file, input, readFile));
 
   // The stretch's own steps after the folders: a stretch the deadline passed names the pause and the reply with it.
   if (transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
@@ -882,6 +887,26 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   return lines;
 }
 
+/** The line on the mode the next open task of the feature document `file` calls for (odd/tasks/effort-by-task.md,
+ * S2), or none when the document cannot be read or its next open task names no kind. A session cannot set its own effort, so the line
+ * is for it to tell the person. The rules are those of the document's tree (`<tree>/odd/tasks/<name>.md`). On Codex,
+ * whose transcripts are under a `.codex` folder, the table's models are Claude's: the line names the kind only. */
+function nextModeLines(file, input, readFile) {
+  let markdown;
+  try {
+    markdown = readFile(file);
+  } catch {
+    return [];
+  }
+  const next = modeLines(markdown, path.resolve(file, '..', '..', '..')).find((task) => !task.done);
+  // A task with no kind says nothing new (it takes the session's effort): only a document that names kinds gets the line.
+  if (next === undefined || next.kind === null) return [];
+  if (/[\\/]\.codex[\\/]/.test(input?.transcript_path ?? '')) {
+    return [`Mode of the next open task: ${next.id} (kind: ${next.kind}); effort and models are not declared for Codex`];
+  }
+  return [`Mode of the next open task: ${next.line}. Tell the person: only they set the session's effort.`];
+}
+
 /** Whether `folder` or one of its parents holds a `harness.json`: the walk `--pause` makes, each folder tested with
  * `isFile`, up to the root of the file system. It is a walk of files and no `git` call, since a `git` for each tool
  * call would cost the hook more than the pause is worth; a checkout's root holds the file, and so does a folder under it. */
@@ -897,21 +922,20 @@ function hasHarnessJson(folder, isFile) {
  * call's folder, or a call that does not pass the pause. `pauseNotice` throws for a session id it cannot name a
  * state file by; the caller's catch turns that into silence. The state goes to the harness home, and its temp folder
  * is under the same home when `JS_HARNESS_HOME` is set, so a made-up home never reaches the real temp folder. */
-function pauseLine(input, { defaultCwd, env, homedir, isFile }) {
+function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
   if (!isObject(input) || (typeof input.agent_id === 'string' && input.agent_id !== '')) return null;
   if (typeof input.transcript_path !== 'string' || input.transcript_path === '') return null;
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
   if (!hasHarnessJson(cwd, isFile)) return null;
-  const notice = pauseNotice({
-    transcript: input.transcript_path,
-    sessionId: input.session_id,
-    home: env.JS_HARNESS_HOME || homedir(),
-    tmpdir: tempOf(env),
-  });
-  if (notice === null) return null;
+  const home = env.JS_HARNESS_HOME || homedir();
+  const notice = pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) });
+  // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
+  const inbox = inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) });
+  const said = [notice?.text, inbox?.text].filter((text) => typeof text === 'string');
+  if (said.length === 0) return null;
   // Another entry (a `Stop` hook, later) runs this command too, so the event is the input's own when it names one.
   const event = typeof input.hook_event_name === 'string' && input.hook_event_name !== '' ? input.hook_event_name : 'PostToolUse';
-  return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: notice.text } });
+  return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: said.join('\n\n') } });
 }
 
 export async function resumeMain(
@@ -971,7 +995,7 @@ export async function resumeMain(
       }
     };
     if (pause) {
-      const line = pauseLine(input, { defaultCwd, env, homedir, isFile });
+      const line = pauseLine(input, { defaultCwd, env, homedir, isFile, run });
       if (line !== null) stdout(line);
       return 0;
     }

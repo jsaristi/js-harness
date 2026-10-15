@@ -160,6 +160,16 @@ session's claim.
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
+### citations-test-reads-clock
+A test of citations cited a fresh commit's short hash, which a citation must hold a digit and a
+letter to be (`bin/lib/citations.mjs:11`): about one run in 27 the hash came out all digits, was no
+citation, and the test failed by the clock alone.
+- Class: tool
+- Seen: 2026-10-14 — odd/tasks/exact-tests.md, L9 — two gates of feat/exact-tests (19:28 and 19:56)
+  failed it, the second in shadow, where selection would have skipped it
+- Control: check — bin/check-citations.test.mjs — "only the lines a staged change adds to a feature
+  document are read, and each unresolved citation is a line" — since 2026-10-14
+
 ### cli-updated-itself
 A tool of the measured stack updated itself and nobody saw it until a measurement was about to run
 on it.
@@ -342,6 +352,17 @@ on it.
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
+### eval-interrupt-process-alive
+A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
+hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
+when the test looked, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
+  `[false, false]` was expected, pid 22809; the only failing test of the run
+- Seen: 2026-10-15 — JH 8's gate of fix/launcher-at-start, in WSL2 — the second entry of `alive` true
+  where false was expected, pid 22900 "answers" at the exit; the only failing test of the run, in a
+  change that touched nothing of the evals, and one of the files the shadow would have skipped
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row
@@ -362,6 +383,19 @@ row"); that tells the load and stops nothing.
   odd/tasks/gate-log.md:590-596
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — the gate on the result of merging
   `main` in timed out at 1,206 s with 3,195 tests passed and none failed; run again, it passed
+
+### gate-mark-hides-failures
+Tests passed in the gate and failed when run by hand. They inherited the gate's mark of a held turn
+(`JS_HARNESS_GATE_HELD=1`), which changes what the code under test does, so no gate could see them fail.
+The gate also runs its tests in WSL, so a failure that only Windows shows is out of its sight too. Only a
+run by hand on Windows, out of a turn, sees both.
+- Class: unseen-state
+- Seen: 2026-10-15 — evals/review/compare.test.mjs — since e06cf68 ("run the review out of the gate
+  lock"), six tests of the review comparison failed when run by hand and passed in the gate. The failure
+  was taken for a Windows-only one until a bisect of the one test showed that the mark decided it, not
+  the platform
+- Control: check — evals/review/compare.test.mjs — "a cell out of a turn of the gate lock is refused before
+  anything is made, with the command that runs it" — since 2026-10-15
 
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
@@ -399,6 +433,9 @@ A test run or a count started while a gate, or a batch that measures durations, 
   odd/tasks/gate-lock.md:1033-1045
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:594-596 — a writer ran a count outside the lock for about
   four minutes beside a gate (its own report)
+- Seen: 2026-10-15 — docs/FAILURES.md, gate-mark-hides-failures — JH 9 and its bisecting sub-agent each
+  ran the whole of evals/review/compare.test.mjs (65 to 132 s) outside the lock, beside gates in line
+  (their own reports)
 - Control: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — since
   2026-10-11
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it

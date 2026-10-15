@@ -7,11 +7,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
+import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
+import { numstatFiles } from './lib/codex-review-parts.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
 import * as reviewRuns from './lib/codex-review-runs.mjs';
@@ -163,6 +165,13 @@ function copyOf(key, build) {
   return { root, ...ids };
 }
 
+/** Writes the `harness.json` that turns the Codex review on in `root`. The fixtures hold no program, so
+ * `auto` would read the review as off and `codex-review` would stop before it starts; declaring it on keeps
+ * these tests about the review. The file is in the first commit and never changes, so no range shows it. */
+function declareReviewOn(root) {
+  fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify({ functions: { codexReview: 'on' } })}\n`, 'utf8');
+}
+
 /** A repo whose first commit (`base`) holds `before` and second (`head`) holds `after`, both maps
  * of file name to content. */
 function makeRepoWith(before, after) {
@@ -175,6 +184,7 @@ function buildRepoWith(before, after) {
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  declareReviewOn(root);
   for (const [name, content] of Object.entries(before)) fs.writeFileSync(path.join(root, name), content, 'utf8');
   git(root, 'add', '.');
   git(root, 'commit', '-m', 'one');
@@ -1437,9 +1447,11 @@ test('--session current is a usage error since the session was removed: exit 2 w
   assert.ok(SESSION_REMOVED.includes(`on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`));
 });
 
-// The last line of the usage: a run pays for no review twice, and the flag that reviews again on purpose.
+// The last line of the usage: a run pays for no review twice, the flag that reviews again on purpose, and a
+// merge of the default branch read by what was written in it.
 const STARTS_WHERE_RECORDS_END =
-  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given.';
+  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
 
 test(`the usage names no session: its flags are those of a review, and its second line says what a review loads and that it runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`, async () => {
   const result = await run(['--cwd', '.']);
@@ -4310,6 +4322,7 @@ test('a renamed file and a binary one, in parts: the renamed file is shown whole
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  declareReviewOn(root);
   fs.writeFileSync(path.join(root, 'old.txt'), 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n', 'utf8');
   fs.writeFileSync(path.join(root, 'z.txt'), 'z1\n', 'utf8');
   fs.writeFileSync(path.join(root, 'blob.bin'), Buffer.from([0, 1, 2, 0, 255]));
@@ -4703,6 +4716,7 @@ const LEFT_OUT_LINE = 'Left out of the review: 2 files, 6 changed lines (1 Markd
 // The same, as a record holds it: the documents apart from what the project marks, which `check --push` reads.
 const LEFT_OUT = { files: 2, changedLines: 6, documents: { files: 1, changedLines: 2 }, marked: { files: 1, changedLines: 4 } };
 const BY_ITS_FILES = 'The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.';
+const MERGE_OWN_PROMPT = 'The review of a merge is asked with this command\'s own prompt: the sentence Codex writes for `--base` names a diff of two commits, not what was written in a merge.';
 
 test('a range that also changes a document and a file the project marks is asked by the files it reads, held to their changed lines alone, and says what it left out', async () => {
   const { root, base, head } = makeMixedRepo();
@@ -4808,6 +4822,8 @@ function makeSubmoduleRepo() {
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
   fs.mkdirSync(path.join(root, 'sub'));
+  declareReviewOn(root);
+  git(root, 'add', 'harness.json');
   const committed = (pointer, files, message) => {
     for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(root, name), content, 'utf8');
     git(root, 'add', ...Object.keys(files));
@@ -5249,6 +5265,150 @@ test('a merge somebody wrote in is a commit of the range: with a record for ever
   assert.deepEqual(await plan('a record covers the merge'), [`Nothing to review: ${rangeOf(base, head)} holds 3 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`]);
 });
 
+/** A branch that merged its remote's default branch and resolved a conflict in `m.txt`, while that branch also
+ * changed `s.txt`: `{ root, base, mine, main, head }`, with a record over `base..mine`. With `inMain` false,
+ * the merged side is a branch of its own, which the remote's default branch does not hold. */
+function makeResolvedMergeRepo({ inMain = true, resolution = 'M1 both\n' } = {}) {
+  const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
+  git(root, 'commit', '-am', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'side', base);
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 theirs\n', 'utf8');
+  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed on main\n', 'utf8');
+  git(root, 'commit', '-am', 'main moves');
+  const main = git(root, 'rev-parse', 'HEAD');
+  if (inMain) {
+    git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+    git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  }
+  git(root, 'checkout', '--quiet', trunk);
+  spawnSync('git', ['merge', '--no-ff', '--quiet', 'side'], { cwd: root });
+  fs.writeFileSync(path.join(root, 'm.txt'), resolution, 'utf8');
+  git(root, 'commit', '-am', 'merge main, resolving m.txt');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  return { root, base, mine, main, head };
+}
+
+/** What `git show --remerge-diff` of the merge `head` prints for `files` in `root`: what was written in it. */
+const remergeOf = (root, head, ...files) => git(root, '--literal-pathspecs', 'show', '--no-color', '--no-ext-diff', '--remerge-diff', '--format=', '--no-renames', head, '--', ...files);
+
+test('a merge of the default branch that resolved a conflict is reviewed by what was written in it: the plan names the resolved file alone', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  const nothing = startsNothing(root);
+  // As a branch asks it: from the default branch, which the records move to the first parent of the merge.
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  nothing.untouched('the plan of a merge');
+  const lines = result.out.split('\n');
+  assert.equal(lines[0], mergeReviewSaid({ head, side: main, branch: 'origin/main' }));
+  const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', head)).reduce((sum, file) => sum + file.changedLines, 0);
+  assert.deepEqual(lines.slice(1), planned(root, mine, head, [{ files: ['m.txt'], changedLines }]));
+});
+
+test('a merge already covered by a record is not reviewed again: the run says the range is covered, as without merge mode (Codex, 2026-10-14)', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  appendCodexReview(root, reviewedRecord(mine, head));
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('remerge'), result.out);
+  assert.match(result.out, /a Codex review record already covers all of them/);
+});
+
+test('a merge that took one side whole is no code commit and starts no review, as before merge mode (verifier B1, 2026-10-14)', async () => {
+  const { root, main } = makeResolvedMergeRepo({ resolution: 'M1 theirs\n' });
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('remerge'), result.out);
+  assert.match(result.out, /a Codex review record already covers/);
+});
+
+test('the diff of a merge review is a diff of the automatic merge and the merge, which shows no signature, whatever the configuration says (Codex, 2026-10-14)', () => {
+  const [head, auto] = ['b'.repeat(40), 'd'.repeat(40)];
+  const args = rangeDiff({ from: 'a'.repeat(40), head, merge: { side: 'c'.repeat(40), branch: 'origin/main', auto } }, ['--numstat'], ['m.txt']);
+  // `log.showSignature` writes a signature in what `git show` and `git log` print, never in a `git diff`.
+  assert.deepEqual(args, ['diff', '--numstat', '--no-renames', auto, head, '--', 'm.txt']);
+});
+
+test('a merge of a branch the default branch does not hold is reviewed as before: from the merged branch, the whole branch', async () => {
+  const { root, main, head } = makeResolvedMergeRepo({ inMain: false });
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('remerge'), result.out);
+  assert.deepEqual(result.out.split('\n'), planned(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
+});
+
+test('the review of a resolved merge asks Codex for a diff of two objects that exist, the automatic merge and the merge, and its record says so', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  // Codex's sandbox is read-only, and `git show --remerge-diff` prints nothing there (it writes a temporary
+  // object directory): the command computes the automatic merge's tree itself and asks for a plain diff (L12).
+  const auto = spawnSync('git', ['merge-tree', '--write-tree', mine, main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0];
+  const command = `git --literal-pathspecs diff --no-renames ${auto} ${head} -- m.txt`;
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', auto, head, '--', 'm.txt');
+  // The same lines as the remerge-diff; only the label of a marker differs, a full id for an id and subject.
+  const unlabeled = (diff) => patchKeys(diff).map((key) => key.replace(/^(.*\n-[<>]{7}) .*$/s, '$1')).sort();
+  assert.deepEqual(unlabeled(shown), unlabeled(remergeOf(root, head, 'm.txt')), 'the same lines as the remerge-diff');
+  const fake = fakeCodexInParts({ stdout: jsonl(thread, turn, cmd(command, 0, shown), msg(FINDINGS), done) });
+  const result = await run(['--base', main, '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1);
+  assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: mine, head, part: { index: 1, of: 1, files: ['m.txt'] }, merge: auto }));
+  // Why its own prompt: a merge's diff is not one of two commits, whatever files it holds (verifier A3).
+  assert.ok(result.out.includes(MERGE_OWN_PROMPT), result.out);
+  assert.ok(!result.out.includes(BY_ITS_FILES), result.out);
+  const record = readCodexReviews(root).at(-1);
+  assert.deepEqual([record.base, record.head, record.outcome, record.diff], [mine, head, 'reviewed', 'remerge']);
+  assert.equal(readCodexReviewRuns(root).at(-1).diff, 'remerge');
+});
+
+test('a commit after a merge of main that a record covers is reviewed alone, from the merge (T6, L3)', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  appendCodexReview(root, { ...reviewedRecord(mine, head), diff: 'remerge' });
+  fs.writeFileSync(path.join(root, 'a.txt'), 'A1 after the merge\n', 'utf8');
+  git(root, 'commit', '-qam', 'after the merge');
+  const after = git(root, 'rev-parse', 'HEAD');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  nothing.untouched('the plan after a reviewed merge');
+  // Four code commits past main: the change of `makeRepoWith` (on the trunk only, since main's side forks
+  // from `base`), `mine`, the merge and the one after; the records cover the first three.
+  assert.deepEqual(result.out.split('\n'), [
+    startsAt(rangeOf(main, after), 4, 3, head),
+    ...planned(root, head, after, [{ files: ['a.txt'], changedLines: 2 }]),
+  ]);
+});
+
+// Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
+const readOnlyHolds = process.platform !== 'win32' && process.getuid?.() !== 0;
+
+test('the diff a merge review reads shows every line of it where the object store is read-only, as in Codex\'s sandbox', { skip: !readOnlyHolds && 'mode bits stop no write here' }, () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  const atMerge = mergeStart(root, { given: main, tip: head });
+  assert.equal(atMerge?.from, mine);
+  const args = ['--literal-pathspecs', ...rangeDiff({ from: mine, head, merge: atMerge }, ['--no-color', '--no-ext-diff'], ['m.txt'])];
+  const writable = git(root, ...args);
+  const objects = path.join(root, '.git', 'objects');
+  const chmodAll = (mode) => spawnSync('chmod', ['-R', mode, objects]);
+  chmodAll('a-w');
+  try {
+    // The old command shows nothing there, and exits 0 all the same (L12): what this test holds against.
+    const remerge = spawnSync('git', ['--literal-pathspecs', 'show', '--remerge-diff', '--format=', '--no-renames', head, '--', 'm.txt'], { cwd: root, encoding: 'utf8' });
+    assert.equal(remerge.stdout, '', 'the remerge-diff is empty with read-only objects');
+    const readOnly = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(readOnly.status, 0, readOnly.stderr);
+    assert.equal(readOnly.stdout.trim(), writable);
+    assert.match(writable, /^-<<<<<<< /m, 'the conflict markers are shown, as the remerge-diff shows them');
+  } finally {
+    chmodAll('u+w');
+  }
+});
+
 test('when the records cannot be read against the range, the range is reviewed as it was given, and one line says so', async () => {
   const { root, base, one, three } = makeSlicedRepo();
   appendCodexReview(root, reviewedRecord(base, one));
@@ -5414,7 +5574,10 @@ test('the row of the plain check and the plan of the command size the same revie
     git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
     return root;
   };
-  for (const [which, make, rowBase] of [['a record covers the first commit', sliced, /^[0-9a-f]+\^$/], ['a merged branch that forked earlier', merged, /^origin\/main$/]]) {
+  // A branch that merged the default branch and resolved a conflict: the row sizes the review of what was
+  // written in the merge, as the command reads it (`mergeStart`).
+  const resolved = () => makeResolvedMergeRepo().root;
+  for (const [which, make, rowBase] of [['a record covers the first commit', sliced, /^[0-9a-f]+\^$/], ['a merged branch that forked earlier', merged, /^origin\/main$/], ['a merge of the default branch that resolved a conflict', resolved, /^[0-9a-f]+\^$/]]) {
     const root = make();
     const row = checkCodexReviewDebt(root);
     const said = /: the review of (\S+)\.\.HEAD is (\d+ parts?) today, (\d+ changed lines? in \d+ files?)$/.exec(row.detail);
@@ -6283,6 +6446,28 @@ test('a second recheck of the same findings is refused before anything runs, and
   assert.ok(third.err.includes(`\`codex-review --base ${fixed} --unavailable "second recheck refused: <task>"\``), third.err);
   assert.equal(fake.calls.length, 0, 'no Codex was launched');
   assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records, runs]);
+});
+
+test('a branch forked at the head of a rechecked review, without the recheck, is new code and is reviewed as any other (L8 of merge-queue)', async () => {
+  const { root, head } = await reviewedThenCorrected();
+  const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
+  assert.equal(second.code, 0, second.err);
+  // Another line from the reviewed head, which holds none of the correction the recheck read.
+  git(root, 'checkout', '-q', '-b', 'forked', head);
+  fs.writeFileSync(path.join(root, 'g.txt'), 'new code\n', 'utf8');
+  git(root, 'add', 'g.txt');
+  git(root, 'commit', '-qm', 'new code on a fork');
+  const fake = fakeCodex(reviewed(root, head));
+  const forked = await run(['--base', head, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
+  assert.equal(forked.code, 0, forked.err);
+  assert.equal(fake.calls.length, 1, 'Codex reviewed it');
+  // Codex's own `--base` review, as any plain range gets in a turn: no prompt on stdin, so no recheck one.
+  assert.equal(fake.calls[0].child.received, null, 'no prompt of its own, so no recheck prompt');
+  assert.ok(!forked.out.includes('This range is a recheck'), forked.out);
+  const line = readCodexReviewRuns(root).at(-1);
+  assert.deepEqual([line.recheck, line.prompt], [undefined, 'codex']);
+  const record = readCodexReviews(root).at(-1);
+  assert.deepEqual([record.base, record.head, record.recheckOf], [head, git(root, 'rev-parse', 'HEAD'), undefined]);
 });
 
 test('a recheck that fixed everything and blocks nothing leaves the next range a review as any other', async () => {

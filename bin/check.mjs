@@ -12,8 +12,11 @@ import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
-import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
+import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
@@ -21,7 +24,11 @@ import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
-import { TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './lib/gate-wsl.mjs';
+import { selectTests, testFilesOf } from './lib/select-tests.mjs';
+import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
+import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
+import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './lib/project-functions.mjs';
+import { clonePending } from './lib/project.mjs';
 
 export { estimateTokens };
 
@@ -269,8 +276,9 @@ function sameFolder(one, other) {
 
 /** The paths of the staged change, which is what the commit a gate guards will hold, when every one of
  * them is among `documents` (`discoverDocuments`). `null` when one is not, when nothing is staged (a
- * check run by hand guards no commit), and whenever git does not say: no git, no repository, a command
- * that fails. `null` is "run the sensors", so every doubt ends in a gate that runs what it always ran.
+ * check run by hand guards no commit; in a hook, an amend is judged against HEAD^, below), and whenever git
+ * does not say: no git, no repository, a command that fails. `null` is "run the sensors", so every doubt
+ * ends in a gate that runs what it always ran.
  *
  * What is staged is listed in the environment this process was given. A hook is given `GIT_INDEX_FILE`
  * by `git commit <path>` and `git commit -a`, which commit from an index of their own: that index is the
@@ -310,14 +318,22 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
   /** `paths` when there are some and all are documents, else `null`. */
   const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
-  const staged = changed();
-  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
-  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14).
-  if (staged.length === 0) return null;
-  const own = documentsOnly(staged);
-  if (own) return { paths: own };
   /** Whether `ref` names a commit here. */
   const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
+  const staged = changed();
+  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
+  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14). A hook is the one
+  // exception, told by `GIT_INDEX_FILE`, which git hands every pre-commit hook and a check by hand is not
+  // given: there it is `git commit --amend` (or `--allow-empty`), run while HEAD is still the commit it
+  // replaces, so the commit it makes changes against HEAD^ what HEAD did. An amend of the message of a
+  // commit of documents ran the whole suite and waited for the lock on 2026-10-15 (JH 17).
+  if (staged.length === 0) {
+    const hooked = Object.keys(process.env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE');
+    const paths = hooked && named('HEAD^') ? documentsOnly(changed('HEAD^')) : null;
+    return paths ? { paths, side: 'HEAD^' } : null;
+  }
+  const own = documentsOnly(staged);
+  if (own) return { paths: own };
   const trunk = ['origin/HEAD', 'origin/main', 'origin/master'].find(named);
   for (const side of [...(named('MERGE_HEAD') ? ['MERGE_HEAD'] : []), ...(trunk ? [trunk] : [])]) {
     const paths = documentsOnly(changed(side));
@@ -402,6 +418,59 @@ export function discoverSensorsInWsl(cwd) {
   if (!declared || !('sensorsInWsl' in declared)) return { value: false };
   if (typeof declared.sensorsInWsl === 'boolean') return { value: declared.sensorsInWsl };
   return { value: false, error: `harness.json "sensorsInWsl" must be true or false; it is ${JSON.stringify(declared.sensorsInWsl)}` };
+}
+
+/** Whether the project runs its tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): `harness.json`
+ * `"exactTests": "shadow"`. `{ value }`, `null` when it says nothing, or `{ value: null, error }` for another
+ * value: `"skip"`, which will let selection decide, is honoured only once the count of S6 holds (T4). */
+export function discoverExactTests(cwd) {
+  const { declared, error } = readHarness(cwd);
+  if (error) return { value: null, error };
+  if (!declared || !('exactTests' in declared)) return { value: null };
+  if (declared.exactTests === 'shadow') return { value: 'shadow' };
+  return { value: null, error: `harness.json "exactTests" must be "shadow"; it is ${JSON.stringify(declared.exactTests)}` };
+}
+
+/** The variable that runs a tests sensor of `node --test` that many test files at a time, for a machine whose
+ * processors make node's default too few: GitHub's runner has 2, where the default is one fewer, 1. Node takes no
+ * `--test-concurrency` in NODE_OPTIONS, so the workflow names it here (step 4 of the parallel-gate plan). */
+export const TEST_CONCURRENCY_ENV = 'JS_HARNESS_TEST_CONCURRENCY';
+
+/** `{ value }` of `TEST_CONCURRENCY_ENV` in `env`, `null` when unset, or `{ value: null, error }` for a value that
+ * is not a whole number above 0: a variable set wrong fails the gate rather than run it as nobody asked. */
+export function discoverTestConcurrency(env = process.env) {
+  const value = env[TEST_CONCURRENCY_ENV];
+  if (value === undefined) return { value: null };
+  if (/^[1-9]\d*$/.test(value)) return { value: Number(value) };
+  return { value: null, error: `${TEST_CONCURRENCY_ENV} must be a whole number above 0; it is ${JSON.stringify(value)}` };
+}
+
+/** `command`, a tests sensor of `node --test`, with `--test-concurrency=<count>`: after `--` for the `test` script. */
+const withConcurrency = (command, count) => (/^npm (run )?test$/.test(command) ? `${command} -- --test-concurrency=${count}` : `${command} --test-concurrency=${count}`);
+
+/** What the tests sensor runs when it is `npm run test` or `npm test`: the project's `test` script; else
+ * the command itself. Shadow traces `node --test` alone, which finds the test files selection is asked of. */
+function testsCommand(cwd, command) {
+  if (!/^npm (run )?test$/.test(command)) return command;
+  const script = readJson(cwd, 'package.json')?.value?.scripts?.test;
+  return typeof script === 'string' ? script : command;
+}
+
+/** The folder of the traces of the repository at `cwd`, or `null` where git names none: under its common git
+ * dir, one store for every worktree of it (the result memory, odd/tasks/result-memory.md), since a trace is
+ * keyed by content and as true in any of them. The folder a linked worktree kept under its own git dir before
+ * it is removed here, by the first gate that writes the shared one. */
+function tracesDir(cwd, spawn = spawnSync) {
+  try {
+    const asked = spawn('git', ['rev-parse', '--absolute-git-dir', '--git-common-dir'], { cwd, encoding: 'utf8' });
+    const [gitDir, common] = asked && !asked.error && asked.status === 0 ? String(asked.stdout).split(/\r?\n/).map((line) => line.trim()) : [];
+    if (!gitDir || !common) return null;
+    const shared = path.resolve(cwd, common);
+    if (path.resolve(gitDir) !== shared) fs.rmSync(path.join(gitDir, 'js-harness', 'traces'), { recursive: true, force: true });
+    return path.join(shared, 'js-harness', 'traces');
+  } catch {
+    return null; // no git on PATH
+  }
 }
 
 /** `iso` as a row says it: the local day and time, to the minute. */
@@ -688,7 +757,7 @@ export function failingTests(output) {
   return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
 }
 
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath } = {}) {
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -715,9 +784,17 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // in a temp directory acts on the repository being committed to, and once left it bare.
   // The mark of a held lock goes whenever it is not given above: the one this process carries is its
   // parent's word, and a gate that runs its sensors without the lock must not pass it on.
-  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
+  // The variable of the tests' concurrency is check's, read above: a test of check in the suite must not see it.
+  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
+  // The tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): the whole suite runs under the tracer, and
+  // the selection is asked first, so the row can say what it would have skipped and which of those failed.
+  // In WSL2 (T3b) the tracer runs in the mirror: the runner sets its variables, the traces of that place have a
+  // folder of their own, and selection is asked with the node, the system and the variables there. A node that
+  // cannot be asked, or a tree WSL does not mount, runs no shadow.
+  const inWsl = Boolean(wsl?.distro && platform === 'win32');
+  const shadow = sensor.name === 'tests' && traces?.dir ? (inWsl ? wslShadow(cwd, traces.dir, { wsl, wslPath, wslNode }) : startShadow(cwd, path.join(traces.dir, platform === 'win32' ? 'windows' : platform), { env })) : null;
   let result;
   // Where the machine opted in (`wsl`, on Windows alone), the sensor runs first in WSL2 from a mirror of
   // the tree (`wslRoute`). It runs on Windows instead where it never reached the mirror, and `fellBack`
@@ -726,7 +803,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   let fellBack;
   const startedAt = Date.now();
   try {
-    const route = wsl?.distro && platform === 'win32' ? wslRoute(cwd, home, sensor, { wsl, wslPath, gateHeld, sensorTimeout }) : null;
+    const route = wsl?.distro && platform === 'win32' ? wslRoute(cwd, home, sensor, { wsl, wslPath, gateHeld, sensorTimeout, trace: shadow?.mounted }) : null;
     if (route?.command) {
       result = await spawn(route.command, { cwd, env, timeout: sensorTimeout });
       const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
@@ -770,19 +847,79 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
   const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
-  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+  // A suite of the mirror that fell back to Windows ran untraced: it says nothing of what was skipped.
+  const shadowed = shadow && !(shadow.mounted && !ranIn) ? endShadow(shadow) : null;
+  if (shadow && !shadowed) fs.rmSync(shadow.results, { recursive: true, force: true });
+  if (shadowed) {
+    const { files, wouldSkip, failedOfSkipped } = shadowed;
+    detail += `; shadow: ${wouldSkip.length} of ${files} test files would have been skipped`;
+    if (failedOfSkipped.length > 0) detail += `, and ${failedOfSkipped.length} of them did not pass: ${failedOfSkipped.join(', ')}`;
+  }
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(ranIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+}
+
+/** The start of a tests sensor in shadow: the selection asked of the traces in `dir`, under `place` (the
+ * node, system and variables of where the suite runs, this process's by default), and `env` given the tracer
+ * where given, with a results folder each test file writes how it ended into, a file of its own. */
+function startShadow(cwd, dir, { env = null, place = {} } = {}) {
+  const root = path.resolve(cwd);
+  const tests = testFilesOf(root);
+  const { skipped } = selectTests({ tests, readTraces: (one) => readTraces(dir, one), stateOf: (key) => stateOf(root, key), ...place });
+  fs.mkdirSync(dir, { recursive: true });
+  const results = path.join(dir, `results-${process.pid}-${Date.now()}`);
+  if (env) Object.assign(env, traceEnv({ root, dir, results, existing: env.NODE_OPTIONS }));
+  return { tests, skipped, results };
+}
+
+/** A shadow of the mirror in `wsl.distro`: its traces under `dir/wsl-<distro>`, the selection asked with the
+ * version that distribution's node says and the runner's variables, and `mounted`, the folder and results folder
+ * as the runner names them; `null` where the node says no version or WSL mounts neither path. */
+function wslShadow(cwd, dir, { wsl, wslPath, wslNode }) {
+  const node = wslNode(wsl.distro, wsl.node);
+  if (!node) return null;
+  const own = path.join(dir, `wsl-${wsl.distro}`);
+  const shadow = startShadow(cwd, own, { place: { node, os: 'linux', env: traceEnvOf(RUNNER_ENV) } });
+  const mounted = { dir: wslPath(own), results: wslPath(shadow.results), preload: wslPath(TRACE_PRELOAD) };
+  if (Object.values(mounted).includes(null)) return null;
+  return { ...shadow, mounted };
+}
+
+/** What the gate log's end line keeps of a shadow: the count of the files selection would have skipped, and
+ * the names of those of them that did not pass, the count S6 reads (zero over at least 30 gates). */
+const shadowCounts = ({ files, wouldSkip, failedOfSkipped }) => ({ files, wouldSkip: wouldSkip.length, failedOfSkipped });
+
+/** The end of it: `{ files, wouldSkip, failedOfSkipped }`, the files that selection would have skipped and
+ * those of them that did not pass: whose run ended with a code other than 0, or left no end at all (killed,
+ * timed out, or a result that cannot be read), since a run not seen to pass is no evidence for S6
+ * (Codex, 2026-10-14). The results folder goes. */
+function endShadow({ tests, skipped, results }) {
+  const passed = new Set();
+  try {
+    for (const name of fs.readdirSync(results)) {
+      try {
+        const ended = JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'));
+        if (ended.code === 0) passed.add(ended.test);
+      } catch {
+        // a result cut short: its file is not seen to pass
+      }
+    }
+  } catch {
+    // no file ended, or the folder cannot be read: none is seen to pass
+  }
+  fs.rmSync(results, { recursive: true, force: true });
+  return { files: tests.length, wouldSkip: skipped, failedOfSkipped: skipped.filter((one) => !passed.has(one)) };
 }
 
 /** How one sensor runs in WSL2: `{ command }`, the command that runs the runner script it wrote into the
  * sensor's throwaway `home`, or `{ why }` where it cannot run there. `wslPath` stands in for `toWslPath`. */
-function wslRoute(cwd, home, sensor, { wsl, wslPath, gateHeld, sensorTimeout }) {
+function wslRoute(cwd, home, sensor, { wsl, wslPath, gateHeld, sensorTimeout, trace = null }) {
   const tree = path.resolve(cwd);
   const source = wslPath(tree);
   if (source === null) return { why: `${tree} is on no drive letter WSL mounts` };
   const runner = path.join(home, 'gate-wsl.sh');
   const mounted = wslPath(runner);
   if (mounted === null) return { why: `${runner} is on no drive letter WSL mounts` };
-  fs.writeFileSync(runner, runnerScript({ source, mirror: mirrorName(tree), node: wsl.node, command: sensor.command, held: gateHeld, heldVariable: GATE_HELD_ENV, seconds: innerSeconds(sensorTimeout) }));
+  fs.writeFileSync(runner, runnerScript({ source, mirror: mirrorName(tree), node: wsl.node, command: sensor.command, held: gateHeld, heldVariable: GATE_HELD_ENV, seconds: innerSeconds(sensorTimeout), trace }));
   return { command: wslCommand(wsl.distro, mounted) };
 }
 
@@ -835,6 +972,8 @@ export const GATE_WAIT_USAGE =
  * longer than its bound. */
 function refusalSaid({ refused, holder, line, waitedMs, stillMs, besideOlder }, waitMinutes) {
   if (refused === 'held') return `${gateOf(holder)} holds the machine's gate lock, and --no-wait was given`;
+  // Its launcher ended (./lib/launcher.mjs, odd/tasks/orphan-gate.md): nobody waits for what it would run.
+  if (refused === 'launcher gone') return 'the process that started this gate ended while it waited, so it gave up its place in the line';
   if (refused === 'ahead') {
     return `${waitingGateOf(line?.head)} waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`;
   }
@@ -907,7 +1046,7 @@ export const GATE_WAIT_SAID_MS = 1000;
  * pass what their environment says (`CLAUDE_CODE_SESSION_ID`).
  * `take` stands in for `takeGateLock`, so a test stands in for the lock or runs the real one on its own
  * clock. */
-export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null }, take = takeGateLock) {
+export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null, stillWanted }, take = takeGateLock) {
   const waitMs = waitMinutes * 60_000;
   const met = new Map();
   // One entry for each token, to which a later telling adds what the entry does not have yet: a holder's
@@ -939,7 +1078,8 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
   let lock;
   const askedAt = Date.now();
   try {
-    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait });
+    // `stillWanted`, from `js-harness gate` alone: whether its launcher lives (`takeGateLock`).
+    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait, ...(stillWanted ? { stillWanted } : {}) });
   } catch (err) {
     return { without: `the machine's gate lock, which could not be taken (${err instanceof Error ? err.message : String(err)})`, waitedMs: Date.now() - askedAt, waitedFor: waitedFor() };
   }
@@ -1111,6 +1251,10 @@ export async function checkSensors(cwd, deps = {}, lock) {
   if (sameTree.error) return [{ name: 'sensors', pass: false, detail: sameTree.error }];
   const inWsl = discoverSensorsInWsl(cwd);
   if (inWsl.error) return [{ name: 'sensors', pass: false, detail: inWsl.error }];
+  const exact = discoverExactTests(cwd);
+  if (exact.error) return [{ name: 'sensors', pass: false, detail: exact.error }];
+  const concurrency = discoverTestConcurrency();
+  if (concurrency.error) return [{ name: 'sensors', pass: false, detail: concurrency.error }];
   const quick = discoverDocumentSensors(cwd, declared.documents);
   if (quick.error) return [{ name: 'sensors', pass: false, detail: quick.error }];
   // Git is asked only by a project that declares documents, and has a sensor their commit would not run
@@ -1195,7 +1339,19 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // log says the sensors took: a fraction of one.
     let code;
     try {
-      for (const sensor of sensors) ran.push(await checkSensor(cwd, sensor, { ...deps, gateHeld, wsl }));
+      for (const sensor of sensors) {
+        // The tests sensor in shadow, where the project says so and its suite is `node --test` alone; a
+        // suite of another command runs as it did, and its row says why it has no shadow.
+        const tests = exact.value === 'shadow' && sensor.name === 'tests' ? testsCommand(cwd, sensor.command) : null;
+        const dir = tests === 'node --test' ? tracesDir(cwd, deps.git) : null;
+        // The tests sensor that many files at a time where the variable says so, when it is `node --test`.
+        const concurrent = concurrency.value !== null && sensor.name === 'tests' ? testsCommand(cwd, sensor.command) : null;
+        const asked = concurrent === 'node --test' ? { ...sensor, command: withConcurrency(sensor.command, concurrency.value) } : sensor;
+        const row = await checkSensor(cwd, asked, { ...deps, gateHeld, wsl, traces: dir ? { dir } : null });
+        if (tests !== null && tests !== 'node --test') row.detail += `; harness.json "exactTests" is "shadow", but the tests run by \`${tests}\`, not \`node --test\`: no shadow`;
+        if (concurrent !== null && concurrent !== 'node --test') row.detail += `; ${TEST_CONCURRENCY_ENV} is ${concurrency.value}, but the tests run by \`${concurrent}\`, not \`node --test\`: they run as written`;
+        ran.push(row);
+      }
       result = sensorsResult(ran);
       // A sensor that came back to Windows ran where its key does not say: it proves no tree.
       const ranWhereKeyed = ran.every((row) => (place ? row.ranIn === 'wsl' : !row.ranIn));
@@ -1204,7 +1360,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
       const failing = ({ pass, output }) => (pass ? [] : failingTests(output));
-      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }) })), code });
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
@@ -1250,8 +1406,11 @@ function whyNoAssessment(result, timeout) {
  * at every commit instead of depending on anyone remembering to ask. Informational and fail-open: gentle-ai
  * owns review and RDD is the user's switch, so a missing, failing or slow gentle-ai never turns a commit red.
  * Only an explicit `off` skips the assessment; an unreadable mode counts as on, the switch's default. */
-export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
+export function checkReview(cwd, { spawn = spawnSync, git = spawnSync, timeout = 20000 } = {}) {
   const row = (detail, lines) => ({ name: 'review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  // With the Codex review off here, gentle-ai's is the one review of the code: it is said due from medium risk up,
+  // his rule (odd/tasks/on-demand-functions.md, S9), and its absence is said too.
+  const codexOff = codexSwitchHere(cwd, git).value === 'off';
   const notFound = () => row('gentle-ai was not found, so review by risk was not assessed');
   const isMissing = (result) => result.error?.code === 'ENOENT';
 
@@ -1259,7 +1418,8 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   if (isMissing(mode)) return notFound();
   const status = mode.error || mode.status !== 0 ? null : jsonObject(mode.stdout)?.status;
   if (isObject(status) && status.effective === 'off') {
-    return row(`RDD is off (${status.source ?? 'unknown source'}), so no review was assessed`);
+    const off = `RDD is off (${status.source ?? 'unknown source'}), so no review was assessed`;
+    return row(codexOff ? `${off}, and the Codex review is off here: no review reads this project's code` : off);
   }
 
   // Parsed whatever the exit code: on a clean tree gentle-ai exits non-zero and still prints the JSON.
@@ -1284,10 +1444,39 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   }
 
   const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
-  const detail = `${risk} risk, ${count(paths, 'path')}, ${count(changed, 'line')}: review ${due ? 'due' : 'not due'} (${dueReason})`;
+  // His answer (S9) is high and medium: gentle-ai may call a high change not due (under its budget), and with
+  // no Codex review it is due all the same.
+  const dueHere = !due && codexOff && (risk === 'medium' || risk === 'high');
+  const why = dueHere ? `${risk} risk and the Codex review is off here` : dueReason;
+  const detail = `${risk} risk, ${count(paths, 'path')}, ${count(changed, 'line')}: review ${due || dueHere ? 'due' : 'not due'} (${why})`;
   const next = assessed.next_transition?.command;
   if (due && typeof next === 'string') lines.push(`next: ${next}`);
   return row(detail, lines);
+}
+
+/** The `functions` row (odd/tasks/on-demand-functions.md): a switch of `harness.json` "functions" that cannot be
+ * read fails the gate, as `sameTree` does, since every switch is then read as on and nothing says so but this;
+ * a clone that is not what its switches ask is said so, one line a difference, and passes, since a gate writes
+ * nothing and `js-harness functions apply` does. No row where the switches are read and applied. */
+export function checkFunctions(cwd) {
+  // Whether the switches can be read does not depend on the files of the tree, so no git is asked: a static
+  // row is all a gate knows before its sensors, and one that fails stops the gate before any git. A
+  // harness.json that is no JSON at all is the `sensors` row's to say, which reads the same file: one fault,
+  // one row. This one says what is wrong in "functions".
+  const harness = harnessOfTree(cwd);
+  if (harness.error) return [];
+  const { errors } = functionsOf(harness, { paths: [] });
+  if (errors.length === 0) return [];
+  return [{ name: 'functions', pass: false, detail: errors.join('; '), lines: ['until it is fixed every switch is read as on; js-harness functions shows each'] }];
+}
+
+/** The `functions` information row: one line for each way this clone is not what its switches ask, or no row.
+ * Read-only, since a gate writes nothing, and asked only of a gate that was not stopped, as the `review` row is.
+ * A clone the harness never set up holds no manifest to drift from and is told nothing (`clonePending`). */
+export function checkFunctionsPending(cwd, { spawn = spawnSync } = {}) {
+  const pending = clonePending(cwd, { spawn });
+  if (pending.length === 0) return [];
+  return [{ name: 'functions', pass: true, info: true, detail: 'this clone is not what its switches ask: js-harness functions apply makes it so', lines: pending }];
 }
 
 /** What the Codex review records say of the code commits between the default branch of `remote` and
@@ -1354,19 +1543,180 @@ function coveredDetail({ codeCommits, base }) {
     : `no code commits since ${base}`;
 }
 
+/** What the Codex review the pushed branch ends on still owes: `null` when it owes nothing, or when nothing
+ * can be proven; `{ refuse: true, detail, lines }` when it owes a correction never rechecked; and
+ * `{ refuse: false, lines }`, a warning the passing row carries, when a recheck left findings open.
+ *
+ * Why. A record covers its commits whatever its review found, so coverage alone let a branch push right
+ * after Codex called its head incorrect (2026-10-14: two P2 findings, then "all covered by a Codex review
+ * record"). The review the branch ends on is the last record that covers its newest code commit; what it
+ * owes is what `codex-review` reads to decide whether the next range is a recheck (`recheckState`). So this
+ * refuses the head whose next review would be a recheck, and nothing else. The head of a recheck that left
+ * findings open passes with a warning that names them: a second recheck is not run, so refusing it would
+ * leave a session away from the user no way forward, and whether a disputed finding is waived is the user's
+ * call (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./lib/codex-review-runs.mjs says why);
+ * the run log, where the findings are kept, only adds this refusal, and a log that cannot be read proves
+ * nothing owed. Documents committed after that head change nothing here: they are no code commit. */
+function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
+  const newest = codeCommits[0];
+  if (newest === undefined) return null;
+  // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
+  // review, so one written later, as to a document commit after the head, must not hide the debt.
+  const last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1);
+  if (last === undefined) return null;
+  const from = last.rec.head;
+  let records;
+  let runs;
+  try {
+    records = readCodexReviews(cwd, { spawn });
+    runs = readCodexReviewRuns(cwd, { spawn });
+  } catch {
+    return null;
+  }
+  const state = recheckState({ from, records, runs });
+  if (state.kind === 'review' || (state.kind === 'refused' && state.open === 0)) return null;
+  const shortOf = (id) => gitOut(spawn, cwd, ['rev-parse', '--short', id]) ?? id.slice(0, 7);
+  const findings = (n) => `${n} finding${n === 1 ? '' : 's'}`;
+  if (state.kind === 'recheck') {
+    const at = shortOf(from);
+    return {
+      refuse: true,
+      detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
+      lines: [...state.findings.map(priorLine), `commit the correction, then recheck it: js-harness codex-review --base ${at}`],
+    };
+  }
+
+  // A recheck that left findings open, which a second recheck may not take up: the recheck is the last
+  // reviewed record that ends at `from` when it is one, else the last one of the findings that ended there.
+  const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
+  const atFrom = reviewed.filter((rec) => rec.head === from).at(-1);
+  const recheck = typeof atFrom?.recheckOf === 'string' ? atFrom : reviewed.filter((rec) => rec.recheckOf === from).at(-1);
+  const id = Array.isArray(recheck.runs) ? recheck.runs.at(-1) : recheck.run;
+  const line = runs.findLast((one) => one?.id === id);
+  const answered = runAnswerFindings(line);
+  const prior = line?.recheck?.findings;
+  // The findings it left open are those its answer marked not fixed or blocking, or did not mark, as
+  // `codex-review` counted them; a line that kept no answer or no count lists none, and still refuses.
+  const read = answered !== null && Number.isInteger(prior) ? classifyRecheck({ findings: answered }, prior) : null;
+  const open = read === null ? [] : [...read.notFixed, ...read.blocking, ...read.unmarked];
+  const at = shortOf(recheck.head);
+  const left = state.open === null ? 'findings open (its counts were not kept)' : `${findings(state.open)} open`;
+  return {
+    refuse: false,
+    lines: [
+      `warning: the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(state.of)}`,
+      ...open.map(priorLine),
+      // No skip is offered: a skip records no correction.
+      `the push passes; the user decides whether they are waived, or a correction is committed as code and reviewed`,
+    ],
+  };
+}
+
 /** The `--push` row: every commit between the remote's default branch and `head` that changes a file
  * a review reads (not a document, not a path the project marks; a merge by the files somebody wrote
  * in it, so one that only brings two sides together needs none: `reviewCoverage`)
  * must lie in a range some `codex-review` record covers (any
  * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
- * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
+ * nothing for a review to look at, such as a change and its revert; both are listed), and the review the
+ * branch ends on must owe no unrechecked correction (`correctionOwed`; a recheck that left findings open
+ * passes with a warning that names them). Plain `check` never
  * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed: what it
  * runs is `checkCodexReviewDebt`, which reads the same records and fails nothing. */
 export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
+  // The switch is read at the commit pushed, before the remote is resolved: a project with the review off is
+  // never refused for a remote this row cannot measure. One that cannot be read is read as on, and said.
+  const git = gitIn(cwd, spawn);
+  const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])?.trim();
+  const atTip = tip ? codexSwitchAt(git, tip) : null;
+  if (atTip?.value === 'off') {
+    const row = { name: 'codex-review', pass: true, detail: `the Codex review is off at the pushed commit (${atTip.because}), so no record is asked for` };
+    const turned = turnsReviewOff(cwd, git, spawn, remote, tip);
+    return turned ? { ...row, lines: [turned] } : row;
+  }
+  const row = codexCoverageRow(cwd, head, { spawn, remote });
+  if (!atTip?.errors.length) return row;
+  return { ...row, lines: [...atTip.errors.map((error) => `read as on: ${error}`), ...(row.lines ?? [])] };
+}
+
+/** The Codex review's switch at the commit `rev`, read from that commit's own files: `{ value, because, errors }`. */
+function codexSwitchAt(git, rev) {
+  const { errors, resolved } = functionsOf(harnessOfCommit(git, rev), commitTree(git, rev));
+  return { ...resolved.codexReview, errors };
+}
+
+/** The top of the working tree `cwd` is in: the nearest folder up from it that holds `.git` (a folder, or the
+ * file of a worktree), found without starting git, since the rows that read it count their git processes.
+ * `cwd` itself where none does. */
+function topOf(cwd) {
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    if (path.dirname(dir) === dir) return cwd;
+  }
+}
+
+/** The Codex review's switch in the working tree of the repository `cwd` is in, read at its top: `cwd` may be
+ * a folder below it. Outside a repository, `cwd` itself. */
+function codexSwitchHere(cwd, spawn) {
+  const { errors, resolved } = functionsOf(harnessOfTree(topOf(cwd)), workingTree(gitIn(cwd, spawn)));
+  return { ...resolved.codexReview, errors };
+}
+
+/** The line of a push that turns the review off where the default branch of `remote` has it on, or `null`:
+ * the switch is the pushed commit's to say, and the push says it in plain sight. */
+function turnsReviewOff(cwd, git, spawn, remote, tip) {
+  const remotes = git(['remote'])?.split('\n').map((line) => line.trim()) ?? [];
+  if (!remotes.includes(remote)) return null;
+  const branch = defaultBranch(spawn, cwd, remote);
+  if (!branch || codexSwitchAt(git, branch.ref).value !== 'on') return null;
+  return `this push turns the Codex review off: it is on at ${branch.label} and off at ${git(['rev-parse', '--short', tip]).trim()}`;
+}
+
+/** git's empty tree: the base a diff of everything a commit holds is taken from. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+/** The push row of the first push of a project to an empty repository, or `null` when it is not one. His
+ * answer (odd/tasks/on-demand-functions.md, S10): it passes and says so, with what went unread and the
+ * command that reviews it, which plans its cost first. It is one only where the remote holds no branch at all,
+ * asked of the remote itself (`git ls-remote`), since a clone that never fetched holds no refs of a remote that
+ * has branches; a remote that cannot be asked is no first push, and the row fails as before. */
+function firstPushRow(cwd, head, { spawn, remote }) {
+  const remotes = gitOut(spawn, cwd, ['remote'])?.split('\n').map((line) => line.trim()) ?? [];
+  if (!remotes.includes(remote)) return null;
+  if (gitOut(spawn, cwd, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/${remote}/`]) !== '') return null;
+  let listed;
+  try {
+    // Asked only where no ref of the remote is here, so once a project; a remote that does not answer in 20 s is
+    // no first push, and the row fails as before rather than hold the push.
+    listed = spawn('git', ['ls-remote', '--heads', remote], { cwd, encoding: 'utf8', timeout: 20000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+  } catch {
+    return null;
+  }
+  if (!listed || listed.error || listed.status !== 0 || listed.stdout.trim() !== '') return null;
+  const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
+  const commits = tip && gitOut(spawn, cwd, ['rev-list', '--count', tip]);
+  const roots = tip && gitOut(spawn, cwd, ['rev-list', '--max-parents=0', tip])?.split('\n').filter(Boolean);
+  if (!commits || !roots?.length) return null;
+  const first = roots[roots.length - 1].slice(0, 7);
+  const size = reviewSize(spawn, cwd, EMPTY_TREE, tip);
+  const unread = size === null ? 'git could not size them' : `${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}`;
+  return {
+    name: 'codex-review',
+    pass: true,
+    detail: `${remote} holds no branch yet, so this first push passes with no Codex review; from the next push on, every code commit is measured against what it leaves there`,
+    lines: [
+      `${counted(Number(commits), 'commit')} went unread by Codex: ${unread}`,
+      `review them when you choose: js-harness codex-review --base ${first} --plan prints the cost and starts nothing; without --plan it reviews them`,
+      `${first} itself, the first commit, is in no range: what it holds stays unread`,
+    ],
+  };
+}
+
+/** The push row with the review on: what the records say of the code commits pushed. */
+function codexCoverageRow(cwd, head, { spawn, remote }) {
   const name = 'codex-review';
   const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
   const state = codexReviewCoverage(cwd, head, { spawn, remote });
-  if (state.unknown) return fail(state.unknown.detail, state.unknown.lines);
+  if (state.unknown) return firstPushRow(cwd, head, { spawn, remote }) ?? fail(state.unknown.detail, state.unknown.lines);
   const { tip, baseRef, base, codeCommits, covers, uncovered, note } = state;
   if (uncovered.length) {
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
@@ -1390,10 +1740,14 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
 
+  const owed = correctionOwed(cwd, state, { spawn });
+  if (owed?.refuse) return fail(`${owed.detail}${note}`, owed.lines);
+
   // The records that cover a code commit here and are no review of Codex's, each as a line that says which
   // it is and why: an explicit skip, or a range that held nothing to review. The detail counts the commits
   // as covered by a record, which they are; these lines are what keeps that from reading as "reviewed".
   const lines = notReviews(state).map((rec) => `${NOT_A_REVIEW[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason ?? 'no reason given'}`);
+  if (owed !== null) lines.push(...owed.lines);
   return { name, pass: true, detail: `${coveredDetail(state)}${note}`, ...(lines.length ? { lines } : {}) };
 }
 
@@ -1405,10 +1759,12 @@ const counted = (count, noun) => `${String(count).replace(/\B(?=(\d{3})+(?!\d))/
  * which are those of the files a review reads; `leftOut` is how many files of the range it leaves out, by
  * the marks of the commit `tip`, as that command reads them. `null` when git cannot say. Renames are off,
  * as in that command. */
-function reviewSize(spawn, cwd, from, tip) {
+function reviewSize(spawn, cwd, from, tip, merge = null) {
   // The output ends with the NUL that ends its last record, which is no whitespace: `gitOut` trims nothing of it.
   // `--no-relative`, as for the commits (`reviewCoverage`): every file of the range, named from the top.
-  const numstat = from === null ? null : gitOut(spawn, cwd, ['diff', '--numstat', '-z', '--no-renames', '--no-relative', from, tip]);
+  // A merge of the default branch is sized by what was written in it, as that command reads it (`mergeStart`).
+  const args = merge === null ? ['diff', '--numstat', '-z', '--no-renames', '--no-relative', from, tip] : rangeDiff({ from, head: tip, merge }, ['--numstat', '-z', '--no-relative']);
+  const numstat = from === null ? null : gitOut(spawn, cwd, args);
   if (numstat === null) return null;
   try {
     const files = numstatFiles(numstat);
@@ -1442,6 +1798,9 @@ export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin'
   const row = (detail, lines) => ({ name: 'codex-review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
   const cannotTell = (why) => row(`cannot tell how much code waits for a Codex review: ${why}`);
   try {
+    // Inside the guard: the switch is read from files and git as the rest is, and fails nothing either.
+    const here = codexSwitchHere(cwd, spawn);
+    if (here.value === 'off') return row(`the Codex review is off here (${here.because}): no code waits for one`);
     return codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
   } catch (err) {
     return cannotTell(`reading the commits, their Codex review records or the size of their review failed (${err instanceof Error ? err.message : String(err)})`);
@@ -1469,9 +1828,13 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   // Where git did not say which commit the range starts at, no start is known and none is sized: taken
   // for two histories that share none, a later start would be held to no commit (`rangeStart`).
   const range = rangeStart(cwd, { base: baseRef, tip, spawn });
-  const { start, before } = range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
+  // A merge of the default branch at the tip, after a branch whose every other code commit has a record, is
+  // reviewed from its first parent by what was written in it (`mergeStart`), and named as `<merge>^`.
+  const merge = range.unknown || range.from === null ? null : mergeStart(cwd, { given: range.from, tip, spawn, remote });
+  const atMerge = merge === null ? null : uncovered.find((commit) => commit.id === tip);
+  const { start, before } = atMerge ? { start: merge.from, before: atMerge } : range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
   const baseArg = before === null ? base : `${before.shortId}^`;
-  const size = reviewSize(spawn, cwd, start, tip);
+  const size = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
   const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
   let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;
@@ -1594,7 +1957,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
@@ -1624,13 +1987,15 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     rows.push(...sensed);
     stopped = sensed.some((row) => row.stopped === true);
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
-    if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
+    if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi, git: deps.git }));
   }
   // How much code waits for a Codex review, said at every commit and failing none: the row that fails is the
   // push's. It reads commits and records, never the working tree, so the inner run prints it as well.
   // `deps.git` stands in for `spawnSync` here and where a gate asks git what is staged or what is untracked
   // in its working tree (`checkSensors`), since `deps.spawn` is what runs a sensor.
-  if (!push && !stopped) rows.push(checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
+  // A clone that is not what its switches ask is said after the sensors, as the review is, and not by a gate
+  // that stopped: it reads git, which a stopped gate asks nothing of.
+  if (!push && !stopped) rows.push(...checkFunctionsPending(cwd, { spawn: deps.git }), checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
 
   for (const row of rows) {
     console.log(formatRow(row));
