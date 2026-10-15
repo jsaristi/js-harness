@@ -300,7 +300,8 @@ draft, mergeable, on main, a gentle-ai line in its body, the latest run of its h
 the base that run tested (from its checkout log) is today's main, or behind it only by documents
 with a clean merge. Exit 0 ready, 3 stale, 4 run missing, pending or red, 1 otherwise. A stale
 pull request gets a fresh run by closing and reopening it, once GitHub has recomputed its merge
-against main, which it says.
+against main, which it says. One that conflicts with main is told the files, and to move its own
+change out of them in a small commit before merging main: a clean merge costs no review of its own.
 
 ```console
 $ js-harness merge-ready 137

@@ -14,6 +14,11 @@
 // or exposes data, and its record names that head (`recheckOf`). A range that starts at the head of a
 // recheck that left a finding open is refused, with what to record instead. No flag skips it.
 //
+// A merge of the default branch at HEAD, after a branch whose other code commits all have a record, is
+// reviewed from its first parent by what was written in it (`mergeStart` in ./lib/codex-review-coverage.mjs):
+// its diff with the tree that merging its two parents again gives, conflict markers included, which is the
+// resolution of its conflicts and any edit made in it, not what the merge brought in (odd/tasks/merge-review.md).
+//
 // A review runs on one model at one effort, `REVIEW_MODEL` at `REVIEW_EFFORT`, which the command names to
 // Codex itself and no flag changes (Sebastián, 2026-10-08; odd/tasks/codex-review-cost.md). The session's
 // own rollout file says what it ran with, and the review is held to that: one that ran on anything else
@@ -927,6 +932,10 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, wher
 // patch read by one section a file (`patchOfRead`) would be a section short, or take the summary for the
 // end of the file before it.
 const SUBMODULE_AS_A_FILE = '--submodule=short';
+
+/** Why the review of a merge is asked with this command's own prompt, whatever was asked for: Codex's own
+ * `--base` reads a diff of two commits, and a merge is read against its automatic merge (verifier A3). */
+const MERGE_OWN_PROMPT = 'The review of a merge is asked with this command\'s own prompt: the sentence Codex writes for `--base` names a diff of two commits, not what was written in a merge.';
 
 /** The line that says a review reads a merge by what was written in it (`mergeStart`). */
 export function mergeReviewSaid({ head, side, branch }) {
@@ -1880,7 +1889,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // A range that leaves files out, whose other files fit in one part: one session, asked by its files
       // as a part is, since Codex's own review of a range reads every file of it. Said when the prompt
       // that was asked for, or the default, is not the one that is sent.
-      if (!own) log('The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.');
+      if (!own) log(merge !== null ? MERGE_OWN_PROMPT : 'The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.');
       const [part] = parts;
       const sole = await attempt({
         expectedKeys: part.expected,
@@ -1901,7 +1910,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // Which bound of a part the range is over: its changed lines, or, when those would fit, its files alone.
       const over = lines > args.partLines ? `more than the ${thousands(args.partLines)} a part holds` : `more files than the ${thousands(PART_MAX_FILES)} a part holds`;
       log(`The range ${range} changes ${counted(lines, 'line')} in ${counted(files, 'file')}${read}, ${over}, so it is reviewed in ${parts.length} parts, one after another.`);
-      if (!own) log('Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
+      if (!own) log(merge !== null ? MERGE_OWN_PROMPT : 'Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
       // One part at a time, in order, and the next only once the one before it has passed: the first that
       // does not pass ends the run with the exit code of its own failure. The lines of the parts before
       // it stay in the run log, as measurements; none of them is a review of the range, so nothing they
