@@ -8,6 +8,7 @@ import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from '../check.mjs';
 import { REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS } from '../codex-review.mjs';
 import { DEFAULT_TIMEOUT_MINUTES } from '../contract.mjs';
 import { GATE_MAX_MINUTES } from '../gate.mjs';
+import { WAIT_EVERY_SECONDS, WAIT_FOR_MINUTES } from '../wait.mjs';
 import { GATE_WAIT_MS } from './gate-lock.mjs';
 import { GATE_COMMAND_MAX, GATE_LOG_MAX_BYTES } from './gate-log.mjs';
 import { ruleValue } from './rules.mjs';
@@ -44,6 +45,11 @@ test('the longest command a line of the gate log holds is the declared gate-log-
 
 test('the bound of a command run under the gate lock is the declared gate-max', () => {
   assert.equal(GATE_MAX_MINUTES, ruleValue('gate-max', 'minutes'));
+});
+
+test('how often js-harness wait checks, and how long it waits, are the declared wait-every and wait-for', () => {
+  assert.equal(WAIT_EVERY_SECONDS, ruleValue('wait-every', 'seconds'));
+  assert.equal(WAIT_FOR_MINUTES, ruleValue('wait-for', 'minutes'));
 });
 
 test('the wait of a gate lock is the declared gate-wait in milliseconds, and a whole number above 0', () => {

@@ -226,6 +226,24 @@ export const RULES = [
     "alias": "haiku"
   },
   {
+    "id": "wait-every",
+    "subject": "how often js-harness wait checks its condition, unless --every says otherwise",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 120,
+    "unit": "seconds",
+    "flag": "--every"
+  },
+  {
+    "id": "wait-for",
+    "subject": "how long js-harness wait waits before it says the time ran out, unless --for says otherwise",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 480,
+    "unit": "minutes",
+    "flag": "--for"
+  },
+  {
     "id": "work-sessions",
     "subject": "the most work sessions open at one time",
     "owner": "sebastian",
