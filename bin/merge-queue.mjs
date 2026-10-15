@@ -15,7 +15,8 @@ export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <p
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
 number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
-review record for every code commit, and no conflict with the candidate so far. It names each pull
+review record for every code commit, and no conflict with the candidate so far. A pull request GitHub
+has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
 request it leaves out and why.
 
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
@@ -227,7 +228,9 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
   // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later.
   const candidates = [];
   for (const pr of [...listed].sort((a, b) => a.number - b.number)) {
-    const problems = pullRequestProblems(pr);
+    // UNKNOWN is GitHub not having computed the merge yet, for about a minute after main moves: the merge into
+    // the candidate below is the queue's own test of it, so it decides. CONFLICTING is GitHub's answer.
+    const problems = pullRequestProblems(pr.mergeable === 'UNKNOWN' ? { ...pr, mergeable: 'MERGEABLE' } : pr);
     if (problems.length) {
       stdout(`PR ${pr.number} is left out: ${problems.join(' ')}`);
       continue;
