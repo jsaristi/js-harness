@@ -15,14 +15,35 @@ export function isMemoryIndex(filePath) {
   return typeof filePath === 'string' && MEMORY_INDEX.test(filePath);
 }
 
-/** Why the `Write` or `Edit` of `toolInput` is refused, or null: the first line it writes into a memory index that is
- * longer than the limit, with its number in what is written (the whole file for a Write, the new text for an Edit). */
-export function memoryIndexRefusal(toolName, toolInput) {
+/** The file the `Write` or `Edit` of `toolInput` leaves, given the file on disk (`before`, null when unreadable), or
+ * null when it cannot be known. An Edit whose file cannot be read, or whose old text is not in it, is judged by its
+ * new text alone. The replacement is spliced, not passed to `String.replace`, so `$&` in the text stays literal. */
+function resultOf(toolName, toolInput, before) {
+  if (toolName === 'Write') return typeof toolInput.content === 'string' ? toolInput.content : null;
+  if (toolName !== 'Edit' || typeof toolInput.new_string !== 'string') return null;
+  const { old_string: oldText, new_string: newText } = toolInput;
+  const at = before === null || typeof oldText !== 'string' || oldText === '' ? -1 : before.indexOf(oldText);
+  if (at === -1) return newText;
+  if (toolInput.replace_all === true) return before.split(oldText).join(newText);
+  return before.slice(0, at) + newText + before.slice(at + oldText.length);
+}
+
+/** Why the `Write` or `Edit` of `toolInput` is refused, or null: the first line of the file it leaves that is longer
+ * than the limit and was not already in the file, numbered in that file. `readIndex(path)` reads the file on disk; a
+ * line already long there is the hygiene pass's to shorten, not a reason to block every other edit until then. */
+export function memoryIndexRefusal(toolName, toolInput, readIndex) {
   if (!isMemoryIndex(toolInput?.file_path)) return null;
-  const text = toolName === 'Write' ? toolInput.content : toolName === 'Edit' ? toolInput.new_string : null;
+  let before = null;
+  try {
+    before = readIndex(toolInput.file_path);
+  } catch {
+    // A new index, or one that cannot be read: every line of the call is judged.
+  }
+  const text = resultOf(toolName, toolInput, typeof before === 'string' ? before : null);
   if (typeof text !== 'string') return null;
+  const existing = new Set(typeof before === 'string' ? before.split(/\r?\n/) : []);
   const lines = text.split(/\r?\n/);
-  const at = lines.findIndex((line) => [...line].length > INDEX_LINE_CHARS);
+  const at = lines.findIndex((line) => [...line].length > INDEX_LINE_CHARS && !existing.has(line));
   if (at === -1) return null;
   const length = [...lines[at]].length;
   return `js-harness guard: line ${at + 1} of the memory index is ${length} characters, over the host's ${INDEX_LINE_CHARS} `

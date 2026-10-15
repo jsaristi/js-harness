@@ -424,7 +424,9 @@ gate turn while another gate holds the machine's lock; and a `Write` or `Edit` t
 over 150 characters, the host's own limit, in a project's memory index
 (`~/.claude/projects/<project>/memory/MEMORY.md`), which every session reads on every turn. A
 refusal is printed as the hook's deny, with the reason and the right value; any other call runs
-as it was. A `Write` or `Edit` of any other file loads nothing but that last check.
+as it was. A `Write` or `Edit` of any other file loads nothing but that last check. An `Edit` is
+judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
+line that was already long there is left to the memory hygiene pass rather than blocking the edit.
 
 It always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
 The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project

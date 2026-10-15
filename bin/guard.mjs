@@ -8,7 +8,8 @@
 //   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a `node --test` of
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
 //     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8).
-//   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters
+//   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters, judged in the file the
+//     call leaves (read from disk for an Edit) and only when the call brings it
 //     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4). The hook runs on every Write and Edit of
 //     every session, so that path loads nothing but that file: the modules of the other checks are imported only for
 //     the tools they check.
@@ -48,10 +49,10 @@ function rulesTextOf(root, readFile) {
 }
 
 /** Why the call of `payload` is refused, or null. */
-async function refusalOf(payload, { now, projectRoot, readFile, testRun }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
-  if (FILE_TOOLS.has(tool)) return memoryIndexRefusal(tool, input);
+  if (FILE_TOOLS.has(tool)) return memoryIndexRefusal(tool, input, readIndex);
   if (tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
   const { allowedModels, backtickRefusal, hourRefusal, modelRefusal } = await import('./lib/guard.mjs');
   if (tool === 'Agent') {
@@ -73,6 +74,7 @@ export async function guardMain(argv, {
   stdout = (text) => process.stdout.write(text),
   stderr = (text) => process.stderr.write(text),
   testRun,
+  readIndex = (file) => fs.readFileSync(file, 'utf8'),
 } = {}) {
   if (argv.length !== 1 || argv[0] !== '--hook') {
     stderr(USAGE);
@@ -80,7 +82,7 @@ export async function guardMain(argv, {
   }
   let reason = null;
   try {
-    reason = await refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun });
+    reason = await refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun, readIndex });
   } catch {
     return 0;
   }

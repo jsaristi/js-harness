@@ -11,7 +11,7 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, index = null } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -26,6 +26,10 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     testRun: (command) => testRunWarning(command, { env: {}, holder: () => held }),
+    readIndex: () => {
+      if (index === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
+      return index;
+    },
   });
   return { code, out: out.join(''), err: err.join('') };
 }
@@ -113,9 +117,33 @@ test('short index lines, a note of the memory, and any other file pass, without 
   ];
   for (const payload of calls) {
     const out = [];
-    const code = await guardMain(['--hook'], { readStdin: () => JSON.stringify(payload), stdout: (t) => out.push(t), stderr: () => {}, projectRoot: () => assert.fail('git asked'), ...untouched });
+    const code = await guardMain(['--hook'], { readStdin: () => JSON.stringify(payload), stdout: (t) => out.push(t), stderr: () => {}, projectRoot: () => assert.fail('git asked'), readIndex: () => '', ...untouched });
     assert.deepEqual({ code, out: out.join(''), err: '' }, quiet, payload.tool_input.file_path);
   }
+});
+
+// The verifier of T4: an index line grows by a short clause, a join or a replace_all far more often than by a whole new
+// line, so an Edit is judged by the file it leaves, read from disk, with the line numbered in that file.
+const onDisk = `- [B](b.md) — short\n- [A](a.md) — ${'x'.repeat(130)}\n- [C](c.md) — c\n`;
+
+test('an Edit that makes an index line long with a short fragment, a join or a replace_all is denied, naming the file line', async () => {
+  const edits = [
+    { old_string: 'x\n- [C]', new_string: 'x and a clause\n- [C]' },
+    { old_string: 'x\n- [C](c.md) — c', new_string: 'x; c merged in here' },
+    { old_string: 'x', new_string: 'xx', replace_all: true },
+  ];
+  for (const edit of edits) {
+    const refused = await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, ...edit } }, { index: onDisk });
+    assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: line 2 of the memory index is \d+ characters/, edit.new_string);
+  }
+});
+
+test('a line that was already long on disk does not block a call that leaves it as it was', async () => {
+  const already = `${longLine}\n- [B](b.md) — short\n`;
+  const quiet = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, old_string: 'short', new_string: 'brief' } }, { index: already }), quiet);
+  assert.deepEqual(await hook({ tool_name: 'Write', tool_input: { file_path: INDEX, content: `${already}- [C](c.md) — c\n` } }, { index: already }), quiet);
+  assert.deepEqual(await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, old_string: 'short', new_string: '$& and $1' } }, { index: 'short\n' }), quiet, 'no replacement patterns');
 });
 
 test('without --hook it prints its usage and exits 2', async () => {
