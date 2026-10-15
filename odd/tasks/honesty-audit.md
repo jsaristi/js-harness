@@ -748,3 +748,16 @@ above and version 3's recall, in the three `Control:` lines of `docs/FAILURES.md
   which failed once in WSL and passed alone ("not in docs/FLAKY.md"); the lead is told. JH 7's PR 219 (the
   register's `measured` level) is in `af42189`, so T15 is done: checked-not-read and told-him-unverified
   read `measured` (since 2026-10-15), estimate-passed-as-fact stays `owed` to T16; `failures check` exit 0.
+- 2026-10-15, 11:06: STATE FOR WHOEVER TAKES T16 (the only open task; this session is done). T10, T13,
+  T14 and T15 are on `main` or in PR 222 (the audit itself is PR 215, landed at `29716ea`). T16 waits on
+  his answer, held by the lead: whether a check refuses a reply that states its own context share more
+  than 2 points from the share its usage records. If he says yes, build it as the hour guard was built:
+  - The oracle is ready: `ownShares(text, window)` and the window of the session's last `get_usage`
+    read are in `bin/lib/audit.mjs` (precision measured: 30 of 30 sampled findings real, seed 23).
+  - A reply is not a tool call, so the guard's `PreToolUse` hook does not see it: the place is a `Stop`
+    hook reading the transcript's last assistant entry, its usage and its text. Whether a Stop hook can
+    refuse, or only tell the session after, is to be read in the hooks contract first.
+  - `docs/FAILURES.md`'s estimate-passed-as-fact then moves from `owed` (T16) to `check`, naming the
+    hook's test file, since the day it lands.
+  If he says no, check T16 off with his words and turn that `Control:` line into `measured`, naming the
+  measure of 2026-10-15 (93 of 267 stated shares wrong over three days).
