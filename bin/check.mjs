@@ -276,8 +276,9 @@ function sameFolder(one, other) {
 
 /** The paths of the staged change, which is what the commit a gate guards will hold, when every one of
  * them is among `documents` (`discoverDocuments`). `null` when one is not, when nothing is staged (a
- * check run by hand guards no commit), and whenever git does not say: no git, no repository, a command
- * that fails. `null` is "run the sensors", so every doubt ends in a gate that runs what it always ran.
+ * check run by hand guards no commit; in a hook, an amend is judged against HEAD^, below), and whenever git
+ * does not say: no git, no repository, a command that fails. `null` is "run the sensors", so every doubt
+ * ends in a gate that runs what it always ran.
  *
  * What is staged is listed in the environment this process was given. A hook is given `GIT_INDEX_FILE`
  * by `git commit <path>` and `git commit -a`, which commit from an index of their own: that index is the
@@ -317,14 +318,22 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
   /** `paths` when there are some and all are documents, else `null`. */
   const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
-  const staged = changed();
-  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
-  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14).
-  if (staged.length === 0) return null;
-  const own = documentsOnly(staged);
-  if (own) return { paths: own };
   /** Whether `ref` names a commit here. */
   const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
+  const staged = changed();
+  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
+  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14). A hook is the one
+  // exception, told by `GIT_INDEX_FILE`, which git hands every pre-commit hook and a check by hand is not
+  // given: there it is `git commit --amend` (or `--allow-empty`), run while HEAD is still the commit it
+  // replaces, so the commit it makes changes against HEAD^ what HEAD did. An amend of the message of a
+  // commit of documents ran the whole suite and waited for the lock on 2026-10-15 (JH 17).
+  if (staged.length === 0) {
+    const hooked = Object.keys(process.env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE');
+    const paths = hooked && named('HEAD^') ? documentsOnly(changed('HEAD^')) : null;
+    return paths ? { paths, side: 'HEAD^' } : null;
+  }
+  const own = documentsOnly(staged);
+  if (own) return { paths: own };
   const trunk = ['origin/HEAD', 'origin/main', 'origin/master'].find(named);
   for (const side of [...(named('MERGE_HEAD') ? ['MERGE_HEAD'] : []), ...(trunk ? [trunk] : [])]) {
     const paths = documentsOnly(changed(side));

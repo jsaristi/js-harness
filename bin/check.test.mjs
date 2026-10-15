@@ -4109,6 +4109,90 @@ test('a commit of one named path is judged by what it holds, not by what else is
   }
 });
 
+// `git commit --amend` runs the hook while HEAD is still the commit it replaces, so an amend of the message
+// alone stages nothing against HEAD; the commit it makes changes against HEAD^ what HEAD did. On 2026-10-15
+// such an amend of a commit of documents ran the whole suite and waited for the lock (JH 17).
+const amended = [
+  'INFO  sensors  no sensor ran (tests): the one path this commit changes against HEAD^ is a document declared in harness.json "documents"',
+  'docs/guide.md',
+];
+
+test('an amend of the message of a commit of documents runs no sensor: it changes against HEAD^ documents alone', async () => {
+  const { repo, home, marker, commit, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    const document = commit(repo);
+    assert.equal(document.status, 0, document.said);
+    assert.equal(fs.existsSync(marker), false, 'the sensor ran for a commit of documents alone');
+
+    const amend = commit(repo, '--amend');
+    assert.equal(amend.status, 0, amend.said);
+    assert.deepEqual(sensorsRow(amend.said), amended, amend.said);
+    assert.equal(fs.existsSync(marker), false, 'the sensor ran for an amend of the message of a commit of documents');
+    assert.equal(fs.existsSync(gateLogDir(home)), false, 'an amend of documents alone wrote the gate log');
+  } finally {
+    remove();
+  }
+});
+
+test('an amend of the message of a commit that holds code runs the sensors', async () => {
+  const { repo, marker, commit, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    writeFile(repo, 'src/app.js');
+    git(repo, 'add', 'docs/guide.md', 'src/app.js');
+    git(repo, ...commitAs, '--no-verify', '-m', 'code and a document');
+
+    const amend = commit(repo, '--amend');
+    assert.equal(amend.status, 0, amend.said);
+    assert.match(amend.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for an amend of a commit that holds a code file');
+  } finally {
+    remove();
+  }
+});
+
+test('a check run by hand with nothing staged runs the sensors, though HEAD changes documents alone against HEAD^', async () => {
+  const { repo, marker, commit, env, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    assert.equal(commit(repo).status, 0);
+    assert.equal(fs.existsSync(marker), false);
+
+    // No hook, so no GIT_INDEX_FILE: the check guards no commit.
+    const byHand = spawnSync(process.execPath, [path.join(path.dirname(fileURLToPath(import.meta.url)), 'check.mjs')], { cwd: repo, env, encoding: 'utf8' });
+    const said = `${byHand.stdout}${byHand.stderr}`.replace(/\r\n/g, '\n');
+    assert.doesNotMatch(said, /changes against HEAD\^/, said);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a check by hand with nothing staged');
+  } finally {
+    remove();
+  }
+});
+
+test('an amend of the message of a root commit runs the sensors: there is no HEAD^ to compare with', async () => {
+  const { repo, home, marker, env, remove } = hookedRepo();
+  const root = makeTmpDir();
+  try {
+    for (const file of ['harness.json', 'AGENTS.md']) fs.copyFileSync(path.join(repo, file), path.join(root, file));
+    writeFile(root, 'docs/guide.md');
+    git(root, 'init', '--quiet');
+    git(root, 'config', 'core.hooksPath', path.join(home, 'hooks').replace(/\\/g, '/'));
+    git(root, 'add', '.');
+    git(root, ...commitAs, '--no-verify', '-m', 'root');
+
+    const amend = spawnSync('git', [...commitAs, '--amend', '-m', 'root again'], { cwd: root, env, encoding: 'utf8' });
+    const said = `${amend.stdout}${amend.stderr}`.replace(/\r\n/g, '\n');
+    assert.equal(amend.status, 0, said);
+    assert.doesNotMatch(said, /changes against HEAD\^/, said);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for an amend of a root commit');
+  } finally {
+    remove();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // What git 2.54 hands a pre-commit hook besides: in a main worktree `GIT_INDEX_FILE` alone, `.git/index` for
 // a plain commit and the whole path of `.git/index.lock` for `-a`; in a linked worktree `GIT_DIR` too, both
 // as whole paths under `.git/worktrees/<name>`. Each is the binding of the repository the gate checks.
