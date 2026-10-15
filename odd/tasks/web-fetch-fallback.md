@@ -149,3 +149,9 @@ shape the hook reads).
   he asked for it. The selectorless STATUS ended `operation_timeout` ("context deadline exceeded",
   `pre_native`, `retry_safe: false`, `next_action: stop`, nothing mutated), with the machine's CPU near 0 %
   when sampled right after. Stopped as the envelope says; the pull request stays a draft.
+- **L11** (2026-10-15): Sebastián answered the lead at about 16:25 (JH ORQ transcript `e152c9d8`, line
+  3972, the question tool): "Reintentar con la máquina quieta (Recomendada)", one retry only. With no
+  `node --test` left on the machine (checked with wmic, clear at 16:29:24), the same selectorless STATUS ran
+  inside `js-harness gate --max 20 --` at 16:30:09 and ended `operation_timeout` again ("context deadline
+  exceeded", `pre_native`, nothing mutated) after 27 s, by `gate log`; the gate measured 4.9 of 8 cores busy
+  before it (powershell, svchost, MsMpEng). No further retry; the pull request stays a draft.
