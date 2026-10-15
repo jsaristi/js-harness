@@ -879,6 +879,19 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
   start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
   is armed before he leaves, in the orchestrator skill (JH 5)
 
+### session-opened-unseen
+A session was opened where he does not see it: a scheduled task opened it in the app's Routines, at
+the medium effort it inherited, and the board showed it like any other.
+- Class: unseen-state
+- Seen: 2026-10-12 — transcript 130317af, line 3443 — he was told to archive sessions he could not
+  find: "pero ninguna de esas las veo en el tablero de claude desktop, deben estar en otra parte y
+  ese es el problema"; the two sessions, cbca9769 and dd949a0e, ran at medium (measured
+  2026-10-15, odd/tasks/session-channel.md, section 17)
+- Control: check — bin/sessions.test.mjs — "the board says how a scheduled session was opened,
+  where it sits and its effort, and that it is not in his sidebar" — since 2026-10-15
+- Proof: owed — the command of T16's layer 2, which names such a session or task until none is
+  left, exiting 0 on this machine; and layer 3's refusal after one real try
+
 ### session-state-misreported
 A session was reported to him as waiting for his prompt while it still had a commit in the gate and
 a sub-agent running.

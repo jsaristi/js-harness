@@ -1525,7 +1525,9 @@ About 600 authored lines. Layer 1 alone is about 250.
 From the list of 2026-10-10 in `odd/tasks/rule-hierarchy.md` ("Failures of 2026-10-10"): 3, 4,
 5, 6, 14, 17 and 18. Each closes only when its proof there exists and passes. 7 and 8 were left
 by the session board for its next slice; they are taken here, in T4, since they change the same
-reader, and that table names this feature as their owner.
+reader, and that table names this feature as their owner. T16 adds `session-opened-unseen` of
+`docs/FAILURES.md` (2026-10-15): controlled by layer 1's board line, its proof owed to layers 2
+and 3.
 
 ## Tasks
 - [x] T0 Design: what exists, the record, the roster, the opening, the context rule, the skill,
@@ -2772,6 +2774,16 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   keeps its control, and its proof names the journey's step `channel` (draft pull request
   199). `opening-pasted-no-line`, `context-cut-by-percentage`, `wait-not-attributable` and
   `stopped-work-shown-live` were controlled already and are unchanged.
+- 2026-10-15, T16 layer 1, on `feat/session-opened`. Design version 2, after two independent
+  readers, is section 17; the lead holds his two questions for layer 3 (sent at 10:48). Built,
+  each with its tests first: `sessionFacts` gives `opened` and `effort` and
+  `bin/lib/app-record.mjs` reads the app's records (4d910da, Codex P2 fixed in 9a53886: a
+  transcript that starts at a compaction says unknown, recheck correct); the board prints one
+  more line per row, opened by whom, where it sits in the app, its effort, with the marks
+  `NOT IN HIS SIDEBAR` and `effort below high` (271c2b1, Codex correct). On this machine's last
+  24 h it read 10 rows by him archived, 6 by a session archived, 5 by a session in Sessions,
+  3 by him in Sessions and 8 unknown in part. New failure entry `session-opened-unseen`. Next:
+  layer 2, then layer 3 after his answers.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
