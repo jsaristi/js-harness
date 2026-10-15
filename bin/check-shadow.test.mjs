@@ -23,6 +23,19 @@ function project() {
 
 const sensor = { name: 'tests', command: 'node --test' };
 
+test('in shadow a test file the flaky ledger names is never one selection would skip, so its failure resets no count', async () => {
+  const { root, dir, done } = project();
+  try {
+    fs.mkdirSync(path.join(root, 'docs'));
+    fs.writeFileSync(path.join(root, 'docs', 'FLAKY.md'), '# Flaky tests\n\n### b.test.mjs\n- Owner: x\n- Expires: 2026-10-22\n- Failure: y\n');
+    await checkSensor(root, sensor, { traces: { dir } });
+    const second = await checkSensor(root, sensor, { traces: { dir } });
+    assert.deepEqual(second.shadow, { files: 2, wouldSkip: ['a.test.mjs'], failedOfSkipped: [] });
+  } finally {
+    done();
+  }
+});
+
 test('in shadow the whole suite runs, and the row counts what selection would have skipped and which of those failed', async () => {
   const { root, dir, done } = project();
   try {

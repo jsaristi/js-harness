@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkSensors } from './check.mjs';
+import { checkExactCount, checkSensors, s6Count } from './check.mjs';
+import { appendGateEvent, GATE_LOG_VERSION } from './lib/gate-log.mjs';
 
 // `harness.json` "exactTests": "shadow" (odd/tasks/exact-tests.md, T3, S6): a gate's tests sensor runs the
 // whole suite under the tracer, its traces go under the git dir, and the end line of the gate log keeps what
@@ -102,5 +103,44 @@ test('a project that says nothing of exactTests has no shadow, and a value other
     assert.deepEqual(rows.map(({ name, pass, detail }) => ({ name, pass, detail })), [{ name: 'sensors', pass: false, detail: 'harness.json "exactTests" must be "shadow"; it is "skip"' }]);
   } finally {
     wrong.done();
+  }
+});
+
+// T4 (exact-tests.md L14): S6's count, as the lead adopted it: the counting gates (wouldSkip above 0) in a row
+// since the last one where a file selection would have skipped failed; 30 of them switch the skip on.
+const endOf = (at, shadow) => ({ v: GATE_LOG_VERSION, id: `gate-${at}`, event: 'end', at, seconds: 1, result: 'pass', sensors: [{ name: 'tests', pass: true, shadow }] });
+
+test('S6 counts the gates in a row that would have skipped a file and saw none of those fail, since the last that did', () => {
+  const events = [
+    endOf('2026-10-15T01:00:00.000Z', { files: 4, wouldSkip: 3, failedOfSkipped: [] }),
+    endOf('2026-10-15T02:00:00.000Z', { files: 4, wouldSkip: 3, failedOfSkipped: ['evals/suite.test.mjs'] }),
+    endOf('2026-10-15T03:00:00.000Z', { files: 4, wouldSkip: 0, failedOfSkipped: [] }),
+    endOf('2026-10-15T04:00:00.000Z', { files: 4, wouldSkip: 2, failedOfSkipped: [] }),
+    { event: 'start', at: '2026-10-15T04:30:00.000Z' },
+    endOf('2026-10-15T05:00:00.000Z', { files: 4, wouldSkip: 1, failedOfSkipped: [] }),
+  ];
+  assert.deepEqual(s6Count(events), { run: 2, last: { at: '2026-10-15T02:00:00.000Z', files: ['evals/suite.test.mjs'] } });
+  // Read in the order the gates ended, whatever order the lines come in.
+  assert.deepEqual(s6Count([...events].reverse()).run, 2);
+  assert.deepEqual(s6Count([]), { run: 0, last: null });
+});
+
+test('a project in shadow has a row that says S6\'s running count and informs only; one that says nothing of exactTests has none', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-exact-count-'));
+  try {
+    for (const [at, failed] of [['2026-10-15T01:00:00.000Z', ['b.test.mjs']], ['2026-10-15T02:00:00.000Z', []], ['2026-10-15T03:00:00.000Z', []]]) {
+      assert.deepEqual(appendGateEvent(home, endOf(at, { files: 2, wouldSkip: 1, failedOfSkipped: failed })), { ok: true });
+    }
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-exact-count-root-'));
+    fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify({ exactTests: 'shadow' }));
+    const [row] = checkExactCount(root, home);
+    assert.equal(row.name, 'exact tests');
+    assert.equal(row.pass, true);
+    assert.match(row.detail, /^S6: 2 of 30 gates in a row would have skipped a test file and saw none of those fail, since the gate of .+ where b\.test\.mjs failed; the skip is switched on at 30$/);
+    fs.writeFileSync(path.join(root, 'harness.json'), '{}');
+    assert.deepEqual(checkExactCount(root, home), []);
+    fs.rmSync(root, { recursive: true, force: true });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });

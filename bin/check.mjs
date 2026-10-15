@@ -24,7 +24,7 @@ import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
-import { selectTests, testFilesOf } from './lib/select-tests.mjs';
+import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './lib/project-functions.mjs';
@@ -464,6 +464,43 @@ function tracesDir(cwd, spawn = spawnSync) {
   }
 }
 
+/** S6's running count (odd/tasks/exact-tests.md, L14, the reading the lead adopted): of the gate log's
+ * `events`, the end lines whose tests row has a shadow that would have skipped a file (`wouldSkip` above 0),
+ * read in the order they ended, and how many of them are in a row since the last whose skipped files did not
+ * all pass. `{ run, last }`, `last` that gate's `{ at, files }` or `null`. Thirty in a row switch the skip on. */
+export function s6Count(events) {
+  const ends = events.filter((event) => event?.event === 'end' && typeof event.at === 'string' && Array.isArray(event.sensors));
+  ends.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  let run = 0;
+  let last = null;
+  for (const end of ends) {
+    for (const sensor of end.sensors) {
+      const shadow = sensor?.shadow;
+      if (!shadow || !(shadow.wouldSkip > 0)) continue;
+      const failed = Array.isArray(shadow.failedOfSkipped) ? shadow.failedOfSkipped : [];
+      if (failed.length > 0) {
+        run = 0;
+        last = { at: end.at, files: failed };
+      } else run += 1;
+    }
+  }
+  return { run, last };
+}
+
+/** The gates in a row S6 asks for before the skip is switched on. */
+const S6_GATES = 30;
+
+/** The `exact tests` row of a project that says `exactTests` in harness.json: S6's running count, read from
+ * the gate log of `home`. It informs only, as `payload` does: the switch is a commit of harness.json, made
+ * with these numbers. A project that says nothing of `exactTests` has no row. */
+export function checkExactCount(cwd, home) {
+  const exact = discoverExactTests(cwd);
+  if (exact.value === null) return [];
+  const { run, last } = s6Count(readGateLog(home).events);
+  const since = last ? `, since the gate of ${rowTime(last.at)} where ${last.files.join(', ')} failed` : '';
+  return [{ name: 'exact tests', pass: true, detail: `S6: ${run} of ${S6_GATES} gates in a row would have skipped a test file and saw none of those fail${since}; the skip is switched on at ${S6_GATES}` }];
+}
+
 /** `iso` as a row says it: the local day and time, to the minute. */
 function rowTime(iso) {
   const at = new Date(iso);
@@ -855,7 +892,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
 function startShadow(cwd, dir, { env = null, place = {} } = {}) {
   const root = path.resolve(cwd);
   const tests = testFilesOf(root);
-  const { skipped } = selectTests({ tests, readTraces: (one) => readTraces(dir, one), stateOf: (key) => stateOf(root, key), ...place });
+  const { skipped } = selectTests({ tests, readTraces: (one) => readTraces(dir, one), stateOf: (key) => stateOf(root, key), flaky: flakyTestsOf(root), ...place });
   fs.mkdirSync(dir, { recursive: true });
   const results = path.join(dir, `results-${process.pid}-${Date.now()}`);
   if (env) Object.assign(env, traceEnv({ root, dir, results, existing: env.NODE_OPTIONS }));
@@ -1948,7 +1985,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home)];
+    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
