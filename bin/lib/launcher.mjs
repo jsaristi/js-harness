@@ -143,7 +143,11 @@ export function readLaunchers({ ppid = process.ppid, readTable = defaultTable } 
 /** The launchers of a gate, read as it starts, `{ read, settle, stop }`: `read()` gives the chain, or `null`
  * while the table is not in yet; `settle()` waits for it and gives the chain; `stop()` ends a read nobody
  * needs any more. On Linux `/proc` is read at once; on Windows PowerShell lists the processes beside the gate
- * (about a second), so a turn taken at once waits for nothing. */
+ * (about a second), so a turn taken at once waits for nothing.
+ *
+ * The window this leaves, known and kept: a launcher that ends inside that second, before the table is in,
+ * reads as a parent gone before the gate, and its end is not seen. Telling the two apart would need when a
+ * process ended, which no table gives; the Bash tool's own wrapper ends inside that second on every run. */
 export function startLaunchers({ ppid = process.ppid, platform = process.platform } = {}) {
   if (platform !== 'win32') {
     const chain = readLaunchers({ ppid });

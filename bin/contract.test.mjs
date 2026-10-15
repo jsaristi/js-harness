@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { contractMain, discoverContracts, validateEntries } from './contract.mjs';
+import { DEFAULT_TIMEOUT_MINUTES, contractMain, discoverContracts, validateEntries } from './contract.mjs';
 import { CONTRACT_TEMPLATE } from './lib/contract.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 
@@ -328,9 +328,9 @@ test('run from a subdirectory runs the commands from the repository root', { ski
 
 // --- run: a timeout for every command ---
 
-test('run gives each command a 30 minute timeout by default, and --timeout <minutes> changes it', async () => {
+test('run gives each command the declared timeout by default, and --timeout <minutes> changes it', async () => {
   const md = contractWith('- `first` exits 0');
-  assert.equal((await runWithFake(md, {})).calls[0].opts.timeout, 30 * 60 * 1000);
+  assert.equal((await runWithFake(md, {})).calls[0].opts.timeout, DEFAULT_TIMEOUT_MINUTES * 60 * 1000);
   assert.equal((await runWithFake(md, {}, { args: ['--timeout', '2'] })).calls[0].opts.timeout, 2 * 60 * 1000);
 });
 
@@ -343,7 +343,7 @@ test('a command that times out is a FAIL row saying so, the next command still r
   assert.match(stdout, /^FAIL {2}first {2}\(timed out after 2 min\)$/m);
   assert.match(stdout, /partial/);
   assert.equal(stdout.split('\n').at(-1), 'not met');
-  assert.match((await runWithFake(md, { first: timedOut })).stdout, /\(timed out after 30 min\)/);
+  assert.ok((await runWithFake(md, { first: timedOut })).stdout.includes(`(timed out after ${DEFAULT_TIMEOUT_MINUTES} min)`));
 });
 
 /** Waits until `holds()` is true, asking every 100 ms for up to `ms`; whether it came true. */

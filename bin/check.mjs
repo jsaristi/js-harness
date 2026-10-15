@@ -10,6 +10,7 @@ import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
+import { ruleValue } from './lib/rules.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
@@ -25,14 +26,21 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gat
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
+import { checkLedger, failedTestFiles, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, word as bashWord, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
+import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
+import { ruleHere, ruleOf } from './lib/rules.mjs';
+import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
+import { dayOf, launchesOf } from './lib/subagent-count.mjs';
+import { readRecords, recordFolders } from './subagents.mjs';
 
 export { estimateTokens };
 
-const TOKEN_BUDGET = 1500;
+// The budget AGENTS.md is held to: the declared rule `agents-budget` (bin/lib/rules-data.mjs).
+export const TOKEN_BUDGET = ruleValue('agents-budget', 'estimated tokens');
 
 /** PASS/FAIL row for AGENTS.md's token budget, rooted at `cwd`. */
 export function checkBudget(cwd) {
@@ -87,8 +95,8 @@ export function checkPayload(cwd, home) {
 // A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
 // gate forever, so the wait is bounded. Twenty minutes, not ten: this repository's own suite takes about
 // eight on a quiet machine and passed ten once other programs held two of eight cores, which refused
-// commits whose tests were green.
-const SENSOR_TIMEOUT_MS = 20 * 60 * 1000;
+// commits whose tests were green. The figure is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
+export const SENSOR_TIMEOUT_MS = ruleValue('sensor-timeout', 'minutes') * 60 * 1000;
 const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
 // The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists
@@ -276,8 +284,9 @@ function sameFolder(one, other) {
 
 /** The paths of the staged change, which is what the commit a gate guards will hold, when every one of
  * them is among `documents` (`discoverDocuments`). `null` when one is not, when nothing is staged (a
- * check run by hand guards no commit), and whenever git does not say: no git, no repository, a command
- * that fails. `null` is "run the sensors", so every doubt ends in a gate that runs what it always ran.
+ * check run by hand guards no commit; in a hook, an amend is judged against HEAD^, below), and whenever git
+ * does not say: no git, no repository, a command that fails. `null` is "run the sensors", so every doubt
+ * ends in a gate that runs what it always ran.
  *
  * What is staged is listed in the environment this process was given. A hook is given `GIT_INDEX_FILE`
  * by `git commit <path>` and `git commit -a`, which commit from an index of their own: that index is the
@@ -317,14 +326,22 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
   /** `paths` when there are some and all are documents, else `null`. */
   const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
-  const staged = changed();
-  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
-  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14).
-  if (staged.length === 0) return null;
-  const own = documentsOnly(staged);
-  if (own) return { paths: own };
   /** Whether `ref` names a commit here. */
   const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
+  const staged = changed();
+  // Nothing staged is no commit to guard, and no other side is asked: a check run by hand on a branch of
+  // documents still runs its sensors over the code it has not staged (Codex, 2026-10-14). A hook is the one
+  // exception, told by `GIT_INDEX_FILE`, which git hands every pre-commit hook and a check by hand is not
+  // given: there it is `git commit --amend` (or `--allow-empty`), run while HEAD is still the commit it
+  // replaces, so the commit it makes changes against HEAD^ what HEAD did. An amend of the message of a
+  // commit of documents ran the whole suite and waited for the lock on 2026-10-15 (JH 17).
+  if (staged.length === 0) {
+    const hooked = Object.keys(process.env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE');
+    const paths = hooked && named('HEAD^') ? documentsOnly(changed('HEAD^')) : null;
+    return paths ? { paths, side: 'HEAD^' } : null;
+  }
+  const own = documentsOnly(staged);
+  if (own) return { paths: own };
   const trunk = ['origin/HEAD', 'origin/main', 'origin/master'].find(named);
   for (const side of [...(named('MERGE_HEAD') ? ['MERGE_HEAD'] : []), ...(trunk ? [trunk] : [])]) {
     const paths = documentsOnly(changed(side));
@@ -1449,24 +1466,43 @@ export async function checkSensors(cwd, deps = {}, lock) {
         const row = await checkSensor(cwd, sensor, { ...deps, gateHeld, wsl, traces: dir ? { dir, mode: exact.value } : null, concurrency: concurrent === 'node --test' ? concurrency.value : null });
         if (tests !== null && tests !== 'node --test') row.detail += `; harness.json "exactTests" is "${exact.value}", but the tests run by \`${tests}\`, not \`node --test\`: ${exact.value === 'skip' ? 'no exact tests' : 'no shadow'}`;
         if (concurrent !== null && concurrent !== 'node --test') row.detail += `; ${TEST_CONCURRENCY_ENV} is ${concurrency.value}, but the tests run by \`${concurrent}\`, not \`node --test\`: they run as written`;
+        // A red suite of `node --test` that names its failed test files runs them once more, alone and
+        // untraced, by the same route (odd/tasks/flaky-ledger.md, Design 2). A timeout names nothing it
+        // can trust, and a suite of another command has no files to give.
+        if (sensor.name === 'tests' && !row.pass && !row.timedOut && testsCommand(cwd, sensor.command) === 'node --test') {
+          const files = failedTestFiles(row.output, testFilesOf(cwd));
+          if (files.length > 0) {
+            const again = await checkSensor(cwd, { name: 'tests', command: `node --test ${files.join(' ')}` }, { ...deps, gateHeld, wsl, traces: null });
+            row.rerun = { files, pass: again.pass, detail: again.detail };
+            // Design 3: the row passes only when the rerun did and every file it ran has a current entry.
+            const judged = judgeRerun(row.rerun, ledgerEntries(cwd), deps.today ?? localDay());
+            row.rerun.row = judged.row;
+            if (judged.pass) {
+              row.pass = true;
+              row.detail += `; its failed test ${files.length === 1 ? 'file' : 'files'} passed alone on rerun and ${files.length === 1 ? 'is' : 'are'} quarantined in docs/FLAKY.md (the rerun row)`;
+            }
+          }
+        }
         ran.push(row);
       }
       result = sensorsResult(ran);
       // A sensor that came back to Windows ran where its key does not say: it proves no tree.
       const ranWhereKeyed = ran.every((row) => (place ? row.ranIn === 'wsl' : !row.ranIn));
+      // Nor does a pass that rests on a quarantine: its entry expires, and a proof of the tree would not.
+      const quarantined = ran.some((row) => row.rerun);
       // A passing gate in skip mode writes the key too (odd/tasks/exact-tests.md, T4c): the files it skipped are
       // proven by their stored passing traces, which is the premise of the switch S6's count earned.
-      if (result === 'pass' && key !== null && ranWhereKeyed && keyNow() === key) code = key;
+      if (result === 'pass' && key !== null && ranWhereKeyed && !quarantined && keyNow() === key) code = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
-      const failing = ({ pass, output }) => (pass ? [] : failingTests(output));
+      const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
       record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code });
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
-    return [...rows, ...ran, ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
+    return [...rows, ...ran, ...ran.flatMap((row) => (row.rerun ? [row.rerun.row] : [])), ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
   };
   if (!lock) return run();
   if (lock.held) {
@@ -1955,8 +1991,60 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   ]);
 }
 
+/** The rules the sub-agent row reads, by id: a writer against the first, an explorer, reviewer or verifier
+ * against the second, and every launch's effort against the third. */
+const SUBAGENT_RULES = { writer: 'subagent-writer-model', reader: 'subagent-reader-model', effort: 'subagent-effort' };
+
+/** Why a rule is not in force, as `ruleHere` names it: no rules file here, or one that is not the harness's list. */
+const OFF_WHY = { elsewhere: 'this project keeps no bin/lib/rules-data.mjs', behind: "its bin/lib/rules-data.mjs is not the harness's list" };
+
+/** `id` as `{ value, alias }` when `ruleHere` finds it in force in the rules text `text`, else `{ off }`. The alias
+ * is `ruleOf`'s, null where the rule has none. */
+function subagentRuleHere(id, text) {
+  const here = ruleHere(id, undefined, text);
+  return Object.hasOwn(here, 'value') ? { value: here.value, alias: ruleOf(id).alias ?? null } : { off: here.off };
+}
+
+/** The sub-agents row of `check --subagents` (odd/tasks/honesty-audit.md, T13): today's launches of this project,
+ * each compared with the rules in force here, as information. It is opt-in because plain check is the commit gate
+ * and a day of records is about 231 MB; only this row reads them.
+ *
+ * It fails nothing, as `checkCodexReviewDebt` does: a throw is said as what the row cannot tell. Where none of the
+ * three rules is in force, one line says so and no record is read. A rule that is not in force is said beside the
+ * others, and nothing is compared with it. `deps` takes the day's clock (`now`), the zone (`offsetMinutes`),
+ * `homedir` and `run` (git, as `subagentsMain` takes it), so a test reads neither the real `~/.claude` nor the clock. */
+export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Date.now, offsetMinutes = -new Date().getTimezoneOffset(), run = (command, args, options) => spawnSync(command, args, { encoding: 'utf8', ...options }) } = {}) {
+  const row = (detail, lines) => ({ name: 'subagents', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  try {
+    const read = readRulesData(cwd);
+    if ('unreadable' in read) throw new Error(`the rules file cannot be read (${read.unreadable})`);
+    const rules = Object.fromEntries(Object.entries(SUBAGENT_RULES).map(([side, id]) => [side, subagentRuleHere(id, read.text)]));
+    const offRules = Object.entries(rules).filter(([, rule]) => 'off' in rule);
+    if (offRules.length === Object.keys(rules).length) {
+      const why = [...new Set(offRules.map(([, rule]) => OFF_WHY[rule.off]))].join('; ');
+      return row(`the sub-agent rules are not in force here (${why}): no launch is compared`);
+    }
+    const notInForce = offRules.map(([side, rule]) => `not in force here: ${SUBAGENT_RULES[side]} (${OFF_WHY[rule.off]})`);
+    const expected = {
+      writerModel: 'off' in rules.writer ? null : rules.writer,
+      readerModel: 'off' in rules.reader ? null : rules.reader,
+      effort: 'off' in rules.effort ? null : rules.effort.value,
+    };
+    const day = dayOf(new Date(now()).toISOString(), offsetMinutes);
+    const folders = recordFolders({ cwd: path.resolve(cwd), env, homedir, run });
+    if (folders.length === 0) return row('no sub-agent launched today: no Claude Code records folder for this project', notInForce);
+    const since = Date.parse(`${day}T00:00:00Z`) - offsetMinutes * 60_000;
+    const { calls, records } = await readRecords(folders, { since, inWindow: () => false });
+    const launches = launchesOf(records, { from: day, to: day, offsetMinutes, calls });
+    const { detail, lines } = subagentRowLines(compareLaunches(launches, expected), expected);
+    return row(detail, [...notInForce, ...lines]);
+  } catch (err) {
+    return row(`cannot tell: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 const USAGE = [
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
 ].join('\n');
 
@@ -1991,7 +2079,7 @@ export function parseGateWait(argv) {
 }
 
 const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait'];
-const BARE_FLAGS = ['--push', '--no-wait'];
+const BARE_FLAGS = ['--push', '--no-wait', '--subagents'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
  * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited
@@ -2020,6 +2108,7 @@ function parseArgs(argv, env) {
     cwd: get('--cwd') ?? process.cwd(),
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
     push: argv.includes('--push'),
+    subagents: argv.includes('--subagents'),
     head: get('--head') ?? 'HEAD',
     remote: get('--remote') ?? 'origin',
     noWait,
@@ -2061,6 +2150,9 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
     : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home)];
 
+  // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
+  if (!push) rows.push(...checkLedger(cwd));
+
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
   // The sensors run under the machine's gate lock, taken in `home`, so two gates never run theirs
@@ -2098,6 +2190,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // A clone that is not what its switches ask is said after the sensors, as the review is, and not by a gate
   // that stopped: it reads git, which a stopped gate asks nothing of.
   if (!push && !stopped) rows.push(...checkFunctionsPending(cwd, { spawn: deps.git }), checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
+  // The sub-agents row runs only when asked (`--subagents`), since it reads a day of records, which a plain gate never does.
+  if (!push && parsed.subagents) rows.push(await checkSubagents(cwd, env, deps));
 
   for (const row of rows) {
     console.log(formatRow(row));
