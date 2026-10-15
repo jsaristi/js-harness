@@ -19,7 +19,7 @@ const SOURCES_TEXT = fs.readFileSync(path.join(PACKAGE, 'docs', 'rule-sources.js
 const SOURCES = JSON.parse(SOURCES_TEXT);
 const COUNT_LINE = `${RULES.length} rules, hash ${rulesHash(RULES)}`;
 const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source]]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests. */
@@ -259,7 +259,7 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
 test('the usage names the applied form, and a word after applied is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
-    assert.match(USAGE, /\| applied\]$/);
+    assert.match(USAGE, /\| applied \| change <id> \[--dry-run \| --check-source\]\]$/);
   });
 });
 
