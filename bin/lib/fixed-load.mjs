@@ -72,7 +72,7 @@ function firstTurn(file) {
   }
 }
 
-/** `{ at, tokens }` when `line` is a main-thread assistant record with usage, else `null`. */
+/** `{ at, tokens }` when `line` is a main-thread assistant record of the model with usage, else `null`. */
 function turnOf(line) {
   let record;
   try {
@@ -81,7 +81,8 @@ function turnOf(line) {
     return null;
   }
   const usage = record?.message?.usage;
-  if (record?.type !== 'assistant' || record.isSidechain || !usage) return null;
+  // A record the host wrote in the model's place (model `<synthetic>`, as bin/lib/sessions.mjs reads it) sent nothing.
+  if (record?.type !== 'assistant' || record.isSidechain || !usage || record.message.model === '<synthetic>') return null;
   const count = (key) => (Number.isFinite(usage[key]) ? usage[key] : 0);
   const tokens = count('input_tokens') + count('cache_creation_input_tokens') + count('cache_read_input_tokens');
   return { at: record.timestamp ?? null, tokens };

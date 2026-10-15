@@ -151,3 +151,11 @@ test('a transcript that cannot be read is skipped, and the row still informs', (
     assert.match(row.detail, /^110002 tokens at the first turn, median of the latest 1 session /);
   });
 });
+
+test('a synthetic assistant record of the host is not the first turn', () => {
+  withFixture((home, cwd) => {
+    const synthetic = { ...assistant(0, 0, 0), message: { role: 'assistant', model: '<synthetic>', usage: { input_tokens: 0, output_tokens: 0 } } };
+    transcript(home, cwd, 's', [user, synthetic, assistant(2, 60_000, 50_000)], 1);
+    assert.equal(measureFixedLoad({ home, cwd }).sessions[0].tokens, 110_002);
+  });
+});
