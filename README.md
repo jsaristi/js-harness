@@ -397,7 +397,9 @@ The board of the project's recent Claude Code sessions: each one's state, contex
 last reply, the worktrees and their feature plans, the running gates and the open pull
 requests. It only reads. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
-<transcript> <line>` prints one message the user sent.
+<transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
+the host made, whether the session was told the pause, committed its feature document and
+announced the compaction, and how many compactions miss one of those facts.
 
 ```console
 $ js-harness sessions --address orchestrator
