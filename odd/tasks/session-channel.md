@@ -1666,7 +1666,7 @@ and 3.
   such a rule would live is a choice of its own (the project has no `.claude/settings.json`;
   an installed project is another question; on Codex only `disabled_tools` of a server), and
   a setting of his machine is his alone
-- [ ] T17 Questions to him go through the question tool and through the orchestrator, and
+- [x] T17 Questions to him go through the question tool and through the orchestrator, and
   the open ones are computed (point 15; his words of 2026-10-12). Slice (a), built:
   `sessions --quote` and the stretch before a compaction read his answer to a question, and
   refuse a question he closed. The reader's attack is done and version 2 written. Slice
@@ -1677,7 +1677,12 @@ and 3.
   copy, the withdrawal, the resume's half, the asking rule (pull request 113, head
   `1f5d67a`). Owed: (c) the orchestrator skill's text, the printed texts in words an
   installed project defines, the sentences for `AGENTS.md` and the two declared rules (the
-  last two placed by the owner of the rules' wording; Progress, 2026-10-13 23:46)
+  last two placed by the owner of the rules' wording; Progress, 2026-10-13 23:46) Done, read
+  on 2026-10-15 from `main`: (c) is pull request 127 (merged 2026-10-14), the skill's
+  "Questions to the user" and the printed texts in "the user"; the `AGENTS.md` sentence ("A
+  decision is asked by the orchestrator, with the question tool") and the two declared rules,
+  `person-present` and `questions-one-place` in `bin/lib/rules-data.mjs`, are 00d531d
+  (2026-10-14), placed by the owner of the rules' wording.
 - [x] T18 Every background timer, watcher or wake loop a session starts declares, in the same
   step, what it is for, the condition that ends or cancels it, and who stops it, written to the
   session's state (the relief file for the orchestrator, the feature document for a work
