@@ -271,8 +271,12 @@ const TRANSCRIPT = 'D:/claude/projects/D--proj/session.jsonl';
 const usageLine = (window) => JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: JSON.stringify({ context: { session: 'self', contextWindow: window } }) }] } });
 const replyLine = (text, tokens) => JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5-5', usage: { input_tokens: 10, cache_read_input_tokens: tokens - 10 }, content: [{ type: 'text', text }] } });
 
-/** Runs `guard --stop` on `payload` with the transcript at TRANSCRIPT reading `transcript` (null for none). */
-async function stop(payload, { transcript = [usageLine(500000), replyLine('Contexto: 40 %.', 300000)].join('\n') } = {}) {
+/** A home of its own for the stop check, which reads the host's configured window under it: none is configured. */
+const STOP_HOME = path.join(os.tmpdir(), 'js-harness-guard-stop-no-home');
+
+/** Runs `guard --stop` on `payload` with the transcript at TRANSCRIPT reading `transcript` (null for none), under
+ * `home` with the environment `env`. */
+async function stop(payload, { transcript = [usageLine(500000), replyLine('Contexto: 40 %.', 300000)].join('\n'), home = STOP_HOME, env = {} } = {}) {
   const out = [];
   const err = [];
   const read = [];
@@ -285,6 +289,8 @@ async function stop(payload, { transcript = [usageLine(500000), replyLine('Conte
     },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
+    env: { JS_HARNESS_HOME: home, ...env },
+    homedir: () => home,
   });
   return { code, out: out.join(''), err: err.join(''), read };
 }
@@ -314,4 +320,24 @@ test('the check stays quiet when it already blocked this stop, when the reply st
   assert.deepEqual(await stop(wrong, { transcript: null }), { ...quiet, read: [TRANSCRIPT] }, 'no transcript');
   assert.deepEqual(await stop({ ...wrong, transcript_path: undefined }), { ...quiet, read: [] }, 'no transcript path');
   assert.deepEqual(await stop(wrong, { transcript: usageLine(500000) }), { ...quiet, read: [TRANSCRIPT] }, 'no reply records a usage');
+});
+
+// The window the host is configured with is the one the pause notice says the share of (odd/tasks/session-channel.md,
+// T6b), so the stop check reads it first: a session that says what the notice told it is not turned back.
+test('a configured window is the one a stated share is checked against, ahead of a get_usage read and of the default', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-guard-stop-'));
+  try {
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ autoCompactWindow: 350000 }));
+    const unread = replyLine('Contexto: 86 %.', 300000);
+    assert.equal((await stop({ transcript_path: TRANSCRIPT }, { transcript: unread, home })).out, '', 'no get_usage read: 86% of 350k is right');
+    const stale = [usageLine(500000), replyLine('Contexto: 86 %.', 300000)].join('\n');
+    assert.equal((await stop({ transcript_path: TRANSCRIPT }, { transcript: stale, home })).out, '', 'a read of the old window does not win');
+    const wrong = JSON.parse((await stop({ transcript_path: TRANSCRIPT }, { transcript: replyLine('Contexto: 60 %.', 300000), home })).out);
+    assert.match(wrong.reason, /states your context at 60%.*records 86% of a 350k window \(the window the host is configured with, else/s);
+    const viaEnv = await stop({ transcript_path: TRANSCRIPT }, { transcript: unread, env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '350000' } });
+    assert.equal(viaEnv.out, '', 'the environment configures it too');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
