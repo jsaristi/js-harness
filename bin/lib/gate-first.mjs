@@ -185,11 +185,34 @@ export function issueTicket({ home, session, tree = null, reason, by = null, min
     until: new Date(at + minutes * 60_000).toISOString(),
   };
   const dir = gateFirstDir(home);
-  io.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${ticket.id}.json`);
   const draft = `${file}.tmp-${process.pid}`;
-  io.writeFileSync(draft, `${JSON.stringify(ticket)}\n`);
-  io.renameSync(draft, file);
+  // A claim or a cancel removes the folder with its last ticket, which can happen between the making of the
+  // folder and the write (Codex, 2026-10-16): the write is tried again in a folder made again.
+  for (let attempt = 1; ; attempt += 1) {
+    io.mkdirSync(dir, { recursive: true });
+    try {
+      io.writeFileSync(draft, `${JSON.stringify(ticket)}\n`);
+      io.renameSync(draft, file);
+      break;
+    } catch (err) {
+      if (err.code !== 'ENOENT' || attempt === 3) throw err;
+    }
+  }
+  // The count before the write is no guard against an issuer that wrote in between (Codex, 2026-10-16), and
+  // the folder holds no lock. So each issuer counts again after its write, and one that sees more than the
+  // limit removes its own ticket, wherever it stands in the order: an issuer that counted before the other
+  // wrote saw no excess and keeps its ticket, and the other sees it. Two that both see it both go, which
+  // leaves fewer open, never more.
+  const after = readTickets(home, { now, fileSystem: io }).open;
+  if (after.length > GATE_FIRST_OPEN) {
+    try {
+      io.rmSync(file);
+    } catch {
+      // claimed in the instant between: it was spent, and the log of its claim says so
+    }
+    throw new GateFirstError(`two tickets are open already: ${after.filter((open) => open.id !== ticket.id).slice(0, GATE_FIRST_OPEN).map(ticketSaid).join(', ')}; cancel one (js-harness gate first --cancel <id>) or wait for it to be claimed or to expire`);
+  }
   return { ticket, expired };
 }
 

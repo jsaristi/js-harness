@@ -80,6 +80,53 @@ test('two tickets at most are open: a third is refused, naming the two in the or
   assert.deepEqual(readTickets(home, { now: clock.now }).open.map((ticket) => ticket.id), ['0a0a0a0a', '0b0b0b0b']);
 }));
 
+// Codex, 2026-10-16 (P2): the count of open tickets was read before the write, so two issuers at once could
+// both see one and both write. Each now counts again after its rename, and one that sees three goes, even
+// when the other was issued later: that other counted before this write, saw two and kept its ticket.
+test('two issues at once leave two tickets open: the one that sees three after its write removes itself and is refused', withHome((home) => {
+  const clock = clockAt();
+  issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  clock.advance(MINUTE);
+  const dir = gateFirstDir(home);
+  // Another issuer, a moment earlier, writes its ticket between this one's count and its rename.
+  const racing = {
+    ...fs,
+    renameSync: (from, to) => {
+      if (to.endsWith('0c0c0c0c.json')) {
+        fs.writeFileSync(path.join(dir, '0b0b0b0b.json'), `${JSON.stringify({ v: 1, id: '0b0b0b0b', session: 'sess-b', tree: null, reason: 'raced', by: null, issuedAt: new Date(clock.now() + 1).toISOString(), until: new Date(clock.now() + 30 * MINUTE).toISOString() })}\n`);
+      }
+      return fs.renameSync(from, to);
+    },
+  };
+  assert.throws(
+    () => issueTicket({ home, now: clock.now, id: () => '0c0c0c0c', session: 'sess-c', reason: 'late', fileSystem: racing }),
+    (err) => err instanceof GateFirstError && /^two tickets are open already: 0a0a0a0a .*, 0b0b0b0b /.test(err.message),
+  );
+  assert.deepEqual(readTickets(home, { now: clock.now }).open.map((ticket) => ticket.id), ['0a0a0a0a', '0b0b0b0b']);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['0a0a0a0a.json', '0b0b0b0b.json'], 'no draft is left');
+}));
+
+// Codex, 2026-10-16 (P2): a claim or a cancel removes the folder with its last ticket, which could happen between
+// this issue's making of the folder and its write. The write is tried again in a folder made again.
+test('an issue whose folder goes between its making and the write makes it again and writes the ticket', withHome((home) => {
+  const clock = clockAt();
+  const dir = gateFirstDir(home);
+  let removed = 0;
+  const removing = {
+    ...fs,
+    writeFileSync: (file, ...rest) => {
+      if (removed === 0) {
+        removed += 1;
+        fs.rmdirSync(dir);
+      }
+      return fs.writeFileSync(file, ...rest);
+    },
+  };
+  const { ticket } = issueTicket({ home, now: clock.now, id: () => '0d0d0d0d', session: 'sess-d', reason: 'unblocks', fileSystem: removing });
+  assert.equal(removed, 1);
+  assert.deepEqual(readTickets(home, { now: clock.now }).open, [ticket]);
+}));
+
 test('a ticket left in place past its expiry is gone: reading calls it expired, and the next issue removes it and says so', withHome((home) => {
   const clock = clockAt();
   const { ticket: old } = issue(home, clock, { session: 'sess-a', minutes: 5 }, '0a0a0a0a');
