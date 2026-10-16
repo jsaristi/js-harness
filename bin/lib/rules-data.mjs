@@ -243,7 +243,10 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "claude-opus-5-5"
+    "value": "claude-opus-5-5",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "sessions-open-in-sidebar",
