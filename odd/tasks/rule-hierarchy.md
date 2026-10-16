@@ -3195,8 +3195,20 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     - the date fixtures depended on the host's time zone.
 
 ## Next step
+**State for a resume, 2026-10-15 at 19:28 by `date`, T16d being built.** On `feat/rules-row`
+(worktree `D:\js-harness-worktrees\rules-row`), each unit through the gate:
+- unit 4, `rules check`'s two findings, `registerFindings` in `bin/lib/rules-scan.mjs` (2012b78);
+- unit 5, the row `rules` in `checkOwnRules`, `checkListRow` in `bin/check.mjs`, tested in
+  `bin/check-rules-row.test.mjs` (e000da9);
+- unit 6, the command's three keys, `withRowKeys` in `bin/lib/rules-change.mjs` and the fetch and
+  the count in `bin/lib/rules-change-run.mjs`, in its gate at this hour.
+Deviation from the design: the scan, the counts and the two findings are in a new
+`bin/lib/rules-scan.mjs`, not in `bin/lib/rules-check.mjs`, which keeps the checks of the list
+itself. Next: unit 7, the help and the failure id in `docs/RULES.md`, already green in a copy;
+then the independent verifier, gentle-ai with `--escalate-item 1`, Codex, and a draft pull request.
+
 **State for a resume, 2026-10-15 at 18:45, T16d being built.** The design is draft pull request
-241. The build is on `feat/rules-row` (worktree `D:js-harness-worktreesules-row`, from `main`
+241. The build is on `feat/rules-row` (worktree `D:\js-harness-worktrees\rules-row`, from `main`
 b0093b8), inline, tests first. Unit 1 is done (0b292bc): `patternOf` and `{amount}` in `bin/lib/rules.mjs`, with `readRules`
 refusing a pattern with no `{amount}` or one matching an empty line. Unit 2, the scan, is
 `bin/lib/rules-scan.mjs` (8aa9b00). Unit 3: `rules check` prints `patterns: none; unscanned: 29`
