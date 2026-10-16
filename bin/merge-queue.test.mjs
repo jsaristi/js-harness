@@ -96,6 +96,7 @@ test('--dry-run builds the candidate of main and the ready pull requests in orde
     `PR 4 is left out: PR 4 is a draft.`,
     `PR 3 is left out: it conflicts with the candidate so far in a.txt.`,
     `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
+    'main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran',
     'Dry run: nothing was tested or pushed, and the candidate was removed.',
   ]);
   assert.equal(git(origin, 'rev-parse', 'main'), main, 'main did not move');
@@ -136,6 +137,7 @@ test('a pull request GitHub has not yet computed (mergeable UNKNOWN, about a min
     'PR 4 is left out: PR 4 is not mergeable (CONFLICTING).',
     'PR 3 is left out: it conflicts with the candidate so far in a.txt.',
     `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
+    'main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran',
     'Dry run: nothing was tested or pushed, and the candidate was removed.',
   ]);
 });
@@ -396,4 +398,156 @@ test('the red rows of the candidate are the gate\'s own FAIL rows, never a FAIL 
   ].join('\n');
   assert.deepEqual(failedRows(output), ['FAIL  tests  npm run test exited 1 in WSL2 (Ubuntu)']);
   assert.deepEqual(failedRows('npm ERR! nothing like a row'), []);
+});
+
+// The merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): each pull request merged into the candidate
+// runs main's `check.mjs --door`. The fixtures below give main a check.mjs of its own, and the door is answered by a stub
+// (`withDoor`), except that main's check.mjs is read for real: the queue decides from its text whether main has a door.
+
+/** Commits `checker` as bin/check.mjs on the detached `root` and pushes it as main: main's source, as the door reads it.
+ * Returns the new main. */
+function landChecker(root, checker) {
+  fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'bin', 'check.mjs'), checker, 'utf8');
+  git(root, 'add', 'bin/check.mjs');
+  git(root, 'commit', '--quiet', '-m', 'main has a check.mjs');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+/** makeQueueRepo, with a feat/e branch that adds e.txt (it merges cleanly with the others), and main carrying a check.mjs
+ * with the door's flag (or `checker`). `{ root, origin, main, heads }`, with feat/e in `heads`. */
+function makeDoorRepo(checker = "const FLAGS = ['--door'];\n") {
+  const made = makeQueueRepo();
+  const { root } = made;
+  git(root, 'checkout', '--quiet', '-b', 'feat/e', made.main);
+  fs.writeFileSync(path.join(root, 'e.txt'), 'E from e\n', 'utf8');
+  git(root, 'add', 'e.txt');
+  git(root, 'commit', '--quiet', '-m', 'feat/e');
+  git(root, 'push', '--quiet', 'origin', 'feat/e');
+  const e = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', made.main);
+  return { ...made, main: landChecker(root, checker), heads: { ...made.heads, 'feat/e': e } };
+}
+
+const passes = () => ({ status: 0, stdout: 'PASS  rules  the rule rows hold\n', stderr: '' });
+const branchOf = (args) => args[args.indexOf('--branch') + 1];
+
+/** `base` with every `node <...>/check.mjs --door ...` answered by `door(args, options)`, each one recorded in `doors`. */
+function withDoor(base, door, doors) {
+  return (command, args, options) => {
+    if (command === process.execPath && args.includes('--door')) {
+      doors.push({ args, cwd: options.cwd });
+      return door(args, options);
+    }
+    return base(command, args, options);
+  };
+}
+
+/** `--dry-run` with the merge door answered by `door`: `{ code, out, calls, doors }`. */
+async function dryRunWithDoor(root, prs, door) {
+  const { run, calls } = runner(prs);
+  const doors = [];
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run: withDoor(run, door, doors), covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  return { code, out, calls, doors };
+}
+
+test('a pull request whose merge door refuses it leaves the batch with the door\'s FAIL row, its merge is taken back, and the batch goes on', async () => {
+  const { root, main, heads } = makeDoorRepo();
+  const seen = [];
+  const door = (args, options) => {
+    if (branchOf(args) === 'feat/e') seen.push(fs.readFileSync(path.join(options.cwd, 'b.txt'), 'utf8'));
+    return branchOf(args) === 'feat/b' ? { status: 1, stdout: 'PASS  rules  the rule rows hold\nFAIL  rules  feat/b turns a rule to refuse\n', stderr: '' } : passes();
+  };
+  const { code, out } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b']), pr(3, 'feat/e', heads['feat/e'])], door);
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(out.includes('PR 2 is left out: the merge door refuses it: FAIL  rules  feat/b turns a rule to refuse.'), out.join('\n'));
+  assert.ok(out.includes(`Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 3 (feat/e).`), out.join('\n'));
+  assert.deepEqual(seen, ['b1\n'], 'the merge of PR 2 was taken back before PR 3 merged');
+});
+
+test('a pull request whose merge door passes stays in the candidate, and the door\'s INFO rows for it are printed, indented', async () => {
+  const { root, main, heads } = makeDoorRepo();
+  const door = () => ({ status: 0, stdout: 'PASS  rules  the rule rows hold\nINFO  rules  one line added to a text in force\n', stderr: '' });
+  const { code, out } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a'])], door);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out, [
+    'PR 1 notes from the merge door:',
+    '  INFO  rules  one line added to a text in force',
+    `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/a).`,
+    'Dry run: nothing was tested or pushed, and the candidate was removed.',
+  ]);
+});
+
+test('a pull request whose merge door does not answer leaves the batch, and says the exit code it gave', async () => {
+  const { root, main, heads } = makeDoorRepo();
+  const door = (args) => (branchOf(args) === 'feat/a' ? { status: 2, stdout: '', stderr: 'unknown flag --door' } : passes());
+  const { code, out } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a']), pr(3, 'feat/e', heads['feat/e'])], door);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out, [
+    'PR 1 is left out: the merge door did not answer (exit 2).',
+    `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 3 (feat/e).`,
+    'Dry run: nothing was tested or pushed, and the candidate was removed.',
+  ]);
+});
+
+test('a main whose check.mjs has no merge door runs no door: the batch merges as today, and one line says so', async () => {
+  const { root, main, heads } = makeDoorRepo("console.log('no merge door yet');\n");
+  const { code, out, doors } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a']), pr(3, 'feat/e', heads['feat/e'])], passes);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(doors, []);
+  assert.deepEqual(out, [
+    `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 3 (feat/e).`,
+    'main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran',
+    'Dry run: nothing was tested or pushed, and the candidate was removed.',
+  ]);
+});
+
+test('the merge door runs in the candidate, with --base HEAD^1 and the pull request\'s branch, from main\'s check.mjs in the main worktree', async () => {
+  const { root, heads } = makeDoorRepo();
+  const { out, doors } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a'])], passes);
+  assert.equal(doors.length, 1, out.join('\n'));
+  const [{ args, cwd }] = doors;
+  assert.deepEqual(args.slice(1), ['--door', '--base', 'HEAD^1', '--branch', 'feat/a']);
+  assert.match(args[0], /merge-queue-\d+-\d+-main[\\/]bin[\\/]check\.mjs$/);
+  assert.match(cwd, /merge-queue-\d+-\d+$/, 'the door runs in the candidate');
+});
+
+test('--land: a pull request merged again by the bisection passes the merge door again', async () => {
+  const { root, heads } = makeDoorRepo();
+  // Red whenever feat/b's change is in the tree under test, so the bisection merges PR 3 a second time.
+  const suite = (dir) => (fs.readFileSync(path.join(dir, 'b.txt'), 'utf8').includes('B from b') ? { ok: false, said: 'FAIL  tests' } : { ok: true });
+  const doors = [];
+  const prs = [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b']), pr(3, 'feat/e', heads['feat/e'])];
+  const { code, out } = await land(root, prs, { suite, wrap: (run) => withDoor(run, passes, doors) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(doors.map((one) => branchOf(one.args)), ['feat/a', 'feat/b', 'feat/e', 'feat/e'], 'the door ran on each merge, and again on PR 3 merged a second time');
+  assert.ok(out.includes('PR 2 is left out: the candidate turns red on this machine when it is merged (FAIL  tests).'), out.join('\n'));
+});
+
+test('the main worktree is made beside the candidate, and removed with it: on success, and on a failure after the merges', async () => {
+  const { root, heads } = makeDoorRepo();
+  const seen = [];
+  const door = (args) => {
+    seen.push(fs.existsSync(args[0]));
+    return passes();
+  };
+  const { code, out } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a'])], door);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(seen, [true], 'main\'s check.mjs was in its worktree when the door ran');
+  assert.equal(git(root, 'worktree', 'list').split('\n').length, 1, 'no worktree is left');
+  assert.deepEqual(fs.readdirSync(path.join(root, '.git', 'js-harness')), [], 'neither the candidate nor main is left under the git directory');
+
+  const red = makeDoorRepo();
+  const redSeen = [];
+  const redDoor = (args) => {
+    redSeen.push(fs.existsSync(args[0]));
+    return passes();
+  };
+  const failed = await land(red.root, [pr(1, 'feat/a', red.heads['feat/a'])], { checks: [[circle('completed', 'failure')]], wrap: (run) => withDoor(run, redDoor, []) });
+  assert.equal(failed.code, 4, failed.out.join('\n'));
+  assert.deepEqual(redSeen, [true]);
+  assert.equal(git(red.root, 'worktree', 'list').split('\n').length, 1, 'no worktree is left after the red CircleCI');
+  assert.deepEqual(fs.readdirSync(path.join(red.root, '.git', 'js-harness')), []);
 });

@@ -1089,6 +1089,166 @@ test('a project list that cannot be read fails the rules row and stops nothing e
   }
 });
 
+// --- the merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): `check --door` runs only the rule rows over the
+// lines `base..HEAD` brings, judged by the running list's patterns and the stricter row of the running list and the
+// candidate's `bin/lib/rules-data.mjs` at HEAD ---
+
+const DOOR_CONTROL = { id: 'control-phrase-min', subject: 'the shortest phrase by which a control or a rule in prose is found in its file', owner: 'project', since: '2026-10-11', value: 12, unit: 'characters', patterns: ['^(?!.*\\bruleValue\\().*\\bcontrol\\b.{0,50}{amount}\\s*characters'] };
+const DOOR_WAIT = { id: 'gate-wait', subject: 'the wait for a turn of the gate lock', owner: 'project', since: '2026-10-11', value: 60, unit: 'minutes', patterns: ['wait.{0,40}{amount}'] };
+const DOOR_RESTATED = 'The gate may wait 60 minutes.';
+const DOOR_REFUSES = { refuses: '2026-10-16' };
+const doorList = (wait = DOOR_WAIT) => [DOOR_CONTROL, wait];
+const doorListText = (list) => `export const RULES = ${JSON.stringify(list, null, 2)};\n`;
+const doorRowNames = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line)).map((line) => line.split('  ')[1]);
+const putFile = (dir, file, text) => {
+  fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+  fs.writeFileSync(path.join(dir, file), text);
+};
+
+/** A repository whose base commit holds `base` as its list (none when null) and a text in force, and whose HEAD commit
+ * is what `change` makes of it. Its base is the first commit, as `base` names it. */
+function doorRepo({ base = doorList(), change = () => {} }) {
+  const dir = makeTmpDir();
+  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(dir, 'config', 'user.name', 'js-harness test');
+  if (base !== null) putFile(dir, 'bin/lib/rules-data.mjs', doorListText(base));
+  putFile(dir, 'docs/ROADMAP.md', '# Roadmap\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'base', '--no-verify');
+  const sha = git(dir, 'rev-parse', 'HEAD');
+  change(dir);
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'head', '--no-verify');
+  return { dir, base: sha };
+}
+
+const restateRoadmap = (dir) => fs.appendFileSync(path.join(dir, 'docs/ROADMAP.md'), `${DOOR_RESTATED}\n`);
+const DOOR_ROW_FAILS = /^FAIL {2}rules {2}/m;
+
+test('check --door refuses a committed line that restates a value a refusing rule holds, and prints the rule row only', async () => {
+  const { dir, base } = doorRepo({ change: restateRoadmap });
+  try {
+    const { code, output } = await runCheck(['--door', '--base', base, '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 1, output);
+    assert.deepEqual(doorRowNames(output), ['rules']);
+    assert.match(output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+    assert.match(output, /^ {6}docs\/ROADMAP\.md:2 restates rule "gate-wait", which refuses it since 2026-10-16: The gate may wait 60 minutes\./m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door prints a reporting rule finding as INFO and exits 0', async () => {
+  const { dir, base } = doorRepo({ change: restateRoadmap });
+  try {
+    const { code, output } = await runCheck(['--door', '--base', base, '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: { reports: 'a wrong pattern', since: '2026-10-16' } }) });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}rules {2}1 restated value in the lines this change adds, none of a rule that refuses it$/m);
+    assert.doesNotMatch(output, DOOR_ROW_FAILS);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door takes the stricter row: a refusal of the candidate refuses a rule the running list reports, and a refusal of the running list holds against a candidate that reports', async () => {
+  const reports = { reports: 'a wrong pattern', since: '2026-10-16' };
+  const candidateRefuses = doorRepo({ change: (dir) => {
+    putFile(dir, 'bin/lib/rules-data.mjs', doorListText(doorList({ ...DOOR_WAIT, row: DOOR_REFUSES })));
+    restateRoadmap(dir);
+  } });
+  const candidateReports = doorRepo({ base: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }), change: (dir) => {
+    putFile(dir, 'bin/lib/rules-data.mjs', doorListText(doorList({ ...DOOR_WAIT, row: reports })));
+    restateRoadmap(dir);
+  } });
+  try {
+    const one = await runCheck(['--door', '--base', candidateRefuses.base, '--cwd', candidateRefuses.dir], {}, { rules: doorList({ ...DOOR_WAIT, row: reports }) });
+    assert.equal(one.code, 1, one.output);
+    assert.match(one.output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+    assert.match(one.output, /which refuses it since 2026-10-16: The gate may wait 60 minutes\./m);
+    const two = await runCheck(['--door', '--base', candidateReports.base, '--cwd', candidateReports.dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(two.code, 1, two.output);
+    assert.match(two.output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+  } finally {
+    fs.rmSync(candidateRefuses.dir, { recursive: true, force: true });
+    fs.rmSync(candidateReports.dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door refuses a candidate rules-data.mjs that does not parse, and one that does not validate', async () => {
+  const unparsed = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', 'export const RULES = [{ "id": ;\n') });
+  const unvalid = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', doorListText([DOOR_WAIT])) });
+  try {
+    const parsing = await runCheck(['--door', '--base', unparsed.base, '--cwd', unparsed.dir], {}, { rules: doorList() });
+    assert.equal(parsing.code, 1, parsing.output);
+    assert.match(parsing.output, /^FAIL {2}rules {2}bin\/lib\/rules-data\.mjs of this pull request does not parse: /m);
+    const validating = await runCheck(['--door', '--base', unvalid.base, '--cwd', unvalid.dir], {}, { rules: doorList() });
+    assert.equal(validating.code, 1, validating.output);
+    assert.match(validating.output, /^FAIL {2}rules {2}bin\/lib\/rules-data\.mjs of this pull request does not validate$/m);
+    assert.match(validating.output, /^ {6}the shortest phrase cannot be read: /m);
+  } finally {
+    fs.rmSync(unparsed.dir, { recursive: true, force: true });
+    fs.rmSync(unvalid.dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door judges by the running list alone when the candidate has no list, and the list a pull request changes outside a rule/ branch is refused only with --branch', async () => {
+  const noList = doorRepo({ base: null, change: restateRoadmap });
+  const edited = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', `${doorListText(doorList())}// touched\n`) });
+  const refusedBranch = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch: a rule changes only by js-harness rules change';
+  try {
+    const alone = await runCheck(['--door', '--base', noList.base, '--cwd', noList.dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(alone.code, 1, alone.output);
+    assert.match(alone.output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+    const plain = await runCheck(['--door', '--base', edited.base, '--cwd', edited.dir], {}, { rules: doorList() });
+    assert.equal(plain.code, 0, plain.output);
+    assert.doesNotMatch(plain.output, new RegExp(refusedBranch));
+    const feature = await runCheck(['--door', '--base', edited.base, '--branch', 'feat/x', '--cwd', edited.dir], {}, { rules: doorList() });
+    assert.equal(feature.code, 1, feature.output);
+    assert.match(feature.output, /^FAIL {2}rules {2}this pull request changes bin\/lib\/rules-data\.mjs and is not from a rule\/ branch: a rule changes only by js-harness rules change$/m);
+    const rule = await runCheck(['--door', '--base', edited.base, '--branch', 'rule/x', '--cwd', edited.dir], {}, { rules: doorList() });
+    assert.equal(rule.code, 0, rule.output);
+    assert.doesNotMatch(rule.output, new RegExp(refusedBranch));
+  } finally {
+    fs.rmSync(noList.dir, { recursive: true, force: true });
+    fs.rmSync(edited.dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door fails the rules row when git does not answer, instead of giving no row', async () => {
+  const dir = makeTmpDir();
+  try {
+    const silent = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
+    const { code, output } = await runCheck(['--door', '--base', 'HEAD~1', '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }), git: silent });
+    assert.equal(code, 1, output);
+    assert.match(output, /^FAIL {2}rules {2}git did not answer, so the door cannot read the lines this pull request brings$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door is a usage error without --base, with --push or with a gate flag, and --base or --branch is one without --door', async () => {
+  const dir = makeTmpDir();
+  try {
+    const usage = [
+      [['--door', '--cwd', dir], /--door needs --base <rev>/],
+      [['--door', '--base', 'HEAD', '--push', '--cwd', dir], /--door goes with the rule rows, not with --push/],
+      [['--door', '--base', 'HEAD', '--first', 'why', '--cwd', dir], /--door runs no gate/],
+      [['--base', 'HEAD', '--cwd', dir], /--base and --branch go with --door/],
+      [['--branch', 'feat/x', '--cwd', dir], /--base and --branch go with --door/],
+    ];
+    for (const [argv, message] of usage) {
+      const { code, output, errOutput } = await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' });
+      assert.equal(code, 2, argv.join(' '));
+      assert.match(errOutput, message);
+      assert.match(errOutput, /Usage: js-harness check/);
+      assert.equal(output, '');
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- flaky row: the quarantine ledger, when the project keeps one (./lib/flaky.mjs) ---
 
 test('main runs the flaky row with the static rows when the project keeps docs/FLAKY.md, and a malformed ledger makes it exit 1', async () => {
@@ -1935,7 +2095,7 @@ test('main errors with usage on stderr, exits 2 and runs no row for a --wait it 
     assert.match(errOutput, /Usage: js-harness check .*\[--wait <minutes> \| --no-wait\]/);
     // And what the two flags mean, since a bound that counts from the last change of hands is not what
     // "--wait <minutes>" says by itself.
-    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator's batch run on main \(odd\/tasks\/gate-first\.md\)\n$/);
+    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator's batch run on main \(odd\/tasks\/gate-first\.md\)\n {7}--door --base <rev> \[--branch <name>\]: runs only the rule rows over the lines <rev>\.\.HEAD brings, judged by the running list, and exits 1 when one refuses \(the merge door of merge-queue, odd\/tasks\/rule-hierarchy\.md\); --branch names the pull request's branch, which may change bin\/lib\/rules-data\.mjs only when it is a rule\/ branch\n$/);
   }
 });
 

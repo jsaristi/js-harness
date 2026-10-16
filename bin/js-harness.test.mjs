@@ -56,6 +56,12 @@ test('--help prints usage listing check and exits 0', () => {
   assert.match(result.stdout, /check/);
 });
 
+test('--help says what check --door runs, the rule rows of the lines a pull request brings', () => {
+  const result = run(['--help']);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^ {2}check {7}.*check --door --base <rev> \[--branch <name>\] runs only the rule rows/m);
+});
+
 // install-update T8: `upgrade` asks the copy on the path which version it is before it lets it sync.
 test('--version prints the version of this copy, alone on one line, and exits 0; the help names it', () => {
   const result = run(['--version']);
@@ -64,6 +70,10 @@ test('--version prints the version of this copy, alone on one line, and exits 0;
   assert.equal(result.stdout, `${version}\n`);
   assert.equal(result.stderr, '');
   assert.match(run(['--help']).stdout, /^js-harness --version /m);
+});
+
+test('the merge-queue help says each pull request merged into the candidate passes main\'s rule rows first (odd/tasks/rule-hierarchy.md, T16e)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*passes main's rule rows first \(check --door\), and one that fails leaves the batch/);
 });
 
 test('unknown command exits 2', () => {
