@@ -31,7 +31,7 @@ import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log
 import { gateFirstDir, issueTicket } from './gate-first.mjs';
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
-import { hygieneDir, journalPath } from './memory-hygiene.mjs';
+import { hygieneDir, journalPath, purgeMarker } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
 
 function makeTmpHome() {
@@ -861,6 +861,128 @@ test('uninstall goes on past a project folder of memory hygiene it cannot remove
     fs.rmSync(kept, { recursive: true });
     const whole = uninstall(home, { removeFile: (target) => { throw Object.assign(new Error('EPERM'), { code: 'EPERM', target }); } });
     assert.deepEqual(whole.memoryKept, [{ path: hygieneDir(home), reason: 'unremovable', code: 'EPERM' }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// T10, the full uninstall (odd/tasks/memory-hygiene.md, D7): `--full` removes the snapshots too, neither mode
+// removes a project under a pass, and a marker beside the folder tells every writer of a pass that an uninstall runs.
+
+/** Puts the lock of a pass in the project folder `project`, as `planPass` writes it. */
+function lockPass(project, stamp, pid = process.pid) {
+  fs.writeFileSync(path.join(project, 'lock'), JSON.stringify({ stamp, pid }));
+}
+
+test('the full uninstall removes the snapshots and the whole folder of memory hygiene, and names each project with its stamps', () => {
+  const home = makeTmpHome();
+  try {
+    const project = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+    fs.mkdirSync(path.join(project, 'snapshots', '20261016T090000000Z'), { recursive: true });
+    leftByMemory(home, 'C--other');
+    const result = uninstall(home, { full: true });
+    assert.deepEqual(result, { ...NOTHING_ELSE, removed: [hygieneDir(home)], memorySnapshotsRemoved: [{ path: project, stamps: ['20261015T120606108Z', '20261016T090000000Z'] }] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the marker is gone, and the now-empty .js-harness with it');
+
+    leftByMemory(home, 'C--other');
+    assert.deepEqual(uninstall(home, { full: true }), { ...NOTHING_ELSE, removed: [hygieneDir(home)] }, 'no snapshot, nothing to name');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the normal uninstall keeps a project under a pass, with what can release its lock, and removes the others', () => {
+  const home = makeTmpHome();
+  try {
+    const planned = leftByMemory(home, 'C--planned', '20261015T120606108Z');
+    fs.writeFileSync(path.join(planned, 'snapshots', '20261015T120606108Z', 'manifest.json'), JSON.stringify({ folder: 'C:/memory', writeSet: [], before: {} }));
+    lockPass(planned, '20261015T120606108Z');
+    const killed = leftByMemory(home, 'C--killed');
+    lockPass(killed, '20261016T090000000Z', 4242);
+    const empty = leftByMemory(home, 'C--empty');
+    fs.writeFileSync(path.join(empty, 'lock'), '');
+    const gone = leftByMemory(home, 'C--gone');
+    const result = uninstall(home);
+    assert.deepEqual(result.memoryKept, [
+      { path: empty, reason: 'locked', lock: path.join(empty, 'lock'), stamp: null, pid: null, manifest: false, folder: null },
+      { path: killed, reason: 'locked', lock: path.join(killed, 'lock'), stamp: '20261016T090000000Z', pid: 4242, manifest: false, folder: null },
+      { path: planned, reason: 'locked', lock: path.join(planned, 'lock'), stamp: '20261015T120606108Z', pid: process.pid, manifest: true, folder: 'C:/memory' },
+    ]);
+    assert.deepEqual(result.removed, [gone]);
+    assert.equal(fs.existsSync(path.join(planned, 'lock')), true);
+    assert.equal(fs.existsSync(purgeMarker(hygieneDir(home))), false, 'the marker is gone after the run');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the full uninstall removes nothing of the folder while any project is under a pass, and names the lock', () => {
+  const home = makeTmpHome();
+  try {
+    const locked = leftByMemory(home, 'C--locked', '20261015T120606108Z');
+    lockPass(locked, '20261015T120606108Z');
+    const other = leftByMemory(home, 'C--other', '20261016T090000000Z');
+    const before = everythingUnder(home);
+    const result = uninstall(home, { full: true });
+    assert.deepEqual(result.memoryKept, [
+      { path: hygieneDir(home), reason: 'locked-whole' },
+      { path: locked, reason: 'locked', lock: path.join(locked, 'lock'), stamp: '20261015T120606108Z', pid: process.pid, manifest: true, folder: null },
+    ]);
+    assert.equal(Object.hasOwn(result, 'memorySnapshotsRemoved'), false);
+    assert.deepEqual(everythingUnder(home), before, 'not one file of it is gone');
+    assert.equal(fs.existsSync(other), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an uninstall refuses while another holds the marker, and names one left by a run that ended; with no folder it makes no marker', () => {
+  const home = makeTmpHome();
+  try {
+    assert.deepEqual(uninstall(home, { full: true }), { ...NOTHING_ELSE, removed: [] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'no folder, no marker, no .js-harness');
+
+    const project = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+    const marker = purgeMarker(hygieneDir(home));
+    fs.writeFileSync(marker, JSON.stringify({ pid: 4242, startedAt: '2026-10-16T08:00:00.000Z' }));
+    for (const [alive, full] of [[true, false], [false, true]]) {
+      const result = uninstall(home, { full, alive: (pid) => pid === 4242 && alive });
+      assert.deepEqual(result.memoryKept, [{ path: hygieneDir(home), reason: 'purging', marker, pid: 4242, alive }], String(alive));
+      assert.equal(fs.existsSync(path.join(project, 'snapshots', '20261015T120606108Z')), true);
+      assert.equal(fs.existsSync(marker), true, 'the marker of another run is not removed');
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a full removal that fails puts the folder back and says it may be partly removed; a folder left aside is named', () => {
+  const home = makeTmpHome();
+  try {
+    const project = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+    const failing = (target, options) => {
+      if (path.basename(target).startsWith('memory-hygiene.purging-')) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    };
+    const back = uninstall(home, { full: true, removeFile: failing });
+    assert.deepEqual(back.memoryKept, [{ path: hygieneDir(home), reason: 'partial', code: 'EBUSY' }]);
+    assert.equal(fs.existsSync(path.join(project, 'journal.jsonl')), true, 'the folder is back under its name');
+
+    let aside;
+    const renameFile = (from, to) => {
+      if (from === hygieneDir(home)) {
+        aside = to;
+        return fs.renameSync(from, to);
+      }
+      throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    };
+    const left = uninstall(home, { full: true, removeFile: failing, renameFile });
+    assert.deepEqual(left.memoryKept, [{ path: aside, reason: 'aside', code: 'EBUSY', dir: hygieneDir(home) }]);
+    assert.equal(fs.existsSync(aside), true);
+
+    const found = uninstall(home);
+    assert.deepEqual(found.memoryKept, [{ path: aside, reason: 'aside-found', dir: hygieneDir(home) }]);
+    assert.equal(fs.existsSync(aside), true, 'a folder left aside is named, never removed');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

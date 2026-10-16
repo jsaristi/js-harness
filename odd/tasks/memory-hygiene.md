@@ -227,7 +227,7 @@ Everything else goes to him, settled by evidence first:
 ### D4 Undo
 1. `js-harness memory plan <files...>` takes a lock (the pattern of `bin/lib/gate-lock.mjs`),
    snapshots the whole folder with each file's sha256 under
-   `~/.js-harness/memory-hygiene/<slug>/<stamp>/`, and records the write set: the files the pass
+   `~/.js-harness/memory-hygiene/<slug>/snapshots/<stamp>/`, and records the write set: the files the pass
    may change, create or delete.
 2. The pass edits only those files.
 3. `memory verify <stamp>` records the after-hashes always, even when it refuses, since a failed
@@ -241,7 +241,7 @@ Everything else goes to him, settled by evidence first:
    is refused by name. The index is undone line by line: the pass's own lines are put back and the
    lines others added since are kept.
 5. Snapshots are kept, the last ten per project; `uninstall` lists the open stamps and keeps them
-   unless asked to purge, since they are the only copy of what a pass changed. `install` records
+   unless `--full` is given (D7), since they are the only copy of what a pass changed. `install` records
    the folder.
 Line endings and bytes are compared raw; the notes are LF today.
 
@@ -542,14 +542,14 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   to JH 21 with closed PR 263's branch, test first, two readers on its design: D7 and T10.
 
 ## Next step (2026-10-16)
-- T10 (JH 21, branch `feat/memory-full-uninstall`, worktree D:js-harness-worktreesmemory-full-uninstall): D7 version 2
-  committed (34094e3) after its two readers. State for a resume: the build has not started; no test is written. Order:
-  memory-pass.mjs first (readLock export, a purgeMarker helper in memory-hygiene.mjs beside hygieneDir, planPass
-  marker check and the two lock lines, undoPass takes the lock and checks hashes), then manifest.mjs
-  (removeMemoryHygieneFolder with full, marker, lock rule, rename aside/back), install.mjs flag and lines, the
-  project line, tui.mjs, dueNotice, docs (D7.10). Each rule RED first (D7.9). Then the verifier (risk 1 and 4),
-  gentle-ai review, Codex reading 2e082ca, a PR, tell the lead. Next: the build
-  test first. L6.2 is answered (L7).
+- T10 (JH 21, branch `feat/memory-full-uninstall`, worktree `D:\js-harness-worktrees\memory-full-uninstall`): built
+  test first, every rule of D7.9 seen RED before its code, in two commits: the pass library (`readLock`, `lockLine`,
+  the marker in `planPass`, `undoPass` and `dueNotice`, the snapshot hash check) and the uninstall (`--full`, the
+  lock rule, the marker, rename aside and back, the project line, the menu's second question, the docs). Per file:
+  memory-pass 27, memory-hygiene 13, manifest 169, install 77, tui 79 tests pass. Beyond D7: `readLock` takes as a
+  stamp only the shape `planPass` writes, and a lock it cannot read counts as held. State for a resume: next the
+  independent verifier (risk items 1 and 4), the gentle-ai review of each commit, Codex reading `2e082ca`, a PR,
+  tell the lead. L6.2 is answered (L7).
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
   to L6.1; L6.2 adds a flag only if he wants one. The folder at uninstall and the board row are on

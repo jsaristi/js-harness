@@ -36,6 +36,10 @@ js-harness uninstall --global
 npm rm -g js-harness
 ```
 
+`uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
+and names them; `uninstall --global --full` removes them too. Files you modified and the memory
+notes themselves are kept either way.
+
 `uninstall` removes from the project what `init` wrote, and `uninstall --global` removes from
 the home what `install` wrote. Each one reads the manifest the install recorded, so it removes
 only those files, and all of them. Measured on Windows with an empty home and an empty project:
@@ -199,6 +203,9 @@ up to date at 0.1.0
 ### js-harness uninstall
 
 Inside a project, removes what `init` wrote; with `--global`, removes what `install` wrote.
+`--global --full` also removes the memory snapshots, the only copy of what a pass changed; files
+you modified and the memory notes themselves are kept either way. Neither removes a project's
+memory folder while a pass holds its lock: the line says what releases it.
 
 ```console
 $ js-harness uninstall
@@ -545,7 +552,8 @@ of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that 
 user is lost and no file another session wrote is overwritten, and an undo that puts back only what
 nobody wrote since and refuses while another pass holds the lock. `uninstall --global` removes that
 folder, except a project's folder that holds snapshots: they are the only copy of what a pass changed,
-so it is kept, with its journal, and its stamps are named. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+so it is kept, with its journal, and its stamps are named; `uninstall --global --full` removes them
+too. Neither removes a project under a pass. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
 
 ```console
 $ js-harness memory status
