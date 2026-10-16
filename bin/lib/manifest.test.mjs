@@ -166,6 +166,59 @@ test('uninstall removes now-empty directories it created', () => {
   }
 });
 
+// T5a of odd/tasks/first-version.md: what install writes outside the repository is undone exactly, folders included.
+test('uninstall of an install into an empty home leaves the home empty, the host folders install made included', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    uninstall(home);
+    assert.deepEqual(fs.readdirSync(home, { recursive: true }), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a repeat install and a sync keep the host folders the first install made, and uninstall still takes them out', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    install(home, '0.1.0');
+    sync(home, '0.2.0');
+    uninstall(home);
+    assert.deepEqual(fs.readdirSync(home, { recursive: true }), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps a host folder that was there before install, even an empty one', () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.mkdirSync(path.join(home, '.codex'));
+    install(home, '0.1.0');
+    uninstall(home);
+    assert.deepEqual(fs.readdirSync(home, { recursive: true }).map(String).sort(), ['.claude', '.codex']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall from a manifest that names no created folder leaves the host folders, as before', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const manifest = readManifest(home);
+    for (const entry of manifest.entries) delete entry.createdFolders;
+    fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
+    uninstall(home);
+    assert.ok(fs.existsSync(path.join(home, '.claude')));
+    assert.ok(fs.existsSync(path.join(home, '.codex')));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall on a home with no manifest is a no-op', () => {
   const home = makeTmpHome();
   try {

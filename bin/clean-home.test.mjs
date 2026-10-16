@@ -1,6 +1,6 @@
 // S5 of odd/tasks/first-version.md: the whole cycle on a clean machine, run by every gate. A throwaway home outside the
 // repository gets this checkout's `install`, a `doctor` with no gap of the harness's own, the session-start hooks the
-// install registered, and `uninstall --global`, which must leave no file behind. The hooks and doctor's hook check run
+// install registered, and `uninstall --global`, which must leave the home empty. The hooks and doctor's hook check run
 // `js-harness` by name, as a host does, so a shim at the front of PATH sends that name to this checkout and never to
 // the copy installed on the machine. The update step waits for the release source (T4 of the same document).
 import { test } from 'node:test';
@@ -41,7 +41,7 @@ function filesUnder(folder) {
     .sort();
 }
 
-test('a clean home installs the harness, reports no gap of its own, runs its session-start hooks and uninstalls to no file at all', () => {
+test('a clean home installs the harness, reports no gap of its own, runs its session-start hooks and uninstalls to an empty home', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-clean-home-'));
   try {
     const home = path.join(root, 'home');
@@ -94,8 +94,9 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
 
     const uninstalled = run(['uninstall', '--global', '--home', home]);
     assert.equal(uninstalled.status, 0, uninstalled.stderr);
-    // Nothing the cycle wrote is left: not the manifest, not the doctor's cache, not a hook's state.
+    // Nothing the cycle wrote is left: not the manifest, not the doctor's cache, not a hook's state, not a folder.
     assert.deepEqual(filesUnder(home), []);
+    assert.deepEqual(fs.readdirSync(home), []);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
