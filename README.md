@@ -361,7 +361,8 @@ PASS  rules  18 rules, hash 7963ae6d5597
 ### js-harness codex-review
 
 Runs the Codex review of `<base>..HEAD` and records it. `--plan` prints what the review would
-read and cost, and starts nothing; `--unavailable <reason>` records a skip.
+read and cost, with how close that estimate came on the last reviews this machine recorded, and
+starts nothing; `--unavailable <reason>` records a skip.
 
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again

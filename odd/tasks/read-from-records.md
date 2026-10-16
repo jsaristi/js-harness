@@ -225,11 +225,14 @@ What each change counts as:
 - [x] T0 · S7 to S11, the recheck, test first, its own pull request; his order of 2026-10-14,
       first in the queue. Route: inline (one understood change; no writer reason). Risk to name
       at its close.
-- [ ] T1 · This document, opened with the task contract, mirrored in engram. Route: inline.
-- [ ] T2 · Two readers attack the design (opus, high, read-only); what they changed written
-      under the design; the design to the orchestrator. Route: delegated, read-only.
-- [ ] T3 · S1 to S3 test first: the fitted estimate, the high figure, the line on how the method
-      did. Route: inline. Risk to name at its close.
+- [x] T1 · This document, opened with the task contract, mirrored in engram. Route: inline.
+      Done: the document and its design, `0eaf5d0`.
+- [x] T2 · Two readers attack the design (opus, high, read-only); what they changed written
+      under the design; the design to the orchestrator. Route: delegated, read-only. Done: "What
+      its two readers changed", `0eaf5d0`.
+- [x] T3 · S1 to S3 test first: the fitted estimate, the high figure, the line on how the method
+      did. Route: inline. Risk: none (see Progress, 2026-10-16). Commits `f66a822`, `e23892b` (S1,
+      S2) and the S3 commit on `feat/plan-from-records` after the merge of `main`.
 - [ ] T4 · S4: the plan recorded in the run log, once its readers are read. Route: inline.
 - [ ] T5 · S5 and S6 test first: `progress --pace`. Route: inline.
 - [x] T6 · A defect of T0 (L8 of odd/tasks/merge-queue.md): a range from the head of a rechecked
@@ -297,9 +300,8 @@ What each change counts as:
   was asked whether to merge it once more.
 
 ## Next
-0. PR 128 (T0, the recheck): pushed at 95a3294 with main f819d0b merged; the orchestrator merges it. If main moves with code before that, it asks for one more merge of main.
-1. T3, S1 to S3, test first, on its own branch: off main once 128 is merged, or stacked on feat/read-from-records if the orchestrator wants it sooner. Read "Design (second version)" first; reader A's replay numbers are there. Merge main before any gate on bin/codex-review.mjs (JH 12 is changing its flag parser).
-2. T4 (S4), then T5 (S5, S6).
+1. T4 (S4), stacked on feat/plan-from-records once T3's pull request is open.
+2. T5 (S5, S6), on its own branch off main.
 
 - 2026-10-14 · **T6, a fork at a rechecked head.** Found by JH 10 on feat/merge-queue (forked at
   e61ae6a, whose findings 8ccd689 rechecked): its own review was refused as "a second recheck".
@@ -322,5 +324,26 @@ What each change counts as:
   correction amended after its recheck keeps the plain review PR 170 gives it, and nothing more is
   built for it.
 
+- 2026-10-16 · **T1 and T2 ticked, T3 built (JH 22).** T1 and T2 were done in substance by
+  `0eaf5d0` (the document and the design after its two readers). T3 sits on
+  `feat/plan-from-records` in the worktree `D:/js-harness-worktrees/plan-from-records`: S1 and S2
+  were already committed (`f66a822`, `e23892b`); a merge of `main` begun at 03:01 and left with one
+  conflict was aborted and made again on `origin/main` `c644fca` (the conflict: `main` renamed the
+  fixtures' model to `gpt-fixture`, `41ee91f`; the branch's expectations were kept with that name).
+  S3, test first: RED by the missing export, then 3 unit tests (`methodRecord`, `methodRecordLine`)
+  and one by the command (`--plan` without records, then with one review), which failed before the
+  line was printed. Decisions the design left open:
+  - "between x and y" is the least and the most of the last ten reviews' estimate over what they
+    took, with the median;
+  - a kept part is told by its line: a run line an earlier record named is kept, and left out; a
+    part kept from a run that recorded nothing is counted once, by the first record that names it;
+  - a review is measured on its measured parts that had an estimate (a measured line before them);
+  - the line is printed by `--plan` alone, after the estimate and before the recheck, allowance and
+    flag lines, and not for a plan of no part.
+  Nine tests of the command and two of the allowance that read `--plan`'s whole output or its last
+  lines gained the line, and the two usage tests its new words. On this machine's records: "on the last 10 reviews this machine recorded, its
+  estimate came to between 0.54 and 2.65 times what each took, 1.38 at the median". Risk: none (no
+  high-risk item: `--plan` output gains one line, no flag, record or format changes).
+
 ## Resume here
-Worktree D:/js-harness-worktrees/read-from-records, branch feat/read-from-records, pushed at 95a3294 (PR 128). T0 is done; T1 and T2 are written (the design's second version, 0eaf5d0); T3 to T5 are not started. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design. The session was cut at 76 percent of context after T0 closed.
+Worktree D:/js-harness-worktrees/plan-from-records, branch feat/plan-from-records. T0 to T3 are done (T3: S1, S2 in f66a822, e23892b; S3 after the merge of main c644fca). Next: T4 (S4, the plan recorded in each run line), stacked on this branch, then T5 (S5, S6) on its own branch off main. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design.
