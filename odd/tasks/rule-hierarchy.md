@@ -3380,6 +3380,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - Next: commit through the gate (one gate for this unit), gentle-ai, Codex with `--base 6a6ce9e`, the
     pull request, the lead told; then T1 (`docs/SPEC.md` and the row `spec`), from the notes the lead
     compiled at `C:\Users\Oficina\.js-harness\spec-notes\D--js-harness.md` (254 lines, six sessions).
+  - Done, 2026-10-16: `020b412` through the gate (exit 0). gentle-ai assessed it medium and not due by size;
+    the session raised it to high by item 5 (it adds `Stop` entries `install` writes on every machine).
+    Review lineage `review-0e9133019c3aab6f`, lenses risk, resilience and reliability, consent pre-granted:
+    approved with no blocker and acknowledged (authority burned). Of its four advisories, three were
+    closed in `1dd9c23` with their tests: a body line that only begins with a label ("Working on the
+    docs") counted as a state line, two labels where one begins the other matched one line, and a
+    `harness.json` that is not JSON turned the check off in silence. The fourth repeats the third.
+    Codex reviewed `6a6ce9e..1dd9c23` in three parts (374,557 input tokens, inside the allowance of
+    840,000): one P2, a fenced block a quote holds (`> ```) was not read as a block; closed in the next
+    commit with its test.
 
 ## Next step
 **State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the

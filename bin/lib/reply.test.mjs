@@ -86,6 +86,11 @@ test('a state line inside a fenced block does not count', () => {
   assert.equal(refusal('Ejemplo:\n\n~~~\nCorte\n~~~\n\nSigo solo: espero el gate.'), null);
 });
 
+test('a state line inside a fenced block that a quote holds does not count either', () => {
+  assert.equal(refusal('Un ejemplo:\n\n> ```\n> Terminado: volvé a JH 7\n> ```\n\n**Sigo solo** — espero el gate.'), null);
+  assert.equal(refusal('Un ejemplo:\n\n> > ~~~\n> > Corte\n> > ~~~\n\n**Sigo solo** — espero el gate.'), null, 'a quote inside a quote');
+});
+
 test('two state lines are turned back, naming both', () => {
   const reason = refusal('Sigo solo: espero el gate.\n\nTerminado: volvé a JH ORQ.');
   assert.match(reason, /more than one state/);

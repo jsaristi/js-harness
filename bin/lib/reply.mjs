@@ -85,7 +85,9 @@ function linesOf(text) {
   const fenced = lines.map(() => false);
   const blocks = [];
   let open = null;
-  lines.forEach((line, i) => {
+  lines.forEach((raw, i) => {
+    // A fence a quote holds (`> ```) is a fence too; `bare` would take the quote marks off its lines.
+    const line = raw.replace(/^\s*(?:>\s?)+/, '');
     const fence = /^\s*(`{3,}|~{3,})/.exec(line);
     if (open === null && fence) {
       open = { start: i, mark: fence[1] };
