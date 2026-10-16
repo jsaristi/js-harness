@@ -85,7 +85,8 @@ function turnOf(line) {
   if (record?.type !== 'assistant' || record.isSidechain || !usage || record.message.model === '<synthetic>') return null;
   const count = (key) => (Number.isFinite(usage[key]) ? usage[key] : 0);
   const tokens = count('input_tokens') + count('cache_creation_input_tokens') + count('cache_read_input_tokens');
-  return { at: record.timestamp ?? null, tokens };
+  // A turn the host resumes after a compaction carries zeros here (its usage sits in `iterations`): no first turn.
+  return tokens > 0 ? { at: record.timestamp ?? null, tokens } : null;
 }
 
 /** The transcripts of the project at `cwd` (and, from a worktree, of its main checkout), newest first. */

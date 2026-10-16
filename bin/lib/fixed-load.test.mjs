@@ -159,3 +159,14 @@ test('a synthetic assistant record of the host is not the first turn', () => {
     assert.equal(measureFixedLoad({ home, cwd }).sessions[0].tokens, 110_002);
   });
 });
+
+test('a record whose usage reports no input at all is not the first turn', () => {
+  withFixture((home, cwd) => {
+    // The host writes the turn it resumes after a compaction with zeros at the top and its real usage in
+    // `iterations` (seen 2026-10-15 in a transcript of this project); measured, it would be a session of 0.
+    const zero = assistant(0, 0, 0);
+    zero.message.usage.iterations = [{ input_tokens: 2, cache_creation_input_tokens: 1117, cache_read_input_tokens: 465_288 }];
+    transcript(home, cwd, 's', [user, zero, zero, assistant(2, 60_000, 50_000)], 1);
+    assert.equal(measureFixedLoad({ home, cwd }).sessions[0].tokens, 110_002);
+  });
+});
