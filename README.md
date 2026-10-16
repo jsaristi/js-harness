@@ -352,7 +352,8 @@ PASS  rules  18 rules, hash 7963ae6d5597
 
 Runs the Codex review of `<base>..HEAD` and records it. `--plan` prints what the review would
 read and cost, with how close that estimate came on the last reviews this machine recorded, and
-starts nothing; `--unavailable <reason>` records a skip.
+starts nothing; a run records in each part's run line the figures it was planned at, which that
+line reads; `--unavailable <reason>` records a skip.
 
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again
