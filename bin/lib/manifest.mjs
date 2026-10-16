@@ -1573,12 +1573,14 @@ function removeMemoryHygieneFolder(home, { removeFile, statFile, listDir, rename
 function hygieneProjects(dir, statFile, listDir) {
   return listDir(dir).sort().map((name) => {
     const project = path.join(dir, name);
+    // The lock first, which never throws: a project whose snapshots cannot be looked at is still seen under a pass.
+    const lock = readLock(project);
     try {
       const snapshots = path.join(project, 'snapshots');
       const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
-      return { path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile), lock: readLock(project) };
+      return { path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile), lock };
     } catch (err) {
-      return { path: project, reason: 'unremovable', code: err.code ?? 'unknown error' };
+      return lock ? { path: project, lock } : { path: project, reason: 'unremovable', code: err.code ?? 'unknown error' };
     }
   });
 }

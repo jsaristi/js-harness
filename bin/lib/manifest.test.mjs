@@ -916,6 +916,27 @@ test('the normal uninstall keeps a project under a pass, with what can release i
   }
 });
 
+test('a project under a pass whose snapshots cannot be looked at is kept as locked by either mode, and the full one removes nothing', () => {
+  const home = makeTmpHome();
+  try {
+    const locked = leftByMemory(home, 'C--locked', '20261015T120606108Z');
+    lockPass(locked, '20261015T120606108Z');
+    leftByMemory(home, 'C--other');
+    const statFile = (target, ...rest) => {
+      if (target === path.join(locked, 'snapshots')) throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      return fs.statSync(target, ...rest);
+    };
+    const before = everythingUnder(home);
+    const entry = { path: locked, reason: 'locked', lock: path.join(locked, 'lock'), stamp: '20261015T120606108Z', pid: process.pid, manifest: true, folder: null };
+    const full = uninstall(home, { full: true, statFile });
+    assert.deepEqual(full.memoryKept, [{ path: hygieneDir(home), reason: 'locked-whole' }, entry]);
+    assert.deepEqual(everythingUnder(home), before);
+    assert.deepEqual(uninstall(home, { statFile }).memoryKept, [entry]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('the full uninstall removes nothing of the folder while any project is under a pass, and names the lock', () => {
   const home = makeTmpHome();
   try {

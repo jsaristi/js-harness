@@ -497,7 +497,7 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
       `<home>/.claude`;
     - an unreadable journal reads as `no-pass` (already so at the baseline).
 
-- [ ] T10 (kind: build) The full uninstall, D7: `uninstall --global --full` removes the snapshots, the normal one
+- [x] T10 (kind: build) The full uninstall, D7: `uninstall --global --full` removes the snapshots, the normal one
   offers it, neither removes a project under a pass; from closed PR 263's pieces, on T9's code, tests first
   (L7; route: inline; risk items 1 and 4, so an independent verifier and the slice's review)
 
@@ -547,9 +547,16 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   the marker in `planPass`, `undoPass` and `dueNotice`, the snapshot hash check) and the uninstall (`--full`, the
   lock rule, the marker, rename aside and back, the project line, the menu's second question, the docs). Per file:
   memory-pass 27, memory-hygiene 13, manifest 169, install 77, tui 79 tests pass. Beyond D7: `readLock` takes as a
-  stamp only the shape `planPass` writes, and a lock it cannot read counts as held. State for a resume: next the
-  independent verifier (risk items 1 and 4), the gentle-ai review of each commit, Codex reading `2e082ca`, a PR,
-  tell the lead. L6.2 is answered (L7).
+  stamp only the shape `planPass` writes, and a lock it cannot read counts as held. Commits `155af74` and `a0501e6`.
+  The independent verifier and the gentle-ai review of the slice (three lenses) found one blocker: a refused undo
+  released the lock of a pass still planned; fixed in `e6417d9`, and gentle-ai approved the slice
+  (`review-d7256531515c8365`, acknowledged). Their warnings are fixed in the commit after it: the full uninstall reads
+  a project's lock before its snapshots, so one it cannot look at is still seen under a pass, and an undo whose
+  folder was moved away names the uninstall's marker. Advisories left open, all needing a filesystem error or a race
+  of milliseconds: `dueNotice` checks the marker and then writes its stamp, with no lock between; the hash check of
+  an undo does not cover `after-index.txt`; a stale marker with no folder blocks and names the folder. State for a
+  resume: next the gentle-ai assess of the last commit, Codex over `155af74^..HEAD` reading `2e082ca`, a PR, tell
+  the lead. L6.2 is answered (L7).
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
   to L6.1; L6.2 adds a flag only if he wants one. The folder at uninstall and the board row are on

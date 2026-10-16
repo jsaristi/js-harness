@@ -283,6 +283,8 @@ export function undoPass({ folder, stateDir, stamp, now }) {
     try {
       fs.writeFileSync(lockFile(stateDir), JSON.stringify({ stamp, pid: process.pid }), { flag: 'wx' });
     } catch (err) {
+      // A folder moved away meanwhile is an uninstall removing it, as in `planPass`.
+      if (err.code === 'ENOENT') refuseWhilePurging(stateDir);
       if (err.code !== 'EEXIST') throw err;
       throw new PassError(lockLine(stateDir, readLock(stateDir)));
     }
