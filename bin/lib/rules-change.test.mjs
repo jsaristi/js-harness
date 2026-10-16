@@ -218,7 +218,9 @@ test('a source needs its reading and where he accepted it, and at least one quot
 test('a design source names a path that exists, and a rule of his takes his words only', () => {
   assert.deepEqual(sourceOf({ kind: 'design', path: 'docs/ROADMAP.md' }, CONTEXT), { kind: 'design', path: 'docs/ROADMAP.md' });
   refusal(() => sourceOf({ kind: 'design', path: 'docs/NOPE.md' }, CONTEXT), /docs\/NOPE.md is not a file of the repository/);
-  refusal(() => sourceOf({ kind: 'design', path: 'docs/ROADMAP.md' }, { ...CONTEXT, owner: 'sebastian' }), /his words/);
+  refusal(() => sourceOf({ kind: 'design', path: 'docs/ROADMAP.md' }, { ...CONTEXT, owner: 'sebastian' }), /his words, not a design, unless the change is of its form alone/);
+  assert.deepEqual(sourceOf({ kind: 'design', path: 'docs/ROADMAP.md' }, { ...CONTEXT, owner: 'sebastian', form: true }), { kind: 'design', path: 'docs/ROADMAP.md' });
+  refusal(() => sourceOf({ kind: 'design', path: 'docs/NOPE.md' }, { ...CONTEXT, owner: 'sebastian', form: true }), /docs\/NOPE.md is not a file of the repository/);
   refusal(() => sourceOf({ kind: 'notes' }, CONTEXT), /words or design/);
 });
 

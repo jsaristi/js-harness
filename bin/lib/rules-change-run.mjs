@@ -224,14 +224,15 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       const file = path.join(transcripts, `${session}.jsonl`);
       return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
     };
-    // A rule of his needs his words whether it is his before the change or after it.
-    const owner = before?.owner === 'sebastian' ? 'sebastian' : rule.owner;
-    const source = sourceOf(given, { owner, today, transcriptOf, exists: (file) => isFileOf(top, file) });
     // A change of form alone (patterns or failure, nothing else) says nothing of the value, so the rule keeps the source
     // of its value, and the relief line names where the change came from; any other change stores its own source.
     const formOnly = change !== null && what === 'form' && Object.hasOwn(startSources, id)
       && Object.keys(change).every((key) => key === 'set' || key === 'source')
       && Object.keys(change.set ?? {}).length > 0 && Object.keys(change.set).every((key) => key === 'patterns' || key === 'failure');
+    // A rule of his needs his words whether it is his before the change or after it, except for a change of its form
+    // alone, which keeps his words as its source (his answer of 2026-10-16, odd/tasks/rule-hierarchy.md).
+    const owner = before?.owner === 'sebastian' ? 'sebastian' : rule.owner;
+    const source = sourceOf(given, { owner, form: formOnly, today, transcriptOf, exists: (file) => isFileOf(top, file) });
     const stored = formOnly ? startSources[id] : source;
     const sources = sortedKeys({ ...startSources, [id]: stored });
     const sourceSaid = formOnly ? `${source.kind}${source.kind === 'design' ? ` ${source.path}` : ''}, the rule's own source kept` : source.kind;
