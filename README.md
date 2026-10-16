@@ -271,6 +271,12 @@ before the first sync since the last review (`~/.gentle-ai/backups/<stamp>/snaps
 the next checks each change against the project's `AGENTS.md` for conflicts.
 `js-harness doctor --gentle-ai-reviewed` records the review, and `--json` prints the record.
 
+Its `stack-update` row does the same for the other tools of the stack and for the `claude` on PATH:
+the first reading is recorded as reviewed, and a tool that updated itself since (engram, codex, the
+Claude CLI's native updater) stays `stale`, named by the session-start hook, until
+`js-harness doctor --stack-reviewed` records its review. A tool installed since joins the record as
+it is; one removed is no update.
+
 ```console
 $ js-harness doctor --offline
 tool            version   claude    codex     project   up to date
