@@ -36,6 +36,7 @@ fourteen matters two places say different things; each is listed, with the text 
 - `node bin/js-harness.mjs failures check --settled` exits 0
 - `node --test bin/lib/spec.test.mjs` exits 0
 - `node --test scripts/practice-lib.test.mjs` exits 0
+- `node --test bin/lib/protocols-skill.test.mjs` exits 0
 - The practice journey, with this feature's steps in it, passes on the machine that builds it
   (here `node scripts/practice.mjs run --root D:\js-harness-practice`), and its record line is
   quoted in Progress. The folder is one machine's, so this is read, not a command of the
@@ -435,8 +436,8 @@ becomes a number that can be other than zero on a green tree: the entries seen a
 `docs/FAILURES.md` exists, the classes are the project's own, and a control owed is a phrase of
 any checkbox item that is not checked, which needs no convention of task numbers; a plan kept
 as plain bullets has to turn the one that owes into a checkbox. Not built in this slice,
-and said so: `init` does not write an empty register (it goes with T9, with the template); no
-command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
+and said so: `init` does not write an empty register (it goes with T9, with the template; built
+with T9 on 2026-10-16, Progress); no command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
 which waits for a reader.
 
 A limit of who writes. The orchestrator writes only its relief file, so what it sees reaches the
@@ -2126,7 +2127,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   hints the merge commit as the base after `main` is merged in, failure 15), T5 (the row
   `citations`, INFO) and T6 (the row `memory-rules` of `doctor`). They carry no checkbox here,
   so that `js-harness progress` counts them once
-- [ ] T7 The skill `js-harness-protocols`, six sections, each opening with its incident
+- [x] T7 The skill `js-harness-protocols`, six sections, each opening with its incident (JH 27,
+  branch `feat/protocols-skill`, Progress 2026-10-16; sections 5 and 6 are built on the lead's
+  assignment and stay his to keep or drop)
 - [ ] T8 `AGENTS.md` rewritten within the budget, its wording passed by him. His idea of
   2026-10-11 for how (relief file, line 203), recorded here and not built yet: the text is
   drafted in `docs/agents-build.md`, analysed, reordered and polished there with the budget
@@ -3415,6 +3418,53 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   checks. gentle-ai's two suggestions go there too: `review-model`'s `\breview\b` misses
   "reviews", and `codex-review-margin`'s lookbehind on `%` leans on `AMOUNT` taking the unit,
   which the `AMOUNT` fix must keep or replace.
+- 2026-10-16, T7 built by JH 27 on the lead's notice of 08:45 ("rule-hierarchy T7, the skill
+  js-harness-protocols (six sections, each opening with its incident)"), branch
+  `feat/protocols-skill`, inline, test first. `bin/lib/protocols-skill.mjs` holds the text and
+  `install` writes it for both hosts as the third skill (`components` in `bin/lib/manifest.mjs`;
+  `sync` rewrites it, `uninstall` removes it). RED: `bin/lib/protocols-skill.test.mjs` failed on
+  the missing module; GREEN: 7 tests, and `bin/lib/manifest.test.mjs` 157. The test is the
+  signal "No protocol without its incident": every section opens with `Incident (<date>):`.
+  Where the design and the files of today differ, the files won, and each is said here:
+  - a decision is asked with the question tool, through the orchestrator, since 2026-10-14
+    (`block-read-as-task`, `docs/FAILURES.md`), so section 1 points to the orchestrator skill's
+    "Questions to the user" instead of the block, and section 2 keeps the block only for a cut;
+  - section 6 names the sub-agent rules by id (`subagent-reader-model`, `subagent-writer-model`,
+    `subagent-effort`) and states no model, because T16 declared them since the design was
+    written and the guard enforces them; the model clause that waited on his answer is not
+    restated;
+  - section 4 follows letters A to H as far as they hold in a project that only installs the
+    harness: `rules change` in the harness's own checkout, `docs/rules.json` by hand elsewhere
+    (`bin/rules.mjs:9-16`); its review date, 2026-11-16, is this session's choice;
+  - the skill speaks of "the user", since it ships to every project.
+  The incidents, each from the register: 1 `asked-yes-not-his` (2026-10-09), 2
+  `block-read-as-task` (2026-10-07), 3 `chained-step-not-conditional` (2026-10-10), 4
+  `old-rule-beside-new` (2026-10-11), 5 the memory note on a mistake in five parts (2026-10-10,
+  his words in the orchestrator's chat, quoted in that note and not read at their line here), 6
+  `estimate-passed-as-fact` (2026-10-10). The controls of `chained-step-not-conditional` and
+  `stacked-pr-base-order`, owed to this task, now name a phrase of the skill. Sections 5 and 6
+  are proposals of this document that he has not answered ("Ask me before"); they are built
+  because the lead assigned six, and are his to keep or drop. Not done here: the practice
+  journey's host-load check (`hostCallProblems`, `scripts/practice-lib.mjs`) still asks the
+  host for the two older skills only, since its fixtures are recorded streams; a step that
+  proves the host lists this one belongs to T12.
+- 2026-10-16, T9's empty register, by `JH 28 · reserva B` on `feat/empty-register`, from the
+  lead's notice to 28 (a claim of the lead's, read in the channel record) after PR 280, the
+  template's lines, had left it open. Built test first: `init` writes `docs/FAILURES.md`
+  (`FAILURES_TEMPLATE`, `bin/lib/project.mjs`) when the project has none, under the same terms
+  as `AGENTS.md`: an existing register is kept and listed in `kept`, and `sync` in a clone
+  creates none. It says what a failure is and how a class and an entry are written, and declares
+  no class, since the classes are the project's own. It parses with no fault, so the gate's
+  `failures` row passes on it. The file is in the manifest with its hash, and `docs/`, when this
+  run made it, among the folders `uninstall` removes while empty. RED: two new tests of
+  `bin/lib/project.test.mjs` failed on `main`; GREEN after. Six tests that pin `init`'s folders
+  or the count of what it writes now name `docs`. Checked by hand in a throwaway repository:
+  `init` printed "wrote docs/FAILURES.md", `uninstall` printed "removed docs/FAILURES.md" and
+  "removed docs", and only `.git` was left. The README's examples and `init`'s help line name
+  the register. Codex on `e898283` (P2, 0.98): a `docs` that is a link out of the repository
+  took the register outside, where `uninstall` does not follow; its folder is now judged as the
+  hooks path is (`resolveHookContainment`), and such a register is kept as outside, never
+  written, pinned by a test with a junction.
 
 ## Next step
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai

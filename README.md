@@ -22,8 +22,8 @@ js-harness init
 1. `npm i -g` puts the `js-harness` command on the path.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md` and the
-   pre-commit gate of that project.
+3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md`, an empty failures
+   register (`docs/FAILURES.md`) and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
@@ -106,7 +106,9 @@ Runs a heavy command under the machine's gate lock, one at a time with the gates
 project, and records the run in the machine's gate log. `gate log` prints the last runs. A
 command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
 in has an open pull request and commits a push would take now, any command but that push or a merge
-is refused, with the push command printed.
+is refused, with the push command printed. `--ready <command>` declares a quick check, such as
+`git diff --quiet`, run before the wait and again as the turn comes after one: when it fails, nothing
+runs (exit 75), so a command that would refuse at once does not wait for a turn first.
 
 ```console
 $ js-harness gate --no-wait -- node -e "console.log('a heavy run, one at a time')"
@@ -125,6 +127,7 @@ Enables js-harness in a git repository and records what it wrote in a manifest o
 $ js-harness init
 wrote harness.json
 wrote AGENTS.md
+wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
 ran codegraph init
 manifest: my-project\.git\js-harness\manifest.json
@@ -137,7 +140,7 @@ manifest of them.
 
 ```console
 $ js-harness install
-installed js-harness 0.1.0 (4 files) into ~
+installed js-harness 0.1.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
@@ -184,7 +187,9 @@ Inside a project, removes what `init` wrote; with `--global`, removes what `inst
 $ js-harness uninstall
 removed harness.json
 removed AGENTS.md
+removed docs/FAILURES.md
 removed .git/hooks/pre-commit
+removed docs
 removed .codegraph/
 removed manifest my-project\.git\js-harness\manifest.json
 $ js-harness uninstall --global
@@ -290,6 +295,21 @@ Roadmap  docs/ROADMAP.md  61/62  98%
 Features  295/349  85%
 ```
 
+`--pace [--days <n>]` reads the first-parent history of the default branch (origin/HEAD, else
+`main`, else `HEAD`) and prints the tasks closed, reopened, added and removed on each of the last
+14 days, or `n`, by committer day, with the totals and the mean a day; `--json` gives the same as
+data. A task is matched by its ID (`T3`); one reworded without an ID, or in a moved file, counts
+as removed and added. Without `--pace`, `progress` runs no git.
+
+```console
+$ js-harness progress --pace --days 2
+Pace of origin/main, its first-parent line, by committer day over the last 2 days:
+  2026-10-15  closed 81  reopened 0  added 67  removed 1
+  2026-10-16  closed 30  reopened 0  added 22  removed 1  (today, so far)
+Total       closed 111  reopened 0  added 89  removed 2
+A day       closed 55.5  reopened 0  added 44.5  removed 1
+```
+
 ### js-harness contract
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
@@ -361,7 +381,9 @@ PASS  rules  18 rules, hash 7963ae6d5597
 ### js-harness codex-review
 
 Runs the Codex review of `<base>..HEAD` and records it. `--plan` prints what the review would
-read and cost, and starts nothing; `--unavailable <reason>` records a skip.
+read and cost, with how close that estimate came on the last reviews this machine recorded, and
+starts nothing; a run records in each part's run line the figures it was planned at, which that
+line reads; `--unavailable <reason>` records a skip.
 
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again

@@ -10,7 +10,7 @@ import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
-import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 
@@ -830,6 +830,9 @@ const gentleAiNotFound = () => ({
 const QUIET_LOAD = { busy: 0.4, processors: 8, share: 0.05, sampleMs: 1000 };
 const QUIET_LOAD_ROW = 'INFO  load  0.4 of 8 logical processors busy before the sensors (5%, 1 s sample)';
 
+/** A watch of a gate's run that finds nobody, at once. */
+const watchedNobody = () => ({ end: async () => ({ seconds: 0, busiest: [] }) });
+
 /** Runs `main`, capturing everything it printed via console.log/console.error and the exit code.
  *
  * A gate takes the machine's gate lock in its home. A run that names none (`--home`, or
@@ -842,7 +845,11 @@ const QUIET_LOAD_ROW = 'INFO  load  0.4 of 8 logical processors busy before the 
  *
  * On a loaded machine a gate looks for the processes that load it, which starts PowerShell on Windows. A
  * run that hands it no look (`deps.busiest`) is given one that finds nobody at once, so no test starts a
- * process for it, whatever its sampler says. */
+ * process for it, whatever its sampler says.
+ *
+ * A gate also watches who spends the processor over its run, which starts PowerShell on Windows at its
+ * start and at its end. A run that hands it no watch (`deps.watchBusiest`) is given one that finds nobody,
+ * so no test starts a process for it and none keeps a line of it. */
 async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   let output = '';
   let errOutput = '';
@@ -856,7 +863,7 @@ async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   };
   const ownHome = argv.includes('--home') || env.JS_HARNESS_HOME !== undefined ? null : makeTmpDir();
   try {
-    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], ...deps });
+    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], watchBusiest: watchedNobody, ...deps });
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
@@ -3259,6 +3266,87 @@ test('nothing is written to the gate log where no gate runs a sensor: a caller t
     for (const folder of [dir, none, home]) fs.rmSync(folder, { recursive: true, force: true });
   }
 });
+
+// --- who spent the processor over a gate's run, kept beside the log (odd/tasks/gate-wait.md, T19) ---
+// The readings are tested in lib/machine-busiest.test.mjs and the file in lib/gate-log.test.mjs; here, when
+// a gate takes them and what it keeps. Every watch is a stand-in that answers at once.
+
+const SPENT = [
+  { name: 'MsMpEng', script: null, pid: 5736, cpuSeconds: 412.3 },
+  { name: 'node', script: 'check.mjs', pid: 9120, cpuSeconds: 2100.4 },
+];
+
+/** A stand-in for `watchBusiest` that writes into `events` when the watch starts and when it ends, and
+ * ends with `spent`. */
+function watched(events, spent = SPENT) {
+  const watch = () => {
+    events.push('watch');
+    return {
+      end: async () => {
+        events.push('watch end');
+        return { seconds: 700.2, busiest: spent };
+      },
+    };
+  };
+  return watch;
+}
+
+test('a gate keeps who spent the processor over its run: watched from its start, read after its sensors, kept in busiest.jsonl under the id of its start, in each state of the lock', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
+  for (const { state, env, deps } of LOCK_STATES) {
+    fs.rmSync(gateLogDir(home), { recursive: true, force: true });
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, sampleLoad, watchBusiest: watched(events), ...deps }));
+    assert.equal(code, 0, `${state}: ${output}`);
+    // The watch starts once the start is written, and is not waited for before the first sensor.
+    assert.deepEqual(events.map((event) => (Array.isArray(event) ? event[0] : event)), ['sample', 'watch', 'run-tests', 'run-lint', 'watch end'], state);
+    const [start] = readGateLog(home).events;
+    const kept = readGateBusiest(home);
+    assert.deepEqual([...kept.keys()], [start.id], state);
+    assert.deepEqual({ ...kept.get(start.id), at: '' }, { v: 1, id: start.id, at: '', seconds: 700.2, busiest: [{ name: 'MsMpEng', pid: 5736, cpuSeconds: 412.3 }, { name: 'node', script: 'check.mjs', pid: 9120, cpuSeconds: 2100.4 }] }, state);
+    // The log's own lines hold nothing new.
+    assert.deepEqual(readGateLog(home).events.map((event) => Object.keys(event).join(' ')), [`${START_FIELDS} load`, 'v event id at seconds result sensors'], state);
+    assert.doesNotMatch(output, /gate log|busiest/);
+  }
+  // A gate that fails keeps it too: a slow red run is as much worth explaining.
+  const { events, sampleLoad } = sampledGate(home);
+  const red = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn: () => ({ ...sensorRan(), status: 3 }), sampleLoad, watchBusiest: watched(events) }));
+  assert.equal(red.code, 1);
+  assert.equal(readGateBusiest(home).size, 2);
+}));
+
+test('no reading is taken and nothing is kept with JS_HARNESS_GATE_LOG=off or JS_HARNESS_GATE_LOAD=off', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  for (const off of [{ JS_HARNESS_GATE_LOG: 'off' }, { JS_HARNESS_GATE_LOAD: 'off' }]) {
+    for (const { state, env, deps } of LOCK_STATES) {
+      const events = [];
+      const { code, output } = await runCheck(['--cwd', dir, '--home', home], { ...env, ...off }, gateDeps({ watchBusiest: watched(events), ...deps }));
+      assert.equal(code, 0, `${state}: ${output}`);
+      assert.deepEqual(events, [], `${JSON.stringify(off)} ${state}`);
+    }
+  }
+  assert.equal(fs.existsSync(path.join(gateLogDir(home), 'busiest.jsonl')), false);
+}));
+
+test('a gate whose readings fail, find nobody or throw still passes, says nothing of them and keeps nothing', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const threw = () => {
+    throw new Error('the watch blew up');
+  };
+  const failing = [
+    threw,
+    () => ({ end: async () => { throw new Error('the end blew up'); } }),
+    () => ({ end: async () => undefined }),
+    () => ({ end: async () => ({ seconds: 1, busiest: [] }) }),
+    () => ({ end: async () => ({ seconds: 1, busiest: 'nobody' }) }),
+    () => undefined,
+  ];
+  for (const watchBusiest of failing) {
+    const spawn = countedSensors();
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, watchBusiest }));
+    assert.deepEqual([code, spawn.ran], [0, 1], output);
+    assert.doesNotMatch(output, /gate log|busiest|blew up/);
+  }
+  assert.equal(readGateBusiest(home).size, 0);
+  assert.deepEqual(gatesOf(readGateLog(home).events).map(({ end }) => end.result), failing.map(() => 'pass'));
+}));
 
 // The switch is for a gate that must leave no file in its home.
 test('JS_HARNESS_GATE_LOG=off writes nothing and says nothing in any state of the lock, nor for a gate that is refused, and only off is the switch', () => withGate({ tests: 'run-tests' }, async (dir, home) => {

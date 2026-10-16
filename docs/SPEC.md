@@ -171,7 +171,7 @@ proofs and by those tasks.
 ### Project init
 
 **Problem:** No incident; the roadmap decided two levels, installed per machine and enabled per project like `git init` (`docs/ROADMAP.md`, `odd/tasks/project-init.md`).
-**Requirement:** In a git repository, init writes a committed `harness.json` pinning the version, a base `AGENTS.md` only where none exists, and the pre-commit gate in the hooks path, keeping any hook already there; it prepares the code map where it is on. Every file is recorded in a per-clone project manifest so uninstall restores the repository exactly. Outside a git repository it writes nothing and exits 1.
+**Requirement:** In a git repository, init writes a committed `harness.json` pinning the version, a base `AGENTS.md` only where none exists, an empty failures register (`docs/FAILURES.md`, declaring no class, since the classes are the project's own) only where none exists, and the pre-commit gate in the hooks path, keeping any hook already there; it prepares the code map where it is on. Every file is recorded in a per-clone project manifest so uninstall restores the repository exactly. Outside a git repository it writes nothing and exits 1.
 **Reason:** Every file init writes inside a project must be undone exactly, like what install writes on the machine.
 **Proof:** `node --test bin/init.test.mjs`, `node --test bin/lib/project.test.mjs`
 **Discarded:** Changing `core.hooksPath`: it silently disables `.git/hooks`. A committed manifest: it is per clone, like the hook.
@@ -189,7 +189,7 @@ proofs and by those tasks.
 ### Progress
 
 **Problem:** "Where are we" was answered by a model reading the roadmap and every feature document, which costs tokens and drifts; states written as prose could not be counted (`odd/tasks/progress-view.md`).
-**Requirement:** The plan and each feature document hold their steps as checkboxes, and a read-only command prints each phase and feature with its checked and pending steps and percentages.
+**Requirement:** The plan and each feature document hold their steps as checkboxes, and a read-only command prints each phase and feature with its checked and pending steps and percentages. Its pace reads the default branch's first-parent history and prints, a day, the tasks closed, reopened, added and removed, counted by the same parsers as the map.
 **Reason:** Progress is computed by a command, not reinterpreted by a model.
 **Proof:** `node --test bin/progress.test.mjs`, `node --test bin/lib/progress.test.mjs`
 **Discarded:** A published page. Editing checkboxes from the command.
@@ -332,12 +332,12 @@ proofs and by those tasks.
 
 ### The installed skills
 
-**Problem:** No incident for the harness's own skill: it is the first component of install's design (`odd/tasks/install-update.md`). For the orchestrator's: on 2026-10-06 three failures in one afternoon came from no session seeing the others, and a session that led and built at once compacted twice in a day (`odd/tasks/session-board.md`).
-**Requirement:** Install writes, for each host, a skill that teaches the commands and the memory hygiene protocol, and a skill that teaches how several sessions share one project: the lead and the work sessions, where each thing lives, how questions reach the owner, the lead's commands and charter, a work session's notices and close. They load on demand, and each is recorded and removed exactly.
+**Problem:** No incident for the harness's own skill: it is the first component of install's design (`odd/tasks/install-update.md`). For the orchestrator's: on 2026-10-06 three failures in one afternoon came from no session seeing the others, and a session that led and built at once compacted twice in a day (`odd/tasks/session-board.md`). For the protocols: what to do when asking the owner for a decision, closing a reply, running something that costs, changing a rule, reporting a mistake and handing off lived only in memory notes and the lead's relief file, and two failures of the register owed their control to a place that did not exist (`odd/tasks/rule-hierarchy.md`, T7).
+**Requirement:** Install writes, for each host, a skill that teaches the commands and the memory hygiene protocol, and a skill that teaches how several sessions share one project: the lead and the work sessions, where each thing lives, how questions reach the owner, the lead's commands and charter, a work session's notices and close, and a third that holds the six protocols, each section opening with the incident it came for and its date and naming the rules it relies on by id, never restating them. They load on demand, and each is recorded and removed exactly.
 **Reason:** A protocol that applies only in some situations loads on demand, while a rule for every reply needs a line in `AGENTS.md` and a check; the lead does not implement because reading code fills a context that has to last.
-**Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/install.test.mjs`
-**Discarded:** A watchman skill: replaced by a lead with a charter the owner decided. Teaching in a skill what a check now enforces. Asking the owner to compact a session.
-**Today:** `bin/lib/manifest.mjs`, `bin/install.mjs`, `claude-skill`, `codex-skill`, `claude-orchestrator-skill`, `codex-orchestrator-skill`
+**Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/install.test.mjs`, `node --test bin/lib/protocols-skill.test.mjs`
+**Discarded:** A watchman skill: replaced by a lead with a charter the owner decided. Six protocol skills: every installed skill's description is read on every turn. Teaching in a skill what a check now enforces. Asking the owner to compact a session.
+**Today:** `bin/lib/manifest.mjs`, `bin/install.mjs`, `claude-skill`, `codex-skill`, `claude-orchestrator-skill`, `codex-orchestrator-skill`, `bin/lib/protocols-skill.mjs`, `claude-protocols-skill`, `codex-protocols-skill`
 
 ### The record of notices between sessions
 
