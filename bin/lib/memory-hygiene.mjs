@@ -37,6 +37,12 @@ export function hygieneDir(home) {
   return path.join(home, '.js-harness', 'memory-hygiene');
 }
 
+/** The marker an uninstall holds while it removes the hygiene folder `folder` (D7.5): beside it, so it outlives the
+ * folder. Every writer of a pass checks it after taking its lock, and stops while it is there. */
+export function purgeMarker(folder) {
+  return `${folder}.purge`;
+}
+
 /** Where the hygiene journal of a project lives: under `~/.js-harness`, never in the memory folder,
  * which the host owns. */
 export function journalPath(home, slug) {
@@ -103,6 +109,8 @@ export function dueNotice({ home, slug, folder, now }) {
     // No stamp yet: look now.
   }
   if (!fs.existsSync(folder)) return null;
+  // An uninstall is removing the folder of memory hygiene (D7.5): the stamp would write into it.
+  if (fs.existsSync(purgeMarker(hygieneDir(home)))) return null;
   let state;
   try {
     state = hygieneState({ memory: readMemory(folder), journal: readJournal(journalPath(home, slug)), now });

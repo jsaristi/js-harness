@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { extractQuotes, PassError, planPass, undoPass, verifyPass } from './memory-pass.mjs';
-import { readJournal } from './memory-hygiene.mjs';
+import { extractQuotes, PassError, planPass, readLock, undoPass, verifyPass } from './memory-pass.mjs';
+import { purgeMarker, readJournal } from './memory-hygiene.mjs';
 
 const NOW = Date.parse('2026-10-15T09:00:00Z');
 const note = (type, body) => `---\nname: x\ndescription: "a description in quotes, not his words"\nmetadata:\n  type: ${type}\n---\n\n${body}\n`;
@@ -125,7 +125,7 @@ test('verify refuses while a reason the pass owns still holds, such as an orphan
 test('a second plan is refused while a pass holds the lock, and allowed after verify releases it', () => {
   withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
     const { stamp } = planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW });
-    assert.throws(() => planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW + 1 }), (err) => err instanceof PassError && /a pass holds the lock: /.test(err.message));
+    assert.throws(() => planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW + 1 }), (err) => err instanceof PassError && err.message.includes(stamp) && /memory verify or memory undo/.test(err.message));
     assert.equal(verifyPass({ folder, stateDir, stamp, homes: '', now: NOW + 2 }).ok, true);
     assert.ok(planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW + 3 }).stamp);
   });
@@ -289,5 +289,79 @@ test('a lock that does not parse is a PassError naming the lock file, from plan,
     assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), named);
     fs.writeFileSync(lock, '{"pid":1}');
     assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }), named);
+  });
+});
+
+// ---- T10, the full uninstall (D7.4, D7.5) ----
+
+const markerOf = (stateDir) => purgeMarker(path.dirname(stateDir));
+
+test('readLock never throws: no lock, a planned pass, an empty lock and a lock whose snapshot was never written', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+    assert.equal(readLock(stateDir), null);
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    assert.deepEqual(readLock(stateDir), { stamp, pid: process.pid, manifest: true });
+    fs.writeFileSync(path.join(stateDir, 'lock'), '');
+    assert.deepEqual(readLock(stateDir), { stamp: null, pid: null, manifest: false });
+    fs.writeFileSync(path.join(stateDir, 'lock'), JSON.stringify({ stamp: '20991231T000000000Z', pid: 4242 }));
+    assert.deepEqual(readLock(stateDir), { stamp: '20991231T000000000Z', pid: 4242, manifest: false });
+    fs.rmSync(path.join(stateDir, 'lock'));
+    fs.mkdirSync(path.join(stateDir, 'lock'));
+    assert.deepEqual(readLock(stateDir), { stamp: null, pid: null, manifest: false }, 'a lock that cannot be read is held');
+    assert.equal(readLock(path.join(stateDir, 'journal.jsonl', 'x')), null, 'a state folder that is a file holds no lock');
+  });
+});
+
+test('a held lock is refused with the line that can release it: verify or undo for a finished plan, remove the file for one that is not', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    assert.throws(() => planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW + 1000 }), (err) => err instanceof PassError && err.message.includes(stamp) && /memory verify or memory undo/.test(err.message));
+    fs.writeFileSync(path.join(stateDir, 'lock'), JSON.stringify({ stamp: '20991231T000000000Z', pid: 4242 }));
+    assert.throws(() => planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW + 2000 }), (err) => err instanceof PassError && err.message.includes(path.join(stateDir, 'lock')) && /holds no finished plan \(pid 4242\)/.test(err.message) && /remove the file/.test(err.message));
+  });
+});
+
+test('a plan is refused while an uninstall holds the marker, and leaves no lock and no snapshot behind', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+    const marker = markerOf(stateDir);
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, startedAt: NOW }));
+    try {
+      assert.throws(() => planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW }), (err) => err instanceof PassError && err.message.includes(marker));
+      assert.equal(fs.existsSync(path.join(stateDir, 'lock')), false);
+      assert.equal(fs.existsSync(path.join(stateDir, 'snapshots')), false);
+    } finally {
+      fs.rmSync(marker, { force: true });
+    }
+  });
+});
+
+test('an undo of a verified pass takes the lock: refused while an uninstall holds the marker, it writes nothing', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    write('MEMORY.md', '- [A](a.md) — a\n');
+    assert.equal(verifyPass({ folder, stateDir, stamp, now: NOW }).ok, true);
+    const marker = markerOf(stateDir);
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, startedAt: NOW }));
+    try {
+      assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError && err.message.includes(marker));
+      assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n');
+      assert.equal(fs.existsSync(path.join(stateDir, 'lock')), false, 'the lock it took is released');
+    } finally {
+      fs.rmSync(marker, { force: true });
+    }
+    undoPass({ folder, stateDir, stamp, now: NOW });
+    assert.equal(read('MEMORY.md'), '- [A](a.md) — a long line\n');
+    assert.equal(fs.existsSync(path.join(stateDir, 'lock')), false, 'and released after an undo that ran');
+  });
+});
+
+test('an undo from a damaged snapshot is refused by name before it writes anything', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    write('MEMORY.md', '- [A](a.md) — a\n');
+    verifyPass({ folder, stateDir, stamp, now: NOW });
+    fs.rmSync(path.join(stateDir, 'snapshots', stamp, 'files', 'MEMORY.md'));
+    assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError && /damaged/.test(err.message) && err.message.includes('MEMORY.md'));
+    assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n');
   });
 });
