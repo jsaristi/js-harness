@@ -177,7 +177,7 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
 - [ ] T1b (kind: design) The lead's answer on Part B, recorded in the Log (S1, S2)
 - [x] T2 (kind: build) `tasksOf` gives each task its lines, and `featureParts`, test first (S3, S4)
 - [x] T3 (kind: build) The hook names the task and its parts, and the mode line follows it, test first; the resume tests updated; SPEC and README (S5, S6, S7)
-- [ ] T4 (kind: verify) Gate, gentle-ai, Codex review, PR ready, the lead told (S1)
+- [x] T4 (kind: verify) Gate, gentle-ai, Codex review, PR ready, the lead told (S1)
 
 ## Log
 
@@ -207,7 +207,12 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
   lines by position now slice past the parts (`4 + PARTS.length`). `thousands` turned out to format
   tokens ("0k"), so counts of lines use `toLocaleString`. The README and `docs/SPEC.md` ("A compaction
   resumes from files") name the parts.
+- L6 — 2026-10-16, T4.
+  - The gate passed on b7a7db5, 96a10a8 and 16975f1.
+  - gentle-ai rated origin/main..16975f1 `--committed-only` as medium risk, review not due (`under_budget`).
+  - Codex reviewed b7a7db5..16975f1 in 2 parts and found it correct (0.88 and 0.94), with no findings, using 211,102 input tokens. The review is recorded.
+  - Pull request 332 was opened, and the lead was told.
 
 ## Next step
 
-T4: the gate, gentle-ai's assessment of the slice, then Codex on the code, the PR, and the lead told. T1b waits for the lead.
+T1b: record the lead's answer on Part B. Drop B: close the feature when PR 332 lands. Build B: design it as `odd/log/<doc>.md` for the two open documents, read by two readers first.
