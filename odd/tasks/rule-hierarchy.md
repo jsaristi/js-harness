@@ -1994,7 +1994,9 @@ name. Each event:
   input's `cwd`, which is the session's, even for a sub-agent in a worktree of its own.
 
 The state is one file a session, `~/.js-harness/channel/rules-seen/<session_id>.json`, holding the last
-seen list reduced to the compared keys. It is written by a temp file and a rename, as the pause state is.
+seen list reduced to the compared keys, with the main ref and the commit it was read at. A turn whose
+main ref still names that commit reads no list: it starts one git, since each costs a few hundred
+milliseconds on this machine. It is written by a temp file and a rename, as the pause state is.
 A write prunes the files of that folder last written more than 30 days before. A fault leaves the record
 as it was, so the next good read prints everything owed.
 
@@ -2441,6 +2443,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     review is written in a document on the pull request's own branch
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
+    - [x] The turn-start hook, its first part: designed, read by two readers, built by JH 27 on
+      2026-10-16 on `feat/rules-reach` ("Reach: the turn-start hook (T16f, first part)")
+    - [ ] The hash in the installed command; the template's marked block; the rest the design lists
   - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
     of the relief file's line 245, carries its cost and a review date, and its done is one
     command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it
@@ -3670,8 +3675,23 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   answer) and 926 (`contract.mjs`, decided with finding 12). Reader C's finding: the memory
   merge of 2026-10-15 copied stale sentences verbatim into the notes it merged them into, so
   they moved instead of going away. T17 stays open until its owners close the rest.
+- 2026-10-16, T16f first part, by JH 27 on `feat/rules-reach`: `rules --hook` built as designed
+  (`bin/lib/rules-reach.mjs`, three `entryComponents`, `doctor` tries it, the practice journey
+  holds its entries). Its time, 20 runs of `js-harness rules --hook` on a `UserPromptSubmit`
+  input in this worktree, in milliseconds sorted: with the first build and a gate's local part
+  running, 1152 … 3747 7345 18087 (two runs hit git's 1,500 ms limit and printed a fault); with
+  no gate, 735 … 1337 1396 1885, while `guard --stop` took 336 … 607 666 and `node -e 0` 206 to
+  885. Each git cost 240 and 370 ms (for-each-ref, show). So a turn after which main has not
+  moved now starts one git and reads no list (the record keeps main's commit): with no gate,
+  601 … 977 1057 1958, the last being the first turn; and as the design asks, 20 turns with no
+  change while JH 26's gate held the machine's gate lock: 405 … 836 911 1014. The 95th
+  percentile is 911 ms, under the design's 1,000, by a thin margin: the run with no gate gave
+  1,057 for its 19 quiet turns, and under the first load `node -e 0` alone reached 1,316. The
+  rest is node's start and one git; going lower means reading the refs without git.
 
 ## Next step
+**State for a resume, 2026-10-16, T16f first part being built by JH 27** on `feat/rules-reach` in `D:/js-harness-worktrees/rules-reach`. The design ("Reach: the turn-start hook") is committed (fdc62a9). Built so far, not committed: `bin/lib/rules-reach.mjs` and its test (11 green); three `entryComponents` in `bin/lib/manifest.mjs` with `manifest.test.mjs` (160 green); `rules --hook` routed in `bin/js-harness.mjs` and `bin/rules.mjs` (`rules.test.mjs` 34 green); `doctor` tries the command (`stack.mjs`, `stack.test.mjs` 120 green); `HASH_KEYS` exported. In progress: `scripts/practice-lib.mjs` (`HARNESS_HOOKS` gains the three entries; `hostHooksProblem` checks `UserPromptSubmit` and `SubagentStart` like `postToolUseProblem`), its tests written RED. Next: `docs/SPEC.md` claims the three ids; README (install output, a `rules --hook` section); `rules` usage, the dispatcher help and the skill command list; T16f sub-item and a Progress entry; commit; the time measured (20 turns, p95 under 1,000 ms); a verifier (item 5); gentle-ai escalated item 5; Codex; PR; notify the lead.
+
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
 approved and acknowledged, the verifier passed, `subagent-effort` narrowed and the near-miss fixed
 in one more commit. Next: gentle-ai's assessment of that commit, Codex, `merge-tree`, and a draft

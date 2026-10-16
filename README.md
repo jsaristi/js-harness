@@ -152,6 +152,9 @@ registered hook entry in ~\.claude\settings.json: js-harness resume --hook (Sess
 registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (UserPromptSubmit)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SubagentStart)
 ```
 
 ### js-harness loop
@@ -382,6 +385,20 @@ Read by: bin/lib/codex-review-allowance.mjs
 $ js-harness rules check
 PASS  rules  18 rules, hash 7963ae6d5597
 ```
+
+`rules --hook` is the turn-start hook of the rules (letter F of `odd/tasks/rule-hierarchy.md`). `install`
+registers it for Claude Code three times: on `UserPromptSubmit`, on `SessionStart` for the
+matcher `compact|clear|resume`, and on `SubagentStart`. Where the project declares rules
+(`bin/lib/rules-data.mjs` in the harness's checkout, `docs/rules.json` in a project), it
+compares the list at the session's merge base with the list on the default branch
+(`origin/HEAD`, else `origin/main`, else `main`, never fetched). It tells the session, once,
+each rule that was added, removed, retired or changed, with the new declaration itself. After a
+compaction, a clear or a resume it tells it again, and a sub-agent is told at its start. Anywhere
+else it prints nothing. A turn with no change prints nothing and costs no token. It never blocks:
+a fault goes to standard error and it exits 0. What a session was last told is kept in
+`~/.js-harness/channel/rules-seen/`, one file a session, pruned after 30 days. `uninstall` removes
+that folder with the channel's; a session still running afterwards may write it again, and the
+next `uninstall` removes it. Codex sessions get nothing until a logging hook confirms its events.
 
 ### js-harness codex-review
 

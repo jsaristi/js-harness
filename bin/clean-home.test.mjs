@@ -136,7 +136,7 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
         }
       }
     }
-    assert.deepEqual(ran, ['js-harness doctor --hook', 'js-harness resume --hook', 'js-harness doctor --hook', 'js-harness resume --hook']);
+    assert.deepEqual(ran, ['js-harness doctor --hook', 'js-harness resume --hook', 'js-harness rules --hook || exit 0', 'js-harness doctor --hook', 'js-harness resume --hook']);
 
     // The update: the newest release tag of the repository is installed, and that copy's own sync brings the home to it.
     const prefix = path.join(root, 'prefix');
