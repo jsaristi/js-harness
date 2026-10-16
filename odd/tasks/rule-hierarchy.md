@@ -3327,8 +3327,30 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 - 2026-10-16, the lead, while he is away about ten hours: "keep going through the batches
   without stopping to report between them". His 13 rules follow batch 2, by count, the group of
   12 to 21 findings (`context-pause`, `codex-review-floor`, `review-effort`) last and alone.
+- 2026-10-16, batch 2 reviewed. gentle-ai approved it (`review-610769fa73a6f19f`, acknowledged)
+  with one warning: no test held a narrowed rule to the line it was narrowed for. Folded in:
+  `NEAR_MISS` in `bin/lib/rules-scan.test.mjs`, one such line per narrowed rule of batches 1 and
+  2. The independent verifier (Opus): PASS, no blocker; all 13 findings on the branch restate a
+  value, two borderline (`agents-budget` on a quoted gate output). Its advisories, left for later
+  because the finding is information only and none turns the check red:
+  - false positives: `agents-budget`'s first pattern has no guard on `{amount}`;
+    `review-part-files`' guard `(?<!:\s?)` fails for two or more digits, since `AMOUNT` starts
+    mid-number; `review-timeout` wants no unit; `gate-max` and `gate-wait` catch measurements
+    ("it ran 3 minutes"). The scan never compares the amount with the value, by design.
+  - misses: `gate-wait`'s "an hour" before any "wait" (`bin/gate.mjs:190`, `bin/check.mjs:2125`,
+    `docs/ROADMAP.md:736`); `agents-budget` without "budget" beside it (`docs/ROADMAP.md:468`,
+    `odd/tasks/f2-context-diet.md:52`); `review-part-lines`' "stays at 400 lines"
+    (`docs/ROADMAP.md:364`); `review-timeout`'s "stops"; `gate-log-command`'s "keeps each
+    command to 120 characters".
+  The `AMOUNT` fix takes the mid-number false positives; the rest is a second pass of patterns
+  after his 13 rules.
 
 ## Next step
+**State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the
+verifier passed, `NEAR_MISS` folded in. Next: Codex (`codex-review --base origin/main`),
+`merge-tree`, push and a draft pull request to the lead's queue; then his batch A (ten rules),
+then batch B alone, then the `AMOUNT` fix.
+
 **State for a resume, 2026-10-16, batch 2 being built on `rule/second-patterns`.** Each rule is one
 `rules change` with source design `odd/tasks/rule-hierarchy.md`, its entry in `PLANTED`, and one
 commit; then gentle-ai, the verifier, Codex, `merge-tree` and a draft pull request to the lead's

@@ -80,6 +80,24 @@ test('on the real list, every rule with patterns finds its own planted line, and
   }
 });
 
+// A line each narrowed rule once caught and must not catch again: the probe's false positive it was narrowed for.
+const NEAR_MISS = {
+  'gate-log-command': 'The Codex command line is cut to 100 characters.',
+  'gate-log-size': 'Search the git log over 3 days.',
+  'gate-max': 'The gate is stopped when 90 percent are done.',
+  'gate-wait': 'A commit waits for its turn of the lock, as S1 says.',
+  'person-present': 'The flag is here for 3 releases.',
+  'review-part-files': 'Each part is read as { of: 1, files }.',
+  'review-parts-unflagged': 'A run of 28 parts started without the numbers.',
+  'review-timeout': 'The Codex login is stopped past codex-review-prompt.mjs:51.',
+};
+
+test('on the real list, a narrowed rule no longer finds the line it was narrowed for', () => {
+  for (const [id, line] of Object.entries(NEAR_MISS)) {
+    assert.deepEqual(scanLines(RULES, inForceLines('docs/ROADMAP.md', `${line}\n`)).filter((finding) => finding.id === id), [], id);
+  }
+});
+
 test('a pattern that is no regular expression is not scanned, so the scan never throws: readRules reports it', () => {
   const broken = { ...WAIT, patterns: ['(', 'wait.{0,40}{amount}'] };
   const files = [{ path: 'docs/ROADMAP.md', text: 'wait 60 minutes\n' }];
