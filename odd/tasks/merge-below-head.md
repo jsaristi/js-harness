@@ -182,3 +182,23 @@ among them), and the marks at M of its written files.
   - Reader B measured a turn's checkout: 627 tracked files, about 3 s to add and 1 s to remove, no
     post-checkout hook, LFS or submodule; a worktree under `.git` resolves its own top and the shared
     common dir (reader A, tested).
+- 2026-10-16, T2 (S1): `mergeTurn` in `bin/lib/codex-review-turns.mjs` (19935ab); RED was the missing module, GREEN 5 of 5. Deviation to record: S7's helper is new in `bin/lib`; the merge queue keeps its own worktree code (changing it is outside this change's risk).
+
+## Next step
+
+**State, 2026-10-16, JH 27 (context pause at 86%):** T1, T2 done (6b3227c, 19935ab). Next, T3 test first in `bin/codex-review.test.mjs` near line 5456, with `makeResolvedMergeRepo` plus a commit after the merge:
+- `--base <main> --plan` prints "Turn 1 of 2, the merge <M7>: what was written in it.", then the recursive plan (`mergeReviewSaid`, `plannedPlan(root, mine, M, m.txt)`), then "Turn 2 of 2, <M7>..<HEAD7>: the commits after the merge.", then `plannedPlan(root, M, after, a.txt)`, then "In all, 2 turns: ..." (parts, lines, files, and tokens when both plans have an estimate);
+- `--again`: no turns;
+- a run with `fakeCodexInParts` writes two records (`mine..M` with `diff: 'remerge'`, then `M..after`) and leaves no worktree;
+- an M review that owes a correction stops before turn 2;
+- `--max-parts` is applied to the sum, with nothing launched;
+- a stale `review-turn-<dead pid>` worktree is swept.
+
+Implementation in `codexReviewMain` (`bin/codex-review.mjs`):
+- internal deps `turnAt` (the head override, which must take the merge path, else exit 1) and `intent`;
+- `startingAt` calls `mergeTurn` with the coverage that `leftByRecords` then reuses;
+- turn 1 is a recursive `codexReviewMain` with `--cwd` set to a worktree for a run, or to the root for a plan;
+- after it, the parent goes on with `from = base = M`, `merge = null`, `runLog` reset and the tree checked again;
+- the debt row in `bin/check.mjs` `codexReviewDebt` sums `reviewSize(from, M, turn)` and `reviewSize(M, tip)`.
+
+Then the README, SPEC, FAILURES control (`mergeLeftOutSaid` test at 5715), T6d, the gate, a verifier (item 2), gentle-ai escalated, Codex, the PR, and a notice to the lead.
