@@ -76,7 +76,7 @@ test('install writes the Claude and Codex skill files at the documented paths', 
   try {
     install(home, '0.1.0');
     for (const host of ['.claude', '.codex']) {
-      for (const skill of ['js-harness', 'js-harness-orchestrator']) {
+      for (const skill of ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols']) {
         assert.ok(fs.existsSync(path.join(home, host, 'skills', skill, 'SKILL.md')), `${host} ${skill}`);
       }
     }
@@ -86,8 +86,15 @@ test('install writes the Claude and Codex skill files at the documented paths', 
 });
 
 // Other tests index the first two, so a new component goes after them.
-test('the components are the two skills, each for Claude Code and for Codex, the first skill first', () => {
-  assert.deepEqual(components.map((component) => component.id), ['claude-skill', 'codex-skill', 'claude-orchestrator-skill', 'codex-orchestrator-skill']);
+test('the components are the three skills, each for Claude Code and for Codex, the first skill first', () => {
+  assert.deepEqual(components.map((component) => component.id), [
+    'claude-skill',
+    'codex-skill',
+    'claude-orchestrator-skill',
+    'codex-orchestrator-skill',
+    'claude-protocols-skill',
+    'codex-protocols-skill',
+  ]);
   assert.equal(new Set(components.map((component) => component.target('home'))).size, components.length, 'no two components share a file');
 });
 
@@ -161,6 +168,8 @@ test('uninstall removes now-empty directories it created', () => {
     assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness')), false);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness-orchestrator')), false);
     assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness-orchestrator')), false);
+    assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness-protocols')), false);
+    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness-protocols')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -2040,6 +2049,31 @@ test('the orchestrator skill is installed for Claude Code and for Codex with the
     assert.deepEqual(result.kept, []);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills')), false, 'no skill folder is left under the home');
     assert.equal(fs.existsSync(path.join(home, '.codex', 'skills')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// T7 of odd/tasks/rule-hierarchy.md: the protocols are one skill, loaded on demand; its text is tested in
+// bin/lib/protocols-skill.test.mjs.
+test('the protocols skill is installed for Claude Code and for Codex with the same text, re-written by sync and removed by uninstall', () => {
+  const home = makeTmpHome();
+  try {
+    const claudeProtocols = components.find((component) => component.id === 'claude-protocols-skill');
+    const codexProtocols = components.find((component) => component.id === 'codex-protocols-skill');
+    assert.equal(claudeProtocols.target(home), path.join(home, '.claude', 'skills', 'js-harness-protocols', 'SKILL.md'));
+    assert.equal(codexProtocols.target(home), path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'));
+    assert.equal(codexProtocols.content('0.1.0'), claudeProtocols.content('0.1.0'), 'Claude and Codex read the same text');
+
+    install(home, '0.1.0');
+    assert.equal(fs.readFileSync(claudeProtocols.target(home), 'utf8'), claudeProtocols.content('0.1.0'));
+    fs.writeFileSync(codexProtocols.target(home), 'an older text', 'utf8');
+    sync(home, '0.2.0');
+    assert.equal(fs.readFileSync(codexProtocols.target(home), 'utf8'), codexProtocols.content('0.2.0'));
+
+    const result = uninstall(home);
+    assert.ok(result.removed.includes(claudeProtocols.target(home)) && result.removed.includes(codexProtocols.target(home)));
+    assert.deepEqual(result.kept, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

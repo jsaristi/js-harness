@@ -147,7 +147,7 @@ check said or before its answer was read.
 - Seen: 2026-10-12 — session 9265156a (JH 7), by its own messages to the lead (claimed) — a commit,
   its push and its pull request were joined by `;` in one command, twice; each step succeeded, so
   nothing went out that its check would have stopped
-- Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
+- Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
 
 ### check-survivor-test-fails
 A gate failed on one test of `bin/check.test.mjs`, "checkSensor kills a background process the command
@@ -957,7 +957,7 @@ conflict git did not reproduce and the merge was refused.
 - Class: delivery
 - Seen: 2026-10-10 — relief file, line 164 — pull request 53: DIRTY, CONFLICTING; two merge bases
   found at lines 166 and 167
-- Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
+- Control: protocol — bin/lib/protocols-skill.mjs — "A stacked pull request is merged after its base, or its base is changed before the one under it is merged" — since 2026-10-16
 
 ### stale-prompts-sent
 He could not tell a session that worked from one that waited on him, and sent prompts that were
