@@ -132,6 +132,15 @@ proofs and by those tasks.
 **Discarded:** A lock per project. A lock by message between sessions: no one is listening. Making the lock folder and then writing it: an empty lock folder let two gates hold it.
 **Today:** `bin/lib/gate-lock.mjs`, `bin/gate.mjs`, `bin/check.mjs`, `bin/lib/launcher.mjs`, `bin/lib/push-waits.mjs`, `js-harness gate`
 
+### A gate that would wait runs its tests on CI
+
+**Problem:** Measured on 2026-10-16: two suites at once on this machine take 303 and 305 s against 158 s alone, so the limit is the CPU and a second local line gains nothing; the gate was the limit on how many sessions fit (`odd/tasks/first-version.md`, S7).
+**Requirement:** A commit's gate runs here when the machine's lock is free. When its turn would wait, the tests run on a CI machine instead, on the exact tree being committed (written as a commit object and pushed to a branch of its own, deleted after), and the commit is made only on green, with the same tree; red prints the failing tests and refuses. Anything that is not a green or red run (no network, no signed-in client, no run, a run cancelled or past its bound) falls back to the local gate and says why, so CI only ever shortens a wait. The workflow runs only for a push to those branches, never for a pull request or the default branch, reads and writes nothing else, names no secret and pins its actions; a test holds every one of those bounds. Each gate on CI leaves its record in the gate log.
+**Reason:** A commit never lands without its own proof, wherever it ran; the local machine stays the fast path for one session; and a bound written in a workflow a pull request could change must be held by a test, not by care.
+**Proof:** `node --test bin/lib/ci-gate.test.mjs`, `node --test bin/check-ci-gate.test.mjs`, `node --test scripts/github-workflows.test.mjs`
+**Discarded:** A second local line: the CPU is shared. A run on every pull request: each merge made every other run stale, and minutes were scarce while the repository was private. Windows runners: 22 billed minutes a run. What CI cannot prove (it is Linux) is caught by the merge queue's local run before the default branch moves.
+**Today:** `bin/lib/ci-gate.mjs`, `bin/check.mjs`, `.github/workflows/gate.yml`, `scripts/github-workflows.test.mjs`
+
 ### The gate log
 
 **Problem:** On 2026-10-11 one gate timed out at 1,200 s and another took 1,069 s against 832 s for the same tree, beside a video and a language server nobody saw; which gates ran beside which was a session's memory (`odd/tasks/gate-log.md`). A failed run's test names were lost with its report.
@@ -153,8 +162,8 @@ proofs and by those tasks.
 ### Releases
 
 **Problem:** Update and upgrade asked the npm registry for a name nobody holds and installed what it printed with no comparison (`odd/tasks/install-update.md`, T5); until a release source existed no command could update a machine (`odd/tasks/first-version.md`).
-**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the private repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in.
-**Reason:** The repository is private and its git credentials are already on the machine; tagging starts at 1.0.0, the first complete version (`docs/ROADMAP.md`).
+**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in.
+**Reason:** The machine's git already holds what the repository needs to be read, and no registry holds the package; tagging starts at 1.0.0, the first complete version (`docs/ROADMAP.md`).
 **Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`
 **Discarded:** The npm registry as the source. An npm publish, planned for a public repository and left without a date.
 **Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `js-harness update`, `js-harness upgrade`
@@ -207,7 +216,7 @@ proofs and by those tasks.
 ### The merge queue
 
 **Problem:** Each merge made every other pull request's green run stale: 205 minutes of a 2,000-minute monthly allowance on 2026-10-14, and GitHub's merge queue is not offered for a private personal repository (`odd/tasks/merge-queue.md`).
-**Requirement:** The queue builds the default branch plus each ready pull request merged in number order, naming each one left out and why; it tests the candidate on this machine under the lock and on one CI system, and when both are green moves the default branch to it by fast-forward, leased on the branch it was built from; a red batch is bisected to the pull request that broke it; the pre-push hook refuses a push of the default branch from anywhere but the queue. No CI runs per pull request.
+**Requirement:** The queue builds the default branch plus each ready pull request merged in number order, naming each one left out and why; it tests the candidate on this machine under the lock and on one CI system, and when both are green moves the default branch to it by fast-forward, leased on the branch it was built from; a red batch is bisected to the pull request that broke it; the pre-push hook refuses a push of the default branch from anywhere but the queue. No CI runs for a pull request.
 **Reason:** A second pusher makes the tested candidate a tree the default branch never was, and minutes are the scarce resource.
 **Proof:** `node --test bin/merge-queue.test.mjs`, `node --test scripts/circleci-config.test.mjs`, `node --test scripts/github-workflows.test.mjs`
 **Discarded:** A GitHub Actions run on every pull request, with its bounds held by a test (`odd/tasks/drop-github-gate.md`). Windows on GitHub: 22 billed minutes a run. A self-hosted runner on the same machine: the same eight threads and the same lock. Merging on GitHub's side: it bypasses the hook.
