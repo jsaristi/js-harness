@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
+import { OPENING_TOOLS as GUARD_OPENING_TOOLS } from '../bin/lib/guard.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
 
 // No test here starts a process, reads the clock or touches the disk: every fact is handed in, and the
@@ -498,6 +499,7 @@ test('the journey is the eleven steps of the feature document, the pause hook, t
     'project-uninstall',
     'global-uninstall',
     'pause-hook',
+    'opening-tools',
     'host-loads',
     'real-home-after',
     'record',
@@ -791,7 +793,7 @@ test('parseArgs names the argument it refused', () => {
 
 // What `install` grafts on a host file, as its own declaration gives it: the list this library checks a
 // host file against must be that one, or a journey would go on passing against an install that changed.
-test('HARNESS_HOOKS is what install declares for each host: the doctor and resume entries for both hosts, the pause entry for Claude Code', () => {
+test('HARNESS_HOOKS is what install declares for each host: the doctor and resume entries for both hosts, the pause and web failure entries for Claude Code', () => {
   const declared = (host) => entryComponents.filter((component) => component.id.startsWith(`${host}-`)).map((component) => {
     const entry = component.entry();
     const hook = { event: component.pointer.at(-1), command: entry.hooks.map((item) => item.command).join(' && ') };
@@ -804,9 +806,11 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor and resum
     { event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' },
     { event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' },
     { event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' },
-    { event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', command: 'js-harness guard --hook || exit 0' },
+    { event: 'PostToolUseFailure', matcher: 'WebFetch', command: 'js-harness resume --pause || exit 0' },
+    { event: 'PreToolUse', matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', command: 'js-harness guard --hook || exit 0' },
+    { event: 'Stop', command: 'js-harness guard --stop || exit 0' },
   ]);
-  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude']]);
+  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude'], ['claude']]);
   assert.deepEqual(declared('claude'), listedFor('claude'));
   assert.deepEqual(declared('codex'), listedFor('codex'));
   assert.ok(Object.isFrozen(HARNESS_HOOKS));
@@ -990,6 +994,42 @@ test('pauseHookProblem says the first run gave no additionalContext when it is e
 
 test('pauseHookProblem says the second run printed again, though the pause is said once, and shows it', () => {
   assert.equal(pauseHookProblem({ ...RIGHT_RUNS, second: printed(`${PAUSE_NOTICE}\n`) }), `the second run printed ${PAUSE_NOTICE}, though the pause is said once`);
+});
+
+// The step `opening-tools`: the guard's answer to each of the four tools, in the project that declares no rule and in one that does.
+const OPENED = ['mcp__scheduled-tasks__create_scheduled_task', 'mcp__scheduled-tasks__update_scheduled_task', 'mcp__scheduled-tasks__run_scheduled_task', 'RemoteTrigger'];
+const denyOf = (tool) => printed(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: `js-harness guard: ${tool} opens a session in the app's Routines or in the cloud (rule sessions-open-in-sidebar). Open it with start_session, a row in his sidebar.` } })}\n`);
+const everyTool = (run) => Object.fromEntries(OPENED.map((tool) => [tool, run(tool)]));
+const OPENING_RIGHT = { plain: everyTool(() => silent), declared: everyTool(denyOf) };
+
+test('the four tools are the ones that open a session, and their call is the host\'s PreToolUse input as JSON', () => {
+  assert.deepEqual([...OPENING_TOOLS], ['mcp__scheduled-tasks__create_scheduled_task', 'mcp__scheduled-tasks__update_scheduled_task', 'mcp__scheduled-tasks__run_scheduled_task', 'RemoteTrigger']);
+  assert.deepEqual([...OPENING_TOOLS], [...GUARD_OPENING_TOOLS], 'the list of bin/lib/guard.mjs');
+  assert.deepEqual(JSON.parse(openingToolInput({ sessionId: 's1', cwd: 'D:/p', tool: 'RemoteTrigger' })), {
+    session_id: 's1', cwd: 'D:/p', hook_event_name: 'PreToolUse', tool_name: 'RemoteTrigger', tool_input: {},
+  });
+});
+
+test('openingToolsProblem finds nothing wrong with the runs the guard should make', () => {
+  assert.equal(openingToolsProblem(OPENING_RIGHT), null);
+});
+
+test('openingToolsProblem names a tool the guard refused in the project that declares no rule', () => {
+  const plain = { ...OPENING_RIGHT.plain, RemoteTrigger: denyOf('RemoteTrigger') };
+  assert.match(openingToolsProblem({ ...OPENING_RIGHT, plain }), /^the guard refused RemoteTrigger in a project that declares no rule: /);
+});
+
+test('openingToolsProblem names a tool the guard let run in the project that declares the rule', () => {
+  const declared = { ...OPENING_RIGHT.declared, 'mcp__scheduled-tasks__run_scheduled_task': silent };
+  assert.equal(openingToolsProblem({ ...OPENING_RIGHT, declared }), 'the guard let mcp__scheduled-tasks__run_scheduled_task run in the project that declares the rule, though its scheduled session would open where he does not see it');
+});
+
+test('openingToolsProblem names a run that does not exit 0, and the refusal that does not name start_session', () => {
+  const declared = { ...OPENING_RIGHT.declared, RemoteTrigger: { status: 1, stdout: '' } };
+  assert.equal(openingToolsProblem({ ...OPENING_RIGHT, declared }), 'the guard exited 1 on RemoteTrigger in the project that declares the rule, not 0');
+  const vague = printed(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'no' } })}\n`);
+  const named = { ...OPENING_RIGHT.declared, RemoteTrigger: vague };
+  assert.match(openingToolsProblem({ ...OPENING_RIGHT, declared: named }), /^the refusal of RemoteTrigger does not name the tool and start_session: no$/);
 });
 
 test('pauseHookProblem says the run outside a project printed, though no harness.json is above its folder', () => {

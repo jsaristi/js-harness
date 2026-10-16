@@ -17,7 +17,7 @@ import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf } f
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
-  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
+  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
   HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
 } from './practice-lib.mjs';
 import { agentsTemplate } from '../bin/lib/project.mjs';
@@ -185,6 +185,10 @@ const npmIn = (ctx, cwd, ...args) => withOutput(npm(ctx.npmCli, [...args, '--cac
 /** The pause command run as the host runs its `PostToolUse` hook: the installed entry file, `resume --pause`, the hook
  * input on standard input and `cwd` as the folder of the call. `input` is the JSON text of `pauseHookInput`. */
 const pauseHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'resume', '--pause'], { ...childOptions(ctx, cwd), input }));
+
+/** The guard run as the host runs its `PreToolUse` hook: the installed entry file, `guard --hook`, the call on standard
+ * input and `cwd` as the folder of the call. `input` is the JSON text of `openingToolInput`. */
+const openingHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'guard', '--hook'], { ...childOptions(ctx, cwd), input }));
 
 /** The tokens of a made-up reply that is past the context pause: the share the host compacts at, which is above the
  * pause's share of the same window, so the reply passes the pause and is not yet a compaction. Built from the constants
@@ -617,6 +621,28 @@ const STEPS = {
     const problem = pauseHookProblem({ first, second, outside: elsewhere });
     assertThat(problem === null, problem);
     return `the first run printed one PostToolUse notice of ${first.stdout.trim().length} characters; the second run printed nothing, and so did the run from ${outside}, where no harness.json lies above; all three exited 0`;
+  },
+
+  'opening-tools': (ctx) => {
+    const { project, root } = ctx.layout;
+    // The project that declares the rule is a folder of the journey's root, a git repository holding the rules file the
+    // installed package ships, copied byte for byte: this candidate's own list is the one the guard reads there.
+    const declaring = path.join(root, 'declaring');
+    const rules = path.join(declaring, 'bin', 'lib', 'rules-data.mjs');
+    fs.mkdirSync(path.dirname(rules), { recursive: true });
+    fs.copyFileSync(path.join(path.dirname(installedBin(ctx.layout.prefix)), 'lib', 'rules-data.mjs'), rules);
+    expectOk(git(ctx, declaring, 'init', '-q'), 'git init of the folder that declares the rule');
+    // A session of its own for each run; the guard keeps no state, and each call is judged on its own.
+    const sessionId = `practice-opening-${randomUUID()}`;
+    const plain = {};
+    const declared = {};
+    for (const tool of OPENING_TOOLS) {
+      plain[tool] = openingHook(ctx, project, openingToolInput({ sessionId, cwd: project, tool }));
+      declared[tool] = openingHook(ctx, declaring, openingToolInput({ sessionId, cwd: declaring, tool }));
+    }
+    const problem = openingToolsProblem({ plain, declared });
+    assertThat(problem === null, problem);
+    return `the guard let the ${OPENING_TOOLS.length} tools pass in ${project}, which declares no rule, and refused each in ${declaring}, which declares it, naming start_session`;
   },
 
   'host-loads': (ctx) => {

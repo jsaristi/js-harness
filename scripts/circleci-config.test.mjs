@@ -52,6 +52,17 @@ test('the job runs the gate on a fixed image and size: an exact node image, medi
   assert.ok(texts.some((text) => /^no_output_timeout: \d+m$/.test(text)), 'a run that hangs is stopped');
 });
 
+test('the gate runs the test files two at a time, as it did on GitHub: medium is 2 vCPUs, and node would run one fewer than the processors the container reports', () => {
+  // The variable is check's, since node takes no --test-concurrency in NODE_OPTIONS (odd/tasks/drop-github-gate.md S2).
+  const lines = configLines();
+  const at = lines.findIndex((line) => line.text === 'name: The gate');
+  assert.notEqual(at, -1, 'a step named The gate');
+  const rest = lines.slice(at);
+  const end = rest.findIndex((line) => line.indent < lines[at].indent);
+  const step = (end === -1 ? rest : rest.slice(0, end)).map((line) => line.text);
+  assert.deepEqual(step, ['name: The gate', 'environment:', 'JS_HARNESS_TEST_CONCURRENCY: 2', 'command: node bin/check.mjs', 'no_output_timeout: 15m']);
+});
+
 test('the workflow runs the job only for the merge queue\'s branches, with no secret and no schedule', () => {
   const lines = configLines();
   const workflow = below(lines, 'workflows:');

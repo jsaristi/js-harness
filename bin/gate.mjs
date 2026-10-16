@@ -24,6 +24,14 @@ import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './li
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
+import { ruleValue } from './lib/rules.mjs';
+
+/** The minutes a command may run when `--max` does not say. A turn holds the lock for every session on the
+ * machine, and on 2026-10-14 a measure that waited for its own sampler held it 24 minutes after its work had
+ * ended (odd/tasks/gate-turn-guards.md, S2). The longest turn in the gate log of the two days before took
+ * 974 s, so 30 minutes stops a hung command and no turn that works. The figure is the declared rule
+ * `gate-max` (bin/lib/rules-data.mjs). */
+export const GATE_MAX_MINUTES = ruleValue('gate-max', 'minutes');
 
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
 // `--wait` is not a bound on the whole of a wait.
@@ -31,14 +39,8 @@ const USAGE = [
   'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
   GATE_WAIT_USAGE,
-  '       --max <minutes>: how long the command may run before it is stopped with every process it started (30 when not given)',
+  `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
 ].join('\n');
-
-/** The minutes a command may run when `--max` does not say. A turn holds the lock for every session on the
- * machine, and on 2026-10-14 a measure that waited for its own sampler held it 24 minutes after its work had
- * ended (odd/tasks/gate-turn-guards.md, S2). The longest turn in the gate log of the two days before took
- * 974 s, so 30 minutes stops a hung command and no turn that works. */
-export const GATE_MAX_MINUTES = 30;
 
 /** How many gates `gate log` prints when `--last` does not say. */
 const GATE_LOG_LAST = 20;

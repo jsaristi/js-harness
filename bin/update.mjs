@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `status`, `update`, `upgrade`: version detection and upgrade. The package manager is injectable
-// because on this machine `npm` on PATH is a pnpm shim; it installs a tarball and is never asked which
-// release is the latest (see `resolveLatest`). `status` also answers by location (T5 design); see
+// because on this machine `npm` on PATH is a pnpm shim; it installs a release and is never asked which
+// release is the latest: the repository's tags say that (see `resolveLatest`). `status` also answers by location (T5 design); see
 // `statusMain` for which folders report the project, the machine install, or refuse.
 import os from 'node:os';
 import path from 'node:path';
@@ -9,11 +9,11 @@ import { spawnSync } from 'node:child_process';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
-import { INSTALL_NEWEST, latestFromSource, splitCommand, installArgs, isNewer } from './lib/version.mjs';
+import { DEFAULT_REPO, INSTALL_NEWEST, latestFromSource, latestTag, tagSpec, splitCommand, installArgs, isNewer } from './lib/version.mjs';
 import { unknownArgument } from './lib/args.mjs';
 
 const PKG_NAME = 'js-harness';
-const UPGRADE_USAGE = 'Usage: js-harness upgrade [--home <path>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
+const UPGRADE_USAGE = 'Usage: js-harness upgrade [--home <path>] [--repo <url or folder>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
 
 function parseArgs(argv, env) {
   const get = (flag) => {
@@ -23,6 +23,7 @@ function parseArgs(argv, env) {
   return {
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
     source: get('--source') ?? env.JS_HARNESS_SOURCE,
+    repo: get('--repo') ?? env.JS_HARNESS_REPO ?? DEFAULT_REPO,
     prefix: get('--prefix') ?? env.JS_HARNESS_PREFIX,
     pm: get('--pm'),
   };
@@ -32,26 +33,50 @@ function resolvePm(pm, env) {
   return pm ?? env.JS_HARNESS_PM ?? 'npm';
 }
 
-/** What the commands say where there is no release to look for: none is tagged before 1.0.0
+/** What the commands say where the repository holds no release tag: none is tagged before 1.0.0
  * (docs/ROADMAP.md, "Release source"), and how a machine gets the newest copy until then. */
 export const NO_RELEASE = `no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get the newest copy: ${INSTALL_NEWEST}`;
 
-/** The newest release in `source`, a folder of `npm pack` tarballs the caller named with `--source` or
- * `JS_HARNESS_SOURCE`, as `{ version, file }`; `null` when that folder holds none, and `null` when there
- * is no source. It starts no process, and that is the point: the public registry is never asked about
- * the name `js-harness`, which nobody holds there, so whoever registered it would decide what `upgrade`
- * installs and runs. Reading the tags of this repository, the decided release source, belongs here when
- * the first one exists. A source folder that cannot be read throws, as `fs.readdirSync` does. */
-export function resolveLatest({ source }) {
-  return source ? latestFromSource(source) : null;
+/** How long `git ls-remote` may take to list the tags before the lookup gives up. */
+const TAG_LOOKUP_MS = 30_000;
+
+class TagLookupError extends Error {}
+
+/** The newest release: in `source`, a folder of `npm pack` tarballs the caller named with `--source` or
+ * `JS_HARNESS_SOURCE`, as `{ version, file }`; else the newest `vX.Y.Z` tag of `repo` (the private repository
+ * unless `--repo` or `JS_HARNESS_REPO` names another), as `{ version, spec }`, read with the machine's git and its
+ * own credentials. `null` when the folder or the repository holds no release. The public registry is never asked
+ * about the name `js-harness`, which nobody holds there, so whoever registered it would decide what `upgrade`
+ * installs and runs. A source folder that cannot be read throws, as `fs.readdirSync` does; tags that cannot be
+ * listed throw a `TagLookupError` with git's reason. */
+export function resolveLatest({ source, repo = DEFAULT_REPO }) {
+  if (source) return latestFromSource(source);
+  const listed = spawnSync('git', ['ls-remote', '--tags', '--refs', repo], {
+    encoding: 'utf8',
+    timeout: TAG_LOOKUP_MS,
+    // A missing credential fails at once instead of waiting for a prompt nobody answers.
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+  });
+  if (listed.status !== 0) {
+    const reason = listed.error?.code ?? String(listed.stderr ?? '').trim().split(/\r?\n/).at(-1) ?? '';
+    throw new TagLookupError(reason || `git exited ${listed.status}`);
+  }
+  const best = latestTag(listed.stdout);
+  return best ? { version: best.version, spec: tagSpec(repo, best.tag) } : null;
 }
 
-/** `resolveLatest` for a command: `{ latest }`, or `{ problem }` with a line to print when the source
- * folder cannot be read. */
+/** `resolveLatest` for a command: `{ latest }`, or `{ problem }` with a line to print when the source folder
+ * cannot be read or the repository's tags cannot be listed. */
 function latestFor(opts) {
   try {
     return { latest: resolveLatest(opts) };
   } catch (err) {
+    if (err instanceof TagLookupError) {
+      return {
+        problem: `cannot list the tags of ${opts.repo}: ${err.message}; the repository is private, so git needs a ` +
+          'credential for it, or name a folder of release tarballs with --source',
+      };
+    }
     return { problem: `cannot read the source folder ${opts.source}: ${err.code ?? err.message}` };
   }
 }
@@ -71,7 +96,7 @@ function quoteForShell(value, platform) {
 }
 
 const STATUS_USAGE =
-  'Usage: js-harness status [--cwd <path>] [--home <path>] [--global] [--source <dir>] [--pm <command>] [--prefix <dir>]';
+  'Usage: js-harness status [--cwd <path>] [--home <path>] [--global] [--repo <url or folder>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
 
 class StatusArgError extends Error {}
 
@@ -85,7 +110,7 @@ function parseStatusArgs(argv, env) {
     const token = argv[i];
     if (token === '--global') {
       global = true;
-    } else if (['--cwd', '--home', '--source', '--prefix', '--pm'].includes(token)) {
+    } else if (['--cwd', '--home', '--repo', '--source', '--prefix', '--pm'].includes(token)) {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) throw new StatusArgError(`${token} requires a value`);
       values[token] = value;
@@ -101,6 +126,7 @@ function parseStatusArgs(argv, env) {
     global,
     home: values['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir(),
     source: values['--source'] ?? env.JS_HARNESS_SOURCE,
+    repo: values['--repo'] ?? env.JS_HARNESS_REPO ?? DEFAULT_REPO,
     prefix: values['--prefix'] ?? env.JS_HARNESS_PREFIX,
     pm: values['--pm'],
   };
@@ -219,8 +245,9 @@ async function machineStatus(opts, env, spawn) {
   if (latest) {
     console.log(`latest available: ${latest.version}`);
     if (isNewer(latest.version, installed)) console.log(`update available: ${latest.version}`);
-  } else if (opts.source) {
-    // A source that was named and answers nothing is not known, which is not the same as no release.
+  } else if (opts.source || problem) {
+    // A source that was named and answers nothing is not known, which is not the same as no release; nor is a
+    // repository whose tags cannot be listed.
     console.log(`latest available: (unknown${problem ? `: ${problem}` : ''})`);
   } else {
     console.log('latest available: (no release is tagged yet)');
@@ -231,10 +258,6 @@ async function machineStatus(opts, env, spawn) {
 export async function updateMain(argv, env = process.env, spawn = spawnSync) {
   const opts = parseArgs(argv, env);
   const installed = currentVersion();
-  if (!opts.source) {
-    console.log(`${NO_RELEASE} (installed: ${installed})`);
-    return 0;
-  }
   const { latest, problem } = latestFor(opts);
   if (problem) {
     console.error(problem);
@@ -242,7 +265,7 @@ export async function updateMain(argv, env = process.env, spawn = spawnSync) {
   }
 
   if (!latest) {
-    console.log('could not determine the latest version');
+    console.log(opts.source ? 'could not determine the latest version' : `${NO_RELEASE} (installed: ${installed})`);
     return 0;
   }
   if (isNewer(latest.version, installed)) {
@@ -280,23 +303,19 @@ function pathCopyRefusal(spawn, version) {
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
   // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
   // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
-  const unknown = unknownArgument(argv, { valued: ['--home', '--source', '--prefix', '--pm'] });
+  const unknown = unknownArgument(argv, { valued: ['--home', '--repo', '--source', '--prefix', '--pm'] });
   if (unknown !== null) {
     console.error(`unknown argument: ${unknown}\n\n${UPGRADE_USAGE}`);
     return 2;
   }
   const opts = parseArgs(argv, env);
-  if (!opts.source) {
-    console.error(`nothing was installed: ${NO_RELEASE}`);
-    return 1;
-  }
   const { latest, problem } = latestFor(opts);
   if (problem) {
     console.error(problem);
     return 1;
   }
   if (!latest) {
-    console.error('could not determine the latest version to upgrade to');
+    console.error(opts.source ? 'could not determine the latest version to upgrade to' : `nothing was installed: ${NO_RELEASE}`);
     return 1;
   }
   // Only a newer release replaces the installed one: the folder may hold the same version, or an older.
@@ -306,9 +325,10 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
     return 0;
   }
 
-  // The one thing ever installed: the tarball of the folder the caller named, never a name on a registry.
+  // What is installed: the tarball of the folder the caller named, or the repository at its release tag; never a
+  // name on a registry.
   const [cmd, ...head] = splitCommand(resolvePm(opts.pm, env));
-  const installResult = spawn(cmd, [...head, ...installArgs(latest.file, opts.prefix)], { encoding: 'utf8' });
+  const installResult = spawn(cmd, [...head, ...installArgs(latest.file ?? latest.spec, opts.prefix)], { encoding: 'utf8' });
   if (installResult.status !== 0) {
     console.error(`upgrade failed: ${cmd} exited ${installResult.status}`);
     return installResult.status ?? 1;

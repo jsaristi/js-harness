@@ -547,3 +547,27 @@ test('progressMain never claims "no docs/ROADMAP.md or odd/tasks" when a source 
     fs.rmSync(project, { recursive: true, force: true });
   }
 });
+
+// S2 of odd/tasks/first-version.md: a feature whose tasks are a table no longer shows 0/0.
+test('progress counts a feature whose tasks are table rows, and lists its open rows', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'odd', 'tasks', 'tabled.md'), [
+      '# Tabled feature',
+      '',
+      '## Tasks',
+      '',
+      '| ID | Specs | Route | Status | Evidence |',
+      '|----|-------|-------|--------|----------|',
+      '| T1 | S1 | inline | done | GREEN 3/3 |',
+      '| T2 | S2 | JH 15 | pending | the Bash case |',
+      '',
+    ].join('\n'));
+    const { code, stdout } = await runProgress(['--cwd', project]);
+    assert.equal(code, 0);
+    assert.match(stdout, /\[ \] Tabled feature\s+1\/2  50%\n {6}- T2 \| S2 \| JH 15 \| pending \| the Bash case/);
+    assert.match(stdout, /Total  1\/2  50%/);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});

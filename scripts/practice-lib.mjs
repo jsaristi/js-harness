@@ -320,17 +320,26 @@ const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
 /** The command of the guard hook, as `bin/lib/manifest.mjs` spells it (`GUARD_HOOK_COMMAND`); the same test holds the two together. */
 const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 
+/** The command of the share check, as `bin/lib/manifest.mjs` spells it (`SHARE_HOOK_COMMAND`); the same test holds the two together. */
+const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
+
+/** The matcher of the guard hook, as `bin/lib/manifest.mjs` spells it: anchored, so that each tool is a whole name. The same test holds the two together. */
+const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$';
+
 /** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
  * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
- * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from. The test holds
+ * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
+ * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool. The test holds
  * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
  * an install that changed. */
 export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
-  Object.freeze({ event: 'PreToolUse', matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash', command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
@@ -421,7 +430,7 @@ export function uninstalledHostProblem(text, seededText) {
   return `expected the file as setup seeded it, byte for byte; found:\n${text}`;
 }
 
-/** The name of an empty `hooks` list of the harness (`SessionStart` or `PostToolUse`) that `text` holds and the seeded file
+/** The name of an empty `hooks` list of the harness (`SessionStart`, `PostToolUse` or `PostToolUseFailure`) that `text` holds and the seeded file
  * does not, or `null`. A text that is not JSON has none. */
 function leftoverList(text, seededText) {
   let data;
@@ -432,7 +441,7 @@ function leftoverList(text, seededText) {
   } catch {
     return null;
   }
-  return ['SessionStart', 'PostToolUse'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
+  return ['SessionStart', 'PostToolUse', 'PostToolUseFailure'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
 }
 
 // ---- the gate log of the practice home -------------------------------------------------------------------------------
@@ -464,6 +473,7 @@ export const JOURNEY = Object.freeze([
   { id: 'project-uninstall', title: 'uninstall removes what init wrote and nothing the project owns; init again' },
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
+  { id: 'opening-tools', title: 'the guard lets the scheduled-task and cloud tools pass in the project, and refuses them where the rule is declared, naming start_session' },
   { id: 'host-loads', title: 'a real Claude Code session in the project loads the skills and AGENTS.md, runs the three hook entries, and leaves nothing in the real home' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
@@ -846,5 +856,58 @@ export function pauseHookProblem({ first, second, outside }) {
   if (outside.status !== 0) return `the run outside a project exited ${outside.status}, not 0`;
   const elsewhere = (outside.stdout ?? '').replace(/\r?\n$/, '');
   if (elsewhere.trim() !== '') return `the run outside a project printed ${elsewhere}, though no harness.json is above its folder`;
+  return null;
+}
+
+// ---- the tools that open a session where he does not see it, as the guard meets them ----
+
+/** The four tools the guard refuses where the rule `sessions-open-in-sidebar` is declared, as `bin/lib/guard.mjs` names
+ * them (`OPENING_TOOLS`); a test holds the two together. A session these open runs in the app's Routines or in the cloud. */
+export const OPENING_TOOLS = Object.freeze([
+  'mcp__scheduled-tasks__create_scheduled_task',
+  'mcp__scheduled-tasks__update_scheduled_task',
+  'mcp__scheduled-tasks__run_scheduled_task',
+  'RemoteTrigger',
+]);
+
+/** The hook input the host sends the guard on standard input before a tool call, as JSON text: the session, its folder,
+ * the event (`PreToolUse`) and the tool, with an empty input, since the refusal of these tools reads no input. */
+export function openingToolInput({ sessionId, cwd, tool }) {
+  return JSON.stringify({ session_id: sessionId, cwd, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: {} });
+}
+
+/** What is wrong with the guard's answers to the four tools, or `null`. `plain` holds a run for each tool in a project
+ * that declares no rule: each must exit 0 and print nothing, so the tool passes. `declared` holds a run for each tool in
+ * the project that declares the rule: each must exit 0 and print the hooks contract's deny, whose reason names the tool
+ * and `start_session`. Each run is `{ status, stdout }` of the child, keyed by the tool's name. The message names the
+ * tool and says what the guard did, in words. */
+export function openingToolsProblem({ plain, declared }) {
+  for (const tool of OPENING_TOOLS) {
+    const quiet = plain[tool];
+    if (quiet?.status !== 0) return `the guard exited ${quiet?.status} on ${tool} in a project that declares no rule, not 0`;
+    const printed = (quiet.stdout ?? '').replace(/\r?\n$/, '');
+    if (printed.trim() !== '') return `the guard refused ${tool} in a project that declares no rule: ${printed}`;
+  }
+  for (const tool of OPENING_TOOLS) {
+    const refused = declared[tool];
+    if (refused?.status !== 0) return `the guard exited ${refused?.status} on ${tool} in the project that declares the rule, not 0`;
+    const printed = (refused.stdout ?? '').replace(/\r?\n$/, '');
+    // Silence is the guard letting the call run, which is the very thing this step must not see here.
+    if (printed.trim() === '') return `the guard let ${tool} run in the project that declares the rule, though its scheduled session would open where he does not see it`;
+    let answer;
+    try {
+      answer = JSON.parse(printed);
+    } catch {
+      return `the guard printed for ${tool} in the project that declares the rule text that is not JSON: ${printed}`;
+    }
+    const output = answer?.hookSpecificOutput;
+    if (output?.hookEventName !== 'PreToolUse' || output.permissionDecision !== 'deny') {
+      return `the guard let ${tool} run in the project that declares the rule, though its scheduled session would open where he does not see it`;
+    }
+    const reason = typeof output.permissionDecisionReason === 'string' ? output.permissionDecisionReason : '';
+    if (!reason.includes(tool) || !reason.includes('start_session')) {
+      return `the refusal of ${tool} does not name the tool and start_session: ${reason}`;
+    }
+  }
   return null;
 }

@@ -7,7 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS,
+  reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
@@ -21,6 +22,9 @@ import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { isValidCodexReview } from './lib/codex-reviews.mjs';
 import { gitDirs } from './lib/project.mjs';
+
+// What a review that ran past its declared timeout says, in the words the command uses.
+const RAN_PAST = `ran past ${REVIEW_TIMEOUT_MS / 60000} minutes`;
 
 // The tests of this file run as two processes. `node --test` gives each test file one process, and this
 // file's time is git processes started one after another, which made it the longest of the suite and so the
@@ -945,7 +949,7 @@ test('a review that never ends is stopped at the timeout: the tree is killed and
   assert.deepEqual(fake.killed, [4242]);
   assert.equal(child.stdout.destroyed, true, 'the pipe is released, so it cannot keep the process alive');
   assert.equal(unrefed, true, 'the child no longer holds the event loop');
-  assert.match(result.err, /ran past 30 minutes/);
+  assert.match(result.err, new RegExp(RAN_PAST));
   assert.doesNotMatch(result.err, /could not start/);
   assert.equal(wrote(root), false);
 });
@@ -1023,7 +1027,7 @@ test('a tree kill that fails is said in the report of the stopped run, not swall
   const fake = fakeCodex('', { hang: true });
   const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, timeoutMs: 30, killTree: () => { throw new Error('the process snapshot failed (exit 1): CIM is down'); } });
   assert.equal(result.code, 1);
-  assert.match(result.err, /ran past 30 minutes/);
+  assert.match(result.err, new RegExp(RAN_PAST));
   assert.match(result.err, /process tree could not be killed \(the process snapshot failed.*CIM is down\).*may still be running/);
 });
 
@@ -3133,7 +3137,7 @@ test('a review stopped at the timeout is logged as timed out', async () => {
   assert.equal(result.code, 1);
   const logged = onlyRun(root);
   assert.equal(logged.outcome, 'timed-out');
-  assert.equal(logged.reason, 'it ran past 30 minutes and was stopped');
+  assert.equal(logged.reason, `it ${RAN_PAST} and was stopped`);
   assert.equal(wrote(root), false);
 });
 
@@ -3680,7 +3684,7 @@ test('the first part that does not pass stops the run: no later part is started,
       /showed 2 of 6 changed lines of part 1 of 2 of [0-9a-f]{7}\.\.HEAD; nothing was recorded\.\n {2}not read in full: b\.txt \(4 of 4 changed lines missing\)/],
     ['Codex exited with a code of its own', 7, 'failed', (root, base, head) => ({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), answer: { status: 7 } }), /did not complete \(it exited 7\)/],
     ['an answer that cannot be read', 1, 'failed', (root, base, head) => ({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), said: 'not an answer' }), /the answer of the review is not JSON; no record was written/],
-    ['a timeout', 1, 'timed-out', () => ({ answer: { hang: true } }), /ran past 30 minutes/],
+    ['a timeout', 1, 'timed-out', () => ({ answer: { hang: true } }), new RegExp(RAN_PAST)],
   ];
   for (const [name, code, outcome, session, said] of failures) {
     const { root, base, head } = makeThreeFileRepo();

@@ -70,16 +70,17 @@ A session holds one feature, because the conversation is lost on a new session o
 and only files survive. So every decision made in the conversation is written to the roadmap or
 the feature document and committed on the feature branch in the same session; that record is
 part of the work and needs no separate request. While he is here, say when to cut: a new session
-when a feature closes, a PR merges or a phase starts; `/compact` when a feature is open and the
-talk long. Away, never stop for one: the host compacts by itself. End each reply with one state:
+when a feature closes, a PR merges or a phase starts. He never compacts by hand, here or away:
+near 88% of its window a session writes its state to the feature document and keeps working,
+the host compacts it by itself, and it resumes from the summary checked against that document,
+repeating any open question. A session that stops instead gets its next prompt from the
+orchestrator, never from him. End each reply with one state:
 working (he sends nothing; say what wakes you), decision (never while work runs), cut, or
 finished (name the session to return to). A planned step he would only say yes to is no
 decision: state its cost and go on. A decision is asked by the orchestrator, with the question
-tool; a cut carries what he sends, in a code block of only that text, under what it is, where it
-goes, what sending it does. A cut is two numbered blocks: the bare `/compact` (text after it
-fails from the phone), then the resume prompt, which he never writes. Its reply resumes from the
-summary, checked against the feature document, and repeats any open question. Otherwise one
-block: two sent out of order cost a session. Before it, say what was done, what is next and why,
+tool; a cut carries what he sends, in one code block of only that text, under what it is, where
+it goes, what sending it does: two blocks sent out of order cost a session. Before it, say what
+was done, what is next and why,
 and for which session: he runs several. Then the map: each roadmap phase's percentage and the
 total, from `js-harness progress`; if it fails, say so.
 

@@ -41,14 +41,22 @@
 // entry at a line of a transcript only when the user sent it: the check a session runs before it takes
 // words another session carried as his. What he sent is what he typed, and what he answered to a question
 // the session asked with the host's question tool, tapped or typed.
+// `--measures` judges each compaction of the transcripts in the window once (odd/tasks/session-channel.md,
+// section 14): told, from the state the pause hook keeps (`toldBetween`, bin/lib/pause.mjs); kept, from the
+// commits of the feature document (`keptByGitLog`, bin/lib/measures.mjs) and, for the orchestrator alone, from a
+// line of its relief file (`keptByRelief`). No reply's block of the bare command is a fact: the user no longer compacts by hand.
+// It runs `git log` of that document and nothing else of the machine: no worktree, pull request or gate.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
+import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
+import { toldBetween } from './lib/pause.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -76,6 +84,11 @@ const USAGE = [
   '         the question, the options shown and whether they tapped one or typed their own; the result of any',
   '         other tool is not, and a question the user closed without answering is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
+  '       js-harness sessions --measures [--hours <n>] [--json] [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
+  '         prints, for each compaction of the transcripts in the window, whether the user asked for it and, for one the host',
+  '         made, two facts: told (the session was told the pause before it) and kept (the feature document has a commit',
+  '         between the notice and the compaction, or for the orchestrator a line of its relief file there),',
+  '         each yes, no or unknown, then how many miss a fact; then the reliefs (each relieved notice of the days the window touches, with the peak of its relieved session against the window: filled at the pause, or another reason) and the Log lines that name a reopening (candidates for the lead, not judged); exit 0 when it printed, 1 when there is no sessions folder',
 ].join('\n');
 
 // How often a watch looks, and how long it waits before it returns with nothing, in seconds. A look is
@@ -124,7 +137,7 @@ const CONTEXT_MARKS = new Map([
 /** Walks argv token by token, like `progress`: anything that is not a known flag is a usage error, never
  * a token that is silently ignored. `--hours` is a number above zero, `--tail` a whole number from zero. */
 function parseArgs(argv) {
-  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, watch: false };
+  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, watch: false, measures: false };
   const marks = new Map([...CONTEXT_MARKS].map(([flag, mark]) => [flag, `${mark.percent}%`]));
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
   // would pass for flags.
@@ -132,7 +145,7 @@ function parseArgs(argv) {
   const waits = new Map([['--interval', 'interval'], ['--timeout', 'timeout']]);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
-    if (token === '--json' || token === '--watch') {
+    if (token === '--json' || token === '--watch' || token === '--measures') {
       parsed[token.slice(2)] = true;
       continue;
     }
@@ -195,12 +208,15 @@ function parseArgs(argv) {
     if (!parsed.watch && parsed[key] !== undefined) throw new SessionsArgError(`${flag} only applies with --watch`);
   }
   // An address is one title and an exit code: there is no board in it to watch, or to give as data. The
-  // same holds for an opening and for a quote, and each of the three is asked alone.
-  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript']].filter(([, asked]) => asked !== undefined);
+  // same holds for an opening and for a quote, and each of the three is asked alone. The measures of the
+  // compactions are asked alone too, and are data like the board, so `--json` gives them; but they are
+  // judged once from what the transcripts hold, and a watch would have nothing in them to wait for.
+  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript'], ['--measures', parsed.measures || undefined, 'the measures of the compactions']].filter(([, asked]) => asked !== undefined);
   if (answers.length > 1) throw new SessionsArgError(`${answers.map(([flag]) => flag).join(' and ')} are asked one at a time`);
   if (parsed.peek && parsed.opening === undefined) throw new SessionsArgError('--peek goes only with --opening: it reads an opening and records nothing');
   for (const [flag, , what] of answers) {
-    if (parsed.watch || parsed.json) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch or --json`);
+    if (flag === '--measures' && parsed.watch) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch`);
+    if (flag !== '--measures' && (parsed.watch || parsed.json)) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch or --json`);
   }
   // The marks are read last: as a percentage each is a share of the window, whichever flag came first.
   for (const [flag, mark] of CONTEXT_MARKS) {
@@ -321,7 +337,7 @@ function workFile(work, { sessionDir, tasksDir }, io) {
 /** One session of the board: its transcript's facts plus, for each piece of work with no recorded end,
  * the last write of its file. A transcript that cannot be read, or that the reader cannot turn into
  * facts, is a session with `unavailable` and the reason: one transcript never costs the whole board. */
-function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault }, io) {
+function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders, readings }, io) {
   let text;
   try {
     text = io.readFile(path.join(projectDir, `${id}.jsonl`));
@@ -338,7 +354,65 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindo
   for (const work of facts.work) {
     if (!work.ended) work.file = workFile(work, folders, io);
   }
-  return { id, modifiedAt, ...facts };
+  return { id, modifiedAt, ...facts, compactionMiss: missOf(text, id, measureReaders, roleOfSession(id, facts, readings)) };
+}
+
+/** The role a session holds for its relief line, from the title the board gives it (the transcript's, or the opening it
+ * read, `titledByReadings`), so the board and `--measures` judge a session alike; `null` for a title outside the shape. */
+function roleOfSession(id, facts, readings = []) {
+  const [titled] = titledByReadings([{ id, title: facts.title ?? null, titleSource: facts.titleSource ?? null }], readings);
+  return hasTitle(titled) ? (roleOfTitle(titled.title)?.role ?? null) : null;
+}
+
+/** The readers of one session's compactions (`compactionMeasures`): an orchestrator keeps its state in its feature
+ * document or its relief file (`keptEither`), any other session in its feature document alone. */
+function readersOf(id, role, readers) {
+  const orchestrator = role === 'orchestrator' && readers.relief !== undefined;
+  return {
+    told: (after, at) => readers.told(id, after, at),
+    kept: orchestrator ? keptEither(readers.kept, readers.relief) : readers.kept,
+    keptWithoutDocument: orchestrator,
+  };
+}
+
+/** The miss of the session's last automatic compaction (`compactionMissOf`), judged by the readers `--measures` uses;
+ * `null` when no readers are given, or the transcript has no automatic compaction that misses a fact. A judgment that
+ * throws is no miss: the board says nothing of it, and `--measures` says what it cannot read. */
+function missOf(text, id, readers, role) {
+  if (readers === undefined) return null;
+  try {
+    return compactionMissOf(text, readersOf(id, role, readers));
+  } catch {
+    return null;
+  }
+}
+
+/** The measures of one session's compactions (`compactionMeasures`): `{ id, modifiedAt, title, titleSource,
+ * measures }`, or `{ id, modifiedAt, unavailable }` with the reason when the transcript cannot be read, which
+ * is said and never skipped: a total that left one out would claim more than was read. The facts are read first,
+ * for the role that decides which state a compaction is kept in; the title is shown only for a transcript that holds
+ * a compaction. A transcript the board's reader cannot turn into facts is measured all the same, by its id. */
+function measureSession(id, modifiedAt, file, readers, io, readings) {
+  let text;
+  try {
+    text = io.readFile(file);
+  } catch (err) {
+    return { id, modifiedAt, unavailable: err.code ?? err.message };
+  }
+  let facts = {};
+  try {
+    facts = io.readFacts(text);
+  } catch {
+    // the block is named by the id, and its role is not known
+  }
+  let measures;
+  try {
+    measures = compactionMeasures(text, readersOf(id, roleOfSession(id, facts, readings), readers));
+  } catch (err) {
+    return { id, modifiedAt, unavailable: `its transcript could not be read into measures: ${err.message}` };
+  }
+  const shown = measures.length > 0 ? facts : {};
+  return { id, modifiedAt, title: shown.title ?? null, titleSource: shown.titleSource ?? null, measures };
 }
 
 /** The relief file at `file` as the board shows it: `{ path, exists: true, lineCount, lines }`, `{ path,
@@ -350,6 +424,48 @@ function readRelief(file, readFile) {
   } catch (err) {
     return err.code === 'ENOENT' ? { path: file, exists: false } : { path: file, unavailable: err.code ?? err.message };
   }
+}
+
+/** The sessions of a project's folder whose transcript changed in the last `hours`, read as the board reads them,
+ * `{ generatedAt, since, sessions, record }`: the sessions most recent first (each one's facts, or `unavailable`
+ * with the reason), where the window starts (ms), and the channel's record as its reader gives it. Or `{ unlisted }`
+ * when the folder could not be listed, with the system's code for why, or its message when it gave no code.
+ * `ENOENT` is a project with no sessions folder; any other is a folder that may hold sessions and did not show
+ * them, which is not the same answer to every caller (`--address`). `unseen` reads its sessions through this too,
+ * so the two never parse a transcript in two ways. `io` is `{ readFile, readdir, stat, readFacts }`. `measureReaders`
+ * (`{ told(sessionId, after, at), kept(query) }`, optional) judges each session's last automatic compaction (`missOf`);
+ * without it no session has a miss. */
+export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io, measureReaders }) {
+  let names;
+  try {
+    names = io.readdir(projectDir);
+  } catch (err) {
+    return { unlisted: err.code ?? err.message };
+  }
+  const generatedAt = now();
+  const since = generatedAt - hours * 3600 * 1000;
+  const record = readNotices(harnessHome, slug, { readFile: io.readFile });
+  const where = { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders, readings: record.readings };
+  const read = [];
+  for (const name of names) {
+    if (!name.endsWith('.jsonl')) continue;
+    const id = name.slice(0, -'.jsonl'.length);
+    let changedAt;
+    try {
+      changedAt = io.stat(path.join(projectDir, name)).mtimeMs;
+    } catch (err) {
+      // A transcript whose date cannot be read cannot be placed outside the window either: it is listed.
+      read.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
+      continue;
+    }
+    if (changedAt >= since) read.push(readSession(id, new Date(changedAt).toISOString(), where, io));
+  }
+  const sessions = titledByReadings(read, record.readings);
+  // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
+  const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
+  sessions.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : 0));
+  for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
+  return { generatedAt, since, sessions, record };
 }
 
 export async function sessionsMain(
@@ -376,6 +492,9 @@ export async function sessionsMain(
     stat = (absolute) => fs.statSync(absolute),
     // The transcript reader, replaceable so a test can make it fail on one transcript.
     readFacts = sessionFacts,
+    // The desktop app's records of the sessions (`appSessions`), replaceable so a test gives its own; a failure
+    // of the reader is no record (`look`), and the board says `unknown` for the sessions it would have placed.
+    readApp = () => appSessions(appRoot(env, platform, homedir())),
     // How a watch waits between two looks; with `now` it is all of its time, so a test waits for nothing.
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   } = {},
@@ -393,12 +512,23 @@ export async function sessionsMain(
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
   const io = { readFile, readdir, stat, readFacts };
+  const pauseTmp = parsed.tmp ?? tmpdir();
+  const stateFiles = { readFileSync: readFile, statSync: stat };
   // Where the session that orchestrates this project keeps its notes: one file per project under the
   // harness home, which is JS_HARNESS_HOME or the user's home. An empty JS_HARNESS_HOME is no home here:
   // joined as it is, it would put the file under the folder the command runs in. A relative `--relief` is
   // read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
   const harnessHome = env.JS_HARNESS_HOME || homedir();
   const reliefFile = path.resolve(defaultCwd, parsed.relief ?? reliefPath(harnessHome, slug));
+  // The readers of a compaction's measures (odd/tasks/session-channel.md, section 14): told from the pause's state, kept
+  // from the commits of the feature document and, for the orchestrator (`readersOf`), its relief file. The board judges
+  // each session's last automatic compaction with them and `--measures` every compaction, so the two never read a fact
+  // in two ways.
+  const measureReaders = {
+    told: (sessionId, after, at) => toldBetween({ home: harnessHome, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
+    kept: keptByGitLog(run),
+    relief: keptByRelief(readFile, reliefFile),
+  };
   // The machine's gate lock is under the same home, read through the same three functions as every other
   // file of the board, so a test hands it a folder of its own.
   const lockFiles = { readdirSync: readdir, statSync: stat, readFileSync: readFile };
@@ -414,41 +544,33 @@ export async function sessionsMain(
    * `record` is the channel's record as its reader gives it (`readNotices`), read in the same look: a
    * session whose transcript carries no title has the one of the opening it read (`titledByReadings`),
    * so it is on the board, and holds its role, under that title. */
-  const lookAtSessions = () => {
-    let names;
-    try {
-      names = readdir(projectDir);
-    } catch (err) {
-      return { unlisted: err.code ?? err.message };
-    }
-
-    const generatedAt = now();
-    const since = generatedAt - parsed.hours * 3600 * 1000;
-    const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail, contextWindow: parsed.contextWindow, contextPause: parsed.contextPause, contextCompactionDefault: parsed.contextCompactionDefault };
-    const read = [];
-    for (const name of names) {
-      if (!name.endsWith('.jsonl')) continue;
-      const id = name.slice(0, -'.jsonl'.length);
-      let changedAt;
-      try {
-        changedAt = stat(path.join(projectDir, name)).mtimeMs;
-      } catch (err) {
-        // A transcript whose date cannot be read cannot be placed outside the window either: it is listed.
-        read.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
-        continue;
-      }
-      if (changedAt >= since) read.push(readSession(id, new Date(changedAt).toISOString(), where, io));
-    }
-    const record = readNotices(harnessHome, slug, { readFile });
-    const sessions = titledByReadings(read, record.readings);
-    // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
-    const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
-    sessions.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : 0));
-    for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
-    return { generatedAt, since, sessions, record };
-  };
+  const lookAtSessions = () =>
+    readSessionsWindow({
+      projectDir,
+      slug,
+      harnessHome,
+      hours: parsed.hours,
+      now,
+      tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug),
+      tail: parsed.tail,
+      contextWindow: parsed.contextWindow,
+      contextPause: parsed.contextPause,
+      contextCompactionDefault: parsed.contextCompactionDefault,
+      self,
+      io,
+      measureReaders,
+    });
 
   const noFolder = (code) => `js-harness sessions: no sessions folder for ${root}: ${projectDir} (${code})`;
+
+  /** The app's records of the sessions, read in each look: a reader that fails leaves none, and the rows say so. */
+  const readAppRecords = () => {
+    try {
+      return readApp();
+    } catch {
+      return new Map();
+    }
+  };
 
   /** One look at the machine: the board, or `null` (said on stderr) when the sessions folder could not be
    * listed: there is then no board to print, whatever the reason, and the line gives it. */
@@ -459,6 +581,7 @@ export async function sessionsMain(
       return null;
     }
     const { generatedAt, since, sessions, record } = seen;
+    const app = readAppRecords();
     const worktrees = readWorktrees(run, root, { readFile });
     // The processes first, the lock after: a gate that starts is a process for a moment before it stands
     // in line, and read the other way round more of them would be shown as not yet in line. The waiters
@@ -490,7 +613,7 @@ export async function sessionsMain(
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,
       // The window lists a transcript whose file changed; a row of the roster wants an entry of that time.
-      roster: rosterOf(sessions, { worktrees, since, record }),
+      roster: rosterOf(sessions, { worktrees, since, record, app }),
       // The record's last notices and the last messages between these sessions: `notify` writes the
       // first, the transcripts hold the second, and this command writes neither.
       channel: channelOf(record, sessions),
@@ -714,6 +837,71 @@ export async function sessionsMain(
     if (unread.length > 0) stderr(`js-harness sessions: ${notRead} and ${unread.length === 1 ? 'is' : 'are'} not counted: ${unread.join(', ')}`);
     if (recordUnread !== null) stderr(`js-harness sessions: ${recordUnread}: a session known only by the opening it read is not counted`);
     return holders.length === 1 ? 0 : 2;
+  }
+
+  // The measures of the compactions (odd/tasks/session-channel.md, section 14), the proof the user is owed
+  // that the pause works: each compaction of the transcripts that changed in the window, judged once in the
+  // file that holds the stretch before it. Told is read from the pause's state under the harness home (or
+  // the temp folder, where the hook keeps it when the home cannot be written), kept from `git log` of the
+  // feature document the session last wrote. A sessions folder that cannot
+  // be listed is exit 1, as for the board: there is nothing to measure, whatever the reason.
+  if (parsed.measures) {
+    let names;
+    try {
+      names = readdir(projectDir);
+    } catch (err) {
+      stderr(noFolder(err.code ?? err.message));
+      return 1;
+    }
+    const generatedAt = now();
+    const since = generatedAt - parsed.hours * 3600 * 1000;
+    const record = readNotices(harnessHome, slug, { readFile });
+    const readings = record.readings;
+    const measured = [];
+    for (const name of names) {
+      if (!name.endsWith('.jsonl')) continue;
+      const id = name.slice(0, -'.jsonl'.length);
+      const file = path.join(projectDir, name);
+      let changedAt;
+      try {
+        changedAt = stat(file).mtimeMs;
+      } catch (err) {
+        // A transcript whose date cannot be read cannot be placed outside the window either: it is said.
+        measured.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
+        continue;
+      }
+      if (changedAt >= since) measured.push(measureSession(id, new Date(changedAt).toISOString(), file, measureReaders, io, readings));
+    }
+    // A session opened from the phone has its title from the opening it read, as on the board.
+    const sessions = titledByReadings(measured, readings);
+    sessions.sort((a, b) => ((a.modifiedAt ?? '') < (b.modifiedAt ?? '') ? 1 : (a.modifiedAt ?? '') > (b.modifiedAt ?? '') ? -1 : 0));
+    // The reliefs (section 18): the `relieved` notices of the whole local days the window touches, each judged from the
+    // transcript of the session it relieves. A record that cannot be read is not known, never a record with no relief.
+    const reliefSince = dayStartOf(since);
+    // The pause the reliefs are judged against is the one the board marks with, --context-pause included.
+    const reliefPause = percentOf(parsed.contextPause, parsed.contextWindow);
+    const reliefList = record.unavailable === undefined
+      ? reliefMeasures(record.notices, {
+        since: reliefSince,
+        transcriptLines: (id) => readFile(path.join(projectDir, `${id}.jsonl`)).split('\n'),
+        pausePercent: reliefPause,
+        defaultWindow: parsed.contextWindow,
+      })
+      : null;
+    // The reopenings (section 18): the Log lines of the feature documents that name one, in the history of the main checkout.
+    const reopened = reopenCandidates(run, root, new Date(reliefSince).toISOString().replace('.000Z', 'Z'));
+    if (parsed.json) {
+      const reliefsData = reliefList === null
+        ? { known: false, why: record.unavailable }
+        : { known: true, firstDay: localDay(reliefSince), lastDay: localDay(generatedAt), pausePercent: reliefPause, items: reliefList, total: reliefsTotal(reliefList) };
+      stdout(JSON.stringify({ root, projectDir, hours: parsed.hours, generatedAt: new Date(generatedAt).toISOString(), sessions, total: measuresTotal(sessions), reliefs: reliefsData, reopenCandidates: reopened }, null, 2));
+    } else {
+      const reliefText = reliefList === null
+        ? [`reliefs: not known (the record could not be read: ${record.unavailable})`]
+        : reliefLines(reliefList, { since: reliefSince, now: generatedAt });
+      for (const line of [...measuresLines(sessions), ...reliefText, ...reopenLines(reopened)]) stdout(line);
+    }
+    return 0;
   }
 
   const first = look();

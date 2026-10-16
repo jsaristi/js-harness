@@ -1284,6 +1284,22 @@ test('a note to this session in the channel is said once by the hook, under the 
   assert.deepEqual((await runPause(machine, input)).lines, [], 'said once');
 }));
 
+// D5 of odd/tasks/memory-hygiene.md: a memory hygiene pass that is due is said on this hook, which a model reads (a
+// SessionStart systemMessage reaches only the person), once a day for the project, whichever session calls first.
+test('a memory hygiene pass that is due is said once a day by the hook', withMachine(async (machine) => {
+  const memory = path.join(machine.home, '.claude', 'projects', projectSlug(machine.root), 'memory');
+  fs.mkdirSync(memory, { recursive: true });
+  fs.writeFileSync(path.join(memory, 'MEMORY.md'), `- [A](a.md) — ${'x'.repeat(200)}\n`);
+  fs.writeFileSync(path.join(memory, 'a.md'), '---\nmetadata:\n  type: user\n---\n\nfact\n');
+  const input = pauseInput(machine, UNDER);
+  const first = await runPause(machine, input);
+  assert.equal(first.lines.length, 1);
+  const context = JSON.parse(first.lines[0]).hookSpecificOutput.additionalContext;
+  assert.match(context, /^js-harness: a memory hygiene pass is due for this project \(no-pass, line-chars\)/);
+  assert.match(context, /js-harness memory status/);
+  assert.deepEqual((await runPause(machine, input)).lines, [], 'said once that day');
+}));
+
 test('past the pause with a note waiting, the hook says both in one line: the pause first, then the note', withMachine(async (machine) => {
   noteTo(machine, '5', 'both at once');
   const first = await runPause(machine, titledPauseInput(machine, PAUSED, 'JH 5 · canal entre sesiones'));
@@ -1314,6 +1330,115 @@ test('a call with no harness.json above it prints nothing; a call under a checko
   assert.equal(fs.existsSync(path.join(machine.home, '.js-harness')), false);
   const inside = await runPause(machine, pauseInput(machine, PAUSED, { id: SECOND, cwd: path.join(machine.worktree, 'odd', 'tasks') }));
   assert.deepEqual([inside.code, inside.lines.length, inside.calls], [0, 1, []]);
+}));
+
+// The web notice (odd/tasks/web-fetch-fallback.md, T2): the tool's answer as Claude Code hands it to a PostToolUse
+// hook, the shape its transcripts keep as `toolUseResult` (measured on 2026-10-15).
+const NPM = 'https://www.npmjs.com/package/react';
+const webFetchOf = (code, codeText, url = NPM) => ({
+  tool_name: 'WebFetch',
+  tool_input: { url, prompt: 'Return the latest version shown.' },
+  tool_response: { bytes: 0, code, codeText, result: `The server returned HTTP ${code} ${codeText}.`, durationMs: 616, url },
+});
+const WEB_NOTICE = (code, codeText, url = NPM) =>
+  `js-harness: WebFetch got HTTP ${code} ${codeText} from ${url}, the answer a site gives AI traffic. Next rung: js-harness fetch '${url}' reads it through r.jina.ai (a public page only: it sends no cookie and no key); if that says blocked, open it in the built-in browser and read it with get_page_text.`;
+const webContext = (lines) => (lines.length === 1 ? JSON.parse(lines[0]).hookSpecificOutput.additionalContext : lines);
+
+test('a WebFetch the site refused as AI traffic gets the notice of the next rung, once per call, under the pause', withMachine(async (machine) => {
+  const blocked = await runPause(machine, pauseInput(machine, UNDER, webFetchOf(403, 'Forbidden')));
+  assert.deepEqual([blocked.code, blocked.stderr, blocked.calls], [0, '', []]);
+  assert.equal(blocked.lines.length, 1);
+  assert.equal(JSON.parse(blocked.lines[0]).hookSpecificOutput.hookEventName, 'PostToolUse');
+  assert.equal(webContext(blocked.lines), WEB_NOTICE(403, 'Forbidden'));
+  // Each refused call is told: the next page is another rung's work.
+  assert.equal(webContext((await runPause(machine, pauseInput(machine, UNDER, webFetchOf(403, 'Forbidden')))).lines), WEB_NOTICE(403, 'Forbidden'));
+  for (const [code, text] of [[402, 'Payment Required'], [429, 'Too Many Requests'], [503, 'Service Unavailable']]) {
+    assert.equal(webContext((await runPause(machine, pauseInput(machine, UNDER, webFetchOf(code, text)))).lines), WEB_NOTICE(code, text), String(code));
+  }
+}));
+
+test('the suggested command quotes the URL, so a shell keeps its & and its spaces; a quote in it is percent-encoded', withMachine(async (machine) => {
+  const url = "https://example.com/search?q=a&page=2&who=o'brien";
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFetchOf(403, 'Forbidden', url)))).lines);
+  assert.ok(said.includes("Next rung: js-harness fetch 'https://example.com/search?q=a&page=2&who=o%27brien' reads it"), said);
+}));
+
+test('a WebFetch that read its page, one the site says is not there, a redirect and another tool get no web notice', withMachine(async (machine) => {
+  for (const [code, text] of [[200, 'OK'], [404, 'Not Found'], [301, 'Moved Permanently'], [401, 'Unauthorized']]) {
+    assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, webFetchOf(code, text)))).lines, [], String(code));
+  }
+  const bash = { ...webFetchOf(403, 'Forbidden'), tool_name: 'Bash' };
+  assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, bash))).lines, []);
+  const noResponse = { ...webFetchOf(403, 'Forbidden'), tool_response: 'The server returned HTTP 403 Forbidden.' };
+  assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, noResponse))).lines, []);
+}));
+
+test('a sub-agent\'s refused WebFetch is told the next rung too, and a call with no harness.json above it is not', withMachine(async (machine) => {
+  const sub = await runPause(machine, pauseInput(machine, PAUSED, { agent_id: 'made-up-agent', ...webFetchOf(403, 'Forbidden') }));
+  assert.equal(webContext(sub.lines), WEB_NOTICE(403, 'Forbidden'), 'the web notice alone: the pause stays the session\'s own');
+  const outside = path.join(machine.dir, 'elsewhere');
+  fs.mkdirSync(outside);
+  assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, { cwd: outside, ...webFetchOf(403, 'Forbidden') }))).lines, []);
+}));
+
+// T4 of odd/tasks/web-fetch-fallback.md: a WebFetch that fails as a tool error reaches no PostToolUse hook, only the
+// `PostToolUseFailure` entry `install` writes on WebFetch, which runs the same command. Its input carries `error`
+// and `is_interrupt` in place of `tool_response` (Claude Code's hooks reference, read on 2026-10-16); the error is
+// the one measured on reddit.com and stackoverflow.com.
+const REDDIT = 'https://www.reddit.com/r/ClaudeAI/';
+const webFailureOf = (url = REDDIT, error = 'Claude Code is unable to fetch from www.reddit.com', more = {}) => ({
+  hook_event_name: 'PostToolUseFailure',
+  tool_name: 'WebFetch',
+  tool_input: { url, prompt: 'Summarize the posts.' },
+  tool_use_id: 'toolu_made_up',
+  error,
+  is_interrupt: false,
+  ...more,
+});
+const FAILURE_NOTICE = (url = REDDIT, error = 'Claude Code is unable to fetch from www.reddit.com') =>
+  `js-harness: WebFetch failed on ${url} (${error}). Next rung: js-harness fetch '${url}' reads it through r.jina.ai (a public page only: it sends no cookie and no key); if that says blocked, open it in the built-in browser and read it with get_page_text.`;
+
+test('a WebFetch that failed as a tool error gets the notice of the next rung, answered under PostToolUseFailure', withMachine(async (machine) => {
+  const failed = await runPause(machine, pauseInput(machine, UNDER, webFailureOf()));
+  assert.deepEqual([failed.code, failed.stderr, failed.calls, failed.lines.length], [0, '', [], 1]);
+  assert.equal(JSON.parse(failed.lines[0]).hookSpecificOutput.hookEventName, 'PostToolUseFailure');
+  assert.equal(webContext(failed.lines), FAILURE_NOTICE());
+  // A sub-agent's failed call is told too, as a refused one is.
+  const sub = await runPause(machine, pauseInput(machine, PAUSED, { agent_id: 'made-up-agent', ...webFailureOf() }));
+  assert.equal(webContext(sub.lines), FAILURE_NOTICE());
+}));
+
+test('the failure notice takes the first line of the error, cut at 200 characters, and quotes the URL for a shell', withMachine(async (machine) => {
+  const url = "https://example.com/a?b=1&c=o'brien";
+  const long = `${'x'.repeat(250)}\nsecond line`;
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFailureOf(url, long)))).lines);
+  assert.ok(said.startsWith(`js-harness: WebFetch failed on ${url} (${'x'.repeat(199)}…). Next rung: js-harness fetch 'https://example.com/a?b=1&c=o%27brien' reads it`), said);
+}));
+
+test('the cut counts characters, not UTF-16 units, so it never splits one in two (gentle-ai review, R3-001)', withMachine(async (machine) => {
+  // 198 letters, then an emoji (two UTF-16 units) as character 199: a cut by units would keep half of it.
+  const error = `${'x'.repeat(198)}😀${'y'.repeat(10)}`;
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFailureOf(REDDIT, error)))).lines);
+  assert.ok(said.includes(`(${'x'.repeat(198)}😀…)`), said);
+  assert.equal(said.isWellFormed(), true);
+}));
+
+test('an interrupted WebFetch, another tool\'s failure and a failure with no URL or no error get no web notice', withMachine(async (machine) => {
+  const cases = [
+    webFailureOf(REDDIT, 'Claude Code is unable to fetch from www.reddit.com', { is_interrupt: true }),
+    { ...webFailureOf(), tool_name: 'Bash', tool_input: { command: 'curl https://www.reddit.com/' } },
+    { ...webFailureOf(), tool_input: { prompt: 'no url' } },
+    { ...webFailureOf(), error: '' },
+    { ...webFailureOf(), error: 7 },
+  ];
+  for (const input of cases) {
+    assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, input))).lines, [], JSON.stringify(input));
+  }
+}));
+
+test('past the pause a refused WebFetch gets both notices in one line, the web notice first', withMachine(async (machine) => {
+  const both = webContext((await runPause(machine, pauseInput(machine, PAUSED, webFetchOf(402, 'Payment Required', 'https://x.com/AnthropicAI')))).lines);
+  assert.ok(both.startsWith(`${WEB_NOTICE(402, 'Payment Required', 'https://x.com/AnthropicAI')}\n\njs-harness: this session holds `), both);
 }));
 
 test('input that is not an object, or names no transcript or session the command can use, prints nothing, exits 0 and writes nothing', withMachine(async (machine) => {
