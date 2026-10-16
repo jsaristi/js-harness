@@ -153,6 +153,10 @@ check said or before its answer was read.
   request 290 and the notice that it was pushed were joined by `;` in one command; the pre-push hook
   refused the push (a merge that resolved a conflict in code had no Codex record) and the notice said
   "pushed"; a second notice corrected it, and the push ran alone after the record
+- Seen: 2026-10-16 — session fc81b0d2 (JH 24), its notices to the lead at 17:39 local (read here)
+  — the push of pull request 328 after a merge of main and the notice "ready to land" were joined
+  by `;`; the pre-push hook refused the push (the merge 78a5853 had no Codex record) and a second
+  notice corrected the first, the same shape as the line above, with the protocol in force
 - Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
 
 ### check-survivor-test-fails
