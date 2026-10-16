@@ -2,6 +2,7 @@
 // filesystem read here, kept simple and injectable via its `dir` argument.
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const TARBALL_RE = /^js-harness-(\d+\.\d+\.\d+)\.tgz$/;
 
@@ -25,6 +26,34 @@ export function isNewer(candidate, current) {
  * release to install and says this instead. It names npm and says the rest: a copy that pnpm installed is
  * not the one npm would replace. */
 export const INSTALL_NEWEST = 'npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it';
+
+/** The repository whose tags are the releases (docs/ROADMAP.md, "Release source"): private, read with the git
+ * credentials already on the machine. */
+export const DEFAULT_REPO = 'https://github.com/jsaristi/js-harness.git';
+
+/** A release tag: `v` and three numbers, nothing else, so a tag that reaches an install's argv carries no flag. */
+const RELEASE_TAG_RE = /^refs\/tags\/(v(\d+\.\d+\.\d+))$/;
+
+/** The highest release tag in the output of `git ls-remote --tags`, as `{ version, tag }`, or null when it holds
+ * none. A line that is not a release tag (a pre-release, a tag with no `v`, a peeled `^{}` line, a branch) is
+ * ignored. */
+export function latestTag(listing) {
+  let best = null;
+  for (const line of listing.split(/\r?\n/)) {
+    const match = RELEASE_TAG_RE.exec(line.split('\t')[1] ?? '');
+    if (!match) continue;
+    if (!best || compareSemver(match[2], best.version) > 0) best = { version: match[2], tag: match[1] };
+  }
+  return best;
+}
+
+/** What a package manager installs for `tag` of `repo`: the GitHub shorthand for the default repository, as the
+ * roadmap writes it, and `git+<url>` for any other, a folder named as a file URL. */
+export function tagSpec(repo, tag) {
+  if (repo === DEFAULT_REPO) return `github:jsaristi/js-harness#${tag}`;
+  const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(repo) ? repo : pathToFileURL(path.resolve(repo)).href;
+  return `git+${url}#${tag}`;
+}
 
 /** Extracts the version out of a `js-harness-<semver>.tgz` (an `npm pack` output name), or null. */
 export function parseTarballVersion(filename) {

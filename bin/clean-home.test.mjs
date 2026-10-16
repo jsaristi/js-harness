@@ -1,8 +1,8 @@
 // S5 of odd/tasks/first-version.md: the whole cycle on a clean machine, run by every gate. A throwaway home outside the
 // repository gets this checkout's `install`, a `doctor` with no gap of the harness's own, the session-start hooks the
-// install registered, and `uninstall --global`, which must leave the home empty. The hooks and doctor's hook check run
-// `js-harness` by name, as a host does, so a shim at the front of PATH sends that name to this checkout and never to
-// the copy installed on the machine. The update step waits for the release source (T4 of the same document).
+// install registered, an `upgrade` to a newer release tag of a local repository, and `uninstall --global`, which must
+// leave the home empty. The hooks and doctor's hook check run `js-harness` by name, as a host does, so a shim at the
+// front of PATH sends that name to this checkout and never to the copy installed on the machine.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -33,6 +33,47 @@ function shimFolder(root) {
   return folder;
 }
 
+/** A local git repository holding what the package ships (`bin/` without its tests, and `package.json`) at
+ * `version`, tagged `v<version>` and under one older tag: the release source of T4b, with no network. */
+function releaseRepo(root, version) {
+  const repo = path.join(root, 'release-repo');
+  const checkout = path.dirname(path.dirname(BIN));
+  fs.cpSync(path.join(checkout, 'bin'), path.join(repo, 'bin'), {
+    recursive: true,
+    filter: (source) => !/\.(test|testkit)\.mjs$/.test(source),
+  });
+  const pkg = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), 'utf8'));
+  fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ ...pkg, version }, null, 2));
+  const git = (...args) => {
+    const run = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-c', 'core.autocrlf=false', ...args], { cwd: repo, encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+  };
+  git('init', '-q');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'release');
+  git('tag', 'v0.0.1');
+  git('tag', `v${version}`);
+  return repo;
+}
+
+/** A package manager stand-in: `install -g git+file:///<repo>#<tag> --prefix <dir>` checks that tag out where npm
+ * puts a global package under a prefix, which is where `upgrade` runs the installed copy's sync from. */
+function packageManager(root) {
+  const script = path.join(root, 'pm.mjs');
+  fs.writeFileSync(script, [
+    "import { spawnSync } from 'node:child_process';",
+    "import path from 'node:path';",
+    "import { fileURLToPath } from 'node:url';",
+    "const [, , verb, global, spec, flag, prefix] = process.argv;",
+    "if (verb !== 'install' || global !== '-g' || flag !== '--prefix' || !spec.startsWith('git+file:')) process.exit(9);",
+    "const [url, tag] = spec.slice('git+'.length).split('#');",
+    "const target = process.platform === 'win32' ? path.join(prefix, 'node_modules', 'js-harness') : path.join(prefix, 'lib', 'node_modules', 'js-harness');",
+    "const clone = spawnSync('git', ['clone', '-q', '--depth', '1', '--branch', tag, url, target], { stdio: 'inherit' });",
+    "process.exit(clone.status ?? 1);",
+  ].join('\n'));
+  return `${process.execPath} ${script}`;
+}
+
 /** Every file under `folder`, relative to it, sorted. */
 function filesUnder(folder) {
   return fs.readdirSync(folder, { recursive: true, withFileTypes: true })
@@ -42,6 +83,9 @@ function filesUnder(folder) {
 }
 
 test('a clean home installs the harness, reports no gap of its own, runs its session-start hooks and uninstalls to an empty home', () => {
+  // Run from a commit's hook, the suite inherits GIT_DIR and its kin, and the git of the release repository and of the
+  // package manager stand-in would act on the repository being committed.
+  for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-clean-home-'));
   try {
     const home = path.join(root, 'home');
@@ -92,6 +136,14 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
     }
     assert.deepEqual(ran, ['js-harness doctor --hook', 'js-harness resume --hook', 'js-harness doctor --hook', 'js-harness resume --hook']);
 
+    // The update: the newest release tag of the repository is installed, and that copy's own sync brings the home to it.
+    const prefix = path.join(root, 'prefix');
+    const repo = releaseRepo(root, '99.0.0');
+    const upgraded = run(['upgrade', '--home', home, '--repo', repo, '--prefix', prefix, '--pm', packageManager(root)]);
+    assert.equal(upgraded.status, 0, upgraded.stderr);
+    assert.match(upgraded.stdout, /upgraded to 99\.0\.0/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8')).version, '99.0.0');
+
     const uninstalled = run(['uninstall', '--global', '--home', home]);
     assert.equal(uninstalled.status, 0, uninstalled.stderr);
     // Nothing the cycle wrote is left: not the manifest, not the doctor's cache, not a hook's state, not a folder.
@@ -101,5 +153,3 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
-
-test.todo('a clean home updates to a newer local tag (S5), once the release source of T4 exists');

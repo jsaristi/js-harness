@@ -94,8 +94,8 @@ Built in T4b, test first, in `bin/update.mjs` and `bin/lib/version.mjs`:
 - [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L3)
 - [ ] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L5)
-- [ ] T4b (kind: build) S4: the release source, built as designed; inline, test first
-- [ ] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (all but the update step: PR 265, L4)
+- [x] T4b (kind: build) S4: the release source, built as designed; inline, test first (L6)
+- [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L4; the update step, L6)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L4)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
 
@@ -122,3 +122,11 @@ Built in T4b, test first, in `bin/update.mjs` and `bin/lib/version.mjs`:
 - L5 (2026-10-16 05:15, the lead): "next for you: T4 of odd/tasks/first-version.md, the release source (S4),
   moved from JH 19 so it runs beside JH 19's T3. Design first in the doc, then build ... Creating any tag is
   his: test against a local tag only. Then T5's update step." The design is above.
+- L6 (2026-10-16, JH 21): T4b built as designed. `bin/release-tags.test.mjs`: RED, its imports missing
+  (`DEFAULT_REPO`, `latestTag`, `tagSpec`); GREEN 8/8. The tests of `bin/update.test.mjs` that named no source
+  now read a local repository with no release tag (48/48; that file went from 103 s to 15 s, so before the change
+  of their environment they had been reaching GitHub). T5's update step is in `bin/clean-home.test.mjs`: a local
+  repository holding `bin/` and `package.json` at 99.0.0 under `v99.0.0`, a package manager stand-in that clones
+  the tag into the prefix, then `upgrade` and its sync; the home records 99.0.0 and `uninstall` still leaves it
+  empty (1/1, also with a stray `GIT_DIR`). On this machine `git ls-remote --tags --refs` of the private repository
+  answered in 3.5 s with no tag, so `update` still says no release is tagged yet.
