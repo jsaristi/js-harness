@@ -54,6 +54,7 @@ test('a failure that names no register entry, and a switch back with no sighting
 // One line for each rule of the real list that carries patterns, restating its value as a text might: a rule gets
 // its patterns and its planted line in the same change, so a pattern that finds nothing in particular never lands.
 const PLANTED = {
+  'agents-budget': { line: 'AGENTS.md stays within its budget of 1500 estimated tokens.', marked: 'AGENTS.md stays within its budget (`rule:agents-budget`).' },
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
   'gate-log-size': { line: 'When the gate log is past 512 KiB it is renamed.', marked: 'When the gate log is past `rule:gate-log-size` it is renamed.' },

@@ -10,7 +10,11 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 1500,
-    "unit": "estimated tokens"
+    "unit": "estimated tokens",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*AGENTS\\.md.{0,60}\\bbudget\\b.{0,30}{amount}",
+      "^(?!.*\\bruleValue\\().*\\bbudget\\b\\W{0,3}{amount}\\s*(?:estimated )?tokens"
+    ]
   },
   {
     "id": "codex-review-floor",
