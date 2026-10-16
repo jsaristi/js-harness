@@ -5471,6 +5471,30 @@ test('a commit after a merge of main that a record covers is reviewed alone, fro
   ]);
 });
 
+test('a merge of main below HEAD, after commits that each have a record, is planned in two turns: the merge by what was written in it, then the commits after it (merge-below-head, S1, S5)', async () => {
+  const { root, mine, main, head: merge } = makeResolvedMergeRepo();
+  fs.writeFileSync(path.join(root, 'a.txt'), 'A1 after the merge\n', 'utf8');
+  git(root, 'commit', '-qam', 'after the merge');
+  const after = git(root, 'rev-parse', 'HEAD');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  nothing.untouched('the plan of a merge below HEAD');
+  const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', merge)).reduce((sum, file) => sum + file.changedLines, 0);
+  assert.deepEqual(result.out.split('\n'), [
+    `Turn 1 of 2, the merge ${merge.slice(0, 7)}: what was written in it.`,
+    mergeReviewSaid({ head: merge, side: main, branch: 'origin/main' }),
+    ...plannedPlan(root, mine, merge, [{ files: ['m.txt'], changedLines }]),
+    `Turn 2 of 2, ${merge.slice(0, 7)}..${after.slice(0, 7)}: the commits after the merge.`,
+    ...plannedPlan(root, merge, after, [{ files: ['a.txt'], changedLines: 2 }]),
+    `In all, 2 turns: 2 parts, ${changedLines + 2} changed lines in 2 files.`,
+  ]);
+  // --again takes the range as it was given: one review, no turn.
+  const again = await run(['--base', main, '--plan', '--again', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(again.code, 0, again.err);
+  assert.doesNotMatch(again.out, /^Turn /m);
+});
+
 // Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
 const readOnlyHolds = process.platform !== 'win32' && process.getuid?.() !== 0;
 
