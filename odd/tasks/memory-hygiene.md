@@ -264,7 +264,7 @@ verification, so high effort, by his effort rule. It reports in the shape of eve
 checked and how, not checked, failed, open), closes with his reply states, sends its one question
 through the lead, and gives the index bytes before and after.
 
-### D7 The full uninstall (L7, his answer to L6.2; design, version 1, for two readers)
+### D7 The full uninstall (L7, his answer to L6.2; design, version 2, after two readers)
 
 His words (L7): "Debe dar la opcion de guardar las copias osea desintalacion completa o la desintalacion
 normal que deja las copias". Two ways out, and he picks: the normal uninstall keeps the snapshots, the
@@ -274,58 +274,107 @@ tells him to remove a kept folder by hand.
 1. *The normal uninstall* is `uninstall --global` as T9 built it (`removeMemoryHygieneFolder`,
    `bin/lib/manifest.mjs`): a project folder that holds a snapshot is kept, with its journal, and its
    stamps are named; every other project folder goes, and the hygiene folder goes when nothing is
-   kept. The one change is its line: "remove the folder by hand to drop them" becomes "`js-harness
-   uninstall --global --full` removes them", so the choice is offered at the moment it matters.
+   kept. Its line "remove the folder by hand to drop them" becomes "`js-harness uninstall --global
+   --full` removes them", so the choice is offered when it matters (the two assertions of
+   `bin/install.test.mjs` that hold the old words are rewritten).
 2. *The full uninstall* is `uninstall --global --full`: everything the normal one removes, and the
-   snapshots too, so `~/.js-harness/memory-hygiene` is gone and nothing of a pass is left. Each project
-   it removed with snapshots is named with its stamps ("removed <project>: N snapshot(s) of a memory
-   pass (<stamps>)"), so what went is on the record of the run. `--full` is the word of his "completa";
-   the help says what it adds: the memory snapshots, the only copy of what a pass changed.
+   snapshots too, so `~/.js-harness/memory-hygiene` is gone. Each project removed with snapshots is
+   named with its stamps ("removed <project>: N snapshot(s) of a memory pass (<stamps>)"). `--full` is
+   his "completa"; since "full" could be read as more, the help says what it adds and what it never
+   removes: "--full also removes the memory snapshots, the only copy of what a pass changed; files you
+   modified and the memory notes themselves are kept either way".
 3. *Only with `--global`.* The snapshots live under the machine's home, one folder per project
-   (`<home>/.js-harness/memory-hygiene/<slug>/snapshots/<stamp>/`), and the project uninstall does not
-   touch that folder today; `--full` without `--global` is refused (exit 2, "--full removes the memory
-   snapshots of the machine: it goes with --global"). `uninstall` filters the flag out before
-   `parseScopeArgs`, which `sync` shares, so `sync --full` stays an unknown flag.
-4. *Never under a pass.* A project whose pass holds its lock (planned, not yet verified or undone:
-   `<slug>/lock` exists, `bin/lib/memory-pass.mjs`) is never removed, in either mode: its snapshot may
-   not be written yet, and its journal is what `memory verify` and `memory undo` read. The normal
-   uninstall keeps it and names it ("kept <project>: a memory pass is in progress (<stamp>); run
-   js-harness memory verify or undo, then uninstall again") with exit 1, since the uninstall did not
-   finish; the full one does the same. A lock that is empty or does not parse is read in the instant
-   `planPass` writes it, so it counts as a pass (`<slug>/unknown`). This closes T9's advisory "a
-   `memory plan` started during an uninstall could lose its snapshot".
-5. *A plan that starts meanwhile.* Before it reads any lock, the uninstall creates the marker
-   `<home>/.js-harness/memory-hygiene.purge` with `wx`, and removes it in `finally`; `planPass` checks
-   for the marker after it takes its own lock, and when it is there it releases the lock, removes the
-   folders it made empty, and refuses ("an uninstall is removing the memory folder; plan again after
-   it"). Either the plan's lock is there when the uninstall reads the locks (4 keeps it), or the plan
-   sees the marker and stops: no order of the two loses a snapshot. A marker already there is another
-   uninstall: refused, exit 1, naming the marker, which a person removes if no uninstall runs. Both
-   modes take the marker, since the normal one removes folders too.
+   (`<home>/.js-harness/memory-hygiene/<slug>/snapshots/<stamp>/`). `--full` without `--global` is
+   refused, exit 2 ("--full removes the memory snapshots of the machine: it goes with --global"), even
+   outside a git repository where `uninstall` alone is the machine one: a flag that deletes the only
+   copy is asked for in full words. `uninstallMain` filters it out before `parseScopeArgs`, which `sync`
+   shares, so `sync --full` stays an unknown flag. The project uninstall gains one stdout line when that
+   project's hygiene folder holds snapshots: where it is, and that `uninstall --global --full` removes
+   them; a project-scope `--full` waits until he asks.
+4. *Never under a pass.* A project whose `<slug>/lock` exists is never removed. The lock is read by a
+   new export of `bin/lib/memory-pass.mjs`, `readLock(stateDir)`, which never throws: `null` when there
+   is none, else `{ stamp, pid, manifest }` with `stamp` null for a lock that is empty or does not
+   parse, and `manifest` whether that stamp's `manifest.json` exists. Its line follows what can release
+   it:
+   - a stamp with a manifest: "a memory pass is planned (<stamp>), in <the memory folder the manifest
+     records>; run js-harness memory verify or memory undo <stamp> there, then uninstall again";
+   - an empty or unreadable lock, or a stamp with no manifest (a plan killed between its lock and its
+     snapshot, which verify and undo cannot release): "<lock path> holds no finished plan (pid <pid>);
+     if that process is not running, remove the file and uninstall again".
+   `planPass`'s own refusal of a held lock takes the same two lines.
+   The normal uninstall keeps such a project and exits 1, since the uninstall did not finish. This part
+   is not his request but T9's open advisory ("a `memory plan` started during an uninstall could lose
+   its snapshot"), and is recorded as that.
+   The full uninstall with any lock present removes nothing of the hygiene folder, names every lock as
+   above, and exits 1 (as PR 263 did): one rename takes the folder whole, or not at all.
+5. *Every writer sees the uninstall.* When the hygiene folder exists, and only then (so an empty home
+   gets no `.js-harness`), the uninstall first creates the marker `<home>/.js-harness/
+   memory-hygiene.purge` with `wx`, holding `{ pid, startedAt }`; then lists the projects; then reads
+   the locks. It removes the marker in `finally`, and before `uninstallInstalled` runs, so the marker
+   never keeps `.js-harness` alive. The writers:
+   - `planPass` checks the marker after it takes its lock (and takes an ENOENT of its folder, moved away
+     meanwhile, as the same refusal); when it is there it releases the lock, removes the folders it made
+     empty, and refuses, naming the marker.
+   - `undoPass`, which today only reads the lock, takes it with `wx` for its whole run when no pass holds
+     it (a verified pass), checks the marker after, and releases it at the end; refused, it writes
+     nothing. Before it writes, it checks that every file of the snapshot is there with the hash the
+     manifest records, so a damaged snapshot is refused by name.
+   - `verifyPass` already needs the lock, and a locked project is kept: covered by 4.
+   - `dueNotice` writes no `told` stamp while the marker is there.
+   Either a writer's lock is there when the uninstall reads the locks (4 keeps it), or the writer sees
+   the marker and stops. A marker already there is another uninstall, or a stale one: when its pid is
+   alive, refused with exit 1; when not (a killed run skips `finally`), the refusal says the run that
+   made it ended and to remove the file. The refusals of the writers name the file and say the same.
 6. *A removal that cannot finish.* The full uninstall moves the folder aside in one rename
-   (`memory-hygiene.purging-<pid>-<time>`) and removes that; if the removal fails, the folder is renamed
-   back, so what is left is still where `memory undo` and the next uninstall look, and the error goes to
-   stderr with exit 1. Only when that rename fails too is the aside name reported. The normal uninstall
-   keeps T9's per-project removal, whose errors already go to stderr with exit 1.
+   (`memory-hygiene.purging-<pid>-<time>`), then removes that with `maxRetries: 3`. If the removal fails,
+   the folder is renamed back and the error says it may be partly removed and to run `uninstall --global
+   --full` again; the hash check of 5 refuses an undo from a snapshot it damaged. Only when the rename
+   back fails too is the aside name reported. Either mode names a `memory-hygiene.purging-*` folder it
+   finds beside the hygiene folder (left by a killed run), with what to do: rename it back when no
+   `memory-hygiene` is there, else remove it.
 7. *What is reused.* Closed PR 263 (`feat/memory-hygiene-uninstall`, kept) built 3 to 6 on the code T9
    replaced: its flag parsing, marker, lock rule, rename aside and rename back are carried over and
-   rewritten on T9's per-project shape (`{ path, stamps, journal }`, now with `inProgress`), on
-   `hygieneDir` (the one home of the path), and on `planPass`'s `lockHolder`. Not reused: its default,
-   which kept the whole folder, and its flag's name, `--purge-memory-snapshots`, replaced by his word.
-8. *Tests, first* (`bin/lib/manifest.test.mjs`, `bin/install.test.mjs`, `bin/lib/memory-pass.test.mjs`):
-   one per rule above: the normal line names `--full` (1); the full uninstall removes the snapshots and
-   the folder and names each stamp, exit 0 (2); `--full` without `--global` exits 2 and `sync --full`
-   is an unknown flag (3); a locked project is kept in both modes with exit 1, an empty lock counts
-   (4); `planPass` refuses while the marker is there and leaves nothing behind, and an uninstall refuses
-   while one is there (5); a failed removal leaves the folder in place (6). T9's existing tests keep
-   the normal uninstall as it is.
-9. *Docs.* The help line of `uninstall` (`bin/js-harness.mjs`, `bin/install.mjs` usage), README's
-   "Remove" and memory sections, D4.5 ("unless asked to purge" becomes "unless `--full` is given"),
-   and D4.1's layout, which is `<slug>/snapshots/<stamp>/`.
-10. *Risk.* Item 1 (it deletes stored data that is the only copy of what a pass changed) and item 4
-    (the marker and the locks order two processes): an independent verifier after the build, and the
+   rewritten on T9's per-project shape (`{ path, stamps, journal }`, now with `lock`), on `hygieneDir`,
+   and on `readLock`. Not reused: its default, which kept the whole folder, and its flag's name.
+8. *The menu.* `bin/tui.mjs`'s Uninstall asks, after its yes and only when snapshots exist, "Remove
+   the memory snapshots too, the only copy of what a pass changed? (y/N)"; yes adds `--full`.
+9. *Tests, first* (`bin/lib/manifest.test.mjs`, `bin/install.test.mjs`, `bin/lib/memory-pass.test.mjs`,
+   `bin/tui.test.mjs`), one per rule: the normal line names `--full` (1); the full uninstall removes the
+   snapshots and the folder and names each stamp, exit 0 (2); `--full` without `--global` exits 2, `sync
+   --full` is an unknown flag, the project uninstall names a project's snapshots (3); a locked project
+   is kept by the normal uninstall with exit 1, a full uninstall with one locked and one other project
+   removes nothing with exit 1, a lock with no manifest and an empty one get the remove-the-file line
+   (4); `planPass` and `undoPass` refuse while the marker is there and write nothing, an undo of a
+   damaged snapshot is refused, an uninstall refuses a live marker and names a stale one, no folder means
+   no marker and an output identical to today's, the marker is gone after a run (5); a failed removal
+   leaves the folder in place and a `purging-*` folder is named (6); the menu's second question (8).
+10. *Docs.* The help line of `uninstall` (`bin/js-harness.mjs`, `bin/install.mjs` usage), README's
+   "Remove", its command reference ("### js-harness uninstall") and its memory hygiene section, the
+   installed skill's line in `bin/lib/manifest.mjs`, D4.5 ("unless asked to purge" becomes "unless
+   `--full` is given"), and D4.1's layout, which is `<slug>/snapshots/<stamp>/`.
+11. *Risk.* Item 1 (it deletes stored data that is the only copy of what a pass changed) and item 4 (the
+    marker and the locks order several processes): an independent verifier after the build, and the
     gentle-ai review of the slice. The Codex review of this slice reads the lock fix `2e082ca` (T8),
     since it touches `bin/lib/memory-pass.mjs`.
+
+#### Review of D7 (two readers, 2026-10-16)
+Version 1 went to two independent readers (data safety and races; fit to his words and the code). Every
+finding taken, with where:
+- Both: a full uninstall cannot keep a locked project inside a folder it renames whole; now nothing is
+  removed while any lock is there (4). Both: an undo of a verified pass takes no lock, so a full
+  uninstall could delete its snapshot mid-copy; undo now takes the lock and checks the marker, and
+  refuses a damaged snapshot (5).
+- A lock left by a killed plan cannot be released by verify or undo, so "run verify or undo" led
+  nowhere; the lines now follow what releases it (4). The marker comes before the listing, since a plan
+  could start between the two (5). A marker or an aside folder left by Ctrl+C, which skips `finally`,
+  is detected by pid and named (5, 6). Windows: retries on removal, and a partly removed folder is said
+  so (6). `dueNotice` writes into the folder too (5). `lockHolder` is private and throws on an empty
+  lock, so `readLock` (4). An ENOENT in `planPass` when the folder moved (5).
+- The menu offers the choice (8). The help says what `--full` never removes (2). The skill text and the
+  command reference were missing (10). The marker only when the folder exists, released before the rest
+  of the uninstall (5). The two old assertions are rewritten, not kept (1). The normal mode's lock rule
+  is T9's advisory, not his request (4). The project uninstall names its snapshots (3). Refusing `--full`
+  without `--global` outside a repository is kept, with its reason (3).
 
 ## Review of the design
 
@@ -493,7 +542,7 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   to JH 21 with closed PR 263's branch, test first, two readers on its design: D7 and T10.
 
 ## Next step (2026-10-16)
-- T10 (JH 21, branch `feat/memory-full-uninstall`): D7 written, version 1; next its two readers, then the build
+- T10 (JH 21, branch `feat/memory-full-uninstall`): D7 version 2, after its two readers; next the build
   test first. L6.2 is answered (L7).
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
