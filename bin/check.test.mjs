@@ -3185,6 +3185,23 @@ test('check --first issues nothing where the host names no session or two ticket
   assert.deepEqual(take.asked.map(({ first }) => first ?? null), [null, null]);
 }));
 
+// Codex (2026-10-16): a second ticket was issued beside an open one of the session, and one this check
+// never claims (a gate that takes no lock) stayed open for a later check to jump the line with.
+test('check --first reuses an open ticket of its session for this tree, and cancels the one it issued when its gate claims none', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const open = issueTicket({ home, session: 'the-orchestrator', tree: dir, reason: 'issued before' }).ticket;
+  const reused = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
+  assert.match(reused.output, new RegExp(`^INFO {2}first {2}no ticket was issued: ticket ${open.id} of this session is open already for this tree, and this gate claims it$`, 'm'));
+  assert.deepEqual(take.asked.map(({ first }) => first?.id), [open.id]);
+  assert.deepEqual(readTickets(home).open, []);
+}));
+
+test('check --first cancels the ticket it issued when its gate runs no sensor under the lock and so claims none', () => withGate({}, async (dir, home) => {
+  const { output } = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: lockTakenAtOnce() }));
+  assert.deepEqual(readTickets(home).open, [], output);
+  assert.match(output, /^INFO {2}first {2}ticket [0-9a-f]{8} was cancelled: this gate ran no sensor under the lock, so it claimed none$/m);
+}));
+
 test('check --first takes one reason, and does not go with --push', async () => {
   for (const [argv, why] of [[['--first'], '--first requires a value'], [['--first', ' '], '--first needs a reason, not an empty one'], [['--push', '--first', 'x'], '--first goes with a gate that runs its sensors, not with --push']]) {
     const { code, errOutput } = await runCheck(argv, {}, {});

@@ -24,7 +24,7 @@ import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './l
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, readGateWaiters, takeGateLock } from './lib/gate-lock.mjs';
-import { GateFirstError, claimTicket, issueTicket, logTicket } from './lib/gate-first.mjs';
+import { GateFirstError, cancelTicket, claimTicket, issueTicket, logTicket, ofTree, readTickets } from './lib/gate-first.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
@@ -1333,9 +1333,13 @@ async function underGateLock(cwd, { home, wait, waitMinutes, session, first = nu
  * (no session, two tickets open already, or a gate in the turn of the process that holds the lock, which waits
  * for nobody); the gate runs all the same. The board flags a ticket whose issuer is not the orchestrator. */
 function ownTicketRows(reason, cwd, lock, env, deps) {
-  const notIssued = (why) => [{ name: 'first', pass: true, info: true, detail: `no ticket was issued: ${why}` }];
+  const notIssued = (why) => ({ rows: [{ name: 'first', pass: true, info: true, detail: `no ticket was issued: ${why}` }], issued: null });
   if (lock.held) return notIssued('this gate runs in the turn of the process that holds the gate lock, and waits for nobody');
   if (lock.session === null) return notIssued('the host names no session for this gate, and a ticket is for a session');
+  // An open ticket of this session that this gate would claim is the one it goes first by: no second (Codex).
+  const tree = path.resolve(cwd);
+  const mine = readTickets(lock.home).open.find((ticket) => ticket.session === lock.session && (!ticket.tree || ofTree(ticket.tree, tree, process.platform)));
+  if (mine) return notIssued(`ticket ${mine.id} of this session is open already for this tree, and this gate claims it`);
   let issued;
   try {
     issued = issueTicket({ home: lock.home, session: lock.session, tree: path.resolve(cwd), reason, by: lock.session });
@@ -1348,7 +1352,7 @@ function ownTicketRows(reason, cwd, lock, env, deps) {
     for (const gone of issued.expired) logTicket(lock.home, 'first-expired', gone, {}, written);
     logTicket(lock.home, 'first-issued', issued.ticket, {}, written);
   }
-  return [];
+  return { rows: [], issued: issued.ticket.id };
 }
 
 /** Claims the ticket of the session of `lock` for the gate that checks `cwd` (`claimTicket`), and writes in
@@ -2301,10 +2305,18 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
     const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null };
     // `--first`: the ticket is issued here and claimed as the gate arrives, as one the orchestrator issued is.
-    if (parsed.first !== undefined) rows.push(...ownTicketRows(parsed.first, cwd, lock, env, deps));
+    const own = parsed.first === undefined ? null : ownTicketRows(parsed.first, cwd, lock, env, deps);
+    if (own) rows.push(...own.rows);
     const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
     const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy, wsl: readGateWsl(home, env) });
     rows.push(...sensed);
+    // A ticket `--first` issued that this gate did not claim (no sensor ran under the lock) is cancelled: it was
+    // for this one command, and a later check would otherwise jump the line with it (Codex).
+    const unclaimed = own?.issued ? cancelTicket({ home, id: own.issued }) : null;
+    if (unclaimed) {
+      if (!gateLogSwitchedOff(env)) logTicket(home, 'first-cancelled', unclaimed, {}, { ...(deps.gateLog?.append && { append: deps.gateLog.append }) });
+      rows.push({ name: 'first', pass: true, info: true, detail: `ticket ${unclaimed.id} was cancelled: this gate ran no sensor under the lock, so it claimed none` });
+    }
     stopped = sensed.some((row) => row.stopped === true);
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi, git: deps.git }));
