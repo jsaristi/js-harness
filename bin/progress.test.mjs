@@ -1,9 +1,27 @@
-import { test } from 'node:test';
+import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { progressMain } from './progress.mjs';
+
+// `--pace` runs git. A git hook runs with GIT_DIR, GIT_INDEX_FILE and friends pointing at the repository being
+// committed; inherited, they would send the git calls of these tests, and those of `progressMain`, there. An
+// empty global config and no system one keep the user's settings out as well.
+let configDir;
+before(() => {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('GIT_')) delete process.env[key];
+  }
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-progress-gitconfig-'));
+  process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
+after(() => {
+  fs.rmSync(configDir, { recursive: true, force: true });
+});
 
 function makeTmpProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-progress-project-'));
@@ -569,5 +587,142 @@ test('progress counts a feature whose tasks are table rows, and lists its open r
     assert.match(stdout, /Total  1\/2  50%/);
   } finally {
     fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- `--pace`: S5 and S6 of odd/tasks/read-from-records.md ---
+
+/** Noon, or `hour`, of `day` days before 2026-10-16 by this machine's calendar; `NOW` is that afternoon. */
+const daysAgo = (day, hour = 12) => new Date(2026, 9, 16 - day, hour);
+const NOW = daysAgo(0, 15);
+
+/** A git repository in a temporary folder on `main`, whose commits are dated as they are asked to be. */
+function makeRepo() {
+  const root = makeTmpProject();
+  const git = (args, when) => {
+    const env = { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' };
+    if (when !== undefined) env.GIT_AUTHOR_DATE = env.GIT_COMMITTER_DATE = `${Math.floor(when.getTime() / 1000)} +0000`;
+    const result = spawnSync('git', args, { cwd: root, env, encoding: 'utf8' });
+    assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+    return result.stdout;
+  };
+  git(['init', '-q', '-b', 'main']);
+  git(['config', 'core.autocrlf', 'false']);
+  /** Writes `files` (path to content) and commits them at `when`. */
+  const commit = (files, when, message = 'change') => {
+    for (const [relative, content] of Object.entries(files)) writeFile(path.join(root, relative), content);
+    git(['add', '-A']);
+    git(['commit', '-q', '--allow-empty', '-m', message], when);
+  };
+  return { root, git, commit };
+}
+
+const doc = (...steps) => ['# F', '', '## Tasks', ...steps, ''].join('\n');
+
+test('progress --pace counts, for each of the last days of main\'s first-parent line, the tasks closed, reopened, added and removed', async () => {
+  const { root, git, commit } = makeRepo();
+  try {
+    // Before the window: the start of the history and a feature with two open tasks.
+    commit({ 'README.md': 'x' }, daysAgo(10));
+    commit({ 'odd/tasks/f.md': doc('- [ ] T1 a', '- [ ] T2 b') }, daysAgo(9));
+    // Two days ago: T1 closed, reworded as it was; a roadmap step added.
+    commit({ 'odd/tasks/f.md': doc('- [x] T1 a, done', '- [ ] T2 b'), 'docs/ROADMAP.md': '# R\n\n## Checklist\n\n### One\n- [ ] step\n' }, daysAgo(2));
+    // Today: a branch closes T2 and adds T3 already checked, and arrives on main in a merge.
+    git(['switch', '-q', '-c', 'side']);
+    commit({ 'odd/tasks/f.md': doc('- [x] T1 a, done', '- [x] T2 b', '- [x] T3 c') }, daysAgo(0, 9));
+    git(['switch', '-q', 'main']);
+    git(['merge', '-q', '--no-ff', '-m', 'merge side', 'side'], daysAgo(0, 10));
+    // A file outside the roadmap and the feature documents counts nothing.
+    commit({ 'notes/n.md': '- [x] not a task' }, daysAgo(0, 11));
+    const { code, stdout, stderr } = await runProgress(['--cwd', root, '--pace', '--days', '3'], { now: () => NOW });
+    assert.equal(code, 0, stderr);
+    assert.deepEqual(stdout.split('\n'), [
+      'Pace of main, its first-parent line, by committer day over the last 3 days:',
+      '  2026-10-14  closed 1  reopened 0  added 1  removed 0',
+      '  2026-10-15  closed 0  reopened 0  added 0  removed 0',
+      '  2026-10-16  closed 2  reopened 0  added 1  removed 0  (today, so far)',
+      'Total       closed 3  reopened 0  added 2  removed 0',
+      'A day       closed 1  reopened 0  added 0.7  removed 0',
+    ]);
+    // The same as data, with the branch it read; 14 days when it is not told.
+    const json = await runProgress(['--cwd', root, '--pace', '--json'], { now: () => NOW });
+    assert.equal(json.code, 0, json.stderr);
+    const pace = JSON.parse(json.stdout);
+    assert.deepEqual(Object.keys(pace), ['root', 'branch', 'ref', 'days', 'from', 'to', 'perDay', 'total', 'meanPerDay']);
+    assert.deepEqual([pace.branch, pace.ref, pace.days, pace.from, pace.to, pace.perDay.length], ['main', 'refs/heads/main', 14, '2026-10-03', '2026-10-16', 14]);
+    assert.deepEqual(pace.total, { closed: 3, reopened: 0, added: 4, removed: 0 });
+    assert.deepEqual(pace.perDay.find((day) => day.date === '2026-10-07'), { date: '2026-10-07', closed: 0, reopened: 0, added: 2, removed: 0, partial: false });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('progress --pace reads origin/HEAD\'s branch, else main, else HEAD, and says which', async () => {
+  const { root, git, commit } = makeRepo();
+  try {
+    commit({ 'README.md': 'x' }, daysAgo(5));
+    commit({ 'odd/tasks/f.md': doc('- [ ] T1 a') }, daysAgo(1));
+    // HEAD on another branch with one more task: main is read, not HEAD.
+    git(['switch', '-q', '-c', 'work']);
+    commit({ 'odd/tasks/f.md': doc('- [ ] T1 a', '- [ ] T2 b') }, daysAgo(0));
+    const onMain = JSON.parse((await runProgress(['--cwd', root, '--pace', '--days', '2', '--json'], { now: () => NOW })).stdout);
+    assert.deepEqual([onMain.branch, onMain.total.added], ['main', 1]);
+    // origin/HEAD, pointing at origin/main, which is behind main: that one is read.
+    git(['update-ref', 'refs/remotes/origin/main', 'main~1']);
+    git(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main']);
+    const onOrigin = await runProgress(['--cwd', root, '--pace', '--days', '2'], { now: () => NOW });
+    assert.equal(onOrigin.code, 0, onOrigin.stderr);
+    assert.equal(onOrigin.stdout.split('\n')[0], 'Pace of origin/main, its first-parent line, by committer day over the last 2 days:');
+    assert.match(onOrigin.stdout, /^Total {7}closed 0 {2}reopened 0 {2}added 0 {2}removed 0$/m);
+    // Neither: HEAD.
+    git(['symbolic-ref', '--delete', 'refs/remotes/origin/HEAD']);
+    git(['branch', '-q', '-m', 'main', 'trunk']);
+    const onHead = JSON.parse((await runProgress(['--cwd', root, '--pace', '--days', '2', '--json'], { now: () => NOW })).stdout);
+    assert.deepEqual([onHead.branch, onHead.total.added], ['HEAD', 2]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('progress --pace outside a git repository exits 1 with one line, and git that fails or runs too long is said the same way', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'odd', 'tasks', 'f.md'), doc('- [ ] T1 a'));
+    const notRepo = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' });
+    const outside = await runProgress(['--cwd', project, '--pace'], { now: () => NOW, spawn: notRepo });
+    assert.deepEqual([outside.code, outside.stdout], [1, '']);
+    assert.equal(outside.stderr, `js-harness progress: --pace reads the history of a git repository, and ${project} is in none`);
+    const timedOut = () => ({ error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) });
+    const slow = await runProgress(['--cwd', project, '--pace'], { now: () => NOW, spawn: timedOut });
+    assert.deepEqual([slow.code, slow.stderr], [1, 'js-harness progress: git for-each-ref took longer than 30 s']);
+    // The second process, the history, fails the same way.
+    let calls = 0;
+    const noCommits = () => (calls++ === 0 ? { status: 0, stdout: '', stderr: '' } : { status: 128, stdout: '', stderr: "fatal: your current branch 'main' does not have any commits yet\n" });
+    const empty = await runProgress(['--cwd', project, '--pace'], { now: () => NOW, spawn: noCommits });
+    assert.deepEqual([empty.code, empty.stderr], [1, "js-harness progress: git log: fatal: your current branch 'main' does not have any commits yet"]);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progress without --pace starts no git process, and --json alone keeps its shape', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'odd', 'tasks', 'f.md'), doc('- [ ] T1 a'));
+    const spawn = () => assert.fail('progress without --pace ran git');
+    assert.equal((await runProgress(['--cwd', project], { spawn })).code, 0);
+    const json = await runProgress(['--cwd', project, '--json'], { spawn });
+    assert.deepEqual(Object.keys(JSON.parse(json.stdout)), ['root', 'roadmap', 'features', 'done', 'total']);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--days takes a whole number of at least 1, and only with --pace; the help names both', async () => {
+  for (const argv of [['--pace', '--days', '0'], ['--pace', '--days', '2.5'], ['--pace', '--days', 'x'], ['--pace', '--days'], ['--days', '3']]) {
+    const { code, stderr } = await runProgress(argv, { spawn: () => assert.fail('a usage error ran git') });
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(stderr, /Usage: js-harness progress \[--cwd <path>\] \[--json\] \[--pace \[--days <n>\]\]/);
+    assert.match(stderr, /a task reworded without an ID, or in a moved file, counts as removed and added/);
   }
 });

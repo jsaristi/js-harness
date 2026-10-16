@@ -173,8 +173,8 @@ function twoFigures(tokens) {
  * estimate; otherwise each is to two figures, and that of the whole is the sum of those of the parts.
  * `inputTokensHigh` is the high figure of the whole, `null` with it: the sum of the high figures of the
  * parts (`inputEstimator`), each to two figures as well, so it is never the smaller of the two, and is the
- * same number when every measured part cost a changed line alike. A part holds one figure: the range is
- * of the whole. `leftOut` is the count it was handed, or `null` when no file is left out. */
+ * same number when every measured part cost a changed line alike. Each part holds its own `inputTokensHigh`
+ * as well, which its run line records (`partPlanned`); the lines print the range of the whole alone. `leftOut` is the count it was handed, or `null` when no file is left out. */
 export function reviewPlan({ base, head, model, effort, parts, runs = [], maxParts, leftOut = null }) {
   const { runs: measured, samePair, atPair, fixed, perChangedLine, highRatio, estimate, high } = inputEstimator(runs, { model, effort });
   const planned = parts.map((part, at) => ({
@@ -183,6 +183,7 @@ export function reviewPlan({ base, head, model, effort, parts, runs = [], maxPar
     files: part.files.length,
     changedLines: part.changedLines,
     inputTokens: estimate === null ? null : twoFigures(estimate(part.changedLines)),
+    inputTokensHigh: estimate === null ? null : twoFigures(high(part.changedLines)),
   }));
   const total = (pick) => planned.reduce((sum, part) => sum + pick(part), 0);
   const bound = maxParts ?? MAX_PARTS_WITHOUT_FLAG;
@@ -195,7 +196,7 @@ export function reviewPlan({ base, head, model, effort, parts, runs = [], maxPar
     files: total((part) => part.files),
     changedLines: total((part) => part.changedLines),
     inputTokens: estimated ? total((part) => part.inputTokens) : null,
-    inputTokensHigh: estimated ? total((part) => twoFigures(high(part.changedLines))) : null,
+    inputTokensHigh: estimated ? total((part) => part.inputTokensHigh) : null,
     // The fit as it is said: the fixed cost to the token, the rest to two decimals, so that the float of a
     // least-squares fit does not show as a measurement.
     basis: {
@@ -268,6 +269,30 @@ export function planLines(plan) {
   ];
 }
 
+// The version of the method a run line's `plan` was made by: 2 is the fit of `inputEstimator`, 1 the median
+// cost a changed line it replaced, whose lines recorded no plan. A new way of estimating takes the next one.
+export const PLAN_METHOD = 2;
+
+/** What the run line of part `index` (1 for a range reviewed whole) records of `plan`, the plan the run printed:
+ * `{ estimate, high, method }`, the part's two figures as the plan has them and `PLAN_METHOD`; `null` when the
+ * plan has no such part or no estimate, since then nothing was planned. */
+export function partPlanned(plan, index = 1) {
+  const planned = plan?.parts?.[index - 1];
+  if (planned === undefined || planned.inputTokens === null) return null;
+  return { estimate: planned.inputTokens, high: planned.inputTokensHigh, method: PLAN_METHOD };
+}
+
+// The estimate a run line recorded, when this method made it; `null` for any other line.
+const plannedEstimate = (run) =>
+  run?.plan?.method === PLAN_METHOD && Number.isFinite(run.plan.estimate) ? run.plan.estimate : null;
+
+// The estimate this method gives part `part` of `runs[index]` from the lines written before it, on the model and
+// at the effort the line ran with; `null` when no measured line came before it.
+const replayedEstimate = (runs, index, part) => {
+  const { estimate } = inputEstimator(runs.slice(0, index), { model: runs[index].model, effort: runs[index].effort });
+  return estimate === null ? null : estimate(part.changedLines);
+};
+
 // How many of the latest reviews the method is judged on.
 const REVIEWS_JUDGED = 10;
 
@@ -279,9 +304,10 @@ const roundedRatio = (value) => (value === null ? null : Math.round(value * 100)
  * least, the median and the most of their estimate over what they took, to two decimals; `null` in the three
  * when it is measured on none.
  *
- * Each part is measured against its own run line, with the estimate this method gives from the lines written
- * before that one, on the model and at the effort the line was run with: a replay, since the lines do not hold
- * the figure they were planned at. A review is the run lines its record names (`runs`, else `run`), since the
+ * Each part is measured against its own run line, with the estimate the line recorded (`plan`) when this method
+ * made it (`PLAN_METHOD`), and otherwise the one this method gives from the lines written before that one, on
+ * the model and at the effort the line was run with: a replay, for the lines written before they held their
+ * plan. A review is the run lines its record names (`runs`, else `run`), since the
  * run log holds no review id and the parts of one review write their lines out of order. A line an earlier
  * record named is a part kept from that run, which cost nothing in this one, and is left out; so is a line that
  * measured no part (`measuredParts`) and one with no measured line before it, which had no estimate. An
@@ -306,9 +332,9 @@ export function methodRecord({ records, runs }) {
       const index = at.get(id);
       const [part] = measuredParts([runs[index]]);
       if (part === undefined) continue;
-      const { estimate } = inputEstimator(runs.slice(0, index), { model: runs[index].model, effort: runs[index].effort });
-      if (estimate === null) continue;
-      estimated += estimate(part.changedLines);
+      const planned = plannedEstimate(runs[index]) ?? replayedEstimate(runs, index, part);
+      if (planned === null) continue;
+      estimated += planned;
       took += part.inputTokens;
     }
     if (took > 0) ratios.push(estimated / took);

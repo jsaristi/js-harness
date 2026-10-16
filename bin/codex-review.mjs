@@ -169,7 +169,7 @@ import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAn
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
-import { MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
+import { MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
@@ -1595,6 +1595,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const ownPrompt = prompt === 'own';
       // Whether this is the only session of its run, whose answer waits for no other.
       const alone = part === null || part.of === 1;
+      // What the plan printed above put this session at, which its run line records: a range reviewed whole
+      // is the one part of its plan. `null` when the plan had no estimate.
+      const planned = partPlanned(plan, part === null ? 1 : part.index);
       // What Codex is launched with, worked out before anything is made: an injected effort or setting that
       // cannot go on a command line is the caller's mistake, and leaves no home behind.
       const codexArgv = codexArgs(from, platform, prompt, { effort, extraConfig: extraCodexConfig });
@@ -1741,6 +1744,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             // such field, as no line had before a range was reviewed in parts (`runPart`). That of a range
             // reviewed by its files in one session has it, 1 of 1, with the files and the lines it covered.
             ...(part === null ? {} : { part: { index: part.index, of: part.of, files: part.files.length, changedLines: part.changedLines } }),
+            // The two figures the plan put this session at, and the version of the method that made them
+            // (`partPlanned`), so that how close the method came is read and not replayed (`methodRecord`).
+            // Absent when the plan had no estimate, as from every line written before 2026-10-16.
+            ...(planned === null ? {} : { plan: planned }),
             outcome: runOutcome,
             ...(reason === undefined ? {} : { reason }),
             cli,

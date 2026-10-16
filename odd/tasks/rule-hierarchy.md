@@ -436,8 +436,8 @@ becomes a number that can be other than zero on a green tree: the entries seen a
 `docs/FAILURES.md` exists, the classes are the project's own, and a control owed is a phrase of
 any checkbox item that is not checked, which needs no convention of task numbers; a plan kept
 as plain bullets has to turn the one that owes into a checkbox. Not built in this slice,
-and said so: `init` does not write an empty register (it goes with T9, with the template); no
-command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
+and said so: `init` does not write an empty register (it goes with T9, with the template; built
+with T9 on 2026-10-16, Progress); no command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
 which waits for a reader.
 
 A limit of who writes. The orchestrator writes only its relief file, so what it sees reaches the
@@ -3411,6 +3411,23 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   journey's host-load check (`hostCallProblems`, `scripts/practice-lib.mjs`) still asks the
   host for the two older skills only, since its fixtures are recorded streams; a step that
   proves the host lists this one belongs to T12.
+- 2026-10-16, T9's empty register, by `JH 28 · reserva B` on `feat/empty-register`, from the
+  lead's notice to 28 (a claim of the lead's, read in the channel record) after PR 280, the
+  template's lines, had left it open. Built test first: `init` writes `docs/FAILURES.md`
+  (`FAILURES_TEMPLATE`, `bin/lib/project.mjs`) when the project has none, under the same terms
+  as `AGENTS.md`: an existing register is kept and listed in `kept`, and `sync` in a clone
+  creates none. It says what a failure is and how a class and an entry are written, and declares
+  no class, since the classes are the project's own. It parses with no fault, so the gate's
+  `failures` row passes on it. The file is in the manifest with its hash, and `docs/`, when this
+  run made it, among the folders `uninstall` removes while empty. RED: two new tests of
+  `bin/lib/project.test.mjs` failed on `main`; GREEN after. Six tests that pin `init`'s folders
+  or the count of what it writes now name `docs`. Checked by hand in a throwaway repository:
+  `init` printed "wrote docs/FAILURES.md", `uninstall` printed "removed docs/FAILURES.md" and
+  "removed docs", and only `.git` was left. The README's examples and `init`'s help line name
+  the register. Codex on `e898283` (P2, 0.98): a `docs` that is a link out of the repository
+  took the register outside, where `uninstall` does not follow; its folder is now judged as the
+  hooks path is (`resolveHookContainment`), and such a register is kept as outside, never
+  written, pinned by a test with a junction.
 
 ## Next step
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
