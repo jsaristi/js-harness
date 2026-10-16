@@ -8,10 +8,10 @@ import { cachePath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
-import { hygieneDir } from './memory-hygiene.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
+import { hygieneDir } from './memory-hygiene.mjs';
 
 function skillContent(version) {
   return `---
@@ -1219,6 +1219,15 @@ export function sync(home, version, deps = {}) {
  * `recordScheduledTask` creates), and `uninstall`, or `remote stop --at-login`, can be run again. An optional file
  * that could not be removed has no such second chance: that older gap is left as it is. */
 export function uninstall(home, deps = {}) {
+  // The folder of memory hygiene first, on its own: what is left of `.js-harness` once it is gone is then removed
+  // by the steps below, with a manifest and without, as when `memory` never ran.
+  const memory = removeMemoryHygieneFolder(home, deps.removeFile ?? fs.rmSync, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync);
+  const result = uninstallInstalled(home, deps);
+  return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory) };
+}
+
+/** `uninstall` without the folder of memory hygiene, which it removes before calling this. */
+function uninstallInstalled(home, deps) {
   const removeFile = deps.removeFile ?? fs.rmSync;
   const statFile = deps.statFile ?? fs.statSync;
   const listDir = deps.listDir ?? fs.readdirSync;
@@ -1232,9 +1241,8 @@ export function uninstall(home, deps = {}) {
     const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
     const channel = removeChannelFolder(home, removeFile, statFile);
     const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept: [] });
-    const memory = removeMemoryHygieneFolder(home, removeFile, statFile, listDir);
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
-    return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed, ...memory.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept, ...memoryResult(memory) };
+    return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
   }
 
   const removed = [];
@@ -1297,8 +1305,7 @@ export function uninstall(home, deps = {}) {
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
-  const memory = removeMemoryHygieneFolder(home, removeFile, statFile, listDir);
-  removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed, ...memory.removed);
+  removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed);
   // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
   // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
   // task to leave the marker under it. It then stays recorded, and its entry says so (`recorded`).
@@ -1315,7 +1322,7 @@ export function uninstall(home, deps = {}) {
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept, ...memoryResult(memory) };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
