@@ -78,7 +78,7 @@ So a resumed session today finds its sections by search, reads up to about 1,000
     - The text may be followed by nothing, by ` (…)` or by `:`.
     - `## Next step, earlier` and `## Next step, history` are left out: they are history, not the next step.
   - **`task`**: the task the session works on, `{ id, start, end }`, or `null`.
-    - It is the first open task (by `tasksOf`) whose id the first resume section names as a whole word.
+    - It is the open task (by `tasksOf`) that the first resume section names first, as a whole word.
     - Without one, it is the first open task.
   - **`specs`**: the `S<n>` items that the task's list item names, each `{ id, start, end }`.
     - They are read under the first `## Specs` heading.
@@ -175,7 +175,7 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
 
 - [x] T1 (kind: design) This design, read by two readers that did not write it; version 2 says what they changed (S1, S2)
 - [ ] T1b (kind: design) The lead's answer on Part B, recorded in the Log (S1, S2)
-- [ ] T2 (kind: build) `tasksOf` gives each task its lines, and `featureParts`, test first (S3, S4)
+- [x] T2 (kind: build) `tasksOf` gives each task its lines, and `featureParts`, test first (S3, S4)
 - [ ] T3 (kind: build) The hook names the task and its parts, and the mode line follows it, test first; the resume tests updated; SPEC and README (S5, S6, S7)
 - [ ] T4 (kind: verify) Gate, gentle-ai, Codex review, PR ready, the lead told (S1)
 
@@ -189,6 +189,19 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
   
   Version 2 takes them all, as "Design" lists. Reader B's call against Part B stands, on corrected figures. The question on B went to the lead (T1b).
 
+- L4 — 2026-10-16, T2 built, test first. RED: the `tasksOf` expectation got `start` and `end` as
+  `undefined`, and `feature-parts.test.mjs` could not import its module. GREEN: both files pass. S4 now
+  says "names first", meaning the order of mention, because a Next step that also names a stale task
+  later must not pick it. On the real documents at 64933f6:
+
+  | Document | Task picked | Today's mode line | Named lines | Document lines |
+  |---|---|---|---|---|
+  | `session-channel.md` | T6b | T2 | 1,143 | 4,070 |
+  | `rule-hierarchy.md` | T16f | T1 | 419 | 4,555 |
+  | `first-version.md` | T6 | — | 31 | 325 |
+
+  Most of the named lines are the resume sections themselves.
+
 ## Next step
 
-T2: test first. `tasksOf` gains `start` and `end` for each task, and `featureParts` follows S4. T1b waits for the lead and blocks nothing in T2 or T3.
+T3: test first. The hook prints S6's lines on its two one-document paths, and the mode line follows the same task (S5). Update the eleven tests built on `READ`. T1b waits for the lead and blocks nothing in T3.

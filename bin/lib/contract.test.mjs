@@ -261,12 +261,32 @@ const DECLARED = {
 };
 const declared = (extra = {}) => (id) => ({ ...DECLARED, ...extra })[id] ?? null;
 
-test('tasksOf reads each checklist line that opens with an ID, outside fences, with its kind and box', () => {
+test('tasksOf reads each checklist line that opens with an ID, outside fences, with its kind, box and lines', () => {
   assert.deepEqual(tasksOf(TASKS), [
-    { id: 'T1', kind: 'design', done: true },
-    { id: 'T2', kind: 'build', done: false },
-    { id: 'T2a', kind: 'verify', done: false },
-    { id: 'T3', kind: null, done: false },
+    { id: 'T1', kind: 'design', done: true, start: 2, end: 2 },
+    { id: 'T2', kind: 'build', done: false, start: 3, end: 4 },
+    { id: 'T2a', kind: 'verify', done: false, start: 4, end: 4 },
+    { id: 'T3', kind: null, done: false, start: 5, end: 5 },
+  ]);
+});
+
+test('a task runs over its wrapped lines and stops at the first line that leaves its item', () => {
+  const md = [
+    '## Tasks',
+    '- [ ] T1 (kind: build) The first, whose line',
+    '  wraps and names S3',
+    '',
+    '- [ ] T2 The second',
+    '  goes on',
+    '',
+    'A paragraph at the margin',
+    '- [ ] T3 The last line of the file',
+    '',
+  ].join('\n');
+  assert.deepEqual(tasksOf(md).map(({ id, start, end }) => ({ id, start, end })), [
+    { id: 'T1', start: 2, end: 3 },
+    { id: 'T2', start: 5, end: 6 },
+    { id: 'T3', start: 9, end: 9 },
   ]);
 });
 
