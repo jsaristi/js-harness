@@ -1162,8 +1162,9 @@ export function uninstall(home, deps = {}) {
     const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
     const channel = removeChannelFolder(home, removeFile, statFile);
     const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept: [] });
+    const memory = memoryHygieneFolder(home, { purge: deps.purgeMemory === true, removeFile, statFile, listDir });
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
-    return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+    return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed, ...memory.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept, ...memory.result };
   }
 
   const removed = [];
@@ -1226,7 +1227,8 @@ export function uninstall(home, deps = {}) {
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
-  removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed);
+  const memory = memoryHygieneFolder(home, { purge: deps.purgeMemory === true, removeFile, statFile, listDir });
+  removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed, ...memory.removed);
   // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
   // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
   // task to leave the marker under it. It then stays recorded, and its entry says so (`recorded`).
@@ -1242,7 +1244,52 @@ export function uninstall(home, deps = {}) {
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept, ...memory.result };
+}
+
+/** The folder of the memory hygiene passes under `home`: `journalPath` of `memory-hygiene.mjs` is
+ * `<this>/<slug>/journal.jsonl`, and `memory plan` keeps each project's lock and snapshots beside it. The path
+ * is written out here, not imported, so the install never loads the session board that module reads. */
+function memoryHygieneDir(home) {
+  return path.join(home, '.js-harness', 'memory-hygiene');
+}
+
+/** What `uninstall` does with the memory hygiene folder (D4 of `odd/tasks/memory-hygiene.md`, step 5): its
+ * snapshots are the only copy of what each pass changed in the host's memory, so it is kept unless `purge` is
+ * asked, and named. Returns `{ removed, result }`; `result` is `{}` when there is no such folder, so the answer of
+ * an uninstall without it is what it always was, and `{ memoryKept }` otherwise: `[]` when it was purged, or one
+ * entry, `{ path, reason, ... }`. `snapshots` (kept, no purge asked) names them as `stamps`, `<slug>/<stamp>`
+ * sorted, for `memory undo`; `in-use` names as `passes` each pass that holds its project's lock, planned and not
+ * yet verified or undone, whose snapshot even a purge does not take; `unremovable` has the error's `code`, as do
+ * the other folders. Nothing records the folder: `memory plan` writes it in any project, with a machine install
+ * or without one, so it is looked for with a manifest and without. */
+function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir }) {
+  const dir = memoryHygieneDir(home);
+  const unremovable = (err) => ({ removed: [], result: { memoryKept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] } });
+  let stamps;
+  let passes;
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], result: {} };
+    stamps = [];
+    passes = [];
+    for (const slug of listDir(dir).sort()) {
+      const stateDir = path.join(dir, slug);
+      const snapshots = path.join(stateDir, 'snapshots');
+      if (isThere(snapshots, statFile)) for (const stamp of listDir(snapshots).sort()) stamps.push(`${slug}/${stamp}`);
+      const lock = path.join(stateDir, 'lock');
+      if (isThere(lock, statFile)) passes.push(`${slug}/${JSON.parse(fs.readFileSync(lock, 'utf8')).stamp}`);
+    }
+  } catch (err) {
+    return unremovable(err);
+  }
+  if (!purge) return { removed: [], result: { memoryKept: [{ path: dir, reason: 'snapshots', stamps }] } };
+  if (passes.length > 0) return { removed: [], result: { memoryKept: [{ path: dir, reason: 'in-use', passes }] } };
+  try {
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return unremovable(err);
+  }
+  return { removed: [dir], result: { memoryKept: [] } };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

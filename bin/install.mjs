@@ -20,7 +20,8 @@ import {
 import { INSTALL_NEWEST } from './lib/version.mjs';
 
 const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
-const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global]';
+const PURGE_MEMORY = '--purge-memory-snapshots';
+const UNINSTALL_USAGE = `Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global [${PURGE_MEMORY}]]`;
 const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
 class ScopeArgError extends Error {}
@@ -359,9 +360,12 @@ export async function syncMain(argv, env = process.env, deps = {}) {
  * `uninstallProject`, `removeFile` and `schtasks` (or `spawnSync`, what the real `schtasks.exe` is run through)
  * for the machine one — each ignores what it does not use. */
 export async function uninstallMain(argv, env = process.env, deps = {}) {
+  // Uninstall's own flag, taken out before the parser `sync` shares, so the other commands still refuse it.
+  const purgeMemory = argv.includes(PURGE_MEMORY);
   let parsed;
   try {
-    parsed = parseScopeArgs(argv, env);
+    parsed = parseScopeArgs(argv.filter((token) => token !== PURGE_MEMORY), env);
+    if (purgeMemory && !parsed.global) throw new ScopeArgError(`${PURGE_MEMORY} removes a machine folder: it goes with --global`);
   } catch (err) {
     console.error(`${err.message}\n\n${UNINSTALL_USAGE}`);
     return 2;
@@ -387,7 +391,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   const home = parsed.home;
   // A recorded scheduled task is looked for and deleted through `schtasks.exe`, found from the environment this
   // command was given and nowhere else (`runSchtasks`); it is run only when the manifest records a task.
-  const result = uninstall(home, { ...deps, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
+  const result = uninstall(home, { ...deps, purgeMemory, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
   // named it is gone by now: it goes to stderr with the error code and what is left to do.
@@ -479,6 +483,22 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
       console.error(`could not remove ${remote.path} (${remote.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
     }
   }
+  // The folder of the memory hygiene passes, which `memory plan` writes under the home. Its snapshots are the only
+  // copy of what each pass changed in the host's memory, so it is kept on purpose (said on stdout, a finished
+  // uninstall) unless --purge-memory-snapshots asks; a purge that leaves it, for a pass between plan and verify
+  // or for an error, goes to stderr and fails, as the other folders do.
+  const memoryKept = result.memoryKept ?? [];
+  const memoryNotUndone = memoryKept.filter((memory) => memory.reason !== 'snapshots');
+  for (const memory of memoryKept) {
+    if (memory.reason === 'snapshots') {
+      const n = memory.stamps.length;
+      console.log(`kept ${memory.path}: the snapshots of ${n} memory hygiene pass${n === 1 ? '' : 'es'} (${memory.stamps.join(', ')}), the only copy of what each changed in the memory; js-harness memory undo <stamp> reads them, and js-harness uninstall --global ${PURGE_MEMORY} removes them`);
+    } else if (memory.reason === 'in-use') {
+      console.error(`kept ${memory.path}: a memory hygiene pass holds its lock, planned and not verified (${memory.passes.join(', ')}); js-harness memory verify <stamp> or js-harness memory undo <stamp> ends it, then run js-harness uninstall --global ${PURGE_MEMORY} again`);
+    } else {
+      console.error(`could not remove ${memory.path} (${memory.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global ${PURGE_MEMORY} again`);
+    }
+  }
   if (
     result.removed.length === 0 &&
     result.kept.length === 0 &&
@@ -488,10 +508,11 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     result.tasksKept.length === 0 &&
     result.gateKept.length === 0 &&
     result.channelKept.length === 0 &&
-    result.remoteKept.length === 0
+    result.remoteKept.length === 0 &&
+    memoryKept.length === 0
   ) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 ? 1 : 0;
+  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
 }

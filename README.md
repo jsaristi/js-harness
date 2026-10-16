@@ -176,6 +176,20 @@ removed ~\.codex\skills\js-harness\SKILL.md
 removed hook entry from ~\.claude\settings.json
 ```
 
+The machine uninstall keeps the snapshots of the memory hygiene passes, under
+`~\.js-harness\memory-hygiene`. They are the only copy of what each pass changed in the memory,
+so it names them and leaves them. `--purge-memory-snapshots` removes them as well. It never
+removes a pass that still holds its lock (planned, not yet verified or undone), and then it
+fails until that pass ends.
+
+```console
+$ js-harness uninstall --global
+…
+kept ~\.js-harness\memory-hygiene: the snapshots of 1 memory hygiene pass (D--js-harness/20261015T210012224Z), the only copy of what each changed in the memory; js-harness memory undo <stamp> reads them, and js-harness uninstall --global --purge-memory-snapshots removes them
+$ js-harness uninstall --global --purge-memory-snapshots
+removed ~\.js-harness\memory-hygiene
+```
+
 ### js-harness status
 
 Inside a project, shows its pinned version, the running version and whether this clone is set

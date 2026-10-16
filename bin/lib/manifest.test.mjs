@@ -31,6 +31,8 @@ import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
+import { journalPath } from './memory-hygiene.mjs';
+import { planPass, verifyPass } from './memory-pass.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
@@ -593,6 +595,78 @@ test('uninstall removes the folder of the session channel, with its records and 
     // And nothing is said of a folder that is not there.
     install(home, '0.1.0');
     assert.equal(uninstall(home).removed.includes(channelDir(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+/** A memory folder with one note and its index line, and a pass of `memory plan` on it, left as `memory` leaves it:
+ * planned only (the lock held) or verified (the lock released). Returns the project's state folder and the stamp. */
+function leftByMemoryPass(home, { slug = 'C--proj', verified = true, now = Date.parse('2026-10-15T12:00:00.000Z') } = {}) {
+  const folder = path.join(home, '.claude', 'projects', slug, 'memory');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'MEMORY.md'), '- [A](a.md) — a\n');
+  fs.writeFileSync(path.join(folder, 'a.md'), '---\nname: a\ndescription: a\nmetadata:\n  type: user\n---\n\na\n');
+  const stateDir = path.dirname(journalPath(home, slug));
+  const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now });
+  if (verified) assert.equal(verifyPass({ folder, stateDir, stamp, now: now + 1000 }).ok, true);
+  return { stateDir, stamp };
+}
+
+test('uninstall keeps the memory hygiene folder and names the snapshots in it, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    const first = leftByMemoryPass(home);
+    const other = leftByMemoryPass(home, { slug: 'C--other', now: Date.parse('2026-10-16T08:00:00.000Z') });
+    const dir = path.dirname(first.stateDir);
+    const memoryKept = [{ path: dir, reason: 'snapshots', stamps: [`C--other/${other.stamp}`, `C--proj/${first.stamp}`] }];
+
+    install(home, '0.1.0');
+    const installed = uninstall(home);
+    assert.deepEqual(installed.memoryKept, memoryKept);
+    assert.equal(installed.removed.includes(dir), false);
+    assert.equal(fs.existsSync(path.join(first.stateDir, 'snapshots', first.stamp, 'manifest.json')), true, 'the only copy of what the pass changed');
+
+    assert.deepEqual(uninstall(home), { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [], remoteKept: [], memoryKept });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall with purgeMemory removes the memory hygiene folder, and the .js-harness it leaves empty', () => {
+  const home = makeTmpHome();
+  try {
+    const { stateDir } = leftByMemoryPass(home);
+    const dir = path.dirname(stateDir);
+    install(home, '0.1.0');
+    const result = uninstall(home, { purgeMemory: true });
+    assert.ok(result.removed.includes(dir), result.removed.join('\n'));
+    assert.deepEqual(result.memoryKept, []);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    leftByMemoryPass(home);
+    assert.deepEqual(uninstall(home, { purgeMemory: true }), { removed: [dir], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [], remoteKept: [], memoryKept: [] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall with purgeMemory keeps the folder while a pass holds its lock, or when it cannot remove it', () => {
+  const home = makeTmpHome();
+  try {
+    const { stateDir, stamp } = leftByMemoryPass(home, { verified: false });
+    const dir = path.dirname(stateDir);
+    const held = uninstall(home, { purgeMemory: true });
+    assert.deepEqual(held.memoryKept, [{ path: dir, reason: 'in-use', passes: [`C--proj/${stamp}`] }]);
+    assert.equal(fs.existsSync(path.join(stateDir, 'lock')), true, 'a pass that is not verified keeps its lock and snapshot');
+
+    fs.rmSync(path.join(stateDir, 'lock'));
+    const removeFile = (target, options) => {
+      if (target === dir) throw Object.assign(new Error('EPERM: operation not permitted, rmdir'), { code: 'EPERM' });
+      return fs.rmSync(target, options);
+    };
+    assert.deepEqual(uninstall(home, { purgeMemory: true, removeFile }).memoryKept, [{ path: dir, reason: 'unremovable', code: 'EPERM' }]);
+    assert.equal(fs.existsSync(dir), true);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

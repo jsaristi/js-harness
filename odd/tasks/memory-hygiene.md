@@ -353,7 +353,16 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
 - [ ] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
   `~/.js-harness/memory-hygiene/` (so `uninstall` can remove it; `bin/lib/manifest.mjs`), the board row of a due
   pass (`js-harness sessions`), and the rule ids `memory-index-bytes` and `memory-pass-days` the sensor's budgets
-  are to be read from
+  are to be read from.
+  - [x] T9a The install record, as D4 step 5 has it (approved with version 2, L4). `memory plan` writes the folder in
+    any project, with a machine install or without one, so like the channel's it is looked for, not recorded.
+    `uninstall --global` keeps it and names each snapshot (`<slug>/<stamp>`), exit 0; `--purge-memory-snapshots`
+    (with `--global` only) removes it, except while a pass holds its lock, then exit 1. Built on branch
+    `feat/memory-hygiene-uninstall` (route: inline): `bin/lib/manifest.mjs` `memoryHygieneFolder`,
+    `bin/install.mjs`, 3 library and 3 CLI tests red first. `manifest.test.mjs` 151/151 and `install.test.mjs`
+    74/74. Without the folder, `uninstall --global` prints the same as main's code (sorted output diffed on one
+    home, 11 lines, exit 0). Help line and README updated
+  - [ ] T9b The board row; T9c the rule ids
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para

@@ -11,6 +11,8 @@ import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
 import { remoteDir, remoteFiles } from './lib/remote.mjs';
+import { journalPath } from './lib/memory-hygiene.mjs';
+import { planPass, verifyPass } from './lib/memory-pass.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
 // project.mjs's `gitTopLevel`/`resolveGitPath`) — isolate it from the host's global/system git
@@ -318,6 +320,74 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
     assert.equal(removed.code, 0);
     assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
     assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+/** A memory folder under `home` and a pass of `memory plan` on it, verified unless asked: the state `memory`
+ * leaves in `~/.js-harness/memory-hygiene`. Returns that folder and the pass's stamp. */
+function leftByMemoryPass(home, { verified = true } = {}) {
+  const folder = path.join(home, '.claude', 'projects', 'C--proj', 'memory');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'MEMORY.md'), '- [A](a.md) — a\n');
+  fs.writeFileSync(path.join(folder, 'a.md'), '---\nname: a\ndescription: a\nmetadata:\n  type: user\n---\n\na\n');
+  const stateDir = path.dirname(journalPath(home, 'C--proj'));
+  const now = Date.parse('2026-10-15T12:00:00.000Z');
+  const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now });
+  if (verified) assert.equal(verifyPass({ folder, stateDir, stamp, now: now + 1000 }).ok, true);
+  return { dir: path.dirname(stateDir), stamp };
+}
+
+test('uninstallMain --global keeps the memory hygiene snapshots and says which they are and how to remove them', async () => {
+  const home = makeTmpHome();
+  try {
+    const { dir, stamp } = leftByMemoryPass(home);
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(code, 0, errLines.join('\n'));
+    assert.deepEqual(outLines, [
+      `kept ${dir}: the snapshots of 1 memory hygiene pass (C--proj/${stamp}), the only copy of what each changed in the memory; js-harness memory undo <stamp> reads them, and js-harness uninstall --global --purge-memory-snapshots removes them`,
+    ]);
+    assert.equal(fs.existsSync(dir), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain --global --purge-memory-snapshots removes them; without --global, or to sync and install, the flag is refused', async () => {
+  const home = makeTmpHome();
+  try {
+    const { dir } = leftByMemoryPass(home);
+    const project = await captureConsole(() => uninstallMain(['--purge-memory-snapshots', '--home', home]));
+    assert.equal(project.code, 2);
+    assert.match(project.errLines.join('\n'), /--purge-memory-snapshots removes a machine folder: it goes with --global/);
+    assert.equal(fs.existsSync(dir), true, 'a refused command removes nothing');
+    for (const [main, words] of [[syncMain, ['--global']], [installMain, []]]) {
+      const refused = await captureConsole(() => main([...words, '--purge-memory-snapshots', '--home', home]));
+      assert.equal(refused.code, 2, main.name);
+      assert.match(refused.errLines.join('\n'), /unknown flag: --purge-memory-snapshots/, main.name);
+    }
+
+    const purged = await captureConsole(() => uninstallMain(['--global', '--purge-memory-snapshots', '--home', home]));
+    assert.equal(purged.code, 0, purged.errLines.join('\n'));
+    assert.deepEqual(purged.outLines, [`removed ${dir}`]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain --global --purge-memory-snapshots keeps the folder of a pass that holds its lock, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    const { dir, stamp } = leftByMemoryPass(home, { verified: false });
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--purge-memory-snapshots', '--home', home]));
+    assert.equal(code, 1);
+    assert.deepEqual(outLines, []);
+    assert.deepEqual(errLines, [
+      `kept ${dir}: a memory hygiene pass holds its lock, planned and not verified (C--proj/${stamp}); js-harness memory verify <stamp> or js-harness memory undo <stamp> ends it, then run js-harness uninstall --global --purge-memory-snapshots again`,
+    ]);
+    assert.equal(fs.existsSync(dir), true);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
