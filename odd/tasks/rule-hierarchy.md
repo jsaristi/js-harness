@@ -1807,6 +1807,198 @@ missing found fifteen gaps, among them:
 
 All of them are folded in above.
 
+### The merge door (T16e)
+Designed on 2026-10-16 by the session "JH 24", on the orchestrator's word ("rule-hierarchy T16e
+(the merge command, the rule rows first)"), after a read-only explorer mapped `main` at `c1bf1b5`.
+Read by two readers that did not write it, one to attack it and one to find what was missing;
+this is the version after them ("What the two readers changed", at the end). Each thing it ships
+passes by Sebastián (Constraints): the orchestrator puts this design to him before slice (b).
+
+**The problem.** Letter E: "The doors. The one that refuses is the merge: a command that runs the
+code of `main` on the merge result, the rule rows first. The commit reads the added lines; the
+push reports." Today no door refuses at the merge:
+- `merge-queue` merges each pull request with `git merge --no-ff --no-verify`
+  (`bin/merge-queue.mjs:277-280`), so the pre-merge-commit hook never runs there, and `--land`
+  tests the candidate with the candidate's own `bin/check.mjs` (`localSuite`, :93-97): a pull
+  request that weakens a row is judged by the row it weakened.
+- The row `rules` reads only `git diff --cached` (`checkListRow`, `bin/check.mjs:231-260`): a
+  commit made with `--no-verify` is never scanned, and a committed candidate shows no row at all.
+  T16d left that to this letter ("the merge door (letter E, T16e) is what closes that").
+- The queue's test of gentle-ai is a word in the pull request's body
+  (`bin/lib/pull-request.mjs:14`, `/gentle-ai/i`).
+- T16c writes "rule:<id> proposed on <branch>, not landed" (`bin/lib/rules-change-run.mjs:253`)
+  and leaves "the line that confirms a landing" to this letter; nothing writes it.
+
+The two needs the lead's inventory of 2026-10-12 gave this task, read in the relief file:
+- Line 325 (pull request 68): "its coverage loop answered NO for two commits that a second, direct
+  look found covered; the loop is not to be trusted without that second look". The loop was the
+  lead's own script, not the queue's: `reviewCoverage` already expands each record with
+  `git rev-list` (`bin/lib/codex-review-coverage.mjs:53-56`, :252-258). What the need asks is
+  that the look the lead had to make by hand is the door's output.
+- Lines 325 and 337 (pull requests 68 and 69): gentle-ai's review was claimed in a message and
+  written in a document of another branch. The need: its evidence is written in a document on
+  the pull request's own branch.
+
+**The decisions.**
+1. *The door is a step of `merge-queue`*, the lead's one path to `main`, and it runs in the
+   candidate's worktree right after each pull request is merged into it (`:276-290`), on
+   `HEAD^1..HEAD`: the lines that pull request brings, numbered as they stand in the result, on
+   top of every pull request merged before it in the batch. A refusal takes that merge back
+   (`git reset --hard HEAD^1`, inside the queue's own worktree) and the pull request leaves the
+   batch with its reasons, as one that conflicts leaves it today. The door runs again on each
+   pull request the bisection of `--land` merges a second time (`:130-138`). `--dry-run` builds
+   the candidate the same way and prints what the door says. No new command: a second path to
+   `main` would be a second door to keep.
+2. *The code of `main`.* The rows run from a detached worktree of `origin/main`'s sha (the base
+   the queue already reads, `:232`), never from the candidate's `bin/` and never from whatever
+   copy of the command runs the queue: `node <main worktree>/bin/check.mjs --door --base HEAD^1`
+   in the candidate. A `main` whose `check.mjs` has no `--door` (the first landing of slice (a)
+   itself) runs no door, and the queue says so in one line. Nothing of the candidate runs
+   before its door passes; `localSuite` runs the candidate's own code after it, as today.
+3. *The rules are `main`'s.* The patterns are `main`'s list. A rule's row is the stricter of
+   `main`'s and the candidate's so far (its `bin/lib/rules-data.mjs` parsed as text by
+   `rulesOfText` and checked by `readRules(list, { declared: list })`, never imported, and only
+   its `row` read): so a `rule/` branch that turns a rule to refuse, merged earlier in the batch,
+   refuses a later pull request that restates it, and no pull request can loosen its own judge.
+   A pull request not from a `rule/` branch that changes `rules-data.mjs` is refused: a rule
+   changes only by `js-harness rules change` (C). A candidate whose list does not parse refuses.
+4. *The rule rows first.* The row `rules` reads every line `HEAD^1..HEAD` adds to a text in
+   force, as the commit's row reads the staged ones: one function, `checkListRow`, given the two
+   sides of the diff instead of `--cached` and `:<file>`. In the door, a git that does not answer
+   refuses instead of giving no row. A finding of a rule whose row refuses refuses the pull
+   request; the rest are printed. The row `failures` then runs on the candidate's worktree, as
+   on disk today (`bin/failures.mjs:100`). These two are the rule rows; the other static rows
+   (`budget`, `citations` and the rest) run in `localSuite` with the candidate's code (Not
+   guaranteed). Reading 5's "the merge refuses on the whole result" is read as: on every line the
+   pull request brings, committed with or without `--no-verify`, not on every line of `main`.
+5. *gentle-ai's evidence, on the pull request's own branch,* added to the line in the body, which
+   stays (S4 of `odd/tasks/merge-queue.md` names it, and a pull request of documents keeps it as
+   its only test). Each code commit of the pull request committed after the cut-over (the date
+   slice (b) lands, a constant in code) is named on a line the pull request adds to a feature
+   document (`odd/tasks/*.md`) that also says `gentle-ai`: by its hash (seven characters at
+   least, resolved with `git rev-parse` inside the pull request's range), or as inside a range
+   `a..b` the line names, read as this repository writes it, first and last both included (`a`,
+   and `git rev-list a..b`). The queue resolves each range itself and never takes the line's word
+   for what it holds. The code commits are those of `reviewCoverage`; a merge of `main` is not
+   one here, since its review is Codex's by what was written in it and gentle-ai's range starts
+   after it (protocol 3). With the Codex review switched off, a code commit is one that changes
+   a file that is not Markdown. A commit with no such line refuses: "no written gentle-ai
+   evidence for <hash> on this branch: name it, or its range, on a gentle-ai line of its feature
+   document" (a rebase changes the hashes: the message says so when a named hash is not in the
+   range). The work sessions learn it from the text that tells them to review (below).
+6. *The second look is the output.* For each code commit the queue prints the Codex record that
+   covers it (its range and date, from `reviewCoverage`'s `covers`) and the line of item 5
+   (`path:line`), so the lead reads coverage commit by commit and needs no look of their own.
+7. *The landing line.* When `--land` moves `main` (the push that reported a failure while
+   `origin/main` is the candidate included, `:188-189`), for each landed pull request from a
+   `rule/` branch and each id it changed, the newest line "rule:<id> proposed on <branch>, not
+   landed" (that exact text, so `rule/a` never matches `rule/ab`) that no later "rule:<id> landed
+   on main ... from <branch>" line confirms gets one line, appended through `appendRelief` with
+   `by` `merge-queue`: "rule:<id> landed on main <sha> from <branch>: confirms relief line <n>",
+   the number as read at that moment. The relief file is found as `notify` finds it
+   (`JS_HARNESS_HOME` or the user's home, the slug of the main checkout). `--dry-run` and a red
+   land write none. A landed `rule/` branch with no proposed line writes none and says so.
+8. *The push reports.* `check --push` adds the row `rules` over `<remote>/<default>...<head>`,
+   the `--remote` and `--head` it already takes, as INFO whatever the rule's row says: the commit
+   refuses, the push reports, the merge refuses. T16d's "does not run on `check --push`" is
+   amended in the same slice.
+
+**In this order.** Slice (a), items 1 to 4: `checkListRow` given the two sides, `check --door`,
+the queue's door; the `AMOUNT` fix of T16d's patterns is on `main` already (`git diff
+origin/main...origin/feat/amount-boundary` is empty), and the slice never touches
+`rules-data.mjs` (batch B is JH 7's). Slice (b), items 5 and 6, after the orchestrator has put this design to him: its cut-over
+makes the open pull requests, batch B among them, pass as they are. Slice (c), items 7 and 8.
+Each slice is one pull request, tested first, through the gate and both reviews.
+
+**Files touched.**
+- Code: `bin/merge-queue.mjs` (the door, the worktree of `main`, the coverage lines, the landing
+  line, `USAGE`); `bin/check.mjs` (`checkListRow` given the two sides, `--door`, the push row,
+  `USAGE`); `bin/lib/pull-request.mjs` (its comment); `bin/lib/rules-change-run.mjs` (`rulesOfText`
+  and the line's shape, read and not changed).
+- Help and docs: `bin/js-harness.mjs` (the help of `merge-queue` and `check`); the README
+  (`js-harness merge-queue` and `check --push`); `docs/ROADMAP.md` (the gate's merge line);
+  `odd/tasks/merge-queue.md` (S4 kept, a log line for the door).
+- Skills: the text that tells a work session to review (`bin/lib/manifest.mjs`) names the
+  gentle-ai line by hash or range; the orchestrator's skill names `merge-queue` and its refusal
+  reasons. This document puts the skills out of scope (Constraints); this task takes the same
+  exception T16c took, for these lines only.
+- `docs/FAILURES.md`: a sighting of `checked-not-read` for pull requests 68 and 69, its
+  `Control:` naming item 5; `old-rule-beside-new`'s control gains the door for `--no-verify`.
+
+**Tests first.** Each seen failing before it passes, in repositories made in a temporary folder,
+through `mergeQueueMain` with `run` stubbed for `gh` only and the home a temporary folder:
+- a pull request whose `--no-verify` commit restates a refusing rule's value leaves the batch
+  with the row's line, and the batch lands without it; a reporting rule's merges and is printed;
+- a pull request whose `bin/check.mjs` drops the row is still refused: `main`'s code ran;
+- a non-`rule/` pull request that loosens a row in `rules-data.mjs` is refused; a `rule/` pull
+  request that turns a rule to refuse, then another that restates it, in one batch: the second
+  leaves; the same after a bisection;
+- a candidate list that does not parse refuses; a git that does not answer refuses;
+- a line restated after a change of `main` above it in the same file is read at its result line;
+- item 5: a commit named only on a line without `gentle-ai`, only in the body, or only in a
+  document the pull request does not change refuses; inside `a..b`, `a` itself, and a short hash
+  pass; a range that does not hold it refuses, with the rebase hint; a commit before the cut-over,
+  a merge of `main`, and a pull request of documents ask nothing of it; the body's line is still
+  required; the review switched off;
+- the coverage lines name each commit's record and `path:line`; `--dry-run` prints the door, the
+  coverage and the refusals and pushes nothing;
+- a landed `rule/` branch appends one confirming line; a second run appends none; a superseded
+  proposal is not confirmed; a branch with no proposed line appends none and says so; a red land,
+  exit 3 and `--dry-run` append none; the push-reported-failure land appends;
+- `check --push` prints the row as INFO and exits 0 with a refusing finding, with `--remote` and
+  `--head`; the queue's own push of `main` passes;
+- the existing tests of the body's line (`bin/lib/pull-request.test.mjs`,
+  `bin/merge-queue.test.mjs`) still pass unchanged.
+
+"Done when" gains `node --test bin/merge-queue.test.mjs` and `node --test
+bin/lib/pull-request.test.mjs`; `bin/check.test.mjs` is there already.
+
+**Cost.** Per pull request, a few git processes per file it changes and one `node` of `main`'s
+`check.mjs --door`; per batch, one worktree of `main` (an estimate: one to two seconds, measured
+in slice (a) and written here). No whole scan: T16d measured 90 patterns over every text at about
+8 s, which the door does not do.
+
+**Risk.** Item 2: the door is a guard. Item 3: the queue's output and refusals and `check --push`'s
+output, which the lead and the pre-push hook consume; `checkListRow`, which the commit's gate
+shares; the skills' text. Item 5: the path to `main`. Each slice gets an independent verifier
+after its own checks.
+
+**Not guaranteed.**
+- A merge outside the queue: the GitHub button, `gh pr merge` (closing them is spend, his).
+- A run of the static rows on `main` after each merge, on GitHub (his, not asked yet).
+- The static rows other than the rule rows: they run with the candidate's code.
+- That a line naming a commit is true: the queue checks that the evidence is written on the
+  branch and names the commit, not that gentle-ai approved it; gentle-ai keeps no record the
+  queue can read for a commit that was not due.
+- A `main` with no `--door`, until slice (a) lands.
+
+**What the two readers changed.**
+- **The attack:**
+  - `readRules` does not parse text: `rulesOfText` does, then `readRules(list, { declared })`.
+  - The merge result's list let a pull request loosen its own judge and run its patterns in the
+    queue: `main`'s patterns, the stricter row, a non-`rule/` change of the list refused.
+  - Judging each pull request against `main` missed the chain the queue lands, and `merge-tree`'s
+    conflicts and line numbers were unspecified: the door runs in the candidate after each merge,
+    on `HEAD^1..HEAD`, and again after a bisection.
+  - A git that does not answer gave no row: it refuses in the door.
+  - `checkFailures` reads disk: it runs in the candidate's worktree.
+  - "The installed command is `main`'s code" had nothing behind it: a worktree of `origin/main`.
+  - Item 5 would have refused landed pull requests and habits: a cut-over, ranges read first and
+    last included, short hashes, merges of `main` exempt, the rebase hint, the skills first.
+  - The coverage comes from `reviewCoverage`, not the single row of `checkCodexReviews`.
+  - The landing line: exact text, newest per id and branch, confirmed by a later line and not by
+    number, the home and slug as `notify` finds them, the land whose push reported a failure.
+  - `--push` uses its own `--remote` and `--head`; T16d's line amended; reading 5 settled; a cost.
+- **What was missing:**
+  - Batches where an earlier pull request changes the rules, and bisection: folded into item 1.
+  - Pull requests of documents, of a merge only, with no code: the body's line stays.
+  - S4 of the queue: kept, item 5 adds to it.
+  - The open pull requests when slice (b) lands: the cut-over, and "In this order".
+  - Projects with `docs/rules.json`: the door is this repository's (`rules-data.mjs`); an
+    installed project's queue, if it has one, runs its static rows in `localSuite` as today.
+  - `--dry-run`, the existing tests, the file list, the skills, the failure register, the risk
+    line's items and "Done when".
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build
@@ -2138,7 +2330,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   added: a session that edits `AGENTS.md` in its own worktree reads that file on every turn, so
   a half-written version would govern the session that writes it
 - [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
-  reply check on is asked of him
+  reply check on is asked of him. The lines are built and their wording is his yes
+  (`feat/template-lines`, Progress, 2026-10-16); the empty register is built
+  (`feat/empty-register`); open: `init` turning the reply check on by default, his answer,
+  built once C1 is (T2)
 - Moved on 2026-10-14 to "JH 15 · auditoría de honestidad", by the lead's message to this
   session; their state is kept in `odd/tasks/honesty-audit.md`, and only there: T10 (the honesty
   eval: the task and its proof; then, before any spend is asked of him, the number of trials,
@@ -2251,12 +2446,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
     inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
     loop over what the reviews cover looks at each record itself, and the evidence of a
-    review is written in a document on the pull request's own branch
+    review is written in a document on the pull request's own branch. Designed on 2026-10-16
+    by "JH 24" and read by two readers, "The merge door (T16e)"; route inline, the parent
+    writes it (no writer trigger: three slices in order, each one unit); branch
+    `feat/merge-command`. Slice (b) waits until the orchestrator has put the design to him
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
-  - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
+  - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
     of the relief file's line 245, carries its cost and a review date, and its done is one
-    command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it
+    command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it.
+    Built by JH 27 on 2026-10-16, see "Progress"
 - [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
   then one writer for documents)
   - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
@@ -3450,6 +3649,23 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   journey's host-load check (`hostCallProblems`, `scripts/practice-lib.mjs`) still asks the
   host for the two older skills only, since its fixtures are recorded streams; a step that
   proves the host lists this one belongs to T12.
+- 2026-10-16, T16g built by JH 27 on the lead's notice of 18:05 ("rule-hierarchy T16g (letter H,
+  the protocol's own home, replaces protocol 4), per the doc"), on `feat/rule-hierarchy-t16g`,
+  inline, test first. The home is section 4 of the protocols skill, which T7 built; what letter H
+  still owed:
+  - the incident: the section now opens with the stale 73 percent of the relief file's line 245
+    (his words of 2026-10-11, read at that line by this session), instead of the three changes of
+    the pause alone;
+  - the done: a line "Done: `js-harness rules check` exits 0.", one command, since it holds
+    the list in the harness's checkout and `docs/rules.json` in a project (both read exit 0 on
+    `origin/main` c1bf1b5, the project in an empty `mktemp -d` repository);
+  - the cost and the review date, 2026-11-16, were already there from T7 and are now pinned;
+  - "replaces protocol 4": the one text in force that still named the old protocol, "recording a
+    new rule", was the fix of `doctor`'s `memory-rules` row (`bin/lib/memory-rules.mjs`); it
+    now reads the section's title from `PROTOCOLS` and names the skill. `docs/todo.md` points to
+    the section too. The feature documents that name the old protocol are records and are left.
+  RED: `bin/lib/protocols-skill.test.mjs` failed on the incident (observed); GREEN: that file 8,
+  `bin/lib/memory-rules.test.mjs` 5, `bin/doctor.test.mjs` 71.
 - 2026-10-16, T9's empty register, by `JH 28 · reserva B` on `feat/empty-register`, from the
   lead's notice to 28 (a claim of the lead's, read in the channel record) after PR 280, the
   template's lines, had left it open. Built test first: `init` writes `docs/FAILURES.md`
@@ -3483,6 +3699,42 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   answer) and 926 (`contract.mjs`, decided with finding 12). Reader C's finding: the memory
   merge of 2026-10-15 copied stale sentences verbatim into the notes it merged them into, so
   they moved instead of going away. T17 stays open until its owners close the rest.
+- 2026-10-16, T9, by `JH 28 · reserva B` on `feat/template-lines`, from the
+  lead's notice to 28 (a claim of the lead's, read in the channel record). Built test first:
+  `agentsTemplate` (`bin/lib/project.mjs`) carries items 1 to 4 and 6 of "`AGENTS.md`,
+  rewritten", worded for any owner, under "What good looks like" (items 1 and 4) and a new
+  section "Working with the owner" (items 2, 3 and 6). RED: the new test of
+  `bin/lib/project.test.mjs` failed on the template of `main`; GREEN after the change. The size
+  test measured characters (under 1,200); it now measures tokens with `estimateTokens`, at most
+  half of `agents-budget`, so an installed project keeps the other half for its own lines. The
+  template measures 564 estimated tokens, from 194 on `main`; the README's example of `check`,
+  which said 122, says so. Three choices of this session, each reversible in one commit:
+  - Item 6 names the four states in a line of their own. The design's wording ("the reply check
+    says how") points at C1, which is not built (T2) and which no installed project has on, so
+    the template says what each state means instead.
+  - Item 2 takes the list of 2026-10-11 with the report published outside that the design adds;
+    T8's draft holds the list he passes, and the template follows it when that changes.
+  - Item 4 enters before C7 has measured it (`odd/tasks/honesty-audit.md`, T10): the eval copies
+    its own text (`evals/configs.mjs`, `HONESTY_SENTENCES`), so this change does not move it, and
+    if the line does not move the score it leaves the template with `AGENTS.md`.
+  Not built, and why: the empty failures register that "The failures register" left to T9
+  (`init` writing `docs/FAILURES.md`). It would add a file that `init` writes in every project
+  and that `uninstall` removes, and the files `init` writes are pinned as exact lists in many
+  test files (`rg -l "AGENTS.md" -g "*.test.mjs" bin scripts`: 19 files); it also turns the
+  `failures` row on in every installed project. It is left open under T9 for the lead to assign.
+  Two questions for him, sent to the lead with `notify --kind question`: (1) the final wording of
+  the template's new lines ("Ask me before"), read in `bin/lib/project.mjs`; (2) whether `init`
+  turns the reply check on in a project, which can be built only once C1 is (T2, JH 25). T9
+  stays open until both are answered.
+- 2026-10-16, T9, his answers to both questions, relayed by the lead's notices to 28 and read
+  in the lead's transcript (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`) with `js-harness
+  sessions --quote`, each a user entry tapped in answer to the lead's question tool. Question
+  10, the template's wording (line 13547, options "Sí, así como está | Esperar"): "Sí, así como
+  está". So the lines stand as built and the pull request is marked ready. Question 11, whether
+  `init` turns the reply check on (line 13566, options "Prendido por defecto (Recomendada) |
+  Apagado hasta que lo active"): "Prendido por defecto (Recomendada)". So `init` writes the
+  reply key on in a new project's `harness.json`; the lead assigns it after C1 lands (pull
+  request 282), test first, in a pull request of its own. T9 stays open for that.
 
 ## Next step
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai

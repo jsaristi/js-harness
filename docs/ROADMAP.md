@@ -867,6 +867,13 @@ podamos implementar todo"), each a feature of its own with its own document and 
      each open ticket with its issuer and flags one the orchestrator did not issue, a gate that
      went first says by which ticket, and the gate log keeps each issue, claim, expiry and
      cancellation. Undo: `gate first --cancel <id>`, or delete `~/.js-harness/gate-first`.
+   - A faster whole check of the same quality (2026-10-14 to 2026-10-16, closed,
+     `odd/tasks/faster-check.md`): the design that ranked how to free the lock without proving
+     less, read by two readers and handed to the orchestrator as version 2. Its first three parts
+     are built, each in its own document: the sensors in WSL2 and the ticket that goes first
+     (both above), and Codex's review out of the lock (the Review row of "Decided"); with them,
+     two guards on a turn of `js-harness gate` (`odd/tasks/gate-turn-guards.md`). The parts it
+     ranked after those were not built there, and it claims nothing of their state.
    - The wait for the gate, measured and cut (2026-10-12 to 16, `odd/tasks/gate-wait.md`, closed).
      *What the measurement found*: one whole run under the lock, 77 files, started 1,005 Node
      processes and 12,041 git processes and ended at 780 s, its longest file at 686 s. After

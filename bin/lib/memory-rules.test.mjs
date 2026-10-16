@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { MEMORY_RULES_FIX, memoryNoteType, memoryRulesState } from './memory-rules.mjs';
 import { projectSlug } from './sessions.mjs';
+import { PROTOCOLS } from './protocols-skill.mjs';
 
 // Not a repository as far as the fake git says, so the project is the folder itself, as for Claude Code.
 const noGit = () => ({ status: 128, stdout: '', stderr: 'not a git repository' });
@@ -76,6 +77,8 @@ test('from a linked worktree the notes are the main checkout\'s, where Claude Co
 });
 
 test('the fix names the protocol and the order of places, then the deletion of the note', () => {
-  assert.match(MEMORY_RULES_FIX, /recording a new rule/);
+  // The protocol's home is section 4 of the protocols skill (T16g); "recording a new rule" is the name it replaced.
+  assert.ok(MEMORY_RULES_FIX.includes(`"${PROTOCOLS[3]}" of the js-harness-protocols skill`), MEMORY_RULES_FIX);
+  assert.doesNotMatch(MEMORY_RULES_FIX, /recording a new rule/);
   assert.match(MEMORY_RULES_FIX, /delete the note/);
 });

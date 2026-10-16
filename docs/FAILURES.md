@@ -273,8 +273,10 @@ the cost of more gates.
   as a rule; Codex took it in seven parts
 - Seen: 2026-10-11 — relief file, line 222 — 2,221 lines did not fit one review; reviewed in two
   halves (claimed)
-- Proof: the row `codex-review` (debt) prints the size (`checkCodexReviewDebt`, `bin/check.mjs`);
-  whether it refuses is its session's to name
+- Control: check — bin/check-commit-size.test.mjs — "a staged change over the changed lines a
+  reviewed commit holds fails the gate" — since 2026-10-16
+- Proof: the row `codex-review` (debt) prints the size of a range (`checkCodexReviewDebt`,
+  `bin/check.mjs`), and the row `commit-size` that of each commit before it is made
 
 ### context-cut-by-percentage
 Sessions were told to cut, or proposed a cut, near 70 percent of their context because of a mark of
@@ -507,10 +509,13 @@ A test run or a count started while a gate, or a batch that measures durations, 
 - Seen: 2026-10-16 — odd/tasks/rule-hierarchy.md, Progress of 2026-10-16 — JH 7's verifier ran
   bin/lib/rules-change-run.test.mjs (about 200 s) outside the lock beside JH 7's own gate, which
   failed on a sensor test that passed alone three times
-- Control: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — since
-  2026-10-11
+- Control: owed — odd/tasks/first-version.md — "a heavy run beside a gate is refused whatever its
+  size"
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
   yet)
+- Was: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — replaced on
+  2026-10-16, after two single test files ran beside gates past it (2026-10-15 and 2026-10-16), by
+  the guard's refusal T6a of odd/tasks/first-version.md owes
 
 ### hold-read-after-build
 A session was told to hold before building, and built: the message waited behind its own turn
@@ -676,6 +681,8 @@ review covers everything the merge brought, code that already had its review.
   parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
   in its first part. A merge is read by what was written in it only at HEAD, so a detached
   worktree at c4b7a37 reviewed it in 1 part of 18 lines
+- Control: check — bin/codex-review.test.mjs — "a run from a merge of the default branch below HEAD
+  names the worktree at the merge" — since 2026-10-16
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he
@@ -800,6 +807,8 @@ makes the next try wait five minutes and fail.
   found on 2026-10-11 was dated 2026-10-09 17:40
 - Seen: 2026-10-11 — relief file, line 201 — two tries, both exit 1; the lock folder left again,
   removed by hand twice
+- Control: check — bin/doctor.test.mjs — "the pnpm-lock row stale for a global bin lock left over in
+  the given PNPM_HOME" — since 2026-10-16
 
 ### probe-end-hook-flake
 A gate failed on `evals/codex-isolation-probe.test.mjs` as a whole, with no test of it red, and the

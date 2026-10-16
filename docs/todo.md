@@ -115,7 +115,7 @@ matters, who holds it, and where it was seen.
   type `feedback`, 1 `project`; none `user`), where nothing acts on them and a session may not recall
   them. Read on 2026-10-14 by the `memory-rules` row of `doctor`, built in JH 12's
   `odd/tasks/commands-and-doctor.md` (T4, not on `main` yet). Each goes to a check, a line of
-  `AGENTS.md` or a protocol, then the note is deleted: JH 7's skill for recording a new rule holds it.
+  `AGENTS.md` or a protocol, then the note is deleted, by section 4 of the `js-harness-protocols` skill.
   He asked for these two items here (the orchestrator's transcript `ffe99ebf`, line 3838).
 - Sessions of the two permission classes, with nothing joining them: 26 of the project's sessions of
   the last 7 days bypass permission prompts and 1 asks for them (likely the phone's), and
