@@ -241,7 +241,7 @@ cuts) shortens the run but does not make any fixed figure true for a growing sui
 - [ ] T6a (kind: build) S6: a heavy run beside a gate is refused whatever its size: one test file the gate log times over a minute counts as several, and an eval batch shows itself to the guard as a gate holder does; one file stays free by the skill's rule (`odd/tasks/test-run-warning.md`, "One file stays free, as the skill says") and the refusal is his decision, so narrowing it goes to him through the lead first (`docs/FAILURES.md`, heavy-run-beside-gate: two single files of 65 to 200 s beside gates since the protocol line, one of which made a gate fail)
 - [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
 - [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
-- [ ] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4)
+- [x] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4); overtaken by `723af7c`, no design left (L22)
 - [x] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1) (above, L21; the figure is his, asked through the lead)
 - [ ] T6f (kind: build) S6: the bound T6e's design gives, once he answers L21's question; inline, test first
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
@@ -399,3 +399,11 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   minutes, one rule change, and the question comes back as the suite grows. Beside either, only he can exclude
   the temporary folders from Defender's scan, the process that led every slow run. Recommended: A. Not
   measured: the longest silence of a whole run, and the run with Defender out of the way.
+- L22 (2026-10-16, JH 25): T6d closed without a design. L18 read `main` at `c1bf1b5`; `723af7c`
+  ("fix(codex-review): name the worktree at a merge below HEAD, not its parent", 13:49 -0500) landed four
+  minutes before L18's commit and fixed the wrong `--base <merge>^` hint: a run from such a merge now names the
+  worktree at the merge, which reviews it by what was written in it. Its check is
+  `bin/codex-review.test.mjs:5715`, the entry's `Control` line in `docs/FAILURES.md`, and `js-harness
+  failures` lists `merge-review-covers-main` as `controlled`. Reading a merge by what was written in it is
+  already how `mergeStart` reviews a merge at HEAD, so no new narrowing of what a review covers is left to
+  ask him.
