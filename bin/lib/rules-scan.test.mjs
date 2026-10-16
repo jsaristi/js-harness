@@ -90,7 +90,7 @@ test('on the real list, every rule with patterns finds its own planted line, and
   }
 });
 
-// A line each narrowed rule once caught and must not catch again: the probe's false positive it was narrowed for.
+// The lines each narrowed rule once caught and must not catch again: the false positives it was narrowed for.
 const NEAR_MISS = {
   'codex-review-margin': 'The gate keeps a margin of 30 seconds on its bound.',
   'codex-review-rate': 'That part cost 325 input tokens a changed line.',
@@ -102,13 +102,19 @@ const NEAR_MISS = {
   'review-part-files': 'Each part is read as { of: 1, files }.',
   'review-parts-unflagged': 'A run of 28 parts started without the numbers.',
   'review-timeout': 'The Codex login is stopped past codex-review-prompt.mjs:51.',
-  'reviewed-commit-lines': 'It is 5,222 changed lines, the whole commit.',
-  'subagent-effort': 'The orchestrator runs on gpt-6.1-sol with effort: "medium".',
+  'reviewed-commit-lines': 'The commit is 5,222 changed lines.',
+  'subagent-effort': [
+    'The orchestrator runs on gpt-6.1-sol with effort: "medium".',
+    'Two readers on Opus at high effort read the first version.',
+    'Measured (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort.',
+  ],
 };
 
 test('on the real list, a narrowed rule no longer finds the line it was narrowed for', () => {
-  for (const [id, line] of Object.entries(NEAR_MISS)) {
-    assert.deepEqual(scanLines(RULES, inForceLines('docs/ROADMAP.md', `${line}\n`)).filter((finding) => finding.id === id), [], id);
+  for (const [id, lines] of Object.entries(NEAR_MISS)) {
+    for (const line of [lines].flat()) {
+      assert.deepEqual(scanLines(RULES, inForceLines('docs/ROADMAP.md', `${line}\n`)).filter((finding) => finding.id === id), [], `${id}: ${line}`);
+    }
   }
 });
 

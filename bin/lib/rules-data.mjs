@@ -278,7 +278,7 @@ export const RULES = [
     "since": "2026-10-07",
     "value": "high",
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\b(?:subagents?|agent calls?|writers?|verifiers?|readers?)\\b.{0,50}\\b(?:at|on) `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\().*(?<![\\w/.-])(?:subagents?|sub-agents?|agent calls?|writers?|verifiers?|readers?)\\b(?![\\w-]*\\.\\w).{0,40}\\b(?:runs?|launched|launch(?:es)?|go(?:es)?)\\b.{0,20}\\b(?:at|with) `?{amount}`? effort",
       "^(?!.*\\bruleValue\\()(?!.*\\bgpt-).*\\beffort: \"{amount}\""
     ]
   },

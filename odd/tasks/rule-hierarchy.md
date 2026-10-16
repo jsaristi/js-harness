@@ -3360,11 +3360,30 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     5,222 changed lines" measures a commit;
   - `subagent-effort`'s second pattern leaves out a line naming a `gpt-` model, since
     `effort: "medium"` in `stack-v4.md` is Codex's orchestrator, not a subagent of this harness.
+- 2026-10-16, his batch A reviewed. gentle-ai approved it (`review-b85f1114633b9a16`,
+  acknowledged), with two warnings. The first is refuted: it held that `subagent-effort`'s
+  near-miss line, with "medium", cannot test the `gpt-` exclusion. But `{amount}` matches any
+  effort word (`AMOUNT`, `bin/lib/rules.mjs:80`), and a probe found that line without the
+  exclusion and missed it with it. The second stands: `reviewed-commit-lines`' near-miss was
+  missed by word order, not by the bound, so it is now "The commit is 5,222 changed lines.",
+  which a probe found without the bound. The independent verifier (Opus): PASS, no blocker; 8
+  of the 11 findings restate a value, and all three false positives were `subagent-effort`'s:
+  two records of how readers ran, and "subagent" inside a path (`docs/ROADMAP.md:371`). So
+  `subagent-effort`'s first pattern now wants a setting verb ("runs", "launched") before the
+  effort, and a subject that is not inside a path; it keeps one finding,
+  `odd/tasks/rule-hierarchy.md:1892`, a restatement. `NEAR_MISS` takes several lines per rule
+  for it. The verifier's other advisories join batch 2's for the second pass: the aliases `opus`
+  and `haiku`, which `{amount}` cannot match since it needs a digit; model lookaheads that accept
+  any `claude-` or `gpt-` model; measurements; and the overlap between rules, which only a probe
+  checks. gentle-ai's two suggestions go there too: `review-model`'s `\breview\b` misses
+  "reviews", and `codex-review-margin`'s lookbehind on `%` leans on `AMOUNT` taking the unit,
+  which the `AMOUNT` fix must keep or replace.
 
 ## Next step
-**State for a resume, 2026-10-16, his batch A built on `rule/his-patterns`.** Ten commits, one
-per rule. Next: gentle-ai (item 3), an independent verifier, Codex, `merge-tree`, and a draft pull
-request to the lead's queue; then batch B alone, narrowed first; then the `AMOUNT` fix.
+**State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
+approved and acknowledged, the verifier passed, `subagent-effort` narrowed and the near-miss fixed
+in one more commit. Next: gentle-ai's assessment of that commit, Codex, `merge-tree`, and a draft
+pull request to the lead's queue; then batch B alone, narrowed first; then the `AMOUNT` fix.
 
 **State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the
 verifier passed, `NEAR_MISS` folded in. Next: Codex (`codex-review --base origin/main`),
