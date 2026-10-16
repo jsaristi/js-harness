@@ -22,20 +22,21 @@ function readJson(file) {
 }
 
 /** The app's folders to look in, in order. On Windows the MSIX package keeps its writes in its own LocalCache,
- * which the app sees as %APPDATA%\Claude, so that one comes first. */
-function appFolders({ platform, env, home }) {
+ * which the app sees as %APPDATA%\Claude, so that one comes first. Every path hangs off `home`, never the
+ * environment, as the account check's do (bin/lib/stack.mjs): a fixture home is read and nothing else. */
+function appFolders({ platform, home }) {
   if (platform === 'darwin') return [path.join(home, 'Library', 'Application Support', 'Claude')];
-  if (platform !== 'win32') return [path.join(env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Claude')];
+  if (platform !== 'win32') return [path.join(home, '.config', 'Claude')];
   const folders = [];
-  const packages = env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Packages') : null;
+  const packages = path.join(home, 'AppData', 'Local', 'Packages');
   try {
-    for (const name of packages ? fs.readdirSync(packages) : []) {
+    for (const name of fs.readdirSync(packages)) {
       if (/^Claude_/.test(name)) folders.push(path.join(packages, name, 'LocalCache', 'Roaming', 'Claude'));
     }
   } catch {
-    // No Packages folder: only %APPDATA% is looked in.
+    // No Packages folder: only AppData\Roaming is looked in.
   }
-  if (env.APPDATA) folders.push(path.join(env.APPDATA, 'Claude'));
+  folders.push(path.join(home, 'AppData', 'Roaming', 'Claude'));
   return folders;
 }
 
@@ -53,8 +54,8 @@ function findAppVersion(value, depth = 0) {
 /** `{ found, desktop, staged, code }`: whether an app folder is there, the running desktop version, the version
  * its updater downloaded, and the highest Code tab CLI under `claude-code/`; `null` for what cannot be read.
  * Of `config.json` only the updater's staged version is read: the file also holds OAuth tokens. */
-export function readHostVersions({ platform = process.platform, env = process.env, home } = {}) {
-  const folder = appFolders({ platform, env, home }).find((dir) => fs.existsSync(dir));
+export function readHostVersions({ platform = process.platform, home } = {}) {
+  const folder = appFolders({ platform, home }).find((dir) => fs.existsSync(dir));
   if (!folder) return { found: false, desktop: null, staged: null, code: null };
   const desktop = findAppVersion(readJson(path.join(folder, 'sentry', 'scope_v3.json')));
   const stagedValue = readJson(path.join(folder, 'config.json'))?.updaterStagedPayloadKind?.version;

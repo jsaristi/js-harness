@@ -19,45 +19,66 @@ function seedApp(dir, { running = '2.37337.1', staged = '2.42304.0', clis = ['2.
   fs.mkdirSync(path.join(dir, 'claude-code', 'not-a-version'), { recursive: true });
 }
 
-test('the versions are read from the MSIX package folder before %APPDATA%: the running one, the staged one and the highest Code tab CLI', () => {
-  const local = tmp();
-  const roaming = tmp();
+test('the versions are read under the home, the MSIX package folder before AppData/Roaming: the running one, the staged one and the highest Code tab CLI', () => {
+  const home = tmp();
   try {
-    seedApp(path.join(local, 'Packages', 'Claude_pzs8sxrjxfjjc', 'LocalCache', 'Roaming', 'Claude'), { clis: ['2.1.293', '2.1.295', '2.1.40'] });
-    seedApp(path.join(roaming, 'Claude'), { running: '1.0.0', staged: null, clis: ['1.0.0'] });
-    const versions = readHostVersions({ platform: 'win32', env: { LOCALAPPDATA: local, APPDATA: roaming }, home: tmp() });
-    assert.deepEqual(versions, { found: true, desktop: '2.37337.1', staged: '2.42304.0', code: '2.1.295' });
+    seedApp(path.join(home, 'AppData', 'Local', 'Packages', 'Claude_pzs8sxrjxfjjc', 'LocalCache', 'Roaming', 'Claude'), { running: '2.40000.1', staged: '2.50000.0', clis: ['2.1.293', '2.1.395', '2.1.40'] });
+    seedApp(path.join(home, 'AppData', 'Roaming', 'Claude'), { running: '1.0.0', staged: null, clis: ['1.0.0'] });
+    const versions = readHostVersions({ platform: 'win32', home });
+    assert.deepEqual(versions, { found: true, desktop: '2.40000.1', staged: '2.50000.0', code: '2.1.395' });
     assert.doesNotMatch(JSON.stringify(versions), /secret-token/);
   } finally {
-    for (const dir of [local, roaming]) fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('with no package folder %APPDATA%\\Claude is read; macOS and Linux read their own app folders', () => {
-  const roaming = tmp();
+test('with no package folder AppData/Roaming/Claude is read; macOS and Linux read their own app folders under the home', () => {
   const home = tmp();
   try {
-    seedApp(path.join(roaming, 'Claude'), { staged: null });
-    assert.deepEqual(readHostVersions({ platform: 'win32', env: { LOCALAPPDATA: tmp(), APPDATA: roaming }, home }), { found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' });
+    seedApp(path.join(home, 'AppData', 'Roaming', 'Claude'), { staged: null });
+    assert.deepEqual(readHostVersions({ platform: 'win32', home }), { found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' });
     seedApp(path.join(home, 'Library', 'Application Support', 'Claude'), { running: '2.1.0', staged: null, clis: [] });
-    assert.deepEqual(readHostVersions({ platform: 'darwin', env: {}, home }), { found: true, desktop: '2.1.0', staged: null, code: null });
+    assert.deepEqual(readHostVersions({ platform: 'darwin', home }), { found: true, desktop: '2.1.0', staged: null, code: null });
     seedApp(path.join(home, '.config', 'Claude'), { running: '2.2.0', staged: '2.3.0', clis: ['2.1.1'] });
-    assert.deepEqual(readHostVersions({ platform: 'linux', env: {}, home }), { found: true, desktop: '2.2.0', staged: '2.3.0', code: '2.1.1' });
+    assert.deepEqual(readHostVersions({ platform: 'linux', home }), { found: true, desktop: '2.2.0', staged: '2.3.0', code: '2.1.1' });
   } finally {
-    for (const dir of [roaming, home]) fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Every path comes from the home, as the account check's do (bin/lib/stack.mjs, DESKTOP_APP_CONFIG): a fixture home is
+// read and nothing else, so a run with a scratch --home never reads this machine's app (gentle-ai review, 2026-10-15).
+test('the environment is never read: a seeded APPDATA, LOCALAPPDATA or XDG_CONFIG_HOME outside the home is not found', () => {
+  const home = tmp();
+  const elsewhere = tmp();
+  const saved = { APPDATA: process.env.APPDATA, LOCALAPPDATA: process.env.LOCALAPPDATA, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
+  try {
+    seedApp(path.join(elsewhere, 'Claude'));
+    seedApp(path.join(elsewhere, 'Packages', 'Claude_x', 'LocalCache', 'Roaming', 'Claude'));
+    Object.assign(process.env, { APPDATA: elsewhere, LOCALAPPDATA: elsewhere, XDG_CONFIG_HOME: elsewhere });
+    for (const platform of ['win32', 'darwin', 'linux']) {
+      assert.deepEqual(readHostVersions({ platform, home }), { found: false, desktop: null, staged: null, code: null }, platform);
+    }
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    for (const dir of [home, elsewhere]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test('no app folder is not found; a folder whose files are missing or broken reads as unknown versions, never a throw', () => {
-  const roaming = tmp();
+  const home = tmp();
   try {
-    assert.deepEqual(readHostVersions({ platform: 'win32', env: { APPDATA: roaming }, home: tmp() }), { found: false, desktop: null, staged: null, code: null });
-    fs.mkdirSync(path.join(roaming, 'Claude', 'sentry'), { recursive: true });
-    fs.writeFileSync(path.join(roaming, 'Claude', 'sentry', 'scope_v3.json'), '{ not json');
-    fs.writeFileSync(path.join(roaming, 'Claude', 'config.json'), JSON.stringify({ updaterStagedPayloadKind: { version: 42 } }));
-    assert.deepEqual(readHostVersions({ platform: 'win32', env: { APPDATA: roaming }, home: tmp() }), { found: true, desktop: null, staged: null, code: null });
+    assert.deepEqual(readHostVersions({ platform: 'win32', home }), { found: false, desktop: null, staged: null, code: null });
+    const app = path.join(home, 'AppData', 'Roaming', 'Claude');
+    fs.mkdirSync(path.join(app, 'sentry'), { recursive: true });
+    fs.writeFileSync(path.join(app, 'sentry', 'scope_v3.json'), '{ not json');
+    fs.writeFileSync(path.join(app, 'config.json'), JSON.stringify({ updaterStagedPayloadKind: { version: 42 } }));
+    assert.deepEqual(readHostVersions({ platform: 'win32', home }), { found: true, desktop: null, staged: null, code: null });
   } finally {
-    fs.rmSync(roaming, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });
 

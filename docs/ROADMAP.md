@@ -112,7 +112,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] TUI stack block above the menu
 - [x] Reviewed and merged (`jsaristi/js-harness#4`, Windows exit fix `#5`)
 - [x] Installed on this machine; global package matches `main`
-- [ ] `doctor` `host-update` row: a Claude Desktop or Code tab CLI update is a gap, with its review steps, until `doctor --host-reviewed` records the review; an update downloaded and not applied is `outdated` (his request of 2026-10-15, `odd/tasks/host-update-check.md`)
+- [x] `doctor` `host-update` row: a Claude Desktop or Code tab CLI update is a gap, with its review steps, until `doctor --host-reviewed` records the review; an update downloaded and not applied is `outdated` (his request of 2026-10-15, `odd/tasks/host-update-check.md`; pull request 242, and its follow-ups: the app folder read under `--home` only, `--host-reviewed --json`)
 
 ### Progress view
 - [x] Parser for roadmap phases and feature docs
