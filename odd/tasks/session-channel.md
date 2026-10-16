@@ -1845,9 +1845,7 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
 
 | Open point | Where it is written | It waits for |
 |---|---|---|
-| The yardstick of "the last task". A message that arrives while a session works starts a task since the round of fixes, and it closes the task before it even when that task's work is not over, so the last task can read far smaller than the work done and "it fits" leans towards true (gentle-ai's warning on `bin/lib/sessions.mjs`, `instructionBy`) | point 7, "Open"; Progress, 2026-10-11 19:57 to 20:42 and 22:20 to 23:57 | his decision, before T9 |
-| The refusal of a pause not below the compaction point also fires for a window so small that the two default shares round to one token, and names two flags nobody gave (gentle-ai's suggestion on `bin/sessions.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
-| The hint above the list of several openings says to ask with the title in double quotes, the quoting the hook's rule for a printed command rejects (gentle-ai's suggestion on `bin/resume.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
+| The yardstick of "the last task". A message that arrives while a session works starts a task since the round of fixes, and it closes the task before it even when that task's work is not over, so the last task can read far smaller than the work done and "it fits" leans towards true (gentle-ai's warning on `bin/lib/sessions.mjs`, `instructionBy`) | point 7, "Open"; Progress, 2026-10-11 19:57 to 20:42 and 22:20 to 23:57 | his decision; it was to come before T9, and T9 is done (`--measures`), so it now waits on him alone |
 | Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | kept as compaction by default, a relief on request, by the lead's notice of 2026-10-15 05:44 (T8, Progress); no question to him |
 
 ## Progress
@@ -3275,6 +3273,14 @@ session needs beside it to go on; the summary of a compaction is not the record.
   `bin/resume.mjs` to the channel library with `openingCommand`, which both use; such a title
   gets its command between single quotes, and any other the request in words; the guard
   matches ids either way (`sameSession`).
+- 2026-10-16, JH 25, `odd/tasks/first-version.md` T3c: two of "Open points" closed, test first. The
+  refusal of a pause not below the compaction names each figure by what gave it, its flag or "the
+  default pause (N% of the window)", so a window too small for the two defaults names no flag
+  nobody gave (`bin/sessions.mjs`; RED on the default compaction, then green). The hint above
+  several openings says in words to give `--opening` one title below between single quotes: a
+  placeholder in double quotes is what Windows PowerShell drops on the way to a program, and one
+  in single quotes reads as a command that would exit 2 (`bin/resume.mjs`, 92 of 92). The
+  yardstick's row no longer waits "before T9", which is done.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is

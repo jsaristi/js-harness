@@ -164,9 +164,9 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T1 (kind: build) S1: the three open table rows, closed in their own documents (L11)
 - [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L4)
 - [x] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks (L12)
-- [ ] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
-- [ ] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
-- [ ] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4)
+- [x] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
+- [x] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
+- [x] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4; L13)
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L6)
 - [x] T4b (kind: build) S4: the release source, built as designed; inline, test first (L7)
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
@@ -266,3 +266,24 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   in double quotes (`bin/resume.mjs:384`), and the row on "the last task" still says "before T9" though T9 is done;
   the yardstick itself waits on his decision: T3c. (7) no `vX.Y.Z` tag on origin and `package.json` says 0.1.0:
   the tag is his and outside this document (Not in scope), so no task. Each of T3a to T3c is small and inline.
+- L13 (2026-10-16, JH 25): T3c built inline, test first, on `feat/first-version-t3abc`: the pause refusal names
+  each figure by its flag or its default (`bin/sessions.mjs`), the openings hint asks in words with single quotes
+  (`bin/resume.mjs`), and the yardstick row no longer waits on T9; detail in `odd/tasks/session-channel.md`,
+  Progress, 2026-10-16.
+- L14 (2026-10-16, JH 25, state for a resume): branch `feat/first-version-t3abc` (worktree
+  `D:/js-harness-worktrees/first-version-t3abc`, on top of PR 294's `docs/first-version-t3`). T3c committed `37f30d7`.
+  T3a in progress, uncommitted: a RED test in `bin/lib/pause.test.mjs` (`ORCHESTRATOR_SAID`); next, the gloss in
+  `bin/lib/pause.mjs:300` (`where`) and in `bin/resume.mjs:91` (`NOTIFY`, and its test constant), test first; then T3b
+  (the pause's fallback window, `bin/lib/pause.mjs:23`); then Codex on the code commits, push, a PR, notify the lead.
+- L15 (2026-10-16, JH 25): T3a built inline, test first: the pause's notices and the resume hook say, the first
+  time they name it, what the orchestrator is and that the js-harness-orchestrator skill teaches it
+  (`ORCHESTRATOR_IS`, `bin/lib/sessions.mjs`; RED 1 in `bin/lib/pause.test.mjs`, 25 in `bin/resume.test.mjs`, then 56 and
+  92 green). The `init` template stays short. Next: T3b, then Codex, push, a PR, the lead told.
+- L16 (2026-10-16, JH 25): T3b built inline, test first: with no window configured and no compaction measured,
+  the pause's notice says its figures assume the default window of 500,000 tokens and names
+  CLAUDE_CODE_AUTO_COMPACT_WINDOW and autoCompactWindow to set it (`bin/lib/pause.mjs`, noticeOf; RED 1 in
+  `bin/lib/pause.test.mjs`, then 57 green). Of the task's two ways this is the second: the notice says the figure is assumed,
+  and the model's own window is not read. Next: Codex on the code commits, push, a PR, the lead told.
+- L17 (2026-10-16, JH 25): Codex on baec266..3d958ca found one P2, confirmed: the T3b notice named
+  CLAUDE_AUTO_COMPACT_WINDOW, which `configuredWindow` does not read; it now names `WINDOW_VARIABLE`
+  (CLAUDE_CODE_AUTO_COMPACT_WINDOW), test first (RED 1, then 57 green).
