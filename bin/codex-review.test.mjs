@@ -4468,10 +4468,13 @@ test('--plan prints the plan of the run and exits 0, and starts nothing: no Code
     'How the method did: no reviews recorded yet.',
   ]);
   // A plan is of the committed range and records nothing, so uncommitted changes, which stop a review, do not stop it.
+  // It says them, on stderr, so a review is not queued to be refused when its turn comes (gate-wait.md, T20).
+  assert.doesNotMatch(two.err, /uncommitted/);
   fs.writeFileSync(path.join(root, 'a.txt'), 'not committed\n', 'utf8');
   const dirty = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(dirty.code, 0, dirty.err);
   assert.deepEqual(dirty.out, two.out);
+  assert.match(dirty.err, /^Tracked files have uncommitted changes, which a review refuses: commit or stash them before the run\.\nM a\.txt$/m);
   nothing.untouched('a dirty tree');
   // A range git cannot size has no plan: that is an error, exit 1, and not a plan of no part.
   const unsized = (command, args, opts) => (command === 'git' && args.includes('--numstat') ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
@@ -4954,7 +4957,9 @@ test('a range that changes only what a review leaves out has no part: the run st
   fs.writeFileSync(path.join(root, '.gitattributes'), '', 'utf8');
   const planned = startsNothing(root);
   const shown = await run(['--base', 'HEAD~1', '--again', '--plan', ...planned.home, '--cwd', root], planned.deps);
-  assert.deepEqual([shown.code, shown.err, shown.out.split('\n')], [0, '', plan]);
+  // The plan is the same; the edited marks are said on stderr, since a run would refuse them (gate-wait.md, T20).
+  assert.deepEqual([shown.code, shown.out.split('\n')], [0, plan]);
+  assert.match(shown.err, /^Tracked files have uncommitted changes, which a review refuses: commit or stash them before the run\.\nM \.gitattributes$/m);
   planned.untouched('--plan');
   git(root, 'checkout', '--', '.gitattributes');
   const nothing = startsNothing(root);

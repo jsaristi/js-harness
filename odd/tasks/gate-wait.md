@@ -1028,6 +1028,23 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       run a cheap refusal the queued command declares, when it is queued and again when its
       turn comes. The turn scripts of this session have the same hole: their check of the head
       and of a clean tree runs after the wait. Not sized.
+      Built (2026-10-16, JH 24) on `feat/gate-refuse-early`, test first: `codex-review --plan`
+      says uncommitted tracked changes on stderr, its plan and exit 0 unchanged; `js-harness gate
+      --ready <command>` runs the check before the wait and again as the turn comes after one,
+      and a failure runs nothing (exit 75, `refused` with reason `not ready` in the gate log).
+      The box is checked at T10, so this line and T19's do not meet in a merge. The turn
+      scripts are scratch files of their sessions and are left: `--ready` is what they can use.
+      Codex on `6a6ce9e..2c519af` (P2, correct): a wait behind a gate in the line that left before
+      it held the lock named no gate waited for, so the check was not asked again. The check is now
+      asked again whenever the turn was not taken at the first look of the lock (`looks`, the count
+      the launcher's last look already uses), with a test for that wait.
+      *Later, non-blocking (gentle-ai, 2026-10-16).* T19 (lineage `review-cf7d0d2ecad4ae1a`, PR 276):
+      the last read of the busiest processes holds the lock 3 to 4 s; the watch is not ended when a
+      run throws, in `check` and in `gate`; a failed write of `busiest.jsonl` is said although the
+      docs say nothing is; names are not cleaned when read. The pull request counts six of them; the
+      record of this session kept these four. T20 (lineage `review-8d18a3a8381fa79c`): no test for a
+      failing check at the turn on the inner path, nor for `codex-review --plan` when its `git status`
+      fails; that `git status` takes git's optional index lock beside other commands.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 

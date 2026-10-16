@@ -1378,6 +1378,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (allowance !== null) log(allowance);
     const needs = needsFlagLine(plan);
     if (needs !== null) log(needs);
+    // What would stop the run itself, said on stderr so the plan's lines stay what they are: a review queued
+    // behind a gate over a dirty tree waited for its turn only to be refused (odd/tasks/gate-wait.md, T20).
+    // A `git status` that does not answer says nothing here; the run asks again and refuses on it.
+    const dirty = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+    if (dirty) error(`Tracked files have uncommitted changes, which a review refuses: commit or stash them before the run.\n${dirty}`);
     return 0;
   }
 
