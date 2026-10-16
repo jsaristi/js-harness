@@ -67,6 +67,20 @@ test('a label written inside a line, or as part of a longer word, is no state li
   assert.match(refusal('Hecho.\n\nTerminados los tests, sigue la doc.'), /no state/);
 });
 
+test('a line that only begins with a label word, with no mark after the label, is no state line', () => {
+  const english = replyConfig({ reply: true });
+  const close = '\n\n**Working** — the gate of the next commit wakes me.';
+  assert.equal(replyRefusal(`Working on the docs now, they were stale.${close}`, english), null);
+  assert.equal(replyRefusal(`Finished the refactor of the parser.${close}`, english), null);
+  assert.equal(refusal('Dónde quedó el archivo lo dije arriba.\n\n**Sigo solo** — espero el gate.'), null, 'a cut label at the start of a sentence');
+  assert.match(replyRefusal('Working on the docs now.', english), /no state/);
+});
+
+test('two labels where one is the other with more words after it are an error, since one line would match both', () => {
+  const overlap = replyConfig({ reply: { states: { working: 'Sigo', cut: 'Sigo solo' } } });
+  assert.match(overlap.error, /"sigo" begins "sigo solo"/);
+});
+
 test('a state line inside a fenced block does not count', () => {
   assert.match(refusal('El hook lee esto:\n\n```\nSigo solo: espero\n```'), /no state/);
   assert.equal(refusal('Ejemplo:\n\n~~~\nCorte\n~~~\n\nSigo solo: espero el gate.'), null);

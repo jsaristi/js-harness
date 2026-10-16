@@ -54,6 +54,11 @@ export function replyConfig(harness) {
   const all = [...Object.values(states.value), ...Object.values(labels.value)].map((label) => label.toLowerCase());
   const twice = all.find((label, i) => all.indexOf(label) !== i);
   if (twice !== undefined) return failed(`two states or labels share "${twice}", so they could not be told apart`);
+  // "Sigo" and "Sigo solo": the line "Sigo solo — …" would start with both.
+  for (const short of all) {
+    const long = all.find((label) => label !== short && label.startsWith(short) && !/[\p{L}\p{N}]/u.test(label[short.length]));
+    if (long !== undefined) return failed(`"${short}" begins "${long}", so one line would match both`);
+  }
   return { states: states.value, labels: labels.value };
 }
 
@@ -65,7 +70,9 @@ const bare = (line) => line.replace(/^\s*(?:>\s*)*(?:#{1,6}\s+)?(?:(?:[-*+]|\d+[
 
 /** Whether `text` starts with `label` as a whole word, whatever its case: what follows is no letter or digit. */
 function startsWithLabel(text, label) {
-  return new RegExp(`^${escaped(label)}(?![\\p{L}\\p{N}])`, 'iu').test(text);
+  // After the label and its emphasis comes the end of the line or a mark that joins what follows ("Working —",
+  // "Qué es:"), so a sentence that only begins with the word ("Working on the docs") is body text, not a state.
+  return new RegExp(`^${escaped(label)}[*_]*\\s*(?:$|[—–:.,;!-])`, 'iu').test(text);
 }
 
 /** What follows `label` on its line, with the punctuation and emphasis that join them taken off. */

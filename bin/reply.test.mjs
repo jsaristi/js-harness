@@ -83,7 +83,9 @@ test('only running background tasks count against a decision', async () => {
 test('whatever it cannot read lets the session stop, and a reply key it cannot read is said on standard error', async () => {
   assert.deepEqual([(await hook(null, { raw: 'not json' })).out, (await hook(null, { raw: 'not json' })).code], [PASS, 0]);
   assert.equal((await hook(stopPayload(null))).out, PASS, 'Codex may send last_assistant_message null');
-  assert.equal((await hook(stopPayload('x'), { files: { [path.join(PROJECT, 'harness.json')]: '{ broken' } })).out, PASS);
+  const broken = await hook(stopPayload('x'), { files: { [path.join(PROJECT, 'harness.json')]: '{ broken' } });
+  assert.equal(broken.out, PASS);
+  assert.match(broken.err, /harness\.json is not JSON .*; the reply check did not run/, 'a broken harness.json is said, not skipped in silence');
   const bad = await hook(stopPayload('x'), { files: { [path.join(PROJECT, 'harness.json')]: JSON.stringify({ reply: 'yes' }) } });
   assert.equal(bad.out, PASS);
   assert.match(bad.err, /harness\.json "reply"/);

@@ -30,7 +30,13 @@ function nearestHarness(start, readFile) {
     } catch (err) {
       if (err?.code !== 'ENOENT' && err?.code !== 'ENOTDIR') throw err;
     }
-    if (text !== undefined) return JSON.parse(text);
+    if (text !== undefined) {
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        throw new Error(`${path.join(dir, 'harness.json')} is not JSON (${err.message})`);
+      }
+    }
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -55,17 +61,24 @@ export async function replyMain(argv, {
     return 2;
   }
   let reason = null;
+  let payload = null;
   try {
-    const payload = JSON.parse(readStdin());
-    const message = payload?.last_assistant_message;
-    if (payload?.stop_hook_active !== true && typeof message === 'string') {
+    payload = JSON.parse(readStdin());
+  } catch {
+    // Input the host did not send as JSON is no reply to check.
+  }
+  const message = payload?.last_assistant_message;
+  if (payload?.stop_hook_active !== true && typeof message === 'string') {
+    try {
       const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
       const config = replyConfig(nearestHarness(cwd, readFile));
       if (config?.error) stderr(`js-harness reply: ${config.error}; the reply check did not run\n`);
       else if (config !== null) reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
+    } catch (err) {
+      // A harness.json that is there and cannot be read lets the session stop, and says why the check did not run.
+      reason = null;
+      stderr(`js-harness reply: ${err?.message ?? err}; the reply check did not run\n`);
     }
-  } catch {
-    reason = null;
   }
   stdout(`${JSON.stringify(reason === null ? {} : { decision: 'block', reason })}\n`);
   return 0;

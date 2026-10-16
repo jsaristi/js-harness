@@ -667,13 +667,16 @@ a background task runs), cut (one code block of what the user sends, under the t
 it is, where it goes and what sending it does, each once) or finished (with the session to return
 to on that line). A block under those labels in any other state is turned back too: a decision is
 asked with the question tool. A state line is a line that starts with a state's label once its
-markdown is taken off (`**Working** — the gate wakes me`); a label inside a sentence is none.
+markdown is taken off, followed by the end of the line or a mark such as a dash or a colon
+(`**Working** — the gate wakes me`); a label inside a sentence, or a sentence that only begins
+with its word (`Working on the docs`), is none.
 
 `"reply": true` takes the English labels (`Working`, `Decision`, `Cut`, `Finished`; `What it is`,
 `Where it goes`, `What sending it does`). An object names the project's own, each over the
 English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decisión", "cut":
 "Corte", "finished": "Terminado"}, "labels": {"what": "Qué es", "where": "Dónde", "effect":
-"Qué pasa"}}`. A key it cannot read is said on standard error and checks nothing. A reply is
+"Qué pasa"}}`. A key it cannot read, or a
+`harness.json` that is not JSON, is said on standard error and checks nothing. A reply is
 already shown when a `Stop` hook runs, so the session writes its close again in its next words.
 It never turns back a stop the hooks already turned back (`stop_hook_active`), does not run for
 sub-agents, writes nothing and always exits 0.
