@@ -11,8 +11,9 @@ import { hashOf, TRACE_ENV, TRACE_PRELOAD, traceEnvOf } from './trace-reads.mjs'
  * runs to the reason, `full` the reason the whole suite runs or `null`. `readTraces(test)` gives a test's stored
  * passing traces, newest first (the result memory, odd/tasks/result-memory.md): one matching now is enough, and
  * with none matching the reason is the newest one's. `readTrace(test)`, one trace or `null`, stands in for it.
- * `stateOf(key)` is what a recorded path is now, as the tracer would record it. */
-export function selectTests({ tests, readTraces, readTrace, stateOf, node = process.version, os = process.platform, env = traceEnvOf(process.env), tracerHash = hashOf(TRACE_PRELOAD) }) {
+ * `stateOf(key)` is what a recorded path is now, as the tracer would record it. `flaky` holds the test files the
+ * flaky ledger names (`flakyTestsOf`), which always run. */
+export function selectTests({ tests, readTraces, readTrace, stateOf, flaky = new Set(), node = process.version, os = process.platform, env = traceEnvOf(process.env), tracerHash = hashOf(TRACE_PRELOAD) }) {
   const why = new Map();
   const skipped = [];
   const states = new Map();
@@ -36,11 +37,30 @@ export function selectTests({ tests, readTraces, readTrace, stateOf, node = proc
     // package.json changed since every passing run of this test that recorded it: the whole suite.
     const recorded = traces.filter((trace) => 'package.json' in trace.reads);
     if (recorded.length > 0 && recorded.every((trace) => now('package.json') !== trace.reads['package.json'])) full ??= 'package.json changed';
-    if (reason === null) skipped.push(test);
+    if (flaky.has(test)) why.set(test, FLAKY_SAID);
+    else if (reason === null) skipped.push(test);
     else why.set(test, reason);
   }
   if (full !== null) return { run: [...tests], skipped: [], why: new Map(tests.map((test) => [test, full])), full };
   return { run: tests.filter((test) => why.has(test)), skipped, why, full };
+}
+
+/** Why a test the flaky ledger names runs. */
+const FLAKY_SAID = 'named in docs/FLAKY.md, the flaky ledger';
+
+/** The test files the flaky ledger of `root` names (`docs/FLAKY.md`, odd/tasks/flaky-ledger.md): each
+ * `### <file>` heading, the path from the top of the repository, expired or not, since an expired entry still
+ * marks a known flake. A known flake is never skipped (exact-tests.md L14; the result memory's S1, "tagged
+ * nondeterministic tests never cached"). No ledger names none. The headings alone are read, so the ledger's
+ * own checks stay its own. */
+export function flakyTestsOf(root) {
+  let text;
+  try {
+    text = fs.readFileSync(path.join(root, 'docs', 'FLAKY.md'), 'utf8');
+  } catch {
+    return new Set();
+  }
+  return new Set(text.split(/\r?\n/).map((line) => /^### (.+)$/.exec(line.trim())?.[1].trim()).filter(Boolean));
 }
 
 /** The first allowlisted variable whose value is not the trace's, said as `traced with A=x, not A=y`. */

@@ -18,7 +18,7 @@ gate: a session reads the process list, sees none, and starts, while another doe
 the same seconds. Two gates together make both miss the 20-minute bound of a sensor, with every
 test green (`odd/tasks/session-board.md`, entry of the gate of pid 30936 beside pid 30180;
 `odd/tasks/codex-review-cost.md`, F7). Three sessions each kept a private wait script by
-2026-10-09 and one collision still happened (`docs/ROADMAP.md`, "Session channel", point 5).
+2026-10-09 and one collision still happened (`odd/tasks/session-channel.md`, section 16, point 5).
 The roadmap ranks a rule a command enforces above a rule in prose, and names this lock as the
 example (`docs/ROADMAP.md`, "Rule hierarchy", level 1). It is also what the other planned
 features wait on: sessions work in parallel only once the gate has its lock.

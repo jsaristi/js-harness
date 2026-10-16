@@ -5,9 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { GATE_NOT_RUN, commandLineOf, gateMain } from './gate.mjs';
+import { GATE_MAX_MINUTES, GATE_NOT_RUN, commandLineOf, gateMain } from './gate.mjs';
+import { ruleValue } from './lib/rules.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
-import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { GATE_COMMAND_MAX, appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 
 // `js-harness gate -- <command>` runs any command under the machine's gate lock, for the heavy runs that
 // are not a commit's gate. The lock itself is tested in lib/gate-lock.test.mjs and what `check` does with
@@ -92,8 +93,8 @@ function gateClock() {
 const USAGE = [
   'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
-  "       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (60 when not given); --no-wait: refuse at once instead of waiting",
-  '       --max <minutes>: how long the command may run before it is stopped with every process it started (30 when not given)',
+  `       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (${ruleValue('gate-wait', 'minutes')} when not given); --no-wait: refuse at once instead of waiting`,
+  `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
 ].join('\n');
 
 /** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
@@ -113,8 +114,8 @@ test('gate runs the command in its folder, in the environment it was given, and 
     assert.deepEqual(said, []);
     assert.equal(spawned.asked.length, 1);
     const [{ commandLine, cwd, env: given, timeout, inherit }] = spawned.asked;
-    // The bound of a turn's wall time, 30 minutes when --max does not say (odd/tasks/gate-turn-guards.md, S2).
-    assert.deepEqual([commandLine, cwd, timeout, inherit], ['node --test', dir, 30 * 60_000, true]);
+    // The bound of a turn's wall time, the declared gate-max when --max does not say (odd/tasks/gate-turn-guards.md, S2).
+    assert.deepEqual([commandLine, cwd, timeout, inherit], ['node --test', dir, GATE_MAX_MINUTES * 60_000, true]);
     // Not a sensor: no throwaway home, and nothing that says "inside a gate" to what it runs. One thing is
     // added, the mark of the lock this process holds while the command runs.
     assert.deepEqual(given, { ...env, JS_HARNESS_GATE_HELD: '1' });
@@ -914,12 +915,12 @@ test('the end of a gate says how its command ended: its exit code, killed, or an
 }));
 
 // What comes after `--` can hold a secret, and the log is a file that stays.
-test('gate writes its command cut at 120 characters', withHome(async (home, dir) => {
+test('gate writes its command cut at the declared gate-log-command', withHome(async (home, dir) => {
   const log = capturedLog();
-  const secret = `--token=${'s'.repeat(200)}`;
+  const secret = `--token=${'s'.repeat(GATE_COMMAND_MAX + 80)}`;
   await runGate(['--home', home, '--cwd', dir, '--', 'node', 'deploy.mjs', secret], {}, { spawn: ranWith(0), ...log.deps });
-  assert.equal(log.events[0].command, `gate -- node deploy.mjs ${secret}`.slice(0, 120));
-  assert.equal(log.events[0].command.length, 120);
+  assert.equal(log.events[0].command, `gate -- node deploy.mjs ${secret}`.slice(0, GATE_COMMAND_MAX));
+  assert.equal(log.events[0].command.length, GATE_COMMAND_MAX);
 }));
 
 test('gate that waited for another writes in its start whose gate that was and for how long, and one that ran nothing writes one line that says why', withHome(async (home, dir) => {
@@ -1583,8 +1584,8 @@ test('gate runs a turn when the branch has no open pull request, when gh cannot 
   assert.deepEqual(neverPushed.asked, []);
 }));
 
-test('gate hands its command a bound of wall time: 30 minutes, or what --max says', withHome(async (home, dir) => {
-  for (const [flags, ms] of [[[], 30 * 60_000], [['--max', '5'], 5 * 60_000], [['--max', '0.5'], 30_000]]) {
+test('gate hands its command a bound of wall time: the declared gate-max, or what --max says', withHome(async (home, dir) => {
+  for (const [flags, ms] of [[[], GATE_MAX_MINUTES * 60_000], [['--max', '5'], 5 * 60_000], [['--max', '0.5'], 30_000]]) {
     const spawned = ranWith(0);
     await runGate(['--home', home, '--cwd', dir, ...flags, '--', 'node', '--test'], {}, { spawn: spawned });
     assert.equal(spawned.asked[0].timeout, ms, flags.join(' '));

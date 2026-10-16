@@ -109,6 +109,26 @@ test('a run leaves the configuration of the repository as it found it: the candi
   assert.equal(git(root, 'config', '--local', '--list'), before);
 });
 
+test('a pull request GitHub has not yet computed (mergeable UNKNOWN, about a minute after main moves) is decided by its merge into the candidate; CONFLICTING is still left out', async () => {
+  // Batch 4 lost 6 ready pull requests to UNKNOWN (the lead, 2026-10-15): the merge into the candidate is the
+  // queue's own test of whether a pull request merges, so a mergeable GitHub has not computed waits for it.
+  const { root, main, heads } = makeQueueRepo();
+  const prs = [
+    pr(1, 'feat/a', heads['feat/a'], { mergeable: 'UNKNOWN' }),
+    pr(2, 'feat/b', heads['feat/b']),
+    pr(3, 'feat/c', heads['feat/c'], { mergeable: 'UNKNOWN' }),
+    pr(4, 'feat/d', heads['feat/d'], { mergeable: 'CONFLICTING' }),
+  ];
+  const { code, out } = await dryRun(root, prs);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out, [
+    'PR 4 is left out: PR 4 is not mergeable (CONFLICTING).',
+    'PR 3 is left out: it conflicts with the candidate so far in a.txt.',
+    `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
+    'Dry run: nothing was tested or pushed, and the candidate was removed.',
+  ]);
+});
+
 test('a merge that fails with no conflict says what git said, not that it conflicts', async () => {
   const { root, heads } = makeQueueRepo();
   const { code, out } = await dryRun(root, [pr(1, 'feat/a', 'f'.repeat(40))]);
@@ -225,6 +245,40 @@ test('--land: a main that moved while the candidate was tested is not overwritte
   assert.notEqual(git(origin, 'rev-parse', 'main'), main, 'the other push stands');
   assert.equal(git(origin, 'log', '-1', '--format=%s', 'main'), 'main moved');
   assert.match(out.at(-1), /^Main moved while the candidate was tested: nothing was pushed to main; run the queue again\.$/);
+});
+
+test('--land: a pull request whose head moved during the land is named after the landing, which still happens (lead, 2026-10-15)', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const other = path.join(path.dirname(origin), 'other');
+  let moved = '';
+  const moveHead = (call) => {
+    if (call !== 0) return;
+    git(path.dirname(origin), 'clone', '--quiet', '--branch', 'feat/a', origin, other);
+    git(other, 'config', 'user.email', 'js-harness-test@example.invalid');
+    git(other, 'config', 'user.name', 'js-harness test');
+    fs.writeFileSync(path.join(other, 'a.txt'), 'A from a, later\n', 'utf8');
+    git(other, 'commit', '--quiet', '-am', 'a later commit');
+    git(other, 'push', '--quiet', 'origin', 'feat/a');
+    moved = git(other, 'rev-parse', 'HEAD');
+  };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { onChecks: moveHead });
+  assert.equal(code, 0, out.join('\n'));
+  const landed = git(origin, 'rev-parse', 'main');
+  assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', heads['feat/a'], landed], { cwd: origin }).status, 0, 'the head the candidate merged is landed');
+  assert.notEqual(spawnSync('git', ['merge-base', '--is-ancestor', moved, landed], { cwd: origin }).status, 0, 'the later commit is not');
+  assert.deepEqual(out.slice(-2), [
+    `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1, PR 2.`,
+    `PR 1 moved to ${moved.slice(0, 7)} during the land; its new commits are not in main.`,
+  ]);
+});
+
+test('--land: heads that cannot be read after the landing are said to be unread, never taken for unmoved', async () => {
+  const { root, main, heads } = makeQueueRepo();
+  const wrap = failingGit((args) => args[0] === 'ls-remote' && args.includes('refs/heads/feat/a'), refused);
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(out.at(-2), new RegExp(`^Landed: main ${main.slice(0, 7)} is now [0-9a-f]{7}, with PR 1\\.$`));
+  assert.equal(out.at(-1), 'Could not read the heads of the landed pull requests (fatal: refused by the test): check none moved during the land.');
 });
 
 test('--land: a candidate red on this machine is bisected, the pull request that turns it red leaves, and the rest lands', async () => {

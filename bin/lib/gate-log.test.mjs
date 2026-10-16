@@ -7,7 +7,6 @@ import { spawn } from 'node:child_process';
 import {
   GATE_COMMAND_MAX,
   GATE_LOG_ENV,
-  GATE_LOG_MAX_BYTES,
   appendGateEvent,
   formatGates,
   gateLogDir,
@@ -45,7 +44,6 @@ const linesOf = (home, name = 'log.jsonl') => fs.readFileSync(path.join(gateLogD
 
 test('gateLogDir is a folder of its own under the harness home, beside the lock\'s and not in it', () => {
   assert.equal(gateLogDir('C:\\home'), path.join('C:\\home', '.js-harness', 'gate-log'));
-  assert.equal(GATE_LOG_MAX_BYTES, 512 * 1024);
 });
 
 test('only off switches the log off', () => {
@@ -470,8 +468,8 @@ test('gateRecord leaves out a load that was not sampled and the sensors of a gat
   record.start({ lock: 'none', waitedMs: 0, waitedFor: [] });
   record.end({ result: 'exit 3' });
   assert.deepEqual(Object.keys(events[0].event), ['v', 'event', 'id', 'at', 'cwd', 'command', 'pid', 'lock', 'waitedSeconds', 'waitedFor']);
-  assert.equal(GATE_COMMAND_MAX, 120);
-  assert.equal(events[0].event.command, long.slice(0, 120));
+  assert.ok(long.length > GATE_COMMAND_MAX, 'the command is longer than the bound');
+  assert.equal(events[0].event.command, long.slice(0, GATE_COMMAND_MAX));
   assert.deepEqual(events[1].event, { v: 1, event: 'end', id: 'id-1', at: AT, seconds: 0, result: 'exit 3' });
 
   const other = gateRecord({ home: 'h', cwd: 'c', command: long, pid: 100, ...deps });
@@ -480,7 +478,7 @@ test('gateRecord leaves out a load that was not sampled and the sensors of a gat
   // No end for a gate that never started.
   other.end({ result: 'pass' });
   assert.equal(events.length, 3);
-  assert.deepEqual(events[2].event, { v: 1, event: 'refused', id: 'id-2', at: AT, cwd: 'c', command: long.slice(0, 120), pid: 100, reason: 'timeout', waitedSeconds: 30, waitedFor });
+  assert.deepEqual(events[2].event, { v: 1, event: 'refused', id: 'id-2', at: AT, cwd: 'c', command: long.slice(0, GATE_COMMAND_MAX), pid: 100, reason: 'timeout', waitedSeconds: 30, waitedFor });
 });
 
 // The lock keeps the command of its holder whole (`gate-lock.mjs`), and a gate hands on what the lock told

@@ -9,6 +9,7 @@ import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
+import { ruleValue } from './rules.mjs';
 
 function skillContent(version) {
   return `---
@@ -24,15 +25,16 @@ js-harness commands:
 - \`js-harness upgrade\` — install the newer release of a folder of tarballs (\`--source <dir>\`), then sync; with no source it installs nothing.
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run. Where the project's \`codexReview\` switch is off at HEAD it starts nothing and records nothing.
-- \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone 60 minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
-- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after 30 minutes (\`--max <minutes>\`), and its exit code is the command's.
+- \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone ${ruleValue('gate-wait', 'minutes')} minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
+- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after ${ruleValue('gate-max', 'minutes')} minutes (\`--max <minutes>\`), and its exit code is the command's.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin). Where \`codexReview\` is off at the pushed commit it asks for none; the first push to a repository that holds no branch passes and says what went unread.
 - \`js-harness functions\` — each function a project can turn off and on (\`harness.json\` "functions": the code map, the TypeScript language server, the Codex review), its value here and why; \`functions apply\` makes the clone what they ask, \`functions set <name> <value>\` writes one.
-- \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired.
+- \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired. In the harness's own checkout, \`rules change <id>\` is the one command that changes one of its rules, and the gate's \`rules\` row reports a line a commit adds that restates a rule's value instead of marking it \`rule:<id>\`, and fails it once that rule refuses.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
-- \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every 120 seconds, gives up after 480 minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
-- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock.
+- \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
+- \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -67,12 +69,12 @@ the machine; a rule belongs in a check, a line of \`AGENTS.md\` or a protocol.
 function orchestratorSkillContent(version) {
   return `---
 name: js-harness-orchestrator
-description: Use when asked to orchestrate, supervise or watch the other sessions of a project, and in a work session that runs while other sessions of the project are open, for how it prompts and how it closes (js-harness v${version}).
+description: Use when asked to lead, orchestrate or supervise the other sessions of a project, and in a work session that runs while other sessions of the project are open, for how it prompts and how it closes (js-harness v${version}).
 ---
 
 # Several sessions, one project
 
-Two kinds of session. A work session owns one feature: its worktree, its feature document (\`odd/tasks/<feature>.md\`) and its own prompts. The orchestrator is a dedicated session that owns no feature. Follow the part that is yours.
+Two kinds of session. A work session owns one feature: its worktree, its feature document (\`odd/tasks/<feature>.md\`) and its own prompts. The orchestrator, the lead, is a dedicated session that owns no feature and keeps the project's work moving. Follow the part that is yours.
 
 A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step. After a compaction, the resume names each one still open.
 
@@ -80,7 +82,7 @@ A change does not exist until it is in a file. Where each thing lives:
 - the project's plan (the order of the features, the decisions): the roadmap on the default branch, changed through small documentation pull requests;
 - a feature's plan (tasks, progress, next step): its feature document on its branch, written only by the session that owns the feature;
 - the notices between sessions (a session opened, waits, closed; a question to the user and its answer): the project's record, appended with \`js-harness notify\` and read on the board;
-- what is in flight between sessions and in neither of those yet (the user's decisions, what each session is for): the orchestrator's relief file;
+- what is in flight between sessions and in neither of those yet (the user's decisions, what each session is for) and, at its head, the charter of what the lead does alone: the orchestrator's relief file;
 - the facts (who works, what runs, gates, branches, context sizes, the questions still open): stored nowhere, computed by \`js-harness sessions\`.
 
 ## Questions to the user
@@ -91,16 +93,17 @@ Every question of the project reaches the user in one place: the orchestrator's 
 - The answer is recorded once given: \`--kind answer --question <n>\`, with \`--transcript\` and \`--line\` naming where the user's words are, and the session that asked is rung. \`--kind withdrawn --question <n> "<why>"\` closes one that no longer needs an answer.
 - The board lists every question still open, and whether it is recorded and not shown yet, on the user's screen, closed without an answer, or answered and not carried yet.
 
-## The orchestrator
+## The lead
 
 What you run:
 - \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the worktrees with their feature plans, the running gates, the open pull requests and your relief file.
 - \`js-harness sessions --watch\`, in the background — your way of waiting. It is silent until the board changes in a way that needs a decision, then prints the changes and the board. Launch it again each time it returns. A return with "nothing changed" is not news: relaunch it and say nothing.
 - \`js-harness progress\` — the map: the roadmap's phases and the features, from their checkboxes.
+- \`js-harness loop run <name> --purpose "<what it is for>" --until "<what ends it>" -- <command>\`, in the background — each loop you keep (\`js-harness loop heartbeat\`, \`js-harness loop channel-watch\`, a merge keeper): it records you as its owner, runs the command, and its end wakes you. \`js-harness loop status\` lists the project's loops with their owners; \`js-harness loop stop <name>\` stops one of yours and says only when nothing of it is left.
 
 What you may do:
-- You read. What you write is your relief file and notices (\`js-harness notify\`).
-- You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last.
+- What you do alone and what stays the user's is the charter the user approved, at the head of your relief file: read it there, act inside it, and ask before anything it does not name. Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command.
+- You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last. One exception, in the harness's own repository, approved by the user with the protocol for changing a rule: you may run \`js-harness rules change\` from a checkout of a \`rule/\` branch and commit what it writes.
 - You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is. When the host gives you a tool to start sessions, open the new session yourself with that message, on your own judgment and within the room the gate leaves.
 - A pull request that changes code is merged on a green run of the project's CI whose checkout says it tested \`Merge <head> into <base>\`, with that base the default branch as origin has it now. A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today. The merge's message names the run, the base it tested and the head.
 - A pull request that changes only documentation (the docs folder and the feature documents; never the agents' instructions or the harness's configuration) is merged without waiting for that run, when \`git merge-tree\` of the default branch and the head is clean.
@@ -110,30 +113,52 @@ What you may do:
 When the user asks for something, place it with the roadmap and the board:
 - work of a feature whose session is open goes to that session: the user says it there in their own words, or here, and you carry it with \`--kind answer\` and the line where they said it;
 - new work gets the opening prompt of a new work session; a design conversation is a session of its own too;
-- note in the relief file what was asked and where it went, and go back to waiting.
+- note in the relief file what was asked and where it went, and go on.
 
-Write to the user only when:
+Interrupt the user only when:
 1. a question waits for them (Questions to the user, above);
 2. a session finished with nothing running behind it;
 3. two gates run at once (a gate that waits for its turn is not one of them);
 4. a prompt they hold became stale;
 5. a feature's plan changed: say what changed, the reason its document gives, and which other session it touches, with a one-line notice for that session, which updates its own document;
-6. a session's context passed the limit.
-Say for each session concerned whether to send that session's own prompt, wait, or drop it. Otherwise stay silent.
+6. a session reached the context pause and its state is not written.
+Say for each session concerned whether to send that session's own prompt, wait, or drop it. Otherwise keep the work moving: the next units of the plan are yours to move inside the charter.
+
+## The recap
+
+Each reply that closes a stretch of work carries:
+- one line a session: its state, the effort mode its kind of work calls for and why;
+- by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine;
+- the Codex meter, read at that moment, when the project reviews with Codex;
+- what waits for the user in a session, said only after reading that session at that moment;
+- when a stretch or a session ends, that it ended and which session to return to.
+
+- Before the user leaves, ask in that reply for everything the stretch will need: the decisions in the queue, the sessions to open and their permission mode, what the machine and the plan's limits allow.
+- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.
 
 The relief file. \`js-harness sessions\` prints its path and its last lines under \`Relief\`.
-- Append one dated line per event as it happens: a decision of the user, a request and where it went, a question still open, a notice not yet delivered, what a session is for. Your first line says that an orchestrator started and gives your session id, the one the board marks \`(this session)\`.
+- Append one dated line per event as it happens: a decision of the user, a request and where it went, a question still open, what a session is for. Your first line says that an orchestrator started and gives your session id, the one the board marks \`(this session)\`.
 - Never rewrite or summarize it, and never leave a line for later: this session can die without warning, and what is not in the file dies with it.
 
-Relief, not compaction. You hold nothing the files do not, so you are replaced instead of compacted.
-- A watch never reports the session that runs it, so read your own row on every board. When it says your context is past the limit, tell the user and give them this opening prompt for a new session, always the same:
+Compaction, and a relief only on request. You hold nothing the files do not. A compaction needs no one; a relief needs the user.
+- A watch never reports the session that runs it, so read your own row on every board. At the context pause, write your state to the relief file and go on: the host compacts you, and you resume from the file.
+- The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by \`SendMessage\` to its title; never hand the user a compaction command or a resume prompt to send.
+- Give this opening prompt only when the user asks for a new lead, always the same:
 
 \`\`\`
 You are the orchestrator of this project's sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.
 \`\`\`
 
-- When you start from that prompt, read the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you are watching. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): archived without asking, and named in the recap.
-- When you come back from a compaction, do what a new orchestrator does: the files are the record, your summary is not.
+- When you start from that prompt, read the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you lead. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): archived without asking, and named in the recap.
+- The orchestrator before you, once it is renamed out of the role's title (\`<code> ORQ relevada\`), runs \`js-harness notify --to orchestrator --kind relieved "<why it was relieved>"\`: \`js-harness sessions --measures\` counts the reliefs from those notices.
+- When you come back from a compaction, do what a new lead does: the files are the record, your summary is not.
+- Loops have owners. At your start and after a compaction, run \`js-harness loop status\`. A compaction or a restart marks your background tasks stopped while their processes live on: restart each loop you own with \`js-harness loop run <name> --restart ...\`, so a task of yours holds it again. Never stop or restart a loop another session owns: a second lead (a fork) that finds loops another owns leaves them alone and says so. At a handover, the new lead takes each loop over with \`--restart --take-over\`, after the relief line where the old lead gave them up; the old lead starts no loop again.
+
+How a lead is rotated, where the host nests a session under the one that started it (the desktop app):
+- A new lead is started with the host's session-start tool in a turn the user's own message starts, and detached from the old lead at once, so it does not die with it.
+- Never by a fork: an agent cannot detach a fork, and a fork inherits the old lead's context and stops its background work.
+- Before a lead is archived, detach every session it started: archiving a session archives its idle side sessions.
+- Before the user leaves, open the reserve sessions the stretch will need: the session-start tool is refused on turns the user did not start, so a reserve waits with \`js-harness wait --notice-to <number>\` until you send it its feature.
 
 ## A work session
 
@@ -144,9 +169,9 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 - Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
 - When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
-- When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
+- When you have finished, say so in your first line, and close with \`js-harness notify --to orchestrator --kind closed "<what you delivered>"\`: nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
-- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
+- Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
 `;
 }
 
@@ -215,6 +240,12 @@ export const entryComponents = [
     pointer: ['hooks', 'PreToolUse'],
     entry: () => guardHookEntry(),
   },
+  {
+    id: 'claude-share-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'Stop'],
+    entry: () => shareHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -263,14 +294,36 @@ function pauseHookEntry() {
  * JSON on standard output, so an older js-harness that answers 2 to `guard` never blocks a tool call. */
 export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 
-/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the three tools it checks: a sub-agent's
- * launch, whose model it holds to the project's rules, and the two ways of sending a message to another session,
- * whose stamped hour it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14). Claude Code only: the tool
- * names are Claude Code's. Five seconds: it may ask git for the project's root once. */
+/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the tools it checks: a sub-agent's launch, whose
+ * model it holds to the project's rules, and the two ways of sending a message to another session, whose stamped hour
+ * it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14), a Bash command, a Write or an Edit, whose line in a
+ * memory index it holds to 150 characters (odd/tasks/memory-hygiene.md, T4), and the four tools that open a session in
+ * the app's Routines or in the cloud, refused where the rule `sessions-open-in-sidebar` is declared (layer 3 of
+ * odd/tasks/session-channel.md). Claude Code only: the tool names are Claude Code's. Five seconds: it may ask git for
+ * the project's root once.
+ * The matcher is anchored, `^(…)$`, because Claude Code's hooks reference (checked 2026-10-15) reads a matcher with a
+ * character outside letters, digits, `_`, `-`, spaces, `,` and `|` as a JavaScript regular expression, unanchored: the
+ * `^` and `$` make it a whole-name match, so `Write` does not match `TodoWrite` and `Edit` does not match
+ * `NotebookEdit`. A hyphen alone does not make it a regex. The same text is held by the tests of
+ * bin/lib/manifest.test.mjs and by scripts/practice-lib.mjs (`HARNESS_HOOKS`). */
 function guardHookEntry() {
   return {
-    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash',
+    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$',
     hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the share check, guarded to exit 0 like the guard's: an older js-harness answers 2 to `--stop`,
+ * and a `Stop` hook that exits 2 turns the stop back. */
+export const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
+
+/** `guard --stop` (bin/guard.mjs) registered as a `Stop` hook: a reply that states the session's own context share
+ * more than 2 points from the share its transcript records is turned back to be corrected (odd/tasks/honesty-audit.md,
+ * T16). A `Stop` entry takes no matcher. Claude Code only: the transcript it reads is Claude Code's. Five seconds: it
+ * reads the transcript once, and only when the reply states a share. */
+function shareHookEntry() {
+  return {
+    hooks: [{ type: 'command', command: SHARE_HOOK_COMMAND, timeout: 5 }],
   };
 }
 
@@ -361,6 +414,15 @@ function countOurs(ourContainers) {
   return count;
 }
 
+/** Whether `item` is an older form of the harness's own `entry`: its one hook runs the same command, and it is not
+ * `entry` itself. The command is the harness's signature (`js-harness doctor --hook`, `js-harness guard --hook ||
+ * exit 0`, ...); an entry with another hook beside it is not the harness's alone, and is left as it is. */
+function isOlderOwnEntry(item, entry) {
+  const command = entry?.hooks?.[0]?.command;
+  return typeof command === 'string' && item !== null && typeof item === 'object' && Array.isArray(item.hooks)
+    && item.hooks.length === 1 && item.hooks[0]?.command === command && !deepEqual(item, entry);
+}
+
 /** Appends `entry` at `pointer` inside the JSON file at `target`, creating intermediate objects
  * and the array itself as needed. Missing file -> starts from `{}` (`createdFile: true`).
  * `ours` is the set of containers js-harness made (`oursContainers`): every container this creates is added to it, so
@@ -426,11 +488,15 @@ function appendEntryToFile(target, pointer, entry, ours) {
   ourContainers.push(ours.has(leafId));
   const arr = cursor[lastKey];
 
-  if (arr.some((item) => deepEqual(item, entry))) {
+  // An entry of an older release (another matcher or timeout) is taken out, and the new one goes in the place of
+  // the first of them: left there, the hook runs twice, and no record names it once install has written its own.
+  const stale = arr.map((item, i) => (isOlderOwnEntry(item, entry) ? i : -1)).filter((i) => i !== -1);
+  const has = arr.some((item) => deepEqual(item, entry));
+  if (has && stale.length === 0) {
     return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
   }
-
-  arr.push(entry);
+  for (const i of [...stale].reverse()) arr.splice(i, 1);
+  if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');

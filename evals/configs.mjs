@@ -188,7 +188,10 @@ export function prepareSandbox({ home, workspace, engramPort, env: extra = {} })
   const options = { cwd: workspace, env: childEnv({ ...sandboxEnv({ home, engramPort }), ...extra, GIT_CONFIG_NOSYSTEM: '1' }) };
   git(['init', '--quiet'], options);
   git(['add', '--all'], options);
-  git(['commit', '--quiet', '--allow-empty', '--message', 'fixture'], options);
+  // A commit starts `git maintenance run --auto --detach`, which writes in .git/objects after the commit has
+  // returned: a trial that stops in `prepare` removes this workspace at once, and that writer would race the
+  // removal (docs/FAILURES.md, eval-missing-login-workroot-kept). For this command only, as GIT_CONFIG_NOSYSTEM.
+  git(['-c', 'maintenance.auto=false', 'commit', '--quiet', '--allow-empty', '--message', 'fixture'], options);
 }
 
 /** The runner config both arms share: the same binary, flags and sandbox, with `extraArgs` after the

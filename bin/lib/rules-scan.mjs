@@ -1,0 +1,93 @@
+// The scan of the texts in force for a restated value (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)"): a
+// line that a rule's pattern matches says the rule's value by its subject, where the cure is the `rule:<id>` mark
+// instead of the value. The texts that show a value, or quote what was said, are not texts in force.
+import { fenceWalk } from './rules-check.mjs';
+import { patternOf } from './rules.mjs';
+
+// The homes of the list, which show a value, and the texts that quote what was said or are frozen.
+const NOT_IN_FORCE = new Set(['bin/lib/rules-data.mjs', 'docs/rule-sources.json', 'docs/RULES.md', 'docs/FAILURES.md', 'docs/origin.md']);
+// Where the history of a feature document starts: what was said and done there is not in force.
+const HISTORY_LINE = /^## (?:Progress|Log)\r?$/;
+const FEATURE_DOCUMENT = /^odd\/tasks\/[^/]+\.md$/;
+// The texts in force by their path, the ones `rules check` reads (bin/rules.mjs, `readAll`): the code under bin/, its
+// tests left out, the roadmap, the spec, the feature documents, AGENTS.md and README.md.
+const TEXT_IN_FORCE = /^(?:bin\/(?:[^/]+\/)*[^/]+\.mjs|docs\/(?:ROADMAP|SPEC)\.md|odd\/tasks\/[^/]+\.md|AGENTS\.md|README\.md)$/;
+
+/** True when the file at `path`, from the top of the repository, is a text in force: one of those `rules check`
+ * reads, and not a home of the list or a quoting text. */
+export function isTextInForce(path) {
+  return TEXT_IN_FORCE.test(path) && !path.endsWith('.test.mjs') && !NOT_IN_FORCE.has(path);
+}
+
+/** The lines of `text`, at `path`, that are in force: `{ path, line, text }`, `line` from 1. A blank line and a line
+ * inside a fence are left out, and so is a feature document from its first `## Progress` or `## Log` line on; a home
+ * of the list or a quoting text gives none. */
+export function inForceLines(path, text) {
+  if (NOT_IN_FORCE.has(path)) return [];
+  const history = FEATURE_DOCUMENT.test(path);
+  const lines = [];
+  let number = 0;
+  for (const { line, outside } of fenceWalk(text).walked) {
+    number += 1;
+    if (history && outside && HISTORY_LINE.test(line)) break;
+    if (outside && line.trim() !== '') lines.push({ path, line: number, text: line.replace(/\r$/, '') });
+  }
+  return lines;
+}
+
+/** The regular expression of `pattern`, or `null` for one that is no regular expression: `readRules` reports that one
+ * as a finding of the list, so the scan leaves it out instead of throwing before any finding is printed. */
+function compiled(pattern) {
+  try {
+    return patternOf(pattern);
+  } catch {
+    return null;
+  }
+}
+
+/** The rules in force that carry patterns, each with the regular expressions of those that compile. */
+function scanned(rules) {
+  return rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns)).map((rule) => ({ id: rule.id, patterns: rule.patterns.map(compiled).filter((pattern) => pattern !== null) }));
+}
+
+/** The findings in `lines`: `{ id, path, line, text }` for each line a pattern of a rule in force matches, once per
+ * rule. A `rule:<id>` mark beside the value does not excuse it. */
+export function scanLines(rules, lines) {
+  const findings = [];
+  const each = scanned(rules);
+  for (const line of lines) {
+    for (const rule of each) {
+      if (rule.patterns.some((pattern) => pattern.test(line.text))) findings.push({ id: rule.id, path: line.path, line: line.line, text: line.text });
+    }
+  }
+  return findings;
+}
+
+/** How many findings each rule in force with patterns has in `files` (`{ path, text }`), and the ids of the rules in
+ * force with none, which are not scanned: `{ counts, unscanned }`. */
+export function countFindings(rules, files) {
+  const counts = Object.fromEntries(scanned(rules).map((rule) => [rule.id, 0]));
+  for (const { path, text } of files) {
+    for (const finding of scanLines(rules, inForceLines(path, text))) counts[finding.id] += 1;
+  }
+  const unscanned = rules.filter((rule) => !Object.hasOwn(rule, 'retired') && !Array.isArray(rule.patterns)).map((rule) => rule.id);
+  return { counts, unscanned };
+}
+
+/** The findings of the rules' `failure` against the register's `entries` (`{ id, seen: [{ date }] }`, as
+ * `parseRegister` gives them): a `failure` that names no entry, and a rule switched back to report whose entry has no
+ * `- Seen:` line on or after the day it was switched, since a switch back is counted as a sighting. */
+export function registerFindings(rules, entries) {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const findings = [];
+  for (const rule of rules) {
+    if (typeof rule.failure !== 'string') continue;
+    const entry = byId.get(rule.failure);
+    if (entry === undefined) {
+      findings.push(`rule "${rule.id}": its failure "${rule.failure}" names no entry of docs/FAILURES.md`);
+    } else if (typeof rule.row?.reports === 'string' && !entry.seen.some((seen) => seen.date >= rule.row.since)) {
+      findings.push(`rule "${rule.id}": it reports again since ${rule.row.since} (${rule.row.reports}), and its failure "${rule.failure}" has no "- Seen:" line on or after that day`);
+    }
+  }
+  return findings;
+}

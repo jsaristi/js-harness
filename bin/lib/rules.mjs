@@ -72,10 +72,22 @@ function show(value) {
  * measured by its words and not by the spaces around them. */
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
 
-/** True when `pattern` is a regular expression that `new RegExp` accepts. */
+// What `{amount}` stands for in a pattern: any amount in any wording, so a pattern finds a restated value by its
+// subject and still finds it after the value changes. A number with an optional unit word ("60 minutes", "3,600 s",
+// "88%"), an hour or half of one, a model id ("gpt-6.1-sol", "claude-opus-5-5"), or an effort level ("high"). An
+// effort word counts only as a word of its own: inside a mark (`rule:gate-max`), a flag (`--max`) or a call
+// (`Math.max(`) it is no amount, or the mark that cures a finding would be one.
+const AMOUNT = String.raw`(?:\d[\d,.]*\s*(?:%|[a-z]+\b)?|(?:half )?an? (?:hour|minute|day)\b|[a-z]+(?:-[a-z0-9.]+)*-\d[\w.]*|(?<![\w.:-])(?:low|medium|x?high|max)(?![\w(-]|\.\w))`;
+
+/** The regular expression of `pattern`, its `{amount}` written out, tried case-insensitively on one line. */
+export function patternOf(pattern) {
+  return new RegExp(pattern.split('{amount}').join(AMOUNT), 'i');
+}
+
+/** True when `pattern` is a regular expression that `new RegExp` accepts, its `{amount}` written out. */
 function compiles(pattern) {
   try {
-    new RegExp(pattern);
+    patternOf(pattern);
     return true;
   } catch {
     return false;
@@ -187,6 +199,8 @@ function optionalFaults({ patterns, row, failure, differs, review }) {
     } else {
       for (const pattern of items) {
         if (!compiles(pattern)) faults.push(`the pattern "${pattern}" is not a regular expression`);
+        else if (!pattern.includes('{amount}')) faults.push(`the pattern "${pattern}" has no {amount}: it finds a value by its subject and any amount`);
+        else if (patternOf(pattern).test('')) faults.push(`the pattern "${pattern}" matches an empty line`);
       }
     }
   }
@@ -415,7 +429,7 @@ const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phr
 // The last line of that paragraph: where the engine version and the day of a check are read, since the list holds neither.
 const LIST_NOTE = 'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
 // The paragraph that docs/RULES.md gives under its title.
-const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.';
+const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.';
 
 /** A copy of `list` sorted by id, with plain `<` on the texts so that no locale changes the order. */
 const byId = (list) => [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -505,8 +519,11 @@ function sourceText(source) {
   return `his words of ${dates}, checked by ${who} on ${show(source.checked.date)}`;
 }
 
-/** The line that gives a rule's day, its row and its source. */
-const sinceLine = (rule, sources) => `- Since ${rule.since}. Row: ${rowText(rule.row)}. Source: ${sourceText(lookup(sources, rule.id))}.`;
+/** The failure of the register a rule's row guards against, after the row, or nothing for a rule that names none. */
+const failureText = (rule) => (typeof rule.failure === 'string' ? `, against the failure ${code(rule.failure)}` : '');
+
+/** The line that gives a rule's day, its row with its failure, and its source. */
+const sinceLine = (rule, sources) => `- Since ${rule.since}. Row: ${rowText(rule.row)}${failureText(rule)}. Source: ${sourceText(lookup(sources, rule.id))}.`;
 
 /** The line of a rule's earlier values, each with the rule's unit, in the order the rule gives them. */
 const wasLine = (rule) => `- Was: ${rule.was.map((item) => `${amount(item.value, rule.unit)} until ${item.until}`).join('; ')}.`;

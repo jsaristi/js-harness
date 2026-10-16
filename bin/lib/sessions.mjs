@@ -348,6 +348,23 @@ function compactionOf(entry) {
   return { before: counted(said.preTokens), after: counted(said.postTokens), automatic: said.trigger === 'auto', at: entry.timestamp ?? null };
 }
 
+/** Whether a user entry only carries tool results: the host writes a call's result as such an entry, and it is no prompt. */
+const isToolResultCarrier = (entry) => {
+  const blocks = blocksOf(entry);
+  return blocks.length > 0 && blocks.every((block) => block.type === 'tool_result');
+};
+
+/** How a session was opened, read from its first prompt: `'scheduled'` for a scheduled run, `'command'` for one the SDK
+ * CLI or the CLI opened, `'his'` for one he typed in the desktop app, `'session'` for the first prompt the SDK gave a
+ * session, else `'unknown'`. A scheduled run is checked first: it can come from the SDK CLI too. */
+function openerOf(entry) {
+  if (entry.turnOrigin === 'scheduled' || entry.origin?.subkind === 'scheduled-trigger') return 'scheduled';
+  if (entry.entrypoint === 'sdk-cli' || entry.entrypoint === 'cli') return 'command';
+  if (entry.turnOrigin === 'human' && entry.entrypoint === 'claude-desktop') return 'his';
+  if (entry.turnOrigin === 'sdk' && entry.turnPosition?.promptIndex === 0) return 'session';
+  return 'unknown';
+}
+
 /** What the stretch of work `stretch` cost, as the board keeps a task: `{ tokens, startedBy, startedAt,
  * endedAt, compactions }`, or `{ unavailable }` with the reason when the transcript does not say.
  * `tokens` is how much the context grew from the instruction that started it to its last reply, added up
@@ -497,7 +514,10 @@ export function personAtOf(entries) {
  * question tool included: what the board says of a call that waits too long is `sessionLines`' rule.
  *
  * `personAt` is the time of the newest entry the person wrote, by `quoteOf`'s rule with the question calls of
- * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time. */
+ * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time.
+ *
+ * `opened` is how the session was opened (`openerOf`, read from its first prompt, `'unknown'` when there is none);
+ * `effort` is the effort of its last reply that records one, `null` when none does. */
 export function sessionFacts(
   text,
   {
@@ -532,6 +552,8 @@ export function sessionFacts(
   let stoppedHow = null;
   let lastReply = null;
   let context = null;
+  let opened = null; // how the session was opened, by its first prompt (`openerOf`)
+  let effort = null; // the effort of the session's last reply that records one
 
   for (const [index, entry] of entries.entries()) {
     context = contextOf(entry) ?? context;
@@ -590,6 +612,12 @@ export function sessionFacts(
       if (!received.has(key)) received.set(key, message);
     }
     firstPrompt ??= promptText(entry);
+    // A compaction before the first prompt means the transcript continues a session whose opening prompt it lost: the
+    // first message after it is a later turn and says nothing of how the session was opened.
+    const compacted = entry.isCompactSummary === true || (entry.type === 'system' && entry.subtype === 'compact_boundary');
+    if (opened === null && compacted) opened = 'unknown';
+    if (opened === null && entry.type === 'user' && !entry.isMeta && !isToolResultCarrier(entry)) opened = openerOf(entry);
+    if (isOwnReply(entry) && typeof entry.effort === 'string') effort = entry.effort;
     const said = turnOf(entry);
     if (said !== null) {
       turn = said;
@@ -704,6 +732,8 @@ export function sessionFacts(
     cwd,
     gitBranch,
     permissionMode,
+    opened: opened ?? 'unknown',
+    effort,
     received: [...received.values()],
     sent: [...sentByCall.values()],
     context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
@@ -1253,8 +1283,13 @@ function recordOfRows(rows, notices) {
  * A row has `title` and `titleSource`; what the title says, `code`, `role`, `number` and `purpose`
  * (`roleOfTitle`), all `null` for a title outside the shape; `self` when the session that asked is one of
  * its transcripts; `lastEntryAt`, the last entry of the latest; `permissionMode`, of the latest transcript
- * that records one; `cwd` and `gitBranch`, together, of the latest that records a folder; `worktree`, the
- * one of `worktrees` (the board's) that folder is, or `null`; `features`, the feature documents of that
+ * that records one; `opened`, the first opener of the earliest transcript that has one (`sessionFacts`), else
+ * `scheduled` when a transcript's app record (`app`, a `Map` from a transcript's id to its record, as
+ * `appSessions` gives it) names a scheduled task, else `unknown`; `where`, the app record's of the latest
+ * transcript that has one, else `not-in-app` for a command and `unknown` otherwise; `effort`, the latest
+ * transcript's that is a string, else the app record's, else `null`; `cwd` and `gitBranch`, together, of the
+ * latest that records a folder; `worktree`, the one of `worktrees` (the board's) that folder is, or `null`;
+ * `features`, the feature documents of that
  * worktree's branch (`readPlans`), named without folder or extension, when the worktree is still on the
  * branch the session recorded, and none otherwise; and `transcripts`, `[{ id, lastEntryAt }]`. The folder
  * is the one the entries record, which is where the session was opened: one that reaches a worktree by
@@ -1274,7 +1309,7 @@ function recordOfRows(rows, notices) {
  * 13 and 14 days old were in a window of 12 hours). So a transcript is in a row, and holds a role, only
  * when its last timed entry is in the window; the others, and those with no timed entry at all, are
  * counted in `outside`. With no `since` every transcript given is in a row. */
-export function rosterOf(sessions, { worktrees, since, record } = {}) {
+export function rosterOf(sessions, { worktrees, since, record, app } = {}) {
   const trees = worktrees?.available ? worktrees.items : [];
   const groups = new Map();
   let unread = 0;
@@ -1300,6 +1335,11 @@ export function rosterOf(sessions, { worktrees, since, record } = {}) {
     const placed = members.find((member) => typeof member.cwd === 'string') ?? latest;
     const tree = typeof placed.cwd === 'string' ? trees.find((item) => comparable(item.path) === comparable(placed.cwd)) : undefined;
     const sameBranch = typeof placed.gitBranch === 'string' && tree?.branch === placed.gitBranch;
+    // The app's record of the latest transcript that has one: where it sits, and its effort when no transcript records one.
+    const latestRecord = members.map((member) => app?.get(member.id)).find((item) => item !== undefined) ?? null;
+    const earliestOpener = [...members].reverse().find((member) => typeof member.opened === 'string' && member.opened !== 'unknown')?.opened;
+    const scheduled = members.some((member) => typeof app?.get(member.id)?.scheduledTaskId === 'string');
+    const opened = earliestOpener ?? (scheduled ? 'scheduled' : 'unknown');
     return {
       title: latest.title ?? null,
       // One transcript of the row that carries the title is enough for the row to have it from there.
@@ -1311,6 +1351,9 @@ export function rosterOf(sessions, { worktrees, since, record } = {}) {
       self: members.some((member) => member.self === true),
       lastEntryAt: latest.lastEntryAt ?? null,
       permissionMode: members.find((member) => typeof member.permissionMode === 'string')?.permissionMode ?? null,
+      opened,
+      where: latestRecord?.where ?? (opened === 'command' ? 'not-in-app' : 'unknown'),
+      effort: members.find((member) => typeof member.effort === 'string')?.effort ?? latestRecord?.effort ?? null,
       cwd: placed.cwd ?? null,
       gitBranch: placed.gitBranch ?? null,
       worktree: tree?.path ?? null,
@@ -1489,8 +1532,9 @@ export function channelOf(record, sessions, { count = CHANNEL_LINES } = {}) {
 
 // ---- whose words a line of a transcript holds ---------------------------------------------------------
 
-// A paste as the host writes it into the person's entry: the same id opens and closes it.
-const PASTED_CONTENT = /<pasted_content id="([^"]*)">[\s\S]*?<\/pasted_content id="\1">/g;
+// A paste as the host writes it into the person's entry: the same id opens and closes it. The command that changes a
+// rule strips it too, to store only what he typed (bin/lib/rules-change.mjs).
+export const PASTED_CONTENT = /<pasted_content id="([^"]*)">[\s\S]*?<\/pasted_content id="\1">/g;
 
 const TOOL_RESULT = 'the result of a tool call';
 const isToolResult = (block) => block.type === 'tool_result';
@@ -1955,21 +1999,6 @@ function within(at, { after, before }) {
   return (after === null || (at !== null && at > after)) && (before === null || (at !== null && at < before));
 }
 
-/** Whether `text` holds a compact block: a fenced code block whose whole content, trimmed, is `/compact`. */
-export function holdsCompactBlock(text) {
-  const lines = text.split('\n').map((line) => line.trim());
-  for (let open = 0; open < lines.length; open += 1) {
-    if (!/^```[\w+#.-]*$/.test(lines[open])) continue;
-    // The block ends at the next bare fence; a fence that closes a block is never an opening one.
-    const close = lines.indexOf('```', open + 1);
-    if (close === -1) return false;
-    const content = lines.slice(open + 1, close).filter((line) => line !== '');
-    if (content.length === 1 && content[0] === '/compact') return true;
-    open = close;
-  }
-  return false;
-}
-
 /** The compactions of `counted` once each, oldest first, as `{ uuid, at, automatic, before, line }`. */
 function boundariesOf(counted) {
   return counted
@@ -2076,47 +2105,75 @@ function keptOf(reader, query) {
   return { known, kept: known && typeof answer.kept === 'boolean' ? answer.kept : null };
 }
 
-/** The first reply of the session in the stretch from `after` to `before` that is at or after `toldAt`, the time the
- * pause was told, and holds the compact block, as `{ line, at }`, or `null` when no reply does. */
-function announcedOf(counted, { after, before, toldAt }) {
-  const found = counted
-    .filter(({ entry, at }) => isOwnReply(entry) && at !== null && at >= toldAt && within(at, { after, before }))
-    .filter(({ entry }) => blocksOf(entry).some((block) => isText(block) && holdsCompactBlock(block.text)))
-    .sort(oldestFirst);
-  return found.length === 0 ? null : { line: found[0].line, at: found[0].at };
-}
-
 /** Each compaction of `text` once, oldest first, with what the transcript holds of the stretch before it:
- * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, announced, verdict }`. The readers
- * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each. */
-export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT } = {}) {
+ * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, verdict }`, the facts being `told` and
+ * `kept` only: the user no longer compacts by hand, so no reply has to hold a block of the bare command (odd/tasks/no-manual-compact.md S2). The readers
+ * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each.
+ * With `lastAutomaticOnly`, only the newest automatic compaction is judged: the readers are asked for it alone, and
+ * every other compaction has no verdict. `kept` is asked with the stretch's `document` only when the stretch has one,
+ * unless `keptWithoutDocument`: the orchestrator's state is also its relief file, which needs no document, so its
+ * `kept` is asked for every stretch the notice reached (with `document` `null` when there is none). */
+export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT, lastAutomaticOnly = false, keptWithoutDocument = false } = {}) {
   const counted = firstAppearances(text);
   const boundaries = boundariesOf(counted);
   const wrote = writesOf(counted);
+  const judged = lastAutomaticOnly ? boundaries.filter((boundary) => boundary.automatic).at(-1) : undefined;
   return boundaries.map((boundary, index) => {
     const { uuid, at, automatic, before, line } = boundary;
     const after = boundaries[index - 1]?.at ?? null;
     const stretch = { after, before: at };
     const inThisFile = counted.some(({ entry, at: when }) => isOwnReply(entry) && within(when, stretch));
     const document = documentBefore(wrote, at);
-    const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, announced: null, verdict: null };
-    if (!automatic || !inThisFile) return item;
+    const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, verdict: null };
+    if (!automatic || !inThisFile || (lastAutomaticOnly && boundary !== judged)) return item;
     const toldState = toldOf(told, after, at);
-    const keptState = toldState.at === null || document === null ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
-    const announced = toldState.at === null ? null : announcedOf(counted, { after, before: at, toldAt: toldState.at });
+    const keptState = toldState.at === null || (document === null && !keptWithoutDocument) ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
     const verdicts = {
       told: toldState.known ? toldState.at !== null : null,
       kept: keptState.kept,
-      announced: toldState.at === null ? null : announced !== null,
     };
     return {
       ...item,
       told: toldState,
       kept: keptState,
-      announced,
-      verdict: { ...verdicts, missing: ['told', 'kept', 'announced'].filter((name) => verdicts[name] === false) },
+      verdict: { ...verdicts, missing: ['told', 'kept'].filter((name) => verdicts[name] === false) },
     };
   });
+}
+
+/** The highest context a reply of the session was sent with, from its last compaction before `atMs` (a time in
+ * milliseconds) up to that time: `{ tokens, preTokens }`. `tokens` is that reply's context (`contextOf`), `null` when no
+ * reply of the stretch records its usage; `preTokens` is what the host counted before that compaction, `null` when no
+ * compaction came before the time. `lines` are the JSON texts of the transcript: an entry the file holds twice (a fork or
+ * a restart copies entries) counts once, a side chain and a reply the harness wrote never count (`firstAppearances`). */
+export function peakContextBefore(lines, atMs) {
+  const counted = firstAppearances(lines.join('\n')).filter(({ at }) => at !== null && Date.parse(at) < atMs);
+  const boundaries = counted
+    .filter(({ entry }) => !entry.isSidechain && compactionOf(entry) !== null)
+    .map(({ entry, at }) => ({ time: Date.parse(at), preTokens: compactionOf(entry).before }))
+    .sort((one, other) => one.time - other.time);
+  const last = boundaries.at(-1) ?? null;
+  const floor = last === null ? -Infinity : last.time;
+  const tokens = counted
+    .filter(({ at }) => Date.parse(at) > floor)
+    .map(({ entry }) => contextOf(entry)?.tokens)
+    .filter((value) => Number.isFinite(value));
+  return { tokens: tokens.length === 0 ? null : tokens.reduce((peak, value) => Math.max(peak, value), -Infinity), preTokens: last?.preTokens ?? null };
+}
+
+/** The miss of the session's last automatic compaction, as the board says it, or `null`: the session has no automatic
+ * compaction judged in `text`, or the judged one misses no fact. `{ at, uuid, missed, unknown }`: `missed` the facts
+ * that are false, `unknown` the facts a reader could not answer (never a miss). The readers are asked only for that
+ * compaction, and not at all when the text names no automatic one. The facts are `told` and `kept`, never a reply's
+ * block of the bare command. */
+export function compactionMissOf(text, readers) {
+  if (!text.includes('compact_boundary') || !text.includes('"auto"')) return null;
+  const measures = compactionMeasures(text, { ...readers, lastAutomaticOnly: true });
+  const judged = measures.filter((measure) => measure.automatic).at(-1);
+  if (!judged?.verdict || judged.verdict.missing.length === 0) return null;
+  const { verdict } = judged;
+  const unknown = ['told', 'kept'].filter((name) => verdict[name] === null);
+  return { at: judged.at, uuid: judged.uuid, missed: verdict.missing, unknown };
 }
 
 // ---- what changed between two boards ------------------------------------------------------------------
@@ -2212,6 +2269,13 @@ function isNewCompaction(was, now) {
   return was.uuid !== null && now.uuid !== null ? was.uuid !== now.uuid : was.at !== now.at;
 }
 
+/** Whether `now`, a session's miss of its last automatic compaction (`compactionMissOf`), is one the earlier look did not
+ * have: none before, or another compaction than the one it named. */
+function isNewMiss(was, now) {
+  if (was === null) return true;
+  return (was.uuid ?? was.at) !== (now.uuid ?? now.at);
+}
+
 /** How long the call a session waits on has had no result, in ms, when the board may say so, else `null`: the
  * session works and has not ended (`ended`), and its last call (`pendingCall`) is not a question, whose calls are
  * in "Open questions". A call of the agent tool is measured from the later of its launch and the last write of
@@ -2278,6 +2342,11 @@ function sessionChanges(before, after, self) {
     // kept has none to compare with (`undefined`), so nothing is said of the compactions it already had.
     if (was && was.lastCompaction !== undefined && session.lastCompaction && isNewCompaction(was.lastCompaction, session.lastCompaction)) {
       lines.push(compactionLine(session, sizes, Date.parse(after.generatedAt)));
+    }
+    // Once, when the last automatic compaction of the session misses a fact (`compactionMissOf`); the same compaction is
+    // not said twice, and a board kept before the field has no miss to compare with (`null`).
+    if (was && session.compactionMiss && session.compactionMiss.missed.length > 0 && isNewMiss(was.compactionMiss ?? null, session.compactionMiss)) {
+      lines.push(`${sessionLabel(session)}: its last automatic compaction missed ${session.compactionMiss.missed.join(', ')}`);
     }
     // Once, when it reaches the pause: what it does there is its own judgment, and the line carries what
     // that judgment needs. A last task that no longer fits is said in it and wakes nobody by itself.
@@ -2422,6 +2491,17 @@ function lastReadSessions(older, newer) {
     if (!session.unavailable) return session;
     const kept = read.get(session.id);
     return kept ? { ...kept, readAt: kept.readAt ?? older.generatedAt } : session;
+  });
+}
+
+/** `sessions` with the miss of the look before kept where they read none: a reader that fails leaves the miss of a
+ * compaction unknown (`null`), and a miss the look before named keeps its identity until a newer miss replaces it,
+ * so the same compaction is not said again once the reader answers. */
+function keptMisses(older, sessions) {
+  const earlier = byKey(older.sessions.filter((session) => !session.unavailable), 'id');
+  return sessions.map((session) => {
+    const was = earlier.get(session.id)?.compactionMiss ?? null;
+    return (session.compactionMiss ?? null) === null && was !== null ? { ...session, compactionMiss: was } : session;
   });
 }
 
@@ -2602,7 +2682,7 @@ export function watchBaseline(older, newer) {
     const old = byKey(previous.items.filter((plan) => !plan.unavailable), 'path');
     return { ...tree.plans, items: tree.plans.items.map((plan) => (plan.unavailable ? (old.get(plan.path) ?? plan) : plan)) };
   };
-  const lastRead = lastReadSessions(older, newer);
+  const lastRead = keptMisses(older, lastReadSessions(older, newer));
   return {
     ...newer,
     sessions: lastRead,
@@ -2667,18 +2747,12 @@ export function askingRule(personAt, now, { waiting = 1 } = {}) {
   return `the user last wrote here ${since} ago: the question tool would hold this session until the user answers, so call it in the reply to the user's next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
 }
 
-/** The sentence that tells a session at the context pause whether to hand the user the cut, given when the user last
- * wrote in the transcript (`personAt`, as `askingRule` takes it) and `now` in ms. Only while the user is present, by
- * the same `PERSON_PRESENT_MS`: a session that stops for a /compact nobody sends waits for hours, and the host
- * compacts a session inside a turn anyway. */
-export function cutRule(personAt, now) {
-  const at = typeof personAt === 'string' ? Date.parse(personAt) : NaN;
-  const keep = 'do not stop and give them nothing to send: the host compacts this session inside a turn, and your state is read after it';
-  if (Number.isNaN(at)) return `when the user last wrote here is not known: ${keep}`;
-  const elapsed = Math.max(0, now - at);
-  const since = durationOf(Math.round(elapsed / 1000));
-  if (elapsed < PERSON_PRESENT_MS) return `the user wrote here ${since} ago: give them, in your next reply, what they send to compact this session and the prompt that resumes it after`;
-  return `the user last wrote here ${since} ago: ${keep}`;
+/** The sentence that tells a session at the context pause what the user gets, the same whether they are present or
+ * away: nothing to send. The user no longer compacts by hand (odd/tasks/no-manual-compact.md S1): the host compacts a
+ * session by itself inside a turn, and a session that stops gets its next prompt from the orchestrator, so no
+ * block of the bare command is handed to anyone and no time of the user's last message is read for it. */
+export function cutRule() {
+  return 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 }
 
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */
@@ -2734,6 +2808,13 @@ function sessionLines(session, now, sizes, ended) {
   lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}`);
   // A line of its own: it is the one read to judge whether what is left of a task fits.
   lines.push(`  ${contextText(session, sizes)}`);
+  // The last automatic compaction misses a fact the proof is owed (`compactionMissOf`): said once under the block, with
+  // what the reader could not know. Nothing when it misses none, or when the facts it misses are only unknown.
+  const miss = session.compactionMiss;
+  if (miss && miss.missed.length > 0) {
+    const unknown = miss.unknown.length > 0 ? `; not known: ${miss.unknown.join(', ')}` : '';
+    lines.push(`    last automatic compaction ${ago(miss.at, now)}: missed ${miss.missed.join(', ')}${unknown}`);
+  }
   // A tool call that has had no result for the limit: the host may be holding it for approval, or it hangs.
   const held = pendingAge(session, now, ended);
   if (held !== null && held >= PENDING_CALL_LIMIT_MS) {
@@ -2833,7 +2914,21 @@ function recordLine(record, now) {
   return parts.length === 0 ? [] : [`    record: ${parts.join('  ')}`];
 }
 
-/** The `Roster` section: two lines per row of `rosterOf`, and a third for a row the record says something
+const OPENED_WORDS = { his: 'opened by him', session: 'opened by a session', command: 'opened by a command', scheduled: 'opened by a scheduled task', unknown: 'opened unknown' };
+const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived: 'archived', 'not-in-app': 'not in the app', unknown: 'where unknown' };
+
+/** The line under a row's mode line: how its session was opened, where the app keeps it and its effort, then
+ * the marks that it is not in his sidebar (in Routines, or not in the app) and that its effort is below `high`
+ * (on a session he did not open himself). */
+function openerLine(row) {
+  const marks = [];
+  if (row.where === 'routines' || row.where === 'not-in-app') marks.push('NOT IN HIS SIDEBAR');
+  if ((row.effort === 'low' || row.effort === 'medium') && row.opened !== 'his') marks.push('effort below high');
+  const effort = row.effort === null ? 'effort unknown' : `effort ${row.effort}`;
+  return `    ${[OPENED_WORDS[row.opened] ?? OPENED_WORDS.unknown, WHERE_WORDS[row.where] ?? WHERE_WORDS.unknown, effort, ...marks].join('  ')}`;
+}
+
+/** The `Roster` section: per row of `rosterOf`, a title line, then the mode line with `openerLine` after it, and a further one for a row the record says something
  * of (`recordLine`). The first has the role, the title and how long the session has been silent, never
  * that it is alive, which no transcript says; the session that asked is the one exception, and is said
  * to be this one. A row whose last word in the record is `closed` or `relieved` says that, with its age,
@@ -2866,7 +2961,7 @@ function rosterLines(roster, now) {
     const transcripts = row.transcripts.length === 1 ? `transcript ${short(row.transcripts[0].id)}` : `transcripts ${row.transcripts.map((transcript) => `${short(transcript.id)} (${ago(transcript.lastEntryAt, now)})`).join(', ')}`;
     // A title no transcript of the row carries is the one of the opening its session read (`titledByReadings`).
     const read = row.titleSource === 'reading' ? '  title from the opening it read' : '';
-    lines.push(`    mode ${row.permissionMode ?? 'unknown'}  folder ${row.cwd ?? 'unknown'}  branch ${row.gitBranch ?? 'unknown'}${feature}  ${transcripts}${read}`, ...recordLine(row.record, now));
+    lines.push(`    mode ${row.permissionMode ?? 'unknown'}  folder ${row.cwd ?? 'unknown'}  branch ${row.gitBranch ?? 'unknown'}${feature}  ${transcripts}${read}`, openerLine(row), ...recordLine(row.record, now));
   }
   const orchestrators = roster.rows.filter((row) => row.role === 'orchestrator');
   if (orchestrators.length > 1) {
