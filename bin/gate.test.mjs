@@ -1450,7 +1450,9 @@ test('gate first refuses a third open ticket, naming the two, and writes nothing
   assert.equal((await runGateLog(['first', '--session', 'sess-b', '--reason', 'two'], env)).code, 0);
   const third = await runGateLog(['first', '--session', 'sess-c', '--reason', 'three'], env);
   assert.equal(third.code, 1);
-  assert.match(third.said.join('\n'), /^gate first: two tickets are open already: [0-9a-f]{8} \(session sess-a, tree .*: one; until .*\), [0-9a-f]{8} \(session sess-b: two; until .*\)/);
+  // Named in the order `readTickets` gives (issued, then id): two tickets issued in one millisecond tie on the time.
+  const said = readTickets(home).open.map((ticket) => (ticket.session === 'sess-a' ? `${ticket.id} \\(session sess-a, tree .*: one; until .*\\)` : `${ticket.id} \\(session sess-b: two; until .*\\)`));
+  assert.match(third.said.join('\n'), new RegExp(`^gate first: two tickets are open already: ${said.join(', ')}`));
   assert.equal(readTickets(home).open.length, 2);
   assert.equal(ticketEvents(home).length, 2);
 }));
