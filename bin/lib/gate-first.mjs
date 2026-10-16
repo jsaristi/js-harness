@@ -98,7 +98,8 @@ export function readTickets(home, { now = Date.now, fileSystem: io = fs } = {}) 
   const unreadable = [];
   for (const name of names.sort()) {
     const id = TICKET_FILE.exec(name)?.[1];
-    // A file being written (`.tmp-`) or claimed (`.claimed-`) is not one of the folder's tickets.
+    // A file being written (`.tmp-`), counted by its issuer (`.pending`) or claimed (`.claimed-`) is not one of
+    // the folder's tickets.
     if (!id) continue;
     const ticket = ticketIn(io, path.join(dir, name), id);
     if (ticket === null) unreadable.push(name);
@@ -154,6 +155,37 @@ export function logTicket(home, kind, ticket, extra = {}, { append = appendGateE
 /** A ticket's words, for a message: its id, its session and why. */
 export const ticketSaid = (ticket) => `${ticket.id} (session ${ticket.session}${ticket.tree ? `, tree ${ticket.tree}` : ''}: ${ticket.reason}; until ${ticket.until})`;
 
+/** The name a ticket has while its issuer counts the others (`issueTicket`): no gate claims it, and
+ * `readTickets` does not list it. */
+const PENDING = '.pending';
+const PENDING_FILE = /^([0-9a-f]{8})\.pending$/;
+
+/** How long a ticket may wait under its pending name before it is taken for the leftover of an issue that
+ * died: an issue counts in milliseconds. */
+const PENDING_MS = 60_000;
+
+/** The tickets of `dir` that an issuer is counting against the others right now, in the order they were
+ * issued. One older than `PENDING_MS` is an issue that died: it is removed and counts for nothing. A file
+ * there that is no ticket counts for nothing either. */
+function pendingTickets(io, dir, now) {
+  let names;
+  try {
+    names = io.readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const held = [];
+  for (const name of names) {
+    const id = PENDING_FILE.exec(name)?.[1];
+    if (!id) continue;
+    const ticket = ticketIn(io, path.join(dir, name), id);
+    if (ticket === null) continue;
+    if (now() - Date.parse(ticket.issuedAt) > PENDING_MS) io.rmSync(path.join(dir, name), { force: true });
+    else held.push(ticket);
+  }
+  return held.sort((a, b) => Date.parse(a.issuedAt) - Date.parse(b.issuedAt) || (a.id < b.id ? -1 : 1));
+}
+
 /** Issues a ticket for the next whole check of `session`, of the tree `tree` where given, for `minutes`
  * (1 to `GATE_FIRST_MAX_MINUTES`, all of them when not given), saying `reason`, issued by `by` (the
  * issuer's session id, or `null`). Expired tickets are removed first. Returns `{ ticket, expired }`, the
@@ -169,10 +201,10 @@ export function issueTicket({ home, session, tree = null, reason, by = null, min
     throw new GateFirstError(`--minutes takes a number from 1 to ${GATE_FIRST_MAX_MINUTES}, not "${minutes}"`);
   }
   const expired = sweepExpired(home, { now, io });
-  const { open } = readTickets(home, { now, fileSystem: io });
-  if (open.length >= GATE_FIRST_OPEN) {
-    throw new GateFirstError(`two tickets are open already: ${open.map(ticketSaid).join(', ')}; cancel one (js-harness gate first --cancel <id>) or wait for it to be claimed or to expire`);
-  }
+  const dir = gateFirstDir(home);
+  const full = (held) => new GateFirstError(`two tickets are open already: ${held.slice(0, GATE_FIRST_OPEN).map(ticketSaid).join(', ')}; cancel one (js-harness gate first --cancel <id>) or wait for it to be claimed or to expire`);
+  const before = [...readTickets(home, { now, fileSystem: io }).open, ...pendingTickets(io, dir, now)];
+  if (before.length >= GATE_FIRST_OPEN) throw full(before);
   const at = now();
   const ticket = {
     v: TICKET_VERSION,
@@ -184,8 +216,8 @@ export function issueTicket({ home, session, tree = null, reason, by = null, min
     issuedAt: new Date(at).toISOString(),
     until: new Date(at + minutes * 60_000).toISOString(),
   };
-  const dir = gateFirstDir(home);
   const file = path.join(dir, `${ticket.id}.json`);
+  const waiting = path.join(dir, `${ticket.id}${PENDING}`);
   const draft = `${file}.tmp-${process.pid}`;
   // A claim or a cancel removes the folder with its last ticket, which can happen between the making of the
   // folder and the write (Codex, 2026-10-16): the write is tried again in a folder made again.
@@ -193,26 +225,24 @@ export function issueTicket({ home, session, tree = null, reason, by = null, min
     io.mkdirSync(dir, { recursive: true });
     try {
       io.writeFileSync(draft, `${JSON.stringify(ticket)}\n`);
-      io.renameSync(draft, file);
+      io.renameSync(draft, waiting);
       break;
     } catch (err) {
       if (err.code !== 'ENOENT' || attempt === 3) throw err;
     }
   }
-  // The count before the write is no guard against an issuer that wrote in between (Codex, 2026-10-16), and
-  // the folder holds no lock. So each issuer counts again after its write, and one that sees more than the
-  // limit removes its own ticket, wherever it stands in the order: an issuer that counted before the other
-  // wrote saw no excess and keeps its ticket, and the other sees it. Two that both see it both go, which
-  // leaves fewer open, never more.
-  const after = readTickets(home, { now, fileSystem: io }).open;
+  // The count before the write is no guard against an issuer that wrote in between, and the folder holds no
+  // lock (Codex, 2026-10-16). So the ticket is first written under a name no gate claims, and every issuer
+  // counts the open tickets and the waiting ones again with its own in place: one that sees more than the
+  // limit removes its own and is refused, wherever it stands in the order. An issuer that counted before the
+  // other wrote saw no excess, and the other sees its ticket; two that both see the excess both go, which
+  // leaves fewer open, never more. Only a ticket that passed its count is renamed to one a gate claims.
+  const after = [...readTickets(home, { now, fileSystem: io }).open, ...pendingTickets(io, dir, now)];
   if (after.length > GATE_FIRST_OPEN) {
-    try {
-      io.rmSync(file);
-    } catch {
-      // claimed in the instant between: it was spent, and the log of its claim says so
-    }
-    throw new GateFirstError(`two tickets are open already: ${after.filter((open) => open.id !== ticket.id).slice(0, GATE_FIRST_OPEN).map(ticketSaid).join(', ')}; cancel one (js-harness gate first --cancel <id>) or wait for it to be claimed or to expire`);
+    io.rmSync(waiting, { force: true });
+    throw full(after.filter((held) => held.id !== ticket.id));
   }
+  io.renameSync(waiting, file);
   return { ticket, expired };
 }
 

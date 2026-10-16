@@ -92,7 +92,10 @@ test('two issues at once leave two tickets open: the one that sees three after i
   const racing = {
     ...fs,
     renameSync: (from, to) => {
-      if (to.endsWith('0c0c0c0c.json')) {
+      if (to.endsWith('0c0c0c0c.pending')) {
+        // Codex's recheck: a ticket that is counted after it is claimable could be claimed in between. It
+        // is counted under a name no gate claims, before it is one.
+        assert.equal(fs.existsSync(path.join(dir, '0c0c0c0c.json')), false, 'never claimable before the count');
         fs.writeFileSync(path.join(dir, '0b0b0b0b.json'), `${JSON.stringify({ v: 1, id: '0b0b0b0b', session: 'sess-b', tree: null, reason: 'raced', by: null, issuedAt: new Date(clock.now() + 1).toISOString(), until: new Date(clock.now() + 30 * MINUTE).toISOString() })}\n`);
       }
       return fs.renameSync(from, to);
@@ -104,6 +107,21 @@ test('two issues at once leave two tickets open: the one that sees three after i
   );
   assert.deepEqual(readTickets(home, { now: clock.now }).open.map((ticket) => ticket.id), ['0a0a0a0a', '0b0b0b0b']);
   assert.deepEqual(fs.readdirSync(dir).sort(), ['0a0a0a0a.json', '0b0b0b0b.json'], 'no draft is left');
+}));
+
+test('an issue waits in a name no gate claims while it counts, and one left there by an issue that died counts for a minute only', withHome((home) => {
+  const clock = clockAt();
+  issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  const dir = gateFirstDir(home);
+  const pending = (id, at) => fs.writeFileSync(path.join(dir, `${id}.pending`), `${JSON.stringify({ v: 1, id, session: 'sess-x', tree: null, reason: 'died', by: null, issuedAt: new Date(at).toISOString(), until: new Date(at + 30 * MINUTE).toISOString() })}\n`);
+  // One that is still counting holds its place: a second issue now would make three.
+  pending('0e0e0e0e', clock.now());
+  assert.throws(() => issue(home, clock, { session: 'sess-c' }, '0c0c0c0c'), GateFirstError);
+  assert.equal(claimTicket({ home, session: 'sess-x', cwd: home, now: clock.now }).ticket, null, 'a pending ticket is never claimed');
+  // A minute on, it is an issue that died, and it is removed.
+  clock.advance(MINUTE + 1);
+  issue(home, clock, { session: 'sess-c' }, '0c0c0c0c');
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['0a0a0a0a.json', '0c0c0c0c.json']);
 }));
 
 // Codex, 2026-10-16 (P2): a claim or a cancel removes the folder with its last ticket, which could happen between
