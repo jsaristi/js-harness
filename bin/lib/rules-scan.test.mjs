@@ -65,6 +65,7 @@ const PLANTED = {
   'gate-max': { line: 'A gate is stopped after 30 minutes.', marked: 'A gate is stopped at `rule:gate-max`.' },
   'gate-wait': { line: 'A commit waits for its turn of the lock for up to 60 minutes.', marked: 'A commit waits for its turn of the lock as `rule:gate-wait` says.' },
   'person-present': { line: 'He is here when he wrote within 15 minutes.', marked: 'He is here when he wrote within `rule:person-present`.' },
+  'review-effort': { line: 'Codex reviews at `medium` effort.', marked: 'Codex reviews at the effort of `rule:review-effort`.' },
   'review-model': { line: 'Codex reviews on gpt-6.1-sol.', marked: 'Codex reviews on the model of `rule:review-model`.' },
   'review-part-files': { line: 'A part holds 40 files at most.', marked: 'A part holds the files of `rule:review-part-files` at most.' },
   'review-part-lines': { line: 'A part holds up to 400 changed lines.', marked: 'A part holds up to `rule:review-part-lines`.' },

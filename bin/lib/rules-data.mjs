@@ -160,7 +160,11 @@ export const RULES = [
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
     "since": "2026-10-12",
-    "value": "medium"
+    "value": "medium",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}\\bgpt-[\\w.-]+`?\\s+at\\s+`?{amount}`?"
+    ]
   },
   {
     "id": "review-model",
