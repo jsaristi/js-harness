@@ -153,6 +153,27 @@ export function lastShare(lines, fallback = DEFAULT_CONTEXT_WINDOW) {
 }
 
 /**
+ * The window of the session's own last get_usage read made before `atMs` (a time in milliseconds), read from the JSON
+ * text `lines` of its transcript, or null when no read before that time gives one. A read after the time is the window
+ * of a later moment, so it is not the window of an event before it; a side chain's read is a sub-agent's, never this one's.
+ * @param {string[]} lines
+ * @param {number} atMs
+ * @returns {number | null}
+ */
+export function windowBefore(lines, atMs) {
+  let found = null;
+  for (const line of lines) {
+    if (!line.includes('contextWindow')) continue;
+    const entry = entryOf(line);
+    const at = typeof entry?.timestamp === 'string' ? Date.parse(entry.timestamp) : NaN;
+    if (!(at < atMs)) continue;
+    const window = windowRead(entry);
+    if (window !== null && (found === null || at >= found.at)) found = { at, window };
+  }
+  return found?.window ?? null;
+}
+
+/**
  * Why a reply whose `text` states the session's own context share is to be corrected, or null: a stated share more
  * than 2 points from the share `tokens` make of `window` (the tolerance the audit measured, `SHARE_TOLERANCE`).
  * @param {string} text the reply's text

@@ -4614,3 +4614,27 @@ test('watchBaseline keeps the miss a failed reader leaves unknown, so the same c
   assert.deepEqual(chain([look(missed('u1', ['told'])), look(null), look(missed('u1', ['told']))]), [said('told')], 'the same compaction after a failed read is not said again');
   assert.deepEqual(chain([look(missed('u1', ['told'])), look(missed('u2', ['announced']))]), [said('told'), said('announced')], 'a new compaction that misses is said');
 });
+
+// --- peakContextBefore: the peak of a session's context before a notice (session channel, T9) ---
+
+test('peakContextBefore reads the highest reply of the session since its last compaction before the time, and that compaction\'s preTokens', () => {
+  const boundary = (minute, preTokens) => ({ type: 'system', subtype: 'compact_boundary', ...base(minute), compactMetadata: { trigger: 'auto', preTokens, postTokens: 300 } });
+  const lines = transcript(prompt('go', 1), spoke(2, usage(0, 400000, 0)), boundary(3, 480000), spoke(4, usage(0, 100000, 0)), spoke(5, usage(0, 150000, 0)), spoke(9, usage(0, 490000, 0))).split('\n');
+  assert.deepEqual(lib.peakContextBefore(lines, Date.parse(at(6))), { tokens: 150000, preTokens: 480000 }, 'the peak before the compaction does not count');
+  assert.deepEqual(lib.peakContextBefore(lines, Date.parse(at(3))), { tokens: 400000, preTokens: null }, 'before any compaction, the replies since the start');
+  assert.deepEqual(lib.peakContextBefore(lines, Date.parse(at(0))), { tokens: null, preTokens: null }, 'no reply before the time');
+});
+
+test('peakContextBefore reads no side chain, no reply the harness wrote, no reply without usage, no reply after the time, and an entry copied twice once', () => {
+  const kept = { ...spoke(2, usage(0, 300000, 0)), uuid: 'u-2' };
+  const lines = transcript(
+    prompt('go', 1),
+    kept,
+    { ...kept },
+    { ...spoke(3, usage(0, 999000, 0)), isSidechain: true },
+    spoke(4, usage(0, 888000, 0), { model: '<synthetic>' }),
+    reply('no usage at all', 5),
+    spoke(8, usage(0, 777000, 0)),
+  ).split('\n');
+  assert.deepEqual(lib.peakContextBefore(lines, Date.parse(at(6))), { tokens: 300000, preTokens: null });
+});

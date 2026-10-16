@@ -394,7 +394,7 @@ decision; `--address <role>` prints the title of the session that holds a role; 
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
 the host made, whether the session was told the pause, committed its feature document (the
 orchestrator may write a line in its relief file instead) and announced the compaction, and how
-many compactions miss one of those facts. Under each roster row's
+many compactions miss one of those facts; then the reliefs of the record (each `relieved` notice, judged by the context its relieved session was at: filled at the pause or another reason) and the Log lines that name a reopening, as candidates for the lead. Under each roster row's
 mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
 and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
 

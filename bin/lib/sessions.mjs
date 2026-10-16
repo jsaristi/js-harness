@@ -2168,6 +2168,26 @@ export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => N
   });
 }
 
+/** The highest context a reply of the session was sent with, from its last compaction before `atMs` (a time in
+ * milliseconds) up to that time: `{ tokens, preTokens }`. `tokens` is that reply's context (`contextOf`), `null` when no
+ * reply of the stretch records its usage; `preTokens` is what the host counted before that compaction, `null` when no
+ * compaction came before the time. `lines` are the JSON texts of the transcript: an entry the file holds twice (a fork or
+ * a restart copies entries) counts once, a side chain and a reply the harness wrote never count (`firstAppearances`). */
+export function peakContextBefore(lines, atMs) {
+  const counted = firstAppearances(lines.join('\n')).filter(({ at }) => at !== null && Date.parse(at) < atMs);
+  const boundaries = counted
+    .filter(({ entry }) => !entry.isSidechain && compactionOf(entry) !== null)
+    .map(({ entry, at }) => ({ time: Date.parse(at), preTokens: compactionOf(entry).before }))
+    .sort((one, other) => one.time - other.time);
+  const last = boundaries.at(-1) ?? null;
+  const floor = last === null ? -Infinity : last.time;
+  const tokens = counted
+    .filter(({ at }) => Date.parse(at) > floor)
+    .map(({ entry }) => contextOf(entry)?.tokens)
+    .filter((value) => Number.isFinite(value));
+  return { tokens: tokens.length === 0 ? null : tokens.reduce((peak, value) => Math.max(peak, value), -Infinity), preTokens: last?.preTokens ?? null };
+}
+
 /** The miss of the session's last automatic compaction, as the board says it, or `null`: the session has no automatic
  * compaction judged in `text`, or the judged one misses no fact. `{ at, uuid, missed, unknown }`: `missed` the facts
  * that are false, `unknown` the facts a reader could not answer (never a miss). The readers are asked only for that
