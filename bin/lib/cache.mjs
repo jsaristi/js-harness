@@ -43,7 +43,18 @@ export function readCache(home) {
   const checkedAt = typeof latest?.checkedAt === 'string' ? latest.checkedAt : null;
   const notified = typeof data?.notified === 'string' ? data.notified : null;
   const host = sanitizeHost(data?.host);
-  return host ? { latest: { checkedAt, versions }, notified, host } : { latest: { checkedAt, versions }, notified };
+  const gentleAi = sanitizeGentleAi(data?.gentleAi);
+  return { latest: { checkedAt, versions }, notified, ...(host ? { host } : {}), ...(gentleAi ? { gentleAi } : {}) };
+}
+
+/** The gentle-ai-update record (bin/lib/gentle-ai-update.mjs): the gentle-ai version last reviewed. Kept by every
+ * reader like the host record; anything malformed is dropped. */
+function sanitizeGentleAi(gentleAi) {
+  const reviewed = gentleAi && typeof gentleAi === 'object' ? gentleAi.reviewed : undefined;
+  if (!reviewed || typeof reviewed !== 'object') return null;
+  const { version, at } = reviewed;
+  if (typeof version !== 'string' || typeof at !== 'string') return null;
+  return { reviewed: { version, at } };
 }
 
 /** The host-update record (bin/lib/host-update.mjs): the Claude Desktop and Code tab CLI versions last reviewed.
