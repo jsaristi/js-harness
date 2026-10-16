@@ -31,6 +31,7 @@ import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log
 import { gateFirstDir, issueTicket } from './gate-first.mjs';
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
+import { hygieneDir, journalPath } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
 
 function makeTmpHome() {
@@ -769,6 +770,102 @@ test('uninstall keeps a folder of the session channel it cannot look at or remov
   }
 });
 
+// The folder of memory hygiene (odd/tasks/memory-hygiene.md, D4 and T9): `memory` writes a project's journal, its
+// daily stamp and, for each pass, a snapshot of the memory folder under it. Nothing records it, like the channel's,
+// and `uninstall` is how it goes; but a snapshot is the only copy of what a pass changed, so a project's folder
+// that holds one is kept, with its stamps.
+
+/** What `memory` leaves under `home` for the project `slug`: a journal and the daily stamp, and a snapshot of
+ * the pass `stamp` when one is given. Returns the project's folder. */
+function leftByMemory(home, slug, stamp) {
+  const project = path.dirname(journalPath(home, slug));
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(journalPath(home, slug), '{"kind":"verify","at":"2026-10-15T12:06:06.108Z","stamp":"20261015T120606108Z"}\n');
+  fs.writeFileSync(path.join(project, 'told'), '2026-10-16T08:00:00.000Z');
+  if (stamp) {
+    fs.mkdirSync(path.join(project, 'snapshots', stamp, 'files'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'snapshots', stamp, 'manifest.json'), '{"writeSet":["MEMORY.md"],"before":{}}');
+  }
+  return project;
+}
+
+test('uninstall removes the folder of memory hygiene when no project holds a snapshot, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    leftByMemory(home, 'C--proj');
+    leftByMemory(home, 'C--other');
+    const installed = uninstall(home);
+    assert.ok(installed.removed.includes(hygieneDir(home)), installed.removed.join('\n'));
+    assert.equal(Object.hasOwn(installed, 'memoryKept'), false, 'said only when a folder is kept');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    leftByMemory(home, 'C--proj');
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [hygieneDir(home)] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    install(home, '0.1.0');
+    assert.equal(uninstall(home).removed.includes(hygieneDir(home)), false, 'nothing is said of a folder that is not there');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps the folder of a project whose memory passes left snapshots, names their stamps, and removes the rest', () => {
+  const home = makeTmpHome();
+  try {
+    for (const withManifest of [true, false]) {
+      if (withManifest) install(home, '0.1.0');
+      const kept = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+      fs.mkdirSync(path.join(kept, 'snapshots', '20261016T090000000Z'), { recursive: true });
+      const gone = leftByMemory(home, 'C--other');
+      const result = uninstall(home);
+      assert.deepEqual(result.memoryKept, [{ path: kept, stamps: ['20261015T120606108Z', '20261016T090000000Z'], journal: true }], String(withManifest));
+      assert.ok(result.removed.includes(gone), result.removed.join('\n'));
+      assert.equal(result.removed.includes(hygieneDir(home)), false);
+      assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true, 'a snapshot is never removed');
+      assert.equal(fs.existsSync(journalPath(home, 'C--proj')), true, 'nor the journal beside it');
+      assert.equal(fs.existsSync(gone), false);
+    }
+
+    // An empty snapshots folder holds no copy of anything: that project's folder goes.
+    fs.rmSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'), { recursive: true });
+    fs.mkdirSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'));
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [hygieneDir(home)] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall goes on past a project folder of memory hygiene it cannot remove, and still names the stamps it keeps', () => {
+  const home = makeTmpHome();
+  try {
+    const first = leftByMemory(home, 'C--a');
+    const busy = leftByMemory(home, 'C--b');
+    const last = leftByMemory(home, 'C--c');
+    const kept = leftByMemory(home, 'C--k', '20261015T120606108Z');
+    fs.rmSync(journalPath(home, 'C--k'));
+    const removeFile = (target, options) => {
+      if (target === busy) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    };
+    const result = uninstall(home, { removeFile });
+    assert.deepEqual(result.removed, [first, last]);
+    assert.deepEqual(result.memoryKept, [
+      { path: busy, reason: 'unremovable', code: 'EBUSY' },
+      { path: kept, stamps: ['20261015T120606108Z'], journal: false },
+    ]);
+    assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true);
+
+    // With no snapshot anywhere, a folder that cannot be removed is the whole folder's, said once.
+    fs.rmSync(kept, { recursive: true });
+    const whole = uninstall(home, { removeFile: (target) => { throw Object.assign(new Error('EPERM'), { code: 'EPERM', target }); } });
+    assert.deepEqual(whole.memoryKept, [{ path: hygieneDir(home), reason: 'unremovable', code: 'EPERM' }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 /** A `listDir` seam for a folder that is listed as empty and cannot be removed: listing `target` puts a file
  * in it first and answers that it holds nothing, as when the file arrived between the listing and the
  * removal. The refusal is then the system's own, of a folder that is not empty. */
@@ -850,9 +947,23 @@ test('entryComponents declare the SessionStart hook for Claude and Codex', () =>
 const [, , claudeResume, codexResume] = entryComponents;
 // What a host file holds of ours after an install: the doctor's entry, then the resume hook's.
 const ourEntries = () => [claudeHook.entry(), claudeResume.entry()];
+// The turn-start hook of the rules (letter F, T16f): three Claude entries after the others, one of them a third
+// SessionStart entry in the Claude file, for the matchers after which a session is told again.
+const [claudeRulesTurn, claudeRulesStart, claudeRulesSubagent] = entryComponents.slice(8);
+const ourClaudeStart = () => [...ourEntries(), claudeRulesStart.entry()];
+const isRulesEntry = (entry) => entry?.hooks?.[0]?.command === 'js-harness rules --hook || exit 0';
+
+test('entryComponents declare the turn-start hook of the rules for Claude alone: a turn, a fresh context and a sub-agent', () => {
+  assert.deepEqual([claudeRulesTurn.id, claudeRulesStart.id, claudeRulesSubagent.id], ['claude-rules-turn-hook', 'claude-rules-start-hook', 'claude-rules-subagent-hook']);
+  assert.deepEqual([claudeRulesTurn.pointer, claudeRulesStart.pointer, claudeRulesSubagent.pointer], [['hooks', 'UserPromptSubmit'], ['hooks', 'SessionStart'], ['hooks', 'SubagentStart']]);
+  for (const component of [claudeRulesTurn, claudeRulesStart, claudeRulesSubagent]) assert.equal(component.target('/h'), claudeHook.target('/h'));
+  assert.deepEqual(claudeRulesTurn.entry(), { hooks: [{ type: 'command', command: 'js-harness rules --hook || exit 0', timeout: 5 }] });
+  assert.deepEqual(claudeRulesStart.entry(), { matcher: 'compact|clear|resume', hooks: [{ type: 'command', command: 'js-harness rules --hook || exit 0', timeout: 5 }] });
+  assert.deepEqual(claudeRulesSubagent.entry(), claudeRulesTurn.entry());
+});
 
 test('entryComponents declare the resume hook for Claude and Codex: a SessionStart entry for the matcher compact', () => {
-  assert.equal(entryComponents.length, 8);
+  assert.equal(entryComponents.length, 11);
   assert.deepEqual([claudeResume.id, codexResume.id], ['claude-resume-hook', 'codex-resume-hook']);
   assert.deepEqual([claudeResume.pointer, codexResume.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
   assert.deepEqual([claudeResume.target('/h'), codexResume.target('/h')], [claudeHook.target('/h'), codexHook.target('/h')], 'the files the first entry is in');
@@ -958,7 +1069,8 @@ const ourPostToolUse = () => [pauseHook.entry()];
 const ourPostToolUseFailure = () => [webFailureHook.entry()];
 const ourPreToolUse = () => [guardHook.entry()];
 const ourStop = () => [shareHook.entry()];
-const ourSettings = () => ({ hooks: { SessionStart: ourEntries(), PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop() } });
+const ourRules = () => [claudeRulesTurn.entry(), claudeRulesStart.entry(), claudeRulesSubagent.entry()];
+const ourSettings = () => ({ hooks: { SessionStart: ourClaudeStart(), PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop(), UserPromptSubmit: [claudeRulesTurn.entry()], SubagentStart: [claudeRulesSubagent.entry()] } });
 
 test('install writes the resume entry beside the doctor\'s in each host file and records both; uninstall removes both and the file it created', () => {
   const home = makeTmpHome();
@@ -969,7 +1081,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
       const isClaude = target === claudeFile;
       assert.deepEqual(readJson(target), isClaude ? ourSettings() : { hooks: { SessionStart: ourEntries() } }, target);
       const records = manifest.entries.filter((e) => e.path === target);
-      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse(), ...ourPostToolUseFailure(), ...ourPreToolUse(), ...ourStop()] : ourEntries());
+      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse(), ...ourPostToolUseFailure(), ...ourPreToolUse(), ...ourStop(), ...ourRules()] : ourEntries());
       // The file is the install's whichever entry made it: the last one removed is the one that deletes it.
       assert.deepEqual(records.map((record) => [record.createdFile, record.skipped]), records.map(() => [true, false]), target);
       assert.equal(records[1].sha256, sha256(JSON.stringify(claudeResume.entry())));
@@ -978,7 +1090,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
 
     const result = uninstall(home);
     assert.deepEqual(result.entriesKept, []);
-    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
+    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
     assert.deepEqual([fs.existsSync(claudeHook.target(home)), fs.existsSync(codexHook.target(home))], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1082,15 +1194,17 @@ test('an update from an install made before the resume hook adds its entry, and 
       const older = install(home, '0.1.0');
       for (const file of [claudeHook.target(home), codexHook.target(home)]) {
         const data = readJson(file);
-        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact');
+        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact' && !isRulesEntry(entry));
+        delete data.hooks.UserPromptSubmit;
+        delete data.hooks.SubagentStart;
         fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
       }
-      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact') }, null, 2), 'utf8');
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact' && !isRulesEntry(record.entry)) }, null, 2), 'utf8');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? [claudeHook.entry()] : [unrelated, claudeHook.entry()]);
 
       const manifest = sync(home, '0.2.0');
-      assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
-      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['WebFetch', created], ['^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', created], [undefined, created]]);
+      assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourClaudeStart() : [unrelated, ...ourClaudeStart()]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['WebFetch', created], ['^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', created], [undefined, created], [undefined, created], ['compact|clear|resume', created], [undefined, created]]);
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
@@ -1108,9 +1222,9 @@ test('uninstall removes the entry that is still there when the user removed the 
     const target = claudeHook.target(home);
     // The user took the resume hook out by hand and put a hook of their own in the file; the pause, web failure, guard and share hooks are still there.
     const theirs = { matcher: 'compact', hooks: [{ type: 'command', command: 'user command', timeout: 1 }] };
-    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs], PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop() } }, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs, claudeRulesStart.entry()], PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop(), UserPromptSubmit: [claudeRulesTurn.entry()], SubagentStart: [claudeRulesSubagent.entry()] } }, null, 2)}\n`, 'utf8');
     const result = uninstall(home);
-    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [5, 1]);
+    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [8, 1]);
     assert.deepEqual(readJson(target), { hooks: { SessionStart: [theirs] } }, 'the entries that were still ours are gone, and theirs stays');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1229,9 +1343,9 @@ test('install appends the hook entry to an existing file without disturbing othe
     const manifest = install(home, '0.1.0');
 
     const data = readJson(target);
-    assert.equal(data.hooks.SessionStart.length, 3);
+    assert.equal(data.hooks.SessionStart.length, 4);
     assert.deepEqual(data.hooks.SessionStart[0], seeded.hooks.SessionStart[0]);
-    assert.deepEqual(data.hooks.SessionStart.slice(1), ourEntries());
+    assert.deepEqual(data.hooks.SessionStart.slice(1), ourClaudeStart());
     assert.deepEqual(data.hooks.Stop, [...seeded.hooks.Stop, ...ourStop()], 'the user\'s Stop entry stays first, ours after it');
 
     const record = manifest.entries.find((e) => e.path === target);
@@ -1290,7 +1404,7 @@ test('install is idempotent: a second install adds no duplicate hook entry', () 
     const after = fs.readFileSync(target, 'utf8');
     assert.equal(after, before, 'a repeat install must not rewrite an already-correct file');
     const data = readJson(target);
-    assert.equal(data.hooks.SessionStart.length, 2, 'the doctor\'s entry and the resume hook\'s, once each');
+    assert.equal(data.hooks.SessionStart.length, 3, 'the doctor\'s entry, the resume hook\'s and the rules hook\'s, once each');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.createdFile, true, 'createdFile must still be true on the second install');
   } finally {
@@ -1466,7 +1580,7 @@ test('R3-001: install never clobbers a value of an unexpected shape, and reports
     const manifest = install(home, '0.1.0');
 
     // The pause, web failure, guard and share hooks are separate entries under their own keys, so they are written; the SessionStart value is not touched.
-    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop() } }, 'the unexpected value is left as it is');
+    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop(), UserPromptSubmit: [claudeRulesTurn.entry()], SubagentStart: [claudeRulesSubagent.entry()] } }, 'the unexpected value is left as it is');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
   } finally {
@@ -1788,12 +1902,12 @@ test('install records how many containers it made for each entry: 2 for a file w
     fs.writeFileSync(target, `${JSON.stringify({ theme: 'dark' }, null, 2)}\n`, 'utf8');
     const first = install(home, '0.1.0');
     const claude = (manifest) => manifest.entries.filter((e) => e.path === target).map((e) => [e.pointer.join('.'), e.createdContainers]);
-    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2]]);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2]], 'a repeat install keeps what the first one made');
+    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2], ['hooks.UserPromptSubmit', 2], ['hooks.SessionStart', 2], ['hooks.SubagentStart', 2]]);
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2], ['hooks.UserPromptSubmit', 2], ['hooks.SessionStart', 2], ['hooks.SubagentStart', 2]], 'a repeat install keeps what the first one made');
 
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [userStart] } }, null, 2)}\n`, 'utf8');
     uninstall(home);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1], ['hooks.PostToolUseFailure', 1], ['hooks.PreToolUse', 1], ['hooks.Stop', 1]], 'only the PostToolUse, PostToolUseFailure, PreToolUse and Stop lists were missing');
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1], ['hooks.PostToolUseFailure', 1], ['hooks.PreToolUse', 1], ['hooks.Stop', 1], ['hooks.UserPromptSubmit', 1], ['hooks.SessionStart', 0], ['hooks.SubagentStart', 1]], 'only the PostToolUse, PostToolUseFailure, PreToolUse, Stop, UserPromptSubmit and SubagentStart lists were missing');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1878,7 +1992,7 @@ test('a manifest written before createdContainers existed is uninstalled as befo
     fs.writeFileSync(manifestPath(home), JSON.stringify(older, null, 2), 'utf8');
 
     uninstall(home);
-    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [], PostToolUseFailure: [], PreToolUse: [], Stop: [] } });
+    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [], PostToolUseFailure: [], PreToolUse: [], Stop: [], UserPromptSubmit: [], SubagentStart: [] } });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

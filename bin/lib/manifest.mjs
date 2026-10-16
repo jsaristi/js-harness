@@ -12,6 +12,7 @@ import { gateFirstDir } from './gate-first.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
+import { hygieneDir } from './memory-hygiene.mjs';
 
 function skillContent(version) {
   return `---
@@ -31,7 +32,7 @@ js-harness commands:
 - \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after ${ruleValue('gate-max', 'minutes')} minutes (\`--max <minutes>\`), and its exit code is the command's.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin). Where \`codexReview\` is off at the pushed commit it asks for none; the first push to a repository that holds no branch passes and says what went unread.
 - \`js-harness functions\` — each function a project can turn off and on (\`harness.json\` "functions": the code map, the TypeScript language server, the Codex review), its value here and why; \`functions apply\` makes the clone what they ask, \`functions set <name> <value>\` writes one.
-- \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired. In the harness's own checkout, \`rules change <id>\` is the one command that changes one of its rules, and the gate's \`rules\` row reports a line a commit adds that restates a rule's value instead of marking it \`rule:<id>\`, and fails it once that rule refuses.
+- \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired. In the harness's own checkout, \`rules change <id>\` is the one command that changes one of its rules, and the gate's \`rules\` row reports a line a commit adds that restates a rule's value instead of marking it \`rule:<id>\`, and fails it once that rule refuses. Its turn-start hook, \`rules --hook\`, tells a session once when the rules on the default branch changed since its merge base, after a compaction too and to a sub-agent at its start.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
@@ -264,6 +265,24 @@ export const entryComponents = [
     pointer: ['hooks', 'Stop'],
     entry: () => shareHookEntry(),
   },
+  {
+    id: 'claude-rules-turn-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'UserPromptSubmit'],
+    entry: () => rulesHookEntry(),
+  },
+  {
+    id: 'claude-rules-start-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'SessionStart'],
+    entry: () => rulesHookEntry(RULES_RETOLD_MATCHER),
+  },
+  {
+    id: 'claude-rules-subagent-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'SubagentStart'],
+    entry: () => rulesHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -354,6 +373,24 @@ export const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 function shareHookEntry() {
   return {
     hooks: [{ type: 'command', command: SHARE_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the rules' turn-start hook, guarded to exit 0 like the pause hook's: an older js-harness that answers
+ * 2 to `--hook` never blocks a turn. */
+export const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
+/** The sources of `SessionStart` after which what the context held may be gone, so the session is told again. */
+export const RULES_RETOLD_MATCHER = 'compact|clear|resume';
+
+/** `rules --hook` (bin/lib/rules-reach.mjs) registered on `UserPromptSubmit`, on `SessionStart` for
+ * `RULES_RETOLD_MATCHER`, and on `SubagentStart`: letter F's turn-start hook, which tells a session what the rules on
+ * the default branch say that its merge base does not (odd/tasks/rule-hierarchy.md, "Reach: the turn-start hook (T16f,
+ * first part)"). Claude Code only, until a logging hook confirms Codex's events. It prints nothing on a turn with no
+ * change. Five seconds: a node start and up to four git calls, each limited on its own. */
+function rulesHookEntry(matcher) {
+  return {
+    ...(matcher === undefined ? {} : { matcher }),
+    hooks: [{ type: 'command', command: RULES_HOOK_COMMAND, timeout: 5 }],
   };
 }
 
@@ -1219,6 +1256,15 @@ export function sync(home, version, deps = {}) {
  * `recordScheduledTask` creates), and `uninstall`, or `remote stop --at-login`, can be run again. An optional file
  * that could not be removed has no such second chance: that older gap is left as it is. */
 export function uninstall(home, deps = {}) {
+  // The folder of memory hygiene first, on its own: what is left of `.js-harness` once it is gone is then removed
+  // by the steps below, with a manifest and without, as when `memory` never ran.
+  const memory = removeMemoryHygieneFolder(home, deps.removeFile ?? fs.rmSync, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync);
+  const result = uninstallInstalled(home, deps);
+  return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory) };
+}
+
+/** `uninstall` without the folder of memory hygiene, which it removes before calling this. */
+function uninstallInstalled(home, deps) {
   const removeFile = deps.removeFile ?? fs.rmSync;
   const statFile = deps.statFile ?? fs.statSync;
   const listDir = deps.listDir ?? fs.readdirSync;
@@ -1436,6 +1482,58 @@ function removeChannelFolder(home, removeFile, statFile) {
   }
   return { removed: [dir], kept: [] };
 }
+
+/** Removes the folder of memory hygiene under `home` (`hygieneDir` of `memory-hygiene.mjs`), as `{ removed, kept }`
+ * (odd/tasks/memory-hygiene.md, D4 and T9). A project's folder that holds a snapshot is kept, with the stamps of its
+ * snapshots and whether its journal is beside them: a snapshot is the only copy of what a memory pass changed, so it
+ * is never removed on its way out. The other projects' folders go; with none kept, the whole folder goes. A folder
+ * that cannot be looked at or removed is kept with the error code, like the channel's, one project at a time, so
+ * one held open does not hide what was removed before it, the projects after it, or the stamps kept. */
+function removeMemoryHygieneFolder(home, removeFile, statFile, listDir) {
+  const dir = hygieneDir(home);
+  const unremovable = (folder, err) => ({ path: folder, reason: 'unremovable', code: err.code ?? 'unknown error' });
+  let projects;
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
+    projects = listDir(dir).sort().map((name) => path.join(dir, name));
+  } catch (err) {
+    return { removed: [], kept: [unremovable(dir, err)] };
+  }
+  const kept = [];
+  const goes = [];
+  for (const project of projects) {
+    try {
+      const snapshots = path.join(project, 'snapshots');
+      const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
+      if (stamps.length > 0) kept.push({ path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile) });
+      else goes.push(project);
+    } catch (err) {
+      kept.push(unremovable(project, err));
+    }
+  }
+  if (kept.length === 0) {
+    try {
+      removeFile(dir, { recursive: true, force: true });
+      return { removed: [dir], kept: [] };
+    } catch (err) {
+      return { removed: [], kept: [unremovable(dir, err)] };
+    }
+  }
+  const removed = [];
+  for (const project of goes) {
+    try {
+      removeFile(project, { recursive: true, force: true });
+      removed.push(project);
+    } catch (err) {
+      kept.push(unremovable(project, err));
+    }
+  }
+  kept.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { removed, kept };
+}
+
+/** `memoryKept` of `uninstall`'s result, there only when a folder of memory hygiene is kept, the one case it speaks of. */
+const memoryResult = (memory) => (memory.kept.length > 0 ? { memoryKept: memory.kept } : {});
 
 /** Removes the folder `js-harness remote` writes under `home` (`remoteDir` of `remote.mjs`) with what is left in
  * it, the logs of the servers and the markers of their stops, as `{ removed, kept }`, like `removeChannelFolder`:

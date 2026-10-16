@@ -17,7 +17,9 @@ const ALWAYS_PACKED = /^(package\.json|readme(\.[^/]*)?|licen[cs]e(\.[^/]*)?)$/i
 function packedPaths() {
   const result = npm(NPM_CLI, ['pack', '--dry-run', '--json', '--logs-max=0'], { cwd: REPO_ROOT });
   assert.equal(result.status, 0, `npm pack --dry-run exited ${result.status}: ${result.stderr}`);
-  const [pack] = JSON.parse(result.stdout);
+  // npm 11 prints an array of packs, npm 12 an object keyed by package name (seen with 12.2.0, 2026-10-16).
+  const parsed = JSON.parse(result.stdout);
+  const [pack] = Array.isArray(parsed) ? parsed : Object.values(parsed);
   return pack.files.map((file) => file.path).sort();
 }
 

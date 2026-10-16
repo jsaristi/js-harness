@@ -60,7 +60,7 @@ Incident (2026-10-10): a check and the step it should allow were joined by a sem
 
 ## 4. ${PROTOCOLS[3]}
 
-Incident (2026-10-11): the share of its context at which a session writes its state changed three times in two days and was carried by hand to each place that stated it; the old value stayed, read as in force, beside the new one.
+Incident (2026-10-11): the user found a 73 percent mark still read as in force after the share of its context at which a session writes its state had changed three times in two days, each time carried by hand to the places that stated it; the old value stayed beside the new one, and the user called it systemic and repeated.
 
 - A new rule or a new protocol first passes five questions: did it happen; twice, or once at a cost; can a check do it; can an existing protocol be amended; what does it cost and what leaves.
 - A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`AGENTS.md\`, a protocol. A memory note is never its home.
@@ -68,6 +68,7 @@ Incident (2026-10-11): the share of its context at which a session writes its st
 - One act. In the harness's own checkout, \`js-harness rules change <id>\`, on a \`rule/\` branch, writes the declaration, its source and the rendered list in one commit; a revert and an urgent change are the same command. In a project, its own rules are \`docs/rules.json\`, edited by hand, and \`js-harness rules check\` refuses a phrase gone from its file or a rule deleted instead of retired.
 - A rule that leaves is retired, never deleted: it keeps its id, with its date and its successor. Text it superseded is removed, not annotated.
 - A rule of the user's changes only with the user's words: the quotation, its date, and where they accepted the reading of it.
+- Done: \`js-harness rules check\` exits 0.
 - Cost: one command and one commit a change, and this section, read only when a rule changes. Reviewed by 2026-11-16.
 
 ## 5. ${PROTOCOLS[4]}

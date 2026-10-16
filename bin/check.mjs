@@ -12,8 +12,9 @@ import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
-import { ruleValue } from './lib/rules.mjs';
+import { readRules, ruleValue } from './lib/rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
+import { rulesOfText } from './lib/rules-change-run.mjs';
 import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
@@ -227,18 +228,21 @@ const shortLine = (text) => (text.trim().length > 160 ? `${text.trim().slice(0, 
  * read on the staged whole file, since a line alone cannot say whether it is inside one. During a merge a line counts
  * only when it is new against both parents, so a merge is never refused for what a parent brought. `rules` is the
  * list of the package, which in this repository is the checkout itself. No row when no rule carries patterns, the
- * change adds no line to a text in force, or git does not answer. */
-function checkListRow(cwd, rules, spawn) {
+ * change adds no line to a text in force, or git does not answer. `side` names the two sides of the diff and how a
+ * file's text is read: the commit's are `STAGED`, the merge door's are `doorSide` (odd/tasks/rule-hierarchy.md, "The
+ * merge door (T16e)"), where a git that does not answer is a failure and the merge of a parent is not filtered. */
+function checkListRow(cwd, rules, spawn, side = STAGED) {
   const scanned = rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns));
   if (scanned.length === 0) return [];
   const git = hookGit(cwd, spawn);
   // The sides named a/ and b/ whatever the clone's diff.mnemonicPrefix says, and a path with an accent unquoted.
-  const diffOf = (...against) => git?.(['-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', ...against]) ?? null;
+  const diffOf = (...against) => git?.(['-c', 'core.quotePath=false', 'diff', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', ...side.revs(...against)]) ?? null;
   const diff = diffOf();
+  if (diff === null) return side.strict ? [UNANSWERED] : [];
   if (!diff) return [];
   const key = (one) => `${one.file}\n${one.line}\n${one.text}`;
   let added = addedLines(diff).filter((one) => isTextInForce(one.file));
-  if (git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) {
+  if (side.mergeFilter && git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) {
     const fromTheirs = new Set(addedLines(diffOf('MERGE_HEAD') ?? '').map(key));
     added = added.filter((one) => fromTheirs.has(key(one)));
   }
@@ -246,7 +250,11 @@ function checkListRow(cwd, rules, spawn) {
   const inForce = new Map();
   const lines = [];
   for (const one of added) {
-    if (!inForce.has(one.file)) inForce.set(one.file, new Set(inForceLines(one.file, git(['show', `:${one.file}`]) ?? '').map((line) => line.line)));
+    if (!inForce.has(one.file)) {
+      const text = side.text(git, one.file);
+      if (text === null && side.strict) return [UNANSWERED];
+      inForce.set(one.file, new Set(inForceLines(one.file, text ?? '').map((line) => line.line)));
+    }
     if (inForce.get(one.file).has(one.line)) lines.push({ path: one.file, line: one.line, text: one.text.replace(/\r$/, '') });
   }
   const byId = new Map(scanned.map((rule) => [rule.id, rule]));
@@ -257,6 +265,80 @@ function checkListRow(cwd, rules, spawn) {
   const detail = `${counted}, ${refusing === 0 ? 'none' : refusing} of a rule that ${refusing > 1 ? 'refuses them' : 'refuses it'}`;
   const found = findings.map((finding) => `${finding.path}:${finding.line} restates rule "${finding.id}", ${rowState(byId.get(finding.id))}: ${shortLine(finding.text)} (write \`rule:${finding.id}\` instead of the value, or change the rule with \`js-harness rules change ${finding.id}\`)`);
   return [refusing === 0 ? { name: 'rules', pass: true, info: true, detail, lines: found } : { name: 'rules', pass: false, detail, lines: found }];
+}
+
+/** The two sides of the commit's row: what it stages (`git diff --cached`), and a file's text as the index holds it. */
+const STAGED = {
+  strict: false,
+  revs: (...against) => ['--cached', ...against],
+  text: (git, file) => git(['show', `:${file}`]),
+  mergeFilter: true,
+};
+
+/** The row `rules` of the merge door, when git does not answer: the door cannot read what the pull request brings. */
+const UNANSWERED = { name: 'rules', pass: false, detail: 'git did not answer, so the door cannot read the lines this pull request brings' };
+const RULES_DATA_FILE = 'bin/lib/rules-data.mjs';
+const DOOR_BRANCH = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch: a rule changes only by js-harness rules change';
+
+/** The two sides of the merge door's row: the lines `base`..HEAD brings, and a file's text as HEAD holds it. */
+const doorSide = (base) => ({
+  strict: true,
+  revs: () => [base, 'HEAD'],
+  text: (git, file) => git(['show', `HEAD:${file}`]),
+  mergeFilter: false,
+});
+
+/** The list `bin/lib/rules-data.mjs` holds at HEAD, read as text and checked as the list the rules accept: `{ list }`,
+ * `list` being `null` when the file is absent, or `{ row }` with the failure of the row `rules` that says why it is
+ * not one. */
+function candidateList(git) {
+  const listed = git(['ls-tree', 'HEAD', '--', RULES_DATA_FILE]);
+  if (listed === null) return { row: UNANSWERED };
+  if (listed.trim() === '') return { list: null };
+  const text = git(['show', `HEAD:${RULES_DATA_FILE}`]);
+  if (text === null) return { row: UNANSWERED };
+  let list;
+  try {
+    list = rulesOfText(text);
+  } catch (err) {
+    return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not parse: ${err.message}` } };
+  }
+  const faults = readRules(list, { declared: list });
+  if (faults.length > 0) return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not validate`, lines: faults } };
+  return { list };
+}
+
+/** The rules the door judges by: the running list's, each with the stricter row of its own and the candidate's. A row
+ * that refuses wins over one that does not; a rule the candidate does not declare keeps its own row. The patterns are
+ * the running list's, so a pull request cannot loosen the judge it is judged by. */
+function stricterRules(running, candidate) {
+  const refuses = (rule) => rule?.row?.refuses !== undefined;
+  return running.map((rule) => {
+    const other = candidate.find((item) => item.id === rule.id);
+    const row = refuses(rule) ? rule.row : refuses(other) ? other.row : (rule.row ?? other?.row);
+    return { ...rule, row };
+  });
+}
+
+/** `check --door --base <rev> [--branch <name>]` (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): the rule rows
+ * of the lines `base`..HEAD brings, which merge-queue runs in the candidate's worktree after each merge. It runs the
+ * running list (`rules`, the patterns of `main`'s copy of this file) and the row `rules` only; the rest of `check` is
+ * not run here. With `branch`, a pull request that changes `bin/lib/rules-data.mjs` from a branch not named `rule/` is
+ * refused, since a rule changes only by `js-harness rules change`. A rule's row is the stricter of the running list's
+ * and the candidate's, and a candidate list that does not parse or validate is refused. A git that does not answer is a
+ * failure of the row, since the door then cannot read what the pull request brings. */
+export function checkDoor(cwd, { rules = RULES, spawn = spawnSync, base = null, branch = null } = {}) {
+  const git = hookGit(cwd, spawn);
+  if (git === null) return [UNANSWERED];
+  const rows = [];
+  if (branch !== null) {
+    const changed = git(['-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', base, 'HEAD']);
+    if (changed === null) return [UNANSWERED];
+    if (!branch.startsWith('rule/') && changed.split(/\r?\n/).includes(RULES_DATA_FILE)) rows.push({ name: 'rules', pass: false, detail: DOOR_BRANCH });
+  }
+  const candidate = candidateList(git);
+  if (candidate.row) return [...rows, candidate.row];
+  return [...rows, ...checkListRow(cwd, stricterRules(rules, candidate.list ?? []), spawn, doorSide(base))];
 }
 
 const DOCUMENTS_SHAPE ='harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
@@ -423,6 +505,41 @@ export function checkCitations(cwd, spawn = spawnSync) {
   const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;
   const row = { name: 'citations', pass: true, info: true, detail: `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}` };
   return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
+}
+
+/** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
+ * a review reads, sized as `js-harness codex-review` sizes a range (documents and marked files left out), against
+ * the rule `reviewed-commit-lines`. Over it the row fails, so the commit is split before it is made: a commit the
+ * reviewer refused had already cost its gate, and remaking it cost two more. The rule is of this repository only,
+ * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
+ * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
+ * own branch), or when git cannot say. */
+export function checkCommitSize(cwd, spawn = spawnSync) {
+  const git = hookGit(cwd, spawn);
+  if (!git || git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) return [];
+  const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
+  if (!Object.hasOwn(rule, 'value')) return [];
+  const most = rule.value;
+  const numstat = git(['diff', '--cached', '--numstat', '-z', '--no-renames', '--no-relative']);
+  if (!numstat) return [];
+  let changed;
+  try {
+    const files = numstatFiles(numstat);
+    // The marks are those of the commit being made, as its review will read them: the tree the index holds, so a
+    // staged `.gitattributes` counts (Codex, 2026-10-16). Writing that tree is what the commit itself does.
+    const tree = git(['write-tree'])?.trim();
+    if (!tree) return [];
+    const why = leftOutOf(files.map((file) => file.path), { cwd, source: tree, spawn });
+    if (why === null) return [];
+    changed = reviewScope(files, why).read.reduce((sum, file) => sum + file.changedLines, 0);
+  } catch {
+    return [];
+  }
+  if (changed === 0) return [];
+  const said = `the staged change has ${counted(changed, 'changed line')} a review reads`;
+  const bound = `the ${counted(most, 'changed line')} of rule reviewed-commit-lines`;
+  if (changed <= most) return [{ name: 'commit-size', pass: true, detail: `${said}, within ${bound}` }];
+  return [{ name: 'commit-size', pass: false, detail: `${said}, over ${bound}: split it into commits under that, each with its own gate, before the reviewer refuses it` }];
 }
 
 /** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
@@ -2237,9 +2354,10 @@ export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Dat
 }
 
 const USAGE = [
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>] | js-harness check --door --base <rev> [--branch <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
   '       --first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator\'s batch run on main (odd/tasks/gate-first.md)',
+  '       --door --base <rev> [--branch <name>]: runs only the rule rows over the lines <rev>..HEAD brings, judged by the running list, and exits 1 when one refuses (the merge door of merge-queue, odd/tasks/rule-hierarchy.md); --branch names the pull request\'s branch, which may change bin/lib/rules-data.mjs only when it is a rule/ branch',
 ].join('\n');
 
 // A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage
@@ -2272,8 +2390,11 @@ export function parseGateWait(argv) {
   return { noWait, waitMinutes: wait === undefined ? GATE_WAIT_MS / 60_000 : Number(wait) };
 }
 
-const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait', '--first'];
-const BARE_FLAGS = ['--push', '--no-wait', '--subagents'];
+const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait', '--first', '--base', '--branch'];
+const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door'];
+// The flags of a gate that runs sensors or waits for the lock, and `--home`, where that lock and the gate log live:
+// `--door` uses none of them, so one of them with it is refused rather than ignored.
+const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--head', '--remote', '--home'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
  * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited
@@ -2301,6 +2422,14 @@ function parseArgs(argv, env) {
   const first = get('--first');
   if (first !== undefined && first.trim() === '') throw new CheckArgError('--first needs a reason, not an empty one');
   if (first !== undefined && argv.includes('--push')) throw new CheckArgError('--first goes with a gate that runs its sensors, not with --push');
+  const door = argv.includes('--door');
+  const base = get('--base') ?? null;
+  const branch = get('--branch') ?? null;
+  if (door && base === null) throw new CheckArgError('--door needs --base <rev>: the lines it judges are <rev>..HEAD');
+  if (door && argv.includes('--push')) throw new CheckArgError('--door goes with the rule rows, not with --push');
+  const gate = GATE_FLAGS.find((flag) => door && argv.includes(flag));
+  if (gate !== undefined) throw new CheckArgError(`--door runs no gate: ${gate} goes with a gate, not with --door`);
+  if (!door && (base !== null || branch !== null)) throw new CheckArgError('--base and --branch go with --door');
   return {
     first: first?.trim(),
     cwd: get('--cwd') ?? process.cwd(),
@@ -2311,6 +2440,9 @@ function parseArgs(argv, env) {
     remote: get('--remote') ?? 'origin',
     noWait,
     waitMinutes,
+    door,
+    base,
+    branch,
   };
 }
 
@@ -2335,6 +2467,12 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     return 2;
   }
   const { cwd, home, push, head, remote, noWait, waitMinutes } = parsed;
+  // The merge door runs the rule rows of the lines a pull request brings, and nothing else: no budget, no sensors, no lock.
+  if (parsed.door) {
+    const rows = [...checkDoor(cwd, { rules: deps.rules, spawn: deps.git, base: parsed.base, branch: parsed.branch }), ...checkFailures(cwd)];
+    for (const row of rows) console.log(formatRow(row));
+    return rows.every((row) => row.pass) ? 0 : 1;
+  }
   // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   //
@@ -2346,7 +2484,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

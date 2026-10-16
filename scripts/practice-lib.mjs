@@ -323,6 +323,9 @@ const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 /** The command of the share check, as `bin/lib/manifest.mjs` spells it (`SHARE_HOOK_COMMAND`); the same test holds the two together. */
 const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 
+/** The command of the rules' turn-start hook, as `bin/lib/manifest.mjs` spells it (`RULES_HOOK_COMMAND`); the same test holds the two together. */
+const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
+
 /** The matcher of the guard hook, as `bin/lib/manifest.mjs` spells it: anchored, so that each tool is a whole name. The same test holds the two together. */
 const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$';
 
@@ -340,6 +343,9 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'UserPromptSubmit', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|resume', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
@@ -393,27 +399,34 @@ export function hostHooksProblem(text, seededCommand, host) {
     const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
     return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(entryShown).join(' | ')}`;
   }
-  return postToolUseProblem(data, host);
+  return postToolUseProblem(data, host) ?? tailProblem(data, host, 'UserPromptSubmit') ?? tailProblem(data, host, 'SubagentStart');
 }
 
 /** What is wrong with `hooks.PostToolUse` of a host file, or `null` when nothing is. Claude Code holds the pause
  * entry once, with no matcher, at the end of the list: `install` appends it, so a user's own entry before it stays
  * first and untouched. Codex holds no entry of the harness there, so one found in its file is a problem. */
 function postToolUseProblem(data, host) {
-  const list = data?.hooks?.PostToolUse;
-  const ours = hooksOfHost(host).filter((hook) => hook.event === 'PostToolUse');
-  if (!Array.isArray(list)) return ours.length === 0 ? null : 'the file holds no list at hooks.PostToolUse';
-  const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === 'PostToolUse').map((hook) => hook.command);
+  return tailProblem(data, host, 'PostToolUse');
+}
+
+/** What is wrong with the list `hooks.<event>` of a host file, held as `postToolUseProblem` holds `PostToolUse`: the
+ * harness's entries of that event once each at its end, and none where the host gets none (the rules' turn-start
+ * entries are Claude Code's alone). */
+function tailProblem(data, host, event) {
+  const list = data?.hooks?.[event];
+  const ours = hooksOfHost(host).filter((hook) => hook.event === event);
+  if (!Array.isArray(list)) return ours.length === 0 ? null : `the file holds no list at hooks.${event}`;
+  const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === event).map((hook) => hook.command);
   const harnessFound = list.filter((entry) => harnessCommands.includes(entryCommand(entry)));
   const found = list.length === 0 ? 'no entry' : list.map(entryShown).join(' | ');
-  if (ours.length === 0) return harnessFound.length === 0 ? null : `expected no entry of the harness in hooks.PostToolUse of ${host}; found: ${found}`;
+  if (ours.length === 0) return harnessFound.length === 0 ? null : `expected no entry of the harness in hooks.${event} of ${host}; found: ${found}`;
   const tail = list.slice(-ours.length);
   const asExpected =
     harnessFound.length === ours.length &&
     ours.every((hook, index) => entryCommand(tail[index]) === hook.command && tail[index]?.matcher === hook.matcher);
   if (asExpected) return null;
   const expected = ours.map((hook) => `"${hook.command}" (${hook.matcher === undefined ? 'no matcher' : `matcher ${hook.matcher}`})`).join(', then ');
-  return `expected ${expected} once, at the end of hooks.PostToolUse; found: ${found}`;
+  return `expected ${expected} once, at the end of hooks.${event}; found: ${found}`;
 }
 
 /** What is wrong with a host file after `uninstall`, or `null` when it is the file as `setup` seeded it (`seededText`, the
@@ -441,7 +454,7 @@ function leftoverList(text, seededText) {
   } catch {
     return null;
   }
-  return ['SessionStart', 'PostToolUse', 'PostToolUseFailure'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
+  return ['SessionStart', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'SubagentStart'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
 }
 
 // ---- the gate log of the practice home -------------------------------------------------------------------------------

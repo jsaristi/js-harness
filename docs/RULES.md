@@ -48,7 +48,7 @@ The one model a Codex review runs on: gpt-6.1-sol.
 ### reviewed-commit-lines
 About how many changed lines a commit that will be reviewed stays under: 1,200 changed lines.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/check.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### session-effort

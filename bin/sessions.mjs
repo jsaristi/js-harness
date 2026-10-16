@@ -51,6 +51,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
+import { boardMemory } from './lib/memory-hygiene.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { readTickets } from './lib/gate-first.mjs';
@@ -635,6 +636,9 @@ export async function sessionsMain(
       gateTickets,
       pullRequests: readPullRequests(run, root),
       relief: readRelief(reliefFile, readFile),
+      // Whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5): the main checkout's
+      // memory folder, which the host keeps beside the transcripts, and the journal `memory` keeps under the home.
+      memory: boardMemory({ home: harnessHome, slug, folder: path.join(projectDir, 'memory'), now: now() }),
       notVisible: NOT_VISIBLE,
     };
   };

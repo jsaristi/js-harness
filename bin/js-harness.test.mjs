@@ -56,6 +56,14 @@ test('--help prints usage listing check and exits 0', () => {
   assert.match(result.stdout, /check/);
 });
 
+test('--help says what check --door runs, the rule rows of the lines a pull request brings', () => {
+  const result = run(['--help']);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^ {2}check {7}.*check --door --base <rev> \[--branch <name>\] runs only the rule rows/m);
+  // The command names keep their column: the line of `gate` after `check` is not moved by it.
+  assert.match(result.stdout, /^ {2}gate {8}Run a command under the machine's gate lock/m);
+});
+
 // install-update T8: `upgrade` asks the copy on the path which version it is before it lets it sync.
 test('--version prints the version of this copy, alone on one line, and exits 0; the help names it', () => {
   const result = run(['--version']);
@@ -64,6 +72,10 @@ test('--version prints the version of this copy, alone on one line, and exits 0;
   assert.equal(result.stdout, `${version}\n`);
   assert.equal(result.stderr, '');
   assert.match(run(['--help']).stdout, /^js-harness --version /m);
+});
+
+test('the merge-queue help says each pull request merged into the candidate passes main\'s rule rows first (odd/tasks/rule-hierarchy.md, T16e)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*passes main's rule rows first \(check --door\), and one that fails leaves the batch/);
 });
 
 test('unknown command exits 2', () => {
@@ -247,7 +259,7 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen', 'host-update', 'gentle-ai-sync'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'unseen', 'host-update', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.

@@ -429,7 +429,7 @@ const FILE_KEYS = [
   'path', 'phrases', 'retired', 'successors', 'patterns', 'row', 'failure', 'differs', 'review',
 ];
 // The keys that say what a rule says, in the order the hash reads them.
-const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phrases', 'retired', 'successors'];
+export const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phrases', 'retired', 'successors'];
 
 // The last line of that paragraph: where the engine version and the day of a check are read, since the list holds neither.
 const LIST_NOTE = 'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
