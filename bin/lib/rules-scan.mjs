@@ -35,9 +35,19 @@ export function inForceLines(path, text) {
   return lines;
 }
 
-/** The rules in force that carry patterns, each with its regular expressions. */
+/** The regular expression of `pattern`, or `null` for one that is no regular expression: `readRules` reports that one
+ * as a finding of the list, so the scan leaves it out instead of throwing before any finding is printed. */
+function compiled(pattern) {
+  try {
+    return patternOf(pattern);
+  } catch {
+    return null;
+  }
+}
+
+/** The rules in force that carry patterns, each with the regular expressions of those that compile. */
 function scanned(rules) {
-  return rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns)).map((rule) => ({ id: rule.id, patterns: rule.patterns.map(patternOf) }));
+  return rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns)).map((rule) => ({ id: rule.id, patterns: rule.patterns.map(compiled).filter((pattern) => pattern !== null) }));
 }
 
 /** The findings in `lines`: `{ id, path, line, text }` for each line a pattern of a rule in force matches, once per

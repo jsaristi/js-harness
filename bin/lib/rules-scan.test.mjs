@@ -63,3 +63,10 @@ test('on the real list, every rule with patterns finds its own planted line, and
     assert.deepEqual(scanLines(RULES, lines).filter((finding) => finding.id === id).map((finding) => finding.line), [1], id);
   }
 });
+
+test('a pattern that is no regular expression is not scanned, so the scan never throws: readRules reports it', () => {
+  const broken = { ...WAIT, patterns: ['(', 'wait.{0,40}{amount}'] };
+  const files = [{ path: 'docs/ROADMAP.md', text: 'wait 60 minutes\n' }];
+  assert.deepEqual(countFindings([broken, { ...PAUSE, patterns: ['['] }], files), { counts: { 'gate-wait': 1, 'context-pause': 0 }, unscanned: [] });
+  assert.deepEqual(scanLines([{ ...WAIT, patterns: [')', 7] }], inForceLines('docs/ROADMAP.md', 'wait 60 minutes\n')), []);
+});

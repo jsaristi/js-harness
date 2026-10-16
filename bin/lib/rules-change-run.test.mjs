@@ -456,3 +456,12 @@ test('a branch not based on origin/main is said before an input that is not JSON
   assert.equal(result.code, 1);
   assert.match(result.err, /^not changed: rule\/gate-wait is not based on origin\/main: git rebase origin\/main$/);
 });
+
+test('a turn to refuse with a pattern that is no regular expression is refused for its pattern, never thrown', async () => {
+  const repo = repository({ list: SCANNED, files: { 'docs/FAILURES.md': REGISTER } });
+  const before = snapshot(repo);
+  const result = await change(repo, ['gate-wait'], { set: { patterns: ['('], row: { refuses: TODAY } }, source: DESIGN }, { run: fetching(FETCHED) });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /the pattern "\(" is not a regular expression/);
+  assert.deepEqual(snapshot(repo), before);
+});
