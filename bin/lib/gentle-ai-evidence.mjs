@@ -18,16 +18,24 @@ export function evidenceLines(diff) {
   const found = [];
   let file = null;
   let at = 0;
+  let inHunk = false;
   for (const line of String(diff).split(/\r?\n/)) {
-    if (line.startsWith('+++ ')) {
-      file = line.startsWith('+++ b/') ? line.slice(6) : null;
+    if (line.startsWith('diff --git ')) {
+      [file, inHunk] = [null, false];
+      continue;
+    }
+    // A `+++ ` line is a header only before a file's first hunk, since an added line can start with "++"; git ends
+    // a header with a tab when the path holds a space.
+    if (!inHunk && line.startsWith('+++ ')) {
+      file = line.startsWith('+++ b/') ? line.slice(6).replace(/\t$/, '') : null;
       continue;
     }
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
     if (hunk) {
-      at = Number(hunk[1]);
+      [at, inHunk] = [Number(hunk[1]), true];
       continue;
     }
+    if (!inHunk) continue;
     if (line.startsWith('+')) {
       if (file !== null && FEATURE_DOCUMENT.test(file) && /gentle-ai/i.test(line)) found.push({ path: file, line: at, text: line.slice(1) });
       at += 1;
@@ -88,7 +96,7 @@ export function gentleAiEvidence(cwd, { main, head, codeCommits, cutover = GENTL
     for (const [from, to] of ranges) {
       const [first, last] = [resolve(from), resolve(to)];
       if (first === null || last === null || !inRange.has(last)) {
-        stray ??= { id: (last === null ? to : from).slice(0, 7), at };
+        stray ??= { id: (last === null || !inRange.has(last) ? to : from).slice(0, 7), at };
         continue;
       }
       for (const id of [first, ...(git(['rev-list', `${first}..${last}`]) ?? '').split('\n').filter(Boolean)]) name(id, at);

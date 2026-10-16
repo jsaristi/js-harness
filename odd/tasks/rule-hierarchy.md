@@ -2775,16 +2775,24 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (`3d0cc94`, gate passed, gentle-ai medium not due); Codex recheck `bbf7dc2..3d0cc94`
     correct (0.97), both fixed. Pull request 314 on `main` (302 landed), the orchestrator told.
     Slice (a) landed as pull request 314. Slice (b), his yes of 2026-10-16 (Progress), on
-    `feat/merge-door-evidence` (worktree `D:/js-harness-worktrees/merge-evidence`), not committed
-    yet: `bin/lib/gentle-ai-evidence.mjs` (+ test, 2/2 green), `reviewEvidence` in
-    `bin/merge-queue.mjs` (8 tests seen red, then green), `codexReviewOffAt` exported from
-    `bin/check.mjs`, help and USAGE and README, a `checked-not-read` sighting. Cut-over
-    `2026-10-17T05:00:00Z`. Next: the protocol line in `bin/lib/protocols-skill.mjs` (the review
-    sentence gains "name each code commit ... on a gentle-ai line"; its first replace missed on
-    escaping, use Edit), run `node --test bin/lib/protocols-skill.test.mjs` and
-    `bin/lib/manifest.test.mjs`, commit through the gate, independent verifier (Risk item 5),
-    gentle-ai `--escalate-item 5`, Codex, pull request, notify. Then slice (c), then the
-    throughput plan's item 2 design (two readers). Throughput item 7 is pull request 323
+    `feat/merge-door-evidence` (worktree `D:/js-harness-worktrees/merge-evidence`), branched at
+    `64933f6`, committed as `b2efbd2` through the gate (the protocol line is in it; verifier and
+    gentle-ai on `64933f6..b2efbd2` high (item 5 escalated), risk and reliability, approved and
+    acknowledged; the independent verifier passed it with no blocker, 38/38 and 2/2, probes of CRLF,
+    a non-ASCII path, an edited line and merges of a sibling branch). One correction batch, test
+    first (both seen red): the rebase hint named `a` of a range whose `b` is no commit of the
+    branch, now `b`; an added line starting "++ " read as a file header, and a header git ends with
+    a tab (a path with a space) missed its document, now a `+++ ` line is a header only before a
+    file's first hunk and loses its tab. Recorded only: a committer date set before the cut-over,
+    or an old branch rebased after it; a seven-digit number on the line read as the stray id; an
+    ambiguous short hash reads as stray; with the review off a merge of another branch asks
+    nothing; no test of a commit named only in the body (the body is never read). Files:
+    `bin/lib/gentle-ai-evidence.mjs` (+ test), `reviewEvidence` in `bin/merge-queue.mjs` (9 tests
+    seen red, then green), `codexReviewOffAt` exported from `bin/check.mjs`, help and USAGE and
+    README, the protocol line in `bin/lib/protocols-skill.mjs`, a `checked-not-read` sighting.
+    Cut-over `2026-10-17T05:00:00Z`. Next: commit the correction through the gate, assess it,
+    Codex on `64933f6..`, pull request, notify. Then slice (c), then the throughput plan's item 2
+    design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident

@@ -669,6 +669,12 @@ test('a hash on a gentle-ai line that is no commit of the branch leaves it out, 
   assert.equal(out[0], `${noEvidence(code.slice(0, 7)).replace(/\.$/, '')}; ${main.slice(0, 7)} on odd/tasks/g.md:2 is no commit of this branch: a rebase changes the hashes, so name the new ones.`);
 });
 
+test('a range whose end is no commit of the branch holds nothing, and the hint names that end', async () => {
+  const { root, code, main, head } = makeEvidenceRepo(({ short, main: base }) => `- gentle-ai: ${short}..${base.slice(0, 7)} approved`);
+  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.equal(out[0], `${noEvidence(code.slice(0, 7)).replace(/\.$/, '')}; ${main.slice(0, 7)} on odd/tasks/g.md:2 is no commit of this branch: a rebase changes the hashes, so name the new ones.`);
+});
+
 test('a code commit made before the cut-over asks for no line, and its coverage line says so', async () => {
   const { root, main, code, head } = makeEvidenceRepo(() => '- no line of the review here');
   const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)], '2999-01-01T00:00:00Z');
