@@ -2035,7 +2035,10 @@ timeout is a notice not given, like any fault.
 
 **Failure.** The hook never blocks and never prints a fault into the model's context. A fault goes to
 standard error with exit 0. The faults: a file that cannot be read, git missing, no `main`, or a list
-that does not parse.
+that does not parse. A list that is not in `main`'s tree is no fault: `main` declares no rule, so a
+revert of the list is told as its rules removed, and a branch that adds a list before `main` has one
+hears nothing (Codex's finding of 2026-10-16). Only git saying the path is not in the tree counts as
+that; a timeout or any other failure of git is a fault.
 
 **Tests first.** Each one is RED before it is built:
 - `readListText` on both shapes, and on a hand-edited file;
@@ -3704,11 +3707,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   lenses risk, resilience, reliability) over `origin/main..9eb3a1e`: one correction, R3
   "merge base fault read as absent" (a timed-out `git show` at the merge base set the starting
   point to main's list and recorded it, so a change owed was never told), fixed in 756293f with
-  its test; validated, approved and acknowledged. Advisories left for the next parts: a branch
-  that adds `docs/rules.json` before main has it faults on every turn, at two gits, where
-  "main declares no list" is expected; the 30-day prune has no test; a failed `for-each-ref`
+  its test; validated, approved and acknowledged. Advisories left for the next parts: the
+  30-day prune has no test; a failed `for-each-ref`
   reads as "no origin/HEAD…" (the verifier's advisory too); four slow gits on a
   `SubagentStart`, which never takes the fast path, can pass the 5 s timeout.
+- 2026-10-16, T16f first part, Codex review of `fdc62a9..d2d32b0` (2 parts, 360,052 input
+  tokens; a first run of 266,744 was thrown away because the doc was edited in the worktree while
+  it ran). Part 2 correct; part 1 one P2: a `main` that no longer holds the list (a revert) was a
+  fault on every turn and never told its rules removed. Fixed with its test: a list not in
+  `main`'s tree is an empty list, which also settles gentle-ai's advisory of a branch that adds
+  a list before `main` has one.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f first part being built by JH 27** on `feat/rules-reach` in `D:/js-harness-worktrees/rules-reach`. The design ("Reach: the turn-start hook") is committed (fdc62a9). Built so far, not committed: `bin/lib/rules-reach.mjs` and its test (11 green); three `entryComponents` in `bin/lib/manifest.mjs` with `manifest.test.mjs` (160 green); `rules --hook` routed in `bin/js-harness.mjs` and `bin/rules.mjs` (`rules.test.mjs` 34 green); `doctor` tries the command (`stack.mjs`, `stack.test.mjs` 120 green); `HASH_KEYS` exported. In progress: `scripts/practice-lib.mjs` (`HARNESS_HOOKS` gains the three entries; `hostHooksProblem` checks `UserPromptSubmit` and `SubagentStart` like `postToolUseProblem`), its tests written RED. Next: `docs/SPEC.md` claims the three ids; README (install output, a `rules --hook` section); `rules` usage, the dispatcher help and the skill command list; T16f sub-item and a Progress entry; commit; the time measured (20 turns, p95 under 1,000 ms); a verifier (item 5); gentle-ai escalated item 5; Codex; PR; notify the lead.

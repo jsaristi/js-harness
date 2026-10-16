@@ -171,6 +171,21 @@ test('a git that fails at the merge base for any reason but a missing path is a 
   }
 });
 
+test('main holding no list is an empty list: its removal is told, and a branch that adds one first hears nothing', () => {
+  const reverted = machine({ refs: { BASE: [pause] }, base: 'BASE' });
+  const early = machine({ refs: {}, base: 'BASE' });
+  try {
+    const told = reverted.run('UserPromptSubmit');
+    assert.equal(told.fault, undefined);
+    assert.match(told.context, /context-pause/);
+    assert.deepEqual(early.run('UserPromptSubmit'), { event: 'UserPromptSubmit', context: null });
+    assert.ok(fs.existsSync(early.seen()), 'the empty list is recorded, so the next turn takes the fast path');
+  } finally {
+    reverted.done();
+    early.done();
+  }
+});
+
 test('a branch that changed a rule itself is told nothing, since what is compared is its merge base', () => {
   const m = machine({ refs: { 'origin/HEAD': [pause], BASE: [pause] }, base: 'BASE' });
   try {
@@ -237,8 +252,8 @@ test('every fault is said apart from the context, and a bad session id writes no
   try {
     assert.equal(broken.run('UserPromptSubmit', { session_id: '../../evil' }).context, null);
     assert.equal(fs.existsSync(path.join(broken.home, '.js-harness')), false);
-    broken.refs['origin/HEAD'] = undefined;
-    const result = broken.run('UserPromptSubmit');
+    const timedOut = (args) => (args[0] === 'show' ? { status: null, stdout: '', stderr: '' } : broken.git(args));
+    const result = reachHook(broken.input('UserPromptSubmit'), { home: broken.home, git: timedOut });
     assert.equal(result.context, null);
     assert.match(result.fault, /origin\/HEAD/);
   } finally {

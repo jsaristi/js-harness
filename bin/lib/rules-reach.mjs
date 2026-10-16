@@ -202,8 +202,10 @@ export function reachHook(input, { home = os.homedir(), git = runGit, now = Date
     const absent = shownText?.status === 128 && /does not exist|exists on disk, but not in/.test(shownText.stderr ?? '');
     return { fault: `${list.path} could not be read at ${rev}`, absent };
   };
-  const onMain = listAt(main);
-  if (onMain.fault) return quiet(onMain.fault);
+  // Main holding no list declares no rule: a revert of the list is told as its rules removed.
+  const read = listAt(main);
+  if (read.fault && !read.absent) return quiet(read.fault);
+  const onMain = read.fault ? { rules: [] } : read;
 
   let before = seen?.list ?? null;
   if (before === null) {
