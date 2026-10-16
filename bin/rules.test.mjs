@@ -19,16 +19,24 @@ const SOURCES_TEXT = fs.readFileSync(path.join(PACKAGE, 'docs', 'rule-sources.js
 const SOURCES = JSON.parse(SOURCES_TEXT);
 const COUNT_LINE = `${RULES.length} rules, hash ${rulesHash(RULES)}`;
 const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
+// After its line, the count of each scanned rule's findings in the texts in force: none in a project of these tests,
+// which holds no text that restates a value, so every rule with patterns counts 0.
+const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
+const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
+const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests. */
 const HOMES = Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
   .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')]));
 
-/** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, the sources, and the
- * home files of the rules in prose. */
-const BASE = () => ({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES), 'docs/rule-sources.json': SOURCES_TEXT });
+/** The package's register, whose entries the rules' `failure` keys name. */
+const REGISTER = fs.readFileSync(path.join(PACKAGE, 'docs', 'FAILURES.md'), 'utf8');
+
+/** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, the sources, the
+ * register, and the home files of the rules in prose. */
+const BASE = () => ({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES), 'docs/rule-sources.json': SOURCES_TEXT, 'docs/FAILURES.md': REGISTER });
 
 /** Writes `files` (path from the top of a project -> content) under `dir`. */
 function write(dir, files) {
@@ -64,7 +72,7 @@ test('render writes docs/RULES.md, and check then passes with its PASS line', as
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['render'], dir), { code: 0, out: [`docs/RULES.md written: ${COUNT_LINE}`], err: [] });
     assert.ok(fs.existsSync(path.join(dir, 'docs', 'RULES.md')));
-    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
   });
 });
 
@@ -80,14 +88,16 @@ test('check fails when docs/RULES.md is edited by hand, and says so in one findi
   });
 });
 
-test('with no docs/ at all check passes, and its two notes say what it did not read', async () => {
+test('with no docs/ at all check passes, and its three notes say what it did not read', async () => {
   await inProject({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
     assert.deepEqual(await run(['check'], dir), {
       code: 0,
       out: [
         PASS_LINE,
+        PATTERNS_LINE,
         'note: no docs/rule-sources.json here: the sources were not checked',
         'note: no docs/RULES.md here: js-harness rules prints the list',
+        "note: no docs/FAILURES.md here: the rules' failures were not checked",
       ],
       err: [],
     });
@@ -158,7 +168,7 @@ test('a test file that reads an undeclared rule is not read', async () => {
   await inProject(BASE(), async (dir) => {
     await run(['render'], dir);
     write(dir, { 'bin/x.test.mjs': READS_UNDECLARED });
-    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
   });
 });
 
@@ -184,7 +194,7 @@ test('a feature document that names an undeclared rule fails check above its Pro
       err: [],
     });
     write(dir, { 'odd/tasks/feature.md': below });
-    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
   });
 });
 
@@ -234,9 +244,13 @@ test('rules <id> prints the declaration, the code that reads it and its source; 
   const reader = "import { ruleValue } from './lib/rules.mjs';\n\nexport const wait = ruleValue('gate-wait', 'minutes');\n";
   await inProject({ ...BASE(), 'bin/cmd.mjs': reader }, async (dir) => {
     const rule = RULES.find((item) => item.id === 'gate-wait');
+    // The project holds the real home files of the rules in prose, and one of them, the skill's manifest,
+    // reads this rule too: the readers are the fixture's and those.
+    const homesReading = Object.keys(HOMES).filter((file) => HOMES[file].includes("ruleValue('gate-wait'"));
+    const readBy = ['bin/cmd.mjs', ...homesReading].sort().join(', ');
     assert.deepEqual(await run(['gate-wait'], dir), {
       code: 0,
-      out: [JSON.stringify(rule, null, 2), 'Read by: bin/cmd.mjs', `Source: ${JSON.stringify(SOURCES['gate-wait'], null, 2)}`],
+      out: [JSON.stringify(rule, null, 2), `Read by: ${readBy}`, `Source: ${JSON.stringify(SOURCES['gate-wait'], null, 2)}`],
       err: [],
     });
     assert.deepEqual(await run(['no-such-rule'], dir), { code: 1, out: [], err: ['no rule "no-such-rule" is declared'] });
@@ -255,7 +269,7 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
 test('the usage names the applied form, and a word after applied is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
-    assert.match(USAGE, /\| applied\]$/);
+    assert.match(USAGE, /\| applied \| change <id> \[--dry-run \| --check-source\] \| --hook\]$/);
   });
 });
 
@@ -512,4 +526,25 @@ test('the dispatcher runs rules: js-harness rules exits 0 and its last line is t
   const result = spawnSync(process.execPath, [path.join(PACKAGE, 'bin', 'js-harness.mjs'), 'rules'], { cwd: PACKAGE, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trimEnd().split(/\r?\n/).at(-1), COUNT_LINE);
+});
+
+// Letter F's turn-start hook (odd/tasks/rule-hierarchy.md, "Reach: the turn-start hook (T16f, first part)"): the
+// dispatcher sends `rules --hook` to bin/lib/rules-reach.mjs, and so does the command run on its own.
+test('rules --hook is answered by the turn-start hook, through the dispatcher and on its own, and exits 0 on empty input', () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-hook-'));
+  try {
+    for (const entry of ['bin/js-harness.mjs', 'bin/rules.mjs']) {
+      const args = entry === 'bin/js-harness.mjs' ? [path.join(PACKAGE, entry), 'rules', '--hook'] : [path.join(PACKAGE, entry), '--hook'];
+      const empty = spawnSync(process.execPath, args, { cwd: outside, input: '', encoding: 'utf8' });
+      assert.deepEqual([empty.status, empty.stdout, empty.stderr], [0, '', ''], entry);
+      const event = JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: 'abcdef12-3456', cwd: outside });
+      const quiet = spawnSync(process.execPath, args, { cwd: outside, input: event, encoding: 'utf8', env: { ...process.env, HOME: outside, USERPROFILE: outside } });
+      assert.deepEqual([quiet.status, quiet.stdout], [0, ''], `${entry}: a folder with no list is told nothing`);
+      const unknown = spawnSync(process.execPath, [...args, '--other'], { cwd: outside, input: '', encoding: 'utf8' });
+      assert.equal(unknown.status, 2, entry);
+      assert.match(unknown.stderr, /^js-harness rules --hook: unknown argument --other/, entry);
+    }
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
 });

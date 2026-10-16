@@ -311,6 +311,81 @@ test('parseFeature trims the title text', () => {
   assert.equal(parseFeature(md, 'x').title, 'Spaced title');
 });
 
+// S2 of odd/tasks/first-version.md: a feature whose tasks are a table counted 0/0. A task table is one whose header
+// names an `ID` and a `Status` cell; each row whose ID is a task (`T2`, `T3c`) is a step, done when its status cell
+// starts with `done`.
+const TASK_TABLE = [
+  '# Test run warning',
+  '',
+  '## Tasks',
+  '',
+  '| ID | Specs | Route | Status | Evidence |',
+  '|----|-------|-------|--------|----------|',
+  '| T1 | S1, S2 | inline | done | RED: the module missing; GREEN: 3/3 |',
+  '| T2 | S2 | JH 15 | pending | the Bash case in `js-harness guard --hook` |',
+  '| T3a | S3 | inline | T3a done, T3b not yet | half of it |',
+  '| T4 | S4 | inline | Done, `850cc9f` | the status is read without regard to case |',
+  '',
+].join('\n');
+
+test('parseFeature counts the rows of a task table, each done when its status cell starts with done', () => {
+  const result = parseFeature(TASK_TABLE, 'test-run-warning');
+  assert.deepEqual([result.done, result.total], [2, 4]);
+  assert.deepEqual(result.steps, [
+    { text: 'T1 | S1, S2 | inline | done | RED: the module missing; GREEN: 3/3', done: true },
+    { text: 'T2 | S2 | JH 15 | pending | the Bash case in `js-harness guard --hook`', done: false },
+    { text: 'T3a | S3 | inline | T3a done, T3b not yet | half of it', done: false },
+    { text: 'T4 | S4 | inline | Done, `850cc9f` | the status is read without regard to case', done: true },
+  ]);
+});
+
+test('the status cell is found by its header, wherever the column is, and an escaped pipe stays inside its cell', () => {
+  const md = ['| Status | ID | Note |', '| --- | :-: | --- |', '| done | T1 | a \\| b |', '| open | T2 | c |', ''].join('\n');
+  const { done, total, steps } = parseFeature(md, 'x');
+  assert.deepEqual([done, total], [1, 2]);
+  assert.equal(steps[0].text, 'done | T1 | a \\| b');
+});
+
+test('a table with no ID or no Status header, a row whose ID is no task, and a table in a fence are not counted', () => {
+  const md = [
+    '| Page | Status |',
+    '|------|--------|',
+    '| T1 | done |',
+    '',
+    '| ID | Owner |',
+    '|----|-------|',
+    '| T2 | him |',
+    '',
+    '| ID | Status |',
+    '|----|--------|',
+    '| L1 | done |',
+    '| ID | done |',
+    '',
+    '```',
+    '| ID | Status |',
+    '|----|--------|',
+    '| T3 | done |',
+    '```',
+    '',
+  ].join('\n');
+  assert.deepEqual(parseFeature(md, 'x').total, 0);
+});
+
+test('a header row with no delimiter row under it is no table, and a table ends at its first line that is not a row', () => {
+  const md = ['| ID | Status |', '| T1 | done |', '', '| ID | Status |', '|---|---|', '| T2 | done |', 'text', '| T3 | done |', ''].join('\n');
+  assert.deepEqual(parseFeature(md, 'x').steps, [{ text: 'T2 | done', done: true }]);
+});
+
+test('checkboxes and table rows are both steps, in the order of the document', () => {
+  const md = ['# Mixed', '- [x] T0 a checkbox', '', '| ID | Status |', '|---|---|', '| T1 | pending |', '', '- [ ] T9 another', ''].join('\n');
+  assert.deepEqual(parseFeature(md, 'mixed').steps.map((step) => step.text), ['T0 a checkbox', 'T1 | pending', 'T9 another']);
+});
+
+test('parseRoadmap still counts checkboxes only: a task table in the Checklist is not its phase\'s step', () => {
+  const md = ['## Checklist', '### Phase', '- [x] a', '| ID | Status |', '|---|---|', '| T1 | pending |', ''].join('\n');
+  assert.deepEqual([parseRoadmap(md).done, parseRoadmap(md).total], [1, 1]);
+});
+
 test('tokenize keeps HTML comments unless stripComments is set, so progress counts are unchanged', () => {
   const md = '<!--\n- [ ] hidden\n-->\n- [x] shown\n';
   assert.equal(parseSteps(md).length, 2);

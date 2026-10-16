@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { waitMain } from './wait.mjs';
+import { WAIT_EVERY_SECONDS, WAIT_FOR_MINUTES, waitMain } from './wait.mjs';
 import { NOTICE_SCHEMA, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
@@ -14,7 +14,7 @@ const RECORD = recordPath(HOME, projectSlug(CWD));
 const ORQ = { role: 'orchestrator', number: null };
 const WORK = (number) => ({ role: 'work', number });
 
-const start = (phrase, minutes = 480) => `js-harness wait: waits for ${phrase}; ends when it holds, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`;
+const start = (phrase, minutes = WAIT_FOR_MINUTES) => `js-harness wait: waits for ${phrase}; ends when it holds, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`;
 const ok = (stdout = '') => ({ status: 0, stdout, stderr: '' });
 const failedRun = (stderr) => ({ status: 1, stdout: '', stderr });
 const missing = () => ({ error: Object.assign(new Error('spawnSync gh ENOENT'), { code: 'ENOENT' }), status: null, stdout: '', stderr: '' });
@@ -127,7 +127,7 @@ test('a check that cannot run is said once on stderr, is retried at the next tic
   const { state, deps } = world({ answer: answers });
   assert.equal(await waitMain(args('--pr', '136'), {}, deps), 0);
   assert.equal(state.calls.length, 3);
-  assert.deepEqual(state.sleeps, [120000, 120000]);
+  assert.deepEqual(state.sleeps, [WAIT_EVERY_SECONDS * 1000, WAIT_EVERY_SECONDS * 1000]);
   assert.deepEqual(state.err, ['js-harness wait: a check did not run (could not resolve host: github.com); it is retried at the next tick']);
 });
 
@@ -147,7 +147,7 @@ test('--main-has: fetches origin, then holds once the commit is an ancestor of o
   const fetch = 'git fetch -q origin';
   const check = 'git merge-base --is-ancestor abc1234 origin/main';
   assert.deepEqual(state.calls, [fetch, check, fetch, check, fetch, check]);
-  assert.deepEqual(state.sleeps, [120000, 120000]);
+  assert.deepEqual(state.sleeps, [WAIT_EVERY_SECONDS * 1000, WAIT_EVERY_SECONDS * 1000]);
   assert.equal(state.out[0], start('commit abc1234 on origin/main'));
   assert.match(state.out[1], /^js-harness wait: commit abc1234 on origin\/main holds \(\d\d:\d\d\)$/);
 });
@@ -183,7 +183,7 @@ test('--notice-to: a notice written before the wait, or to another role, does no
   });
   assert.equal(await waitMain(args('--notice-to', 'orchestrator'), {}, deps), 0);
   assert.deepEqual(state.calls, []);
-  assert.deepEqual(state.sleeps, [120000, 120000]);
+  assert.deepEqual(state.sleeps, [WAIT_EVERY_SECONDS * 1000, WAIT_EVERY_SECONDS * 1000]);
   assert.equal(state.out[0], start('a notice to orchestrator'));
   assert.match(state.out[1], /^js-harness wait: a notice to orchestrator holds \(\d\d:\d\d\)$/);
   assert.equal(state.out[2], 'answer from JH 5 · canal entre sesiones: sí, sigue');

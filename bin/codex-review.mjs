@@ -114,7 +114,8 @@
 // What a run will cost is said before it is spent (`bin/lib/codex-review-plan.mjs`). `--plan` prints the
 // plan and exits 0: the range, the model and the effort, the parts with their files and changed lines, and
 // an estimate of the input tokens, from a likely figure to a high one, made from this machine's own run log
-// and never from a number written here.
+// and never from a number written here, then one line on how close that method came on the last reviews
+// this machine recorded (`methodRecord`).
 // It starts nothing: no Codex is looked for, no home is made, no login is looked at, and nothing is logged
 // or recorded, so it works on a machine with no Codex and over a tree with uncommitted changes. A real run
 // prints the same plan before its first session; one whose range changes no file has no part, so it starts
@@ -168,7 +169,7 @@ import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAn
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
-import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
+import { MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
@@ -214,7 +215,7 @@ const USAGE =
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
-  `--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
+  `--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
   'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
@@ -680,8 +681,9 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
 }
 
 // Reviews seen so far took 1 to 15 minutes; a run past this has stalled (a hung sandboxed command,
-// a network stall), and without a bound the command would wait forever.
-const REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
+// a network stall), and without a bound the command would wait forever. The bound is the declared rule
+// `review-timeout` (bin/lib/rules-data.mjs).
+export const REVIEW_TIMEOUT_MS = ruleValue('review-timeout', 'minutes') * 60 * 1000;
 
 // What a review that did not stand ends with. A review that failed is run again; the explicit skip is for a
 // machine where Codex cannot run (`NO_CODEX`, `SKIP_IS_THE_WAY_OUT`). The command does not tell a spent usage
@@ -1026,7 +1028,10 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
 /** The line that says a run's base is a code commit of its branch that no Codex review record covers, and what
  * reviews it: `commit` is what `baseLeftOut` answers, `{ id, shortId, subject }`. A range starts after its
  * base, so the run does not read the base, and no record of the run covers it. */
-function baseLeftOutSaid({ shortId, subject }) {
+function baseLeftOutSaid({ shortId, subject, merged }) {
+  if (merged) {
+    return `The base ${shortId} (${subject}) is a merge of ${merged} that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it. A merge is reviewed by what was written in it only where it is HEAD, and \`--base ${shortId}^\` here would review everything it brought in: in a worktree at it (\`git worktree add --detach <folder> ${shortId}\`), \`js-harness codex-review --base ${shortId}^\` reviews what was written in it, and every worktree of the clone shares its record.`;
+  }
   return `The base ${shortId} (${subject}) is a code commit of this branch that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it.`;
 }
 
@@ -1358,6 +1363,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
+    // How close the method came on the reviews this machine recorded, said after the estimate it judges. A
+    // plan of no part has no estimate to judge; records that cannot be read are none.
+    if (plan.parts.length > 0) {
+      let records;
+      try {
+        records = readCodexReviews(root, { spawn, where });
+      } catch {
+        records = [];
+      }
+      log(methodRecordLine(methodRecord({ records, runs: readRunLog() })));
+    }
     if (state.kind === 'recheck') log(`A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
     if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ of: state.of, open: state.open, base: from }).split('\n')[0]}`);
     // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.
@@ -1365,6 +1381,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (allowance !== null) log(allowance);
     const needs = needsFlagLine(plan);
     if (needs !== null) log(needs);
+    // What would stop the run itself, said on stderr so the plan's lines stay what they are: a review queued
+    // behind a gate over a dirty tree waited for its turn only to be refused (odd/tasks/gate-wait.md, T20).
+    // A `git status` that does not answer says nothing here; the run asks again and refuses on it.
+    const dirty = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+    if (dirty) error(`Tracked files have uncommitted changes, which a review refuses: commit or stash them before the run.\n${dirty}`);
     return 0;
   }
 
@@ -1577,6 +1598,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const ownPrompt = prompt === 'own';
       // Whether this is the only session of its run, whose answer waits for no other.
       const alone = part === null || part.of === 1;
+      // What the plan printed above put this session at, which its run line records: a range reviewed whole
+      // is the one part of its plan. `null` when the plan had no estimate.
+      const planned = partPlanned(plan, part === null ? 1 : part.index);
       // What Codex is launched with, worked out before anything is made: an injected effort or setting that
       // cannot go on a command line is the caller's mistake, and leaves no home behind.
       const codexArgv = codexArgs(from, platform, prompt, { effort, extraConfig: extraCodexConfig });
@@ -1723,6 +1747,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             // such field, as no line had before a range was reviewed in parts (`runPart`). That of a range
             // reviewed by its files in one session has it, 1 of 1, with the files and the lines it covered.
             ...(part === null ? {} : { part: { index: part.index, of: part.of, files: part.files.length, changedLines: part.changedLines } }),
+            // The two figures the plan put this session at, and the version of the method that made them
+            // (`partPlanned`), so that how close the method came is read and not replayed (`methodRecord`).
+            // Absent when the plan had no estimate, as from every line written before 2026-10-16.
+            ...(planned === null ? {} : { plan: planned }),
             outcome: runOutcome,
             ...(reason === undefined ? {} : { reason }),
             cli,

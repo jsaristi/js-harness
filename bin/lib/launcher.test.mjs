@@ -95,7 +95,7 @@ test('the launchers are alive while every one exists; one gone is enough, and a 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const hasSh = spawnSync('sh', ['-c', 'exit 0']).status === 0;
 
-test('a real node started by a shell whose own parent has ended sees its launchers alive, and gone once that shell ends', { skip: !hasSh && 'no sh on this machine', timeout: 60_000 }, async () => {
+test('a real node started by a shell whose own parent has ended sees its launchers alive, and gone once that shell ends', { skip: !hasSh && 'no sh on this machine', timeout: 120_000 }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-launcher-'));
   const said = path.join(dir, 'said.txt');
   const child = path.join(dir, 'child.mjs');
@@ -126,7 +126,8 @@ test('a real node started by a shell whose own parent has ended sees its launche
       return false;
     };
     const read = () => (fs.existsSync(said) ? fs.readFileSync(said, 'utf8') : '');
-    assert.ok(await until(() => /^(alive|gone) /.test(read()), 20_000), `the child never read its launchers: ${read()}`);
+    // A whole run on Windows starved this first read past 20 s while the test passed alone (first-version T6c).
+    assert.ok(await until(() => /^(alive|gone) /.test(read()), 60_000), `the child never read its launchers: ${read()}`);
     assert.match(read(), /^alive [1-9]/);
     fs.writeFileSync(stop, '');
     assert.ok(await until(() => read() === 'gone', 30_000), `the child did not see the shell end: ${read()}`);

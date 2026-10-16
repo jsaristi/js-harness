@@ -7,20 +7,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS,
+  reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
 import { numstatFiles } from './lib/codex-review-parts.mjs';
-import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
+import { methodRecord, methodRecordLine, PLAN_METHOD, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
 import * as reviewRuns from './lib/codex-review-runs.mjs';
 import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { isValidCodexReview } from './lib/codex-reviews.mjs';
 import { gitDirs } from './lib/project.mjs';
+
+// What a review that ran past its declared timeout says, in the words the command uses.
+const RAN_PAST = `ran past ${REVIEW_TIMEOUT_MS / 60000} minutes`;
 
 // The tests of this file run as two processes. `node --test` gives each test file one process, and this
 // file's time is git processes started one after another, which made it the longest of the suite and so the
@@ -945,7 +949,7 @@ test('a review that never ends is stopped at the timeout: the tree is killed and
   assert.deepEqual(fake.killed, [4242]);
   assert.equal(child.stdout.destroyed, true, 'the pipe is released, so it cannot keep the process alive');
   assert.equal(unrefed, true, 'the child no longer holds the event loop');
-  assert.match(result.err, /ran past 30 minutes/);
+  assert.match(result.err, new RegExp(RAN_PAST));
   assert.doesNotMatch(result.err, /could not start/);
   assert.equal(wrote(root), false);
 });
@@ -1023,7 +1027,7 @@ test('a tree kill that fails is said in the report of the stopped run, not swall
   const fake = fakeCodex('', { hang: true });
   const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, timeoutMs: 30, killTree: () => { throw new Error('the process snapshot failed (exit 1): CIM is down'); } });
   assert.equal(result.code, 1);
-  assert.match(result.err, /ran past 30 minutes/);
+  assert.match(result.err, new RegExp(RAN_PAST));
   assert.match(result.err, /process tree could not be killed \(the process snapshot failed.*CIM is down\).*may still be running/);
 });
 
@@ -1465,7 +1469,7 @@ test(`the usage names no session: its flags are those of a review, and its secon
   // What a person has to know of the cost before starting: how to see it, and that a large run is not started by itself.
   // And what a review reads, with how a project says what it does not; and that it reviews nothing twice.
   assert.deepEqual(more, [
-    '--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    '--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     STARTS_WHERE_RECORDS_END,
   ]);
@@ -3133,7 +3137,7 @@ test('a review stopped at the timeout is logged as timed out', async () => {
   assert.equal(result.code, 1);
   const logged = onlyRun(root);
   assert.equal(logged.outcome, 'timed-out');
-  assert.equal(logged.reason, 'it ran past 30 minutes and was stopped');
+  assert.equal(logged.reason, `it ${RAN_PAST} and was stopped`);
   assert.equal(wrote(root), false);
 });
 
@@ -3680,7 +3684,7 @@ test('the first part that does not pass stops the run: no later part is started,
       /showed 2 of 6 changed lines of part 1 of 2 of [0-9a-f]{7}\.\.HEAD; nothing was recorded\.\n {2}not read in full: b\.txt \(4 of 4 changed lines missing\)/],
     ['Codex exited with a code of its own', 7, 'failed', (root, base, head) => ({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), answer: { status: 7 } }), /did not complete \(it exited 7\)/],
     ['an answer that cannot be read', 1, 'failed', (root, base, head) => ({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), said: 'not an answer' }), /the answer of the review is not JSON; no record was written/],
-    ['a timeout', 1, 'timed-out', () => ({ answer: { hang: true } }), /ran past 30 minutes/],
+    ['a timeout', 1, 'timed-out', () => ({ answer: { hang: true } }), new RegExp(RAN_PAST)],
   ];
   for (const [name, code, outcome, session, said] of failures) {
     const { root, base, head } = makeThreeFileRepo();
@@ -4430,6 +4434,12 @@ function startsNothing(root) {
 const planned = (root, base, head, parts, over = {}) =>
   planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts, runs: readCodexReviewRuns(root), ...over }));
 
+/** The line `--plan` says after its estimate, of how close the method came on the reviews `root` recorded. */
+const methodSaid = (root) => methodRecordLine(methodRecord({ records: reviewRecords.readCodexReviews(root, { where: whereOf(root) }), runs: readCodexReviewRuns(root) }));
+
+/** The lines `--plan` prints of `root`'s review of `base..head` in `parts`: the plan, then how the method did. */
+const plannedPlan = (root, base, head, parts, over = {}) => [...planned(root, base, head, parts, over), methodSaid(root)];
+
 // The three files of `makeThreeFileRepo` as one part, and as the two of `--part-lines 6`.
 const AS_ONE = [{ files: ['a.txt', 'b.txt', 'c.txt'], changedLines: 8 }];
 const AS_TWO = [{ files: ['a.txt', 'b.txt'], changedLines: 6 }, { files: ['c.txt'], changedLines: 2 }];
@@ -4443,7 +4453,7 @@ test('--plan prints the plan of the run and exits 0, and starts nothing: no Code
     const result = await run(['--base', 'HEAD~1', '--plan', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
     assert.equal(result.code, 0, `${which}: ${result.err}`);
     assert.deepEqual([result.err, result.shown], ['', ''], which);
-    assert.deepEqual(result.out.split('\n'), planned(root, base, head, parts), which);
+    assert.deepEqual(result.out.split('\n'), plannedPlan(root, base, head, parts), which);
     nothing.untouched(which);
   }
   // What it says, with `--part-lines` changing the parts as it does for a run. No part was ever measured in
@@ -4455,12 +4465,16 @@ test('--plan prints the plan of the run and exits 0, and starts nothing: no Code
     '  part 1 of 2: 2 files, 6 changed lines',
     '  part 2 of 2: 1 file, 2 changed lines',
     'No estimate: the run log of this machine holds no part whose changed lines and input tokens were measured, and an estimate is never a guess.',
+    'How the method did: no reviews recorded yet.',
   ]);
   // A plan is of the committed range and records nothing, so uncommitted changes, which stop a review, do not stop it.
+  // It says them, on stderr, so a review is not queued to be refused when its turn comes (gate-wait.md, T20).
+  assert.doesNotMatch(two.err, /uncommitted/);
   fs.writeFileSync(path.join(root, 'a.txt'), 'not committed\n', 'utf8');
   const dirty = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(dirty.code, 0, dirty.err);
   assert.deepEqual(dirty.out, two.out);
+  assert.match(dirty.err, /^Tracked files have uncommitted changes, which a review refuses: commit or stash them before the run\.\nM a\.txt$/m);
   nothing.untouched('a dirty tree');
   // A range git cannot size has no plan: that is an error, exit 1, and not a plan of no part.
   const unsized = (command, args, opts) => (command === 'git' && args.includes('--numstat') ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
@@ -4481,6 +4495,44 @@ test('--plan over a range that changes nothing is a plan of no part, which still
     'No estimate: the range changes no file, so there is no part to review.',
   ]);
   nothing.untouched('an empty range');
+});
+
+test('--plan says after its estimate how close the method came on the reviews this machine recorded, and records nothing', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const plan = async () => {
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, result.err);
+    nothing.untouched('a plan');
+    return result.out.split('\n');
+  };
+  const before = await plan();
+  assert.deepEqual(before.slice(0, planned(root, base, head, AS_ONE).length + 1), [...planned(root, base, head, AS_ONE), 'How the method did: no reviews recorded yet.']);
+  // Five parts on 10,000 input tokens and 100 a changed line, then a review of one part of 100 lines that
+  // took 10,000: estimated at 20,000 from the five before it, twice what it took.
+  const line = (id, changedLines, inputTokens) => ({
+    schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA,
+    id,
+    part: { index: 1, of: 1, files: 1, changedLines },
+    outcome: 'reviewed',
+    session: 'lean',
+    model: REVIEW_MODEL,
+    effort: REVIEW_EFFORT,
+    usage: { inputTokens, cachedInputTokens: 0, outputTokens: 10, reasoningOutputTokens: 0 },
+    usageSource: 'rollout',
+    sessionModel: REVIEW_MODEL,
+    sessionEffort: REVIEW_EFFORT,
+  });
+  const where = { where: whereOf(root) };
+  for (const [at, lines] of [100, 200, 300, 1000, 2000].entries()) reviewRuns.appendCodexReviewRun(root, line(`basis-${at}`, lines, 10000 + 100 * lines), where);
+  reviewRuns.appendCodexReviewRun(root, line('reviewed', 100, 10000), where);
+  appendCodexReview(root, { schema: 'js-harness.codex-review/v1', base: 'e'.repeat(40), head: 'f'.repeat(40), reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'reviewed', run: 'reviewed', runs: ['reviewed'] });
+  const after = await plan();
+  const lines = planned(root, base, head, AS_ONE);
+  assert.deepEqual(after.slice(0, lines.length + 1), [
+    ...lines,
+    'How the method did: on the last review this machine recorded, its estimate came to 2 times what it took; each part against its own run line, kept parts left out.',
+  ]);
 });
 
 test('a run prints its plan before its first session starts, and the estimate of a plan is made from the run lines this machine wrote', async () => {
@@ -4507,17 +4559,17 @@ test('a run prints its plan before its first session starts, and the estimate of
   assert.ok(first.onScreen[0].findIndex((line) => line.startsWith('Codex is reviewing part 1 of 2')) >= none.length, 'and before the session is announced');
   assert.equal(first.out.filter((line) => line.startsWith('Plan of the Codex review')).length, 1, 'once a run, not once a part');
   // Its two parts are in the run log now, 6 and 2 changed lines at 297,479 input tokens each, and the plan
-  // is made from them: the median of 49,580 and 148,740 a changed line, and no part under 297,479.
+  // is made from them: two parts that cost the same whatever their lines are a fixed cost of 297,479 a part.
   const measured = planned(root, base, head, AS_TWO);
-  assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 590,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
-  // Both ran on the model and at the effort of a review, so nothing is said of another effort. The whole is
-  // a range: its high figure puts both parts at the 148,740 a changed line of the dearer one, 890,000 and 300,000.
-  assert.ok(measured[3].startsWith(`Estimate: about 890,000 to 1,190,000 input tokens in all. It rests on 2 parts this machine's run log measured on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort: `), measured[3]);
-  assert.ok(measured[3].endsWith(' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: how far a session looks into the code moves what it costs more than the size of its part does.'), measured[3]);
+  assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 300,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
+  // Both ran on the model and at the effort of a review, so nothing is said of another effort. Both cost what
+  // the fit says, so the whole is one figure.
+  assert.ok(measured[3].startsWith(`Estimate: about 600,000 input tokens in all. It rests on 2 parts this machine's run log measured on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort: `), measured[3]);
+  assert.ok(measured[3].endsWith(': a part is put at about 300,000 input tokens and about 0 more a changed line, a fit by least squares to the most recent 20 of them at most.'), measured[3]);
   const nothing = startsNothing(root);
   const plan = await run(['--base', 'HEAD~1', '--again', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(plan.code, 0, plan.err);
-  assert.deepEqual(plan.out.split('\n'), measured);
+  assert.deepEqual(plan.out.split('\n'), [...measured, methodSaid(root)]);
   nothing.untouched('--plan');
   // And the next run prints that same plan, before its first session.
   const second = await inTwoParts('--fresh');
@@ -4533,6 +4585,38 @@ test('a run prints its plan before its first session starts, and the estimate of
   assert.match(onScreen[0][3], /^Codex is reviewing /);
 });
 
+test('each run line records what its part was planned at, with the version of the method, and a run with no estimate records none', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ran = [parentThread, [turnContext(REVIEW_MODEL, REVIEW_EFFORT), ...reviewThread]];
+  const twoSessions = () => fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: ran }, { stdout: partShown(root, base, head, 'c.txt'), threads: ran });
+  const inTwoParts = async (...flags) => {
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, ...TWO_PARTS, '--cwd', root], { ...twoSessions(), randomUUID: runIds() });
+    assert.equal(result.code, 0, result.err);
+    return readCodexReviewRuns(root).slice(-2);
+  };
+  // The first run had no measured part to plan from: its lines record no plan.
+  const first = await inTwoParts();
+  assert.deepEqual(first.map((line) => 'plan' in line), [false, false]);
+  // The next is planned from those two: each line holds the figures its part was printed with.
+  const plan = reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts: AS_TWO, runs: readCodexReviewRuns(root) });
+  const second = await inTwoParts('--fresh');
+  assert.deepEqual(second.map((line) => line.plan), plan.parts.map((one) => ({ estimate: one.inputTokens, high: one.inputTokensHigh, method: PLAN_METHOD })));
+  assert.deepEqual(second.map((line) => line.plan.estimate), [300000, 300000]);
+  // `--plan` records nothing.
+  const nothing = startsNothing(root);
+  const said = await run(['--base', 'HEAD~1', '--again', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(said.code, 0, said.err);
+  assert.equal(readCodexReviewRuns(root).length, 4);
+  // A range reviewed whole is the one part of its plan, and its line records it too.
+  const whole = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(whole.code, 0, whole.err);
+  const [line] = readCodexReviewRuns(root).slice(-1);
+  assert.equal('part' in line, false);
+  assert.deepEqual(Object.keys(line.plan), ['estimate', 'high', 'method']);
+  assert.equal(line.plan.method, PLAN_METHOD);
+  assert.ok(line.plan.high >= line.plan.estimate, JSON.stringify(line.plan));
+});
+
 test('a run log that cannot be read is one that measured nothing: the plan says there is no estimate, and a run goes on as it would', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ran = [parentThread, [turnContext(REVIEW_MODEL, REVIEW_EFFORT), ...reviewThread]];
@@ -4540,7 +4624,7 @@ test('a run log that cannot be read is one that measured nothing: the plan says 
   // A run that leaves two measured parts in the log, so that there is an estimate to lose.
   const first = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...twoSessions(), randomUUID: runIds() });
   assert.equal(first.code, 0, first.err);
-  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 890,000 to 1,190,000 input tokens/);
+  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 600,000 input tokens/);
   const none = planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts: AS_TWO }));
   assert.match(none.at(-1), /^No estimate: the run log of this machine holds no part /);
   /** `spawn`, but the first two times git is asked where the common dir is, which is how the run log is
@@ -4563,7 +4647,8 @@ test('a run log that cannot be read is one that measured nothing: the plan says 
     const plan = await run(['--base', 'HEAD~1', '--again', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: logNotFound(nothing.deps.spawn, instead) });
     assert.equal(plan.code, 0, `${which}: ${plan.err}`);
     assert.equal(plan.err, '', which);
-    assert.deepEqual(plan.out.split('\n'), none, which);
+    // The records are read and the run log they name is not: no review has a part to be measured on.
+    assert.deepEqual(plan.out.split('\n'), [...none, 'How the method did: no review this machine recorded has a part it can be measured on yet.'], which);
     nothing.untouched(`${which}, --plan`);
     // The run prints the same plan and then goes on: its two sessions, their two lines in the log, its record.
     const [records, lines] = [readCodexReviews(root).length, readCodexReviewRuns(root).length];
@@ -4904,7 +4989,9 @@ test('a range that changes only what a review leaves out has no part: the run st
   fs.writeFileSync(path.join(root, '.gitattributes'), '', 'utf8');
   const planned = startsNothing(root);
   const shown = await run(['--base', 'HEAD~1', '--again', '--plan', ...planned.home, '--cwd', root], planned.deps);
-  assert.deepEqual([shown.code, shown.err, shown.out.split('\n')], [0, '', plan]);
+  // The plan is the same; the edited marks are said on stderr, since a run would refuse them (gate-wait.md, T20).
+  assert.deepEqual([shown.code, shown.out.split('\n')], [0, plan]);
+  assert.match(shown.err, /^Tracked files have uncommitted changes, which a review refuses: commit or stash them before the run\.\nM \.gitattributes$/m);
   planned.untouched('--plan');
   git(root, 'checkout', '--', '.gitattributes');
   const nothing = startsNothing(root);
@@ -5080,7 +5167,7 @@ test('a run of more than six parts is refused before anything is started, with i
     const result = await run(['--base', 'HEAD~1', '--plan', ...SEVEN, ...flags, ...nothing.home, '--cwd', root], nothing.deps);
     assert.equal(result.code, 0, which);
     assert.equal(result.err, '', which);
-    assert.deepEqual(result.out.split('\n'), [...plan, ...said], which);
+    assert.deepEqual(result.out.split('\n'), [...plan, methodSaid(root), ...said], which);
     nothing.untouched(which);
   }
   // With its count named, the run goes on: seven sessions and one record.
@@ -5258,7 +5345,7 @@ test('a merge somebody wrote in is a commit of the range: with a record for ever
   // with what the merge brought in beside it.
   assert.deepEqual(await plan('the merge has no record'), [
     startsAt(rangeOf(base, head), 3, 2, mine),
-    ...planned(root, mine, head, [{ files: ['m.txt', 's.txt'], changedLines: 4 }]),
+    ...plannedPlan(root, mine, head, [{ files: ['m.txt', 's.txt'], changedLines: 4 }]),
   ]);
   // Covered as any commit is, by a record whose range holds it: then the range is covered whole.
   appendCodexReview(root, reviewedRecord(mine, head));
@@ -5305,7 +5392,7 @@ test('a merge of the default branch that resolved a conflict is reviewed by what
   const lines = result.out.split('\n');
   assert.equal(lines[0], mergeReviewSaid({ head, side: main, branch: 'origin/main' }));
   const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', head)).reduce((sum, file) => sum + file.changedLines, 0);
-  assert.deepEqual(lines.slice(1), planned(root, mine, head, [{ files: ['m.txt'], changedLines }]));
+  assert.deepEqual(lines.slice(1), plannedPlan(root, mine, head, [{ files: ['m.txt'], changedLines }]));
 });
 
 test('a merge already covered by a record is not reviewed again: the run says the range is covered, as without merge mode (Codex, 2026-10-14)', async () => {
@@ -5340,7 +5427,7 @@ test('a merge of a branch the default branch does not hold is reviewed as before
   const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
   assert.deepEqual([result.code, result.err], [0, '']);
   assert.ok(!result.out.includes('remerge'), result.out);
-  assert.deepEqual(result.out.split('\n'), planned(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
+  assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
 test('the review of a resolved merge asks Codex for a diff of two objects that exist, the automatic merge and the merge, and its record says so', async () => {
@@ -5380,7 +5467,7 @@ test('a commit after a merge of main that a record covers is reviewed alone, fro
   // from `base`), `mine`, the merge and the one after; the records cover the first three.
   assert.deepEqual(result.out.split('\n'), [
     startsAt(rangeOf(main, after), 4, 3, head),
-    ...planned(root, head, after, [{ files: ['a.txt'], changedLines: 2 }]),
+    ...plannedPlan(root, head, after, [{ files: ['a.txt'], changedLines: 2 }]),
   ]);
 });
 
@@ -5527,12 +5614,12 @@ test('--plan says what a run would: where it starts and the plan of the range th
     nothing.untouched(which);
     return result.out.split('\n');
   };
-  assert.deepEqual(await plan([], 'partly covered'), [startsAt(rangeOf(base, three), 3, 1, one), ...planned(root, one, three, LAST_TWO)]);
-  assert.deepEqual(await plan(['--again'], 'partly covered, --again'), planned(root, base, three, ALL_THREE));
+  assert.deepEqual(await plan([], 'partly covered'), [startsAt(rangeOf(base, three), 3, 1, one), ...plannedPlan(root, one, three, LAST_TWO)]);
+  assert.deepEqual(await plan(['--again'], 'partly covered, --again'), plannedPlan(root, base, three, ALL_THREE));
   appendCodexReview(root, reviewedRecord(one, two));
   appendCodexReview(root, reviewedRecord(two, three));
   assert.deepEqual(await plan([], 'covered whole'), [`Nothing to review: ${rangeOf(base, three)} holds 3 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`]);
-  assert.deepEqual(await plan(['--again'], 'covered whole, --again'), planned(root, base, three, ALL_THREE));
+  assert.deepEqual(await plan(['--again'], 'covered whole, --again'), plannedPlan(root, base, three, ALL_THREE));
 });
 
 test('a run that starts later says how many of the covering records are no review, as a range covered whole does: a skip covers its commits and reviewed none', async () => {
@@ -5544,7 +5631,7 @@ test('a run that starts later says how many of the covering records are no revie
   assert.deepEqual([result.code, result.err], [0, '']);
   assert.deepEqual(result.out.split('\n'), [
     startsAt(rangeOf(base, three), 3, 1, one, '1 of the records that do is a skip or a range with nothing to review, not a review'),
-    ...planned(root, one, three, LAST_TWO),
+    ...plannedPlan(root, one, three, LAST_TWO),
   ]);
   nothing.untouched('a plan past a skip');
 });
@@ -5621,6 +5708,35 @@ test('a run from the first commit of a branch off the default branch says so bef
   nothing.untouched('a plan from the first commit of a branch');
 });
 
+/** What a run says of its base when the base is a merge of the default branch that no record covers. */
+const mergeLeftOutSaid = ({ shortId, subject }) =>
+  `The base ${shortId} (${subject}) is a merge of origin/main that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it. A merge is reviewed by what was written in it only where it is HEAD, and \`--base ${shortId}^\` here would review everything it brought in: in a worktree at it (\`git worktree add --detach <folder> ${shortId}\`), \`js-harness codex-review --base ${shortId}^\` reviews what was written in it, and every worktree of the clone shares its record.`;
+
+test('a run from a merge of the default branch below HEAD names the worktree at the merge, not its first parent, which would review everything the merge brought in; and that worktree reviews the merge by what was written in it (merge-review-covers-main)', async () => {
+  const { root, main, head: merge } = makeResolvedMergeRepo();
+  fs.writeFileSync(path.join(root, 'a.txt'), 'A1 after the merge\n', 'utf8');
+  git(root, 'commit', '-am', 'after the merge');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', merge, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.equal(result.out.split('\n')[0], mergeLeftOutSaid(namedOf(root, merge)), result.out);
+  assert.equal(result.out.includes(`--base ${namedOf(root, merge).shortId}^\` reviews it.`), false, result.out);
+  nothing.untouched('a plan from a merge below HEAD');
+
+  // The road the line names: a worktree whose HEAD is the merge reads it by what was written in it.
+  const at = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-worktree-')), 'at-merge');
+  git(root, 'worktree', 'add', '--detach', '--quiet', at, merge);
+  try {
+    const there = startsNothing(at);
+    const plan = await run(['--base', `${merge}^`, '--plan', ...there.home, '--cwd', at], there.deps);
+    assert.deepEqual([plan.code, plan.err], [0, ''], plan.err);
+    assert.equal(plan.out.split('\n')[0], mergeReviewSaid({ head: merge, side: main, branch: 'origin/main' }), plan.out);
+  } finally {
+    git(root, 'worktree', 'remove', '--force', at);
+    fs.rmSync(path.dirname(at), { recursive: true, force: true });
+  }
+});
+
 test('a run from the default branch says nothing of its base: the base of a branch off the default branch is the default branch\'s own commit', async () => {
   const { root, base } = makeSlicedRepo();
   git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
@@ -5666,7 +5782,7 @@ test('--again takes the base as it was given, so it says nothing of the base and
   const nothing = startsNothing(root);
   const result = await run(['--base', one, '--again', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
   assert.deepEqual([result.code, result.err], [0, ''], result.err);
-  assert.deepEqual(result.out.split('\n'), planned(root, one, three, LAST_TWO));
+  assert.deepEqual(result.out.split('\n'), plannedPlan(root, one, three, LAST_TWO));
   assert.deepEqual(basesSaid(result.out), []);
   nothing.untouched('a plan with --again from a base left out');
 });
@@ -5974,7 +6090,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
-    '--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    '--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     STARTS_WHERE_RECORDS_END,
   ]);

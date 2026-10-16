@@ -76,7 +76,7 @@ local check, with what it leaves unproven on his machine said beside it.
 - Every code commit goes through the machine's gate with `js-harness gate`, and no test, board
   read or reviewer runs beside a gate that is running — because the lock is one for the machine.
 - Zero dependencies, every operating system, and each thing that ships judged twice: here, and
-  in a project that installed the harness (`docs/ROADMAP.md`, "Session channel") — because
+  in a project that installed the harness (`odd/tasks/session-channel.md`, section 16) — because
   `check` ships, and whether `init` writes a workflow is a product choice of his.
 - A Codex review runs without asking only inside the rate (`js-harness codex-review --plan` at
   most 1.05 times the larger of 300,000 input tokens and 1,200 a changed line); over it, the
@@ -594,7 +594,8 @@ version).**
 - [x] T7 · The design of the exchange (R1): how a pull request is tested again once `main`
       moved, its minutes against 2,000, what it loses, what the gate log must record to
       measure it; two readers; to the orchestrator for him ("avísame cuando llegue el diseño
-      del canje"). Route: inline, then delegated readers.
+      del canje"). Route: inline, then delegated readers. **Superseded by merge-queue on
+      2026-10-16** (Progress, his answer at line 7753): its open question is closed.
 
 ## Progress
 - 2026-10-13 · T1, T2. The opening read and the orchestrator told (title, hour, context 23
@@ -755,6 +756,14 @@ version).**
     did so on pull request 128 at 14:18 local, which proves the reopen the design left unproven.
   - **Sessions:** they stop merging `main` into their pull requests unless there is a conflict or
     they need code from `main`.
+- 2026-10-16 · **T7 is closed as superseded by merge-queue.** JH 10's question, "Pregunta 1"
+  on the board ("¿Se puede mergear un PR con una corrida verde en GitHub contra el main donde cae,
+  sin que la rama traiga main ni corra el gate local entero?"), had stayed open. The orchestrator
+  put it to him: merge-queue, which lands everything today, already answers most of it, because
+  branches do not bring `main` in and the gate runs once per batch, not once per branch. He tapped
+  (orchestrator transcript `e152c9d8`, line 7753, 04:37:59Z, read with `sessions --quote`) "Sí,
+  cerrala (Recomendada)" to "¿La cierro como superada por merge-queue?". Nothing more of R1 is
+  built.
 
 ## Next
 0. **His order, first** (ffe99ebf line 5906, 19:43:44Z: "Listo entonces quiero que pausemos todo e

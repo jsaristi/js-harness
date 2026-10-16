@@ -1,14 +1,26 @@
 #!/usr/bin/env node
 // `progress`: reads a project's docs/ROADMAP.md and odd/tasks/*.md and reports every roadmap phase
 // and feature with its checked and pending steps, a percentage, and what remains — counted from
-// checkboxes by bin/lib/progress.mjs, never reinterpreted by a model. See
+// checkboxes, and the rows of a feature's task table, by bin/lib/progress.mjs, never reinterpreted by a model. See
 // odd/tasks/progress-view.md. Read-only, zero dependencies; `--json` gives the same data so
 // Claude Desktop and mobile can render it as an inline widget on request.
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseRoadmap, parseFeature } from './lib/progress.mjs';
+import { PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, windowStart } from './lib/progress-pace.mjs';
 
-const USAGE = 'Usage: js-harness progress [--cwd <path>] [--json]';
+const USAGE = [
+  'Usage: js-harness progress [--cwd <path>] [--json] [--pace [--days <n>]]',
+  `  --pace  the tasks closed, reopened, added and removed on each of the last ${PACE_DAYS} days (or --days), read`,
+  '          from the first-parent line of the default branch: origin/HEAD, else main, else HEAD. A task is',
+  '          matched by its ID (T3); a task reworded without an ID, or in a moved file, counts as removed and added.',
+].join('\n');
+
+// How long each git process of `--pace` may run, and how much it may print: the whole history of this
+// repository came to about 16 MB of file content (S6 of odd/tasks/read-from-records.md).
+const GIT_TIMEOUT_MS = 30_000;
+const GIT_MAX_BUFFER = 256 * 1024 * 1024;
 
 // R3-003-style (doctor's own rule, see bin/doctor.mjs): a flag with no value (end of argv, or
 // immediately followed by another `--flag`) is a usage error, not a silently-swallowed token.
@@ -27,6 +39,8 @@ function requireValue(argv, i, flag) {
 function parseArgs(argv) {
   let cwd;
   let json = false;
+  let pace = false;
+  let days;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === '--cwd') {
@@ -38,9 +52,63 @@ function parseArgs(argv) {
       json = true;
       continue;
     }
+    if (token === '--pace') {
+      pace = true;
+      continue;
+    }
+    if (token === '--days') {
+      const value = requireValue(argv, i, token);
+      if (!/^\d+$/.test(value) || Number(value) < 1) throw new ProgressArgError(`--days takes a whole number of at least 1, not ${value}`);
+      days = Number(value);
+      i += 1;
+      continue;
+    }
     throw new ProgressArgError(`unknown argument: ${token}`);
   }
-  return { cwd, json };
+  if (days !== undefined && !pace) throw new ProgressArgError('--days counts the days of --pace, which was not given');
+  return { cwd, json, pace, days: days ?? PACE_DAYS };
+}
+
+/** Runs one git process of `--pace` in `root`: `{ stdout }`, or `{ error }`, the one line that says why not. */
+function gitRead(spawn, root, args) {
+  const result = spawn('git', args, { cwd: root, encoding: 'utf8', timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER, windowsHide: true });
+  const name = `git ${args.find((arg) => !arg.startsWith('-') && !arg.includes('='))}`;
+  if (result.error) {
+    if (result.error.code === 'ETIMEDOUT') return { error: `${name} took longer than ${GIT_TIMEOUT_MS / 1000} s` };
+    if (result.error.code === 'ENOBUFS') return { error: `${name} printed more than ${GIT_MAX_BUFFER / 1024 / 1024} MiB` };
+    return { error: `${name}: ${result.error.message}` };
+  }
+  if (result.status !== 0) {
+    const said = String(result.stderr ?? '').trim().split('\n')[0];
+    if (/not a git repository/.test(said)) return { error: `--pace reads the history of a git repository, and ${root} is in none` };
+    return { error: `${name}: ${said || `exit ${result.status}`}` };
+  }
+  return { stdout: String(result.stdout) };
+}
+
+/** `progress --pace`: two git processes, the branch and then its history, and the pace printed from them. Exits
+ * 1 with one line when either cannot run. A time is cut by `now`, in this machine's time zone. */
+function paceMain(root, parsed, { stdout, stderr, spawn, now }) {
+  const named = gitRead(spawn, root, PACE_REF_ARGS);
+  if (named.error) {
+    stderr(`js-harness progress: ${named.error}`);
+    return 1;
+  }
+  const { ref, name } = paceRef(named.stdout);
+  const at = now();
+  const since = windowStart(at, parsed.days).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const log = gitRead(spawn, root, paceLogArgs({ ref, since }));
+  if (log.error) {
+    stderr(`js-harness progress: ${log.error}`);
+    return 1;
+  }
+  const pace = paceOf({ commits: parsePaceLog(log.stdout), now: at, days: parsed.days });
+  if (parsed.json) {
+    stdout(JSON.stringify({ root, branch: name, ref, ...pace }, null, 2));
+    return 0;
+  }
+  for (const line of paceLines({ branch: name, ...pace })) stdout(line);
+  return 0;
 }
 
 function toRepoRelative(root, absolutePath) {
@@ -203,6 +271,9 @@ export async function progressMain(
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
     stat = (absolute) => fs.statSync(absolute),
     readdir = (absolute) => fs.readdirSync(absolute, { withFileTypes: true }),
+    // `--pace` alone runs git, and cuts its days by the clock; both injectable for its tests.
+    spawn = spawnSync,
+    now = () => new Date(),
   } = {},
 ) {
   let parsed;
@@ -214,6 +285,7 @@ export async function progressMain(
   }
 
   const root = path.resolve(parsed.cwd ?? defaultCwd);
+  if (parsed.pace) return paceMain(root, parsed, { stdout, stderr, spawn, now });
   // Tracks whether any real discovery/read error was reported (as opposed to a source that is
   // simply, silently absent), so the exit-1 message below never claims "no docs/ROADMAP.md or
   // odd/tasks/*.md" when one of them exists but failed to read.

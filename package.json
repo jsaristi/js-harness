@@ -1,6 +1,7 @@
 {
   "name": "js-harness",
   "version": "0.1.0",
+  "license": "MIT",
   "description": "A small, evidence-first harness for AI-assisted development on Claude Code and Codex.",
   "type": "module",
   "bin": {

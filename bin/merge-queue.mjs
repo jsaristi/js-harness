@@ -9,14 +9,15 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkCodexReviews } from './check.mjs';
-import { pullRequestProblems } from './lib/merge-ready.mjs';
+import { pullRequestProblems } from './lib/pull-request.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
 number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
-review record for every code commit, and no conflict with the candidate so far. It names each pull
-request it leaves out and why.
+review record for every code commit, and no conflict with the candidate so far. A pull request GitHub
+has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
+request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
 
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, then CircleCI's run
@@ -24,7 +25,9 @@ of a queue/* branch pushed for it and removed after. When both are green, main i
 candidate, by fast-forward from the main it was built from. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. Exit 0 landed or nothing to land, 4 red, 3 main
-moved meanwhile (nothing pushed), 1 anything else.`;
+moved meanwhile (nothing pushed), 1 anything else.
+A landed pull request whose branch moved during the land is named after the landing: its new commits
+are not in main, so it needs another run of the queue.`;
 
 const TIMEOUT_MS = 60_000;
 
@@ -33,9 +36,9 @@ function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
   try {
     result = run(command, args, { cwd, encoding: 'utf8', windowsHide: true, timeout, maxBuffer: 64 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}) });
   } catch (err) {
-    return { ok: false, out: '', err: err.message };
+    return { ok: false, status: null, out: '', err: err.message };
   }
-  return { ok: !result?.error && result?.status === 0, out: String(result?.stdout ?? ''), err: String(result?.stderr ?? result?.error?.message ?? '').trim() };
+  return { ok: !result?.error && result?.status === 0, status: result?.status ?? null, out: String(result?.stdout ?? ''), err: String(result?.stderr ?? result?.error?.message ?? '').trim() };
 }
 
 function parseArgs(argv) {
@@ -71,19 +74,106 @@ export function circleciState(checkRuns, statuses) {
   return { state: all > 0 && done ? 'green' : 'pending' };
 }
 
+/** The rows of `status` (`FAIL`, `INFO`) in a `check` `output`. `check` prints its rows as one block, then each failed
+ * sensor's output after a blank line (`main` of bin/check.mjs), and that output can hold a row a test printed; so the
+ * rows are the first run of lines that begin with a row's status, up to the first blank line. */
+function rowsWith(output, status) {
+  return rowsAndLines(output, status).map((one) => one.row);
+}
+
+/** `rowsWith`, each row with the lines the gate indents under it (`{ row, lines }`), as the merge door gives its findings. */
+function rowsAndLines(output, status) {
+  const lines = String(output ?? '').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
+  if (start === -1) return [];
+  const rows = [];
+  let current = null;
+  for (const line of lines.slice(start)) {
+    if (line.trim() === '') break;
+    if (/^ {6}\S/.test(line)) {
+      current?.lines.push(line.trim());
+      continue;
+    }
+    current = line.startsWith(`${status}  `) ? { row: line.trim(), lines: [] } : null;
+    if (current !== null) rows.push(current);
+  }
+  return rows;
+}
+
+/** The gate's own FAIL rows in its `output` (`rowsWith`). */
+export function failedRows(output) {
+  return rowsWith(output, 'FAIL');
+}
+
 /** The whole suite on the candidate at `place`, under the gate lock, by the candidate's own commands. */
 function localSuite(run, place) {
   const bin = path.join(place, 'bin', 'js-harness.mjs');
   const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
-  const last = `${done.out}\n${done.err}`.split('\n').map((line) => line.trim()).filter((line) => /^FAIL /.test(line));
+  const last = failedRows(done.out);
   return { ok: done.ok, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
+}
+
+/** Whether main's check.mjs has the merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): its source names
+ * the `'--door'` flag. Read once per batch from main's worktree; a main without the file has no door yet. */
+function mainHasDoor(checker) {
+  try {
+    return fs.readFileSync(checker, 'utf8').includes("'--door'");
+  } catch {
+    return false;
+  }
+}
+
+/** The merge of `pr` into the candidate at `place`, then main's merge door on that merge (odd/tasks/rule-hierarchy.md,
+ * "The merge door (T16e)"), run in the candidate's worktree on `HEAD^1..HEAD`. `door` is main's check.mjs, or `null`
+ * when main has no door, and then nothing runs after the merge. Returns:
+ * - `{ kind: 'merged', merge }` when the pull request stays (its merge commit); a head the candidate already has
+ *   merges without a commit, and no door runs on it;
+ * - `{ kind: 'conflict', conflicted, said }` when git does not merge it, the merge aborted, the candidate as it was;
+ * - `{ kind: 'door', line }` when the door refuses it or does not answer: the candidate goes back to the commit it was
+ *   before this merge, and `line` says why, with the lines the door indents under its FAIL rows;
+ * - `{ kind: 'broken', line }` when the merge cannot be taken back, so the candidate is not known: nothing more may
+ *   be merged or tested.
+ * `--no-verify`: the repository's pre-merge-commit hook runs the gate on every merge, which the queue runs once on the
+ * whole candidate instead (S6); under the hook a merge waited for a turn of the lock and was then refused, and read as a
+ * conflict. The merge takes the identity the repository already has (no `git config` is written here). */
+function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
+  const commit = () => gitIn(place, 'rev-parse', 'HEAD').out.trim();
+  const before = commit();
+  const done = answer(run, 'git', ['merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid], place);
+  if (!done.ok) {
+    const conflicted = gitIn(place, 'diff', '--name-only', '--diff-filter=U').out.split('\n').map((line) => line.trim()).filter(Boolean);
+    gitIn(place, 'merge', '--abort');
+    return { kind: 'conflict', conflicted, said: done.err.split('\n').find((line) => line.trim()) ?? 'git gave no reason' };
+  }
+  // A head the candidate has already merges without a commit: it brings no line, so no door runs on it.
+  if (door === null || commit() === before) return { kind: 'merged', merge: commit() };
+  // The door's code is main's, from main's worktree (`door`), and it reads only the lines this pull request brings.
+  const ran = answer(run, process.execPath, [door, '--door', '--base', 'HEAD^1', '--branch', pr.headRefName], place);
+  if (ran.ok) {
+    const notes = rowsAndLines(ran.out, 'INFO');
+    if (notes.length > 0) {
+      stdout(`PR ${pr.number} notes from the merge door:`);
+      for (const note of notes) {
+        stdout(`  ${note.row}`);
+        for (const line of note.lines) stdout(`      ${line}`);
+      }
+    }
+    return { kind: 'merged', merge: commit() };
+  }
+  const taken = gitIn(place, 'reset', '--hard', before);
+  if (!taken.ok) return { kind: 'broken', line: `could not take the merge of PR ${pr.number} back (${taken.err.split('\n')[0] || 'git gave no reason'}): nothing was pushed.` };
+  if (ran.status === 1) {
+    const rows = rowsAndLines(ran.out, 'FAIL').map((one) => [one.row, ...one.lines].join(': '));
+    return { kind: 'door', line: `the merge door refuses it${rows.length > 0 ? `: ${rows.join('; ')}` : ' (no row says why)'}` };
+  }
+  return { kind: 'door', line: `the merge door did not answer (exit ${ran.status ?? 'none'})` };
 }
 
 /** `--land`: the candidate at `place`, built on `main`, tested on this machine and then on CircleCI, and main
  * moved to it when both are green (S6, S7). Its CircleCI run is that of a `queue/*` branch pushed for it and
  * removed afterwards, whatever the result. Main moves by fast-forward only, leased on the `main` the candidate
  * was built from: a main that moved in between is left as it is (exit 3). Red anywhere is exit 4. */
-async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, stdout, fail }) {
+async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
   const local = suite(place);
@@ -110,19 +200,18 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
     if (failed !== null) return failed;
     const kept = merged.slice(0, low - 1);
     for (const pr of merged.slice(low)) {
-      const again = gitIn(place, 'merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid);
-      if (!again.ok) {
-        gitIn(place, 'merge', '--abort');
-        stdout(`PR ${pr.number} is left out: it does not merge into the candidate without PR ${culprit.number}.`);
-        continue;
-      }
-      kept.push({ ...pr, merge: gitIn(place, 'rev-parse', 'HEAD').out.trim() });
+      // Merged again, so its door runs again on the shorter candidate (odd/tasks/rule-hierarchy.md, "The merge door (T16e)").
+      const step = mergeThroughDoor({ run, gitIn, place, door, pr, stdout });
+      if (step.kind === 'merged') kept.push({ ...pr, merge: step.merge });
+      else if (step.kind === 'broken') return fail(step.line);
+      else if (step.kind === 'door') stdout(`PR ${pr.number} is left out: ${step.line}.`);
+      else stdout(`PR ${pr.number} is left out: it does not merge into the candidate without PR ${culprit.number}.`);
     }
     if (kept.length === 0) {
       stdout('No pull request is left to land: nothing was pushed.');
       return 4;
     }
-    return landCandidate({ run, gitIn, place, main, merged: kept, suite, sleep, stdout, fail });
+    return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail });
   }
   if (!local.ok) {
     stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
@@ -177,6 +266,18 @@ async function landCandidate({ run, gitIn, place, main, merged, suite, sleep, st
     }
   }
   stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
+  // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
+  // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
+  const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
+  if (!refs.ok) {
+    stdout(`Could not read the heads of the landed pull requests (${refs.err.split('\n')[0] || 'git gave no reason'}): check none moved during the land.`);
+    return 0;
+  }
+  const heads = new Map(refs.out.split('\n').filter(Boolean).map((line) => line.split('\t').reverse()));
+  for (const pr of merged) {
+    const head = heads.get(`refs/heads/${pr.headRefName}`);
+    if (head && head !== pr.headRefOid) stdout(`PR ${pr.number} moved to ${head.slice(0, 7)} during the land; its new commits are not in main.`);
+  }
   return 0;
 }
 
@@ -212,7 +313,9 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
   // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later.
   const candidates = [];
   for (const pr of [...listed].sort((a, b) => a.number - b.number)) {
-    const problems = pullRequestProblems(pr);
+    // UNKNOWN is GitHub not having computed the merge yet, for about a minute after main moves: the merge into
+    // the candidate below is the queue's own test of it, so it decides. CONFLICTING is GitHub's answer.
+    const problems = pullRequestProblems(pr.mergeable === 'UNKNOWN' ? { ...pr, mergeable: 'MERGEABLE' } : pr);
     if (problems.length) {
       stdout(`PR ${pr.number} is left out: ${problems.join(' ')}`);
       continue;
@@ -236,25 +339,25 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
   const place = path.join(path.resolve(cwd, common), 'js-harness', `merge-queue-${process.pid}-${Date.now()}`);
   fs.mkdirSync(path.dirname(place), { recursive: true });
   if (!gitIn(cwd, 'worktree', 'add', '--quiet', '--detach', place, main).ok) return fail('could not make the worktree of the candidate.');
+  // main's own code, in a worktree beside the candidate's: the door runs main's check.mjs, never the candidate's
+  // (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"). Both worktrees are removed together, whatever happens.
+  const mainPlace = `${place}-main`;
   try {
+    if (!gitIn(cwd, 'worktree', 'add', '--quiet', '--detach', mainPlace, main).ok) return fail('could not make the worktree of main.');
+    const checker = path.join(mainPlace, 'bin', 'check.mjs');
+    const door = mainHasDoor(checker) ? checker : null;
     // No identity is written: a linked worktree has no configuration of its own, so `git config` here wrote the
     // shared one, and every session's commits were authored "js-harness merge-queue" until it was undone
     // (verifier, 2026-10-14). The merges take the identity the repository already has.
     const merged = [];
     for (const pr of candidates) {
-      // `--no-verify`: the repository's pre-merge-commit hook runs the gate on every merge, which the queue
-      // runs once on the whole candidate instead (S6); under the hook a merge waited for a turn of the lock
-      // and was then refused, and read as a conflict.
-      const done = answer(run, 'git', ['merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid], place);
-      if (done.ok) {
-        // The commit after each merge: the candidate of the pull requests up to this one, which bisection tests.
-        merged.push({ ...pr, merge: gitIn(place, 'rev-parse', 'HEAD').out.trim() });
-        continue;
-      }
-      const conflicted = gitIn(place, 'diff', '--name-only', '--diff-filter=U').out.split('\n').map((line) => line.trim()).filter(Boolean);
-      gitIn(place, 'merge', '--abort');
-      if (conflicted.length) stdout(`PR ${pr.number} is left out: it conflicts with the candidate so far in ${conflicted.join(', ')}.`);
-      else stdout(`PR ${pr.number} is left out: it does not merge into the candidate so far: ${done.err.split('\n').find((line) => line.trim()) ?? 'git gave no reason'}.`);
+      // The commit after each merge (`merge`): the candidate of the pull requests up to this one, which bisection tests.
+      const step = mergeThroughDoor({ run, gitIn, place, door, pr, stdout });
+      if (step.kind === 'merged') merged.push({ ...pr, merge: step.merge });
+      else if (step.kind === 'broken') return fail(step.line);
+      else if (step.kind === 'door') stdout(`PR ${pr.number} is left out: ${step.line}.`);
+      else if (step.conflicted.length) stdout(`PR ${pr.number} is left out: it conflicts with the candidate so far in ${step.conflicted.join(', ')}.`);
+      else stdout(`PR ${pr.number} is left out: it does not merge into the candidate so far: ${step.said}.`);
     }
     if (merged.length === 0) {
       stdout('No pull request merges into main: nothing was built.');
@@ -262,12 +365,14 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
     }
     const list = merged.map((pr) => `PR ${pr.number} (${pr.headRefName})`).join(', ');
     stdout(`Candidate: main ${main.slice(0, 7)} with ${merged.length} pull request${merged.length === 1 ? '' : 's'} merged in order: ${list}.`);
+    if (door === null) stdout('main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran');
     if (args.dryRun) {
       stdout('Dry run: nothing was tested or pushed, and the candidate was removed.');
       return 0;
     }
-    return await landCandidate({ run, gitIn, place, main, merged, suite: suite ?? ((dir) => localSuite(run, dir)), sleep, stdout, fail });
+    return await landCandidate({ run, gitIn, place, main, door, merged, suite: suite ?? ((dir) => localSuite(run, dir)), sleep, stdout, fail });
   } finally {
+    gitIn(cwd, 'worktree', 'remove', '--force', mainPlace);
     gitIn(cwd, 'worktree', 'remove', '--force', place);
   }
 }

@@ -34,6 +34,30 @@ export function modelRefusal(toolInput, allowed) {
     + 'Launch it on one of those, or with no model to run on the parent\'s.';
 }
 
+// The tools that open a session in the app's Routines or in the cloud, where it runs at the effort it inherits and he
+// does not see it (odd/tasks/session-channel.md, layer 3). `delete`, `list` and `CronCreate` open nothing and pass.
+export const OPENING_TOOLS = Object.freeze([
+  'mcp__scheduled-tasks__create_scheduled_task',
+  'mcp__scheduled-tasks__update_scheduled_task',
+  'mcp__scheduled-tasks__run_scheduled_task',
+  'RemoteTrigger',
+]);
+
+/** Why the call of the tool `toolName` is refused, or null. The four tools of `OPENING_TOOLS` are refused in the project
+ * whose rules file has the text `projectData`, where the rule `sessions-open-in-sidebar` gives a value (his answers of
+ * 2026-10-15: only where the rule is declared, and even when he asked for the session): the reason names the tool, the
+ * rule and the value to open a session with instead. In a project that does not declare the rule, and in a copy of the
+ * harness whose list is not the project's, nothing is refused. The rule is read with `ruleHere`, by its id written out
+ * so that `rules check` lists this file as its reader. */
+export function openingRefusal(toolName, projectData) {
+  if (!OPENING_TOOLS.includes(toolName)) return null;
+  const rule = ruleHere('sessions-open-in-sidebar', undefined, projectData);
+  if (!Object.hasOwn(rule, 'value')) return null;
+  return `js-harness guard: ${toolName} opens a session in the app's Routines or in the cloud, where he does not see it `
+    + `(rule sessions-open-in-sidebar). Open it with ${rule.value}, a row in his sidebar, or tell the lead; `
+    + 'it is refused even when he asked for it.';
+}
+
 // The hour a message stamps as the time it is sent: in its opening header, after nothing but the sender's label
 // and an optional date, and followed by a stamp word or a stop. The label is "From <someone>" or a session's
 // title as the harness names sessions, a short code and a number with an optional topic ("JH 5 · canal, ",

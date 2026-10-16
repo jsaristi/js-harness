@@ -91,7 +91,7 @@ export function serverArgs({ name, spawnMode = 'same-dir', permissionMode } = {}
 /** What cmd.exe acts on in a line of a batch file, quoted or not: the operators, `%` (a variable, expanded inside
  * quotes too), `!` (the same, where delayed expansion is on), a quote, which no escape gets past both cmd.exe and
  * the program it starts, and control characters, a line end among them. */
-const UNSAFE_IN_BATCH = /[&|<>^%"!\x00-\x1f\x7f]/;
+export const UNSAFE_IN_BATCH = /[&|<>^%"!\x00-\x1f\x7f]/;
 
 /** The values a launcher holds, each with what it is called when it is refused. `startCommandLine` checks these and
  * builds the command from what it checked, so no value reaches the file unchecked or is refused without a name. */

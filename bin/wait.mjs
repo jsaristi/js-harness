@@ -10,13 +10,19 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { readNotices } from './lib/channel.mjs';
 import { mainCheckout, projectSlug, roleNamed } from './lib/sessions.mjs';
+import { ruleValue } from './lib/rules.mjs';
+
+/** How often a wait checks, and how long it waits, when --every and --for do not say: the declared rules
+ * `wait-every` and `wait-for` (bin/lib/rules-data.mjs). */
+export const WAIT_EVERY_SECONDS = ruleValue('wait-every', 'seconds');
+export const WAIT_FOR_MINUTES = ruleValue('wait-for', 'minutes');
 
 const USAGE = [
   'Usage: js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)',
   '                       [--every <seconds>] [--for <minutes>] [--cwd <path>] [--home <path>]',
   '  Ends when its one condition holds, and prints one line that says so (exit 0). It first prints what it waits',
-  '    for and when it ends, checks at once and then every --every seconds (120 when not given), and after --for',
-  '    minutes (480 when not given) prints that the time ran out (exit 1). A check that cannot run is said once on',
+  `    for and when it ends, checks at once and then every --every seconds (${WAIT_EVERY_SECONDS} when not given), and after --for`,
+  `    minutes (${WAIT_FOR_MINUTES} when not given) prints that the time ran out (exit 1). A check that cannot run is said once on`,
   '    stderr and retried at the next tick. Run it in the background; stop it with TaskStop when it is no longer needed.',
   '  --pr <number>: the pull request is merged (gh). Closed without merging, it ends with exit 1, and says so.',
   '  --main-has <commit>: origin/main holds the commit, after git fetch origin.',
@@ -220,8 +226,8 @@ export async function waitMain(
 
   const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
   const home = path.resolve(defaultCwd, parsed.home ?? (env.JS_HARNESS_HOME || homedir()));
-  const seconds = parsed.every ?? 120;
-  const minutes = parsed.minutes ?? 480;
+  const seconds = parsed.every ?? WAIT_EVERY_SECONDS;
+  const minutes = parsed.minutes ?? WAIT_FOR_MINUTES;
   const started = now();
   const deadline = started + minutes * 60000;
   // A hung gh or git must not hold the wait past its deadline: each check gets the time left, at least a second.

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  POWERSHELL_ROW_FUNCTION, killProcesses, killSurvivors, killTree, parseSnapshot, selectTrees,
+  POWERSHELL_ROW_FUNCTION, killProcesses, killSurvivors, killTree, parseSnapshot, selectTrees, settleGroup,
 } from '../bin/lib/process-tree.mjs';
 import { isWithin } from './paths.mjs';
 import { readClaudeOutput } from './agent-output.mjs';
@@ -288,8 +288,11 @@ export function killByPath(roots, { platform = process.platform, spawnSync: sync
  * gets no signal forwarding below, because that kills the tree and then re-raises the signal on this process, which
  * ends it before the caller's own cleanup; the caller aborts, waits for the result and cleans up, then exits. */
 export function runProcess({
-  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors, signal,
+  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors, signal, settle,
 }) {
+  // What the sweep killed is waited for before the run ends (`settleGroup`). A caller that swaps the sweep killed
+  // no real group, so by default it has nothing to wait for.
+  const settling = settle ?? (sweep === killSurvivors ? settleGroup : async () => []);
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     if (signal?.aborted) {
@@ -358,7 +361,19 @@ export function runProcess({
       stop(sweep);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve({ ...out, ...exit, timedOut, ...(aborted && { aborted }), ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) });
+      // A group sent SIGKILL can still run for a moment under load; the run ends once it is gone, or says what was
+      // still running at the bound, as a Windows kill does (`killProcesses`).
+      // Whatever the wait answers or throws, the run resolves: a wait that fails is reported, never a hang.
+      Promise.resolve()
+        .then(() => settling(child))
+        .then((left) => {
+          if (!Array.isArray(left)) throw new Error(`the wait after the kill answered ${JSON.stringify(left)}, not a list of pids`);
+          if (left.length > 0) throw new Error(`still running after the kill: pid ${left.join(', ')}`);
+        })
+        .catch((error) => {
+          sweepError ??= error;
+        })
+        .then(() => resolve({ ...out, ...exit, timedOut, ...(aborted && { aborted }), ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) }));
     };
     signal?.addEventListener('abort', abort, { once: true });
     for (const stream of ['stdout', 'stderr']) {

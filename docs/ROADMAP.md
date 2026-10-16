@@ -40,12 +40,13 @@ First request of a one-word prompt, estimated tokens:
 
 | Area | Decision |
 |------|----------|
-| Name, home | `js-harness`, `D:\js-harness`, `github.com/jsaristi/js-harness`, private, and it stays private: asked when he means to make it public, he tapped "Se queda privado" (the lead's transcript `65318fd5`, line 13033, 2026-10-13, read with `sessions --quote`), which changes his words of 2026-09-26 that it would become public (transcript `2c923152`, line 72) |
+| Name, home | `js-harness`, `D:\js-harness`, `github.com/jsaristi/js-harness`, public since 2026-10-16. It had stayed private by his answer "Se queda privado" (the lead's transcript `65318fd5`, line 13033, 2026-10-13). On 2026-10-16, to get free parallel CI gates (`odd/tasks/first-version.md`, S7), a read-only audit of every branch and pull-request ref found no secret and no third party's data, only his own (his outlook address on web merges, his name, paths of his machine, quotes of his words); asked, he tapped "Sí, así como está (Recomendada)" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 11108, 2026-10-16T11:08Z, read with `js-harness sessions --quote`), and the lead made it public the same hour |
 | Hosts | Claude Code and Codex (CLI + desktop) now; Antigravity later, once its model is worth adopting |
 | Stack | gentle-ai 4 (ODD, RDD review, test-first by default), engram 3 (the binary, and its Claude plugin since `gentle-ai sync` installs it: hooks and one skill, no second MCP server), codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` on every turn — Claude Code reads it natively; the skills `install` writes for each host (`js-harness`, `js-harness-orchestrator`) load on demand |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
-| Release source | Decided and not built: git tags in the private repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it stays private (Name, home), so that step has no date. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: until the first tag `update`, `upgrade` and `status` say that no release is tagged yet, and `upgrade` installs only the newer tarball of a folder named with `--source` (2026-10-13, `odd/tasks/install-update.md`, T5). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
+| Release source | Built 2026-10-16 (`odd/tasks/first-version.md`, T4 and T4b), no release tagged yet: git tags in the private repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it stays private (Name, home), so that step has no date. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: `status --global`, `update` and `upgrade` read the newest `vX.Y.Z` tag with `git ls-remote` (`--repo` or `JS_HARNESS_REPO` names another repository, a test's local one), and until the first tag they say that no release is tagged yet; `--source`, a folder of tarballs, still wins when named (2026-10-13, `odd/tasks/install-update.md`, T5; tags 2026-10-16). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
+| License | MIT, in `LICENSE` and `package.json`. Chosen before the repository went public for free parallel CI gates (`odd/tasks/first-version.md`, S7): asked which license, among MIT, Apache-2.0, AGPL-3.0 or none, he tapped "MIT (Recomendada)" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 10941, 2026-10-16T10:55Z, read with `js-harness sessions --quote`) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. So does a commit, a merge above all, whose index differs in documents alone from the trunk as origin names it, or from `MERGE_HEAD` where git wrote one: the trunk merged into a branch of documents, whose code is the trunk's (2026-10-14, `odd/tasks/merge-documents-skip.md`). Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`). A project may declare `"sameTree": "skip"`: a gate whose tree, file for file, with the same sensors on the same Node, is the one a gate already ran every sensor on and passed, by a line of the gate log, runs no sensor and takes no lock, and says in its row which gate is the proof; off unless declared, since the key of a tree holds no file git ignores; this repository declares it (his decision of 2026-10-12, the lead's transcript, line 3913; built 2026-10-13, `odd/tasks/gate-wait.md`, T12) |
@@ -61,7 +62,7 @@ First request of a one-word prompt, estimated tokens:
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
 | Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
-| Context | `autoCompactWindow: 500000`; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
+| Context | `autoCompactWindow: 350000` (his setting of 2026-10-15), which the context pause reads to know where the host compacts; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
 
 ## Phases
 
@@ -78,7 +79,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
 | Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Done, reviewed, merged to `main` 2026-09-27 via `jsaristi/js-harness#4`; installed on this machine, hook registered in Claude Code and Codex; the Windows exit crash that install found was fixed via `jsaristi/js-harness#5`, and the global package matches `main` (`js-harness doctor --hook` exits 0, 2026-09-27) (`odd/tasks/stack-doctor.md`) |
 | Progress view | The phases in this file carry checkbox steps; `js-harness progress` reads a project's `docs/ROADMAP.md` and `odd/tasks/*.md` and prints every phase and feature with checked and pending steps, percentages and what remains; `--json` returns the same data; tests use fixtures; js-harness uses it on itself first | Done, reviewed, merged to `main` 2026-09-27 via `jsaristi/js-harness#6` (`odd/tasks/progress-view.md`); every later phase is tracked with it |
-| F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | Measurement done, reviewed, merged to `main` 2026-09-28 via `jsaristi/js-harness#7` (`odd/tasks/f2-context-diet.md`); gentle-ai 4.0.0 adopted 2026-10-01, merged to `main` 2026-10-03 via `jsaristi/js-harness#25` (`odd/tasks/stack-v4.md`), and it is not a diet: Claude went from 20,651 to 21,104 estimated tokens per turn and Codex from 10,510 to 25,515, since v4 gives Codex the full orchestrator; the last step waits on gentle-ai (#4036 is open, checked 2026-10-01) |
+| F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | Measurement done, reviewed, merged to `main` 2026-09-28 via `jsaristi/js-harness#7` (`odd/tasks/f2-context-diet.md`); gentle-ai 4.0.0 adopted 2026-10-01, merged to `main` 2026-10-03 via `jsaristi/js-harness#25` (`odd/tasks/stack-v4.md`), and it is not a diet: Claude went from 20,651 to 21,104 estimated tokens per turn and Codex from 10,510 to 25,515, since v4 gives Codex the full orchestrator; the last step waits on gentle-ai (#4036 is open, checked 2026-10-15). The fixed load of a session, measured 2026-10-15 (`odd/tasks/fixed-load.md`): about 110k tokens before the first message in the desktop app, 63.5k in the headless CLI; the global `CLAUDE.md` is 28.2k of it, 24.8k in gentle-ai's orchestrator and routing blocks |
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project, above the machine commands (Sebastián, 2026-09-29), and the machine commands outside one; `doctor` reports the Codex plugin, and the Codex review of each approved code slice leaves a record a check verifies | Done 2026-09-29 (`odd/tasks/project-init.md`), seven slices stacked to `main`: the git-spec install through the pnpm shim works since `jsaristi/js-harness#8` (the package no longer runs `prepare`); `init` merged via `jsaristi/js-harness#9`; project `uninstall`, with `init`'s review follow-ups, merged via `jsaristi/js-harness#10` (2026-09-29); project `sync` by location merged via `jsaristi/js-harness#11` (2026-09-29); the TUI by location merged via `jsaristi/js-harness#12` (2026-09-29); the Codex plugin in `doctor` merged via `jsaristi/js-harness#13` (2026-09-29); the verifiable Codex review record (`js-harness codex-review` and the pre-push `check --push`) merged via `jsaristi/js-harness#14` (2026-09-29). Its follow-ups are carried in the feature document |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | Done, reviewed, merged to `main` 2026-09-30 via `jsaristi/js-harness#16` (`odd/tasks/task-contract.md`); its follow-ups are carried in the feature document |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
@@ -112,6 +113,8 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] TUI stack block above the menu
 - [x] Reviewed and merged (`jsaristi/js-harness#4`, Windows exit fix `#5`)
 - [x] Installed on this machine; global package matches `main`
+- [x] `doctor` `host-update` row: a Claude Desktop or Code tab CLI update is a gap, with its review steps, until `doctor --host-reviewed` records the review; an update downloaded and not applied is `outdated` (his request of 2026-10-15, `odd/tasks/host-update-check.md`; pull request 242, and its follow-ups: the app folder read under `--home` only, `--host-reviewed --json`)
+- [x] `doctor` `gentle-ai-sync` row: a new gentle-ai version is a gap, with its review steps, until `doctor --gentle-ai-reviewed` records the review; one step diffs the global `CLAUDE.md`, which a sync rewrites and js-harness never writes, against gentle-ai's pre-sync snapshot, and the next checks the changes against `AGENTS.md` (his request of 2026-10-16, `odd/tasks/gentle-ai-update-check.md`; ticked in its own pull request, which lands at once)
 
 ### Progress view
 - [x] Parser for roadmap phases and feature docs
@@ -125,6 +128,8 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] codegraph prompt hook measured with and without
 - [x] gentle-ai v4 adopted when released
 - [ ] Block exclusion via gentle-ai #4036, if it ships
+- [x] The fixed load of a session measured per part and owner, and a `fixed load` row in `check` that warns over 100,000 tokens (`odd/tasks/fixed-load.md`)
+- [ ] The cuts that document recommends, one at a time: moved, never deleted, measured before and after, proven by an eval, each undoable (his decisions D1-D7 there)
 
 ### Project init
 - [x] A git-spec global install works through the pnpm shim
@@ -178,6 +183,15 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 
 ### F7 Future-model protocol
 - [x] Written procedure: measure payload, run evals, strip one component at a time ([future-model.md](future-model.md))
+
+### Web fetch fallback
+When WebFetch is refused as AI traffic, the next rung is said at once (Sebastián, 2026-10-15: "las pagina
+te tienen bloqueado al ser una ia ese es el problema"); measured on nine pages, `odd/tasks/web-fetch-fallback.md`.
+- [x] Measured: which rung (WebFetch, r.jina.ai, the built-in browser) reads each of nine pages
+- [x] `js-harness fetch <url>`: rung 2, read or blocked with the next rung
+- [x] The `resume --pause` hook names the next rung after a blocked WebFetch
+- [x] And after a WebFetch that failed as a tool error, through a `PostToolUseFailure` entry `install` writes (Sebastián, 2026-10-16: "Sí, agregala (Recomendada)")
+- [x] Reviewed (gentle-ai and Codex) and merged (`jsaristi/js-harness#204`, its `PostToolUseFailure` entry `#260`)
 
 ## F5 result
 
@@ -664,121 +678,15 @@ to undo. `status` says how many hold; the skill and the `AGENTS.md` template nam
 
 ## Session channel
 
-Designed on 2026-10-10 in `odd/tasks/session-channel.md`, by the design session that also wrote
-`odd/tasks/rule-hierarchy.md`, and being built: what is done is read in that document's tasks
-and in `js-harness progress`. Where this section and that document differ on the design, the
-document wins; a decision of his that the document does not restate stands as it is written
-here and in the orchestrator's relief file.
+Designed on 2026-10-10 and being built in `odd/tasks/session-channel.md`: what is done is read
+in its tasks and in `js-harness progress`. What this section held of that feature (the problem
+and the proposal he approved, points 1 to 6, the advice on width and his answer, the reasoning
+of the lead, the charter, the context and its measure, the live handover, the two classes, the
+test owed and the limits) was moved there word for word on 2026-10-15, to section 16
+("Decisions carried from the roadmap"); that document wins where the two differ. What stays
+here is the order he asked for on 2026-10-09, whose items are features of their own.
 
-A feature of its own, asked by Sebastián on 2026-10-09. It builds on the session board
-(`odd/tasks/session-board.md`), which is merged. The design below is the main session's
-proposal, put to him that day and approved by him ("me parece excelente tu propuesta");
-point 6 answers the question he asked next. What he changes from here on is written in the
-feature document.
-
-The problem. Sessions that work side by side talk to each other only through him: a session
-that finishes hands him a block of text to paste into the orchestrator, and he carries it
-across. On 2026-10-09 he carried one such notice by hand and asked for the sessions to talk
-directly, to be told what was said instead of being given a prompt, and for a session's name
-to say at a glance whether it is the orchestrator or a work session and which orchestrator it
-belongs to (his example: `ORQ1: <name>` and `SES1.1: <name>`).
-
-What exists. Claude Code lists the sessions of the machine (`ListAgents`) and delivers a
-message to one by its title (`SendMessage`). Tested that day between two desktop sessions: the
-message arrived as a new turn, was not held for his approval, and the answer came back within
-a minute. A session can be renamed from another (`set_session_title`, desktop app). Codex has
-no such channel. The board already reads every transcript of the project.
-
-The proposal, in the order it would ship:
-
-1. Names. A title is `<project code> <role> · <what it does>`: `JH ORQ · js-harness` for the
-   orchestrator, `JH 1 · subagent routing`, `JH 2 · codex review` for its work sessions, the
-   number given in the order they open and never reused. The project code replaces his
-   orchestrator number because what tells two orchestrators apart is the project they serve,
-   and a code is read without a legend where `1` is not. The title is also the address of a
-   message, so it is short, unique and never changed while the session lives. The orchestrator
-   gives the title in the opening prompt it writes; the session sets it where the host can,
-   and the orchestrator's relief file keeps the list either way, so the board shows role and
-   number in a host that cannot rename.
-2. Notices, few and of one line, because each one costs the receiver a turn. From a work
-   session to its orchestrator: opened (feature, worktree, branch), waiting for Sebastián (on
-   what), closed (what it delivered). From the orchestrator to a work session: only what that
-   session cannot see (the default branch moved, another feature touches its file, a hint is
-   wrong). A message between sessions is never his word. An answer he gives in the
-   orchestrator's chat travels to the session that asked, with his exact words and the
-   transcript line where that session reads them before using them (his decision of
-   2026-10-10; `odd/tasks/session-channel.md`, "His words, when they travel", with the limit
-   found the same day). Spend, the irreversible and product choices are asked in the chat of
-   the session that needs them.
-3. What he reads. A reply no longer ends with a prompt for another session. It ends by saying
-   what was sent and whether it arrived (`Told the orchestrator at 03:04, delivered: closed,
-   #43 and #44 are on main`), and the orchestrator's next reply says what it received and from
-   whom. Only when the send fails does the session fall back to a block for him to paste. A
-   block for him remains for his own decisions, as today.
-4. The board shows it. `js-harness sessions` gains a section with the last messages between
-   sessions (time, from, to, first line, delivered or not), read from the transcripts, so
-   whether the sessions are talking is a command's output and not a session's claim.
-5. One gate at a time, by the gate. A second `check` on the machine waits for the first or
-   refuses beside it, in `bin/check.mjs`, instead of a wait script in every session (three
-   private copies and one collision by 2026-10-09). It is listed here because the message
-   channel must not become the way gates take turns: a lock holds when nobody is listening.
-6. One orchestrator per project, and that is checked. He asked whether there would ever be
-   two, and how not to get lost if so. Two at once are normal across projects (`JH ORQ` and
-   `ABG ORQ`): each has its own board and relief file, both keyed by the project's folder, and
-   its work sessions address it by a title that carries the project code, so nothing of one
-   reaches the other. Two in one project are not allowed: they would keep two boards over the
-   same worktrees, gates and default branch, which is the collision itself. The orchestrator
-   skill already hands over by relief, the new one in before the old one is archived, "so
-   there are never two"; this feature turns that sentence into a check. A session that starts
-   as orchestrator reads the relief file and the board first and refuses when another one of
-   the project is alive, and the board says so in a line when two sessions carry the
-   orchestrator's title. What two projects do share is the machine: the gate lock of point 5
-   is the machine's, not the project's, and the Claude and Codex limits are his to spend.
-   He then asked it of one project alone: three features at once, is that one orchestrator
-   and three work sessions, or is a second orchestrator ever needed? Always one. What caps a
-   project is not what an orchestrator can hold but what the sessions share: one gate at a
-   time on the machine (12 to 18 minutes each, queued all day with three sessions on
-   2026-10-09), one default branch, and his attention for each decision. A second
-   orchestrator adds none of those and splits the one place that knows the order. The cases
-   that look like a need for two have other answers: an orchestrator short of context is
-   relieved, not doubled; a feature too large for one session splits its work among its own
-   sub-agents, or into two features with two work sessions; a second machine on the same
-   repository would be the one real case, one orchestrator per machine meeting through pull
-   requests, and it is out of scope until he has one.
-
-Asked the same day, and answered as advice, not as a plan: how to go faster with several
-teams at once, a second computer included, without collisions and with work that is always
-well done. What was measured that day and what follows from it:
-- The limits are, in this order, his attention (every session asks him), the gate (it runs
-  only on this machine, one at a time, 12 to 18 minutes; the repository has no workflow under
-  `.github/` and no run on GitHub, and branch protection is not offered to a private
-  repository on its plan, checked with `gh`), the plan's weekly limit (86% that morning with
-  one machine), and the files every feature touches (`docs/ROADMAP.md`, `AGENTS.md`,
-  `bin/lib/manifest.mjs`: two re-merges of `main` in one night).
-- So width is added only as far as those four allow. The lever with the most in it is the
-  gate: a lock so two never run together (point 5), a shorter gate, and the same gate run by
-  GitHub on every pull request, where runs do not queue behind one machine. A second machine
-  comes after that, and meets the first through pull requests, not through a new channel.
-- His three principles (work well done, no shortcut taken to hand in a result, everything
-  under the agreed protocols) are not new prose for this feature: each already has a check
-  (the task contract, the test written first, the hooks), and the place that states them
-  once is the rule hierarchy above. The repository's own measurement argues against adding
-  text for its own sake: in F5 the fuller stack cost 1.68 to 2.54 times as much for the same
-  score.
-- His answer, the same day, which corrects that advice in four places. His attention was
-  short because of how progress is told to him, not because of how many sessions asked: the
-  way the orchestrator reports is part of this feature, and the reply that reaches him opens
-  with what needs him, then what runs alone, then what was done, in everyday words. The
-  limits are to be solved here, by building or on top of an existing solution, not only
-  named. The plan is not one of them: he will raise it, with several maximum plans if needed
-  (a second account does not share the first one's messages, so across accounts the meeting
-  point stays the repository). And the shared files are a limit of this repository because
-  the harness is what is being edited here; a project where the harness is installed has it
-  fixed. What such a project still shares is its own plan and specification, so the rule to
-  carry over is who writes them: a work session writes its feature document, and one place
-  writes the shared plan.
-- Every item of this section is therefore judged twice: as it is here, and as it would work
-  in a project that only uses the harness.
+### The order he asked for (2026-10-09)
 
 The order he asked for, the same day ("quiero que lo que hemos hablado le hagamos un plan y lo
 podamos implementar todo"), each a feature of its own with its own document and session:
@@ -947,8 +855,47 @@ podamos implementar todo"), each a feature of its own with its own document and 
      file, each row says where its temporary files went. What Windows loses per commit:
      its own code paths are tested by one run per merged batch, in a lock turn on `main`:
      `TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node
-     bin/check.mjs`. An installed project gets nothing unless its machine has the file.
+     bin/check.mjs`, written where merges are made: the README's `js-harness merge-queue`. An
+     installed project gets nothing unless its machine has the file.
      Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
+   - The ticket that goes first (2026-10-16, `odd/tasks/gate-first.md`, his "agrega la prioridad
+     del gate"): `js-harness gate first --session <id> --reason <why>` puts that session's next
+     whole check before every gate that waits; the turn that runs is never cut. Two are open at
+     most, for an hour at most; a gate claims its session's ticket as it arrives and spends it
+     whatever comes next. The orchestrator's batch run carries one by itself with `check --first
+     <reason>`. It cannot be made impossible, so it is made seen: `js-harness sessions` prints
+     each open ticket with its issuer and flags one the orchestrator did not issue, a gate that
+     went first says by which ticket, and the gate log keeps each issue, claim, expiry and
+     cancellation. Undo: `gate first --cancel <id>`, or delete `~/.js-harness/gate-first`.
+   - A faster whole check of the same quality (2026-10-14 to 2026-10-16, closed,
+     `odd/tasks/faster-check.md`): the design that ranked how to free the lock without proving
+     less, read by two readers and handed to the orchestrator as version 2. Its first three parts
+     are built, each in its own document: the sensors in WSL2 and the ticket that goes first
+     (both above), and Codex's review out of the lock (the Review row of "Decided"); with them,
+     two guards on a turn of `js-harness gate` (`odd/tasks/gate-turn-guards.md`). The parts it
+     ranked after those were not built there, and it claims nothing of their state.
+   - The wait for the gate, measured and cut (2026-10-12 to 16, `odd/tasks/gate-wait.md`, closed).
+     *What the measurement found*: one whole run under the lock, 77 files, started 1,005 Node
+     processes and 12,041 git processes and ended at 780 s, its longest file at 686 s. After
+     the command's tests ran as two processes, no file was the wall any more (533 s, the
+     machine 94% busy), so only less work shortens a run: fewer process starts, or less of
+     what the antivirus spends on each (1,077 processor-seconds of 5,524 in that run, his).
+     Two cuts of git were taken, each judged by a second count: the questions a
+     `codex-review` run asks (its test file, 7,840 to 6,628 git processes), and test
+     repositories built once per process and copied (`bin/lib/git-fixture.testkit.mjs`,
+     1,545 fewer in 15 files, 6.8% of the suite's git). *What may run beside a gate*: both
+     reviews. Codex ran beside a commit gate 67 times and every run ended reviewed; a
+     gentle-ai review adds at most 12 s to a gate, against 30 s written before it was
+     measured. A test run still may not: the guard refuses `node --test` of several files
+     while another gate holds the lock, outside a turn. A review in parts keeps the parts
+     that passed, a review runs at medium effort, and a queued command can be refused before
+     it waits (`js-harness gate --ready`). *What the trial on GitHub answered* (run
+     38296748258): on machines of one size the suite took 1,258 s on Windows (124 failing)
+     and 184 s on Linux (7 failing), 6.8 times longer on Windows, so it is Windows that is
+     slow for this suite, not his machine. The figure of a month of gates there (about 21 to
+     26 dollars while the repository was private) went to him, and nothing was paid; once it
+     was public, the gates that would wait for the lock go to GitHub's Linux machines instead
+     (`odd/tasks/first-version.md`, T7).
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
@@ -982,168 +929,84 @@ podamos implementar todo"), each a feature of its own with its own document and 
    other. What is known: the app's messages stay inside one account, so across accounts the
    meeting point is the repository. He takes it up again after the four above.
 
-The orchestrator as a lead, asked by him on 2026-10-09 and decided by him the same day: one
-orchestrator per project, and it is the lead, not a watchman. His words, in short:
-with one session working he does not know which one to open
-next; the orchestrator, who knows the whole project, should say what else can be done at
-the same time, without one feature colliding with another and without work that has to be
-redone because it could have been seen that another way, or doing it together with another
-feature, was better; like a lead developer with several programmers; it should know the
-project in detail, ask what it doubts, be curious; and it should not take his words
-literally but order the ideas and propose the better way. Quality comes before speed, and
-speed still matters. What stands today is the opposite on purpose: the installed skill
-makes the orchestrator a watchman ("You read", "Otherwise stay silent"), because reading
-code and discussing a design fill a context that has to last. So the role changes, and the
-knowledge goes to files instead of to the orchestrator's conversation:
-
-- A work plan beside the roadmap's order: for each feature not started, what it touches
-  (files and areas), what it needs finished first, what it blocks, and what it would be
-  better built together with. From it the orchestrator says what can start now.
-- A sensor for collisions rather than a judgment: the board already lists every worktree,
-  so it can print the files two branches both changed.
-- An entry gate for a feature: before it gives an opening prompt the orchestrator answers
-  four things in writing. Does it touch what another one touches? Does it need something
-  unfinished? Is it better joined with another? Is there room (the gate, the plan's
-  limit, his attention)? A work session that wants to widen its scope asks it first.
-- The next one proposed, not waited for: when a session closes or starts waiting, the
-  orchestrator says whether there is room for another, which, and why it collides with
-  nothing. He still decides the start, since a session spends his plan.
-- Questions kept and asked: its doubts about the project go in the relief file and reach
-  him one at a time, in a quiet moment, the one that unblocks most first.
-- His wording is the need, not the specification: for every request, the need behind it,
-  where it falls in the map, the proposal, then the record.
-- Detail without filling its context: the specification planned in the rule hierarchy, the
-  code graph, and a sub-agent sent to read when depth is needed; it keeps the conclusion.
-- It still does not implement and never answers for him.
-
-He then asked whether the lead should be a session of its own, passing what it decides to
-an orchestrator that only controls the sessions, and saw the cost himself: that
-orchestrator would be blind. The recommendation given, which stands as his decision of that
-day: one session, the orchestrator is the lead. What can start and what collides is
-decided from the board's facts, so the one who decides the order has to be the one who
-sees the state; two sessions add a hop to every notice and one more place that asks for
-his attention, which is the real limit. The watching is the part that needs no judgment,
-and it is already a program (`sessions --watch`), so the split
-that holds is program and session, not two sessions. What is right in his idea is kept: a
-long design conversation is a work session of its own that delivers a document, as the
-skill already says, and the lead reads its conclusion. The measure that would reopen this:
-an orchestrator relieved more than once in a working day because its context filled. It
-tripped, and whether the decision is reopened is his, not answered
-(`odd/tasks/session-channel.md`, "Why" and "Ask me before").
-
-More autonomy, asked the same day, with his yes to the push of this branch (pull request
-#47). His words, in short: knowing the whole picture, say how many more sessions can work
-now, alone or in pairs; he is the limit, so the orchestrator gets permission to handle
-several sessions and go on from the agreed route, interrupting him only for decisions that
-really matter, even compacting by itself and sending the next prompt, without leaving the
-plan. What the tools allow, checked that day in the desktop app: a session can send another
-a message (`SendMessage`), rename it, and read its state; it cannot open a new session
-(`start_session` is named by other tools' descriptions and is not among this session's
-tools, and whether it can be turned on is not known), and nothing compacts another session.
-A session compacts by itself at 93% of its window, and a `SessionStart` hook with the
-matcher `compact` runs right after (engram's did, in this session), so the resume prompt he
-pastes today can be a hook the harness installs: read the feature document's next step and
-go on. The proposal put to him, as a charter with two lists, which he approved the same day
-("te apruebo todo") and widened on 2026-10-10 ("fusioná vos el código y dá vos el visto bueno
-de las etapas") and on 2026-10-11 ("te apruebo todo lo que me pides"), his words as the
-orchestrator's relief file records them:
-
-- Alone, told afterwards: which feature starts next within the order and up to three work
-  sessions; plan steps and notices sent to work sessions; pushes and pull requests once the
-  gate and both reviews are green; the merge of a pull request that changes only documents,
-  and of one with code when the gate passed, both reviews are recorded with nothing blocking
-  and it is clean; the go-ahead of a later stage inside a plan he approved; a Codex review
-  within the cost its plan prints, held by a rate for each changed line of a slice and not by
-  a number for a feature (on 2026-10-11 he approved a cap by rate; the figure is the lead's,
-  recorded in that file, and no command holds it yet), and he is asked over it; compaction
-  left to the host, with the feature document as the record.
-- His, asked one at a time: spend outside the plan; anything installed or changed on a
-  machine; a product choice; what cannot be undone; a change of the plan or of its order;
-  a new protocol.
-
-Opening a session stays one paste of his, a short prompt the orchestrator writes, until a
-way to open one from a session is found.
-
-Context, his condition on that approval. Every session knows how full its window is, so
-that it is never cut in the middle of a piece of work, leaving it short or wrong and costing
-more to repair than it would have cost to do once. It does not stop for the sake of
-stopping either: it measures, and it cuts where nothing is lost. The reading, to be built
-with the session channel and tried first by hand:
-
-- No session stops, slows or proposes a cut for a percentage. Near the end of its window
-  it pauses, writes its state in its feature document, and judges: little left, it
-  finishes well; much left, the compaction is done there and the same task continues after
-  it. This is the context pause, his rule of 2026-10-10. The share of the window it acts
-  at has one home, the constant `DEFAULT_CONTEXT_PAUSE_PERCENT` of `bin/lib/sessions.mjs`,
-  with the share where the host compacts beside it (`DEFAULT_CONTEXT_COMPACTION_PERCENT`):
-  a text names the rule or reads the constant and never writes the value, and a test of
-  `bin/sessions.test.mjs` fails when one does. Its design is in
-  `odd/tasks/session-channel.md` ("Context").
-- A task ends with its commit and with the feature document saying what is next, so at
-  that point the files hold everything and the conversation can go.
-- Two ways to cut, to be compared: the host's compaction with a `SessionStart` hook that
-  sends the session back to its feature document, and a clean start (the app can clear a
-  session's conversation) followed by the orchestrator's message to resume from the
-  document. The second loses nothing to a summary, since nothing is carried in one, and is
-  not tried yet: whether a session may clear itself while he has it open is not known.
-- The measure: no task reopened because a cut lost what it needed.
-
 For the gate on GitHub, a fact found the same day: the repository is private
 (`gh repo view --json visibility`), so its runs count against the account's minutes.
 
-A live handover, his decision of 2026-10-09, given in the new orchestrator's chat the first
-time one took over from another (`JH ORQ · js-harness` from the main session). His words,
-read in that session's transcript: "tu puedes comunicarte con la sesion anterior osea, si
-tienes dudas siempre manda en el prompt cual fue el nombre de la sesion anterior
-orquetadora que te creo y preguntale informacion adicional que no te haya quedado clara,
-recuerda siempre se critico por que siempre priorizamos la calidad sobre el tiempo aunque
-la rapidez tambien es importante. si tienes que añadir esto al harness hazlo por favor".
-The new orchestrator's reading, his to correct, for the rewrite of the skill:
-
-- The title of the orchestrator before, which is its message address, is always in the
-  relief file, so it outlives an orchestrator that died; the opening prompt may repeat it.
-- Before it says it is watching, the new one reads what can be read and asks the one before,
-  by message, only what the files do not hold. Each answer is a claim: one thing is
-  checked, and what was learned is appended to the relief file.
-- The one before is archived only after those questions are answered.
-- A sensor rather than prose: the board's Relief section prints who the orchestrator before
-  was and whether it is alive to be asked.
-
-It was done that way the same day: five questions asked by message and answered the same
-way (`odd/tasks/session-board.md`, entries of that day).
-
-Two classes of session, found on 2026-10-10 in the first stretch with two work sessions
-(`odd/tasks/session-board.md`). Claude Code delivers a message between sessions only when
-both ask for permissions the same way: a receiver that bypasses permission prompts holds a
-message from a sender that does not, and in the desktop app the held message expires
-unseen. His desktop sessions bypass; a session he opens from the phone through `js-harness
-remote` runs in `auto`. So the notice of a phone-opened work session never reached the
-orchestrator. His decision that day: such a session is read on the board for now, the
-repair goes here, and making the modes meet is his, at the computer (the host documents
-`crossSessionInbound: "accept"` in the user's settings, and the roadmap's open decision 2,
-the permission mode, is the other road). Proposed by the orchestrator for this feature, not
-decided: a work session whose first notice is held does not retry and says so once; the
-stack doctor reports when a project's sessions run in different classes; an orchestrator is
-opened from the desktop app. In a project that only uses the harness this is the first
-thing a second device would meet, so the check belongs in what is installed, not in advice.
-
-A test owed, carried here from the session board's last task on 2026-10-10. A session that
-the orchestrator opens by itself, through a scheduled task with no schedule, was seen to
-start, take a title, receive a message and run with permission prompts bypassed
-(`odd/tasks/session-board.md`, criterion 3). Not tried: whether he can type in its chat, and
-whether it can commit in a folder of its own. The second costs one gate turn and needs him
-at the app once; until it is run, work sessions open by his paste, because a session opened
-that way has no tool to ask him anything. The same stretch left two more things for this
-feature, both taken into its design (`odd/tasks/session-channel.md`): a wait handed to a
-session that cannot be reached names a process that ends, never a commit that may not come;
-and the handover of the orchestrator's title, done twice that night by renaming in one step.
-
-Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
-block. A session in another permission mode holds incoming messages for his approval. The
-rule about how a reply ends is paid on every turn, so where it lives is settled by the rule
-hierarchy above, not by this feature.
-
 ## Next
+
+**Scope frozen, by his answer of 2026-10-16.** On 2026-10-15 the sessions ticked 70 tasks and
+opened 56 new ones (counted from the feature documents' history on `main`), so the open count
+fell by only 14 in a day. Asked whether to freeze the scope, with 44 tasks open and about 13
+hours left at that day's pace if it stays fixed, he tapped "Sí, congelá (Recomendada)" (the
+lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 9186, 2026-10-16T07:49Z, read
+with `js-harness sessions --quote`). From then on the first version is the tasks open on
+2026-10-16 and the phases already named in this map. A new finding becomes a task only when it
+breaks shipped behaviour or blocks one of those tasks; anything else goes to "Later" below, with
+its source, and waits for him. This replaces his answer of 2026-10-13 that ideas keep entering
+as before ("Todo sigue entrando como hoy", in the next paragraph); the rest of that paragraph
+stands.
+
+Three things the count of 44 left out, found by the lead the same morning. Seven phases show
+0/0 in `js-harness progress` because their documents keep tasks in a table, not as checkboxes;
+of their rows, three are still open (`odd/tasks/exact-tests.md` T3 and T4,
+`odd/tasks/test-run-warning.md` T2), read from `main` with `rg '^\| T\d'` on each document. That
+`progress` cannot count those rows is a defect in shipped behaviour, so it enters as a task. And
+the defects with no task and the items with no design, which the next paragraph puts inside the
+first version, are still a list made by readers and never checked in the code; checking each one
+is a task, and each confirmed one becomes a task of its own. The Codex review switch among them
+already ships (`js-harness functions`, `codexReview` in `bin/lib/functions.mjs`).
+
+**The first version must be complete, stable and fully working, by his order of 2026-10-16.** Told
+the three things above, he wrote "necesitamos si o si que la primera version sea completa y estable
+y ademas super funcional" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 9602,
+2026-10-16T08:10Z). The work it adds is tracked in `odd/tasks/first-version.md`: the three table
+rows, `progress` counting table rows, the 2026-10-13 list checked in the code, the release source
+("Release source" above, decided and not built, without which no machine can update to a new
+version), a clean-home run of install, update and uninstall, and a stability pass at the end.
+Creating the 1.0.0 tag stays his.
+
+**Throughput, by his word of 2026-10-16, inside the frozen scope.** Shown the day's yield, he asked
+to optimize until going further costs more than it returns, without trading quality or
+reliability ("Ojala podamos optimizar a un nivel sin sacrificar calidad que me tengas que decir que
+optimizar mas es mas el costo que el beneficio esa es la idea pero manteniendo la calidad y
+fiabilidad", typed in the lead's chat during a turn, a queued message the transcript keeps without
+its text), and then to apply it at once ("apliquemos todo eso de una vez para que cuando trabajes
+autonomamente avancemos de una manera excepcional y a la maxima eficiencia", the lead's transcript
+`e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 14742, 2026-10-16T20:48Z). The second sentence puts
+these items inside the first version despite the freeze; that reading is the lead's.
+
+The stop rule, the lead's reading: each item carries its baseline, its target and its cost, and
+items stop being added when the next one is estimated to return less than it costs, which the lead
+tells him. Nothing that lowers quality or reliability is an item: no dropping the Windows run from
+a land, no skipped review, no weaker test. Version 1 of this list was the lead's and reached him
+unreviewed; two readers on Opus 5.5 at high then found most of it built or mismeasured (the
+docs-only skip, the same-tree skip, exact tests, the rerun of a failed test file and the pnpm lock
+fix already ship; suite gates are about 2.9 per merged PR, not 5.5; the lock was idle about 30% of
+the day; the 82 conflict lines were 17 distinct PRs, mostly code; the merge door of T16e is a rules
+door, not a gate moved off this machine). This is version 2. Baselines are of 2026-10-16 UTC.
+
+| # | Item | Baseline | Owner |
+|---|---|---|---|
+| 1 | Fix the doctor `pnpm-lock` test (ext4 under WSL keeps the mtime 1 ms off) | 3 red land candidates | JH 27, `#315` |
+| 2 | Ready pull requests land without waiting for a lead turn, with the same checks and reviews | ready to merged: median 48 min, worst 391 | JH 24, design and two readers first |
+| 3 | Stale conflicting pull requests merged with `main` or closed | 8 of 15 open conflicting | the lead |
+| 4 | Shared hot files generated, not hand-edited: the README command list from `--help`, manifest rows derived | README in 26 of 61 merged PRs, ROADMAP 17, manifest 11 | JH 25, after `#282` |
+| 5 | Resume reads the open task, and closed Log sections move to a sibling file | `session-channel.md` 345 KB, `rule-hierarchy.md` 306 KB | JH 26, after `#311` |
+| 6 | Dropped by the stop rule. Codex coverage surviving a rebase (commits matched by patch-id): two readers found a per-commit match unsound, since a review reads its range's net diff, and a sound match is a push-guard change (high-risk item 2); measured, 4 re-reviews in 491 records since 2026-09-29 would have been saved. Built instead: the one rebase hint, `js-harness rule change`, now says `git merge origin/main` (`odd/tasks/codex-patch-coverage.md`) | about 157k tokens per review redone (the plan's figure; records keep no token count) | JH 27, dropped by the lead |
+| 7 | A land of only documentation skips the suite (`bin/merge-queue.mjs:95` always runs `check.mjs`) | 14 of 61 merged PRs were documentation | JH 24, before item 2 |
+| 8 | A session silent for 60 minutes with open work is flagged | 3 sessions stalled 5 to 6 h | JH 22, `feat/stalled-sessions` |
+| 9 | Windows Defender's real-time protection off on this machine (his change); gates measured against the day's check median of about 150 s | `MsMpEng` 552 CPU-seconds in gate-start samples | the lead measures |
+| 10 | Finished sessions archived, since each open one keeps a `claude` process and its MCP servers | `claude` 5.9 GB, `node` 2.1 GB, 4.5 of 19.7 GB free | the lead, with his yes per session |
+
+Each item that needs a design passes two readers that did not write it before it is built, and
+its version says what they changed; each build is test first, through the gate, gentle-ai and
+Codex.
+
+**Later (found after the freeze; not in the first version).**
+
+- [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
+  handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
+  hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.
 
 **What the first version holds, by his answer of 2026-10-13.** Asked what enters the first
 version, the 1.0.0, he had four options: what is already installed, well finished (the one
@@ -1298,15 +1161,19 @@ reasons, is under [Session channel](#session-channel). Also open:
    - working: he sends nothing; the reply says what wakes the agent and what it reports next.
      No block.
    - decision: the work waits on him. One block.
-   - cut: a compact (two numbered blocks, the bare `/compact` and the resume prompt) or a new
-     session.
+   - cut: a new session, one block. He never compacts by hand, present or away (his words of
+     2026-10-15, odd/tasks/no-manual-compact.md S1): near 88% a session writes its state and
+     keeps working, the host compacts it by itself, and a session that stops gets its next
+     prompt from the orchestrator. Until then a compact was two numbered blocks, the bare
+     compaction command and the resume prompt.
    - finished: the session closed; the reply names the session he returns to. No block.
 
    A block sits under three fixed lines: what it is (for example "leave to spend one Codex
    review"), where it is sent (this chat) and what sending it does (the agent runs it; he
    runs nothing). The text of a decision is his answer in his words, as short as "Sí", never
    a technical instruction; the question, with its cost, goes above it in plain words. The
-   resume prompt of a cut is the one long text, labelled as text to paste, not to understand.
+   opening prompt of a new session is the one long text, labelled as text to paste, not to
+   understand.
    A decision is never asked while work still runs: the agent waits for it to end. A decision
    asked again says first that the earlier answer still holds and what changed.
 
@@ -1430,7 +1297,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    --quote` in the lead's transcript `65318fd5`: no payment method on the GitHub account, now or
    later ("no tiene tarjeta, dejémosla sin tarjeta", line 12461); the gate on GitHub runs on
    Linux at each push to a pull request with code ("En cada PR con código (Recomendada)", line
-   12491). JH 10's `odd/tasks/gate-on-github.md` holds the design.
+   12491). JH 10's `odd/tasks/gate-on-github.md` holds the design. **Its exchange (R1, T7) was
+   closed on 2026-10-16 as superseded by merge-queue**: "Sí, cerrala (Recomendada)" (the lead's
+   transcript `e152c9d8`, line 7753, read with `sessions --quote`).
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks
    (`odd/tasks/codex-review-lean.md`, "Proposal for the Codex plugin").
 9. **Answered on 2026-10-13: one page and each command** ("Una página y cada comando", question

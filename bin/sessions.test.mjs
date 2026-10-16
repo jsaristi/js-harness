@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
-import { appendNotice, findOpenings, newNotice, readNotices, writeOpening } from './lib/channel.mjs';
+import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
+import { dayStartOf, localDay, measuresTotal } from './lib/measures.mjs';
+import { statePath } from './lib/pause.mjs';
+import { issueTicket } from './lib/gate-first.mjs';
 import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
@@ -177,6 +180,10 @@ const USAGE_ERRORS = [
   ['--opening'], ['--opening', ''], ['--opening', '--json'], ['--opening', 'JH 5', '--json'], ['--opening', 'JH 5', '--watch'], ['--opening', 'JH 5', '--address', '5'], ['--address', '5', '--opening', 'JH 5'],
   ['--quote'], ['--quote', 'aaaaaaaa'], ['--quote', 'aaaaaaaa', '0'], ['--quote', 'aaaaaaaa', 'last'], ['--quote', 'aaaaaaaa', '1.5'], ['--quote', 'aaaaaaaa', '--json'], ['--quote', 'aaaaaaaa', HUGE],
   ['--quote', 'abc', '5'], ['--quote', '', '5'], ['--quote', 'aaaaaaaa', '5', '--json'], ['--quote', 'aaaaaaaa', '5', '--watch'], ['--quote', 'aaaaaaaa', '5', '--opening', 'JH 5'], ['--address', '5', '--quote', 'aaaaaaaa', '5'],
+  // Session channel, T9: --measures prints the measures of the compactions, once: there is nothing in them to
+  // watch, and it is not an address, an opening or a quote either.
+  ['--measures', '--watch'], ['--watch', '--measures'], ['--measures', '--address', '5'], ['--address', 'ORQ', '--measures'], ['--measures', '--opening', 'JH 5'],
+  ['--quote', 'aaaaaaaa', '5', '--measures'],
 ];
 
 /** A usage case as the name of its test says it: its arguments, a long run of digits as its length, so
@@ -216,6 +223,13 @@ test('the usage says what --opening and --quote take, what each prints and what 
   assert.match(usage, /--opening \[--\] "<title>"\|"<code> <role>"[\s\S]*prints the opening stored for that session[\s\S]*records in the channel which session read it[\s\S]*exit 0 for one,\s+1 for none,\s+2 for several or when it cannot tell/);
   assert.match(usage, /--quote <transcript file or session id> <line>[\s\S]*only when the user sent it, with its time[\s\S]*exit 1[\s\S]*another session's message, a task notification, a meta or assistant entry,\s+or no such line[\s\S]*2 when it cannot look/);
   assert.match(usage, /the user's answer to a question the session asked with the host's question tool is the user's too[\s\S]*the question, the options shown and whether they tapped one or typed their own[\s\S]*a question the user closed without answering is exit 1/);
+});
+
+test('the usage says what --measures prints', async () => {
+  const err = [];
+  assert.equal(await sessionsMain(['--measures', '--watch'], { stdout: () => {}, stderr: (line) => err.push(line) }), 2);
+  assert.match(err.join('\n'), /--measures \[--hours <n>\] \[--json\][\s\S]*for each compaction of the transcripts in the window[\s\S]*told[\s\S]*kept/);
+  assert.doesNotMatch(err.join('\n'), /announced/);
 });
 
 // --- where the sessions are ---
@@ -484,10 +498,12 @@ test('--context-pause and --context-compaction take tokens or a percentage of --
 test('a pause that is not below the compaction point the board will use is refused with both figures, whichever flag gave either and in either unit', withMachine(async (machine) => {
   writeSessions(machine);
   const figure = (tokens, window) => `${tokens} tokens (${percentOf(tokens, window)}% of the window)`;
-  const refusal = (pause, compaction, window = WINDOW) => `--context-pause must be below --context-compaction, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
+  // Each figure is named by what gave it: its flag, or the default with its share when no flag did.
+  const named = (argv, flag, word, percent) => (argv.includes(flag) ? flag : `the default ${word} (${percent}% of the window)`);
+  const refusal = (argv, pause, compaction, window = WINDOW) => `${named(argv, '--context-pause', 'pause', PAUSE_PERCENT)} must be below ${named(argv, '--context-compaction', 'compaction', COMPACTION_PERCENT)}, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
   const refused = async (argv, pause, compaction, window) => {
     const { code, stdout, stderr } = await runSessions(machine, argv);
-    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(pause, compaction, window)], argv.join(' '));
+    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(argv, pause, compaction, window)], argv.join(' '));
     assert.match(stderr, /Usage: js-harness sessions/);
   };
   const accepted = async (argv, pause, compaction) => {
@@ -515,6 +531,13 @@ test('a pause that is not below the compaction point the board will use is refus
   await refused(['--context-pause', '18000', '--context-compaction', '90%', '--context-window', '20000'], 18000, 18000, 20000);
   await refused(['--context-window', '20000', '--context-pause', '95%', '--context-compaction', '18999'], 19000, 18999, 20000);
   await accepted(['--context-window', '20000', '--context-pause', '17999', '--context-compaction', '90%'], 17999, 18000);
+  // A window so small that the two default shares round to one token: neither flag was given, so the
+  // refusal names the two defaults and no flag.
+  const tiny = 10;
+  assert.equal(shareOf(tiny, PAUSE_PERCENT), shareOf(tiny, COMPACTION_PERCENT), 'the window must make the defaults meet');
+  await refused(['--context-window', String(tiny)], shareOf(tiny, PAUSE_PERCENT), shareOf(tiny, COMPACTION_PERCENT), tiny);
+  const { stderr } = await runSessions(machine, ['--context-window', String(tiny)]);
+  assert.doesNotMatch(stderr.split('\n')[0], /--context-(pause|compaction)/, 'no flag nobody gave is named');
 }));
 
 test('--context-limit, the flag of the limit mark that left, is refused with the two flags that replaced it and their defaults, read from the constants', withMachine(async (machine) => {
@@ -689,6 +712,25 @@ test('the machine facts are on the board: worktrees with their counts, running g
   ]);
   assert.deepEqual(board.gates, { available: true, items: [{ pid: 4242, startedAt: before(180).toISOString(), worktree: slashes(machine.worktree), knowsLock: false, commandLine: `node "${slashes(machine.worktree)}/bin/check.mjs"` }] });
   assert.deepEqual(board.pullRequests, { available: true, items: [{ number: 41, title: 'feat: session board', branch: 'feat/board' }] });
+}));
+
+test('the board says whether a memory hygiene pass is due for the project, read from its memory folder and its journal', withMachine(async (machine) => {
+  writeSessions(machine);
+  const folder = path.join(machine.projectDir, 'memory');
+  const none = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(none.memory, { available: true, folder, na: true });
+
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'MEMORY.md'), '- [A note](a.md) — what it holds\n');
+  fs.writeFileSync(path.join(folder, 'a.md'), '---\nname: a\ndescription: a note\nmetadata:\n  type: user\n---\n\nA fact.\n');
+  const due = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(due.memory, { available: true, folder, due: true, reasons: ['no-pass'] });
+  const { stdout } = await runSessions(machine, []);
+  const lines = stdout.split('\n');
+  assert.deepEqual(lines.slice(lines.indexOf('Memory hygiene'), lines.indexOf('Memory hygiene') + 2), [
+    'Memory hygiene',
+    '  a pass is due (no-pass): js-harness memory status says why; the orchestrator runs it at a task boundary',
+  ]);
 }));
 
 test('a machine fact that cannot be read is unavailable with its reason, and the exit code is still 0', withMachine(async (machine) => {
@@ -1333,6 +1375,24 @@ function writeRoster(machine) {
   writeTitled(machine, SESSION_C, 'JH ORQ · long ago', 13 * 3600);
 }
 
+test('the board says how a scheduled session was opened, where it sits and its effort, and that it is not in his sidebar', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
+  const routines = new Map([[SESSION_E, { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null }]]);
+  const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => routines });
+  assert.equal(code, 0, stderr);
+  const lines = stdout.split('\n');
+  const opener = lines.indexOf('    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR  effort below high');
+  assert.notEqual(opener, -1, stdout);
+  assert.equal(lines[opener - 1], '    mode bypassPermissions  folder C:\\proj  branch main  transcript eeeeeeee');
+}));
+
+test('the board reads no app record when the reader fails: the row says unknown, and the board still prints', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
+  const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => { throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); } });
+  assert.equal(code, 0, stderr);
+  assert.ok(stdout.split('\n').includes('    opened unknown  where unknown  effort unknown'), stdout);
+}));
+
 test('the board has a roster after the sessions: a row per title with its role, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   writeAt(path.join(machine.worktree, 'odd', 'tasks', 'board.md'), BOARD_PLAN, 300);
@@ -1342,8 +1402,10 @@ test('the board has a roster after the sessions: a row per title with its role, 
     'Roster',
     `  orchestrator  ${ORCHESTRATOR}  silent since 10m ago`,
     '    mode bypassPermissions  folder C:\\proj  branch main  transcript aaaaaaaa',
+    '    opened unknown  where unknown  effort unknown',
     `  work 5  ${WORKER}  this session, last entry 1m ago`,
     `    mode auto  folder ${machine.worktree}  branch feat/board  feature board  transcript bbbbbbbb`,
+    '    opened unknown  where unknown  effort unknown',
     `  ${ROSTER_NOT_KNOWN}`,
     '',
   ]);
@@ -1975,6 +2037,25 @@ const sectionOf = (stdout, name, next) => {
   return lines.indexOf(name) === -1 ? null : lines.slice(lines.indexOf(name), lines.indexOf(next));
 };
 
+// odd/tasks/stalled-sessions.md S3: the board reads the stalled sessions from the channel's record and the gate log.
+test('the board lists a work session the orchestrator handed work to and that went quiet past the rule, in the text and in --json', withMachine(async (machine) => {
+  writeRoster(machine);
+  const lead = sender('e152c9d8-0000-4000-8000-000000000000', 'JH ORQ · lead');
+  writeNotice(machine, 2 * 3600, lead, '19', 'note', 'T3 is yours');
+  // A session handed work 30 minutes ago is inside the hour; one that said it waits holds nothing.
+  writeNotice(machine, 1800, lead, '20', 'note', 'T4 is yours');
+  writeNotice(machine, 3 * 3600, lead, '21', 'note', 'T5 is yours');
+  writeNotice(machine, 2.5 * 3600, sender('21000000-0000-4000-8000-000000000000', 'JH 21 · other'), 'orchestrator', 'waiting', 'nothing to do');
+
+  const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.equal(board.stalled.limitMinutes, 60);
+  assert.deepEqual(board.stalled.unavailable, []);
+  assert.deepEqual(board.stalled.items.map((item) => [item.number, item.quietSince, item.holding.text]), [[19, before(2 * 3600).toISOString(), 'T3 is yours']]);
+  const lines = (await runSessions(machine, [])).stdout.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('Stalled  '));
+  assert.deepEqual(lines.slice(start + 1, lines.indexOf('', start)), ['  work session 19  quiet 2h 00m  holding a note from JH ORQ · lead of 2h 00m ago: T3 is yours']);
+}));
+
 test('the board lists the questions put to the user that have no answer, read from the transcripts of its window, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   const question = 'Pregunta 21: ¿seguimos con la lista?';
@@ -2128,6 +2209,21 @@ test('each wait on the board is printed with the session it hangs from: two gate
   ]);
 }));
 
+// odd/tasks/gate-first.md, T4: the tickets of the harness home are on the board, read from their folder, and a
+// gate of the lock that went first by one says so from its own file.
+test('the board prints the open tickets of the gate lock with their issuer, and a gate that went first by one', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_A, ORCHESTRATOR, 600, { cwd: machine.root });
+  writeTitled(machine, SESSION_B, WORKER, 60, { cwd: machine.root });
+  const home = machine.userHome;
+  withLockLibrary(machine.root);
+  writeGateFile(home, 'lock', { pid: 4242, cwd: machine.root, startedAt: before(125).toISOString(), waitingSince: before(125).toISOString(), first: '0a0a0a0a', firstReason: 'the batch of main' }, 3);
+  issueTicket({ home, session: SESSION_A, reason: 'his fix waits on it', by: SESSION_B, now: () => NOW, id: () => '0b0b0b0b' });
+  const { stdout } = await runSessions(machine, [], { listProcesses: () => [checkProcess(4242, machine.root, 130)] });
+  const lines = gatesSection(stdout);
+  assert.equal(lines[0].split('  ')[3], 'running, took the gate lock 2m ago, first by ticket 0a0a0a0a: the batch of main');
+  assert.deepEqual(lines.slice(1), [`  ticket 0b0b0b0b  the next check of ${ORCHESTRATOR} goes first, for 60m more: his fix waits on it  issued by ${WORKER}, which is not the orchestrator`]);
+}));
+
 // 8: stopped tasks and archived sessions printed as live.
 test('a task stopped by hand reads as stopped and not as work with no recorded end, and a session that closed or was relieved does not read as live', withMachine(async (machine) => {
   const stopped = [
@@ -2204,4 +2300,350 @@ test('reading an opening is the one thing sessionsMain writes: a line of the rec
   const now = fs.readFileSync(record, 'utf8').split('\n');
   assert.deepEqual([now.slice(0, lines.length - 1), now.length], [lines.slice(0, -1), lines.length + 1], 'what the record held is as it was, and one line was added');
   assert.equal(JSON.parse(now.at(-2)).schema, 'js-harness.channel-reading/v1');
+}));
+
+// --- the measures of the compactions (session channel, T9) ---
+
+const boundary = (uuid, trigger, seconds) => ({ type: 'system', subtype: 'compact_boundary', uuid, ...entry(seconds), compactMetadata: { trigger, preTokens: 900, postTokens: 300 } });
+
+/** Three sessions for the measure. A was told the pause and committed its feature document before the compaction the
+ * host then made, with no `/compact` block anywhere (the user no longer compacts by hand); after it, the host compacted it again with no telling in that stretch. B
+ * had a compaction the user asked for. C was compacted thirteen hours ago, outside the default window. A
+ * was told by the state the pause hook keeps under the harness home, written here as the hook writes it. */
+function writeMeasured(machine) {
+  const { projectDir } = machine;
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  writeAt(
+    path.join(projectDir, `${SESSION_A}.jsonl`),
+    jsonl(
+      { type: 'custom-title', customTitle: 'Board feature', sessionId: SESSION_A },
+      prompt('go', 900),
+      call('toolu_e1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+      reply('Saved.', 700),
+      boundary('b1', 'auto', 600),
+      reply('working again', 300),
+      boundary('b2', 'auto', 100),
+    ),
+    60,
+  );
+  writeAt(path.join(projectDir, `${SESSION_B}.jsonl`), jsonl(prompt('fix it', 400), reply('ok', 350), boundary('b3', 'manual', 300)), 3000);
+  writeAt(path.join(projectDir, `${SESSION_C}.jsonl`), jsonl(prompt('an older session', 13 * 3600 + 60), reply('done', 13 * 3600 + 30), boundary('b4', 'auto', 13 * 3600)), 13 * 3600);
+  const state = statePath(machine.userHome, SESSION_A);
+  fs.mkdirSync(path.dirname(state), { recursive: true });
+  fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told: [{ at: before(750).toISOString(), tokens: 400000 }], written: before(500).toISOString() }));
+  return { document };
+}
+
+/** A `run` that answers `git -C <folder> log` with `log` and every other command as `fakeRun` does,
+ * recording the log calls apart. The reopenings' log (`git -C <root> log -p`, no `--format=%cI`) is answered by
+ * `reopen`, which by default finds no Log line. */
+function measuringRun(machine, log, reopen = () => ok('')) {
+  const fake = fakeRun(machine);
+  const logs = [];
+  const run = (command, args, options) => {
+    if (command === 'git' && args[0] === '-C' && args[2] === 'log' && args.includes('--format=%cI')) {
+      logs.push(args);
+      return log(args);
+    }
+    if (command === 'git' && args[0] === '-C' && args[2] === 'log') return reopen(args);
+    // The reopen candidates name the default branch first (Codex on f8ca1d6).
+    if (command === 'git' && args[0] === '-C' && args[2] === 'rev-parse' && args.includes('origin/HEAD')) return ok('origin/main\n');
+    return fake.run(command, args, options);
+  };
+  return { run, logs, calls: fake.calls };
+}
+
+const neverListed = () => {
+  throw new Error('the measures list no process');
+};
+
+const NO_REOPEN = '0 Log lines name a reopening: candidates for the lead, cause not read. A reopening written in no Log, or closed again inside one pull request, is not seen.';
+const pad2 = (number) => String(number).padStart(2, '0');
+/** The local time of `ms` as `--measures` prints it: `YYYY-MM-DD HH:MM`. */
+const minuteOf = (ms) => {
+  const at = new Date(ms);
+  return `${localDay(ms)} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`;
+};
+/** The lines after the compactions' when the record holds no relief and no Log line names a reopening, over `hours`. */
+const quietTail = (hours = 12) => [`no relieved notice in the record for ${localDay(dayStartOf(NOW - hours * 3600 * 1000))}..${localDay(NOW)}`, NO_REOPEN];
+/** The closing line of the compactions, which `--measures` prints before the reliefs. */
+const totalOf = (stdout) => stdout.split('\n').find((line) => line.includes(' judged in '));
+
+test('--measures prints, per session of the window with a compaction, each one with its two facts read from the pause\'s state and the document\'s commits, then the total', withMachine(async (machine) => {
+  const { document } = writeMeasured(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n${before(5000).toISOString()}\n`));
+  const { code, stdout, stderr } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.doesNotMatch(stdout, /announced/);
+  assert.deepEqual(stdout.split('\n'), [
+    'aaaaaaaa  Board feature',
+    `  ${before(600).toISOString()}  automatic  told yes  kept yes`,
+    `  ${before(100).toISOString()}  automatic  told no  kept unknown`,
+    'bbbbbbbb  fix it',
+    `  ${before(300).toISOString()}  asked`,
+    '2 automatic compactions judged in 1 session: 1 misses a fact (told 1); 1 with a fact not known; 1 asked, not judged',
+    ...quietTail(),
+  ]);
+  assert.deepEqual(measuring.logs, [['-C', path.dirname(document), 'log', '--format=%cI', '--', 'board.md']], 'git log is asked once, for the compaction whose pause was told');
+  assert.deepEqual(measuring.calls.map((made) => made.args[0]), ['rev-parse'], 'no worktree, pull request or gate is read for the measures');
+}));
+
+test('--measures reads a stretch whose document has no commit after the notice as not kept, and one git cannot read as not known', withMachine(async (machine) => {
+  writeMeasured(machine);
+  const late = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok(`${before(5000).toISOString()}\n`)).run, listProcesses: neverListed });
+  assert.equal(late.stdout.split('\n')[1], `  ${before(600).toISOString()}  automatic  told yes  kept no`);
+  assert.match(totalOf(late.stdout), /^2 automatic compactions judged in 1 session: 2 miss a fact \(told 1, kept 1\)/);
+  const failing = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })).run, listProcesses: neverListed });
+  assert.equal(failing.code, 0);
+  assert.equal(failing.stdout.split('\n')[1], `  ${before(600).toISOString()}  automatic  told yes  kept unknown`);
+}));
+
+test('--measures --hours widens the window, and --json gives the same measures and total as data', withMachine(async (machine) => {
+  writeMeasured(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n`));
+  const { code, stdout } = await runSessions(machine, ['--measures', '--json', '--hours', '14'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  const data = JSON.parse(stdout);
+  assert.equal(data.hours, 14);
+  assert.equal(data.generatedAt, new Date(NOW).toISOString());
+  assert.deepEqual(data.sessions.map((session) => [session.id, session.title, session.measures.map((measure) => measure.uuid)]), [
+    [SESSION_A, 'Board feature', ['b1', 'b2']],
+    [SESSION_B, 'fix it', ['b3']],
+    [SESSION_C, 'an older session', ['b4']],
+  ]);
+  assert.deepEqual(data.sessions[0].measures[0].verdict, { told: true, kept: true, missing: [] });
+  // C's pause was never told: no state is kept for it, so its told fact is not known and nothing else is asked.
+  assert.deepEqual(data.sessions[2].measures[0].verdict, { told: null, kept: null, missing: [] });
+  assert.deepEqual(data.total, measuresTotal(data.sessions));
+  assert.deepEqual(data.total, { judged: 3, sessions: 2, missing: 1, facts: { told: 1, kept: 0 }, unknown: 2, asked: 1, elsewhere: 0, unreadable: 0 });
+}));
+
+test('--measures says a transcript it cannot read, and still prints the others', withMachine(async (machine) => {
+  writeMeasured(machine);
+  const unreadable = path.join(machine.projectDir, `${SESSION_B}.jsonl`);
+  const readFile = (file) => {
+    if (file === unreadable) throw Object.assign(new Error('denied'), { code: 'EACCES' });
+    return fs.readFileSync(file, 'utf8');
+  };
+  const { code, stdout } = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok(`${before(650).toISOString()}\n`)).run, listProcesses: neverListed, readFile });
+  assert.equal(code, 0);
+  const lines = stdout.split('\n');
+  assert.ok(lines.includes(`${SESSION_B}  unavailable: EACCES`), stdout);
+  assert.equal(lines[0], 'aaaaaaaa  Board feature');
+  assert.match(totalOf(stdout), /; 1 transcript could not be read$/);
+}));
+
+test('--measures exits 0 with the total and the tail alone when nothing was compacted, and 1 when the project has no sessions folder', withMachine(async (machine) => {
+  writeAt(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('go', 900), reply('done', 800)), 60);
+  const quiet = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok('')).run, listProcesses: neverListed });
+  assert.equal(quiet.code, 0);
+  assert.equal(quiet.stdout, ['0 automatic compactions judged in 0 sessions: 0 miss a fact', ...quietTail()].join('\n'));
+  fs.rmSync(machine.projectDir, { recursive: true });
+  const none = await runSessions(machine, ['--measures'], { listProcesses: neverListed });
+  assert.equal(none.code, 1);
+  assert.equal(none.stdout, '');
+  assert.equal(none.stderr, `js-harness sessions: no sessions folder for ${machine.root}: ${machine.projectDir} (ENOENT)`);
+}));
+
+/** Two sessions of the project with one automatic compaction each, told the pause, whose document was
+ * edited and never committed: the orchestrator (A, "JH ORQ · js-harness") and a work session (B, "JH 2 · board"). The
+ * relief file, where the orchestrator keeps its state, has one line inside both stretches, written as `notify` writes it. */
+function writeReliefed(machine) {
+  const { projectDir } = machine;
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  for (const [id, title, seconds] of [[SESSION_A, 'JH ORQ · js-harness', 60], [SESSION_B, 'JH 2 · board', 90]]) {
+    writeAt(
+      path.join(projectDir, `${id}.jsonl`),
+      jsonl(
+        { type: 'custom-title', customTitle: title, sessionId: id },
+        prompt('go', 900),
+        call('toolu_e1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+        reply('Saved.', 700),
+        boundary('b1', 'auto', 600),
+      ),
+      seconds,
+    );
+    const state = statePath(machine.userHome, id);
+    fs.mkdirSync(path.dirname(state), { recursive: true });
+    fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told: [{ at: before(750).toISOString(), tokens: 400000 }], written: before(500).toISOString() }));
+  }
+  fs.mkdirSync(path.dirname(machine.relief), { recursive: true });
+  fs.writeFileSync(machine.relief, `${reliefStamp(before(650).getTime())} the orchestrator's note of the stretch\n`);
+  return { document };
+}
+
+test('--measures keeps an orchestrator\'s compaction by a line of its relief file, and a work session\'s with the same line is still a miss', withMachine(async (machine) => {
+  writeReliefed(machine);
+  const measuring = measuringRun(machine, () => ok(''));
+  const { code, stdout, stderr } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(stdout.split('\n'), [
+    'aaaaaaaa  JH ORQ · js-harness',
+    `  ${before(600).toISOString()}  automatic  told yes  kept yes`,
+    'bbbbbbbb  JH 2 · board',
+    `  ${before(600).toISOString()}  automatic  told yes  kept no`,
+    '2 automatic compactions judged in 2 sessions: 1 misses a fact (kept 1)',
+    ...quietTail(),
+  ]);
+  assert.equal(measuring.logs.length, 2, 'the feature document of each session is asked, as before');
+}));
+
+// --- the reliefs and the reopenings of --measures (session channel, T9) ---
+
+const FILLED_TOKENS = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_PAUSE_PERCENT) + 1000;
+
+/** Two reliefs in the record, both within the window. D, a lead renamed "JH ORQ relevada · proj", was at the pause
+ * when it was relieved: its transcript holds a reply of that share. A Codex session, which sends no id, relieved
+ * it too: its relieved session is not known. */
+function writeReliefs(machine) {
+  writeAt(path.join(machine.projectDir, `${SESSION_D}.jsonl`), jsonl({ type: 'custom-title', customTitle: 'JH ORQ relevada · proj', sessionId: SESSION_D }, prompt('go', 900), spoke(FILLED_TOKENS, 800)), 60);
+  writeNotice(machine, 700, sender(SESSION_D, 'JH ORQ relevada · proj'), 'orchestrator', 'relieved', 'the context filled');
+  writeNotice(machine, 300, { host: 'codex', id: null, source: null, title: 'JH ORQ relevada · proj', permissionMode: null, context: null }, 'orchestrator', 'relieved', 'handed over from Codex');
+}
+
+test('--measures prints the reliefs of the record after the compactions, and the reopenings after them', withMachine(async (machine) => {
+  writeReliefs(machine);
+  const measuring = measuringRun(machine, () => ok(''));
+  const { code, stdout, stderr } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(stdout.split('\n'), [
+    '0 automatic compactions judged in 0 sessions: 0 miss a fact',
+    `${minuteOf(before(700).getTime())}  dddddddd  peak ${percentOf(FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW)}% of 500k  filled  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    `${minuteOf(before(300).getTime())}  unknown  peak not known  not known  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    '2 reliefs, 1 because the context filled; days with more than one: none',
+    NO_REOPEN,
+  ]);
+  assert.deepEqual(measuring.calls.map((made) => made.args[0]), ['rev-parse'], 'the record is read, not git for the reliefs');
+}));
+
+// Codex on d2c3bf9: a pause given with --context-pause is the one the reliefs are judged against, and printed.
+test('--measures judges the reliefs against the --context-pause it is given', withMachine(async (machine) => {
+  writeReliefs(machine);
+  const measuring = measuringRun(machine, () => ok(''));
+  const { code, stdout } = await runSessions(machine, ['--measures', '--context-pause', '90%'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.ok(stdout.split('\n').includes(`${minuteOf(before(700).getTime())}  dddddddd  peak ${percentOf(FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW)}% of 500k  another reason  pause 90%`), stdout);
+  const json = await runSessions(machine, ['--measures', '--json', '--context-pause', '90%'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(JSON.parse(json.stdout).reliefs.pausePercent, 90);
+}));
+
+test('--measures prints the compactions as before the reliefs were added, whatever the record holds', withMachine(async (machine) => {
+  writeMeasured(machine);
+  writeReliefs(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n${before(5000).toISOString()}\n`));
+  const { stdout } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  const lines = stdout.split('\n');
+  assert.deepEqual(lines.slice(0, lines.indexOf(totalOf(stdout)) + 1), [
+    'aaaaaaaa  Board feature',
+    `  ${before(600).toISOString()}  automatic  told yes  kept yes`,
+    `  ${before(100).toISOString()}  automatic  told no  kept unknown`,
+    'bbbbbbbb  fix it',
+    `  ${before(300).toISOString()}  asked`,
+    '2 automatic compactions judged in 1 session: 1 misses a fact (told 1); 1 with a fact not known; 1 asked, not judged',
+  ]);
+  assert.deepEqual(lines.slice(lines.indexOf(totalOf(stdout)) + 1), [
+    `${minuteOf(before(700).getTime())}  dddddddd  peak ${percentOf(FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW)}% of 500k  filled  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    `${minuteOf(before(300).getTime())}  unknown  peak not known  not known  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    '2 reliefs, 1 because the context filled; days with more than one: none',
+    NO_REOPEN,
+  ], 'the reliefs and the reopenings follow the total');
+}));
+
+test('--measures --json gives the reliefs and the reopen candidates as data, and a git that fails as not known', withMachine(async (machine) => {
+  writeReliefs(machine);
+  const measured = await runSessions(machine, ['--measures', '--json'], { run: measuringRun(machine, () => ok('')).run, listProcesses: neverListed });
+  assert.equal(measured.code, 0);
+  const data = JSON.parse(measured.stdout);
+  assert.deepEqual(data.reliefs.total, { reliefs: 2, filled: 1, days: [] });
+  assert.equal(data.reliefs.pausePercent, DEFAULT_CONTEXT_PAUSE_PERCENT);
+  assert.deepEqual(data.reliefs.items.map((one) => [one.at, one.relieved, one.verdict, one.peak?.tokens ?? null, one.window, one.fromContext]), [
+    [before(700).toISOString(), SESSION_D, 'filled', FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW, null],
+    [before(300).toISOString(), null, 'not known', null, DEFAULT_CONTEXT_WINDOW, null],
+  ]);
+  assert.deepEqual(data.reopenCandidates, { known: true, candidates: [] });
+
+  const failing = await runSessions(machine, ['--measures', '--json'], { run: measuringRun(machine, () => ok(''), () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })).run, listProcesses: neverListed });
+  assert.deepEqual(JSON.parse(failing.stdout).reopenCandidates, { known: false, why: 'fatal: not a git repository' });
+  const text = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok(''), () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })).run, listProcesses: neverListed });
+  assert.equal(text.stdout.split('\n').at(-1), 'reopen candidates: not known (fatal: not a git repository)', 'never "0 Log lines"');
+}));
+
+test('--measures says that no relieved notice is in the record for the days it read, when the record holds none', withMachine(async (machine) => {
+  writeAt(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('go', 900), reply('done', 800)), 60);
+  const { stdout } = await runSessions(machine, ['--measures', '--hours', '30'], { run: measuringRun(machine, () => ok('')).run, listProcesses: neverListed });
+  assert.equal(stdout.split('\n').at(-2), `no relieved notice in the record for ${localDay(dayStartOf(NOW - 30 * 3600 * 1000))}..${localDay(NOW)}`);
+  assert.ok(!stdout.includes('no relief'), 'never "no relief"');
+}));
+
+// --- the last automatic compaction that misses a fact, on the board (session channel, T9) ---
+
+/** Session A's last automatic compaction, told the pause in its stretch and with the document written before it, and
+ * no `/compact` block in any reply: the user no longer compacts by hand (odd/tasks/no-manual-compact.md S2). */
+function writeMissing(machine, told = [{ at: before(750).toISOString(), tokens: 400000 }]) {
+  const document = path.join(machine.root, 'odd', 'tasks', 'board.md');
+  writeAt(
+    path.join(machine.projectDir, `${SESSION_A}.jsonl`),
+    jsonl(
+      { type: 'custom-title', customTitle: 'Board feature', sessionId: SESSION_A },
+      prompt('go', 900),
+      call('toolu_m1', 'Edit', { file_path: document, old_string: 'x', new_string: 'y' }, 850),
+      reply('Saved.', 700),
+      boundary('b1', 'auto', 600),
+      reply('working again', 300),
+    ),
+    60,
+  );
+  const state = statePath(machine.userHome, SESSION_A);
+  fs.mkdirSync(path.dirname(state), { recursive: true });
+  fs.writeFileSync(state, JSON.stringify({ compaction: null, armed: true, lastArmed: true, told, written: before(500).toISOString() }));
+}
+
+const missLines = (stdout) => stdout.split('\n').filter((line) => line.includes('last automatic compaction'));
+
+test('the board names no miss for a session whose pause was told and kept, with no /compact block anywhere', withMachine(async (machine) => {
+  writeMissing(machine);
+  const { code, stdout, stderr } = await runSessions(machine, [], { run: measuringRun(machine, () => ok(`${before(650).toISOString()}\n`)).run });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.doesNotMatch(stdout, /announced/);
+  assert.deepEqual(missLines(stdout), []);
+  const json = await runSessions(machine, ['--json'], { run: measuringRun(machine, () => ok(`${before(650).toISOString()}\n`)).run });
+  assert.equal(JSON.parse(json.stdout).sessions.find((item) => item.id === SESSION_A).compactionMiss, null);
+}));
+
+test('the board marks the last automatic compaction of a session that misses a fact, and --json carries it', withMachine(async (machine) => {
+  writeMissing(machine);
+  // The document was committed before the notice, so it was not kept in the stretch: a miss of kept.
+  const measuring = measuringRun(machine, () => ok(`${before(5000).toISOString()}\n`));
+  const { code, stdout, stderr } = await runSessions(machine, [], { run: measuring.run });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(missLines(stdout), ['    last automatic compaction 10m ago: missed kept']);
+  const json = await runSessions(machine, ['--json'], { run: measuringRun(machine, () => ok(`${before(5000).toISOString()}\n`)).run });
+  const session = JSON.parse(json.stdout).sessions.find((item) => item.id === SESSION_A);
+  assert.deepEqual(session.compactionMiss, { at: before(600).toISOString(), uuid: 'b1', missed: ['kept'], unknown: [] });
+}));
+
+test('the board says a fact that its reader cannot answer as not known, and never as missed', withMachine(async (machine) => {
+  // The pause was never told in the stretch, so told is missed, and kept, which needs the telling, is not known.
+  writeMissing(machine, []);
+  const failing = measuringRun(machine, () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' }));
+  const { code, stdout } = await runSessions(machine, [], { run: failing.run });
+  assert.equal(code, 0);
+  assert.deepEqual(missLines(stdout), ['    last automatic compaction 10m ago: missed told; not known: kept']);
+}));
+
+test('the board calls no measure reader for a session with no automatic compaction, and its --json says none', withMachine(async (machine) => {
+  writeSessions(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n`));
+  const { code, stdout } = await runSessions(machine, [], { run: measuring.run });
+  assert.equal(code, 0);
+  assert.deepEqual(measuring.logs, []);
+  assert.deepEqual(missLines(stdout), []);
+  const json = await runSessions(machine, ['--json'], { run: measuringRun(machine, () => ok('')).run });
+  assert.ok(JSON.parse(json.stdout).sessions.length > 0);
+  for (const session of JSON.parse(json.stdout).sessions) assert.equal(session.compactionMiss, null, session.id);
 }));

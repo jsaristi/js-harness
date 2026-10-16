@@ -6,10 +6,13 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
-import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
+import { issueTicket, readTickets } from './lib/gate-first.mjs';
 import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 
 function makeTmpDir() {
@@ -26,7 +29,7 @@ test('estimateTokens divides length by 4, rounding up', () => {
 test('checkBudget passes at exactly the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6000)); // 1500 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(TOKEN_BUDGET * 4)); // the budget, exactly
     const row = checkBudget(dir);
     assert.equal(row.pass, true);
   } finally {
@@ -37,7 +40,7 @@ test('checkBudget passes at exactly the token limit', () => {
 test('checkBudget fails over the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004)); // 1501 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4)); // one token over it
     const row = checkBudget(dir);
     assert.equal(row.pass, false);
   } finally {
@@ -59,7 +62,7 @@ test('checkBudget fails with a clear message when AGENTS.md is missing', () => {
 test('main exits 1 when a row fails (budget over limit, tests skipped)', async () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
     const code = await main(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
     assert.equal(code, 1);
   } finally {
@@ -451,7 +454,7 @@ test('checkSensor gives every sensor a 20 minute timeout by default', async () =
     return { status: 0, stdout: '', stderr: '' };
   };
   await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
-  assert.equal(options.timeout, 20 * 60 * 1000);
+  assert.equal(options.timeout, SENSOR_TIMEOUT_MS);
 });
 
 /** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
@@ -504,9 +507,14 @@ test('checkSensor kills a background process the command left behind, and still 
   const dir = makeTmpDir();
   try {
     const pidFile = path.join(dir, 'survivor.pid');
-    fs.writeFileSync(path.join(dir, 'child.js'), `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 120000);`);
-    // The shell exits 0 at once; the survivor is its own child and inherits the output pipes.
-    const command = process.platform === 'win32' ? 'start /b node child.js' : 'node child.js &';
+    // The survivor starts slowly, as a node does on a loaded machine: a gate saw it killed when the pipe
+    // grace (`PIPE_GRACE_MS`, 2 s) ended, before it had written its pid (docs/FAILURES.md,
+    // check-survivor-test-fails).
+    fs.writeFileSync(path.join(dir, 'child.js'), `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)), 2500); setTimeout(() => {}, 120000);`);
+    // The shell exits 0 once the survivor has written its pid; the survivor is its own child and inherits
+    // the output pipes. The shell waits for it so the pipe grace starts only after the pid exists.
+    fs.writeFileSync(path.join(dir, 'wait.js'), `const fs = require('fs'); const until = Date.now() + 60000; (function wait() { if (fs.existsSync(${JSON.stringify(pidFile)}) || Date.now() > until) return; setTimeout(wait, 20); })();`);
+    const command = process.platform === 'win32' ? 'start /b node child.js & node wait.js' : 'node child.js & node wait.js';
     const started = Date.now();
     const row = await checkSensor(dir, { name: 'tests', command });
     assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
@@ -823,6 +831,9 @@ const gentleAiNotFound = () => ({
 const QUIET_LOAD = { busy: 0.4, processors: 8, share: 0.05, sampleMs: 1000 };
 const QUIET_LOAD_ROW = 'INFO  load  0.4 of 8 logical processors busy before the sensors (5%, 1 s sample)';
 
+/** A watch of a gate's run that finds nobody, at once. */
+const watchedNobody = () => ({ end: async () => ({ seconds: 0, busiest: [] }) });
+
 /** Runs `main`, capturing everything it printed via console.log/console.error and the exit code.
  *
  * A gate takes the machine's gate lock in its home. A run that names none (`--home`, or
@@ -835,7 +846,11 @@ const QUIET_LOAD_ROW = 'INFO  load  0.4 of 8 logical processors busy before the 
  *
  * On a loaded machine a gate looks for the processes that load it, which starts PowerShell on Windows. A
  * run that hands it no look (`deps.busiest`) is given one that finds nobody at once, so no test starts a
- * process for it, whatever its sampler says. */
+ * process for it, whatever its sampler says.
+ *
+ * A gate also watches who spends the processor over its run, which starts PowerShell on Windows at its
+ * start and at its end. A run that hands it no watch (`deps.watchBusiest`) is given one that finds nobody,
+ * so no test starts a process for it and none keeps a line of it. */
 async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   let output = '';
   let errOutput = '';
@@ -849,7 +864,7 @@ async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   };
   const ownHome = argv.includes('--home') || env.JS_HARNESS_HOME !== undefined ? null : makeTmpDir();
   try {
-    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], ...deps });
+    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], watchBusiest: watchedNobody, ...deps });
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
@@ -1069,6 +1084,204 @@ test('a project list that cannot be read fails the rules row and stops nothing e
     assert.equal(code, 1);
     assert.match(output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
     assert.match(output, /^PASS {2}budget /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- the merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): `check --door` runs only the rule rows over the
+// lines `base..HEAD` brings, judged by the running list's patterns and the stricter row of the running list and the
+// candidate's `bin/lib/rules-data.mjs` at HEAD ---
+
+const DOOR_CONTROL = { id: 'control-phrase-min', subject: 'the shortest phrase by which a control or a rule in prose is found in its file', owner: 'project', since: '2026-10-11', value: 12, unit: 'characters', patterns: ['^(?!.*\\bruleValue\\().*\\bcontrol\\b.{0,50}{amount}\\s*characters'] };
+const DOOR_WAIT = { id: 'gate-wait', subject: 'the wait for a turn of the gate lock', owner: 'project', since: '2026-10-11', value: 60, unit: 'minutes', patterns: ['wait.{0,40}{amount}'] };
+const DOOR_RESTATED = 'The gate may wait 60 minutes.';
+const DOOR_REFUSES = { refuses: '2026-10-16' };
+const doorList = (wait = DOOR_WAIT) => [DOOR_CONTROL, wait];
+const doorListText = (list) => `export const RULES = ${JSON.stringify(list, null, 2)};\n`;
+const doorRowNames = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line)).map((line) => line.split('  ')[1]);
+const putFile = (dir, file, text) => {
+  fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+  fs.writeFileSync(path.join(dir, file), text);
+};
+
+/** A repository whose base commit holds `base` as its list (none when null) and a text in force, and whose HEAD commit
+ * is what `change` makes of it. Its base is the first commit, as `base` names it. */
+function doorRepo({ base = doorList(), change = () => {} }) {
+  const dir = makeTmpDir();
+  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(dir, 'config', 'user.name', 'js-harness test');
+  if (base !== null) putFile(dir, 'bin/lib/rules-data.mjs', doorListText(base));
+  putFile(dir, 'docs/ROADMAP.md', '# Roadmap\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'base', '--no-verify');
+  const sha = git(dir, 'rev-parse', 'HEAD');
+  change(dir);
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'head', '--no-verify');
+  return { dir, base: sha };
+}
+
+const restateRoadmap = (dir) => fs.appendFileSync(path.join(dir, 'docs/ROADMAP.md'), `${DOOR_RESTATED}\n`);
+const DOOR_ROW_FAILS = /^FAIL {2}rules {2}/m;
+
+test('check --door refuses a committed line that restates a value a refusing rule holds, and prints the rule row only', async () => {
+  const { dir, base } = doorRepo({ change: restateRoadmap });
+  try {
+    const { code, output } = await runCheck(['--door', '--base', base, '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 1, output);
+    assert.deepEqual(doorRowNames(output), ['rules']);
+    assert.match(output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+    assert.match(output, /^ {6}docs\/ROADMAP\.md:2 restates rule "gate-wait", which refuses it since 2026-10-16: The gate may wait 60 minutes\./m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door prints a reporting rule finding as INFO and exits 0', async () => {
+  const { dir, base } = doorRepo({ change: restateRoadmap });
+  try {
+    const { code, output } = await runCheck(['--door', '--base', base, '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: { reports: 'a wrong pattern', since: '2026-10-16' } }) });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}rules {2}1 restated value in the lines this change adds, none of a rule that refuses it$/m);
+    assert.doesNotMatch(output, DOOR_ROW_FAILS);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door takes the stricter row: a refusal of the candidate refuses a rule the running list reports, and a refusal of the running list holds against a candidate that reports', async () => {
+  const reports = { reports: 'a wrong pattern', since: '2026-10-16' };
+  const candidateRefuses = doorRepo({ change: (dir) => {
+    putFile(dir, 'bin/lib/rules-data.mjs', doorListText(doorList({ ...DOOR_WAIT, row: DOOR_REFUSES })));
+    restateRoadmap(dir);
+  } });
+  const candidateReports = doorRepo({ base: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }), change: (dir) => {
+    putFile(dir, 'bin/lib/rules-data.mjs', doorListText(doorList({ ...DOOR_WAIT, row: reports })));
+    restateRoadmap(dir);
+  } });
+  try {
+    const one = await runCheck(['--door', '--base', candidateRefuses.base, '--cwd', candidateRefuses.dir], {}, { rules: doorList({ ...DOOR_WAIT, row: reports }) });
+    assert.equal(one.code, 1, one.output);
+    assert.match(one.output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+    assert.match(one.output, /which refuses it since 2026-10-16: The gate may wait 60 minutes\./m);
+    const two = await runCheck(['--door', '--base', candidateReports.base, '--cwd', candidateReports.dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(two.code, 1, two.output);
+    assert.match(two.output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+  } finally {
+    fs.rmSync(candidateRefuses.dir, { recursive: true, force: true });
+    fs.rmSync(candidateReports.dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door refuses a candidate rules-data.mjs that does not parse, and one that does not validate', async () => {
+  const unparsed = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', 'export const RULES = [{ "id": ;\n') });
+  const unvalid = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', doorListText([DOOR_WAIT])) });
+  try {
+    const parsing = await runCheck(['--door', '--base', unparsed.base, '--cwd', unparsed.dir], {}, { rules: doorList() });
+    assert.equal(parsing.code, 1, parsing.output);
+    assert.match(parsing.output, /^FAIL {2}rules {2}bin\/lib\/rules-data\.mjs of this pull request does not parse: /m);
+    const validating = await runCheck(['--door', '--base', unvalid.base, '--cwd', unvalid.dir], {}, { rules: doorList() });
+    assert.equal(validating.code, 1, validating.output);
+    assert.match(validating.output, /^FAIL {2}rules {2}bin\/lib\/rules-data\.mjs of this pull request does not validate$/m);
+    assert.match(validating.output, /^ {6}the shortest phrase cannot be read: /m);
+  } finally {
+    fs.rmSync(unparsed.dir, { recursive: true, force: true });
+    fs.rmSync(unvalid.dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door passes a merge that brings no line, which is not a git that does not answer', async () => {
+  const { dir } = doorRepo({ change: restateRoadmap });
+  try {
+    // The base is HEAD itself: what a merge of a change already in the candidate brings, nothing.
+    const { code, output } = await runCheck(['--door', '--base', 'HEAD', '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /^FAIL /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door judges by the running list alone when the candidate has no list, and the list a pull request changes outside a rule/ branch is refused only with --branch', async () => {
+  const noList = doorRepo({ base: null, change: restateRoadmap });
+  const edited = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', `${doorListText(doorList())}// touched\n`) });
+  const refusedBranch = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch: a rule changes only by js-harness rules change';
+  try {
+    const alone = await runCheck(['--door', '--base', noList.base, '--cwd', noList.dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(alone.code, 1, alone.output);
+    assert.match(alone.output, /^FAIL {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it$/m);
+    const plain = await runCheck(['--door', '--base', edited.base, '--cwd', edited.dir], {}, { rules: doorList() });
+    assert.equal(plain.code, 0, plain.output);
+    assert.doesNotMatch(plain.output, new RegExp(refusedBranch));
+    const feature = await runCheck(['--door', '--base', edited.base, '--branch', 'feat/x', '--cwd', edited.dir], {}, { rules: doorList() });
+    assert.equal(feature.code, 1, feature.output);
+    assert.match(feature.output, /^FAIL {2}rules {2}this pull request changes bin\/lib\/rules-data\.mjs and is not from a rule\/ branch: a rule changes only by js-harness rules change$/m);
+    const rule = await runCheck(['--door', '--base', edited.base, '--branch', 'rule/x', '--cwd', edited.dir], {}, { rules: doorList() });
+    assert.equal(rule.code, 0, rule.output);
+    assert.doesNotMatch(rule.output, new RegExp(refusedBranch));
+  } finally {
+    fs.rmSync(noList.dir, { recursive: true, force: true });
+    fs.rmSync(edited.dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door fails the rules row when git does not answer, instead of giving no row', async () => {
+  const dir = makeTmpDir();
+  try {
+    const silent = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
+    const { code, output } = await runCheck(['--door', '--base', 'HEAD~1', '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }), git: silent });
+    assert.equal(code, 1, output);
+    assert.match(output, /^FAIL {2}rules {2}git did not answer, so the door cannot read the lines this pull request brings$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --door is a usage error without --base, with --push or with a gate flag, and --base or --branch is one without --door', async () => {
+  const dir = makeTmpDir();
+  try {
+    const usage = [
+      [['--door', '--cwd', dir], /--door needs --base <rev>/],
+      [['--door', '--base', 'HEAD', '--push', '--cwd', dir], /--door goes with the rule rows, not with --push/],
+      [['--door', '--base', 'HEAD', '--first', 'why', '--cwd', dir], /--door runs no gate/],
+      [['--door', '--base', 'HEAD', '--home', dir, '--cwd', dir], /--door runs no gate: --home goes with a gate/],
+      [['--base', 'HEAD', '--cwd', dir], /--base and --branch go with --door/],
+      [['--branch', 'feat/x', '--cwd', dir], /--base and --branch go with --door/],
+    ];
+    for (const [argv, message] of usage) {
+      const { code, output, errOutput } = await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' });
+      assert.equal(code, 2, argv.join(' '));
+      assert.match(errOutput, message);
+      assert.match(errOutput, /Usage: js-harness check/);
+      assert.equal(output, '');
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- flaky row: the quarantine ledger, when the project keeps one (./lib/flaky.mjs) ---
+
+test('main runs the flaky row with the static rows when the project keeps docs/FLAKY.md, and a malformed ledger makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.mkdirSync(path.join(dir, 'bin'));
+    fs.writeFileSync(path.join(dir, 'bin', 'a.test.mjs'), '');
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    const read = await runCheck(['--cwd', dir], env);
+    assert.equal(read.code, 0);
+    assert.match(read.output, /^PASS {2}flaky {2}docs\/FLAKY\.md quarantines 1 test file, 1 of them current; /m);
+
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n');
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}flaky {2}docs\/FLAKY\.md is not read: 2 faults to repair in that file$/m);
+    assert.match(refused.output, /^ {6}bin\/a\.test\.mjs: no "- Expires:" line$/m);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1536,7 +1749,7 @@ test('main started with the mark of a held gate lock takes no lock and runs its 
       "INFO  gate  the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate took none",
     ]);
     // Not the inner run of old: every row of a gate is there.
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'load', 'tests', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'load', 'tests', 'review', 'codex-review']);
     assert.deepEqual(fs.readdirSync(gateDir(home)), ['lock'], 'it stood in no line');
     assert.equal(readGateHolder(home).pid, 4321);
   } finally {
@@ -1590,7 +1803,7 @@ test('main --no-wait fails the gate row against a held lock, runs no sensor and 
     assert.deepEqual(gateRows(output), [
       `FAIL  gate  no sensor ran: the gate of C:\\work\\other (pid 4321, started ${startedAt}) holds the machine's gate lock, and --no-wait was given`,
     ]);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'review', 'codex-review']);
     // A gate that does not wait says nothing of a wait.
     assert.equal(errOutput, '');
     assert.equal(readGateHolder(home).pid, 4321);
@@ -1623,7 +1836,7 @@ test('main waits for the gate that holds the lock, says once on stderr whose it 
   const names = rowsOf(output).map((row) => row.split('  ')[1]);
   assert.deepEqual(names.slice(names.indexOf('gate'), names.indexOf('tests') + 1), ['gate', 'load', 'tests'], output);
   // The wait is not the sensor's time: its own bound starts when it does, whole.
-  assert.deepEqual(timeouts, [20 * 60 * 1000]);
+  assert.deepEqual(timeouts, [SENSOR_TIMEOUT_MS]);
   assert.equal(readGateHolder(home, { now: clock.now }), null);
 }));
 
@@ -1895,7 +2108,7 @@ test('main errors with usage on stderr, exits 2 and runs no row for a --wait it 
     assert.match(errOutput, /Usage: js-harness check .*\[--wait <minutes> \| --no-wait\]/);
     // And what the two flags mean, since a bound that counts from the last change of hands is not what
     // "--wait <minutes>" says by itself.
-    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
+    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator's batch run on main \(odd\/tasks\/gate-first\.md\)\n {7}--door --base <rev> \[--branch <name>\]: runs only the rule rows over the lines <rev>\.\.HEAD brings, judged by the running list, and exits 1 when one refuses \(the merge door of merge-queue, odd\/tasks\/rule-hierarchy\.md\); --branch names the pull request's branch, which may change bin\/lib\/rules-data\.mjs only when it is a rule\/ branch\n$/);
   }
 });
 
@@ -2564,7 +2777,7 @@ test('a gate samples the load once, before its first sensor and inside its turn,
     assert.deepEqual(events, [['sample', holder], 'run-tests', 'run-lint'], state);
     assert.deepEqual(loadRows(output), [LOAD_ROW], state);
     const names = rowsOf(output).map((row) => row.split('  ')[1]);
-    assert.deepEqual(names, ['budget', 'contracts', 'payload claude', 'payload codex', ...gate, 'load', 'tests', 'lint', 'review', 'codex-review'], state);
+    assert.deepEqual(names, ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', ...gate, 'load', 'tests', 'lint', 'review', 'codex-review'], state);
   }
 }));
 
@@ -3090,6 +3303,124 @@ test('main tells the lock which session started the gate, from the environment i
   assert.deepEqual([during?.pid, during?.session], [process.pid, 'a-session']);
 }));
 
+// --- a ticket that puts a session's next check first (odd/tasks/gate-first.md) ---
+
+test('a gate of a session with a ticket claims it as it arrives, takes the lock with it, and the gate log keeps the claim with the gates it passed', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const { ticket } = issueTicket({ home, session: 'a-session', reason: 'unblocks the others', by: 'the-orchestrator' });
+  // A gate that waits for the lock, of another session, which this one passes.
+  const waiting = path.join(gateDir(home), 'wait-4321-aaaaaaaaaaaa');
+  fs.mkdirSync(waiting, { recursive: true });
+  fs.writeFileSync(path.join(waiting, 'holder-4321-aaaaaaaaaaaa.json'), `${JSON.stringify({ token: '4321-aaaaaaaaaaaa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', waitingSince: new Date().toISOString(), line: 1, session: null })}\n`);
+  const take = lockTakenAtOnce();
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], { CLAUDE_CODE_SESSION_ID: 'a-session' }, gateDeps({ takeGateLock: take, ...log.deps }));
+  assert.equal(code, 0, output);
+  assert.deepEqual(take.asked.map(({ first }) => first), [{ id: ticket.id, reason: 'unblocks the others' }]);
+  assert.deepEqual(readTickets(home).open, [], 'spent at the claim');
+  const claimed = log.events.find(({ event }) => event === 'first-claimed');
+  assert.deepEqual(
+    { ...claimed, at: undefined },
+    { v: 1, event: 'first-claimed', id: ticket.id, at: undefined, session: 'a-session', reason: 'unblocks the others', by: 'the-orchestrator', until: ticket.until, cwd: path.resolve(dir), pid: process.pid, passed: [{ cwd: 'C:\\work\\other', pid: 4321 }] },
+  );
+  assert.match(output, new RegExp(`^INFO {2}gate {2}this gate claimed ticket ${ticket.id} \\(unblocks the others\\), issued by the-orchestrator, and went before every gate that waited$`, 'm'));
+  // The next check of the session has no ticket: it waits as any other, and claims nothing.
+  await runCheck(['--cwd', dir, '--home', home], { CLAUDE_CODE_SESSION_ID: 'a-session' }, gateDeps({ takeGateLock: take, ...log.deps }));
+  assert.deepEqual(take.asked.map(({ first }) => first ?? null), [{ id: ticket.id, reason: 'unblocks the others' }, null]);
+}));
+
+test('a ticket is spent by a gate that stops before its sensors, and is claimed by no gate of another session or with no session', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  issueTicket({ home, session: 'a-session', reason: 'unblocks the others' });
+  const take = lockTakenAtOnce();
+  for (const env of [{}, { CLAUDE_CODE_SESSION_ID: 'another-session' }]) await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ takeGateLock: take }));
+  assert.deepEqual(take.asked.map(({ first }) => first ?? null), [null, null]);
+  assert.equal(readTickets(home).open.length, 1);
+  const rows = await checkSensors(dir, gateDeps({ takeGateLock: take }), { home, wait: true, waitMinutes: 1, session: 'a-session', stoppedBy: ['budget'] });
+  assert.equal(rows[0].stopped, true);
+  assert.deepEqual(readTickets(home).open, [], 'a stopped gate spends it');
+}));
+
+// S2: "The orchestrator's own batch run on `main` may carry one by itself (`--first` on that one command)."
+test('check --first <reason> issues its session a ticket for this tree and claims it as it arrives; the issue is in the gate log', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take, ...log.deps }));
+  assert.equal(code, 0, output);
+  const issued = log.events.find(({ event }) => event === 'first-issued');
+  assert.deepEqual([issued?.session, issued?.by, issued?.tree, issued?.reason], ['the-orchestrator', 'the-orchestrator', path.resolve(dir), 'the batch run on main']);
+  assert.deepEqual(take.asked.map(({ first }) => first), [{ id: issued.id, reason: 'the batch run on main' }]);
+  assert.deepEqual(readTickets(home).open, [], 'spent at the claim');
+  assert.match(output, new RegExp(`^INFO {2}gate {2}this gate claimed ticket ${issued.id} \\(the batch run on main\\), issued by the-orchestrator,`, 'm'));
+}));
+
+test('check --first issues nothing where the host names no session or two tickets are open, says why in a row, and the gate runs all the same', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const none = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], {}, gateDeps({ takeGateLock: take }));
+  assert.equal(none.code, 0, none.output);
+  assert.match(none.output, /^INFO {2}first {2}no ticket was issued: the host names no session for this gate, and a ticket is for a session$/m);
+  // Issued at the same instant, so the id breaks the tie (`readTickets`, bin/lib/gate-first.mjs): on CircleCI two
+  // tickets issued in one millisecond with random ids were named in either order (2026-10-16, job 66).
+  // Now, read once: the check reads the tickets on the real clock, so a fixed date would expire them.
+  const instant = Date.now();
+  const at = () => instant;
+  const one = issueTicket({ home, session: 's1', reason: 'one', now: at, id: () => 'ffffffff' }).ticket;
+  const two = issueTicket({ home, session: 's2', reason: 'two', now: at, id: () => '00000000' }).ticket;
+  const full = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
+  assert.equal(full.code, 0, full.output);
+  assert.match(full.output, new RegExp(`^INFO {2}first {2}no ticket was issued: two tickets are open already: ${two.id} .*${one.id} `, 'm'));
+  assert.deepEqual(take.asked.map(({ first }) => first ?? null), [null, null]);
+}));
+
+// Codex (2026-10-16): a second ticket was issued beside an open one of the session, and one this check
+// never claims (a gate that takes no lock) stayed open for a later check to jump the line with.
+test('check --first reuses an open ticket of its session for this tree, and cancels the one it issued when its gate claims none', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const open = issueTicket({ home, session: 'the-orchestrator', tree: dir, reason: 'issued before' }).ticket;
+  const reused = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
+  assert.match(reused.output, new RegExp(`^INFO {2}first {2}no ticket was issued: ticket ${open.id} of this session is open already for this tree, and this gate claims it$`, 'm'));
+  assert.deepEqual(take.asked.map(({ first }) => first?.id), [open.id]);
+  assert.deepEqual(readTickets(home).open, []);
+}));
+
+test('check --first cancels the ticket it issued when its gate runs no sensor under the lock and so claims none', () => withGate({}, async (dir, home) => {
+  const { output } = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: lockTakenAtOnce() }));
+  assert.deepEqual(readTickets(home).open, [], output);
+  assert.match(output, /^INFO {2}first {2}ticket [0-9a-f]{8} was cancelled: this gate ran no sensor under the lock, so it claimed none$/m);
+}));
+
+test('check --first takes one reason, and does not go with --push', async () => {
+  for (const [argv, why] of [[['--first'], '--first requires a value'], [['--first', ' '], '--first needs a reason, not an empty one'], [['--push', '--first', 'x'], '--first goes with a gate that runs its sensors, not with --push']]) {
+    const { code, errOutput } = await runCheck(argv, {}, {});
+    assert.deepEqual([code, errOutput.split('\n')[0]], [2, why]);
+  }
+});
+
+test('takeGateTurn hands the lock the ticket it claimed, and says of a gate that went first by a ticket which ticket and why; the gates it waited for mark that one first', async () => {
+  const holder = { token: '4321-aa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', session: null, startedAt: '2026-10-11T07:00:00.000Z', beatAt: 1, stale: false, first: '0a0a0a0a', firstReason: 'unblocks the others' };
+  const waiter = { token: '77-bb', pid: 77, cwd: 'C:\\work\\two', command: 'check', waitingSince: '2026-10-11T06:59:00.000Z', session: null, first: '0b0b0b0b', firstReason: 'the batch run on main' };
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 6000 };
+  const said = [];
+  const originalError = console.error;
+  console.error = (line) => said.push(String(line));
+  let asked;
+  let turn;
+  try {
+    turn = await takeGateTurn({ name: 'check', home: 'C:\\home', cwd: 'C:\\work\\mine', command: 'check', wait: true, waitMinutes: 1, first: { id: '0c0c0c0c', reason: 'mine' } }, async (options) => {
+      asked = options;
+      options.onWait(null, 60_000, { ahead: 2, head: waiter });
+      options.onWait(holder, 60_000, { ahead: 1, head: null });
+      return lock;
+    });
+  } finally {
+    console.error = originalError;
+  }
+  assert.deepEqual(asked.first, { id: '0c0c0c0c', reason: 'mine' });
+  assert.deepEqual(said, [
+    "check: waiting behind the gate of C:\\work\\two (pid 77, waiting since 2026-10-11T06:59:00.000Z, first by ticket 0b0b0b0b: the batch run on main), which waits for its turn at the machine's gate lock, for 1 minute at most; 2 gates are ahead of this one, that one included",
+    'check: waiting for the gate of C:\\work\\other (pid 4321, started 2026-10-11T07:00:00.000Z, first by ticket 0a0a0a0a: unblocks the others) to finish, for 1 minute at most',
+  ]);
+  assert.deepEqual(turn.waitedFor, [{ cwd: 'C:\\work\\other', pid: 4321, command: 'check', first: true }]);
+});
+
 const LOCK_NAMES = ['own', 'parent', 'none'];
 
 test('a gate writes its start after the sample and before its first sensor, and its end after the last, in each of the three states of the lock', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
@@ -3228,6 +3559,87 @@ test('nothing is written to the gate log where no gate runs a sensor: a caller t
   }
 });
 
+// --- who spent the processor over a gate's run, kept beside the log (odd/tasks/gate-wait.md, T19) ---
+// The readings are tested in lib/machine-busiest.test.mjs and the file in lib/gate-log.test.mjs; here, when
+// a gate takes them and what it keeps. Every watch is a stand-in that answers at once.
+
+const SPENT = [
+  { name: 'MsMpEng', script: null, pid: 5736, cpuSeconds: 412.3 },
+  { name: 'node', script: 'check.mjs', pid: 9120, cpuSeconds: 2100.4 },
+];
+
+/** A stand-in for `watchBusiest` that writes into `events` when the watch starts and when it ends, and
+ * ends with `spent`. */
+function watched(events, spent = SPENT) {
+  const watch = () => {
+    events.push('watch');
+    return {
+      end: async () => {
+        events.push('watch end');
+        return { seconds: 700.2, busiest: spent };
+      },
+    };
+  };
+  return watch;
+}
+
+test('a gate keeps who spent the processor over its run: watched from its start, read after its sensors, kept in busiest.jsonl under the id of its start, in each state of the lock', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
+  for (const { state, env, deps } of LOCK_STATES) {
+    fs.rmSync(gateLogDir(home), { recursive: true, force: true });
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, sampleLoad, watchBusiest: watched(events), ...deps }));
+    assert.equal(code, 0, `${state}: ${output}`);
+    // The watch starts once the start is written, and is not waited for before the first sensor.
+    assert.deepEqual(events.map((event) => (Array.isArray(event) ? event[0] : event)), ['sample', 'watch', 'run-tests', 'run-lint', 'watch end'], state);
+    const [start] = readGateLog(home).events;
+    const kept = readGateBusiest(home);
+    assert.deepEqual([...kept.keys()], [start.id], state);
+    assert.deepEqual({ ...kept.get(start.id), at: '' }, { v: 1, id: start.id, at: '', seconds: 700.2, busiest: [{ name: 'MsMpEng', pid: 5736, cpuSeconds: 412.3 }, { name: 'node', script: 'check.mjs', pid: 9120, cpuSeconds: 2100.4 }] }, state);
+    // The log's own lines hold nothing new.
+    assert.deepEqual(readGateLog(home).events.map((event) => Object.keys(event).join(' ')), [`${START_FIELDS} load`, 'v event id at seconds result sensors'], state);
+    assert.doesNotMatch(output, /gate log|busiest/);
+  }
+  // A gate that fails keeps it too: a slow red run is as much worth explaining.
+  const { events, sampleLoad } = sampledGate(home);
+  const red = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn: () => ({ ...sensorRan(), status: 3 }), sampleLoad, watchBusiest: watched(events) }));
+  assert.equal(red.code, 1);
+  assert.equal(readGateBusiest(home).size, 2);
+}));
+
+test('no reading is taken and nothing is kept with JS_HARNESS_GATE_LOG=off or JS_HARNESS_GATE_LOAD=off', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  for (const off of [{ JS_HARNESS_GATE_LOG: 'off' }, { JS_HARNESS_GATE_LOAD: 'off' }]) {
+    for (const { state, env, deps } of LOCK_STATES) {
+      const events = [];
+      const { code, output } = await runCheck(['--cwd', dir, '--home', home], { ...env, ...off }, gateDeps({ watchBusiest: watched(events), ...deps }));
+      assert.equal(code, 0, `${state}: ${output}`);
+      assert.deepEqual(events, [], `${JSON.stringify(off)} ${state}`);
+    }
+  }
+  assert.equal(fs.existsSync(path.join(gateLogDir(home), 'busiest.jsonl')), false);
+}));
+
+test('a gate whose readings fail, find nobody or throw still passes, says nothing of them and keeps nothing', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const threw = () => {
+    throw new Error('the watch blew up');
+  };
+  const failing = [
+    threw,
+    () => ({ end: async () => { throw new Error('the end blew up'); } }),
+    () => ({ end: async () => undefined }),
+    () => ({ end: async () => ({ seconds: 1, busiest: [] }) }),
+    () => ({ end: async () => ({ seconds: 1, busiest: 'nobody' }) }),
+    () => undefined,
+  ];
+  for (const watchBusiest of failing) {
+    const spawn = countedSensors();
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, watchBusiest }));
+    assert.deepEqual([code, spawn.ran], [0, 1], output);
+    assert.doesNotMatch(output, /gate log|busiest|blew up/);
+  }
+  assert.equal(readGateBusiest(home).size, 0);
+  assert.deepEqual(gatesOf(readGateLog(home).events).map(({ end }) => end.result), failing.map(() => 'pass'));
+}));
+
 // The switch is for a gate that must leave no file in its home.
 test('JS_HARNESS_GATE_LOG=off writes nothing and says nothing in any state of the lock, nor for a gate that is refused, and only off is the switch', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const argv = ['--cwd', dir, '--home', home];
@@ -3281,7 +3693,7 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
     // One row for the gate, not one for each of its two lines.
     assert.deepEqual([code, spawn.ran, logRows(output).length], [exit, 2, 1], output);
     assert.match(logRows(output)[0], NOT_WRITTEN);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'load', 'tests', 'lint', 'gate log', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'load', 'tests', 'lint', 'gate log', 'review', 'codex-review']);
     // The same gate with the log switched off: every other row is the same.
     const off = await runCheck(argv, { JS_HARNESS_GATE_LOG: 'off' }, gateDeps({ spawn: () => ({ ...sensorRan(), status }) }));
     assert.deepEqual([off.code, rowsOf(off.output)], [exit, rowsOf(output).filter((row) => !logRows(output).includes(row))]);
@@ -3293,7 +3705,7 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
   try {
     const { code, output } = await runCheck([...argv, '--no-wait'], {}, gateDeps());
     assert.equal(code, 1);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'gate log', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'gate log', 'review', 'codex-review']);
     assert.match(logRows(output)[0], /^INFO {2}gate log {2}could not be written \(E[A-Z]+: [^\n]*\), so this refusal is not in it$/);
   } finally {
     other.release();
@@ -3312,9 +3724,9 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
 // changes when a failure is known, never what a commit proves: such a gate was red before, and is red now.
 
 /** Puts the AGENTS.md of `dir` over its budget: the static row a test fails by itself. */
-const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
-const BUDGET_FAILS = 'FAIL  budget  1501 estimated tokens (budget 1500)';
-const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex'];
+const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
+const BUDGET_FAILS = `FAIL  budget  ${TOKEN_BUDGET + 1} estimated tokens (budget ${TOKEN_BUDGET})`;
+const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load'];
 const namesOf = (output) => rowsOf(output).map((row) => row.split('  ')[1]);
 
 const LOCK_NOT_TAKEN = "the machine's gate lock was not taken";
@@ -3496,7 +3908,7 @@ test('a failing static row stops nothing where no sensor would have run: a fault
     assert.deepEqual([asked.lock, asked.load, asked.sensors], [0, 0, 0], output);
     assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'sensors', 'review', 'codex-review'], output);
     assert.deepEqual([gateRows(output), rowsOf(output)[0]], [[], BUDGET_FAILS]);
-    assert.match(rowsOf(output)[4], sensors);
+    assert.match(rowsOf(output)[STATIC_ROWS.length], sensors);
   };
   await unstopped('{ nope', /^FAIL {2}sensors {2}harness\.json is not valid JSON: /);
   await unstopped({ sensors: { tests: 'run-tests' }, documents: ['docs/*'] }, /^FAIL {2}sensors {2}harness\.json "documents" must be /);
@@ -4325,6 +4737,27 @@ test('a folder that is not the index has no key: with an untracked file, an unst
   }
 });
 
+test('a gate whose tests passed only by a quarantine proves no tree, so the next gate runs them again (odd/tasks/flaky-ledger.md)', async () => {
+  const quarantined = sameTreeRepo({ sameTree: 'skip', sensors: { tests: 'node --test' } });
+  try {
+    fs.mkdirSync(path.join(quarantined.repo, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'bin', 'a.test.mjs'), '');
+    fs.mkdirSync(path.join(quarantined.repo, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    git(quarantined.repo, 'add', '-A');
+    git(quarantined.repo, ...commitAs, '-m', 'a quarantined test file');
+    const red = { status: 1, signal: null, stdout: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ one (1ms)\n', stderr: '' };
+    let call = 0;
+    quarantined.sensor.answer = () => (call++ % 2 === 0 ? red : { status: 0, signal: null, stdout: '', stderr: '' });
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal(quarantined.sensorRuns(), 4, 'each gate ran the suite and its rerun');
+    assert.deepEqual(quarantined.events().filter((event) => event.event === 'end').map((event) => [event.result, 'code' in event]), [['pass', false], ['pass', false]]);
+  } finally {
+    quarantined.remove();
+  }
+});
+
 test('a gate proves no tree when a sensor failed, or when a tracked file changed while the sensors ran', async () => {
   const failing = sameTreeRepo();
   try {
@@ -4892,3 +5325,117 @@ test('a gate whose sensors fail keeps the names of their failing tests in its en
     { name: 'more', pass: true, failing: undefined },
   ]);
 }));
+
+// The sub-agents row of `check --subagents` (odd/tasks/honesty-audit.md, T13). Plain check runs none of it.
+const SUBAGENT_NOW = Date.parse('2026-10-14T20:00:00Z'); // 15:00 in Bogota, UTC-5
+const BOGOTA_OFFSET = -300;
+const recordLine = (entries) => `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`;
+const turnAt = (stamp, model) => ({ type: 'assistant', timestamp: stamp, effort: 'high', message: { id: `m-${stamp}`, model, usage: { input_tokens: 10, output_tokens: 1 }, content: [] } });
+
+/** `run` answering git as a main checkout at `dir` with no other worktree, as `recordFolders` asks it. */
+function gitOf(dir) {
+  return (command, args) => {
+    if (args[0] === 'rev-parse') return { status: 0, stdout: `${path.join(dir, '.git')}\n` };
+    if (args[0] === 'worktree') return { status: 0, stdout: `worktree ${dir}\nHEAD abc\nbranch refs/heads/main\n\n` };
+    return { status: 1, stdout: '' };
+  };
+}
+
+/** A project of today's sub-agents: a writer on haiku and an explorer on sonnet, the explorer off the reader's
+ * rule (opus). `rules` gives the project the harness's rules file, the one the rules are read from; `records`
+ * gives it a config folder with the records. */
+function subagentProject({ rules = true, records = true } = {}) {
+  const dir = makeTmpDir();
+  const config = makeTmpDir();
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+  if (rules) {
+    fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+    fs.copyFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib', 'rules-data.mjs'), path.join(dir, 'bin', 'lib', 'rules-data.mjs'));
+  }
+  if (records) {
+    const folder = path.join(config, 'projects', projectSlug(dir));
+    const agents = path.join(folder, 's1', 'subagents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(folder, 's1.jsonl'), recordLine([turnAt('2026-10-14T14:00:00Z', 'claude-opus-5-5')]));
+    const agent = (id, meta, model, stamp) => {
+      fs.writeFileSync(path.join(agents, `agent-${id}.jsonl`), recordLine([turnAt(stamp, model)]));
+      fs.writeFileSync(path.join(agents, `agent-${id}.meta.json`), JSON.stringify(meta));
+    };
+    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, 'claude-haiku-5-5', '2026-10-14T14:02:00Z');
+    agent('e1', { agentType: 'Explore', description: 'Map things' }, 'claude-sonnet-5-5', '2026-10-14T14:03:00Z');
+  }
+  return { dir, config, cleanup: () => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(config, { recursive: true, force: true }); } };
+}
+
+/** The deps `main` takes for the sub-agents row, with the day and the machine's zone fixed. */
+const subagentDeps = (project, extra = {}) => ({ run: gitOf(project.dir), now: () => SUBAGENT_NOW, offsetMinutes: BOGOTA_OFFSET, ...extra });
+
+/** The lines of `output` that open the sub-agents row. */
+const subagentRows = (output) => output.split('\n').filter((line) => line.startsWith('INFO  subagents  ') || line.startsWith('PASS  subagents  ') || line.startsWith('FAIL  subagents  '));
+
+test('plain check prints no subagents row and reads no record', async () => {
+  const project = subagentProject();
+  const gitCalls = [];
+  const run = gitOf(project.dir);
+  try {
+    const { code, output } = await runCheck(['--cwd', project.dir], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project, { run: (command, args, options) => { gitCalls.push(args); return run(command, args, options); } }));
+    assert.equal(subagentRows(output).length, 0, output);
+    assert.equal(gitCalls.filter((args) => args[0] === 'worktree').length, 0, JSON.stringify(gitCalls));
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents prints an INFO subagents row that counts today\'s launches against the rules', async () => {
+  const project = subagentProject();
+  try {
+    const { code, output, errOutput } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    assert.equal(errOutput, '', output);
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /2 launches today: 1 on a model off the rules/, output);
+    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('subagent-reader-model')), output);
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says the sub-agent rules are not in force here, and compares nothing', async () => {
+  const project = subagentProject({ rules: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /not in force/, output);
+    assert.doesNotMatch(row, /launches today/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says no sub-agent launched today when the project has no records folder', async () => {
+  const project = subagentProject({ records: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  no sub-agent launched today: no Claude Code records folder/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says what it cannot tell when reading the records throws, and fails nothing', async () => {
+  const project = subagentProject();
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1' }, subagentDeps(project, { homedir: () => { throw new Error('no home directory here'); } }));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  cannot tell: .*no home directory here/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+

@@ -1069,6 +1069,42 @@ test('an abort kills the child\'s tree once, sweeps what it left, and resolves a
   assert.deepEqual(calls, ['tree', 'survivors'], 'nothing happens after the run ended');
 });
 
+test('a run ends only after what it killed is gone, and one that outlives the bound is reported as a sweep error', async () => {
+  // A WSL2 gate under load, 2026-10-15 (docs/FAILURES.md, eval-interrupt-process-alive): the group was sent SIGKILL
+  // and the suite exited while the grandchild still ran (state R).
+  const settled = [];
+  const child = stubChild();
+  const controller = new AbortController();
+  let release;
+  const pending = runProcess({
+    command: 'agent', input: 'prompt', timeoutMs: 60000, graceMs: 30, spawn: () => child, signal: controller.signal,
+    kill: () => {}, killSurvivors: () => {},
+    settle: (killed) => new Promise((resolve) => { settled.push(killed.pid); release = () => resolve([4243]); }),
+  });
+  controller.abort();
+  let ended = false;
+  pending.then(() => { ended = true; });
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.deepEqual(settled, [4242], 'the group of the child is waited for');
+  assert.equal(ended, false, 'the run does not end while the wait runs');
+  release();
+  const run = await pending;
+  assert.equal(run.sweepError, 'still running after the kill: pid 4243');
+  assert.equal(run.aborted, true);
+});
+
+test('a wait after the kill that fails, or answers no list, is reported as a sweep error and the run still ends', { timeout: 5000 }, async () => {
+  const end = (settle) => {
+    const child = stubChild();
+    const pending = runProcess({ command: 'agent', input: 'prompt', timeoutMs: 60000, spawn: () => child, kill: () => {}, killSurvivors: () => {}, settle });
+    child.emit('exit', 0, null);
+    child.emit('close', 0, null);
+    return pending;
+  };
+  assert.equal((await end(async () => { throw new Error('permission denied'); })).sweepError, 'permission denied');
+  assert.equal((await end(async () => undefined)).sweepError, 'the wait after the kill answered undefined, not a list of pids');
+});
+
 test('an abort that comes after the child exited kills no tree, and a signal that is already aborted spawns nothing', async () => {
   const child = stubChild();
   const calls = [];

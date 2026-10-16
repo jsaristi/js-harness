@@ -35,8 +35,10 @@ import { modeLines } from './contract.mjs';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
-import { pauseNotice, toldBetween } from './lib/pause.mjs';
-import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
+import { dueNotice } from './lib/memory-hygiene.mjs';
+import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
+import { webBlockNotice } from './lib/web-block.mjs';
+import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness resume --hook',
@@ -48,7 +50,9 @@ const USAGE = [
   'Usage: js-harness resume --pause',
   '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
   '         one JSON line with the notice the first time a stretch of work passes the pause, and the notices of the',
-  '         channel addressed to the session that it was not told yet, once each; nothing else.',
+  '         channel addressed to the session that it was not told yet, once each, and at most once a day for',
+  '         the project that a memory hygiene pass is due (js-harness memory status); and, after a WebFetch the',
+  '         site answered 402, 403, 429 or 503, sub-agents\' too, the next rung: js-harness fetch, then the browser.',
   '         It never fails and always exits 0.',
 ].join('\n');
 
@@ -84,7 +88,7 @@ const DEADLINE_PASSED = 'this hook\'s own deadline passed';
 
 const NO_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST_COMPACTED = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = `Then tell the orchestrator in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
+const NOTIFY = `Then tell the orchestrator (${ORCHESTRATOR_IS}) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
@@ -377,7 +381,7 @@ function openingLines(found, title) {
   const uncounted = unread === null ? '' : `; ${unread} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`;
   if (openings.length === 1) return [`Opening: ${openings[0].path}  (${printing(title)}${uncounted})`];
   return [
-    `Opening: ${openings.length} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${uncounted})`,
+    `Opening: ${openings.length} openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it${uncounted})`,
     ...openings.map((opening) => `  ${printedTitle(opening.title)}  (${opening.path})`),
   ];
 }
@@ -907,13 +911,14 @@ function nextModeLines(file, input, readFile) {
   return [`Mode of the next open task: ${next.line}. Tell the person: only they set the session's effort.`];
 }
 
-/** Whether `folder` or one of its parents holds a `harness.json`: the walk `--pause` makes, each folder tested with
- * `isFile`, up to the root of the file system. It is a walk of files and no `git` call, since a `git` for each tool
- * call would cost the hook more than the pause is worth; a checkout's root holds the file, and so does a folder under it. */
-function hasHarnessJson(folder, isFile) {
+/** The nearest of `folder` and its parents that holds a `harness.json`, or `null`: the walk `--pause` makes, each folder
+ * tested with `isFile`, up to the root of the file system. It is a walk of files and no `git` call, since a `git` for
+ * each tool call would cost the hook more than the pause is worth; a checkout's root holds the file, and so does a
+ * folder under it. The folder found is the project whose `.claude` settings may configure the host's window. */
+function harnessRootOf(folder, isFile) {
   for (let dir = folder; ; dir = path.dirname(dir)) {
-    if (isFile(path.join(dir, 'harness.json'))) return true;
-    if (path.dirname(dir) === dir) return false;
+    if (isFile(path.join(dir, 'harness.json'))) return dir;
+    if (path.dirname(dir) === dir) return null;
   }
 }
 
@@ -923,15 +928,35 @@ function hasHarnessJson(folder, isFile) {
  * state file by; the caller's catch turns that into silence. The state goes to the harness home, and its temp folder
  * is under the same home when `JS_HARNESS_HOME` is set, so a made-up home never reaches the real temp folder. */
 function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
-  if (!isObject(input) || (typeof input.agent_id === 'string' && input.agent_id !== '')) return null;
-  if (typeof input.transcript_path !== 'string' || input.transcript_path === '') return null;
+  if (!isObject(input)) return null;
+  // The web notice is said to a sub-agent too, since research is mostly theirs; the pause and the inbox are the
+  // session's own, and need its transcript.
+  const own = !(typeof input.agent_id === 'string' && input.agent_id !== '') && typeof input.transcript_path === 'string' && input.transcript_path !== '';
+  const web = webBlockNotice(input);
+  if (!own && web === null) return null;
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
-  if (!hasHarnessJson(cwd, isFile)) return null;
+  const root = harnessRootOf(cwd, isFile);
+  if (root === null) return null;
   const home = env.JS_HARNESS_HOME || homedir();
-  const notice = pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) });
+  // The window the host compacts on, when a setting gives it: the pause is measured against it, since a session
+  // measured on another window, or on none, would be told too late (odd/tasks/session-channel.md, T6b). The Claude
+  // home is under the same home as the state, so a made-up home never reads the real settings.
+  const window = own ? hostWindow({ env, home, projectDir: root }) : null;
+  const notice = own ? pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, window, tmpdir: tempOf(env) }) : null;
   // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
-  const inbox = inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) });
-  const said = [notice?.text, inbox?.text].filter((text) => typeof text === 'string');
+  const inbox = own ? inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) }) : null;
+  // A memory hygiene pass that is due, at most once a day for the project (odd/tasks/memory-hygiene.md, D5). It is
+  // the session's own, like the pause: a sub-agent's call gets the web notice alone.
+  let hygiene = null;
+  if (own) {
+    try {
+      const slug = projectSlug(mainCheckoutByFiles(cwd) ?? mainCheckout(run, cwd));
+      hygiene = dueNotice({ home, slug, folder: path.join(home, '.claude', 'projects', slug, 'memory'), now: Date.now() });
+    } catch {
+      // The pause and the inbox are said whatever happens here.
+    }
+  }
+  const said = [web, notice?.text, inbox?.text, hygiene].filter((text) => typeof text === 'string');
   if (said.length === 0) return null;
   // Another entry (a `Stop` hook, later) runs this command too, so the event is the input's own when it names one.
   const event = typeof input.hook_event_name === 'string' && input.hook_event_name !== '' ? input.hook_event_name : 'PostToolUse';

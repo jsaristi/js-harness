@@ -49,6 +49,11 @@
 //     that stood back for it each time. One machine's lock is shared by every project, each with the
 //     version it has, so beside a live gate whose file has no mark a gate does the same (`gatesAhead`).
 // Nothing new is on disk for it: the same folders, and two more fields in the same file.
+//
+// A gate may go first: one that claimed a ticket as it arrived (./gate-first.mjs) writes its id in its file
+// (`first`, with `firstReason`), from its first write, and the order of the turn becomes the ticket, then
+// the arrival, then the token (`inTurnBefore`). It passes every gate that waits; the holder is never cut,
+// and a gate of an older version, which reads no ticket, sees an ordinary arrival.
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -160,6 +165,11 @@ function pidOf(said, token) {
   return named ? Number(named[1]) : null;
 }
 
+/** What a gate's file says of the ticket it claimed (`first`, its id, and `firstReason`), or nothing for a
+ * gate that claimed none: the fields are there only for a gate that has one, so what a reader is told of
+ * every other gate is what it was before tickets. */
+const firstSaid = (said) => (typeof said.first === 'string' ? { first: said.first, firstReason: typeof said.firstReason === 'string' ? said.firstReason : null } : {});
+
 /** What a holder's file says, as far as it can be read: a file that is not ours names nobody and still
  * holds by its beat. `beatAt` is `null` for a file too busy to be looked at, and that holder is not
  * stale: a beat that could not be read is not an old beat. */
@@ -174,6 +184,7 @@ function holderOf(io, file, token, beatAt, { now, staleMs }) {
     startedAt: typeof said.startedAt === 'string' ? said.startedAt : null,
     beatAt,
     stale: beatAt !== null && isStale(beatAt, now, staleMs),
+    ...firstSaid(said),
   };
 }
 
@@ -259,6 +270,7 @@ const waiterSaid = (said, token) => ({
   command: typeof said.command === 'string' ? said.command : null,
   waitingSince: typeof said.waitingSince === 'string' ? said.waitingSince : null,
   session: typeof said.session === 'string' ? said.session : null,
+  ...firstSaid(said),
 });
 
 /** The gates that wait for the machine's gate lock: `[{ token, pid, cwd, command, waitingSince,
@@ -343,6 +355,7 @@ function readInLine(io, file) {
  * Throws when the folder `root` cannot be listed, for its caller to read as no line at all. */
 function gatesAhead(io, root, me, met, { now, staleMs }) {
   const ahead = [];
+  // A gate with a ticket is ahead of every gate without one, whenever it arrived (`inTurnBefore`).
   for (const name of io.readdirSync(root)) {
     const token = WAIT_DIR.exec(name)?.[1];
     if (!token || token === me.token) continue;
@@ -355,19 +368,27 @@ function gatesAhead(io, root, me, met, { now, staleMs }) {
     }
     if (isStale(touched, now, staleMs)) continue;
     let gate = met.get(token);
-    if (!gate) met.set(token, (gate = { seenAt: now(), read: false, keepsLine: false, since: Infinity, waiter: waiterSaid({}, token) }));
+    if (!gate) met.set(token, (gate = { seenAt: now(), read: false, keepsLine: false, first: false, since: Infinity, waiter: waiterSaid({}, token) }));
     if (!gate.read) {
       const said = readInLine(io, path.join(folder, `holder-${token}.json`));
       if (said !== undefined) {
         const since = typeof said.waitingSince === 'string' ? Date.parse(said.waitingSince) : NaN;
-        Object.assign(gate, { read: true, keepsLine: said.line === KEEPS_LINE && Number.isFinite(since), since, waiter: waiterSaid(said, token) });
+        Object.assign(gate, { read: true, keepsLine: said.line === KEEPS_LINE && Number.isFinite(since), first: typeof said.first === 'string', since, waiter: waiterSaid(said, token) });
       }
     }
     if (gate.read ? !gate.keepsLine : now() - gate.seenAt >= staleMs) return null;
-    if (!gate.read || gate.since < me.since || (gate.since === me.since && token < me.token)) ahead.push({ token, since: gate.since, waiter: gate.waiter });
+    if (!gate.read || inTurnBefore({ first: gate.first, since: gate.since, token }, me)) ahead.push({ token, first: gate.first, since: gate.since, waiter: gate.waiter });
   }
   // A gate whose arrival is not known yet is `Infinity` here: after those whose turn is known.
-  return ahead.sort((a, b) => a.since - b.since || (a.token < b.token ? -1 : a.token > b.token ? 1 : 0));
+  return ahead.sort((a, b) => (a.token === b.token ? 0 : inTurnBefore(a, b) ? -1 : 1));
+}
+
+/** Whether the gate `a` (`{ first, since, token }`) has its turn before the gate `b`: a ticket first, then the
+ * arrival, then the token, so every gate computes the same order from the files it read. */
+function inTurnBefore(a, b) {
+  if (a.first !== b.first) return a.first;
+  if (a.since !== b.since) return a.since < b.since;
+  return a.token < b.token;
 }
 
 /** Removes the folders of gates that died while they waited: nothing touched them for the stale time.
@@ -419,7 +440,9 @@ function unreadable(dir, { token, since, answer }) {
  * the take as it was before the line: the line never makes a take reject, and never grants the lock.
  * `session` is the id of the host's session that started the gate, or `null`: it is written in the gate's
  * file for whoever reads the lock (`readGateHolder`, `readGateWaiters`), and is given by the caller, which
- * has the environment; nothing here reads it.
+ * has the environment; nothing here reads it. `first` is the ticket the gate claimed as it arrived (`{ id,
+ * reason }`, ./gate-first.mjs), or `null`: written in its file from the first write, it puts the gate before
+ * every gate that waits without one (`inTurnBefore`), and never before the holder.
  *
  * Resolves to `{ refused, holder, line, waitedMs, stillMs, besideOlder }` when it is not taken. `refused` is:
  *   - `'held'`, with `wait` off, at once: `holder` holds the lock;
@@ -520,6 +543,7 @@ export async function takeGateLock({
   beatMs = GATE_BEAT_MS,
   fileSystem: io = fs,
   stillWanted = () => true,
+  first = null,
 }) {
   const root = gateDir(home);
   const dir = gateLockDir(home);
@@ -529,7 +553,7 @@ export async function takeGateLock({
   const fileName = `holder-${token}.json`;
   const startedWaiting = now();
   // This gate in the line, and what it remembers of the others (`gatesAhead`).
-  const me = { token, since: startedWaiting };
+  const me = { token, first: typeof first?.id === 'string', since: startedWaiting };
   const met = new Map();
   // THE ANCHOR OF THE BOUND: the bound of the wait is counted from `boundFrom`, here and nowhere else.
   // It starts at the arrival and is moved by `handsRead` alone, to the look that saw the lock change
@@ -595,6 +619,7 @@ export async function takeGateLock({
       waitingSince: new Date(startedWaiting).toISOString(),
       line: KEEPS_LINE,
       session: typeof session === 'string' && session !== '' ? session : null,
+      ...(me.first && { first: first.id, firstReason: typeof first.reason === 'string' ? first.reason : null }),
     };
     io.writeFileSync(file, `${JSON.stringify(says)}\n`);
     io.utimesSync(file, at, at);

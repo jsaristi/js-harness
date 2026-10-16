@@ -9,6 +9,13 @@
 // All of that is in the harness's own repository. In a project that installs the harness (its git top holds no
 // bin/lib/rules-data.mjs), `rules`, `rules <id>` and `rules check` are about that project's own list, docs/rules.json,
 // beside the rules of the harness in force there, and `render` is refused (bin/lib/project-rules.mjs).
+// `rules change <id>` is the one form that writes a rule: run in the checkout it changes, on a branch rule/<name>, it
+// writes the declaration, its source and docs/RULES.md and appends a relief line (bin/lib/rules-change-run.mjs); a
+// change of patterns or failure alone keeps the rule's source and names its own in the relief line, and takes a
+// design even on a rule of his. It is refused in a project that installs the harness, whose own list is edited by
+// hand. In the harness's own checkout
+// `rules check` also counts each rule's patterns in the texts in force and checks each rule's failure against the
+// register (bin/lib/rules-scan.mjs); the gate's row `rules` reads the same patterns in what a commit adds.
 // Zero dependencies.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,15 +24,18 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
 import { beforeProgress, checkRules } from './lib/rules-check.mjs';
+import { countFindings, registerFindings } from './lib/rules-scan.mjs';
+import { parseRegister } from './lib/failures.mjs';
 import { renderList, rulesHash, ruleHere, ruleOf } from './lib/rules.mjs';
 import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
 import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
+import { changeRule } from './lib/rules-change-run.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
@@ -39,6 +49,19 @@ class RulesArgError extends Error {}
 
 /** The words of argv, walked token by token: a flag is a usage error, and so is a second word. */
 function parseArgs(argv) {
+  // `change <id>` is the one form with options: `--dry-run` prints what it would write, `--check-source` checks a
+  // stored source again instead of a change.
+  if (argv[0] === 'change') {
+    const parsed = { command: 'change', id: undefined, dryRun: false, checkSource: false };
+    for (const token of argv.slice(1)) {
+      if (token === '--dry-run') parsed.dryRun = true;
+      else if (token === '--check-source') parsed.checkSource = true;
+      else if (token.startsWith('-') || parsed.id !== undefined) throw new RulesArgError(`unknown argument: ${token}`);
+      else parsed.id = token;
+    }
+    if (parsed.id === undefined) throw new RulesArgError('rules change needs the id of the rule');
+    return parsed;
+  }
   const words = [];
   for (const token of argv) {
     if (token.startsWith('-') || words.length === 1) throw new RulesArgError(`unknown argument: ${token}`);
@@ -246,11 +269,20 @@ async function projectForm(parsed, top, { run, stdout, stderr }) {
   return 0;
 }
 
-/** The check: PASS with the count line, or FAIL with each finding indented; the notes follow, and the exit is 0 only
- * with no finding. */
-function checkList({ findings, notes }, stdout) {
+/** The line that follows a passing check: how many findings each rule with patterns has in the texts in force, and
+ * how many rules in force carry none and are not scanned (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)").
+ * It is information and never a finding, so a first pattern does not turn the check red. */
+function patternsLine({ counts, unscanned }) {
+  const named = Object.entries(counts).map(([id, count]) => `${id} ${count}`);
+  return `patterns: ${named.length === 0 ? 'none' : named.join(', ')}; unscanned: ${unscanned.length}`;
+}
+
+/** The check: PASS with the count line and the patterns line, or FAIL with each finding indented; the notes follow,
+ * and the exit is 0 only with no finding. */
+function checkList({ findings, notes }, stdout, counted) {
   if (findings.length === 0) {
     stdout(`PASS  rules  ${countLine()}`);
+    stdout(patternsLine(counted));
   } else {
     stdout(`FAIL  rules  ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'}`);
     for (const finding of findings) stdout(`      ${finding}`);
@@ -360,7 +392,11 @@ export async function rulesMain(argv, {
   homedir = os.homedir,
   now = Date.now,
   run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }),
+  stdin = () => fs.readFileSync(0, 'utf8'),
+  rename = fs.renameSync,
 } = {}) {
+  // Letter F's turn-start hook is a module of its own (bin/lib/rules-reach.mjs); run on its own, this sends it there.
+  if (argv[0] === '--hook') return (await import('./lib/rules-reach.mjs')).rulesHookMain(argv.slice(1));
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -381,7 +417,28 @@ export async function rulesMain(argv, {
       stderr(err.message);
       return 1;
     }
+    if (!harnessRepository && parsed.command === 'change') {
+      stderr(`not changed: ${PROJECT_RULES_PATH} is edited by hand in a project that installs the harness; rules change changes the harness's own rules`);
+      return 1;
+    }
     if (!harnessRepository) return projectForm(parsed, top, { run, stdout, stderr });
+  }
+
+  if (parsed.command === 'change') {
+    const slug = projectSlug(mainCheckout(run, cwd));
+    return changeRule({
+      ...parsed,
+      top,
+      packageRoot: root,
+      readTree: readAll,
+      git: (args) => run('git', args, { cwd: top }),
+      stdin,
+      now,
+      home: path.resolve(env.JS_HARNESS_HOME || homedir()),
+      slug,
+      transcripts: path.join(env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), 'projects', slug),
+      rename,
+    }, stdout, stderr);
   }
 
   // The plain listing needs only the declarations, so a file it does not read cannot stop it.
@@ -422,7 +479,16 @@ export async function rulesMain(argv, {
   }
 
   if (parsed.command === 'id') return showRule(parsed.id, { sources: read.sources, readers: result.readers }, stdout, stderr);
-  if (parsed.command === 'check') return checkList(result, stdout);
+  if (parsed.command === 'check') {
+    // A rule's `failure` names an entry of the register, and a switch back to report is a sighting of it (odd/tasks/
+    // rule-hierarchy.md, "The row `rules` (T16d)"). With no register here they are not checked, and a note says so,
+    // as for the sources: a checkout or a test project without it is not a list whose failures name nothing.
+    const register = read.readFile('docs/FAILURES.md');
+    if (register === null) result.notes.push("no docs/FAILURES.md here: the rules' failures were not checked");
+    else result.findings.push(...registerFindings(RULES, parseRegister(register).entries));
+    const inForce = [...read.codeFiles, ...read.textFiles, ...['AGENTS.md', 'README.md'].map((file) => ({ path: file, text: read.readFile(file) })).filter((file) => file.text !== null)];
+    return checkList(result, stdout, countFindings(RULES, inForce));
+  }
   return renderLists(root, { sources: read.sources, ...result }, stdout, stderr);
 }
 
