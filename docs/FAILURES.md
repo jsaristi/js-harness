@@ -732,6 +732,18 @@ to it were delivered only after the prompt was answered.
 - Control: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool
   and through the orchestrator"
 
+### pnpm-cleanup-deleted-link-targets
+A cleanup of pnpm's old install folders deleted folders that live installs still pointed to: in
+`pnpm/global/v11` some hashed names are links to such folders, and nothing resolved the links
+before deleting, so the commands behind them broke, and with them every session's hooks.
+- Class: machine
+- Seen: 2026-10-16 — relief file, line 1122 (claimed; the lead's) — the cleanup he allowed at line
+  1120 ("Sí, borralas (Recomendada)", for the folders no process holds) deleted 73 temporary
+  folders; four of them were the targets of links (js-harness, codex, ctx7, ccstatusline), so those
+  commands and every session's hooks failed from about 03:58 to 04:05 local; fixed by a
+  `pnpm add -g` of each, and all four then answered `--version`; the prevention named there is to
+  resolve every link in `v11` before a folder is deleted and keep its target
+
 ### pnpm-pack-refuses-crlf
 pnpm's own pack refuses this checkout on Windows, where `bin/js-harness.mjs` is checked out with
 CRLF; whether an install by pnpm from the repository meets it is not measured.
