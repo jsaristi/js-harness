@@ -1671,7 +1671,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // Windows, which is there to catch what WSL2 cannot.
   const place = wsl?.distro && (deps.platform ?? process.platform) === 'win32' ? `wsl ${wsl.distro} ${wsl.node}` : undefined;
   const record = lock && lock.log !== false && lock.home !== undefined
-    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, ...deps.gateLog })
     : null;
   // The ticket of this gate's session, claimed as it arrives and so spent whatever comes next: a gate that
   // stops, is proven by its tree or is refused spends it too, and its tree cannot jump the line twice
@@ -1814,7 +1814,7 @@ async function testsOnCi(cwd, lock, deps) {
   const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
   let at = startedAt;
   const record = lock.log !== false && lock.home !== undefined
-    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', now: () => at, ...deps.gateLog })
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, now: () => at, ...deps.gateLog })
     : null;
   record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
   at = Date.now();

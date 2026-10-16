@@ -274,6 +274,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "session-stall",
+    "subject": "how long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 60,
+    "unit": "minutes",
+    "flag": "--stall"
+  },
+  {
     "id": "sessions-open-in-sidebar",
     "subject": "the one way a session opens another in this repository, so that it is a row in his sidebar: the tools that open one in the app's Routines or in the cloud are refused",
     "owner": "sebastian",

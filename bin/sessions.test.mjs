@@ -2037,6 +2037,25 @@ const sectionOf = (stdout, name, next) => {
   return lines.indexOf(name) === -1 ? null : lines.slice(lines.indexOf(name), lines.indexOf(next));
 };
 
+// odd/tasks/stalled-sessions.md S3: the board reads the stalled sessions from the channel's record and the gate log.
+test('the board lists a work session the orchestrator handed work to and that went quiet past the rule, in the text and in --json', withMachine(async (machine) => {
+  writeRoster(machine);
+  const lead = sender('e152c9d8-0000-4000-8000-000000000000', 'JH ORQ · lead');
+  writeNotice(machine, 2 * 3600, lead, '19', 'note', 'T3 is yours');
+  // A session handed work 30 minutes ago is inside the hour; one that said it waits holds nothing.
+  writeNotice(machine, 1800, lead, '20', 'note', 'T4 is yours');
+  writeNotice(machine, 3 * 3600, lead, '21', 'note', 'T5 is yours');
+  writeNotice(machine, 2.5 * 3600, sender('21000000-0000-4000-8000-000000000000', 'JH 21 · other'), 'orchestrator', 'waiting', 'nothing to do');
+
+  const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.equal(board.stalled.limitMinutes, 60);
+  assert.deepEqual(board.stalled.unavailable, []);
+  assert.deepEqual(board.stalled.items.map((item) => [item.number, item.quietSince, item.holding.text]), [[19, before(2 * 3600).toISOString(), 'T3 is yours']]);
+  const lines = (await runSessions(machine, [])).stdout.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('Stalled  '));
+  assert.deepEqual(lines.slice(start + 1, lines.indexOf('', start)), ['  work session 19  quiet 2h 00m  holding a note from JH ORQ · lead of 2h 00m ago: T3 is yours']);
+}));
+
 test('the board lists the questions put to the user that have no answer, read from the transcripts of its window, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   const question = 'Pregunta 21: ¿seguimos con la lista?';
