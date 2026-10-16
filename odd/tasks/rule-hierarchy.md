@@ -2086,9 +2086,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 - [x] T0 Design: the survey, the placement of the 83 rules, the checks, the outline of
   `AGENTS.md`, the protocols, the signals (route: inline, with three read-only sub-agents for
   the survey and the host documentation)
-- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec`. It takes section D of
+- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec` (both built, route: inline,
+  JH 25, on `feat/jh25-spec`; Progress, 2026-10-16; open: section D). It takes section D of
   `docs/model-effort.md` (documentation by model, graded by a test that rebuilds a capability
-  from the documents alone): one of the two measurements that spend, his to allow before it
+  from the documents alone, not built): one of the two measurements that spend, his to allow before it
   runs, asked once when he is back
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json`
@@ -2289,6 +2290,42 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   An eval task is a folder with `task.md`, `task.json`, a fixture, a hidden grader and a
   reference (`evals/runner.mjs:49-75`). The practice journey takes a step as one entry in
   `JOURNEY` and one function in `STEPS` (`scripts/practice-lib.mjs`, `scripts/practice.mjs`).
+- 2026-10-16, JH 25, T1 built on `feat/jh25-spec` (from `origin/main`, apart from T2's draft pull
+  request, by the lead's notice of 13:15). Written now because the roadmap stands at 96% and the lead
+  gave it: his decision that `docs/SPEC.md` comes last, with the code still (`docs/ROADMAP.md`).
+  - The row `spec` (`bin/lib/spec.mjs`, in `bin/check.mjs` after `contracts`): no row where a project
+    keeps no `docs/SPEC.md`. Each `### ` capability under `## Capabilities` must hold the six fields
+    (Problem, Requirement, Reason, Proof, Discarded, Today); a proof holds at least one command in
+    backticks; each item of Today is a file of the repository (it must exist; `path:line` reads as
+    its path), `js-harness <command>`, an id of the manifest or a path under `~/`. Only in the harness's
+    own checkout (its package bears the harness's name), every command of the dispatcher, every id of
+    `components` and `entryComponents` and the two home files no entry stands for
+    (`~/.js-harness/manifest.json`, `~/.claude/settings.json`) must be claimed, and a claimed command
+    the dispatcher lacks is a finding. Files a command names at run time (a launcher, the channel) are
+    not enumerated, and `docs/SPEC.md` says so. RED observed (module missing), then 13 of 13 green.
+  - `docs/SPEC.md`: 49 capabilities, from the notes the lead compiled
+    (`~/.js-harness/spec-notes/`, outside the repository) and two read-only readers' notes over the
+    feature documents for the commands with none (not kept). The feature documents they cite stay
+    the record: each entry names its incident and its proof, so it stands without the notes. JH 10's
+    first note is left out as it stands: the GitHub workflow it describes was removed
+    (`odd/tasks/drop-github-gate.md`), and the merge queue's entry carries that lesson under Discarded.
+    The reply check's entry joins with T2's pull request, which then has the command to claim.
+  - Not done: the line `AGENTS.md` should carry to send an agent to an entry (the roadmap's design):
+    `AGENTS.md` stands at about 1,478 of 1,500 tokens and is rewritten by T8, which places it. Section
+    D's measurement (C5 of `docs/model-effort.md`) is not built: it needs an eval that rebuilds one
+    capability from the documents alone, with held-out tests, and its cost figure before he allows it.
+  - Main gained the CI overflow gate (35a0423) meanwhile: `bbd1b74` adds its capability (50 now) and
+    drops the spec's word that the repository is private.
+  - gentle-ai on `8b3c031..bbd1b74`: medium, not due (`under_budget`), raised to high by item 5 (a row
+    of the commit gate that refuses commits here); lenses risk, readability, reliability; approved and
+    acknowledged (`review-95be76221f6981fc`), its bound STATUS first timing out three times while a
+    whole suite ran outside the gate lock. Of its seven advisories, closed with tests (RED 4, then 17
+    of 17): a field written twice or outside the six is no longer stored; fenced lines are text; a
+    manifest id in a project's spec reads as an id; "own" is the package's name, not the module's path,
+    so the installed command or a junction holds this checkout too; and the absolute path above. Left:
+    a proof is any text in backticks, not a command shape. Those fixes are `a6fe143`.
+  - Codex on `8b3c031..a6fe143` (3 files, 329 lines): the patch is correct (0.84), 91,062 input
+    tokens, recorded.
 - 2026-10-10, host documentation read by a sub-agent: `code.claude.com/docs/en/hooks.md`,
   `statusline.md`, `skills.md`, `commands.md`, `cross-session-messaging.md`, `cli-reference.md`,
   `remote-control.md`; `learn.chatgpt.com/docs/hooks` (as the sub-agent gave it; not opened by
