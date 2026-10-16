@@ -119,6 +119,11 @@ $ js-harness gate log --last 2
 10-14 04:24:38  0 s  exit 0  load 8.0 of 8 (vmmem, MsMpEng, claude)  my-project
 ```
 
+A ticket puts one session's next whole check before every gate that waits: the orchestrator issues it
+with `gate first --session <id> --reason <why>`, or its own batch run carries one with `check --first
+<reason>`. Two are open at most, for an hour at most; `js-harness sessions` prints them with their
+issuer and flags one the orchestrator did not issue, and the gate log keeps each issue and claim.
+
 ### js-harness init
 
 Enables js-harness in a git repository and records what it wrote in a manifest of the clone.

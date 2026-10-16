@@ -858,6 +858,15 @@ podamos implementar todo"), each a feature of its own with its own document and 
      bin/check.mjs`, written where merges are made: the README's `js-harness merge-queue`. An
      installed project gets nothing unless its machine has the file.
      Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
+   - The ticket that goes first (2026-10-16, `odd/tasks/gate-first.md`, his "agrega la prioridad
+     del gate"): `js-harness gate first --session <id> --reason <why>` puts that session's next
+     whole check before every gate that waits; the turn that runs is never cut. Two are open at
+     most, for an hour at most; a gate claims its session's ticket as it arrives and spends it
+     whatever comes next. The orchestrator's batch run carries one by itself with `check --first
+     <reason>`. It cannot be made impossible, so it is made seen: `js-harness sessions` prints
+     each open ticket with its issuer and flags one the orchestrator did not issue, a gate that
+     went first says by which ticket, and the gate log keeps each issue, claim, expiry and
+     cancellation. Undo: `gate first --cancel <id>`, or delete `~/.js-harness/gate-first`.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait

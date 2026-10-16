@@ -1935,7 +1935,7 @@ test('main errors with usage on stderr, exits 2 and runs no row for a --wait it 
     assert.match(errOutput, /Usage: js-harness check .*\[--wait <minutes> \| --no-wait\]/);
     // And what the two flags mean, since a bound that counts from the last change of hands is not what
     // "--wait <minutes>" says by itself.
-    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
+    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator's batch run on main \(odd\/tasks\/gate-first\.md\)\n$/);
   }
 });
 
@@ -3165,6 +3165,56 @@ test('a ticket is spent by a gate that stops before its sensors, and is claimed 
   assert.equal(rows[0].stopped, true);
   assert.deepEqual(readTickets(home).open, [], 'a stopped gate spends it');
 }));
+
+// S2: "The orchestrator's own batch run on `main` may carry one by itself (`--first` on that one command)."
+test('check --first <reason> issues its session a ticket for this tree and claims it as it arrives; the issue is in the gate log', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take, ...log.deps }));
+  assert.equal(code, 0, output);
+  const issued = log.events.find(({ event }) => event === 'first-issued');
+  assert.deepEqual([issued?.session, issued?.by, issued?.tree, issued?.reason], ['the-orchestrator', 'the-orchestrator', path.resolve(dir), 'the batch run on main']);
+  assert.deepEqual(take.asked.map(({ first }) => first), [{ id: issued.id, reason: 'the batch run on main' }]);
+  assert.deepEqual(readTickets(home).open, [], 'spent at the claim');
+  assert.match(output, new RegExp(`^INFO {2}gate {2}this gate claimed ticket ${issued.id} \\(the batch run on main\\), issued by the-orchestrator,`, 'm'));
+}));
+
+test('check --first issues nothing where the host names no session or two tickets are open, says why in a row, and the gate runs all the same', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const none = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], {}, gateDeps({ takeGateLock: take }));
+  assert.equal(none.code, 0, none.output);
+  assert.match(none.output, /^INFO {2}first {2}no ticket was issued: the host names no session for this gate, and a ticket is for a session$/m);
+  const one = issueTicket({ home, session: 's1', reason: 'one' }).ticket;
+  const two = issueTicket({ home, session: 's2', reason: 'two' }).ticket;
+  const full = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
+  assert.equal(full.code, 0, full.output);
+  assert.match(full.output, new RegExp(`^INFO {2}first {2}no ticket was issued: two tickets are open already: ${one.id} .*${two.id} `, 'm'));
+  assert.deepEqual(take.asked.map(({ first }) => first ?? null), [null, null]);
+}));
+
+// Codex (2026-10-16): a second ticket was issued beside an open one of the session, and one this check
+// never claims (a gate that takes no lock) stayed open for a later check to jump the line with.
+test('check --first reuses an open ticket of its session for this tree, and cancels the one it issued when its gate claims none', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const open = issueTicket({ home, session: 'the-orchestrator', tree: dir, reason: 'issued before' }).ticket;
+  const reused = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
+  assert.match(reused.output, new RegExp(`^INFO {2}first {2}no ticket was issued: ticket ${open.id} of this session is open already for this tree, and this gate claims it$`, 'm'));
+  assert.deepEqual(take.asked.map(({ first }) => first?.id), [open.id]);
+  assert.deepEqual(readTickets(home).open, []);
+}));
+
+test('check --first cancels the ticket it issued when its gate runs no sensor under the lock and so claims none', () => withGate({}, async (dir, home) => {
+  const { output } = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: lockTakenAtOnce() }));
+  assert.deepEqual(readTickets(home).open, [], output);
+  assert.match(output, /^INFO {2}first {2}ticket [0-9a-f]{8} was cancelled: this gate ran no sensor under the lock, so it claimed none$/m);
+}));
+
+test('check --first takes one reason, and does not go with --push', async () => {
+  for (const [argv, why] of [[['--first'], '--first requires a value'], [['--first', ' '], '--first needs a reason, not an empty one'], [['--push', '--first', 'x'], '--first goes with a gate that runs its sensors, not with --push']]) {
+    const { code, errOutput } = await runCheck(argv, {}, {});
+    assert.deepEqual([code, errOutput.split('\n')[0]], [2, why]);
+  }
+});
 
 test('takeGateTurn hands the lock the ticket it claimed, and says of a gate that went first by a ticket which ticket and why; the gates it waited for mark that one first', async () => {
   const holder = { token: '4321-aa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', session: null, startedAt: '2026-10-11T07:00:00.000Z', beatAt: 1, stale: false, first: '0a0a0a0a', firstReason: 'unblocks the others' };

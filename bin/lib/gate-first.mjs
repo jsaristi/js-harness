@@ -265,7 +265,7 @@ export function cancelTicket({ home, id, fileSystem: io = fs }) {
 }
 
 /** Whether a gate that checks `cwd` is of the tree `tree`: the same folder, in any case on Windows. */
-function ofTree(tree, cwd, platform) {
+export function ofTree(tree, cwd, platform) {
   const norm = (value) => {
     const resolved = path.resolve(value).replace(/[\\/]+$/, '');
     return platform === 'win32' ? resolved.toLowerCase() : resolved;

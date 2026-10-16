@@ -53,10 +53,11 @@ import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { readTickets } from './lib/gate-first.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -597,6 +598,9 @@ export async function sessionsMain(
       const waiters = readGateWaiters(harnessHome, reading);
       return { holder: readGateHolder(harnessHome, reading), waiters, readAt };
     });
+    // The tickets that put a session's next check first in that lock, under the same home and through the
+    // same functions (./lib/gate-first.mjs).
+    const gateTickets = readGateTickets(() => readTickets(harnessHome, { now, fileSystem: lockFiles }));
     return {
       root,
       projectDir,
@@ -624,6 +628,7 @@ export async function sessionsMain(
       worktrees,
       gates,
       gateLock,
+      gateTickets,
       pullRequests: readPullRequests(run, root),
       relief: readRelief(reliefFile, readFile),
       notVisible: NOT_VISIBLE,
