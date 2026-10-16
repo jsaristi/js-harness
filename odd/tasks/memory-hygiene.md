@@ -374,7 +374,13 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
     marker `memory-hygiene.purge` beside the folder (a file made only if absent) before it looks at the locks,
     and `planPass` looks for it after taking its lock, refusing and removing what it made; a marker already there
     keeps the folder (`purging`, exit 1). `memory-pass.test.mjs` 20/20, `manifest.test.mjs` 152/152,
-    `install.test.mjs` 75/75
+    `install.test.mjs` 75/75 (`c54b820`). gentle-ai 4.2.0 ran this time on 99a4849..c54b820 (risk, resilience,
+    reliability) and approved, acknowledged as `review-1babe8a724444f23`, with five informational findings. Two
+    were real and are fixed test first in the next commit: a folder moved aside and not removed was left under
+    a name no uninstall looks for (it now goes back to its name), and an empty lock, read in the instant a plan
+    makes it, was reported as an unknown error (it is a pass, `<slug>/unknown`). Left as they are: a marker left
+    by a purge that was killed blocks plans until removed, which the refusal says how to do; a read error of
+    the folder without a purge is reported as unremovable, as for the other folders
   - [ ] T9b The board row; T9c the rule ids
 - [ ] T10 (kind: verify) Follow-up of the Codex recheck of 3bb2dd5..373dd52, which left "Serialize snapshot
   purging with new memory plans" open: the marker fix is committed after 373dd52 with its tests, and a second

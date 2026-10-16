@@ -1270,7 +1270,8 @@ function memoryHygieneDir(home) {
  * lock, so one of the two always sees the other. A plan that held its lock first is `in-use`; one after the marker
  * is refused, on a project the purge saw or a new one, and removes what it made. A refused plan's lock can be seen
  * for an instant, which keeps the folder for this run: the safe side. The folder is moved aside in one rename and
- * the moved one removed, and the marker is let go whatever happens. `renameFile` (default `fs.renameSync`) is the
+ * the moved one removed; what cannot be removed goes back to its name, so the next uninstall still finds it. The
+ * marker is let go whatever happens. `renameFile` (default `fs.renameSync`) is the
  * seam a test runs plans in, around the move. */
 function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir, renameFile = fs.renameSync }) {
   const dir = memoryHygieneDir(home);
@@ -1308,7 +1309,12 @@ function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir, renam
           if (err.code === 'ENOENT' || err.code === 'ENOTDIR') continue;
           throw err;
         }
-        passes.push(`${slug}/${JSON.parse(held).stamp}`);
+        // A lock read in the instant `planPass` makes it is still empty: a pass all the same.
+        let stamp = 'unknown';
+        try {
+          stamp = JSON.parse(held).stamp ?? stamp;
+        } catch {}
+        passes.push(`${slug}/${stamp}`);
       }
     } catch (err) {
       return unremovable(err);
@@ -1323,7 +1329,13 @@ function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir, renam
     try {
       removeFile(aside, { recursive: true, force: true });
     } catch (err) {
-      return { removed: [], result: { memoryKept: [{ path: aside, reason: 'unremovable', code: err.code ?? 'unknown error' }] } };
+      // What is left goes back to its name, where the next uninstall looks; only if it cannot is it named aside.
+      try {
+        renameFile(aside, dir);
+        return unremovable(err);
+      } catch {
+        return { removed: [], result: { memoryKept: [{ path: aside, reason: 'unremovable', code: err.code ?? 'unknown error' }] } };
+      }
     }
     return { removed: [dir], result: { memoryKept: [] } };
   } finally {

@@ -694,6 +694,10 @@ test('uninstall with purgeMemory keeps the folder while a pass holds its lock, o
     assert.equal(fs.existsSync(`${dir}.purge`), true, 'a marker it did not make is not its to remove');
     fs.rmSync(`${dir}.purge`);
 
+    // A lock read in the instant `planPass` makes it, still empty, is a pass all the same.
+    fs.writeFileSync(path.join(stateDir, 'lock'), '');
+    assert.deepEqual(uninstall(home, { purgeMemory: true }).memoryKept, [{ path: dir, reason: 'in-use', passes: ['C--proj/unknown'] }]);
+
     fs.rmSync(path.join(stateDir, 'lock'));
     const refuse = (target) => {
       if (target.startsWith(dir)) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
@@ -702,13 +706,23 @@ test('uninstall with purgeMemory keeps the folder while a pass holds its lock, o
     const unmoved = uninstall(home, { purgeMemory: true, renameFile: (from, to) => { refuse(from); fs.renameSync(from, to); } });
     assert.deepEqual(unmoved.memoryKept, [{ path: dir, reason: 'unremovable', code: 'EPERM' }]);
     assert.deepEqual([fs.existsSync(dir), fs.existsSync(path.join(stateDir, 'lock'))], [true, false]);
-    // One moved aside and not removed is named where it is now.
+    // One moved aside and not removed goes back to its name, so the next uninstall finds it.
     const removeFile = (target, options) => { refuse(target); return fs.rmSync(target, options); };
     const unremoved = uninstall(home, { purgeMemory: true, removeFile });
-    assert.equal(unremoved.memoryKept.length, 1);
-    assert.deepEqual([unremoved.memoryKept[0].reason, unremoved.memoryKept[0].code], ['unremovable', 'EPERM']);
-    assert.match(unremoved.memoryKept[0].path, /memory-hygiene\.purging-\d+-\d+$/);
-    assert.equal(fs.existsSync(unremoved.memoryKept[0].path), true);
+    assert.deepEqual(unremoved.memoryKept, [{ path: dir, reason: 'unremovable', code: 'EPERM' }]);
+    assert.deepEqual(fs.readdirSync(path.dirname(dir)).filter((name) => name.startsWith('memory-hygiene')), ['memory-hygiene']);
+    assert.deepEqual(uninstall(home, { purgeMemory: true }).memoryKept, [], 'and removes it');
+    // When it cannot go back, it is named where it is.
+    const stuck = uninstall(home, { purgeMemory: false });
+    assert.deepEqual(stuck, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [], remoteKept: [] });
+    leftByMemoryPass(home);
+    let moves = 0;
+    const once = (from, to) => { moves += 1; if (moves > 1) refuse(to); fs.renameSync(from, to); };
+    const aside = uninstall(home, { purgeMemory: true, removeFile, renameFile: once });
+    assert.equal(aside.memoryKept.length, 1);
+    assert.deepEqual([aside.memoryKept[0].reason, aside.memoryKept[0].code], ['unremovable', 'EPERM']);
+    assert.match(aside.memoryKept[0].path, /memory-hygiene\.purging-\d+-\d+$/);
+    assert.equal(fs.existsSync(aside.memoryKept[0].path), true);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
