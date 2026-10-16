@@ -57,6 +57,7 @@ const PLANTED = {
   'agents-budget': { line: 'AGENTS.md stays within its budget of 1500 estimated tokens.', marked: 'AGENTS.md stays within its budget (`rule:agents-budget`).' },
   'codex-review-margin': { line: 'The plan keeps a margin of 5% of the allowance.', marked: 'The plan keeps its margin (`rule:codex-review-margin`).' },
   'codex-review-rate': { line: 'A part is put at 1,200 input tokens a changed line.', marked: 'A part is put at the rate of `rule:codex-review-rate`.' },
+  'context-pause': { line: 'Near 88% of its window a session writes its state.', marked: 'At the pause of `rule:context-pause` a session writes its state.' },
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
   'gate-log-command': { line: 'The gate log keeps a command cut at 120 characters.', marked: 'The gate log keeps a command cut as `rule:gate-log-command` says.' },

@@ -57,7 +57,11 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 88,
     "unit": "percent of the context window",
-    "flag": "--context-pause"
+    "flag": "--context-pause",
+    "patterns": [
+      "^(?!.*\\bruleValue\\()(?=.*\\b(?:paus\\w*|compact\\w*|writes? its state)\\b).*(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))\\s*of (?:its|the|a|this session's|the session's) (?:context )?window",
+      "^(?!.*\\bruleValue\\().*\\bcontext pause\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))"
+    ]
   },
   {
     "id": "contract-run-timeout",
