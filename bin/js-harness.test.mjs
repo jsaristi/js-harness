@@ -80,7 +80,7 @@ test('the merge-queue help says each code commit needs its gentle-ai line on its
 
 test('the merge-queue help says a landed rule/ branch confirms its proposal in the relief file, and the check help says a push reports the row rules (T16e, slice c)', () => {
   const help = run(['--help']).stdout;
-  assert.match(help, /merge-queue .*A landed rule\/ branch appends to the relief file one line that confirms the newest proposal of each rule it changed\./);
+  assert.match(help, /merge-queue .*A landed rule\/ branch appends to the relief file one line that confirms the newest proposal of each rule it changed that its landed head holds./);
   assert.match(help, /check .*js-harness check --push adds the row rules of the lines the push brings past the remote's default branch, as INFO: the commit refuses, the push reports, the merge refuses\./);
 });
 

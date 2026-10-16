@@ -1039,3 +1039,19 @@ test('a land whose relief file cannot be found after main moved still exits 0 an
   assert.ok(out.includes('Could not write the landing lines of the relief file (the checkout went away): main moved all the same.'), out.join('\n'));
   assert.equal(fs.readFileSync(made.reliefFile, 'utf8'), before);
 });
+
+test('landingLines given until confirms only a proposal stamped by then, so a later one stays unconfirmed', () => {
+  const relief = ['# Relief', proposed('a', 'rule/a', '00:00'), proposed('a', 'rule/a', '05:00'), 'not a stamped line rule:a proposed on rule/a, not landed'].join('\n');
+  const until = new Date(2026, 9, 16, 10, 1, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until }), { lines: ['rule:a landed on main abc1234 from rule/a: confirms relief line 2'], none: [] });
+  const early = new Date(2026, 9, 16, 9, 0, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until: early }), { lines: [], none: ['a'] });
+});
+
+test('a land confirms the proposal its tested head holds, not one rules change wrote after that head', async () => {
+  const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00')]);
+  fs.appendFileSync(made.reliefFile, `2099-01-01 00:00:00 local (rules change). rule:a proposed on rule/a, not landed: value; source design; supersedes relief line 2\n`, 'utf8');
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});

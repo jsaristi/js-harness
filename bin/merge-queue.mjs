@@ -38,8 +38,8 @@ runs none, and CircleCI's run is its test. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. For each landed rule/ pull request and each rule it
 changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> landed on main <sha> from
-<branch>: confirms relief line <n>", for the newest "rule:<id> proposed on <branch>, not landed" line no
-later landing confirms; one with no such line is named. --dry-run and a land that does not move main
+<branch>: confirms relief line <n>", for the newest "rule:<id> proposed on <branch>, not landed" line stamped
+no later than the landed head's commit that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
 write none. Exit 0 landed or nothing to land, 4 red, 3 main moved meanwhile (nothing pushed), 1 anything
 else.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
@@ -248,13 +248,15 @@ function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
  * newest line "rule:<id> proposed on <branch>, not landed" (`js-harness rules change` writes it; the comma after the
  * branch keeps `rule/a` from matching `rule/ab`, the space after "proposed" `rule:a` from matching `rule:ab`) that no
  * later "rule:<id> landed on main ... from <branch>: " line confirms gets one line naming its place, from 1, blank lines
- * counted, as `rules change` names the line it supersedes; `none` are the ids no proposed line names. */
-export function landingLines(relief, { branch, ids, sha }) {
+ * counted, as `rules change` names the line it supersedes; `none` are the ids no proposed line names. Given `until`
+ * (ms), only a proposed line stamped by then counts: `rules change` stamps its line before the commit that holds it, so
+ * a line stamped after the landed head's commit proposes a change that head does not hold. */
+export function landingLines(relief, { branch, ids, sha, until = Infinity }) {
   const lines = String(relief).split('\n');
   const found = { lines: [], none: [] };
   for (const id of ids) {
     const proposal = `rule:${id} proposed on ${branch}, not landed`;
-    const newest = lines.findLastIndex((line) => line.includes(proposal));
+    const newest = lines.findLastIndex((line) => line.includes(proposal) && stampOf(line) <= until);
     if (newest === -1) {
       found.none.push(id);
       continue;
@@ -263,6 +265,12 @@ export function landingLines(relief, { branch, ids, sha }) {
     if (!confirmed) found.lines.push(`rule:${id} landed on main ${sha} from ${branch}: confirms relief line ${newest + 1}`);
   }
   return found;
+}
+
+/** The local time an `appendRelief` line is stamped with, in ms; NaN for a line it did not stamp. */
+function stampOf(line) {
+  const stamp = /^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d) local /.exec(line);
+  return stamp === null ? NaN : new Date(+stamp[1], stamp[2] - 1, +stamp[3], +stamp[4], +stamp[5], +stamp[6]).getTime();
 }
 
 const RULES_DATA = 'bin/lib/rules-data.mjs';
@@ -308,7 +316,13 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
     } catch {
       // No relief file is no proposed line.
     }
-    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7) });
+    // The landed head's commit time bounds the proposals it can hold, to the end of its second.
+    const committed = Number(gitIn(place, 'show', '-s', '--format=%ct', pr.headRefOid).out.trim());
+    if (!Number.isFinite(committed) || committed <= 0) {
+      stdout(`${said}, and the time of its head commit could not be read: no landing line is written for it.`);
+      continue;
+    }
+    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), until: committed * 1000 + 999 });
     for (const id of none) stdout(`${said} with no relief line "rule:${id} proposed on ${pr.headRefName}, not landed": no landing line is written for it.`);
     for (const line of lines) {
       try {
