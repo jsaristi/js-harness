@@ -486,7 +486,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   for (const folder of memoryKept) {
     if (folder.stamps) {
       const count = folder.stamps.length;
-      console.log(`kept ${folder.path}: ${count} snapshot${count === 1 ? '' : 's'} of a memory pass (${folder.stamps.join(', ')}), the only copy of what ${count === 1 ? 'that pass' : 'those passes'} changed, with the project's journal; remove the folder by hand to drop them`);
+      console.log(`kept ${folder.path}: ${count} snapshot${count === 1 ? '' : 's'} of a memory pass (${folder.stamps.join(', ')}), the only copy of what ${count === 1 ? 'that pass' : 'those passes'} changed${folder.journal ? ", with the project's journal" : ''}; remove the folder by hand to drop them`);
     } else {
       console.error(`could not remove ${folder.path} (${folder.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
     }

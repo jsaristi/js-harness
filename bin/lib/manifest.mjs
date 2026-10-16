@@ -1423,34 +1423,51 @@ function removeChannelFolder(home, removeFile, statFile) {
 
 /** Removes the folder of memory hygiene under `home` (`hygieneDir` of `memory-hygiene.mjs`), as `{ removed, kept }`
  * (odd/tasks/memory-hygiene.md, D4 and T9). A project's folder that holds a snapshot is kept, with the stamps of its
- * snapshots: a snapshot is the only copy of what a memory pass changed, so it is never removed on its way out, and
- * its journal stays beside it. The other projects' folders go; with none kept, the whole folder goes. One that
- * cannot be looked at or removed is kept with the error code, like the channel's, and the uninstall still finishes. */
+ * snapshots and whether its journal is beside them: a snapshot is the only copy of what a memory pass changed, so it
+ * is never removed on its way out. The other projects' folders go; with none kept, the whole folder goes. A folder
+ * that cannot be looked at or removed is kept with the error code, like the channel's, one project at a time, so
+ * one held open does not hide what was removed before it, the projects after it, or the stamps kept. */
 function removeMemoryHygieneFolder(home, removeFile, statFile, listDir) {
   const dir = hygieneDir(home);
+  const unremovable = (folder, err) => ({ path: folder, reason: 'unremovable', code: err.code ?? 'unknown error' });
+  let projects;
   try {
     if (!isThere(dir, statFile)) return { removed: [], kept: [] };
-    const projects = listDir(dir).sort().map((name) => path.join(dir, name));
-    const kept = [];
-    for (const project of projects) {
+    projects = listDir(dir).sort().map((name) => path.join(dir, name));
+  } catch (err) {
+    return { removed: [], kept: [unremovable(dir, err)] };
+  }
+  const kept = [];
+  const goes = [];
+  for (const project of projects) {
+    try {
       const snapshots = path.join(project, 'snapshots');
       const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
-      if (stamps.length > 0) kept.push({ path: project, stamps });
+      if (stamps.length > 0) kept.push({ path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile) });
+      else goes.push(project);
+    } catch (err) {
+      kept.push(unremovable(project, err));
     }
-    if (kept.length === 0) {
+  }
+  if (kept.length === 0) {
+    try {
       removeFile(dir, { recursive: true, force: true });
       return { removed: [dir], kept: [] };
+    } catch (err) {
+      return { removed: [], kept: [unremovable(dir, err)] };
     }
-    const removed = [];
-    for (const project of projects) {
-      if (kept.some((folder) => folder.path === project)) continue;
+  }
+  const removed = [];
+  for (const project of goes) {
+    try {
       removeFile(project, { recursive: true, force: true });
       removed.push(project);
+    } catch (err) {
+      kept.push(unremovable(project, err));
     }
-    return { removed, kept };
-  } catch (err) {
-    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
   }
+  kept.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { removed, kept };
 }
 
 /** `memoryKept` of `uninstall`'s result, there only when a folder of memory hygiene is kept, the one case it speaks of. */

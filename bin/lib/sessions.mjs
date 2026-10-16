@@ -2876,8 +2876,6 @@ export function reliefTail(text, count = RELIEF_LINES) {
   return { lineCount: lines.length, lines: lines.slice(lines.length - Math.min(count, lines.length)) };
 }
 
-/** The `Relief` section: the file's path with its last lines, or that there is none yet (and where the
- * first line would create it), or why it could not be read. */
 /** The section that says whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5),
  * with the ids of its reasons; `memory status` says why, and the pass is the orchestrator's, at a task boundary. */
 function memoryLines(memory) {
@@ -2889,6 +2887,8 @@ function memoryLines(memory) {
   return ['Memory hygiene', line, ''];
 }
 
+/** The `Relief` section: the file's path with its last lines, or that there is none yet (and where the
+ * first line would create it), or why it could not be read. */
 function reliefLines(relief) {
   if (relief.unavailable) return ['Relief', `  ${relief.path}  unavailable: ${relief.unavailable}`, ''];
   if (!relief.exists) return ['Relief', `  no relief file yet: the first line an orchestrator appends creates ${relief.path}`, ''];

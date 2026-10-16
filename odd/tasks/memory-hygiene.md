@@ -373,6 +373,17 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
     (`boardMemory`, `memoryLines`); `--json` carries it as `memory`. RED: both tests failed; GREEN:
     lib/sessions 296/296, sessions 232/232.
   - [ ] The rule ids: a choice of his, asked in L6.
+  - Verified (item 1: uninstall now deletes the journal, stamp and lock of a project with no snapshot): an
+    independent verifier on `498b418` found no blocker. Twelve uninstall cases never deleted a snapshot, and
+    with no folder the output was identical to the baseline. Three of its advisories are fixed test first:
+    - a project that could not be removed now no longer hides the others or the kept stamps;
+    - the journal is named only when it is there;
+    - a doc comment is back over `reliefLines`.
+    Left as advisories:
+    - a `memory plan` started during an uninstall could lose its snapshot, since uninstall takes no lock;
+    - the board reads the memory folder from `--claude-home`/`CLAUDE_CONFIG_DIR`, `memory status` from
+      `<home>/.claude`;
+    - an unreadable journal reads as `no-pass` (already so at the baseline).
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para

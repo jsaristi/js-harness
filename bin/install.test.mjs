@@ -668,6 +668,11 @@ test('uninstallMain names the memory snapshots it keeps and what removes them, a
     assert.deepEqual([kept.code, kept.outLines, kept.errLines], [0, [
       `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed, with the project's journal; remove the folder by hand to drop them`,
     ], []]);
+    fs.rmSync(journalPath(home, 'C--proj'));
+    const alone = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual(alone.outLines, [
+      `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed; remove the folder by hand to drop them`,
+    ], 'no journal is named where there is none');
 
     fs.rmSync(path.join(project, 'snapshots'), { recursive: true });
     const removeFile = (target, options) => {

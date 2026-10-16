@@ -793,7 +793,7 @@ test('uninstall keeps the folder of a project whose memory passes left snapshots
       fs.mkdirSync(path.join(kept, 'snapshots', '20261016T090000000Z'), { recursive: true });
       const gone = leftByMemory(home, 'C--other');
       const result = uninstall(home);
-      assert.deepEqual(result.memoryKept, [{ path: kept, stamps: ['20261015T120606108Z', '20261016T090000000Z'] }], String(withManifest));
+      assert.deepEqual(result.memoryKept, [{ path: kept, stamps: ['20261015T120606108Z', '20261016T090000000Z'], journal: true }], String(withManifest));
       assert.ok(result.removed.includes(gone), result.removed.join('\n'));
       assert.equal(result.removed.includes(hygieneDir(home)), false);
       assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true, 'a snapshot is never removed');
@@ -805,6 +805,35 @@ test('uninstall keeps the folder of a project whose memory passes left snapshots
     fs.rmSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'), { recursive: true });
     fs.mkdirSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'));
     assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [hygieneDir(home)] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall goes on past a project folder of memory hygiene it cannot remove, and still names the stamps it keeps', () => {
+  const home = makeTmpHome();
+  try {
+    const first = leftByMemory(home, 'C--a');
+    const busy = leftByMemory(home, 'C--b');
+    const last = leftByMemory(home, 'C--c');
+    const kept = leftByMemory(home, 'C--k', '20261015T120606108Z');
+    fs.rmSync(journalPath(home, 'C--k'));
+    const removeFile = (target, options) => {
+      if (target === busy) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    };
+    const result = uninstall(home, { removeFile });
+    assert.deepEqual(result.removed, [first, last]);
+    assert.deepEqual(result.memoryKept, [
+      { path: busy, reason: 'unremovable', code: 'EBUSY' },
+      { path: kept, stamps: ['20261015T120606108Z'], journal: false },
+    ]);
+    assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true);
+
+    // With no snapshot anywhere, a folder that cannot be removed is the whole folder's, said once.
+    fs.rmSync(kept, { recursive: true });
+    const whole = uninstall(home, { removeFile: (target) => { throw Object.assign(new Error('EPERM'), { code: 'EPERM', target }); } });
+    assert.deepEqual(whole.memoryKept, [{ path: hygieneDir(home), reason: 'unremovable', code: 'EPERM' }]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
