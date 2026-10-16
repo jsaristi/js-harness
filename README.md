@@ -87,11 +87,11 @@ over 100,000 tokens.
 
 ```console
 $ js-harness check
-PASS  budget  564 estimated tokens (budget 1500)
+PASS  budget  639 estimated tokens (budget 1500)
 PASS  contracts  no contracts under odd/tasks
-INFO  payload claude  564 estimated tokens per turn from files (tools and hook output not counted)
+INFO  payload claude  639 estimated tokens per turn from files (tools and hook output not counted)
       global CLAUDE.md   not found  ~\.claude\CLAUDE.md
-      project AGENTS.md        564  my-project\AGENTS.md
+      project AGENTS.md        639  my-project\AGENTS.md
 …
 INFO  fixed load  95570 tokens at the first turn, median of the latest 5 sessions (budget 100000)
 …

@@ -698,6 +698,116 @@ hold part of it, since the reply check can refuse a decision block of that kind 
 review. Its cost on that day: about 500,000 tokens of sub-agents and 25 minutes for the second
 round of three readers. A memory note of the orchestrator holds it until then.
 
+### The double review (T18), version 2 (after two readers)
+
+Designed on 2026-10-16 by `JH 28 · reserva B`, from the lead's brief of that day (a claim of the
+lead's: `jh28-double-review-brief.md` in its notes folder). His words, searched in the relief file,
+this document, the memory note and the lead's transcript, and read where they were typed (both
+with `js-harness sessions --quote`):
+- 2026-10-11 (`130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 470): "Siempre me gustaria hacewr
+  asi una doble revision con mejora quiero añadirlo al harness siempre obtenes mejores resultados".
+- 2026-10-16 (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 14210), after the lead's
+  improvement plan reached him with no reader: "Vuelve a revisar y plan y verifica si falta algo o
+  algo por corregir para mejorar aun mas o para que lo podamos hacer como debe ser, siempre
+  tenemos que hacer una doble revision a todo para que salga sin errores por favor cementa esto".
+
+The reading, not his words, and not accepted by him yet: "a todo" covers everything. Code
+already passes two reviewers that did not write it (Codex at every push; gentle-ai when its
+assessment makes a review due, so a passive commit has Codex alone), and this rule does not
+change that. What has no reviewer is text: a design before it is built, and a plan, a design, an
+analysis with figures, a protocol or a change of the charter that reaches him, asked or
+reported. That text passes two read-only readers that did not write it. The reading goes to him
+as one question (below); the rule's source needs where he accepted it.
+
+The five questions of a new rule: it happened (2026-10-11: the rule-change protocol reached him
+three times, each round asked to approve the version before it; 2026-10-16: the plan above); a
+check can hold its text now and part of its practice later (below); no new protocol, it amends
+protocol 1, "Asking the user for a decision", where the paragraph above placed it, with a
+pointer in protocol 6, "Handing off", since a plan handed over in a report never loads section 1;
+its cost is said below; nothing leaves, and the lead's memory note goes on the next list of
+deletions once the source is in `docs/rule-sources.json`.
+
+Item 8 of "`AGENTS.md`, rewritten" ("Every proposal is judged twice: as it is here, and as it
+works in a project that only uses the harness") stays what T9 made it: this repository's, for
+building the harness. This rule sits beside it and names no project; neither copy says "judged
+twice" or "consent", which `bin/lib/project.test.mjs` keeps out of the template.
+
+The rule double-review (named here without its mark, which `rules check` would find undeclared):
+owner `sebastian`; since the day it lands; subject "a design before it is built, and what reaches
+the user to decide, passes two read-only readers that did not write it"; review a month after it
+lands; failure `proposal-unreviewed` (below). Source, of kind words: the two quotes above
+(session, line, excerpt), the reading above, and `accepted`: where he answers the question.
+Home: `bin/lib/protocols-skill.mjs`, section 1, one bullet:
+
+> A design before it is built, and a plan, a design, an analysis with figures, a protocol or a
+> change of the charter that reaches the user, asked or reported, first passes two read-only
+> readers that did not write it: one attacks its claims, one looks only for what is missing.
+> The writer searches the user's earlier words on the subject and names the search. Each reader
+> gets the whole text, the user's words and the paths it cites; the findings go in the feature
+> document, or the orchestrator's notes when there is none. The version the user gets says what
+> each reader changed and what stays unguaranteed; where readers disagree the writer decides on
+> evidence, and what is not settled is unguaranteed. A second round reads only the first round's
+> blockers; what is still open after it goes to the user as unguaranteed, never a third round.
+> Readers run on the reader model the rules give, or where none is declared on the session's own
+> model at high effort; a host with no sub-agents asks another session. Code is not this: it has
+> its reviews (section 3). Not for a question of fact (a figure or an outcome looked up, nothing
+> proposed), nor for a step or a choice whose reviewed text the question names by path.
+
+Its phrases, held by `rules check`: "first passes two read-only readers that did not write it"
+and "one attacks its claims, one looks only for what is missing". Protocol 6 gains one bullet
+that names the rule: a plan or design handed on passes it first. The orchestrator skill
+(`orchestratorSkillContent`, `bin/lib/manifest.mjs`), "Questions to the user", gains one bullet
+that names the rule: a question that puts a plan, design, analysis or protocol to the user names
+its readers' changes, or the reviewed text it rests on. Both say "the user", never he or him.
+
+The template `init` writes ("Working with the owner") gets one sentence, an exception to "one
+home" with its reason: a project's own `AGENTS.md` is read by hosts that load no skill, and
+`init` writes it once (`sync` never rewrites it), so it reaches new projects only. About 55
+tokens, from 564 of the template's 750. A test holds that the template and the bullet share the
+phrase "one attacks its claims", so the copy cannot drift alone.
+
+This repository's `AGENTS.md` does not change in this task. Its room is 3 tokens on this machine
+(1,497 of 1,500 with CRLF endings; 1,475 in the blob), its wording is his and changes only by
+T8's approved draft, and no rule mark enters it. The line goes to T8 as item 10 of its draft.
+
+A failure entry `proposal-unreviewed` (class `rule-not-acting`) in `docs/FAILURES.md`, with the
+two sightings, its control owed by T18b.
+
+Order, which `rules change` constrains (a `rule/` branch whose tree differs from its head only in
+the rule's home; one open rule change at a time):
+- T18a, now: this design, the failure entry and the template's sentence with its test, one
+  commit.
+- T18b, after pull request 284 (`rule/his-last-patterns`, open) lands and he has answered: edit
+  only the protocols bullet, run `rules change double-review --dry-run`, then the command; add the
+  protocols bullet's test, protocol 6's pointer, the orchestrator line and its test, and the
+  shared-phrase test in the same commit; the failure's control becomes a check.
+
+The question for him, one, through the lead: whether "a todo" is read as above (text passes two
+readers; code keeps gentle-ai and Codex), or more widely (every code commit also gets a second
+reviewer beside Codex). Recommended: as above.
+
+Cost of the rule when it acts: on 2026-10-11 a round of three readers was about 500,000
+sub-agent tokens and 25 minutes; this design's round of two was 351,184 sub-agent tokens and
+about 12 minutes. Size never exempts: a short proposal gets two short readings. Cost of the
+slices: two commits through the gate, gentle-ai, and Codex on the code lines.
+
+Not guaranteed: nothing checks yet that a proposal did pass its readers; only the text that asks
+for it is held. Two cheap checks are later options, not these slices: `notify --kind question`
+taking a `reviewed` field the board shows when it is missing, and the reply check (C1, T2)
+refusing a decision block that names no review. Exemptions are judged by the writer.
+
+What the readers changed from version 1. The reader that attacked: the budget of `AGENTS.md` is 3
+tokens here, not 25; `rules change` refuses while pull request 284 is open; the rule's mark in
+this document would fail `rules check` before the rule exists; the source needs session, line
+and an `accepted` that does not exist yet; the four places gave the rule four scopes; the bullet
+shipped item 8, a rule of this repository, to every project; the exemptions could skip the very
+plan that started it. The reader that looked for what is missing: `AGENTS.md` changes only by
+T8's draft and takes no rule mark; item 8 was not reconciled; the search of his words was dropped
+from the bullet; designs that never reach him were left out (the lead's throughput plan already
+asks for them); the commit order; the lifecycle (who runs the readers, what they get, where
+findings go, disagreement, a bounded second round); a pointer in protocol 6; readers in a project
+with no declared model and in Codex; the memory note's end; an incident entry and a review date.
+
 His, and not asked yet: a run of the static rows on `main` after each merge, on GitHub (spend).
 
 Needs of others, placed by the orchestrator. The gate stops before its sensors when a static
@@ -2683,6 +2793,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (`old-rule-beside-new`; its control is owed by T16)
   - [x] T17e The 104 items still open on 2026-10-16, read again and closed where they could be:
     57 checked off, 47 left to their owners (Progress, 2026-10-16)
+- [ ] T18 The double review, by his words of 2026-10-11 and 2026-10-16 ("The double review
+  (T18)"; route: inline, design passed by two read-only readers first)
+  - [x] T18a The design (version 2, after two readers), the failure entry and the template's
+    sentence with its test
+  - [ ] T18b After pull request 284 lands and he has answered: the rule declared with its home,
+    protocol 6's pointer, the orchestrator line, their tests and the shared-phrase test
 
 ## Progress
 - 2026-10-10, T0. The session opened by Sebastián's paste and waited for a line of his (failure
@@ -3984,6 +4100,20 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   Apagado hasta que lo active"): "Prendido por defecto (Recomendada)". So `init` writes the
   reply key on in a new project's `harness.json`; the lead assigns it after C1 lands (pull
   request 282), test first, in a pull request of its own. T9 stays open for that.
+- 2026-10-16, T18a, by `JH 28 · reserva B` on `rule/double-review`, from the lead's brief of that
+  day (a claim of the lead's). His two lines were read where he typed them (`sessions --quote`:
+  `130317af` line 470, `e152c9d8` line 14210). The design, "The double review (T18)", went to two
+  read-only readers on the reader model at high effort, one that attacked its claims and one that
+  looked only for what was missing: 351,184 sub-agent tokens, about 12 minutes in parallel. Each
+  found blockers; version 2 lists what each changed. The ones that moved the plan: `AGENTS.md`
+  has 3 tokens of room on this machine (1,497 of 1,500 with CRLF endings) and changes only by
+  T8's draft, so its line goes there; `rules change` refuses while pull request 284 is open; the
+  rule's source needs where he accepted the reading, which is put to him as one question. Built
+  test first: `agentsTemplate` gains the sentence (RED on the template of `225da7d`, GREEN
+  after; 639 estimated tokens of its 750), the README's example of `check` says so, and
+  `docs/FAILURES.md` gains `proposal-unreviewed`, its control owed by T18b. Left for T18b: the
+  rule with its home in the protocols skill, protocol 6's pointer, the orchestrator line, their
+  tests and the shared-phrase test.
 
 ## Next step
 **State, 2026-10-16, T16f first part built by JH 27** on `feat/rules-reach`: designed, built, checked by the gate, an independent verifier, gentle-ai (acknowledged) and Codex (recorded), each finding fixed with its test (see "Progress"); its pull request waits for the lead to land it. T16f stays open: its next part is the hash in the installed command, with the rest "Left to the other parts of T16f" lists.
