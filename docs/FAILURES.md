@@ -997,10 +997,8 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
 - Seen: 2026-10-14 — relief file, line 758 — JH 13 idle from 03:13 and JH 15 from 03:44, both told to
   start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
   is armed before he leaves, in the orchestrator skill (JH 5)
-- Seen: 2026-10-16 — the channel's record, the lead's notices to session 7 of 15:30Z to 18:17Z —
-  JH 7 waited on pull request 284 with `js-harness wait --pr` and ended its turn; no wait watched its
-  number, so none of the lead's notices woke it, and it saw them at 17:04 local (claimed; JH 7's own
-  notice of 22:06Z)
+- Control: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
+  in its background work" — since 2026-10-14
 
 ### session-opened-unseen
 A session was opened where he does not see it: a scheduled task opened it in the app's Routines, at
@@ -1244,6 +1242,17 @@ names something that does not exist.
   (odd/tasks/install-update.md, T5)
 - Control: check — bin/update.test.mjs — "upgrade with no source installs nothing and runs no
   sync, whatever a registry would answer" — since 2026-10-13
+
+### wait-blind-to-notices
+A session waited with `js-harness wait` on one event, and the lead's notices to it did not end the
+wait, so it read them hours later.
+- Class: unseen-state
+- Seen: 2026-10-16 — the channel's record, the lead's notices to session 7 of 15:30Z to 18:17Z —
+  JH 7 waited on pull request 284 with `js-harness wait --pr` and ended its turn; no wait watched its
+  number, so none of the lead's notices woke it, and it saw them at 17:04 local (claimed; JH 7's own
+  notice of 22:06Z)
+- Control: owed — odd/tasks/session-channel.md — "every `js-harness wait` also ends on a notice to
+  the waiting session's own number"
 
 ### wait-not-attributable
 A process that waits for a free machine cannot be attributed to its session from the board, and one
