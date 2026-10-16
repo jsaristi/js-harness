@@ -164,7 +164,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T1 (kind: build) S1: the three open table rows, closed in their own documents (L11)
 - [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L4)
 - [x] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks (L12)
-- [ ] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
+- [x] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
 - [ ] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
 - [x] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4; L13)
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L6)
@@ -270,3 +270,12 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   each figure by its flag or its default (`bin/sessions.mjs`), the openings hint asks in words with single quotes
   (`bin/resume.mjs`), and the yardstick row no longer waits on T9; detail in `odd/tasks/session-channel.md`,
   Progress, 2026-10-16.
+- L14 (2026-10-16, JH 25, state for a resume): branch `feat/first-version-t3abc` (worktree
+  `D:/js-harness-worktrees/first-version-t3abc`, on top of PR 294's `docs/first-version-t3`). T3c committed `37f30d7`.
+  T3a in progress, uncommitted: a RED test in `bin/lib/pause.test.mjs` (`ORCHESTRATOR_SAID`); next, the gloss in
+  `bin/lib/pause.mjs:300` (`where`) and in `bin/resume.mjs:91` (`NOTIFY`, and its test constant), test first; then T3b
+  (the pause's fallback window, `bin/lib/pause.mjs:23`); then Codex on the code commits, push, a PR, notify the lead.
+- L15 (2026-10-16, JH 25): T3a built inline, test first: the pause's notices and the resume hook say, the first
+  time they name it, what the orchestrator is and that the js-harness-orchestrator skill teaches it
+  (`ORCHESTRATOR_IS`, `bin/lib/sessions.mjs`; RED 1 in `bin/lib/pause.test.mjs`, 25 in `bin/resume.test.mjs`, then 56 and
+  92 green). The `init` template stays short. Next: T3b, then Codex, push, a PR, the lead told.

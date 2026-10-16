@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, cutRule, percentOf, shareOf } from './sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, ORCHESTRATOR_IS, cutRule, percentOf, shareOf } from './sessions.mjs';
 
 /** The most of a transcript's end that the hook reads, in bytes. The hook runs after every tool call, so a
  * file of megabytes costs what this many bytes cost: the end is all it may look at. */
@@ -297,7 +297,9 @@ function noticeOf(tokens, compaction, stage, configured = null) {
   const share = percentOf(whole, window);
   const room = Math.round(Math.max(0, compaction - tokens));
   const head = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${compactionShare}%: about ${thousands(room)} tokens are left.`;
-  const where = 'the "Next step" of the session\'s feature document; the relief file for an orchestrator';
+  // A project that only installs the harness defines no orchestrator in its AGENTS.md: the first mention says
+  // what one is and where that is taught (odd/tasks/first-version.md, T3a).
+  const where = `the "Next step" of the session's feature document; for the orchestrator (${ORCHESTRATOR_IS}), its relief file instead`;
   const opening = 'js-harness notify --opening "<this session\'s title>" (its text on standard input: the feature document, the task, the branch and worktree, any question still open; it is what a new session under that title reads too)';
   // Two sessions near their compaction ended their turn waiting and were never woken (odd/tasks/pause-no-idle.md).
   const noIdle = 'Never end your turn idle: the host compacts only inside a turn, and a turn that ends with nothing running to wake it is never woken. When the work waits on something, write your state, then keep a declared wait running in the background (js-harness wait, which says what it waits for and when it ends, and wakes you when it holds), so the compaction happens inside a turn.';

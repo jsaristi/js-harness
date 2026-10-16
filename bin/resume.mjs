@@ -38,7 +38,7 @@ import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { dueNotice } from './lib/memory-hygiene.mjs';
 import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
-import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
+import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness resume --hook',
@@ -88,7 +88,7 @@ const DEADLINE_PASSED = 'this hook\'s own deadline passed';
 
 const NO_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST_COMPACTED = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = `Then tell the orchestrator in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
+const NOTIFY = `Then tell the orchestrator (${ORCHESTRATOR_IS}) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const oneLine = (text) => text.replace(/\s+/g, ' ').trim();

@@ -128,7 +128,7 @@ const NOT_TOLD = 'The pause: not known whether this session was told (it keeps n
 const NO_USER = 'The user wrote nothing in this stretch.';
 const NONE_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = 'Then tell the orchestrator in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session\'s title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator\'s title, or that there is none).';
+const NOTIFY = 'Then tell the orchestrator (the session that leads this project\'s sessions, where one does: the js-harness-orchestrator skill says how) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session\'s title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator\'s title, or that there is none).';
 const USER_LINE = (count, lines) => `The user wrote at ${count} lines of it, the last at ${lines}: read each with  js-harness sessions --quote ${SESSION} <line>`;
 const REPLY_LINE = (line, at, text) => `This session's last reply with text is line ${line} (${at}); it ended: "${text}"`;
 // The feature document of `titled` and `notified`, and the state line the hook says of it: written 12 minutes before the test's now, committed at 09:00.

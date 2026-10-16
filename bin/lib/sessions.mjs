@@ -2751,6 +2751,10 @@ export function askingRule(personAt, now, { waiting = 1 } = {}) {
  * away: nothing to send. The user no longer compacts by hand (odd/tasks/no-manual-compact.md S1): the host compacts a
  * session by itself inside a turn, and a session that stops gets its next prompt from the orchestrator, so no
  * block of the bare command is handed to anyone and no time of the user's last message is read for it. */
+/** What the orchestrator is, said where a hook first names it: a project that only installs the harness defines
+ * no orchestrator in its AGENTS.md, and the skill that teaches the role is installed beside it. */
+export const ORCHESTRATOR_IS = 'the session that leads this project\'s sessions, where one does: the js-harness-orchestrator skill says how';
+
 export function cutRule() {
   return 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 }
