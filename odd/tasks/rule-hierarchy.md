@@ -3279,6 +3279,17 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   that his protection covers values and not patterns. Recommended: the second, with his yes.
 
 ## Next step
+**State for a resume, 2026-10-16 at 03:45 by `date`, step 2 of T16d, batch 1 being built.** Pull
+request 249 landed (`main` 87914bf): a change of patterns or failure alone keeps the rule's stored
+source. The lead split the decision: the 13 rules of his wait for his answer on whether his
+protection covers patterns; the 15 project rules go now, in three batches by count on `main`
+87914bf. Batch 1 (0 to 1): `contract-run-timeout`, `control-phrase-min`, `person-present`,
+`sensor-timeout`, `gate-log-size`, `wait-every`, `wait-for`. Batch 2 (2 to 4): `agents-budget`,
+`gate-log-command`, `review-part-files`, `review-parts-unflagged`, `review-timeout`,
+`review-part-lines`. Batch 3: `gate-max` and `gate-wait`, whose drafts catch lines that only
+mention a number near the word and are narrowed first. Each rule is one `rules change` run with
+source design `odd/tasks/rule-hierarchy.md`, its entry in `PLANTED`, and one commit.
+
 **State for a resume, 2026-10-15, step 2 of T16d, blocked on a decision.** T16d is on `main`
 (a1e8fb3) and checked off. `rule/first-patterns`, from `main`, holds only the documents' commit.
 Step 2 waits on the decision in Progress (his rules, and a change of form that keeps a rule's
