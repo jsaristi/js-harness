@@ -83,6 +83,17 @@ test('a gentle-ai version since the reviewed one is stale until reviewed: its st
   ]);
 });
 
+test("an apostrophe in a path is quoted in the diff command, so the shell still reads one argument (Codex, 2026-10-16)", () => {
+  const snapshots = [{ at: '2026-10-16T04:45:56.400Z', dir: "/home/o'brien/.gentle-ai/backups/first", entry: "files/home/o'brien/.claude/CLAUDE.md" }];
+  const { row } = gentleAiUpdateRow({ version: '4.2.0', reviewed, snapshots, home: "/home/o'brien", now: NOW });
+  assert.ok(
+    row.fix.claude[2].endsWith(
+      `diff -u <(cd '/home/o'\\''brien/.gentle-ai/backups/first' && tar -xzOf snapshot.tar.gz 'files/home/o'\\''brien/.claude/CLAUDE.md') '/home/o'\\''brien/.claude/CLAUDE.md'`,
+    ),
+    row.fix.claude[2],
+  );
+});
+
 test('with no snapshot since the review the diff step says so and asks for the whole file to be read', () => {
   const { row } = gentleAiUpdateRow({ version: '4.2.0', reviewed, snapshots: [], home: '/h', now: NOW });
   assert.equal(row.fix.claude[2], 'no copy of the global CLAUDE.md from before the sync was found under ~/.gentle-ai/backups: read /h/.claude/CLAUDE.md whole');

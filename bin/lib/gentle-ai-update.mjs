@@ -10,6 +10,8 @@ const RELEASES = 'https://github.com/Gentleman-Programming/gentle-ai/releases';
 const CLAUDE_MD = /(^|[\\/])\.claude[\\/]CLAUDE\.md$/i;
 
 const posix = (file) => file.replace(/\\/g, '/');
+/** One shell word in single quotes: an apostrophe inside closes the quote, escapes itself, and reopens it. */
+const quote = (word) => `'${word.replace(/'/g, "'\\''")}'`;
 
 /** `[{ at, dir, entry }]`, oldest first: the gentle-ai backups under `home` whose snapshot holds the global
  * CLAUDE.md, with the backup's folder and the file's path inside `snapshot.tar.gz`. gentle-ai takes one before each
@@ -45,8 +47,8 @@ function diffStep(reviewed, snapshots, home) {
   const since = snapshots.find((snapshot) => Date.parse(snapshot.at) > Date.parse(reviewed.at));
   if (!since) return `no copy of the global CLAUDE.md from before the sync was found under ~/.gentle-ai/backups: read ${claudeMd} whole`;
   // `cd` first: Git Bash's tar takes a drive letter in an archive path for a remote host.
-  const before = `cd '${posix(since.dir)}' && tar -xzOf snapshot.tar.gz '${since.entry}'`;
-  return `diff the global CLAUDE.md, which gentle-ai rewrites on sync, against its copy from before the first sync since the review: diff -u <(${before}) '${claudeMd}'`;
+  const before = `cd ${quote(posix(since.dir))} && tar -xzOf snapshot.tar.gz ${quote(since.entry)}`;
+  return `diff the global CLAUDE.md, which gentle-ai rewrites on sync, against its copy from before the first sync since the review: diff -u <(${before}) ${quote(claudeMd)}`;
 }
 
 /** `{ row, record }`: the `gentle-ai-update` row for the installed gentle-ai `version` (the gentle-ai row's, `null`
