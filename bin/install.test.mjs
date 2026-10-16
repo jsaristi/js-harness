@@ -311,7 +311,7 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
       `registered hook entry in ${settings}: js-harness resume --hook (SessionStart, matcher compact)`,
       `registered hook entry in ${hooks}: js-harness resume --hook (SessionStart, matcher compact)`,
       `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUse)`,
-      `registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit)`,
+      `registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$)`,
       `registered hook entry in ${settings}: js-harness guard --stop || exit 0 (Stop)`,
     ]);
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));

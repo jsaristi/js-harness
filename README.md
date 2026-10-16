@@ -215,6 +215,15 @@ nothing was installed: no release of js-harness is tagged yet (versions are tagg
 Reports each tool of the stack: its version, whether Claude Code and Codex are configured for
 it, and the command that fixes what is missing. `--offline` skips the check for newer versions.
 
+Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bundled for its Code
+tab, read from the app's folder under the home (`--home`), never from the environment. The first
+reading is recorded as reviewed in the doctor cache. After an update, the row stays `stale` until
+the review is done, listing the old and new versions and the review steps: the two changelogs,
+the harness hooks, Remote Control, and a report to the user. `js-harness doctor --host-reviewed`
+records the review; with `--json` it prints the record it wrote. The row also shows
+`outdated` when the app downloaded an update it has not applied: on Windows that waits until
+Claude is quit fully, the tray icon included.
+
 ```console
 $ js-harness doctor --offline
 tool            version   claude    codex     project   up to date
@@ -383,9 +392,9 @@ last reply, the worktrees and their feature plans, the running gates and the ope
 requests. It only reads. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
-the host made, whether the session was told the pause, committed its feature document (the
-orchestrator may write a line in its relief file instead) and announced the compaction, and how
-many compactions miss one of those facts. Under each roster row's
+the host made, whether the session was told the pause and committed its feature document (the
+orchestrator may write a line in its relief file instead), and how many compactions miss one of
+those facts (nobody announces a compaction: he does not compact by hand); then the reliefs of the record (each `relieved` notice, judged by the context its relieved session was at: filled at the pause or another reason) and the Log lines that name a reopening, as candidates for the lead. Under each roster row's
 mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
 and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
 
@@ -560,9 +569,12 @@ Find there the document of the feature this session was working on, read its "Ne
 
 The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
 `PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
-session, on `Bash`, and on `Write` and `Edit`. `guard --hook` reads the call on standard input
-and refuses six things: a sub-agent launched on a model the project's rules do not give; a
-message whose stamped hour is more than a minute off the clock; a shell command with backticks
+session, on `Bash`, on `Write` and `Edit`, and on the scheduled-task and cloud tools that open a session
+(`create`, `update` and `run` of a scheduled task, and `RemoteTrigger`). `guard --hook` reads the call on
+standard input and refuses seven things: a sub-agent launched on a model the project's rules do not give;
+a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
+declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
+sidebar, even when he asked for it; a message whose stamped hour is more than a minute off the clock; a shell command with backticks
 inside double quotes, which bash runs as commands; a `node --test` of several files outside a
 gate turn while another gate holds the machine's lock; and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index

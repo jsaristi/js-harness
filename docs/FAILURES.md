@@ -907,10 +907,12 @@ the medium effort it inherited, and the board showed it like any other.
   find: "pero ninguna de esas las veo en el tablero de claude desktop, deben estar en otra parte y
   ese es el problema"; the two sessions, cbca9769 and dd949a0e, ran at medium (measured
   2026-10-15, odd/tasks/session-channel.md, section 17)
-- Control: check — bin/sessions.test.mjs — "the board says how a scheduled session was opened,
-  where it sits and its effort, and that it is not in his sidebar" — since 2026-10-15
+- Control: check — bin/guard.test.mjs — "a scheduled-task or cloud tool that opens a session is
+  denied in the project that declares the rule, naming start_session" — since 2026-10-15
 - Proof: owed — the command of T16's layer 2, which names such a session or task until none is
-  left, exiting 0 on this machine; and layer 3's refusal after one real try
+  left, exiting 0 on this machine (layer 1's board check is bin/sessions.test.mjs); the practice
+  step `opening-tools` of scripts/practice.mjs runs the refusal on the candidate; and the one real
+  try of layer 3 on his machine (a create_scheduled_task with no schedule, refused, nothing created)
 
 ### session-state-misreported
 A session was reported to him as waiting for his prompt while it still had a commit in the gate and

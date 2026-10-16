@@ -1619,6 +1619,186 @@ independent verifier after its own checks.
 - **T16f:** the hash in the installed command.
 - **Letter H**, its own home, has no task yet: it is added as T16g.
 
+### The row `rules` (T16d)
+Designed on 2026-10-15, after a read-only explorer mapped what exists on `main` at 9773770. Two
+readers that did not write it then read the first draft, one to attack it and one to find what
+it lacks; this text is the draft with their findings, listed at its end. It builds letter D and
+what T16c left to it: `patterns`, `row` and `failure`, and the switch of a wrong red row. Not
+built.
+
+**What exists** (by the explorer's map):
+- `readRules` already accepts and validates the three keys (`bin/lib/rules.mjs:12-18`, `:181-200`).
+  No rule carries one, and `changedList` refuses them (`bin/lib/rules-change.mjs:14`, `:37-41`).
+- A static row of `bin/check.mjs` returns `{ name, pass, info?, detail, lines? }`. An `info` row
+  reports and never fails, and a failing static row already stops the gate before its sensors
+  (`bin/check.mjs:2189-2190`).
+- `addedLines` (`bin/lib/citations.mjs:31`) turns a `-U0` diff into `[{ file, line, text }]`.
+- `checkOwnRules` (`bin/check.mjs:186`) gives a project's row and nothing here.
+- Nothing scans a text for a restated value, and sightings are written by hand
+  (`bin/failures.mjs:15`).
+
+**The texts it reads.** The texts are those `readAll` reads (`bin/rules.mjs:97-130`), plus
+`AGENTS.md` and `README.md`. The list's own homes are left out, because they are where a value
+is shown: `bin/lib/rules-data.mjs`, `docs/rule-sources.json` and `docs/RULES.md`. So are
+`docs/FAILURES.md` (its evidence quotes what was said), `docs/origin.md` (frozen), and a feature
+document from its first `## Progress` or `## Log` on (its history). About 30 feature documents
+use `## Log`.
+- The skill and template texts are scanned as the source lines of `bin/lib/manifest.mjs`, not
+  as rendered. A value interpolated from its rule (`${...}`) is the cure there, so it is no
+  finding.
+- A line inside a fence is no finding. The fence and the history cut are read on the whole
+  file: the staged copy (`git show :<file>`) for the row, the tree for `rules check`.
+
+**A pattern.** It names the rule's subject, and its `{amount}` placeholder stands for any amount
+in any wording: a number with a unit, "an hour", "half an hour", or a model or effort name for a
+text value. So a pattern still finds a restatement after the value changes, and it never has to
+be rewritten with the value.
+- It is tried case-insensitively on one line. `readRules` refuses a pattern that matches the
+  empty string, or that has no `{amount}`.
+- A finding is a line outside the history and the fences that a pattern matches. A
+  `` `rule:<id>` `` mark on the same line does not excuse it: the cure is the mark instead of
+  the value, not beside it.
+- A rule with no patterns is not scanned. `rules check` lists it as unscanned, so the gap stays
+  in view.
+
+**The row.** It is one static row named `rules`, added to `checkOwnRules`. It acts only where
+`bin/lib/rules-data.mjs` exists, and the project branch of `checkOwnRules` keeps its output. It
+reads only the lines the staged change adds, with renames detected, so a moved document adds
+nothing.
+- During a merge (`MERGE_HEAD` exists), a line counts only when it is new against both parents.
+  So a merge of `main` is never refused for lines it brought in.
+- Rule by rule, its state is the stored `row`:
+  - **absent:** a finding is an INFO line;
+  - **`{ refuses: <day> }`:** a finding fails the row, and with it the gate, before the sensors;
+  - **`{ reports: <reason>, since: <day> }`:** a finding is INFO and the line names the reason.
+- A FAIL line names the rule, the file, the line and the text, and gives the cure: the mark
+  instead of the value, or `rules change`.
+- It does not run on `check --push`, nor when nothing is staged. `--no-verify` passes it; the
+  merge door (letter E, T16e) is what closes that.
+- It scans only the added lines, so it costs little at every commit. A probe found the whole
+  scan takes about 8 seconds with 90 subject-anchored patterns, so the whole-text count is kept
+  out of the gate.
+
+**`rules check`.** Its exit code does not change. After its line it prints the count of each
+scanned rule's findings in the texts in force, as `patterns: <id> <n>, ...; unscanned: <n>`.
+The count is information and never a finding, so the first pattern does not turn the gate red.
+It gains two findings:
+- a `failure` that names no entry of `docs/FAILURES.md`;
+- a rule in `reports` whose `failure` entry has no `- Seen:` line on or after its `since`.
+
+**Turning a rule to refuse, and back.** Both are `rules change <id>` with `set.row`; T16c's
+command stops refusing the three keys. It is given the count and the register by
+`rules-change-run.mjs` and `bin/rules.mjs`, since `rules-change.mjs` reads no file.
+- **Turning to refuse.** `set.row: { refuses: <today> }` runs `git fetch origin main` first, and
+  is refused when that fails. It is also refused while the rule's count on `origin/main`'s texts
+  is above zero, and while the rule has no `patterns` or no `failure`.
+  - So a rule with a finding in `AGENTS.md` (`context-pause`, "near 88%") turns only after
+    letter G, which puts marks out of `AGENTS.md`.
+  - The state is stored, not computed, so a new finding never turns a refusing rule back.
+- **Disarming a refusing rule.** While a rule refuses, `set.row: null`, `set.patterns` and
+  `set.failure` are refused, whether set to null or changed. Its only way back is the switch
+  back.
+- **The switch back.** `set.row: { reports: <reason>, since: <today> }` is accepted only from
+  `refuses`, with a source as any change. It is counted: its relief line names the `failure`
+  id, and `rules check` fails until that entry has a `- Seen:` line on or after `since`. The
+  count is the sightings of that entry.
+- **A change of form.** `set.patterns` and `set.failure` on a rule that does not refuse are a
+  change of form: they move neither `since` nor `was`. `failure` must name an entry of
+  `docs/FAILURES.md`.
+
+**The failure.** It is `old-rule-beside-new` (`docs/FAILURES.md:664-673`), whose control is
+owed to T16. Its `Control:` line names the row once the first rule refuses. No new entry is
+added.
+
+**`docs/RULES.md` and the hash.** `RULES.md` already shows a rule's `row`
+(`bin/lib/rules.mjs:488-509`) and gains its `failure` id. Patterns are not shown: `rules <id>`
+prints them. `HASH_KEYS` leaves the three keys out by intent (`bin/lib/rules.mjs:413`, `:451-454`),
+so a turn re-renders `RULES.md` and leaves the hash as it is.
+
+**In this order.**
+1. **The code.** Its own pull request: the row, the scan, the counts and findings, and the
+   command's three keys.
+2. **The first patterns,** in a `rule/` branch per rule, with source `design` naming this
+   section. The first are the rules `rules check` counts fewest findings for once their
+   patterns are in. The session writes the patterns, and each run prints its count in its dry
+   run.
+3. **The texts,** cleaned of each rule's findings by marks, in ordinary pull requests.
+4. **Each turn to refuse,** in its own `rule/` branch, once its count on `main` is zero.
+
+**What it changes.**
+- Code:
+  - `bin/check.mjs`: the row in `checkOwnRules`, with the list and the git runner given in, so a
+    fixture can drive it.
+  - `bin/lib/rules-check.mjs`: the scan, the counts and the two findings.
+  - `bin/lib/rules.mjs`: `{amount}`, the empty-match refusal, and `failure` in `RULES.md`.
+  - `bin/lib/rules-change.mjs`, `bin/lib/rules-change-run.mjs` and `bin/rules.mjs`: the keys, the
+    turn, the guard while refusing, and the switch back.
+- Help: `bin/rules.mjs`'s help, the dispatcher line in `bin/js-harness.mjs`, the skill line at
+  `bin/lib/manifest.mjs:32` (today's refusals), and the error at `bin/lib/rules-change.mjs:39`.
+- Records: this document and `docs/FAILURES.md`'s control line.
+
+**Tests, each a requirement.** Each test of a new check is added to "Done when", as the
+document's constraint asks.
+- The planted violation, one test per state: report, refuse before the sensors, report again
+  with the reason.
+- Exclusions:
+  - a line in a fence, in the history, or in a list home is no finding;
+  - a line with its mark and the value is a finding;
+  - a merge of `main` is not refused for its lines;
+  - a renamed document adds nothing.
+- `rules check`:
+  - its exit code and its first line are unchanged;
+  - the counts are printed;
+  - a missing `failure` entry is a finding;
+  - a switch back with no sighting is a finding.
+- The command:
+  - the turn is refused with a count on `origin/main`, with no patterns, or with no failure;
+  - while a rule refuses, the three keys are refused;
+  - the switch back is accepted only from `refuses`.
+- `readRules` refuses a pattern that matches the empty string, or one with no `{amount}`.
+- Regressions:
+  - the project row of `checkOwnRules`, its output unchanged;
+  - `checkCitations`, unchanged;
+  - `rules`, `rules <id>` and `rules change` for a value, as before.
+- The real list: every pattern compiles and finds its own planted line.
+
+Risk:
+- item 1, the rows of `rules-data.mjs`;
+- item 3, `checkOwnRules`, `addedLines` and the help are shared;
+- item 5, the row sits in the pre-commit gate.
+
+So an independent verifier reads it after its own checks, as for T16c.
+
+**Not guaranteed.**
+- A pattern finds what its subject and `{amount}` describe. A value stated with no subject on
+  its line, or across a hard-wrapped line, passes.
+- A hand edit of `rules-data.mjs` in `writeRules`' shape still passes, as under T16c. The row
+  reads texts, not the list's history.
+- `evals/`, `.githooks/` and other `docs/` files are not texts in force. `evals/suite.mjs` names
+  both model ids, and is code read by its own tests.
+- A commit with `--no-verify`, or an amend with nothing staged, is not scanned until the merge
+  door.
+
+**What the readers changed.** The attack found five blockers:
+- the list's own file read as a text in force, so no turn could pass;
+- added lines cut at fences and history with no file context;
+- a merge of `main` refused for lines it brought in;
+- patterns tied to the value;
+- a refusing rule disarmed with `null`.
+
+Its advisories gave the same-line mark, `AGENTS.md`, the stale `origin/main`, the file
+lists, long one-line texts, the cost at each commit, renames and installed projects. What was
+missing found fifteen gaps, among them:
+- zero on `main`, not on the branch;
+- `rules check`'s exit code;
+- the existing failure entry;
+- the order of the pull requests;
+- the rendered skill texts;
+- the design's own example;
+- the help texts, the tests, the risk line and the verifier.
+
+All of them are folded in above.
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build
@@ -2046,15 +2226,15 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       Codex's records). What it leaves, named: a row of `check` or `doctor` that calls the
       command, whose files are open in other features; the hook that refuses a launch (T13),
       which is his to approve
-  - [ ] T16c The one command that changes a rule: designed on 2026-10-15 and read by two
+  - [x] T16c The one command that changes a rule: designed on 2026-10-15 and read by two
     readers (the attack and what was missing), "The one command that changes a rule (T16c)";
     route inline, the parent writes it (no writer trigger: one unit, a session well under the
     backstop). Built on `feat/rules-change`: 3f48e4b, ff3bbf4, d9e0925, 0acb6bf, then the
-    verifier's fixes a5877e4 and Codex's fixes 6986330; pull request 238, draft. Checked off
-    when it lands
+    verifier's fixes a5877e4 and Codex's fixes 6986330; pull request 238, landed on 2026-10-15
+    (`main` e7e97df), its design as pull request 234 (d2441d5)
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
-    its sensors
+    its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline
   - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
     inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
     loop over what the reviews cover looks at each record itself, and the evidence of a
@@ -3013,8 +3193,84 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     - AGENTS.md was refused only by its literal spelling;
     - a design source could name a path outside the repository;
     - the date fixtures depended on the host's time zone.
+- 2026-10-15, T16d built on `feat/rules-row` from `main` b0093b8, tests first, inline. Seven
+  units, each through the gate: 0b292bc (`{amount}`), 8aa9b00 (the scan, `bin/lib/rules-scan.mjs`),
+  bf7d0f7 (the counts), 2012b78 (the two register findings), e000da9 (the row in `checkOwnRules`),
+  85bc94e (the command's three keys), cea42f6 (the help, the failure in `docs/RULES.md`).
+  - The scan, the counts and the two findings are in `bin/lib/rules-scan.mjs`, not in
+    `bin/lib/rules-check.mjs` as the design said: that file keeps the checks of the list itself.
+  - An independent verifier (items 1, 3 and 5) probed every item in a scratch clone. It found
+    three blockers, fixed in aeeeff6 and rechecked fixed:
+    - `{amount}` did not stand for an effort level, which the design names;
+    - the test of the real list was missing; it now asks each rule with patterns for a planted
+      line its patterns find and its mark does not (`PLANTED`, `bin/lib/rules-scan.test.mjs`);
+    - `rules change` said an input that is not JSON before a branch not based on origin/main.
+    Three of its advisories were silent misses of the row, fixed in the same commit: a clone's
+    `diff.mnemonicPrefix`, a path with an accent, and a path with a space (the tab git puts
+    after it, dropped by `addedLines`, so `checkCitations` gains it too). A row removed from a
+    rule that has none is refused. Its other advisories stay as written, not blockers:
+    - the `patterns:` line is printed after PASS only;
+    - a retirement still releases a refusing rule, with a source and its reviews;
+    - no CLI test of a non-zero count, since `rules check` reads the package's own list;
+    - an added line that starts with `++ ` is read as a header, as before T16d;
+    - the tests of `rules-change-run.test.mjs` leave their temporary repositories, as before
+      (a separate task was offered).
+  - gentle-ai, raised to item 1: four lenses over b0093b8..aeeeff6, approved and acknowledged
+    (lineage `review-be897a496eaa9388`), with seven informational findings: two repeated shapes
+    (`bin/lib/rules-change-run.mjs:115-126`, `bin/check.mjs:227`), a set's name
+    (`bin/check.mjs:237`), a dry run that fetches, the row giving no line when git fails or the
+    merge diff fails (the same as `checkCitations`), and the register read in a project, which
+    does not happen: there `rules check` takes the project's form (`bin/rules.mjs:414`).
+  - Codex over b0093b8..aeeeff6, two parts, found one: the counts compiled a malformed pattern
+    again and threw before any finding. The scan now leaves out a pattern that does not compile,
+    which also kept the gate's row and a turn's count from throwing (c55164e). Codex rechecked
+    aeeeff6..c55164e: 1 of 1 fixed. gentle-ai assessed that commit medium and under budget, so no
+    review was due for it.
 
 ## Next step
+**State for a resume, 2026-10-15, T16d built and checked.** The code is draft pull request 247
+(`feat/rules-row`, b0093b8..c55164e, pushed); its design is draft pull request 241, this branch.
+Every check passed: each gate, the verifier and its recheck, gentle-ai (acknowledged), Codex and
+its recheck, and merge-tree against origin/main e019785. Next: both land through the lead's
+queue, and T16d is checked off when 247 lands. Then step 2 of the section's order: the first
+patterns, one `rule/` branch per rule, each with its planted line in `PLANTED`.
+
+**State for a resume, 2026-10-15 at 19:28 by `date`, T16d being built.** On `feat/rules-row`
+(worktree `D:\js-harness-worktrees\rules-row`), each unit through the gate:
+- unit 4, `rules check`'s two findings, `registerFindings` in `bin/lib/rules-scan.mjs` (2012b78);
+- unit 5, the row `rules` in `checkOwnRules`, `checkListRow` in `bin/check.mjs`, tested in
+  `bin/check-rules-row.test.mjs` (e000da9);
+- unit 6, the command's three keys, `withRowKeys` in `bin/lib/rules-change.mjs` and the fetch and
+  the count in `bin/lib/rules-change-run.mjs`, in its gate at this hour.
+Deviation from the design: the scan, the counts and the two findings are in a new
+`bin/lib/rules-scan.mjs`, not in `bin/lib/rules-check.mjs`, which keeps the checks of the list
+itself. Next: unit 7, the help and the failure id in `docs/RULES.md`, already green in a copy;
+then the independent verifier, gentle-ai with `--escalate-item 1`, Codex, and a draft pull request.
+
+**State for a resume, 2026-10-15 at 18:45, T16d being built.** The design is draft pull request
+241. The build is on `feat/rules-row` (worktree `D:\js-harness-worktrees\rules-row`, from `main`
+b0093b8), inline, tests first. Unit 1 is done (0b292bc): `patternOf` and `{amount}` in `bin/lib/rules.mjs`, with `readRules`
+refusing a pattern with no `{amount}` or one matching an empty line. Unit 2, the scan, is
+`bin/lib/rules-scan.mjs` (8aa9b00). Unit 3: `rules check` prints `patterns: none; unscanned: 29`
+after its PASS line (`bin/rules.mjs` `patternsLine`, bf7d0f7). Next
+units, in order:
+1. `rules check`'s two findings: a `failure` naming no register entry, a switch back with no sighting;
+2. the row in `checkOwnRules`;
+3. the command's three keys;
+4. the help.
+Then the verifier, gentle-ai and Codex, and a draft pull request.
+
+**State for a resume, 2026-10-15, after T16d was designed and read.** T16d is designed in "The row
+`rules` (T16d)" on `docs/rule-hierarchy-t16d`, with both readers' findings folded in. Next: open
+its pull request (draft), then build T16d inline on a `feat/` branch from `main`, tests first, in
+the order and with the tests the section names; then an independent verifier, gentle-ai, Codex.
+
+**State for a resume, 2026-10-15 at 18:21 by `date`.** Pull requests 238 and 234 landed
+(`main` e7e97df and d2441d5): T16c is checked off. Its prerequisite for T16d, the gate's stop
+before its sensors, is built (`docs/ROADMAP.md:801`, 2026-10-11). Next: T16d, the row `rules`,
+designed the way T16c was: a read-only map of what exists, the design here, two readers that did
+not write it, then the build, tests first.
+
 **State for a resume, 2026-10-15, after T16c was built.** T16c is pull request 238, draft
 (`feat/rules-change`, worktree `D:\js-harness-worktrees\rules-change`, 6986330), every
 check passed: the gate, the verifier, gentle-ai (two lineages, both acknowledged) and Codex

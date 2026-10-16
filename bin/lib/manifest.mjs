@@ -142,6 +142,7 @@ The relief file. \`js-harness sessions\` prints its path and its last lines unde
 
 Compaction, and a relief only on request. You hold nothing the files do not. A compaction needs no one; a relief needs the user.
 - A watch never reports the session that runs it, so read your own row on every board. At the context pause, write your state to the relief file and go on: the host compacts you, and you resume from the file.
+- The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by \`SendMessage\` to its title; never hand the user a compaction command or a resume prompt to send.
 - Give this opening prompt only when the user asks for a new lead, always the same:
 
 \`\`\`
@@ -149,6 +150,7 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 \`\`\`
 
 - When you start from that prompt, read the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you lead. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): archived without asking, and named in the recap.
+- The orchestrator before you, once it is renamed out of the role's title (\`<code> ORQ relevada\`), runs \`js-harness notify --to orchestrator --kind relieved "<why it was relieved>"\`: \`js-harness sessions --measures\` counts the reliefs from those notices.
 - When you come back from a compaction, do what a new lead does: the files are the record, your summary is not.
 - Loops have owners. At your start and after a compaction, run \`js-harness loop status\`. A compaction or a restart marks your background tasks stopped while their processes live on: restart each loop you own with \`js-harness loop run <name> --restart ...\`, so a task of yours holds it again. Never stop or restart a loop another session owns: a second lead (a fork) that finds loops another owns leaves them alone and says so. At a handover, the new lead takes each loop over with \`--restart --take-over\`, after the relief line where the old lead gave them up; the old lead starts no loop again.
 
@@ -169,7 +171,7 @@ How a lead is rotated, where the host nests a session under the one that started
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line, and close with \`js-harness notify --to orchestrator --kind closed "<what you delivered>"\`: nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
-- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
+- Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
 `;
 }
 
@@ -292,14 +294,21 @@ function pauseHookEntry() {
  * JSON on standard output, so an older js-harness that answers 2 to `guard` never blocks a tool call. */
 export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 
-/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the three tools it checks: a sub-agent's
- * launch, whose model it holds to the project's rules, and the two ways of sending a message to another session,
- * whose stamped hour it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14), a Bash command, and a Write or
- * an Edit, whose line in a memory index it holds to 150 characters (odd/tasks/memory-hygiene.md, T4). Claude Code
- * only: the tool names are Claude Code's. Five seconds: it may ask git for the project's root once. */
+/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the tools it checks: a sub-agent's launch, whose
+ * model it holds to the project's rules, and the two ways of sending a message to another session, whose stamped hour
+ * it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14), a Bash command, a Write or an Edit, whose line in a
+ * memory index it holds to 150 characters (odd/tasks/memory-hygiene.md, T4), and the four tools that open a session in
+ * the app's Routines or in the cloud, refused where the rule `sessions-open-in-sidebar` is declared (layer 3 of
+ * odd/tasks/session-channel.md). Claude Code only: the tool names are Claude Code's. Five seconds: it may ask git for
+ * the project's root once.
+ * The matcher is anchored, `^(…)$`, because Claude Code's hooks reference (checked 2026-10-15) reads a matcher with a
+ * character outside letters, digits, `_`, `-`, spaces, `,` and `|` as a JavaScript regular expression, unanchored: the
+ * `^` and `$` make it a whole-name match, so `Write` does not match `TodoWrite` and `Edit` does not match
+ * `NotebookEdit`. A hyphen alone does not make it a regex. The same text is held by the tests of
+ * bin/lib/manifest.test.mjs and by scripts/practice-lib.mjs (`HARNESS_HOOKS`). */
 function guardHookEntry() {
   return {
-    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit',
+    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$',
     hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
   };
 }

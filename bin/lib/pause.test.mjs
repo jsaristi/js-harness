@@ -183,26 +183,26 @@ test('the crossing: the first call at the pause says the share, the room and the
   assert.deepEqual(stateOf(home).told, [{ at: new Date(NOW).toISOString(), tokens: OVER }]);
 }));
 
-// The cut is handed to the user only while they are present: a session that stops for a /compact nobody sends
-// waits for hours, and the host compacts a session inside a turn anyway.
+// The user no longer compacts by hand, present or away (odd/tasks/no-manual-compact.md S1): the notice gives them
+// nothing to send, whenever they last wrote, and the session's state is the pause's whole answer.
 const typed = (at, text = 'go on') => ({ type: 'user', origin: { kind: 'human' }, message: { role: 'user', content: text }, timestamp: new Date(at).toISOString() });
-const GIVE = 'give them, in your next reply, what they send to compact this session and the prompt that resumes it after';
-const KEEP = 'do not stop and give them nothing to send: the host compacts this session inside a turn';
+const CUT = 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 
-test('the crossing while the user wrote here minutes ago: the notice hands them the cut', inHome((home) => {
+test('the crossing while the user wrote here minutes ago: the notice still gives them nothing to send', inHome((home) => {
   const transcript = write(home, 't.jsonl', [typed(NOW - 5 * 60000), reply(OVER)]);
   const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
-  assert.ok(notice.text.includes(`the user wrote here 5m ago: ${GIVE}`), notice.text);
-  assert.ok(!notice.text.includes(KEEP), notice.text);
+  assert.ok(notice.text.includes(`The cut: ${CUT}.`), notice.text);
+  assert.doesNotMatch(notice.text, /what they send to compact/);
+  assert.doesNotMatch(notice.text, /the user wrote here/);
 }));
 
-test('the crossing while the user is away, or never wrote in the end that is read: no cut, and the session goes on', inHome((home) => {
+test('the crossing while the user is away, or never wrote in the end that is read: the same nothing to send, and the session goes on', inHome((home) => {
   for (const entries of [[typed(NOW - 2 * 3600000), reply(OVER)], [reply(OVER)]]) {
     const transcript = write(home, 't.jsonl', entries);
     fs.rmSync(path.join(home, '.js-harness'), { recursive: true, force: true });
     const notice = pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') });
-    assert.ok(notice.text.includes(KEEP), notice.text);
-    assert.ok(!notice.text.includes(GIVE), notice.text);
+    assert.ok(notice.text.includes(`The cut: ${CUT}.`), notice.text);
+    assert.doesNotMatch(notice.text, /what they send to compact/);
     assert.ok(notice.text.includes('go on with the task'), notice.text);
   }
 }));

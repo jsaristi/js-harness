@@ -760,10 +760,24 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
   assert.deepEqual(guardHook.pointer, ['hooks', 'PreToolUse']);
   assert.deepEqual(guardHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(guardHook.entry(), {
-    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit',
+    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$',
     hooks: [{ type: 'command', command: 'js-harness guard --hook || exit 0', timeout: 5 }],
   });
   assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
+});
+
+test('the guard matcher is anchored: each tool it names matches, and a tool it does not name, or one that only contains its name, does not', () => {
+  const matcher = new RegExp(guardHook.entry().matcher);
+  const named = [
+    'Agent', 'SendMessage', 'mcp__ccd_session_mgmt__send_message', 'Bash', 'Write', 'Edit',
+    'mcp__scheduled-tasks__create_scheduled_task', 'mcp__scheduled-tasks__update_scheduled_task',
+    'mcp__scheduled-tasks__run_scheduled_task', 'RemoteTrigger',
+  ];
+  assert.equal(named.length, 10);
+  for (const tool of named) assert.ok(matcher.test(tool), tool);
+  for (const tool of ['TodoWrite', 'NotebookEdit', 'MultiEdit', 'mcp__scheduled-tasks__delete_scheduled_task', 'mcp__scheduled-tasks__list_scheduled_tasks', 'CronCreate']) {
+    assert.equal(matcher.test(tool), false, tool);
+  }
 });
 
 // --- The share check: a `Stop` entry, in Claude Code's settings and nowhere else ---
@@ -916,7 +930,7 @@ test('an update from an install made before the resume hook adds its entry, and 
 
       const manifest = sync(home, '0.2.0');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
-      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit', created], [undefined, created]]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', created], [undefined, created]]);
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
@@ -1916,6 +1930,16 @@ test('the orchestrator skill has a one-line description a host can read, and nam
   for (const command of ['js-harness sessions', 'js-harness sessions --watch', 'js-harness progress']) {
     assert.ok(text.includes(command), command);
   }
+});
+
+// T9 of odd/tasks/session-channel.md: the handover ends with a `relieved` notice, which `sessions --measures` counts as a relief.
+test('the orchestrator skill has the one before append a relieved notice as the step after its handover', () => {
+  const lines = components[2].content('0.1.0').split('\n');
+  const handover = lines.findIndex((line) => line.startsWith('- When you start from that prompt, '));
+  assert.notEqual(handover, -1, 'the handover bullet is in the skill');
+  assert.ok(lines[handover + 1].startsWith('- ') && lines[handover + 1].includes('`js-harness notify --to orchestrator --kind relieved "<why it was relieved>"`'), lines[handover + 1]);
+  assert.ok(lines[handover + 1].includes('`<code> ORQ relevada`'), 'the step says it runs once the one before is renamed out of the role\'s title');
+  assert.ok(lines[handover + 1].includes('`js-harness sessions --measures`'), 'the step says the measure counts those notices');
 });
 
 // Two gates at once was a rule each session kept by hand, from the board. `check` keeps it now, so the
@@ -3069,7 +3093,15 @@ test('the skills say who archives and opens sessions, and to check that TaskStop
   assert.ok(components[0].content('0.1.0').includes('TaskStop has been seen to end the shell of a background command and leave its node process running'));
 });
 
-test('the orchestrator skill tells a work session never to end a turn waiting for a message, a compact or an event', () => {
+test('the orchestrator skill tells a work session never to end a turn waiting for a message or an event, present or away', () => {
   const text = components[2].content('0.1.0');
-  assert.ok(text.includes("- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn."));
+  assert.ok(text.includes('- Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn.'));
+});
+
+// odd/tasks/no-manual-compact.md, S1 and S3: he no longer compacts by hand, and the lead sends a stopped session its
+// next prompt.
+test('the orchestrator skill says the user never compacts by hand and the lead sends a stopped session its next prompt', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('- The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by `SendMessage` to its title; never hand the user a compaction command or a resume prompt to send.'));
+  assert.doesNotMatch(text, /\/compact/, 'no compaction command is named to the user');
 });

@@ -477,9 +477,11 @@ export async function rulesMain(argv, {
   if (parsed.command === 'id') return showRule(parsed.id, { sources: read.sources, readers: result.readers }, stdout, stderr);
   if (parsed.command === 'check') {
     // A rule's `failure` names an entry of the register, and a switch back to report is a sighting of it (odd/tasks/
-    // rule-hierarchy.md, "The row `rules` (T16d)"). An absent register has no entry, so every `failure` names none.
+    // rule-hierarchy.md, "The row `rules` (T16d)"). With no register here they are not checked, and a note says so,
+    // as for the sources: a checkout or a test project without it is not a list whose failures name nothing.
     const register = read.readFile('docs/FAILURES.md');
-    result.findings.push(...registerFindings(RULES, register === null ? [] : parseRegister(register).entries));
+    if (register === null) result.notes.push("no docs/FAILURES.md here: the rules' failures were not checked");
+    else result.findings.push(...registerFindings(RULES, parseRegister(register).entries));
     const inForce = [...read.codeFiles, ...read.textFiles, ...['AGENTS.md', 'README.md'].map((file) => ({ path: file, text: read.readFile(file) })).filter((file) => file.text !== null)];
     return checkList(result, stdout, countFindings(RULES, inForce));
   }
