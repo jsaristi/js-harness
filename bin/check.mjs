@@ -443,7 +443,11 @@ export function checkCommitSize(cwd, spawn = spawnSync) {
   let changed;
   try {
     const files = numstatFiles(numstat);
-    const why = leftOutOf(files.map((file) => file.path), { cwd, source: 'HEAD', spawn });
+    // The marks are those of the commit being made, as its review will read them: the tree the index holds, so a
+    // staged `.gitattributes` counts (Codex, 2026-10-16). Writing that tree is what the commit itself does.
+    const tree = git(['write-tree'])?.trim();
+    if (!tree) return [];
+    const why = leftOutOf(files.map((file) => file.path), { cwd, source: tree, spawn });
     if (why === null) return [];
     changed = reviewScope(files, why).read.reduce((sum, file) => sum + file.changedLines, 0);
   } catch {

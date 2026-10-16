@@ -87,6 +87,29 @@ test('a staged change at the bound passes, and its Markdown documents are not co
   });
 });
 
+test('the files a review leaves out are those the staged attributes mark, not those of the commit before', () => {
+  inRepo((root) => {
+    // The staged change removes the exclusion of a file and makes it too large: the review will read it.
+    fs.writeFileSync(path.join(root, '.gitattributes'), 'bin/gen.mjs -codex-review\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'mark gen');
+    fs.writeFileSync(path.join(root, '.gitattributes'), '');
+    fs.writeFileSync(path.join(root, 'bin', 'gen.mjs'), linesOf(REVIEWED_COMMIT_LINES + 1));
+    git(root, 'add', '.');
+    const [removed] = checkCommitSize(root);
+    assert.equal(removed.pass, false, removed.detail);
+    // The staged change marks a file it makes too large: the review will leave it out.
+    git(root, 'reset', '-q');
+    fs.writeFileSync(path.join(root, '.gitattributes'), 'bin/gen.mjs -codex-review\nbin/other.mjs -codex-review\n');
+    fs.writeFileSync(path.join(root, 'bin', 'other.mjs'), linesOf(REVIEWED_COMMIT_LINES + 1));
+    git(root, 'add', '.');
+    // What is left is the line `.gitattributes` gains, which a review reads.
+    const [marked] = checkCommitSize(root);
+    assert.equal(marked.pass, true, marked.detail);
+    assert.match(marked.detail, /^the staged change has 1 changed line a review reads,/);
+  });
+});
+
 test('no row with nothing staged, with only documents staged, or while a merge is being made', () => {
   inRepo((root) => {
     assert.deepEqual(checkCommitSize(root), []);
