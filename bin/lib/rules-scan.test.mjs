@@ -55,8 +55,10 @@ test('a failure that names no register entry, and a switch back with no sighting
 // its patterns and its planted line in the same change, so a pattern that finds nothing in particular never lands.
 const PLANTED = {
   'agents-budget': { line: 'AGENTS.md stays within its budget of 1500 estimated tokens.', marked: 'AGENTS.md stays within its budget (`rule:agents-budget`).' },
+  'codex-review-floor': { line: 'A review is never put under its floor of 300,000 input tokens.', marked: 'A review is never put under its floor (`rule:codex-review-floor`).' },
   'codex-review-margin': { line: 'The plan keeps a margin of 5% of the allowance.', marked: 'The plan keeps its margin (`rule:codex-review-margin`).' },
   'codex-review-rate': { line: 'A part is put at 1,200 input tokens a changed line.', marked: 'A part is put at the rate of `rule:codex-review-rate`.' },
+  'context-pause': { line: 'Near 88% of its window a session writes its state.', marked: 'At the pause of `rule:context-pause` a session writes its state.' },
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
   'gate-log-command': { line: 'The gate log keeps a command cut at 120 characters.', marked: 'The gate log keeps a command cut as `rule:gate-log-command` says.' },
@@ -64,6 +66,7 @@ const PLANTED = {
   'gate-max': { line: 'A gate is stopped after 30 minutes.', marked: 'A gate is stopped at `rule:gate-max`.' },
   'gate-wait': { line: 'A commit waits for its turn of the lock for up to 60 minutes.', marked: 'A commit waits for its turn of the lock as `rule:gate-wait` says.' },
   'person-present': { line: 'He is here when he wrote within 15 minutes.', marked: 'He is here when he wrote within `rule:person-present`.' },
+  'review-effort': { line: 'Codex reviews at `medium` effort.', marked: 'Codex reviews at the effort of `rule:review-effort`.' },
   'review-model': { line: 'Codex reviews on gpt-6.1-sol.', marked: 'Codex reviews on the model of `rule:review-model`.' },
   'review-part-files': { line: 'A part holds 40 files at most.', marked: 'A part holds the files of `rule:review-part-files` at most.' },
   'review-part-lines': { line: 'A part holds up to 400 changed lines.', marked: 'A part holds up to `rule:review-part-lines`.' },
@@ -92,13 +95,20 @@ test('on the real list, every rule with patterns finds its own planted line, and
 
 // The lines each narrowed rule once caught and must not catch again: the false positives it was narrowed for.
 const NEAR_MISS = {
+  'codex-review-floor': ['const mid = Math.floor(sorted.length / 2);', 'The floor is the cheapest part ever measured (24,206).'],
   'codex-review-margin': 'The gate keeps a margin of 30 seconds on its bound.',
   'codex-review-rate': 'That part cost 325 input tokens a changed line.',
+  'context-pause': [
+    'The parent was at 70% of its window.',
+    'The busiest 24 hours of the window hold 47 events.',
+    'The context limit defaults to 73%.',
+  ],
   'gate-log-command': 'The Codex command line is cut to 100 characters.',
   'gate-log-size': 'Search the git log over 3 days.',
   'gate-max': 'The gate is stopped when 90 percent are done.',
   'gate-wait': 'A commit waits for its turn of the lock, as S1 says.',
   'person-present': 'The flag is here for 3 releases.',
+  'review-effort': ['| lean | `gpt-6.1-sol` `medium` | 7 |', 'Explore, review and verify stay on Opus 5.5 at high effort.'],
   'review-part-files': 'Each part is read as { of: 1, files }.',
   'review-parts-unflagged': 'A run of 28 parts started without the numbers.',
   'review-timeout': 'The Codex login is stopped past codex-review-prompt.mjs:51.',

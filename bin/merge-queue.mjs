@@ -8,7 +8,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkCodexReviews } from './check.mjs';
+import { allDocuments, checkCodexReviews, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
@@ -22,7 +22,9 @@ request it leaves out and why. Each pull request merged into the candidate passe
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, then CircleCI's run
 of a queue/* branch pushed for it and removed after. When both are green, main is pushed as the
-candidate, by fast-forward from the main it was built from. A candidate red on this machine is
+candidate, by fast-forward from the main it was built from. A candidate whose every changed path is a
+document main's harness.json declares runs no suite on this machine, as a commit of documents alone
+runs none, and CircleCI's run is its test. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. Exit 0 landed or nothing to land, 4 red, 3 main
 moved meanwhile (nothing pushed), 1 anything else.
@@ -112,6 +114,22 @@ function localSuite(run, place) {
   const last = failedRows(done.out);
   return { ok: done.ok, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
 }
+
+/** Whether every path the candidate at `place` changes against `main` is a document that main's harness.json, in
+ * main's worktree `mainPlace`, declares (`discoverDocuments`): then the suite does not run on this machine, as for a
+ * commit of documents alone, and CircleCI's run of the whole gate is the candidate's test (the throughput plan's item 7,
+ * 2026-10-16). Main's declaration, never the candidate's: a pull request cannot widen what counts as a document for
+ * itself, and its harness.json is a path that is no document. A git that does not answer, a declaration that does not
+ * parse, or an empty change runs the suite. */
+function documentsAlone(gitIn, place, main, mainPlace) {
+  const { documents, error } = discoverDocuments(mainPlace);
+  if (error || documents.length === 0) return false;
+  // The commit gate's own question and answer (`DOCUMENT_DIFF`, `allDocuments`), so the two never disagree.
+  const diff = gitIn(place, 'diff', ...DOCUMENT_DIFF, main, 'HEAD');
+  return diff.ok && allDocuments(diff.out.split('\0').filter(Boolean), documents);
+}
+
+const DOCUMENTS_ALONE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; CircleCI runs the whole gate on it.';
 
 /** Whether main's check.mjs has the merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): its source names
  * the `'--door'` flag. Read once per batch from main's worktree; a main without the file has no door yet. */
@@ -217,7 +235,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
     return 4;
   }
-  stdout(`The candidate ${candidate.slice(0, 7)} is green on this machine.`);
+  if (!local.skipped) stdout(`The candidate ${candidate.slice(0, 7)} is green on this machine.`);
   // `--no-verify`: the branch is the candidate's run on CircleCI, and no hook judges it; main's push is judged.
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
@@ -366,11 +384,14 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
     const list = merged.map((pr) => `PR ${pr.number} (${pr.headRefName})`).join(', ');
     stdout(`Candidate: main ${main.slice(0, 7)} with ${merged.length} pull request${merged.length === 1 ? '' : 's'} merged in order: ${list}.`);
     if (door === null) stdout('main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran');
+    const documents = documentsAlone(gitIn, place, main, mainPlace);
+    if (documents) stdout(DOCUMENTS_ALONE);
     if (args.dryRun) {
       stdout('Dry run: nothing was tested or pushed, and the candidate was removed.');
       return 0;
     }
-    return await landCandidate({ run, gitIn, place, main, door, merged, suite: suite ?? ((dir) => localSuite(run, dir)), sleep, stdout, fail });
+    const local = documents ? () => ({ ok: true, skipped: true }) : (suite ?? ((dir) => localSuite(run, dir)));
+    return await landCandidate({ run, gitIn, place, main, door, merged, suite: local, sleep, stdout, fail });
   } finally {
     gitIn(cwd, 'worktree', 'remove', '--force', mainPlace);
     gitIn(cwd, 'worktree', 'remove', '--force', place);

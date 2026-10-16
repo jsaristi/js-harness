@@ -481,6 +481,19 @@ test('gateRecord writes the start and the end of one gate under one id, with wha
   assert.equal(record.failure(), undefined);
 });
 
+test('gateRecord writes the session that ran the gate when it is given one, so a reader can tell whose it was', () => {
+  const { events, deps } = captured();
+  const record = gateRecord({ home: 'h', cwd: 'c', command: 'check', pid: 100, session: '9a1b2c3d-0000-0000-0000-000000000000', ...deps });
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  record.refused({ reason: 'timeout', waitedMs: 0, waitedFor: [] });
+  assert.equal(events[0].event.session, '9a1b2c3d-0000-0000-0000-000000000000');
+  assert.equal(events[1].event.session, '9a1b2c3d-0000-0000-0000-000000000000');
+  // With none (a gate run from a terminal, or a host that gives no id) the line has no such field.
+  const { events: bare, deps: bareDeps } = captured();
+  for (const session of [undefined, null, '']) gateRecord({ home: 'h', cwd: 'c', command: 'check', pid: 100, session, ...bareDeps }).start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  assert.ok(bare.every(({ event }) => !('session' in event)));
+});
+
 test('gateRecord leaves out a load that was not sampled and the sensors of a gate that has none, cuts the command, and writes a refusal as one line', () => {
   const { events, deps } = captured();
   const long = `gate -- node -e ${'x'.repeat(300)}`;

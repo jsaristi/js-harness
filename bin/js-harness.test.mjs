@@ -78,6 +78,10 @@ test('the merge-queue help says each pull request merged into the candidate pass
   assert.match(run(['--help']).stdout, /merge-queue .*passes main's rule rows first \(check --door\), and one that fails leaves the batch/);
 });
 
+test('the merge-queue help says a candidate of documents alone runs no suite on this machine (the throughput plan\'s item 7)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*A candidate whose every changed path is a document main's harness\.json declares runs no suite on this machine, and CircleCI's run is its test\./);
+});
+
 test('unknown command exits 2', () => {
   const result = run(['bogus']);
   assert.equal(result.status, 2);

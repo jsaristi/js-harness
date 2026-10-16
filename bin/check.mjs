@@ -386,6 +386,18 @@ const DOCUMENT_SENSORS_SHAPE = 'harness.json "documentSensors" must be an object
  * lock, beside whatever gate holds it, so they are checks of seconds; this is the bound that says so. */
 export const DOCUMENT_SENSOR_TIMEOUT_MS = 2 * 60 * 1000;
 
+/** The arguments of a `git diff` that lists the paths a change touches, for asking whether they are documents alone
+ * (`stagedDocuments`, and merge-queue's land): renames off, so a file moved into the documents or out of them is listed
+ * at both its paths; a submodule listed whatever the repository is set to leave out of a diff; names from the top of the
+ * repository, each ended by a NUL. */
+export const DOCUMENT_DIFF = ['--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z'];
+
+/** Whether `paths` are some, and every one of them is in `documents` (`discoverDocuments`): an entry that ends in "/"
+ * holds every path below it, any other is one path. */
+export function allDocuments(paths, documents) {
+  return paths.length > 0 && paths.every((file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry)));
+}
+
 /** The sensors of a commit that holds documents alone: `harness.json` `documentSensors`, named commands
  * of the shape of `sensors`. Such a commit runs none of the project's sensors (`stagedDocuments`), and
  * yet a document may be what a check reads: a rule kept in one, a text a test holds to a figure. These
@@ -459,11 +471,10 @@ function sameFolder(one, other) {
 function stagedDocuments(cwd, documents, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   if (git === null) return null;
-  const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
   /** The paths the index changes against `against` (its own branch when none). */
-  const changed = (...against) => git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z', ...against])?.split('\0').filter(Boolean) ?? [];
+  const changed = (...against) => git(['diff', '--cached', ...DOCUMENT_DIFF, ...against])?.split('\0').filter(Boolean) ?? [];
   /** `paths` when there are some and all are documents, else `null`. */
-  const documentsOnly = (paths) => (paths.length > 0 && paths.every(isDocument) ? paths : null);
+  const documentsOnly = (paths) => (allDocuments(paths, documents) ? paths : null);
   /** Whether `ref` names a commit here. */
   const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])?.trim());
   const staged = changed();
@@ -1671,7 +1682,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // Windows, which is there to catch what WSL2 cannot.
   const place = wsl?.distro && (deps.platform ?? process.platform) === 'win32' ? `wsl ${wsl.distro} ${wsl.node}` : undefined;
   const record = lock && lock.log !== false && lock.home !== undefined
-    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, ...deps.gateLog })
     : null;
   // The ticket of this gate's session, claimed as it arrives and so spent whatever comes next: a gate that
   // stops, is proven by its tree or is refused spends it too, and its tree cannot jump the line twice
@@ -1814,7 +1825,7 @@ async function testsOnCi(cwd, lock, deps) {
   const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
   let at = startedAt;
   const record = lock.log !== false && lock.home !== undefined
-    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', now: () => at, ...deps.gateLog })
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, now: () => at, ...deps.gateLog })
     : null;
   record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
   at = Date.now();

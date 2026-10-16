@@ -58,6 +58,11 @@ import { readTickets } from './lib/gate-first.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
+import { ruleValue } from './lib/rules.mjs';
+import { readStalled } from './lib/stall.mjs';
+
+// How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
+const STALL_MINUTES = ruleValue('session-stall', 'minutes');
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
@@ -578,6 +583,12 @@ export async function sessionsMain(
     }
   };
 
+  /** The board's stalled sessions at `at` (ms): `{ limitMinutes, items, unavailable }`, read as the heartbeat reads them. */
+  const stalledOf = (at) => {
+    const { stalled, unavailable } = readStalled({ home: harnessHome, slug, now: at, limitMs: STALL_MINUTES * 60 * 1000, windowMs: parsed.hours * 3600 * 1000, run, fileSystem: { readFileSync: (file) => readFile(file), readdirSync: readdir } });
+    return { limitMinutes: STALL_MINUTES, items: stalled, unavailable };
+  };
+
   /** One look at the machine: the board, or `null` (said on stderr) when the sessions folder could not be
    * listed: there is then no board to print, whatever the reason, and the line gives it. */
   const look = () => {
@@ -621,6 +632,9 @@ export async function sessionsMain(
       self,
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,
+      // The work sessions the orchestrator handed work to that went quiet (odd/tasks/stalled-sessions.md), from the
+      // channel's record, the openings and the gate log under the home: what the heartbeat reads too, without a transcript.
+      stalled: stalledOf(generatedAt),
       // The window lists a transcript whose file changed; a row of the roster wants an entry of that time.
       roster: rosterOf(sessions, { worktrees, since, record, app }),
       // The record's last notices and the last messages between these sessions: `notify` writes the
