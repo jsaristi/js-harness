@@ -95,10 +95,11 @@ function gateClock() {
 // The third line is there since 2026-10-11: the bound of a wait counts from the last time the lock changed
 // hands, which "--wait <minutes>" does not say by itself.
 const USAGE = [
-  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
+  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--ready <command>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
   `       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (${ruleValue('gate-wait', 'minutes')} when not given); --no-wait: refuse at once instead of waiting`,
   `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
+  '       --ready <command>: a quick check, one shell command line, run before the wait and again as the turn comes after one; when it fails, nothing runs (exit 75), so a command that would refuse at once does not wait for a turn',
 ].join('\n');
 
 /** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
@@ -282,6 +283,104 @@ function launchersThat(alive, { eager = false } = {}) {
     },
   };
 }
+
+// `--ready <command>` (odd/tasks/gate-wait.md, T20): a cheap check the queued command declares, run before the
+// gate waits and again as its turn comes after a wait, so a command that would refuse at once is refused before
+// it spends a place in the line. A Codex review waited about 40 minutes and then started nothing.
+
+/** A runner that answers `readyStatus` (one status, or one per ask) for the check of `--ready`, and 0 for the
+ * command; it keeps both, in order. */
+function readyThen(readyStatus, during = () => {}) {
+  const statuses = [readyStatus].flat();
+  const spawned = async (commandLine, options) => {
+    const isReady = commandLine === 'git diff --quiet';
+    spawned.asked.push({ commandLine, ...options });
+    if (!isReady) await during();
+    const status = isReady ? statuses[Math.min(spawned.asked.filter((ask) => ask.commandLine === commandLine).length - 1, statuses.length - 1)] : 0;
+    return { status, signal: null, stdout: '', stderr: '' };
+  };
+  spawned.asked = [];
+  return spawned;
+}
+
+test('gate --ready that fails refuses before the line: no lock is asked for, the command does not run, exit 75 and a refusal in the log', withHome(async (home, dir) => {
+  const spawned = readyThen(1);
+  const { code, said } = await runGate(['--ready', 'git diff --quiet', '--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: () => assert.fail('the lock was asked for') });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.deepEqual(spawned.asked.map((ask) => ask.commandLine), ['git diff --quiet']);
+  assert.deepEqual([spawned.asked[0].cwd, spawned.asked[0].inherit], [dir, true]);
+  assert.deepEqual(said, ['gate: nothing ran: its check before the line, git diff --quiet, exited 1, so the command would be refused; nothing waited for a turn']);
+  const [gate] = gatesOf(readGateLog(home).events);
+  assert.equal(gate.refused?.reason, 'not ready', JSON.stringify(gate));
+}));
+
+test('gate --ready that passes runs the command once, and asks the check once when no gate was waited for', withHome(async (home, dir) => {
+  const spawned = readyThen(0);
+  const { code, said } = await runGate(['--ready', 'git diff --quiet', '--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned });
+  assert.deepEqual([code, said], [0, []]);
+  assert.deepEqual(spawned.asked.map((ask) => ask.commandLine), ['git diff --quiet', 'node --test']);
+}));
+
+test('gate --ready is asked again as the turn comes after a wait: a check that fails then runs nothing, gives the lock back and says so', withHome(async (home, dir) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 2) other.release();
+  };
+  const spawned = readyThen([0, 1]);
+  const { code, said } = await runGate(['--ready', 'git diff --quiet', '--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: clock.take });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.deepEqual(spawned.asked.map((ask) => ask.commandLine), ['git diff --quiet', 'git diff --quiet']);
+  assert.equal(said.at(-1), 'gate: nothing ran: its check before the turn, git diff --quiet, exited 1 after the wait, so the command would be refused; the turn goes to the next gate');
+  assert.equal(readGateHolder(home, { now: clock.now }), null, 'the lock is given back');
+  const gates = gatesOf(readGateLog(home).events);
+  assert.deepEqual(gates.map((one) => one.refused?.reason), ['not ready'], JSON.stringify(gates));
+
+  // And one that still passes runs the command.
+  const again = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    again.beat();
+    if (sleeps === 2) again.release();
+  };
+  const passing = readyThen([0, 0]);
+  const ran = await runGate(['--ready', 'git diff --quiet', '--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: passing, takeGateLock: clock.take });
+  assert.equal(ran.code, 0);
+  assert.deepEqual(passing.asked.map((ask) => ask.commandLine), ['git diff --quiet', 'git diff --quiet', 'node --test']);
+}));
+
+// Found by Codex (2026-10-16): a wait behind a gate in the line that left before it ever held the lock names
+// no gate waited for, and the check was then not asked again.
+test('gate --ready is asked again after a wait behind a gate in the line alone, with no holder ever seen', withHome(async (home, dir) => {
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 30_000 };
+  const lineOnly = async ({ onWait, stillWanted }) => {
+    assert.equal(stillWanted(), true);
+    onWait(null, 600_000, { head: { cwd: 'C:\\work\\other', pid: 4321 }, ahead: 1 });
+    assert.equal(stillWanted(), true);
+    return lock;
+  };
+  const launchers = { read: () => null, alive: () => true };
+  const spawned = readyThen([0, 1]);
+  const { code, said } = await runGate(['--ready', 'git diff --quiet', '--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: lineOnly, launchers });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.deepEqual(spawned.asked.map((ask) => ask.commandLine), ['git diff --quiet', 'git diff --quiet']);
+  assert.equal(said.at(-1), 'gate: nothing ran: its check before the turn, git diff --quiet, exited 1 after the wait, so the command would be refused; the turn goes to the next gate');
+}));
+
+test('gate --ready takes one value, once', withHome(async (home, dir) => {
+  for (const [argv, why] of [
+    [['--ready', '--', 'x'], '--ready requires a value'],
+    [['--ready', 'a', '--ready', 'b', '--', 'x'], '--ready given twice'],
+  ]) {
+    const spawned = ranWith(0);
+    const { code, said } = await runGate([...argv.slice(0, -2), '--home', home, '--cwd', dir, ...argv.slice(-2)], {}, { spawn: spawned });
+    assert.deepEqual([code, said[0].split('\n')[0], spawned.asked.length], [2, why, 0]);
+  }
+}));
 
 const GONE_WAITING = "gate: nothing ran: the process that started this gate ended while it waited, so it gave up its place in the line";
 const GONE_AT_TURN = "gate: nothing ran: the process that started this gate ended while it waited, so it gave up its turn as it came";

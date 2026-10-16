@@ -232,8 +232,9 @@ What each change counts as:
       its two readers changed", `0eaf5d0`.
 - [x] T3 · S1 to S3 test first: the fitted estimate, the high figure, the line on how the method
       did. Route: inline. Risk: none (see Progress, 2026-10-16). Commits `f66a822`, `e23892b` (S1,
-      S2) and the S3 commit on `feat/plan-from-records` after the merge of `main`.
-- [ ] T4 · S4: the plan recorded in the run log, once its readers are read. Route: inline.
+      S2) and `44cbf2e` (S3) on `feat/plan-from-records` after the merge of `main`; PR 286.
+- [x] T4 · S4: the plan recorded in the run log, once its readers are read. Route: inline.
+      Risk: none (see Progress, 2026-10-16, T4). Commit: the T4 commit above `44cbf2e`.
 - [ ] T5 · S5 and S6 test first: `progress --pace`. Route: inline.
 - [x] T6 · A defect of T0 (L8 of odd/tasks/merge-queue.md): a range from the head of a rechecked
       review was refused as a second recheck even on a branch that forked there, without the recheck
@@ -300,7 +301,7 @@ What each change counts as:
   was asked whether to merge it once more.
 
 ## Next
-1. T4 (S4), stacked on feat/plan-from-records once T3's pull request is open.
+1. T4 (S4) is built above T3 on feat/plan-from-records; its PR follows PR 286.
 2. T5 (S5, S6), on its own branch off main.
 
 - 2026-10-14 · **T6, a fork at a rechecked head.** Found by JH 10 on feat/merge-queue (forked at
@@ -328,7 +329,7 @@ What each change counts as:
   `0eaf5d0` (the document and the design after its two readers). T3 sits on
   `feat/plan-from-records` in the worktree `D:/js-harness-worktrees/plan-from-records`: S1 and S2
   were already committed (`f66a822`, `e23892b`); a merge of `main` begun at 03:01 and left with one
-  conflict was aborted and made again on `origin/main` `c644fca` (the conflict: `main` renamed the
+  conflict was aborted and made again on `origin/main` `6a6ce9e` (the conflict: `main` renamed the
   fixtures' model to `gpt-fixture`, `41ee91f`; the branch's expectations were kept with that name).
   S3, test first: RED by the missing export, then 3 unit tests (`methodRecord`, `methodRecordLine`)
   and one by the command (`--plan` without records, then with one review), which failed before the
@@ -344,6 +345,27 @@ What each change counts as:
   lines gained the line, and the two usage tests its new words. On this machine's records: "on the last 10 reviews this machine recorded, its
   estimate came to between 0.54 and 2.65 times what each took, 1.38 at the median". Risk: none (no
   high-risk item: `--plan` output gains one line, no flag, record or format changes).
+  Gate PASS on `fa8e650` and `44cbf2e`; gentle-ai on 6a6ce9e..44cbf2e medium, not due
+  (under_budget, 672 lines); Codex correct (0.86, 0.93), 350,983 input tokens against a plan of
+  300,000 to 420,000. PR 286.
+- 2026-10-16 · **T4 built (JH 22), on `feat/plan-from-records` above T3.** Its readers were read
+  first: `readCodexReviewRuns` and the review records keep any JSON object
+  (`bin/lib/codex-reviews.mjs:92-97`), and no reader of the run log (`check`, the recheck, the
+  kept parts, the plan) looks at a field it does not know, so `plan` needs no new schema. Test
+  first: RED by the missing exports and by the run line without `plan`, then GREEN. Decisions:
+  - `PLAN_METHOD` is 2: the fit of S1; 1 names the median method it replaced, whose lines hold no
+    plan;
+  - each part of `reviewPlan` now holds its own `inputTokensHigh`, and the whole's is their sum;
+  - `partPlanned(plan, index)` gives `{ estimate, high, method }`, or `null` when the plan had no
+    estimate, and then the line has no `plan` field;
+  - a range reviewed whole records its plan too, as the one part of its plan, though its line has
+    no `part` and so is in no basis: the figure is still what it was planned at;
+  - `methodRecord` reads `plan.estimate` when `plan.method` is this method's and the estimate is a
+    number, and replays otherwise.
+  Tests: two unit tests and one by the command (two parts unplanned, then planned at 300,000
+  each, `--plan` writing nothing, a whole range recording its plan); the "one figure" keys test
+  gained the field. Risk: none (an added optional field in the run log, read by nothing that
+  could misread it; the schema stays `v1`, as through five additions).
 
 ## Resume here
-Worktree D:/js-harness-worktrees/plan-from-records, branch feat/plan-from-records. T0 to T3 are done (T3: S1, S2 in f66a822, e23892b; S3 after the merge of main c644fca). Next: T4 (S4, the plan recorded in each run line), stacked on this branch, then T5 (S5, S6) on its own branch off main. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design.
+Worktree D:/js-harness-worktrees/plan-from-records, branch feat/plan-from-records. T0 to T4 are done (T3: S1, S2 in f66a822, e23892b, S3 in 44cbf2e after the merge of main 6a6ce9e, PR 286; T4 above it). Next: T5 (S5, S6) on its own branch off main. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design.
