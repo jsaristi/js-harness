@@ -116,7 +116,7 @@ export const RULES = [
     "value": 15,
     "unit": "minutes",
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\b(?:present|here|last wrote|wrote last)\\b.{0,40}\\b(?:within|in the last|for)\\s+{amount}"
+      "^(?!.*\\bruleValue\\().*\\b(?:(?:is|was|counts as|stays) (?:present|here)|last wrote|wrote last)\\b.{0,40}\\b(?:within|in the last)\\s+{amount}"
     ]
   },
   {
