@@ -1503,6 +1503,26 @@ one searched his words, the memory notes and the records.
   there. The try is harmless: a `create_scheduled_task` with no schedule and an empty prompt. If it
   is refused, nothing is created. If it is not, the lead deletes the task at once with
   `delete_scheduled_task` and reports it.
+- The try, made by the lead on 2026-10-15 after pull requests 243 and 244 landed (main `ab6c236`)
+  and the installed copy was updated:
+  - The first, at 19:52, was not refused, and the lead deleted the task at once. The guard never
+    ran for that call. The only `PreToolUse` hook the transcript records for it is another
+    tool's, and `settings.json` had been written 47 s before. The checkout was also behind: it
+    was pulled 16 s after the try, so its rules file was not the installed copy's list, and
+    `ruleHere` reads that as off.
+  - The second, at 19:58 in the same session, was refused with "js-harness guard:
+    mcp__scheduled-tasks__create_scheduled_task opens a session in the app's Routines … (rule
+    sessions-open-in-sidebar). Open it with start_session …", and nothing was created. The
+    installed `js-harness guard --hook` also denies the payload read from a file.
+  - Two facts for the next try of a hook:
+    - A running session applies a new hook matcher only some time after `settings.json`
+      changes. The hooks reference says only that such edits are "normally picked up
+      automatically by the file watcher". Try from a session that has the new matcher, and
+      with the checkout at the commit the installed copy was built from.
+    - In Git Bash, `echo` of a JSON payload turns `\\` into `\`. A Windows path then becomes a
+      bad JSON escape, and the guard, which exits 0 on any failure, prints nothing. A hand
+      reproduction reads the payload from a file. `bin/guard.test.mjs` pins that file through
+      the public command.
 - A FAILURES entry, `session-opened-unseen`:
   - Class `unseen-state`.
   - Seen 2026-10-12, `130317af:3443`.
@@ -1661,7 +1681,7 @@ and 3.
 - T15, MOVED to JH 13 (2026-10-14, by the lead's message; its record is there now). A count of a day's sub-agents by kind (writer, explorer, reviewer, verifier), model
   and tokens, read from their records (C1): it costs nothing to run, and it decides what is
   measured next and the working rule on fewer launches
-- [ ] T16 No session opens where he does not see it (his words of 2026-10-12, Progress 01:20;
+- [x] T16 No session opens where he does not see it (his words of 2026-10-12, Progress 01:20;
   the three layers are the lead's wording of the option he chose, and the design passes two
   independent readers before it reaches him). (1) Seen: the board says of each session how
   it was opened and marks the ones he did not open, with their effort; a transcript a
@@ -1677,7 +1697,9 @@ and 3.
   a tool the app itself provides or under which server name: one real try decides it. Where
   such a rule would live is a choice of its own (the project has no `.claude/settings.json`;
   an installed project is another question; on Codex only `disabled_tools` of a server), and
-  a setting of his machine is his alone
+  a setting of his machine is his alone. Done 2026-10-15: the three layers landed (layer 3 is
+  pull request 243), and the lead's real, harmless try at 19:58 was refused by the guard,
+  naming `start_session`; section 17, "The try", records it, with the first try's miss
 - [x] T17 Questions to him go through the question tool and through the orchestrator, and
   the open ones are computed (point 15; his words of 2026-10-12). Slice (a), built:
   `sessions --quote` and the stretch before a compaction read his answer to a question, and
