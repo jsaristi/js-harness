@@ -1994,7 +1994,8 @@ name. Each event:
   input's `cwd`, which is the session's, even for a sub-agent in a worktree of its own.
 
 The state is one file a session, `~/.js-harness/channel/rules-seen/<session_id>.json`, holding the last
-seen list reduced to the compared keys, with the main ref and the commit it was read at. A turn whose
+seen list reduced to the compared keys, with the project's top and the main ref and the commit it was
+read at; a record of another top, the session having moved, counts as none. A turn whose
 main ref still names that commit reads no list: it starts one git, since each costs a few hundred
 milliseconds on this machine. It is written by a temp file and a rename, as the pause state is.
 A write prunes the files of that folder last written more than 30 days before. A fault leaves the record
@@ -2075,7 +2076,9 @@ the command; the dispatcher reaches the command, and so does a run on its own.
 - which of the shipped rules reach an installed project, a field T16b names, whose list is his ninth
   difference: until then the hook reads only a project's own `docs/rules.json` there;
 - the orchestrator skill's "read the relief file" becoming "read the list";
-- keeping the installed copy current enough to read the list on `main`.
+- keeping the installed copy current enough to read the list on `main`;
+- the practice journey's real-session check that each of the three events ran (the verifier of
+  2026-10-16 found it unbuilt: `practice-lib.mjs` still checks only `SessionStart:startup`).
 
 **Where the readers' findings went.**
 - The attacker's blockers: B1 into "What it prints", B2 into "What is compared", B3 into "When it
@@ -3688,6 +3691,15 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   percentile is 911 ms, under the design's 1,000, by a thin margin: the run with no gate gave
   1,057 for its 19 quiet turns, and under the first load `node -e 0` alone reached 1,316. The
   rest is node's start and one git; going lower means reading the refs without git.
+- 2026-10-16, T16f first part, the independent verifier (Opus, risk item 5) on 0fd7d99: every
+  requirement met, the install and uninstall round trip clean with the user's own entries kept,
+  every fault probe exit 0 with nothing printed. One blocker, fixed with its test: the session's
+  record was not tied to a project, so a session that moved to another repository with rules
+  was compared with the last project's list and told a false notice; the record now keeps the
+  top. Advisories: a list at the merge base that does not parse now is a fault, as the design
+  names it; the practice journey's check of the three events is moved to the parts left; git
+  missing reads as "no origin/HEAD…", and four slow gits can pass the 5 s timeout (accepted by
+  the design), both left.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f first part being built by JH 27** on `feat/rules-reach` in `D:/js-harness-worktrees/rules-reach`. The design ("Reach: the turn-start hook") is committed (fdc62a9). Built so far, not committed: `bin/lib/rules-reach.mjs` and its test (11 green); three `entryComponents` in `bin/lib/manifest.mjs` with `manifest.test.mjs` (160 green); `rules --hook` routed in `bin/js-harness.mjs` and `bin/rules.mjs` (`rules.test.mjs` 34 green); `doctor` tries the command (`stack.mjs`, `stack.test.mjs` 120 green); `HASH_KEYS` exported. In progress: `scripts/practice-lib.mjs` (`HARNESS_HOOKS` gains the three entries; `hostHooksProblem` checks `UserPromptSubmit` and `SubagentStart` like `postToolUseProblem`), its tests written RED. Next: `docs/SPEC.md` claims the three ids; README (install output, a `rules --hook` section); `rules` usage, the dispatcher help and the skill command list; T16f sub-item and a Progress entry; commit; the time measured (20 turns, p95 under 1,000 ms); a verifier (item 5); gentle-ai escalated item 5; Codex; PR; notify the lead.

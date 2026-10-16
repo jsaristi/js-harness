@@ -85,6 +85,7 @@ function machine({ kind = 'harness', refs = {}, base = 'origin/main', present = 
     if (args[0] === 'show') {
       const [rev] = args[1].split(':');
       const list = refs[rev === 'BASE' ? base : rev];
+      if (typeof list === 'string') return { status: 0, stdout: list };
       return list ? { status: 0, stdout: text(list) } : { status: 128, stdout: '', stderr: 'fatal: path does not exist' };
     }
     return { status: 1, stdout: '' };
@@ -126,6 +127,31 @@ test('a turn after which main has not moved starts one git, and reads no list', 
     m.calls.length = 0;
     assert.equal(m.run('UserPromptSubmit').context, null);
     assert.deepEqual(m.calls.map((call) => call.split(' ')[0]), ['for-each-ref']);
+  } finally {
+    m.done();
+  }
+});
+
+test('a session that moves to another project is compared there from its merge base, not from the last project\'s list', () => {
+  const first = machine({ refs: { 'origin/HEAD': [pause, budget], BASE: [pause, budget] }, base: 'BASE' });
+  const other = machine({ kind: 'project', refs: { 'origin/HEAD': [pause], BASE: [pause] }, base: 'BASE' });
+  try {
+    assert.equal(first.run('UserPromptSubmit').context, null);
+    const moved = reachHook(other.input('UserPromptSubmit'), { home: first.home, git: other.git });
+    assert.deepEqual(moved, { event: 'UserPromptSubmit', context: null });
+  } finally {
+    first.done();
+    other.done();
+  }
+});
+
+test('a list at the merge base that does not parse is a fault, and nothing is recorded', () => {
+  const m = machine({ refs: { 'origin/HEAD': [pause], BASE: 'export const RULES = [ { id: "x" } ];\n' }, base: 'BASE' });
+  try {
+    const result = m.run('UserPromptSubmit');
+    assert.equal(result.context, null);
+    assert.match(result.fault, /not in the shape writeRules gives/);
+    assert.equal(fs.existsSync(m.seen()), false);
   } finally {
     m.done();
   }

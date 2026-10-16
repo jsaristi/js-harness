@@ -137,23 +137,23 @@ function listOf(top) {
 /** The record of a session's last seen list. */
 const seenPath = (home, sessionId) => path.join(home, '.js-harness', 'channel', 'rules-seen', `${sessionId}.json`);
 
-/** The last seen list of a session with the main ref and commit it was read at, `{ list, main, commit }`, or `null`
- * when none is recorded or it cannot be read. */
+/** The last seen list of a session with the project's top and the main ref and commit it was read at,
+ * `{ list, top, main, commit }`, or `null` when none is recorded or it cannot be read. */
 function readSeen(file) {
   try {
     const record = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return Array.isArray(record?.seen) ? { list: record.seen, main: record.main, commit: record.commit } : null;
+    return Array.isArray(record?.seen) ? { list: record.seen, top: record.top, main: record.main, commit: record.commit } : null;
   } catch {
     return null;
   }
 }
 
-/** Records `list` as the session's last seen, read at `commit` of `main`, by a temp file and a rename, then prunes
- * the records of sessions not written for thirty days. */
-function writeSeen(file, { list, main, commit }, now) {
+/** Records `list` as the session's last seen in the project at `top`, read at `commit` of `main`, by a temp file and
+ * a rename, then prunes the records of sessions not written for thirty days. */
+function writeSeen(file, { list, top, main, commit }, now) {
   const temp = `${file}.${process.pid}.tmp`;
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(temp, `${JSON.stringify({ main, commit, seen: list.map(reduce) }, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(temp, `${JSON.stringify({ top, main, commit, seen: list.map(reduce) }, null, 2)}\n`, 'utf8');
   fs.renameSync(temp, file);
   for (const name of fs.readdirSync(path.dirname(file))) {
     const other = path.join(path.dirname(file), name);
@@ -190,12 +190,14 @@ export function reachHook(input, { home = os.homedir(), git = runGit, now = Date
   if (main === undefined) return quiet('no origin/HEAD, origin/main or main to compare with');
   const commit = present.get(full);
   const file = records ? seenPath(home, input.session_id) : null;
-  const seen = event === 'UserPromptSubmit' ? readSeen(file) : null;
+  // A record of another project, the session having moved, is no record here.
+  const recorded = event === 'UserPromptSubmit' ? readSeen(file) : null;
+  const seen = recorded?.top === top ? recorded : null;
   // Each git costs a few hundred milliseconds here: a turn after which main has not moved reads no list.
   if (seen !== null && seen.main === main && seen.commit === commit) return { event, context: null };
   const listAt = (rev) => {
     const shownText = ask(['show', `${rev}:${list.path}`]);
-    if (shownText?.status !== 0) return { fault: `${list.path} could not be read at ${rev}` };
+    if (shownText?.status !== 0) return { fault: `${list.path} could not be read at ${rev}`, absent: true };
     return readListText(shownText.stdout, list.kind);
   };
   const onMain = listAt(main);
@@ -207,12 +209,13 @@ export function reachHook(input, { home = os.homedir(), git = runGit, now = Date
     if (base?.status !== 0) return quiet(`no merge base of HEAD and ${main}`);
     const atBase = listAt(base.stdout.trim());
     // A merge base that has no list yet owes nothing: the list the tree holds came with the branch.
+    if (atBase.fault && !atBase.absent) return quiet(atBase.fault);
     before = atBase.fault ? onMain.rules : atBase.rules;
   }
   const context = rulesNotice(diffRules(before, onMain.rules), main);
   if (records) {
     try {
-      writeSeen(file, { list: onMain.rules, main, commit }, now);
+      writeSeen(file, { list: onMain.rules, top, main, commit }, now);
     } catch (err) {
       return { event, context, fault: `the last seen rules could not be recorded: ${err.message}` };
     }
