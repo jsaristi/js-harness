@@ -74,6 +74,7 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
 | T3 | S2: how a waiter sees it was passed | inline | done (slice A) | the wait line says `first by ticket <id>: <reason>`, `first: true` in the start line and ` (first by a ticket)` in `gate log`; 1 test in `gate-log.test.mjs` |
 | T4 | S2: what stops every session marking itself first | inline | pending | the board prints tickets and flags an issuer that is no orchestrator; `--first` on the batch run |
 | T5 | S1, S2 | inline | pending | help, README, ROADMAP, `faster-check.md` T2 |
+| T6 | S2: two tickets at most | inline | pending (follow-up) | Codex reads `e464081` (a ticket written as `<id>.pending`, counted with the other pending ones, renamed to a claimable ticket only once its count passed) inside the review of a later change to `bin/lib/gate-first.mjs`; `codex-review` refuses a second recheck of the review that ended at `b10ce08`, so `828b23b..e464081` is recorded as a skip naming this task |
 
 ## Log
 
@@ -103,6 +104,17 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
   (an unremovable one is said in `gateKept`, where `install` already tells to remove it by hand). The
   claimed line logs the waiters it passed by `cwd` and `pid`, not by their record's id. Slice B is T4-T5:
   the board, `check --first`, the docs. The branch merged main (`6c6201b`), clean by `git merge-tree`.
+- **L6** (2026-10-16, JH 24): the reviews of slice A. gentle-ai approved `6c6201b..b10ce08` raised to
+  item 4 (the order of the lock between processes), lineage `review-73fbddbc0542a97c`. Codex found two
+  P2 on it: the folder of tickets removed between its making and the write (fixed in `828b23b`) and the
+  cap of two open tickets not atomic. Its recheck of `828b23b` found the cap still open: a third ticket
+  was claimable in the instant before its issuer counted it and took it back. `e464081` writes a ticket
+  as `<id>.pending`, which no gate claims, counts it with the other pending ones, and renames it only
+  once its count passed; a pending ticket older than a minute counts for nothing. A second recheck is
+  refused by `codex-review`, hence T6. gentle-ai on `828b23b..e464081`: medium, not due (under budget).
+  Its non-blocking advisories, for later: a claim whose rename fails on Windows with EPERM or EBUSY is
+  silent; the `passed` of a `first-claimed` line overstates when the gate then stops, is proven by its
+  tree or is refused; the spent paths of a proven, refused or log-off gate have no test.
 
 ## Resume here (JH 8, 2026-10-14 15:13 by `date`, context 87%)
 
