@@ -853,7 +853,8 @@ podamos implementar todo"), each a feature of its own with its own document and 
      file, each row says where its temporary files went. What Windows loses per commit:
      its own code paths are tested by one run per merged batch, in a lock turn on `main`:
      `TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node
-     bin/check.mjs`. An installed project gets nothing unless its machine has the file.
+     bin/check.mjs`, written where merges are made: the README's `js-harness merge-queue`. An
+     installed project gets nothing unless its machine has the file.
      Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
