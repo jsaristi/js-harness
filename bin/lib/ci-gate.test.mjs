@@ -29,7 +29,9 @@ function project() {
   fs.writeFileSync(path.join(cwd, 'a.txt'), 'one\n');
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'first');
-  git(cwd, 'remote', 'add', 'origin', remote);
+  // A GitHub URL, as a real remote is, that git rewrites to the bare remote on disk.
+  git(cwd, 'remote', 'add', 'origin', 'https://github.com/o/r.git');
+  git(cwd, 'config', `url.${remote}.insteadOf`, 'https://github.com/o/r.git');
   fs.writeFileSync(path.join(cwd, 'a.txt'), 'staged\n');
   git(cwd, 'add', 'a.txt');
   // Not staged: the commit being made does not hold it, so neither does its gate.
@@ -49,8 +51,10 @@ function fakeGh({ runs = [[]], views = [], log = '' } = {}) {
   const calls = [];
   let listed = 0;
   let viewed = 0;
-  const gh = (args) => {
+  const cwds = [];
+  const gh = (args, { cwd } = {}) => {
     calls.push(args);
+    cwds.push(cwd);
     if (args[0] === 'run' && args[1] === 'list') return { status: 0, stdout: JSON.stringify(runs[Math.min(listed++, runs.length - 1)]), stderr: '' };
     if (args[0] === 'run' && args[1] === 'view' && args.includes('--log-failed')) return { status: 0, stdout: log, stderr: '' };
     if (args[0] === 'run' && args[1] === 'view') return { status: 0, stdout: JSON.stringify(views[Math.min(viewed++, views.length - 1)]), stderr: '' };
@@ -58,6 +62,7 @@ function fakeGh({ runs = [[]], views = [], log = '' } = {}) {
     return { status: 1, stdout: '', stderr: `unexpected gh ${args.join(' ')}` };
   };
   gh.calls = calls;
+  gh.cwds = cwds;
   return gh;
 }
 
@@ -98,7 +103,9 @@ test('a green run passes the gate: the staged tree went to gate/<sha>, and the b
     const sha = pushed.split(':')[0];
     assert.equal(git(p.remote, 'show', `${sha}:a.txt`), 'staged', 'the commit being made, not the working tree');
     assert.equal(git(p.remote, 'rev-parse', `${sha}^`), git(p.cwd, 'rev-parse', 'HEAD'), 'its parent is HEAD');
-    assert.deepEqual(gh.calls[0], ['run', 'list', '--commit', sha, '--workflow', 'gate.yml', '--json', 'databaseId,status,conclusion,url', '--limit', '1']);
+    assert.deepEqual(gh.calls[0], ['run', 'list', '--repo', 'o/r', '--commit', sha, '--workflow', 'gate.yml', '--json', 'databaseId,status,conclusion,url', '--limit', '1']);
+    assert.ok(gh.calls.every((args) => args[2] === '--repo' && args[3] === 'o/r'), 'every gh call names the repository of the remote');
+    assert.ok(gh.cwds.every((cwd) => cwd === p.cwd), 'gh runs in the project');
     assert.equal(remoteBranches(p.remote), '', 'the gate branch is deleted');
     assert.equal(git(p.cwd, 'rev-list', '--count', 'HEAD'), '1', 'no commit was made here');
   } finally {
@@ -129,6 +136,9 @@ test('a run that never starts, or ends neither green nor red, is no answer: the 
     assert.equal(none.ran, false);
     assert.match(none.why, /no run of \.github\/workflows\/gate\.yml started within 3 minutes/);
     assert.equal(remoteBranches(p.remote), '');
+    const timedOut = await runCiGate(options(p, fakeGh({ runs: [[RUN]], views: [{ ...RUN, status: 'completed', conclusion: 'timed_out' }] }), clock()));
+    assert.equal(timedOut.ran, false, 'a job past its own timeout proves nothing of the tests');
+    assert.match(timedOut.why, /ended timed_out/);
     const cancelled = await runCiGate(options(p, fakeGh({ runs: [[RUN]], views: [{ ...RUN, status: 'completed', conclusion: 'cancelled' }] }), clock()));
     assert.equal(cancelled.ran, false);
     assert.match(cancelled.why, /ended cancelled/);
@@ -144,21 +154,48 @@ test('a run past its bound is cancelled and is no answer', async () => {
     const result = await runCiGate(options(p, gh, clock()));
     assert.equal(result.ran, false);
     assert.match(result.why, /not done after 20 minutes/);
-    assert.deepEqual(gh.calls.at(-1), ['run', 'cancel', '42']);
+    assert.deepEqual(gh.calls.at(-1), ['run', 'cancel', '--repo', 'o/r', '42']);
     assert.equal(remoteBranches(p.remote), '');
   } finally {
     p.done();
   }
 });
 
+test('a remote that is not on GitHub is no answer, and nothing is pushed', async () => {
+  const p = project();
+  try {
+    git(p.cwd, 'remote', 'set-url', 'origin', p.remote);
+    const gh = fakeGh();
+    const result = await runCiGate(options(p, gh, clock()));
+    assert.equal(result.ran, false);
+    assert.match(result.why, /^origin is not a GitHub repository/);
+    assert.deepEqual(gh.calls, []);
+    assert.equal(remoteBranches(p.remote), '');
+  } finally {
+    p.done();
+  }
+});
+
+test('the GitHub repository of a remote is read from its URL, in each form git takes', async () => {
+  const { githubRepository } = await import('./ci-gate.mjs');
+  assert.equal(githubRepository('https://github.com/jsaristi/js-harness.git'), 'jsaristi/js-harness');
+  assert.equal(githubRepository('https://github.com/jsaristi/js-harness'), 'jsaristi/js-harness');
+  assert.equal(githubRepository('git@github.com:jsaristi/js-harness.git'), 'jsaristi/js-harness');
+  assert.equal(githubRepository('ssh://git@github.com/jsaristi/js-harness.git'), 'jsaristi/js-harness');
+  assert.equal(githubRepository('https://gitlab.com/jsaristi/js-harness.git'), null);
+  assert.equal(githubRepository('D:/repos/js-harness.git'), null);
+});
+
 test('a push that fails, or a gh that cannot list runs, is no answer', async () => {
   const p = project();
   try {
-    git(p.cwd, 'remote', 'set-url', 'origin', path.join(p.root, 'nowhere.git'));
+    git(p.cwd, 'config', '--unset', `url.${p.remote}.insteadOf`);
+    git(p.cwd, 'config', `url.${path.join(p.root, 'nowhere.git')}.insteadOf`, 'https://github.com/o/r.git');
     const unpushed = await runCiGate(options(p, fakeGh(), clock()));
     assert.equal(unpushed.ran, false);
     assert.match(unpushed.why, /^git push to origin failed/);
-    git(p.cwd, 'remote', 'set-url', 'origin', p.remote);
+    git(p.cwd, 'config', '--unset', `url.${path.join(p.root, 'nowhere.git')}.insteadOf`);
+    git(p.cwd, 'config', `url.${p.remote}.insteadOf`, 'https://github.com/o/r.git');
     const noGh = () => ({ status: 1, stdout: '', stderr: 'gh: To get started with GitHub CLI, please run: gh auth login' });
     const unlisted = await runCiGate(options(p, noGh, clock()));
     assert.equal(unlisted.ran, false);

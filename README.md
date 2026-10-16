@@ -72,11 +72,12 @@ which no longer count.
 
 In a project that holds `.github/workflows/gate.yml`, as this repository does, a gate whose turn
 at the machine's gate lock would wait runs its tests on GitHub's machines instead: it pushes the tree
-being committed to a `gate/<sha>` branch, reads that workflow's run with `gh`, deletes the branch,
-and lets the commit through only on green. The `tests` row then names the run. A gate whose turn
-is free runs here, and one that gets no answer from GitHub (no push, `gh` not signed in, no run
-within 3 minutes, a run cancelled or past 20) runs here too, after one `check:` line on stderr that
-says why. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
+being committed to a `gate/<sha>` branch of the remote (`--remote`, `origin` when not given), reads
+that workflow's run in the GitHub repository the remote names with `gh`, deletes the branch, and
+lets the commit through only on green. The `tests` row then names the run. A gate whose turn is
+free runs here, and one that gets no answer from GitHub (a remote not on GitHub, no push, `gh` not
+signed in, no run within 3 minutes, a run cancelled, timed out or past 20) runs here too, after one
+`check:` line on stderr that says why. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
 on Windows is left to the merge queue's run on this machine.
 
 The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,

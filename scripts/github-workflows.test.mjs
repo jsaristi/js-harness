@@ -35,6 +35,9 @@ function below(lines, key) {
   return end === -1 ? rest : rest.slice(0, end);
 }
 
+/** A secret named in an expression, by property or by index: `secrets.X`, `secrets['X']`, `secrets [ "X" ]`. */
+const SECRET = /\bsecrets\s*[.[]/;
+
 const level = (lines) => lines.filter((line) => line.indent === lines[0].indent).map((line) => line.text);
 
 test('the repository holds one GitHub workflow, the gate', () => {
@@ -53,7 +56,7 @@ test('its token reads the contents and nothing more, and no secret is named', ()
   const lines = workflowLines();
   assert.deepEqual(below(lines, 'permissions:').map((line) => line.text), ['contents: read']);
   const text = fs.readFileSync(GATE, 'utf8');
-  assert.doesNotMatch(text, /secrets\./, 'a secret');
+  assert.doesNotMatch(text, SECRET, 'a secret');
   assert.doesNotMatch(text, /GITHUB_TOKEN|github\.token/, 'the token handed to a step');
 });
 
@@ -72,6 +75,11 @@ test('every action is pinned by commit and is one of GitHub\'s own', () => {
   assert.ok(uses.length > 0);
   for (const use of uses) assert.match(use, /^actions\/(checkout|setup-node)@[0-9a-f]{40}$/, use);
   assert.doesNotMatch(fs.readFileSync(GATE, 'utf8'), /persist-credentials:\s*true/);
+});
+
+test('a secret is found in either form an expression can name it', () => {
+  for (const named of ['${{ secrets.API_KEY }}', "${{ secrets['API_KEY'] }}", '${{ secrets [ "API_KEY" ] }}']) assert.match(named, SECRET, named);
+  assert.doesNotMatch('the secrets of this file', SECRET);
 });
 
 test('the shapes a workflow must not take are refused', () => {

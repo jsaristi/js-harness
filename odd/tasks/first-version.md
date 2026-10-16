@@ -225,3 +225,11 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   git identity on the runner, reproduced here with no global git config and fixed in the test.
   The second live run (38895150726) was green: 139 s from the push to its conclusion, 167 s with the push
   and the delete, against a local median of 137-174 s before any wait.
+- L10 (2026-10-16, JH 21): T7b reviewed. gentle-ai high, lenses risk, resilience and reliability, approved with no
+  finding and acknowledged (`review-114b5da986f80c00`); its preflight timed out three times with `--base-ref=origin/main`
+  while the machine was at 100% CPU, and answered in 9 s with the merge-base SHA. The build commit's own gate went
+  to CI while another gate held the lock: 105 s, run 38895585918. Codex (c644fca..35a0423) said incorrect, three
+  P2s, all taken: `gh` now runs in the project and names the GitHub repository of the remote (`--repo`, read from
+  the remote's URL as written; a remote not on GitHub is no answer); a run that ends `timed_out` is no answer, not
+  a red; the workflow test finds a secret named by index (`secrets['X']`). RED 4 of 8 in `ci-gate.test.mjs`, then
+  8/8, also with no git identity.

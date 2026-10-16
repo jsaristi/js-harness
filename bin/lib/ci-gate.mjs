@@ -55,23 +55,36 @@ function onCiMachine(env) {
   return Boolean(value) && value !== 'false' && value !== '0';
 }
 
-const spawner = (command, env) => (args) => {
-  const run = spawnSync(command, args, { encoding: 'utf8', env, windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
+const spawner = (command, env) => (args, { cwd } = {}) => {
+  const run = spawnSync(command, args, { cwd, encoding: 'utf8', env, windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
   return { status: run.error ? null : run.status, stdout: String(run.stdout ?? ''), stderr: String(run.stderr ?? run.error?.message ?? '').trim() };
 };
 
 const firstLine = (text) => String(text).trim().split(/\r?\n/)[0] ?? '';
+
+/** The `owner/name` of a GitHub repository from a remote's URL, in the forms git takes (https, ssh, scp-style), or
+ * null for a URL that is not GitHub's. */
+export function githubRepository(url) {
+  const match = /^(?:https?:\/\/(?:[^@/]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
+  return match ? `${match[1]}/${match[2]}` : null;
+}
 
 /** Runs the gate of the commit being made on GitHub's machines and says how it ended: `{ ran: true, pass, url,
  * seconds, output }`, `output` the end of a red run's failed log, or `{ ran: false, why }`. `gh`, `now`, `sleep`
  * and `onGit` (told the arguments of each git call) are injectable. */
 export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), onGit = () => {} }) {
   const runGit = spawner('git', env);
-  const runGh = gh ?? spawner('gh', env);
   const git = (...args) => {
     onGit(args);
     return runGit(['-C', cwd, ...args]);
   };
+  // The repository the push goes to, as the remote is written (its push URL first), before git rewrites it: `gh`
+  // is asked about that repository and no other, whatever folder `check` was started from.
+  const url = git('config', '--get', `remote.${remote}.pushurl`).stdout.trim() || git('config', '--get', `remote.${remote}.url`).stdout.trim();
+  const repository = githubRepository(url);
+  if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url || 'no URL'})` };
+  const runGh = gh ?? spawner('gh', env);
+  const ghIn = ([verb, sub, ...rest]) => runGh([verb, sub, '--repo', repository, ...rest], { cwd });
   const tree = git('write-tree');
   if (tree.status !== 0) return { ran: false, why: `git write-tree failed: ${firstLine(tree.stderr)}` };
   const head = git('rev-parse', '--verify', '--quiet', 'HEAD');
@@ -86,7 +99,7 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   if (pushed.status !== 0) return { ran: false, why: `git push to ${remote} failed: ${firstLine(pushed.stderr)}` };
   const startedAt = now();
   try {
-    return await followRun({ sha, gh: runGh, now, sleep, startedAt });
+    return await followRun({ sha, gh: ghIn, now, sleep, startedAt });
   } finally {
     git('push', '--quiet', '--no-verify', remote, '--delete', ref);
   }
@@ -119,7 +132,9 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
     }
     const seconds = Math.round((now() - startedAt) / 1000);
     if (run.conclusion === 'success') return { ran: true, pass: true, url: run.url, seconds, output: '' };
-    if (run.conclusion === 'failure' || run.conclusion === 'timed_out') {
+    // A job past its own timeout (`timed_out`) proves nothing of the tests, so it is no answer, as a run past this
+    // gate's bound is.
+    if (run.conclusion === 'failure') {
       const log = gh(['run', 'view', id, '--log-failed']);
       return { ran: true, pass: false, url: run.url, seconds, output: log.stdout.trimEnd().split(/\r?\n/).slice(-LOG_LINES).join('\n') };
     }
