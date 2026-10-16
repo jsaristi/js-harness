@@ -1050,6 +1050,22 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       fails; that `git status` takes git's optional index lock beside other commands.
 - [x] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice. Evidence: the entry of T10 in Progress.
+- [ ] T11 · `review-tool-timeout` (docs/FAILURES.md): three of its four sightings ran beside
+      a gate or a full machine (2026-10-11 beside a gate; 2026-10-15, host-update-check L4,
+      while a retry on a quiet machine answered in 23 s, L6; 2026-10-16, first-version L10, at
+      100% CPU with `--base-ref=origin/main`, then 9 s with the merge-base commit). M2 read "no
+      sighting since 2026-10-11" from the review records, which keep no timeout; the manifest
+      still says a gentle-ai review runs beside a gate. Design, read by two readers: whether a
+      gentle-ai review waits for the gate lock, or is given the merge-base commit, and what a
+      session does on `operation_timeout` (one retry with no gate running; then continue
+      without reporting, record it in the feature document, Codex covers the range, he is not
+      asked), written in the manifest's review text so an installed project gets it too. The
+      provider defect stays tracked upstream as gentle-ai #5422, open (an occurrence on 4.1.1
+      on 2026-10-16; this machine runs 4.2.0). When done, the entry's Control becomes the check
+      or the manifest line it leaves. The lead's order of 2026-10-16 22:10Z: "fix the cause
+      test first if it breaks shipped behavior, else open its task in the owning feature doc
+      and settle the entry"; the cause is not shown (the timeouts are an observation beside
+      the gate), so it is a task.
 
 ## Progress
 - 2026-10-12 · Opened (`335ce6f`). The map of the code is a read-only sub-agent's (72 test

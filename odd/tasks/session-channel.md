@@ -551,6 +551,7 @@ decided today would use them.
 ### 13. Tests owed
 Each is run once by the build, with its result recorded in Progress.
 1. A one-line opening pasted on the phone and on the desktop: typed text or pasted content?
+   Run 2026-10-16 at 02:16 local: typed text, both times (Progress, 02:16).
 2. A session opened by the orchestrator through a scheduled task: can he type in it; can it
    commit in a folder of its own (one gate turn)? His rule of 2026-10-12 is that no session
    opens where he does not see it (T16), and the app files such a session under its routines,
@@ -560,6 +561,8 @@ Each is run once by the build, with its result recorded in Progress.
    `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
    scheduled task, so the test would ask about a way this project no longer opens sessions.
 3. `claude --name` with an initial prompt, from a command: does the session appear in the app?
+   Run 2026-10-16 at 02:37 local: it does not appear in his sidebar, though the session ran
+   (Progress, 02:39).
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
 5. After a rename, does the old title stop resolving as an address?
@@ -1651,7 +1654,8 @@ and 3.
   one test pipes an opening through the dispatcher's real standard input; the concurrent
   append test proves its writers overlapped, or starts them on a barrier
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
-  2 is retired by his answer of 2026-10-15 (section 13); tests 1, 3, 4, 5 and 6 remain
+  2 is retired by his answer of 2026-10-15 (section 13); test 1 is run (2026-10-16, typed
+  text); test 3 is run (2026-10-16, not in his sidebar); tests 4, 5 and 6 remain
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
@@ -1837,6 +1841,7 @@ and 3.
   JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
   wording). After T18
 - [x] T20 `js-harness wait`: one command a session runs in the background that ends when its condition holds (a pull request merged, by gh; origin/main holding a commit or a file content; a notice addressed to this session in the channel record), printing its purpose and its end at start (T18); and the skill and the hooks say that while he is not present a work session never ends a turn waiting for a message, his /compact or an event: it writes its state, arms `js-harness wait` and keeps working. His order of 2026-10-14, typed, read with `sessions --quote`, exit 0 (the lead's transcript `ffe99ebf`, line 5141): nothing ran from 06:40 to 13:34. The rule's wording is the lead's message of 13:58. Done: merged as PR 156, 3b9e681.
+- [ ] T20b `wait-blind-to-notices` (docs/FAILURES.md): every `js-harness wait` also ends on a notice to the waiting session's own number, with an exit code of its own, so a session that waits on a pull request or on `main` still wakes for the lead (JH 7, 2026-10-16: five of the lead's notices reached it hours late). Its number is read as `notify` reads its sender (`senderOf`, bin/lib/channel.mjs, from `CLAUDE_CODE_SESSION_ID`); a session with no number (the lead, Codex, a phone session whose transcript has no title) keeps today's wait, and a project with no channel sees no error. The notice watch is no second condition (bin/wait.mjs refuses two); a wait ended by a notice names the wait to arm again, and `js-harness wake` re-arms waits from their command lines (bin/lib/wake.mjs). Test first; wait's help, README.md and the manifest's wait lines say the new exit. When done, the entry's Control becomes that test (`check — bin/wait.test.mjs — "<its name>" — since <date>`). The lead's order of 2026-10-16 22:10Z: "fix the cause test first if it breaks shipped behavior, else open its task in the owning feature doc and settle the entry"; this one breaks nothing shipped (each mode does what its help says), so it is a task.
 - [x] T21 The merge checks and the pre-leave list in the orchestrator skill: a code pull request merges on a green CI run whose checkout says `Merge <head> into <base>` with that base origin's default branch now (a stale run: close and reopen; the merge's message names the run, the base and the head); a documents-only one merges when `git merge-tree` is clean; the gate rule stays for a project with no CI; before the user leaves, every waiting session has a declared wait running, none ended its turn to wait for them, and the orchestrator's watch runs. His words: "Sí, tomemos el intercambio con verde de GitHub" (`ffe99ebf` line 5394) and "pausemos todo e implementemos las soluciones" (line 5906, 14:43, quoted by this session with `sessions --quote`); the wording is the lead's orders of 14:21 and 14:45. Branch `feat/orchestrator-merge-checks`, worktree `D:\js-harness-worktrees\merge-checks`, inline. Done: merged as PR 149, eb6abf7.
 - [x] T22 The cut only while the user is here: the pause notice reads when the user last wrote (`personAtOf`, the end of the transcript it reads) and says by `cutRule` (15 minutes, as `askingRule`) to give the two blocks only then, and otherwise never to stop, since the host compacts inside a turn; AGENTS.md says the same in place of its old cut sentence, inside 1500 tokens. Same orders as T21. Widened by the lead's correction of 15:52 and 15:58, on his words "pero si se autocompacta en la mitad de una tarea creo que es malo" (`b878a67f` line 3189, 15:37) and "despues de la autocompactacion se le puede inyectar el siguiente prompt automaticamente?" (line 3535, 15:49), both quoted by this session: from the pause on, the notice says to write the state after every step (committed with the next commit) and to store the session's own resume prompt with `notify --opening` (what a compaction by the host or a new session under that title reads); a last notice, once a stretch, at `DEFAULT_CONTEXT_LAST_PERCENT` (three points under the compaction, the lead's 15:58 correction) says to write both now, before anything else, and then to go on with the task (never to wait for the compaction: Codex's P2 on cab5d69, since the host compacts with the next requests). Caveats sent to the lead: the last notice had about 10k tokens of room at two points, so it moved to three (about 15k), and a self-written opening replaces the lead's. Branch `feat/cut-while-present`, worktree `D:\js-harness-worktrees\cut-rule`, inline. Done: merged as PR 151, 34be88d.
 
@@ -2999,6 +3004,30 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
   scheduled task. Tests 1, 3 and 6 go to him next, one question at a time, through the lead;
   tests 4 and 5 do not need him at the app.
+- 2026-10-16, 02:16 local, T2, test 1 run. To the lead's question 3, "Prueba 1 del canal (JH 5):
+  ¿una línea pegada llega a la sesión como texto escrito o como contenido pegado?", he tapped
+  "Sí, ahora (Recomendada)" (`e152c9d8`:8485, read with `sessions --quote`). He then pasted
+  "Prueba 1 de T2: línea pegada para ver cómo llega; no hagas nada con ella." twice into
+  JH 5's chat, once from the desktop and once from the phone (his plan, as he was asked). Both
+  reached the session as typed text: `sessions --quote` read each one as his own words, exit 0,
+  with no pasted-content warning.
+  - `e5376fe9`:36884, 07:16:23Z: a `user` entry whose content is a plain string, with `origin`
+    kind human, `turnOrigin` human and `entrypoint` claude-desktop.
+  - `e5376fe9`:36915, 07:16:38Z: sent while the session was working, so the host queued it as a
+    `queued_command` attachment with `origin` kind human; `sessions --quote` reads it as "sent by
+    the user while the session was working (the host queued it)".
+
+  Neither entry records the device it came from, so which line came from which device is his
+  word only. The assumption of section 6 holds: a one-line opening pasted from either device
+  arrives as typed text, and nothing has to be typed by hand.
+- 2026-10-16, 02:39 local, T2, test 3 run. To the lead's question 4 he tapped "Sí, ahora
+  (Recomendada)" (`e152c9d8`:8787). He ran `claude --name "JH prueba 3" "Prueba 3 de T2:
+  respondé solo ok."` in a terminal in `D:\js-harness` and wrote: "Prueba 3: no, "JH prueba 3"
+  no aparece en la barra lateral." (`e152c9d8`:9027, read with `sessions --quote`). The session
+  did run: its transcript is `38272b60`, 52 entries from 07:37:31Z, `entrypoint` cli, titled
+  "JH prueba 3". So a session started by a command runs but is not one he sees in the app,
+  as layer 1's `by a command` already marks it, and opening a session stays one line of his
+  or `start_session` (T16).
 - 2026-10-16, 06:51 local, T6b (JH 26, by the lead's order): why the pause still missed. `js-harness sessions
   --measures --hours 24` on this machine at 06:30: "54 automatic compactions judged in 12 sessions: 32 miss a fact
   (told 28, kept 4)". Each automatic compaction since 2026-10-13 was read again in its transcript (a scratch

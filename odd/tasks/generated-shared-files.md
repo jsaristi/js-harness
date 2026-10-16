@@ -92,8 +92,9 @@ Nothing planned. Splitting the README, or retiring the practice's "imports nothi
 - What the count caught stays caught: ids unique, and no two entries with the same target, pointer and entry
   (a merge that kept both sides). The order inside an event with more than one entry, `SessionStart` today
   (doctor, resume, rules), is asserted as a list of ids for each host file.
-- One raw settings file stays literal (an indent-preservation test), so install's grouping is not checked only
-  against a builder that copies it.
+- No whole settings file stays literal: the scratch hook of "Done when" failed on it, since every new hook
+  would edit it (L5). Install's grouping is held instead by the test's own builder, `ourFile`, written apart
+  from install's code, and by the literal `SessionStart` order and each hook's literal pins.
 
 ### D2: the practice test drops its literal, the copy stays
 `scripts/practice-lib.test.mjs:807-818` goes; the comparison with `entryComponents` stays, with one pinned
@@ -131,7 +132,7 @@ another order), conflicted in 5 of the 60 merges (`44c064c`, `b4f526d`, `1050643
 
 ## Tasks
 - [x] T1 (kind: design) S1-S3: this design, read by two readers that did not write it; their changes in L3
-- [ ] T2 (kind: build) S1: D1 and D2, after pull request 282 lands (route: inline)
+- [x] T2 (kind: build) S1: D1 and D2, after pull request 282 lands (route: inline); evidence in L5
 - [x] T3 (kind: docs) S1: D3, the install example cut and the preface's rule (route: inline)
 
 ## Log
@@ -154,3 +155,14 @@ another order), conflicted in 5 of the 60 merges (`44c064c`, `b4f526d`, `1050643
 - L4 (2026-10-16, JH 25): T3. The install example keeps its first line and the two doctor lines of its real
   run, then `…`; the preface says output that grows with each feature is shown in part. `bin/readme.test.mjs`
   5 of 5. No test was written first: the change is prose, and the README's test checks the shape it keeps.
+- L5 (2026-10-16, JH 25): T2, written by a haiku writer and read here. `hookById`, `componentsIn`,
+  `ourHooks` and `ourFile` in `bin/lib/manifest.test.mjs`; the count, positional picks and full-list literals
+  gone; unique ids, unique target+pointer+entry and the `SessionStart` order per host file asserted.
+  `bin/install.test.mjs` builds its expected lines with its own template and keeps the guard's line literal;
+  `scripts/practice-lib.test.mjs` drops its literal and pins one entry per host. Changed from D1: the writer
+  pinned the whole settings file as a literal, and the scratch hook failed on it, so that test now compares
+  with `ourFile('settings.json')`. Tests: manifest 166 of 166, install 72 of 72, practice-lib 105 of 105. The
+  scratch hook (`claude-fake-hook` on `Notification`, its own test, its id on the reply capability's
+  `Today` line, its `HARNESS_HOOKS` line) changed only its own 7 lines of `manifest.test.mjs` and none of
+  `install.test.mjs` or `practice-lib.test.mjs`: manifest 167 of 167, install 72 of 72, practice-lib 105 of
+  105, and the `spec` row raised no finding about it.

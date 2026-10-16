@@ -141,6 +141,17 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
 - [x] T5 (S4; from session-channel T7) The row `session-classes` of `doctor`; and the explicit
   `install` flag that writes `crossSessionInbound: "accept"`, recorded and undone by `uninstall`
   (his answer, L3). Route: inline.
+- [ ] T6 (`record-states-wrong-fact` of docs/FAILURES.md) The row `citations` also checks that a task
+  the change checks off in a feature document names a commit, and that commit is reachable from HEAD
+  (not `main`: a feature branch checks its tasks off before it merges), building on
+  `bin/lib/citations.mjs`. It answers the entry's sixth sighting, `odd/tasks/gate-log.md` T3 to T8
+  checked off while their files were in no commit. The other five are runtime facts (a process
+  "was not killed", the cause of a wake, "failed three times") or lines of the relief file, which is
+  outside the repository; no check reads them, and their control stays AGENTS.md's rule that a claim
+  carries its evidence. The row stays INFO by its own rule. Test first; when done, the entry's
+  Control becomes that test. The lead's order of 2026-10-16 22:10Z: "fix the cause test first if it
+  breaks shipped behavior, else open its task in the owning feature doc and settle the entry";
+  nothing shipped is broken, so it is a task.
 
 ## Log
 - L1 — The opening of this session, by the orchestrator "JH ORQ · js-harness", 2026-10-14 (a claim,
