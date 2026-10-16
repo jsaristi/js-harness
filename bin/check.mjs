@@ -425,6 +425,41 @@ export function checkCitations(cwd, spawn = spawnSync) {
   return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
 }
 
+/** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
+ * a review reads, sized as `js-harness codex-review` sizes a range (documents and marked files left out), against
+ * the rule `reviewed-commit-lines`. Over it the row fails, so the commit is split before it is made: a commit the
+ * reviewer refused had already cost its gate, and remaking it cost two more. The rule is of this repository only,
+ * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
+ * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
+ * own branch), or when git cannot say. */
+export function checkCommitSize(cwd, spawn = spawnSync) {
+  const git = hookGit(cwd, spawn);
+  if (!git || git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) return [];
+  const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
+  if (!Object.hasOwn(rule, 'value')) return [];
+  const most = rule.value;
+  const numstat = git(['diff', '--cached', '--numstat', '-z', '--no-renames', '--no-relative']);
+  if (!numstat) return [];
+  let changed;
+  try {
+    const files = numstatFiles(numstat);
+    // The marks are those of the commit being made, as its review will read them: the tree the index holds, so a
+    // staged `.gitattributes` counts (Codex, 2026-10-16). Writing that tree is what the commit itself does.
+    const tree = git(['write-tree'])?.trim();
+    if (!tree) return [];
+    const why = leftOutOf(files.map((file) => file.path), { cwd, source: tree, spawn });
+    if (why === null) return [];
+    changed = reviewScope(files, why).read.reduce((sum, file) => sum + file.changedLines, 0);
+  } catch {
+    return [];
+  }
+  if (changed === 0) return [];
+  const said = `the staged change has ${counted(changed, 'changed line')} a review reads`;
+  const bound = `the ${counted(most, 'changed line')} of rule reviewed-commit-lines`;
+  if (changed <= most) return [{ name: 'commit-size', pass: true, detail: `${said}, within ${bound}` }];
+  return [{ name: 'commit-size', pass: false, detail: `${said}, over ${bound}: split it into commits under that, each with its own gate, before the reviewer refuses it` }];
+}
+
 /** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
  * not answer; or `null` itself when the environment is not to be trusted as the binding of the repository
  * of `cwd`, or `cwd` is not its top (the test `stagedDocuments` tells). The one place that test is made,
@@ -2346,7 +2381,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

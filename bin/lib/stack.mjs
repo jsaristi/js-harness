@@ -19,6 +19,7 @@ import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, rem
 import { INSTALL_NEWEST } from './version.mjs';
 import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
+import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -608,7 +609,9 @@ function hookCommandsState(deps) {
  * there (`memory-rules.mjs`); it runs in the session-start report as well, so a new one is told at the next session.
  * The session classes check's gap is `mismatch` in the `claude` cell: the project's recent sessions are of both
  * permission classes and the user setting that lets a message cross between them is not `accept`
- * (`session-classes.mjs`); its fix is `install --accept-session-messages`. */
+ * (`session-classes.mjs`); its fix is `install --accept-session-messages`. The pnpm lock check's gap is `stale` in the
+ * `claude` cell: the global bin lock a failed `pnpm add -g` left, which makes the next one wait five minutes and fail
+ * (`pnpm-lock.mjs`); it reads `PNPM_HOME` from `deps.env`, the env doctor was given, and its fix is the `rmdir`. */
 export const checks = [
   {
     id: 'memory-rules',
@@ -645,6 +648,13 @@ export const checks = [
     project: () => 'n/a',
     fix: (_deps, configured) => (configured?.claude === 'stale' ? { claude: [HOOK_FIX, ...configured.lines] } : {}),
     interactiveOnly: true,
+  },
+  {
+    id: 'pnpm-lock',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: (deps) => pnpmLockState({ env: deps.env }),
+    project: () => 'n/a',
+    fix: (_deps, configured) => (configured?.claude === 'stale' ? { claude: [PNPM_LOCK_FIX, ...configured.lines] } : {}),
   },
 ];
 
