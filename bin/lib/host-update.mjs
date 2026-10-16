@@ -98,7 +98,9 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date()) {
       ...(reviewed.desktop !== versions.desktop ? [`read ${DESKTOP_CHANGELOG} from ${reviewed.desktop} to ${versions.desktop}`] : []),
       ...(versions.code && reviewed.code && reviewed.code !== versions.code ? [`read the Claude Code CHANGELOG (${CODE_CHANGELOG}) from ${reviewed.code} to ${versions.code}`] : []),
       'check that the harness hooks in ~/.claude/settings.json still run',
-      'check Remote Control in each session',
+      // A restart of the app turns Remote Control off; his standing yes to turning it back on each time is in
+      // odd/tasks/host-update-check.md (L9).
+      'turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
       'report the benefits, the behavior changes and the breaking changes to the user',
       'then record the review: js-harness doctor --host-reviewed',
     ];

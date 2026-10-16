@@ -103,7 +103,7 @@ test('an update since the reviewed versions is stale until reviewed: its fix nam
     'read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
     'read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
     'check that the harness hooks in ~/.claude/settings.json still run',
-    'check Remote Control in each session',
+    'turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
     'report the benefits, the behavior changes and the breaking changes to the user',
     'then record the review: js-harness doctor --host-reviewed',
   ]);
