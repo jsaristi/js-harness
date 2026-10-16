@@ -87,7 +87,7 @@ export const RULES = [
     "value": 512,
     "unit": "KiB",
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\blog\\b.{0,80}\\b(?:past|over|above|at most|up to)\\s+{amount}"
+      "^(?!.*\\bruleValue\\().*(?:\\bgate log\\b|\\blog\\.jsonl\\b|\\blog file\\b).{0,80}\\b(?:past|over|above|at most|up to)\\s+{amount}"
     ]
   },
   {
