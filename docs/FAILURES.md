@@ -147,7 +147,7 @@ check said or before its answer was read.
 - Seen: 2026-10-12 — session 9265156a (JH 7), by its own messages to the lead (claimed) — a commit,
   its push and its pull request were joined by `;` in one command, twice; each step succeeded, so
   nothing went out that its check would have stopped
-- Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
+- Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
 
 ### check-survivor-test-fails
 A gate failed on one test of `bin/check.test.mjs`, "checkSensor kills a background process the command
@@ -732,6 +732,18 @@ to it were delivered only after the prompt was answered.
 - Control: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool
   and through the orchestrator"
 
+### pnpm-cleanup-deleted-link-targets
+A cleanup of pnpm's old install folders deleted folders that live installs still pointed to: in
+`pnpm/global/v11` some hashed names are links to such folders, and nothing resolved the links
+before deleting, so the commands behind them broke, and with them every session's hooks.
+- Class: machine
+- Seen: 2026-10-16 — relief file, line 1122 (claimed; the lead's) — the cleanup he allowed at line
+  1120 ("Sí, borralas (Recomendada)", for the folders no process holds) deleted 73 temporary
+  folders; four of them were the targets of links (js-harness, codex, ctx7, ccstatusline), so those
+  commands and every session's hooks failed from about 03:58 to 04:05 local; fixed by a
+  `pnpm add -g` of each, and all four then answered `--version`; the prevention named there is to
+  resolve every link in `v11` before a folder is deleted and keep its target
+
 ### pnpm-pack-refuses-crlf
 pnpm's own pack refuses this checkout on Windows, where `bin/js-harness.mjs` is checked out with
 CRLF; whether an install by pnpm from the repository meets it is not measured.
@@ -957,7 +969,7 @@ conflict git did not reproduce and the merge was refused.
 - Class: delivery
 - Seen: 2026-10-10 — relief file, line 164 — pull request 53: DIRTY, CONFLICTING; two merge bases
   found at lines 166 and 167
-- Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
+- Control: protocol — bin/lib/protocols-skill.mjs — "A stacked pull request is merged after its base, or its base is changed before the one under it is merged" — since 2026-10-16
 
 ### stale-prompts-sent
 He could not tell a session that worked from one that waited on him, and sent prompts that were

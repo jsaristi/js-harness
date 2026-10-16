@@ -1,0 +1,74 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { protocolsSkillContent, PROTOCOLS } from './protocols-skill.mjs';
+import { RULES } from './rules-data.mjs';
+
+const TEXT = protocolsSkillContent('0.1.0');
+
+/** The sections of the skill: each `## ` heading with the lines under it, up to the next heading. */
+function sections(text) {
+  const found = [];
+  for (const line of text.split('\n')) {
+    if (line.startsWith('## ')) found.push({ heading: line.slice(3), lines: [] });
+    else if (found.length > 0) found.at(-1).lines.push(line);
+  }
+  return found;
+}
+
+test('the protocols skill has a one-line description a host can read, with the version', () => {
+  const frontmatter = /^---\nname: js-harness-protocols\ndescription: (.+)\n---\n/.exec(TEXT);
+  assert.ok(frontmatter, TEXT.slice(0, 200));
+  // A colon followed by a space, or a hash after one, would end or break the YAML value a host parses.
+  assert.doesNotMatch(frontmatter[1], /: | #/);
+  assert.match(frontmatter[1], /\(js-harness v0\.1\.0\)/);
+});
+
+test('the protocols skill opens with an index of its six situations, in the order of its sections', () => {
+  assert.equal(PROTOCOLS.length, 6);
+  const body = TEXT.split('\n---\n')[1];
+  const index = body.split('\n').filter((line) => /^\d\. /.test(line)).slice(0, 6);
+  assert.deepEqual(index, PROTOCOLS.map((title, i) => `${i + 1}. ${title}.`));
+  assert.ok(body.indexOf(index[5]) < body.indexOf('\n## '), 'the index is above the first section');
+  assert.deepEqual(sections(TEXT).map((section) => section.heading), PROTOCOLS.map((title, i) => `${i + 1}. ${title}`));
+});
+
+// A section is kept for the incident it came for, so that it can be withdrawn when the incident has not come back
+// (odd/tasks/rule-hierarchy.md, "Protocols" and the signal "No protocol without its incident").
+test('every section of the protocols skill opens with the incident it came for and its date', () => {
+  for (const section of sections(TEXT)) {
+    const first = section.lines.find((line) => line.trim() !== '');
+    const match = /^Incident \((\d{4}-\d{2}-\d{2})\): (.+)/.exec(first ?? '');
+    assert.ok(match, `${section.heading}: ${first}`);
+    const date = new Date(`${match[1]}T00:00:00Z`);
+    assert.equal(date.toISOString().slice(0, 10), match[1], `${section.heading}: ${match[1]} is a day of the calendar`);
+    assert.ok(match[2].length >= 40, `${section.heading}: the incident is told, not only named`);
+  }
+});
+
+test('the protocols skill says how a section is withdrawn and that a missing one is proposed, never created', () => {
+  assert.ok(TEXT.includes('A section whose incident has not come back and that nobody used is withdrawn'));
+  assert.ok(TEXT.includes('reported and proposed to the user, never written as a protocol by the session that met it'));
+});
+
+test('a mistake is reported in its five parts, and a handoff always fills what was not checked and what failed', () => {
+  const [, , , , mistake, handoff] = sections(TEXT);
+  assert.equal(mistake.lines.filter((line) => /^\d\. /.test(line)).length, 5);
+  assert.ok(handoff.lines.join('\n').includes('"Not checked" and "failed" are always filled, with "nothing" when that is true'));
+});
+
+// One home for every rule: the skill names a rule by its id and never restates its value, and every id it names is
+// declared, so that a rule changed by `js-harness rules change` reaches this text with nothing to carry by hand.
+test('every rule id the protocols skill names is declared, and none of their values is written in it', () => {
+  const named = [...TEXT.matchAll(/`rule:([a-z0-9-]+)`/g)].map((match) => match[1]);
+  assert.ok(named.length > 0, 'the skill names the rules it relies on');
+  for (const id of named) {
+    const rule = RULES.find((declared) => declared.id === id);
+    assert.ok(rule, `${id} is declared`);
+    if (rule.value !== undefined) assert.ok(!TEXT.includes(String(rule.value)), `${id}'s value is not written in the skill`);
+  }
+});
+
+test('the protocols skill ships to every user of the harness, so it speaks of the user', () => {
+  assert.doesNotMatch(TEXT, /Sebasti/);
+  assert.match(TEXT, /the user/);
+});

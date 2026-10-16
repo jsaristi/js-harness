@@ -32,7 +32,11 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-12",
     "value": 5,
-    "unit": "percent of the allowance"
+    "unit": "percent of the allowance",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bmargin\\b.{0,40}(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent))",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent)).{0,20}\\bof the allowance\\b"
+    ]
   },
   {
     "id": "codex-review-rate",
@@ -41,7 +45,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "input tokens a changed line"
+    "unit": "input tokens a changed line",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:rate|cap|put at)\\b.{0,20}(?<![\\w:.-]){amount}\\s*(?:input )?tokens (?:a|per|for each) changed line"
+    ]
   },
   {
     "id": "context-pause",
@@ -156,7 +163,10 @@ export const RULES = [
     "subject": "the one model a Codex review runs on",
     "owner": "sebastian",
     "since": "2026-10-08",
-    "value": "gpt-6.1-sol"
+    "value": "gpt-6.1-sol",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?=gpt-){amount}"
+    ]
   },
   {
     "id": "review-part-files",
@@ -213,7 +223,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "changed lines"
+    "unit": "changed lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcommits?\\b.{0,50}\\b(?:up to|at most|under|no more than|holds?)\\s+(?:about\\s+)?(?<![\\w:.-]){amount}\\s*changed lines"
+    ]
   },
   {
     "id": "sensor-timeout",
@@ -232,7 +245,10 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort"
+    ]
   },
   {
     "id": "session-model",
@@ -240,7 +256,10 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "claude-opus-5-5"
+    "value": "claude-opus-5-5",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "sessions-open-in-sidebar",
@@ -257,7 +276,11 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-07",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?<![\\w/.-])(?:subagents?|sub-agents?|agent calls?|writers?|verifiers?|readers?)\\b(?![\\w-]*\\.\\w).{0,40}\\b(?:runs?|launched|launch(?:es)?|go(?:es)?)\\b.{0,20}\\b(?:at|with) `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\()(?!.*\\bgpt-).*\\beffort: \"{amount}\""
+    ]
   },
   {
     "id": "subagent-reader-model",
@@ -266,7 +289,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-10",
     "value": "claude-opus-5-5",
-    "alias": "opus"
+    "alias": "opus",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:readers?|verifiers?|reviewers?)\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "subagent-writer-model",
@@ -275,7 +301,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": "claude-haiku-5-5",
-    "alias": "haiku"
+    "alias": "haiku",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "wait-every",
@@ -310,6 +339,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-09",
     "value": 3,
-    "unit": "sessions"
+    "unit": "sessions",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:at most|up to|no more than)\\s+{amount}\\s*(?:work )?sessions\\b",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*work sessions\\b"
+    ]
   }
 ];

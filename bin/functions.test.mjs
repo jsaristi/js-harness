@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { functionsMain } from './functions.mjs';
+import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // A real git runs here: not the host's configuration, nor the repository of a commit's hook (see
 // bin/lib/project.test.mjs).
@@ -20,11 +21,16 @@ before(() => {
 });
 after(() => fs.rmSync(configDir, { recursive: true, force: true }));
 
+/** What `git init` makes, made once and copied (`lib/git-fixture.testkit.mjs`): every empty repository here is the same. */
+const emptyRepo = repoTemplate((root) => {
+  const init = spawnSync('git', ['init'], { cwd: root, encoding: 'utf8' });
+  assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+});
+
 function repo(t, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-functions-cmd-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const init = spawnSync('git', ['init'], { cwd: root, encoding: 'utf8' });
-  assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+  emptyRepo(root);
   for (const [name, text] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), text);

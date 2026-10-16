@@ -15,7 +15,14 @@
 // Bounded by rotation and never by rewriting: a gate that finds `log.jsonl` past its bound renames it to
 // `log.1.jsonl`, over the older one, and appends to a new file. A rewrite would lose the line a gate
 // appends meanwhile, and the gate that loses it is the one that runs without the lock, which the log
-// exists to show. So the folder holds two files at most.
+// exists to show. So the log is two files at most.
+//
+// Beside it, a file of its own: `busiest.jsonl`, a line for each gate that kept who spent the processor
+// over its run (`appendGateBusiest`, and `watchBusiest` of `./machine-busiest.mjs`), keyed by the id of
+// that gate's lines in the log. Of its own so that no reader of the log's lines meets a new field: gates
+// of several versions of the harness write the one log of a machine, and a field one version adds is a
+// line another version may refuse (odd/tasks/gate-wait.md, T19). It is bounded the same way, by the same
+// figure, into `busiest.1.jsonl`, so the folder holds four files at most.
 //
 // Nothing here throws to a gate, and nothing a gate proves depends on its record.
 import fs from 'node:fs';
@@ -50,6 +57,8 @@ export function gateLogDir(home) {
 
 const CURRENT = 'log.jsonl';
 const OLDER = 'log.1.jsonl';
+const BUSIEST_CURRENT = 'busiest.jsonl';
+const BUSIEST_OLDER = 'busiest.1.jsonl';
 
 /** Whether `file` is there, is not empty and does not end with a line break: what a write that was cut
  * short leaves. `false` for a file that cannot be looked at, since the line is appended all the same.
@@ -93,20 +102,35 @@ function endsUnterminated(io, file) {
  * within the same few microseconds, once in some 700 gates.
  * `fileSystem` stands in for `node:fs` in a test. */
 export function appendGateEvent(home, event, { maxBytes = GATE_LOG_MAX_BYTES, fileSystem: io = fs } = {}) {
+  return appendLine(home, [CURRENT, OLDER], event, { maxBytes, io });
+}
+
+/** Appends `value` as a line of its own to the file `current` of the folder of `home`, which is renamed to
+ * `older` first where it is past `maxBytes`: what `appendGateEvent` says, for any file of the folder. */
+function appendLine(home, [current, older], value, { maxBytes, io }) {
   try {
     const dir = gateLogDir(home);
     io.mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, CURRENT);
+    const file = path.join(dir, current);
     try {
-      if (io.statSync(file).size > maxBytes) io.renameSync(file, path.join(dir, OLDER));
+      if (io.statSync(file).size > maxBytes) io.renameSync(file, path.join(dir, older));
     } catch {
       // no file yet, or a rename refused: the line is appended all the same
     }
-    io.appendFileSync(file, `${endsUnterminated(io, file) ? '\n' : ''}${JSON.stringify(event)}\n`, 'utf8');
+    io.appendFileSync(file, `${endsUnterminated(io, file) ? '\n' : ''}${JSON.stringify(value)}\n`, 'utf8');
     return { ok: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/** Appends the line of one gate to `busiest.jsonl`, beside the log, as `appendGateEvent` appends an event:
+ * rotated past `maxBytes` into `busiest.1.jsonl`, `{ ok: true }` or `{ error }`, never a throw. The line is
+ * `{ v, id, at, seconds, busiest }`: the version, the id of the gate's lines in the log, when it was
+ * written, the seconds of the run, and who spent the processor over it, `[{ pid, name, script?,
+ * cpuSeconds }]`, the heaviest first. `gateRecord` writes it (`busiest`), with what its reader takes. */
+export function appendGateBusiest(home, line, { maxBytes = GATE_LOG_MAX_BYTES, fileSystem: io = fs } = {}) {
+  return appendLine(home, [BUSIEST_CURRENT, BUSIEST_OLDER], line, { maxBytes, io });
 }
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -245,6 +269,51 @@ export function readGateLog(home, { fileSystem: io = fs } = {}) {
   return { dir, events, skipped, ...(unavailable.length && { unavailable }) };
 }
 
+/** A process that spent the processor over a gate's run, as far as a reader prints it: its name, its
+ * script or `null` or none, its seconds and its pid where it is there. Asked by the reader of
+ * `busiest.jsonl` and by its writer (`gateRecord`), so that the two cannot come apart. */
+const isSpent = (value) => isBusiest(value) && isText(value.name) && Number.isFinite(value.cpuSeconds) && (value.pid === undefined || Number.isFinite(value.pid));
+
+/** Whether `value` is a line of `busiest.jsonl` of this version, whole. */
+const isBusiestLine = (value) => (
+  isObject(value)
+  && value.v === GATE_LOG_VERSION
+  && isText(value.id)
+  && isText(value.at)
+  && Number.isFinite(Date.parse(value.at))
+  && Number.isFinite(value.seconds)
+  && listOf(isSpent)(value.busiest)
+);
+
+/** Who spent the processor over each gate of `home` that kept it: a map from the id of the gate's lines
+ * in the log to its line of `busiest.jsonl` (`appendGateBusiest`), from both files. A line that is torn,
+ * is not JSON or is no line of this version whole is left out, never fatal, and so is a file that cannot
+ * be read: what it holds is an addition to a gate's line, and a gate without it prints as it always did.
+ * The newer file is read first, as `readGateLog` reads the log, so that a rotation between the two
+ * readings costs no line; a gate's line in the newer file is the one kept. */
+export function readGateBusiest(home, { fileSystem: io = fs } = {}) {
+  const dir = gateLogDir(home);
+  const byId = new Map();
+  for (const name of [BUSIEST_CURRENT, BUSIEST_OLDER]) {
+    let text;
+    try {
+      text = io.readFileSync(path.join(dir, name), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const line of text.split('\n')) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (isBusiestLine(parsed) && !byId.has(parsed.id)) byId.set(parsed.id, parsed);
+    }
+  }
+  return byId;
+}
+
 /** The gates of `events`, in the order they began: `{ start, end }` for a gate that ran, with no `end` for
  * one that was killed or still runs, `{ refused }` for one that was refused its turn, and `{ stopped }` for
  * one that stopped before its sensors, which is the end of no start whatever id it has. An end whose start
@@ -327,8 +396,12 @@ function sameSaid({ by }) {
  * took and how it ended, the lock where it was not its own, the load it started under, whom it waited for,
  * and its folder. A start that has no end says so, a refusal says why it was refused, and a gate that
  * stopped before its sensors says that and for which rows, so that it reads as none of the others: it
- * neither ran, nor was refused, nor was killed. What a gate does not have is left out of its line. */
-export function formatGates(gates) {
+ * neither ran, nor was refused, nor was killed. What a gate does not have is left out of its line.
+ *
+ * `busiest` is who spent the processor over each gate that kept it (`readGateBusiest`): the line of a gate
+ * that ran and has one ends with the three heaviest, so that the reason a run was slow is read beside its
+ * seconds. A gate without one prints as it did before the file was there. */
+export function formatGates(gates, busiest = new Map()) {
   return gates.map(({ start, end, refused, stopped, same }) => {
     const first = start ?? refused ?? stopped ?? same;
     let parts;
@@ -336,8 +409,17 @@ export function formatGates(gates) {
     else if (same) parts = [sameSaid(same)];
     else if (refused) parts = [`refused (${refused.reason})`, waitSaid(refused, true)];
     else parts = [end ? `${wholeSeconds(end.seconds)}  ${end.result}` : 'no end (killed, or still running)', LOCK_SAID[start.lock], loadSaid(start.load), waitSaid(start)];
-    return [localTime(first.at), ...parts, first.cwd].filter(Boolean).join('  ');
+    return [localTime(first.at), ...parts, first.cwd, start && spentSaid(busiest.get(start.id))].filter(Boolean).join('  ');
   });
+}
+
+/** Who spent the processor over a gate's run, in a few words: the three heaviest, each by its name, its
+ * script in parentheses where it has one, and its whole seconds. `null` for a gate that kept nobody. */
+function spentSaid(line) {
+  const spent = line?.busiest ?? [];
+  if (spent.length === 0) return null;
+  const said = spent.slice(0, 3).map(({ name, script, cpuSeconds }) => `${name}${script ? ` (${script})` : ''} ${Math.round(cpuSeconds).toLocaleString('en-US')} s`);
+  return `busiest: ${said.join(', ')}`;
 }
 
 /** Milliseconds as the seconds a line holds, to a tenth. */
@@ -380,20 +462,28 @@ function loadWritten(load) {
  * - `stopped({ rows })`, for a gate that ran nothing because a row it knew before its sensors had already
  *   failed: `rows` are the names of the rows that stopped it. It is the one line of that gate, which wrote
  *   no start and writes no end.
+ * - `busiest({ seconds, busiest })`, after the end of a gate that started: who spent the processor over
+ *   its run (`watchBusiest` of `./machine-busiest.mjs`), written in `busiest.jsonl` under the gate's `id`
+ *   (`appendGateBusiest`). Each process is written as its reader takes it (`isSpent`) and the rest is left
+ *   out; nothing is written for a gate whose start is not in the log, which nothing could key it by, nor
+ *   where nobody was found.
+ * - `id`, the id of the gate's lines, and `started()`, whether its start is in the log: a gate takes the
+ *   readings `busiest` writes only where it can be written.
  * - `failure()`: `undefined`, or why the log could not be written and what is missing from it, to be said
  *   after `the gate log`. A gate has one such sentence at most, and `onFailure` is called with it once.
  *
- * None of them throws. `append`, `now` and `id` stand in for the writer, the clock and the random id. */
-export function gateRecord({ home, cwd, command, pid = process.pid, append = appendGateEvent, now = Date.now, id = randomUUID, onFailure }) {
+ * None of them throws. `append`, `appendBusiest`, `now` and `id` stand in for the writer of the log, the
+ * writer of `busiest.jsonl`, the clock and the random id. */
+export function gateRecord({ home, cwd, command, pid = process.pid, append = appendGateEvent, appendBusiest = appendGateBusiest, now = Date.now, id = randomUUID, onFailure }) {
   const gate = id();
   const said = { cwd, command: String(command).slice(0, GATE_COMMAND_MAX), pid };
   let startedAt;
   let failure;
-  /** Writes one line at the clock's time `at`; `false`, with the failure kept, when it could not. */
-  const write = (what, at, event) => {
+  /** Hands one line to `writer`; `false`, with the failure kept and said, when it could not be written. */
+  const handed = (what, writer, line) => {
     let answer;
     try {
-      answer = append(home, { v: GATE_LOG_VERSION, event: event.event, id: gate, at: new Date(at).toISOString(), ...event });
+      answer = writer(home, line);
     } catch (err) {
       answer = { error: err instanceof Error ? err.message : String(err) };
     }
@@ -404,6 +494,8 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
     }
     return false;
   };
+  /** Writes one line of the log at the clock's time `at`; `false`, with the failure kept, when it could not. */
+  const write = (what, at, event) => handed(what, append, { v: GATE_LOG_VERSION, event: event.event, id: gate, at: new Date(at).toISOString(), ...event });
   // The lock keeps its holder's command whole, so the command of a gate this one waited for is cut here as
   // this gate's own is: it can hold the same secret, and a line has to stay short enough to be one write.
   const cut = (holder) => (typeof holder.command === 'string' ? { ...holder, command: holder.command.slice(0, GATE_COMMAND_MAX) } : holder);
@@ -413,6 +505,16 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
   // place in the log.
   const waited = ({ waitedMs, waitedFor }) => ({ waitedSeconds: seconds(waitedMs), waitedFor: (Array.isArray(waitedFor) ? waitedFor : []).filter(isGateWaitedFor).map(cut) });
   return {
+    id: gate,
+    started: () => startedAt !== undefined,
+    busiest({ seconds: runSeconds, busiest } = {}) {
+      if (startedAt === undefined || !Array.isArray(busiest)) return;
+      // Written as the reader takes it (`isSpent`): a script of `null` is left out, as are fields no
+      // reader looks at, and a process the reader would refuse is not written at all.
+      const spent = busiest.filter(isSpent).map(({ pid: spentPid, name, script, cpuSeconds }) => ({ ...(Number.isFinite(spentPid) && { pid: spentPid }), name, ...(isText(script) && { script }), cpuSeconds }));
+      if (spent.length === 0) return;
+      handed('who spent the processor over this gate', appendBusiest, { v: GATE_LOG_VERSION, id: gate, at: new Date(now()).toISOString(), seconds: Number.isFinite(runSeconds) ? runSeconds : 0, busiest: spent });
+    },
     start({ lock, waitedMs, waitedFor, load }) {
       const at = now();
       const sampled = loadWritten(load);

@@ -184,7 +184,7 @@ export function shareRefusal(text, { tokens, window }) {
   const wrong = ownShares(text, window).find(({ stated }) => Math.abs(stated - recorded) > SHARE_TOLERANCE);
   if (wrong === undefined) return null;
   return `js-harness guard: this reply states your context at ${wrong.stated}%, and your transcript records ${recorded}% of a `
-    + `${Math.round(window / 1000)}k window (the window of your last get_usage read, else the default). The reply is already `
+    + `${Math.round(window / 1000)}k window (the window the host is configured with, else your last get_usage read, else the default). The reply is already `
     + 'sent: correct it in one line with the share mcp__ccd_session_mgmt__get_usage reads now, and say no share you have '
     + 'not just read.';
 }
