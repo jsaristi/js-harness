@@ -91,7 +91,7 @@ export function serverArgs({ name, spawnMode = 'same-dir', permissionMode } = {}
 /** What cmd.exe acts on in a line of a batch file, quoted or not: the operators, `%` (a variable, expanded inside
  * quotes too), `!` (the same, where delayed expansion is on), a quote, which no escape gets past both cmd.exe and
  * the program it starts, and control characters, a line end among them. */
-const UNSAFE_IN_BATCH = /[&|<>^%"!\x00-\x1f\x7f]/;
+export const UNSAFE_IN_BATCH = /[&|<>^%"!\x00-\x1f\x7f]/;
 
 /** The values a launcher holds, each with what it is called when it is refused. `startCommandLine` checks these and
  * builds the command from what it checked, so no value reaches the file unchecked or is refused without a name. */
@@ -378,13 +378,37 @@ function openLog(logPath) {
   }
 }
 
+/** Whether the log at `logPath` ends inside a line: on Linux a SIGKILL can cut the server's last write short, and
+ * a note glued onto that piece is a line `remote status` no longer reads as a note. Best effort: a log that cannot
+ * be read is taken as ending a line. */
+function endsInsideLine(logPath) {
+  let fd;
+  try {
+    fd = fs.openSync(logPath, 'r');
+    const size = fs.fstatSync(fd).size;
+    if (size === 0) return false;
+    const last = Buffer.alloc(1);
+    fs.readSync(fd, last, 0, 1, size - 1);
+    return last[0] !== 0x0a;
+  } catch {
+    return false;
+  } finally {
+    try {
+      if (fd !== undefined) fs.closeSync(fd);
+    } catch {
+      // a handle that would not close costs nothing else
+    }
+  }
+}
+
 /** Adds one `[js-harness remote] ...` line to the log, best effort: the supervisor has nowhere else to say that
- * its log cannot be written, and must keep the server up all the same. */
+ * its log cannot be written, and must keep the server up all the same. The note starts a line of its own, also
+ * after a last line the server left without its end (`endsInsideLine`). */
 export function logNote(logPath, text) {
   const fd = openLog(logPath);
   if (fd === null) return;
   try {
-    fs.appendFileSync(fd, `[js-harness remote] ${text}\n`);
+    fs.appendFileSync(fd, `${endsInsideLine(logPath) ? '\n' : ''}[js-harness remote] ${text}\n`);
   } catch {
     // an unwritable log loses the line, nothing else
   } finally {

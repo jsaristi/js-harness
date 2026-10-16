@@ -7,11 +7,10 @@ Branch: `feat/on-demand-functions`, in the linked worktree
 (app session `local_11c45a36-0115-4c92-b865-f1dc3f68c3c1`) · Runner: `node --test` · Delivery:
 ask-on-risk
 
-State 2026-10-13 19:43 (this machine's clock): the design is in its second version, after its
-two readers, and his four answers make it his (S6 to S9). One question is open with him, the
-first push of a project, built last. Slice 1 is being committed: T1, then the reader of a
-project's switches, the unrouted `functions` view and the settings key. Next: slice 2 ("The
-order of the build"), in a worktree of its own stacked on this branch.
+State 2026-10-15 (this machine's clock): slice 3 is `09e605f` + `28a6cad` on feat/on-demand-functions-3, based on `main` at `eab3eff`, reviewed by gentle-ai (approved) and Codex (correct), going to its pull request (L25, L26). Every task is checked off. Slices 1 and 2 are on main
+(pull requests 111 and 131; L17 to L19). Next: slice 3, in a branch of its own
+("The order of the build"): the `bin/check.mjs` rows, `codex-review` reading the switch, the S9 review row,
+`doctor`'s codegraph row (T6's rest), then the texts (T8) and the first push (S10).
 
 ## Goal
 A project chooses which of the harness's functions it runs: what serves only programming is off
@@ -544,7 +543,7 @@ not write.
 
 ## Tasks
 
-- [ ] T0 (route: inline, with two read-only explorers for the map and two readers; first
+- [x] T0 (done: his four answers are S6 to S9, read from his lines; route: inline, with two read-only explorers for the map and two readers; first
   version `f8e70c0`) The design: the functions that exist and what each costs when it is not
   needed, which become switches, where a switch is stored, how each command reads it, the
   defaults, the migration; attacked by two readers; its questions sent to the orchestrator.
@@ -554,22 +553,25 @@ not write.
   from a parsed `harness.json`, answers "the project holds code" from a list of paths, resolves
   each switch with its reason. Pure, no git and no file read in it, so every rule is a test.
   The default of `codexReview` is one constant, since question 2 may move it.
-- [ ] T2 (route: inline; S2) The probe: Claude Code honors `env.CODEGRAPH_NO_PROMPT_HOOK` and
+- [x] T2 (route: inline; S2; done 2026-10-14, L17) The probe: Claude Code honors `env.CODEGRAPH_NO_PROMPT_HOOK` and
   the `enabledPlugins` key from a clone's `.claude/settings.local.json`; its output in the Log.
-- [ ] T3 (route: inline; S2) `js-harness functions`, the read-only view, and its route.
-- [ ] T4 (route: inline; S4; needs JH 8's `bin/check.mjs`) `codexReview` in the commit's rows,
+- [x] T3 (route: inline; S2; slice 1, pull request 111) `js-harness functions`, the read-only view, and its route.
+- [x] T4 (slice 3, L20 to L22) (route: inline; S4; needs JH 8's `bin/check.mjs`) `codexReview` in the commit's rows,
   in the push row read at the pushed tip before the remote, and in `codex-review`; the line
   when a push turns the review off; one test for each existing behavior of those rows at the
   default.
-- [ ] T5 (route: inline; S2, S3; needs JH 8's `bin/lib/project.mjs`) The manifest's `settings`
+- [x] T5 (route: inline; S2, S3; slice 2, L17) The manifest's `settings`
   list, `functions apply`, and `uninstall` undoing each key exactly.
-- [ ] T6 (route: inline; S1, S3; needs JH 8's and JH 5's files) `codeMap` in `init`, `sync` and
+- [x] T6 (slice 3: the `functions` row, L20; `doctor`'s codegraph row, L22) (route: inline; S1, S3; needs JH 8's and JH 5's files) `codeMap` in `init`, `sync` and
   `doctor`; the `functions` row of the gate; the fixtures of the tests that expected an index
-  in an empty repository.
-- [ ] T7 (route: inline; S2) `functions set`.
-- [ ] T8 (route: inline; S4; needs JH 5's and JH 7's files) The texts: the skill, the usage,
+  in an empty repository. Done in slice 2 (L17): `init`, `sync`, the fixtures. Open: `doctor`'s
+  codegraph row (`n/a` where the map is off) and the gate's `functions` row, in slice 3.
+- [x] T7 (route: inline; S2; slice 2, L17) `functions set`.
+- [x] T8 (slice 3, L23) (route: inline; S4; needs JH 5's and JH 7's files) The texts: the skill, the usage,
   the Codex rules, the `AGENTS.md` template that serves both kinds.
-- [ ] T9 What his answers add: the push check wired by `init` (question 1), the migration
+- [x] T9 (question 1: the pre-push hook `init` and `sync` wire, slice 2; question 3: `sync` applies the
+  switches and says so, slice 2; question 4: the review row and the template's line, slice 3) What his
+  answers add: the push check wired by `init` (question 1), the migration
   (question 3), gentle-ai's rule with the Codex review off (question 4). Written when answered.
 
 Forecast: over 400 authored lines, so more than one pull request; the slices are the stretches
@@ -637,6 +639,33 @@ What the code already gives, so the slice stays call sites and one new module
   `createdDir`. Errors in `functions` apply nothing.
 - The settings file is `.claude/settings.local.json` under the root; a record's `path` is
   repository-relative, like a file's.
+
+### Slice 3, read before it is written (`bin/check.mjs` at `c33b7bf`)
+
+In its own worktree, `D:\js-harness-worktrees\on-demand-functions-3`, branch `feat/on-demand-functions-3`,
+stacked on `feat/on-demand-functions-2`. Each unit test first:
+
+1. **The `functions` validation row** (S2): `functions` errors in the working tree's `harness.json` fail the
+   commit's gate, before the sensors, as `sameTree` does (`discoverSameTree`, `check.mjs:316`).
+2. **The push row reads the switch at the pushed tip, before the remote** (S4, S6):
+   `checkCodexReviews(cwd, head)` (`:1271`) asks `harnessOfCommit` + `commitTree` of the tip
+   (`bin/lib/project-functions.mjs`) before `codexReviewCoverage` (`:1212`) resolves a remote. Off: pass with
+   one line, the value and why. An unreadable switch is read as on and said. When the tip turns it off and the
+   default branch has it on, a line of its own: "this push turns the Codex review off: <commit>".
+3. **The debt row** (`checkCodexReviewDebt`, `:1340`): with the review off in the working tree, one line and
+   no git.
+4. **The review row** (`checkReview`, `:1159`, S9): with the Codex review off, a medium change is said due
+   ("medium risk and the Codex review is off here"); with gentle-ai's mode off too, the row says no review
+   reads this project's code.
+5. **`codex-review`** (`bin/codex-review.mjs`): with the switch off at the head it would review, it launches
+   nothing, says why and exits 0; `--plan` the same; `--unavailable` always records.
+6. **The `functions` information row**: silent when the clone is what its switches ask; otherwise one line
+   per difference and `js-harness functions apply`. Read-only (a gate writes nothing).
+7. **`doctor`'s codegraph row** (`bin/lib/stack.mjs:330-348`): `n/a` in the project cell where the map is
+   off, and no fix printed. Tell the lead before (JH 5 holds doctor's Codex row, not this one).
+Then T8, the texts (each after its owner's word), S10 (the first push to an empty remote), and the owed
+item of `docs/todo.md`: what `codegraph init` writes under the home (`.codegraph/telemetry-queue.jsonl`,
+`.codegraph/telemetry.json`) is recorded by no manifest (register entry `init-leaves-codegraph-files`).
 
 ## Log
 
@@ -779,3 +808,159 @@ What the code already gives, so the slice stays call sites and one new module
   (`node --test bin/js-harness.test.mjs`, 33 of 33). The route touches the dispatcher every
   command shares, by one entry in its table; the test of `--help` that lists the other commands
   still passes. Risk: none.
+- **L16** (2026-10-13 22:50 to 2026-10-14 01:10) Pull request 111 opened at `8649718`; `main`
+  at `c99abbc` merged in as `b8a4022` at the orchestrator's word (check waited 4 min 4 s, tests
+  passed; pre-push: "4 code commits since origin/main, all covered by a Codex review record");
+  the orchestrator merged it (`main` = `3f59bb2`, after a reboot of the machine at his order).
+  The second Codex review, of the fixes and the route (`d24c510..8649718`), answered "the patch
+  is correct" with 122,175 input tokens. The notes for `docs/SPEC.md` he asked for (the
+  orchestrator's line 14050) were sent for slice 1, four capabilities. Owed from others, read
+  before slice 2 and slice 3 are written: JH 11 adds two imports and `...checkOwnRules(cwd)` in
+  `bin/check.mjs` and one line of `agentsTemplate` in `bin/lib/project.mjs`; whichever lands
+  second merges `main`. A separate item, the Codex plan learning from what reviews spent, was
+  declined as another feature. Next: slice 2.
+- **L17** (2026-10-14 02:49 to 04:43) Paused at the lead's word (his line 1647 of `ffe99ebf`), then
+  resumed on his tapped answer at line 2856 ("Retomar con el gate viejo (Recomendada)"), when the WSL gate
+  landed on `main` (03:54). `main` at `8aa93c3` merged in as `a86c7e0` (its check waited in the line from
+  03:55; tests passed). Slice 2 was written in the scratchpad while that merge waited, and moved in after.
+  What it is, each rule with its test written first and seen red against the code before it:
+  1. `bin/lib/project-apply.mjs` (new): `planFunctions` (what the resolved switches ask of a clone: the
+     settings keys, the index to make, remove or leave, the push check), `applySettings` (the keys made to
+     hold, recorded, taken back, never over another value), `isValidSettingsRecord` (a record names a known
+     key, its own pointer and value, in `.claude/settings.local.json` only). 16 tests; red with the module
+     absent.
+  2. `bin/lib/project.mjs`: `init` and a fresh clone's `sync` make the index only where the code map asks
+     for one, write the keys and record them under `settings` with `format: 1`, take the keys back on a
+     rollback; `sync` follows a changed switch (a key no longer wanted is removed, an index the harness made
+     is removed for a declared `off`, never for `auto`); `uninstall` puts each key back; a manifest of a
+     newer format is refused by both, touching nothing (`newerManifest`, printed by `bin/install.mjs`).
+     `bin/lib/project-switches.test.mjs`, 12 tests, 10 red on the code before (the other two guard what was
+     already true). 22 tests of `project.test.mjs` expected an index in an empty repository; their fixtures
+     now hold a program (`makeCodeRepo`, `makeClone({ code: true })`), by design (S3), and two of them count
+     the two keys. `install.test.mjs`: one test of the refusal's words, red on the old `install.mjs`.
+  3. The push check (S6): `init`, `sync` and `functions apply` write `pre-push` where `codexReview`
+     resolves on (one `js-harness check --push` a pushed ref, a delete skipped, as `.githooks/pre-push`
+     does), record it, take it away where the review is turned off while it holds what was written, and
+     keep a hook of the project's own. 5 tests, 4 red before.
+  4. `js-harness functions apply` and `functions set <name> <value>` (`bin/functions.mjs`, help line in
+     `bin/js-harness.mjs`): apply needs no pin; where no manifest exists it writes one with `scope:
+     "functions"` holding only what it applied, and only when something was; `set` writes one switch into
+     `harness.json` in the file's own layout and applies it. 6 tests, 5 red before. `status` says "only its
+     switches applied" for such a manifest (JH 8's point 1; `bin/update.mjs`, one test red before), and
+     `sync` of a pinned project sets such a clone up the rest of the way (the pre-commit gate). JH 8's point 2
+     holds by construction: that manifest's `files` is empty, so `uninstall` never touches a `harness.json`
+     it did not write (the apply test reads it back byte for byte).
+  5. The `AGENTS.md` template serves both kinds: "where the work lives: the code, the data, the documents",
+     and "a finding, with the evidence that proves it" beside the test. One test, red before.
+  The first commit's gate failed one more of the same kind, `evals/home.test.mjs` (the real `init` in a
+  workspace holding only `a.txt`): that fixture now holds a program. Real trials are not touched: `prepareSandbox`
+  commits the task's fixture, which holds its code, before `init` runs (`evals/configs.mjs:177-191`).
+  A slip, told to the lead at once: `project.test.mjs` whole (150 tests, 4 min) ran outside the lock
+  beside the gate of `commands-and-doctor`. Every later run of it is under `js-harness gate --`.
+  T2, the probe (Claude Code 2.1.296, in a scratch repository under the temp folder, removed after): with
+  `.claude/settings.local.json` holding `env` `{ "JS_HARNESS_PROBE": "from-settings-local",
+  "CODEGRAPH_NO_PROMPT_HOOK": "1" }`, `claude -p` with Haiku ran `echo` in its Bash tool and answered
+  `probe=from-settings-local hook=1`: the keys of `env` reach the session from that file. With it holding
+  `enabledPlugins` `{ "typescript-lsp@claude-plugins-official": false }`, `claude plugin list --json` there
+  gave that plugin `"enabled": false`; with the file removed, `"enabled": true`. Both keys are honored from
+  the clone's own file.
+- **L18** (2026-10-14 05:14 to 05:30) gentle-ai over `a86c7e0..02e898f`: medium risk, 1,411 lines, review not
+  due (`under_budget`). The Codex review of that range, planned at about 904,000 input tokens inside an
+  allowance of 1,618,800, ran under the lock in 5 parts and is recorded: 859,614 input tokens (630,784 cached),
+  339 s. Parts 3 and 5 "correct"; parts 1, 2 and 4 "incorrect", six P2 findings, five defects, all true, all
+  fixed in the commit that carries this entry, each with its test seen red first:
+  1. `functions set` outside a git repository rewrote `harness.json` before `apply` refused: both verbs now
+     refuse first and write nothing.
+  2. `functions apply --cwd` a folder that does not exist threw on `result.actions`: it now says "no such
+     directory" and exits 1.
+  3. A recorded key written again (somebody removed the key and left its object) lost what the harness had
+     made, so the last undo left the file: the earlier record now counts with the others.
+  4. A write or an undo that throws partway (a disk error) lost the record of a key already written, in
+     `applySettings` and so in `init` and `sync`: each key's throw is now that key's `problem` or `failed`,
+     and what was written is returned to be recorded (two findings, one defect).
+  5. Taking the push check away followed a hooks folder that a link now sends outside the repository: the
+     real-path containment `uninstall` checks runs first, and such a hook is kept ("moved outside").
+  Runs: `node --test bin/lib/project-apply.test.mjs` 19 of 19, `bin/functions.test.mjs` 15 of 15,
+  `bin/lib/project-switches.test.mjs` 19 of 19.
+- **L19** (2026-10-14 05:52 to 06:04) Codex over the fixes (`02e898f..31889aa`): "the patch is correct",
+  92,385 input tokens. `main` at `2a29285` merged in as `f9c0482` (its check passed). Pushed; the pre-push check
+  said "2 code commits since origin/main, all covered by a Codex review record". Pull request 131 opened, the
+  orchestrator told, with the notes for `docs/SPEC.md`. Context at 75 percent: cut here, at the slice's end.
+- **L20** (2026-10-14 13:58 to 14:44) The lead woke this session (his line 5141 of `ffe99ebf`: the seven-hour stall).
+  `main` at `c33b7bf` merged into pull request 131 as `afe4be0`, pushed; a second merge (for `cb303a8`) was stopped
+  in the lock's line and aborted on his decision at line 5394 (a code pull request merges on a green GitHub run
+  against the main it lands on). Slice 3 started in `D:js-harness-worktreeson-demand-functions-3`, branch
+  `feat/on-demand-functions-3`, stacked on `afe4be0`; units 1 to 5 of "Slice 3, read before it is written" are
+  written, each test first and seen red: the `functions` row (`checkFunctions`, `clonePending`), the push row
+  at the pushed tip, the debt row, the S9 review row, and `codex-review` stopping where the review is off
+  (`bin/check-functions.test.mjs` 12, `bin/codex-review-switch.test.mjs` 2; the test of `main` that lists the
+  git a gate asks now allows `ls-files`). Their run of the affected suites under the lock was stopped before it
+  ran: slice 3 is PAUSED by his order at line 5906 ("pausemos todo e implementemos las soluciones"), corrections
+  first (line 5853). Its commit was REFUSED by the gate (15:2x): `bin/codex-review.test.mjs` builds repositories
+  that hold no program, where `codexReview` `auto` now resolves off and `codex-review` stops, so its tests fail.
+  The units are staged in the worktree, NOT committed and not pushed. At 15:58 the fixtures declare
+  `codexReview: on` (`declareReviewOn` in `bin/codex-review.test.mjs`: `buildRepoWith`, the rename and binary
+  test, `makeSubmoduleRepo`), staged too, NOT yet run: its run under the lock was taken out of the gate queue by
+  the lead (the queue is for the corrections; slice 3's gate turns wait for "JH 9 resume" or the pause's end).
+  Meanwhile the correction is pull request 146 (`fix/codegraph-home-files`, `7a853bf`: `codegraph init` runs with
+  `DO_NOT_TRACK=1`). To resume: run `bin/codex-review.test.mjs` under the lock, then commit through the gate.
+  Owed after it: unit 7, T8, S10.
+- **L21** (2026-10-15 00:13) The pause is lifted for this session: the lead's message says he tapped "Sí, esas
+  cuatro (Recomendada)" to resume JH 15, 9, 14 and 13 (relief line 878); the machine restarted at 23:52.
+  Pull request 146 (the correction) and pull request 131 (slice 2) are on `main`. Slice 3's branch moved by
+  fast-forward from `afe4be0` to `main` at `eab3eff`, and its staged units were applied on it; three import and
+  row-list conflicts in `bin/check.mjs` and `bin/codex-review.mjs` were resolved by keeping both sides (main's
+  `checkOwnRules`, `checkCitations`, the recheck imports, beside this slice's switch imports and the
+  `functions` row). Next: the commit through the gate, its reviews, then unit 7, T8, S10.
+- **L22** (2026-10-15 00:23) While that commit waited in the gate's line, unit 7 and S10 were written, each test
+  first and seen red. Unit 7: `doctor`'s codegraph project cell is `n/a` where `codeMap` is off
+  (`bin/lib/stack.mjs`, the codegraph row; `deps.functions` was already resolved by `doctor` for the Codex
+  row), so no gap and no `gentle-ai codegraph init` is offered; tests in `bin/lib/stack.test.mjs` and
+  `bin/doctor.test.mjs`; the lead was told before the edit. S10: `firstPushRow` in `bin/check.mjs`. Where the
+  remote holds no ref here and `git ls-remote --heads` answers no branch, the push row passes. It says how many
+  commits and changed lines went unread (sized as a review sizes them, from git's empty tree). It names
+  `js-harness codex-review --base <first> --plan`. A remote that cannot be asked, or holds a branch not fetched, fails as
+  before. Decision, mine (engineering, within his answer): the command reviews from the first commit, so
+  that commit's own content is in no range, and the row says so in a line. A review from git's empty tree
+  would need records whose base is no commit, a change of the records' format that every reader of them
+  would have to accept; that is not worth it for one commit of one push.
+- **L23** (2026-10-15, after L22) T8, the texts. The skill (`bin/lib/manifest.mjs`) gains the `functions`
+  line and what the switch does to `codex-review` and `check --push`, and says the first push passes. The
+  `AGENTS.md` template gains S9's written rule: "Where the Codex review is off (`js-harness functions`),
+  gentle-ai reviews every change of medium or high risk." Its test was seen red, then green. The usage already
+  held `functions` (slice 2). The Codex rules in `bin/lib/rules-data.mjs` are cost numbers, which no switch
+  changes, so they need no word.
+  T0 is closed: his four answers are S6 to S9. T9 is closed: questions 1 and 3 landed in slice 2 (`sync`
+  wires the pre-push hook and applies the switches with a line each), and question 4 in slice 3.
+- **L24** (2026-10-15, after L23) The gate refused the commit twice, and each refusal was mine to fix:
+  1. The compare eval's fake repository held no program: it now holds one. One of its tests still fails on
+     Windows on `main` itself (5f7f8cd: the review is asked with the own prompt where it expects `--base`).
+     That failure is not this slice's, and it does not reproduce in the gate's WSL.
+  2. `main` gained "a gate whose static row fails asks git nothing". The `functions` row is now two:
+     - the validation, a static row that reads harness.json and asks no git. It also leaves a harness.json
+       that is no JSON to the `sensors` row, one fault, one row.
+     - the information row, `checkFunctionsPending`, said after the sensors and never by a stopped gate. It
+       is said only in a clone the harness set up (a manifest), since one it never set up has nothing to
+       drift from.
+  3. A defect of this slice, found by a test of `main`: from a folder below the top of the repository, the
+     switch was read in that folder. `ls-files` listed only that folder and `ls-tree` named paths from it,
+     so `evals/` read as a project with no program. `workingTree`, `commitTree` and `harnessOfCommit` now
+     read the whole repository from its top, and the debt row reads harness.json at the top. A test of
+     `bin/lib/project-functions.mjs` was seen red without the fix.
+  4. Fixtures of `check-codex-reviews` that hold no program, where the review is now off (S7), hold one.
+  5. The debt row's git processes are bounded by a test of `main` (12). The top of the repository is found
+     by walking up to `.git`, not by asking git, so the switch costs the row one process (`ls-files`).
+  Slice 3 goes as one commit: `bin/check.mjs` holds units 1 to 5 and S10 together.
+- **L25** (2026-10-15) Slice 3 is commit `09e605f`. The commit assessed as medium, not due. I raised it to high
+  (item 2: it changes what the pre-push guard refuses). gentle-ai reviewed it with three lenses (risk,
+  resilience, reliability) and APPROVED it; the approval was acknowledged (lineage `review-b242ccf2f9db84d0`).
+  Its three advisories are fixed in a commit of their own:
+  - a high change gentle-ai calls not due is due too where the Codex review is off (S9 says high and
+    medium); its test was seen red;
+  - the debt row reads the switch inside its guard;
+  - `ls-remote` waits 20 s, not 60.
+  Codex's plan for the range: about 500,000 input tokens, inside the 816,000 allowance.
+- **L26** (2026-10-15) The fixes are commit `28a6cad`, assessed medium and not due. Codex reviewed
+  `eab3eff..28a6cad` in 2 parts. Its verdict on both: the patch is correct (0.86 and 0.85), no findings.
+  It used 392,796 input tokens and recorded the review. Next: push `feat/on-demand-functions-3`, open the pull
+  request, and tell the lead (now "JH ORQ 2 · js-harness").

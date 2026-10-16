@@ -22,7 +22,16 @@ import path from 'node:path';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
+import { ruleValue } from './lib/rules.mjs';
+
+/** The minutes a command may run when `--max` does not say. A turn holds the lock for every session on the
+ * machine, and on 2026-10-14 a measure that waited for its own sampler held it 24 minutes after its work had
+ * ended (odd/tasks/gate-turn-guards.md, S2). The longest turn in the gate log of the two days before took
+ * 974 s, so 30 minutes stops a hung command and no turn that works. The figure is the declared rule
+ * `gate-max` (bin/lib/rules-data.mjs). */
+export const GATE_MAX_MINUTES = ruleValue('gate-max', 'minutes');
 
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
 // `--wait` is not a bound on the whole of a wait.
@@ -30,14 +39,8 @@ const USAGE = [
   'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
   GATE_WAIT_USAGE,
-  '       --max <minutes>: how long the command may run before it is stopped with every process it started (30 when not given)',
+  `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
 ].join('\n');
-
-/** The minutes a command may run when `--max` does not say. A turn holds the lock for every session on the
- * machine, and on 2026-10-14 a measure that waited for its own sampler held it 24 minutes after its work had
- * ended (odd/tasks/gate-turn-guards.md, S2). The longest turn in the gate log of the two days before took
- * 974 s, so 30 minutes stops a hung command and no turn that works. */
-export const GATE_MAX_MINUTES = 30;
 
 /** How many gates `gate log` prints when `--last` does not say. */
 const GATE_LOG_LAST = 20;
@@ -47,6 +50,10 @@ const GATE_LOG_LAST = 20;
  * sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
  * a caller can tell "did not run" from "ran and failed". A usage error is 2, as everywhere here. */
 export const GATE_NOT_RUN = 75;
+
+// The parent this process had when it started, read as the module loads: on Linux an orphan is adopted, and
+// `process.ppid` read later would name its adopter (./lib/launcher.mjs).
+const STARTED_BY = process.ppid;
 
 class GateArgError extends Error {}
 
@@ -236,7 +243,8 @@ function gateLogMain(argv, env) {
  * The lock is released on every way out of the command, a throw included. Killed, this process leaves
  * its holder's file, which the next gate takes over a minute after its last beat, as with `check`.
  * `deps.takeGateLock`, `deps.spawn` (for `runSensor`), `deps.sampleLoad` (for the sampler of the load),
- * `deps.busiest` (for the look for what loads the machine), `deps.gateLog` (for what the record is
+ * `deps.busiest` (for the look for what loads the machine), `deps.launchers` (`{ read, alive }`, for the look
+ * at what started this gate, ./lib/launcher.mjs), `deps.gateLog` (for what the record is
  * written with: `{ append, now, id }`, each optional) and `deps.cwd` are replaceable, and so is
  * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
  * line of another system and stands in for what would run it. */
@@ -294,8 +302,15 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     : gateRecord({ home, cwd: path.resolve(cwd), command, ...deps.gateLog, onFailure: (why) => console.error(`gate: the gate log ${why}`) });
   /** The command between the two lines of its record: the load is read, the start written, and the end
    * on every way out. `turn` is the state of the lock, and whom this gate waited for. */
-  const logged = async (turn, given, afterGate = false) => {
+  // `goneAtTurn`, after a wait: the last look at what started this gate, made after the sample of the load
+  // (a second, and a look at the busiest processes) and just before the command starts (Codex, 2026-10-14).
+  const logged = async (turn, given, afterGate = false, goneAtTurn = () => false) => {
     const load = await sayLoad(afterGate);
+    if (goneAtTurn()) {
+      console.error('gate: nothing ran: the process that started this gate ended while it waited, so it gave up its turn as it came');
+      record?.refused({ reason: 'launcher gone', waitedMs: turn.waitedMs, waitedFor: turn.waitedFor });
+      return GATE_NOT_RUN;
+    }
     record?.start({ ...turn, load });
     let result = 'error';
     try {
@@ -325,7 +340,27 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return GATE_NOT_RUN;
   }
 
-  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null }, deps.takeGateLock);
+  // What started this gate, asked at every look of its wait (odd/tasks/orphan-gate.md): a gate whose launcher
+  // ended is an orphan, and its turn would run a script nobody waits for. The launchers are read as the gate
+  // starts, from the parent this process had then: read later, a chain ends at a Linux adopter and hides the
+  // one that ended (Codex, 2026-10-14), and on Windows it takes the wrapper above the Bash tool's shell, gone
+  // within a second, for a launcher that ended while the gate waited (2026-10-15). On Windows the table comes
+  // in beside the gate; until it does there is no chain to ask, and the gate keeps its place. The first look
+  // is not asked, the launcher having started this gate a moment ago.
+  const launcher = deps.launchers ?? { ...startLaunchers({ ppid: STARTED_BY }), alive: launchersAlive, eager: true };
+  let launchers = launcher.eager ? launcher.read() : null;
+  let looks = 0;
+  const stillWanted = () => {
+    looks += 1;
+    if (looks === 1) return true;
+    launchers ??= launcher.read();
+    return launchers === null || launcher.alive(launchers);
+  };
+  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, stillWanted }, deps.takeGateLock);
+  // A turn that came after a wait has its last look before the command: a table not in yet is waited for
+  // (Codex, 2026-10-15), never stopped, since an orphan would otherwise run with no look at all.
+  if (looks > 1) launchers ??= launcher.settle ? await launcher.settle() : launcher.read();
+  launcher.stop?.();
   const { waitedMs, waitedFor } = turn;
   if (turn.refused) {
     console.error(`gate: nothing ran: ${turn.refused}`);
@@ -339,7 +374,7 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   const { lock } = turn;
   let lost = false;
   try {
-    return await logged({ lock: 'own', waitedMs, waitedFor }, { ...env, [GATE_HELD_ENV]: '1' }, waitedMs >= GATE_WAIT_SAID_MS);
+    return await logged({ lock: 'own', waitedMs, waitedFor }, { ...env, [GATE_HELD_ENV]: '1' }, waitedMs >= GATE_WAIT_SAID_MS, () => launchers !== null && !launcher.alive(launchers, { full: true }));
   } finally {
     // Asked before the release, after which there is no lock to have lost.
     lost = lock.lost();

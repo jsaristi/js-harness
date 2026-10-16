@@ -737,6 +737,21 @@ test('a trim that fails loses nothing but the trim: it never throws, the end of 
   assert.equal(trimLog(logPath, { ...SMALL_CAP, io: closeFails }).trimmed, true, 'a close that fails after the cut does not throw either');
 });
 
+test('a note after a torn last line starts a line of its own, and one after a whole line adds no empty line', () => {
+  // On Linux a SIGKILL can cut a write to a file short, so a killed server can leave its last line without its
+  // end; the note that follows (`stopped`, `server exited`) is what `remote status` reads, and must not be glued on.
+  const logPath = path.join(tempDir(), 'remote.log');
+  fs.writeFileSync(logPath, 'frame 0000001 whole\nframe 0000002 to');
+  logNote(logPath, 'stopped');
+  assert.equal(readLog(logPath), 'frame 0000001 whole\nframe 0000002 to\n[js-harness remote] stopped\n');
+  logNote(logPath, 'stopped again');
+  assert.equal(readLog(logPath), 'frame 0000001 whole\nframe 0000002 to\n[js-harness remote] stopped\n[js-harness remote] stopped again\n');
+  const empty = path.join(tempDir(), 'remote.log');
+  fs.writeFileSync(empty, '');
+  logNote(empty, 'stopped');
+  assert.equal(readLog(empty), '[js-harness remote] stopped\n', 'an empty log takes no empty line first');
+});
+
 test('a server that writes during every copy does not hold a trim: after a handful of looks the log is cut, and only what came after the last look is lost', () => {
   const logPath = path.join(tempDir(), 'remote.log');
   const server = fs.openSync(logPath, 'a'); // the server's own handle
@@ -951,6 +966,16 @@ test('a server that never exits has its log trimmed while it runs, on the real t
   assert.doesNotMatch(log, /\0/, 'no hole: the server\'s writes went to the new end of the file');
   const lines = trimmedParts(log).kept.split('\n');
   assert.deepEqual(lines.splice(-2), ['[js-harness remote] stopped', '']);
+  // The kill may cut the server's last write short on Linux: a torn last frame is the start of a whole one, and
+  // `stopped` still has a line of its own.
+  const FRAME = 'frame 0000000 ' + '·✔︎'.repeat(12);
+  const last = lines.at(-1);
+  if (!/^frame \d{7} (?:·✔︎){12}$/.test(last)) {
+    // A cut inside a character reads back as U+FFFD; the digits are any.
+    const shape = last.replace(/�+$/u, '').replace(/\d/g, '0');
+    assert.ok(shape.length > 0 && shape.length < FRAME.length && FRAME.startsWith(shape), `the last line before stopped is neither a frame nor the start of one: ${JSON.stringify(last)}`);
+    lines.pop();
+  }
   // A write that fell between a trim's last look and its cut is missing, so the numbers may skip: never go back.
   const frames = lines.map((line) => /^frame (\d{7}) (?:·✔︎){12}$/.exec(line)?.[1]);
   const broken = frames.findIndex((frame, i) => frame === undefined || (i > 0 && frame <= frames[i - 1]));

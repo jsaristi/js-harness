@@ -65,6 +65,14 @@
 // (`rendered`). A later run of the same range that would send the same thing takes the part from the newest
 // such line instead of asking again (`keptPartFor`). A line without `kept`, which is every line written before
 // this and every attempt that did not pass, is never reused (`runKept`). The schema stayed `v1` here too.
+//
+// What a review found, and the recheck. The line of an attempt that stood also holds `answer`: its findings
+// whole (file, lines, severity, title, body, confidence) and its verdict, so that a range that starts at its
+// head can be checked against them (`./codex-review-recheck.mjs`). The line of such a recheck holds `recheck`:
+// `of`, the head whose findings it checked, with how many there were (`findings`), how many are `fixed` and
+// `notFixed`, and the new ones it found, the `followUps` that do not block and the `blocking` ones. A line
+// written before these fields has neither, and a review recorded then is never rechecked. The schema stayed
+// `v1` here too.
 import { createHash } from 'node:crypto';
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 

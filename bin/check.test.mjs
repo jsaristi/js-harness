@@ -5,8 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
@@ -26,7 +28,7 @@ test('estimateTokens divides length by 4, rounding up', () => {
 test('checkBudget passes at exactly the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6000)); // 1500 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(TOKEN_BUDGET * 4)); // the budget, exactly
     const row = checkBudget(dir);
     assert.equal(row.pass, true);
   } finally {
@@ -37,7 +39,7 @@ test('checkBudget passes at exactly the token limit', () => {
 test('checkBudget fails over the token limit', () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004)); // 1501 tokens
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4)); // one token over it
     const row = checkBudget(dir);
     assert.equal(row.pass, false);
   } finally {
@@ -59,7 +61,7 @@ test('checkBudget fails with a clear message when AGENTS.md is missing', () => {
 test('main exits 1 when a row fails (budget over limit, tests skipped)', async () => {
   const dir = makeTmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
     const code = await main(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
     assert.equal(code, 1);
   } finally {
@@ -451,7 +453,7 @@ test('checkSensor gives every sensor a 20 minute timeout by default', async () =
     return { status: 0, stdout: '', stderr: '' };
   };
   await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
-  assert.equal(options.timeout, 20 * 60 * 1000);
+  assert.equal(options.timeout, SENSOR_TIMEOUT_MS);
 });
 
 /** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
@@ -504,9 +506,14 @@ test('checkSensor kills a background process the command left behind, and still 
   const dir = makeTmpDir();
   try {
     const pidFile = path.join(dir, 'survivor.pid');
-    fs.writeFileSync(path.join(dir, 'child.js'), `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 120000);`);
-    // The shell exits 0 at once; the survivor is its own child and inherits the output pipes.
-    const command = process.platform === 'win32' ? 'start /b node child.js' : 'node child.js &';
+    // The survivor starts slowly, as a node does on a loaded machine: a gate saw it killed when the pipe
+    // grace (`PIPE_GRACE_MS`, 2 s) ended, before it had written its pid (docs/FAILURES.md,
+    // check-survivor-test-fails).
+    fs.writeFileSync(path.join(dir, 'child.js'), `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)), 2500); setTimeout(() => {}, 120000);`);
+    // The shell exits 0 once the survivor has written its pid; the survivor is its own child and inherits
+    // the output pipes. The shell waits for it so the pipe grace starts only after the pid exists.
+    fs.writeFileSync(path.join(dir, 'wait.js'), `const fs = require('fs'); const until = Date.now() + 60000; (function wait() { if (fs.existsSync(${JSON.stringify(pidFile)}) || Date.now() > until) return; setTimeout(wait, 20); })();`);
+    const command = process.platform === 'win32' ? 'start /b node child.js & node wait.js' : 'node child.js & node wait.js';
     const started = Date.now();
     const row = await checkSensor(dir, { name: 'tests', command });
     assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
@@ -1016,6 +1023,89 @@ test('main --push does not run the contracts row', async () => {
   }
 });
 
+// --- rules row: a project's own rules, when it keeps a list (./lib/project-rules.mjs) ---
+
+test('main runs the rules row first, when a project keeps its own rules, and a rule that no longer holds makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), `- Never deploy by hand.\n${'a'.repeat(400)}`);
+    fs.mkdirSync(path.join(dir, 'docs'));
+    const rule = { id: 'no-direct-deploy', subject: 'a deploy goes through the pipeline', since: '2026-10-14', path: 'AGENTS.md', phrases: ['Never deploy by hand'] };
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), JSON.stringify({ format: 1, rules: [rule] }));
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    const namesOf = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line)).map((row) => row.split('  ')[1]);
+
+    const held = await runCheck(['--cwd', dir], env);
+    assert.equal(held.code, 0);
+    assert.deepEqual(namesOf(held.output).slice(0, 2), ['rules', 'budget']);
+    assert.match(held.output, /^PASS {2}rules {2}1 rule of the project holds \(docs\/rules\.json\)$/m);
+
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
+    assert.match(refused.output, /^ {6}rule "no-direct-deploy": AGENTS\.md no longer holds the phrase "Never deploy by hand"$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main has no rules row in a project that keeps no list of its own, nor in the harness repository', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    assert.doesNotMatch((await runCheck(['--cwd', dir], env)).output, /^(PASS|FAIL) {2}rules /m);
+    fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'bin', 'lib', 'rules-data.mjs'), 'export const RULES = [];\n');
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), '{ not json');
+    assert.doesNotMatch((await runCheck(['--cwd', dir], env)).output, /^(PASS|FAIL) {2}rules /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a project list that cannot be read fails the rules row and stops nothing else from printing', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), '﻿{ not json');
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir });
+    assert.equal(code, 1);
+    assert.match(output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
+    assert.match(output, /^PASS {2}budget /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- flaky row: the quarantine ledger, when the project keeps one (./lib/flaky.mjs) ---
+
+test('main runs the flaky row with the static rows when the project keeps docs/FLAKY.md, and a malformed ledger makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.mkdirSync(path.join(dir, 'bin'));
+    fs.writeFileSync(path.join(dir, 'bin', 'a.test.mjs'), '');
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    const read = await runCheck(['--cwd', dir], env);
+    assert.equal(read.code, 0);
+    assert.match(read.output, /^PASS {2}flaky {2}docs\/FLAKY\.md quarantines 1 test file, 1 of them current; /m);
+
+    fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n');
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}flaky {2}docs\/FLAKY\.md is not read: 2 faults to repair in that file$/m);
+    assert.match(refused.output, /^ {6}bin\/a\.test\.mjs: no "- Expires:" line$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- failures row: the register of failures, when the project keeps one (./failures.mjs) ---
 
 test('main runs the failures row first, before budget, when the project keeps a register, prints the entries that are not settled, and a register it cannot read makes it exit 1', async () => {
@@ -1282,8 +1372,9 @@ test('main prints the codex-review row last, as information, and runs its git th
     const rows = output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
     assert.match(rows.at(-2), /^INFO {2}review /);
     assert.match(rows.at(-1), /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /);
-    // The questions of this row, and before them the one a gate asks of its working tree before its sensors.
-    assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status) /.test(line)), asked.join('\n'));
+    // The questions of this row, and before them the one a gate asks of its working tree before its sensors,
+    // and the names of its files, which the switches of harness.json "functions" are resolved from.
+    assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status|ls-files) /.test(line)), asked.join('\n'));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1477,7 +1568,7 @@ test('main started with the mark of a held gate lock takes no lock and runs its 
       "INFO  gate  the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate took none",
     ]);
     // Not the inner run of old: every row of a gate is there.
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'load', 'tests', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'load', 'tests', 'review', 'codex-review']);
     assert.deepEqual(fs.readdirSync(gateDir(home)), ['lock'], 'it stood in no line');
     assert.equal(readGateHolder(home).pid, 4321);
   } finally {
@@ -1531,7 +1622,7 @@ test('main --no-wait fails the gate row against a held lock, runs no sensor and 
     assert.deepEqual(gateRows(output), [
       `FAIL  gate  no sensor ran: the gate of C:\\work\\other (pid 4321, started ${startedAt}) holds the machine's gate lock, and --no-wait was given`,
     ]);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'review', 'codex-review']);
     // A gate that does not wait says nothing of a wait.
     assert.equal(errOutput, '');
     assert.equal(readGateHolder(home).pid, 4321);
@@ -1564,7 +1655,7 @@ test('main waits for the gate that holds the lock, says once on stderr whose it 
   const names = rowsOf(output).map((row) => row.split('  ')[1]);
   assert.deepEqual(names.slice(names.indexOf('gate'), names.indexOf('tests') + 1), ['gate', 'load', 'tests'], output);
   // The wait is not the sensor's time: its own bound starts when it does, whole.
-  assert.deepEqual(timeouts, [20 * 60 * 1000]);
+  assert.deepEqual(timeouts, [SENSOR_TIMEOUT_MS]);
   assert.equal(readGateHolder(home, { now: clock.now }), null);
 }));
 
@@ -2264,6 +2355,29 @@ test("a commit of documents alone runs the sensors of documents, in their order 
   }
 });
 
+// Codex, 2026-10-14: with nothing staged there is no commit to guard, and a check run by hand on a branch
+// whose commits differ from the trunk in documents alone must still run its sensors over the code edits it
+// has not staged. The other side is asked only of an index that holds a change.
+test('a check with nothing staged runs the sensors even where the branch differs from the trunk in documents alone', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    const git = (program, args) => {
+      git.asked.push(args.join(' '));
+      if (args[0] === 'rev-parse') return ok(args.includes('--show-prefix') ? '\n' : 'abc123\n');
+      // Nothing staged against its own branch; against the trunk, documents alone.
+      return ok(args.at(-1) === '-z' ? '' : 'docs/guide.md\0');
+    };
+    git.asked = [];
+    const spawn = recordedSensors();
+    await checkSensors(dir, { spawn, git });
+    assert.deepEqual(spawn.ran.map(([command]) => command), ['run-tests']);
+    assert.ok(!git.asked.some((asked) => asked.startsWith('diff') && asked.endsWith('origin/HEAD')), JSON.stringify(git.asked));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a commit that holds anything that is no document runs the project's sensors and none of the sensors of documents", async () => {
   const dir = makeTmpDir();
   try {
@@ -2482,7 +2596,7 @@ test('a gate samples the load once, before its first sensor and inside its turn,
     assert.deepEqual(events, [['sample', holder], 'run-tests', 'run-lint'], state);
     assert.deepEqual(loadRows(output), [LOAD_ROW], state);
     const names = rowsOf(output).map((row) => row.split('  ')[1]);
-    assert.deepEqual(names, ['budget', 'contracts', 'payload claude', 'payload codex', ...gate, 'load', 'tests', 'lint', 'review', 'codex-review'], state);
+    assert.deepEqual(names, ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', ...gate, 'load', 'tests', 'lint', 'review', 'codex-review'], state);
   }
 }));
 
@@ -3199,7 +3313,7 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
     // One row for the gate, not one for each of its two lines.
     assert.deepEqual([code, spawn.ran, logRows(output).length], [exit, 2, 1], output);
     assert.match(logRows(output)[0], NOT_WRITTEN);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'load', 'tests', 'lint', 'gate log', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'load', 'tests', 'lint', 'gate log', 'review', 'codex-review']);
     // The same gate with the log switched off: every other row is the same.
     const off = await runCheck(argv, { JS_HARNESS_GATE_LOG: 'off' }, gateDeps({ spawn: () => ({ ...sensorRan(), status }) }));
     assert.deepEqual([off.code, rowsOf(off.output)], [exit, rowsOf(output).filter((row) => !logRows(output).includes(row))]);
@@ -3211,7 +3325,7 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
   try {
     const { code, output } = await runCheck([...argv, '--no-wait'], {}, gateDeps());
     assert.equal(code, 1);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'gate log', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'gate log', 'review', 'codex-review']);
     assert.match(logRows(output)[0], /^INFO {2}gate log {2}could not be written \(E[A-Z]+: [^\n]*\), so this refusal is not in it$/);
   } finally {
     other.release();
@@ -3230,9 +3344,9 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
 // changes when a failure is known, never what a commit proves: such a gate was red before, and is red now.
 
 /** Puts the AGENTS.md of `dir` over its budget: the static row a test fails by itself. */
-const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(6004));
-const BUDGET_FAILS = 'FAIL  budget  1501 estimated tokens (budget 1500)';
-const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex'];
+const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
+const BUDGET_FAILS = `FAIL  budget  ${TOKEN_BUDGET + 1} estimated tokens (budget ${TOKEN_BUDGET})`;
+const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load'];
 const namesOf = (output) => rowsOf(output).map((row) => row.split('  ')[1]);
 
 const LOCK_NOT_TAKEN = "the machine's gate lock was not taken";
@@ -3414,7 +3528,7 @@ test('a failing static row stops nothing where no sensor would have run: a fault
     assert.deepEqual([asked.lock, asked.load, asked.sensors], [0, 0, 0], output);
     assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'sensors', 'review', 'codex-review'], output);
     assert.deepEqual([gateRows(output), rowsOf(output)[0]], [[], BUDGET_FAILS]);
-    assert.match(rowsOf(output)[4], sensors);
+    assert.match(rowsOf(output)[STATIC_ROWS.length], sensors);
   };
   await unstopped('{ nope', /^FAIL {2}sensors {2}harness\.json is not valid JSON: /);
   await unstopped({ sensors: { tests: 'run-tests' }, documents: ['docs/*'] }, /^FAIL {2}sensors {2}harness\.json "documents" must be /);
@@ -3428,7 +3542,7 @@ test('a failing static row stops nothing where no sensor would have run: a fault
   const git = stagedGit(['docs/guide.md', 'src/app.js']);
   const { asked, deps } = afterStaticRows({ ...log.deps, git });
   const { code, output } = await runCheck(argv, {}, deps);
-  assert.deepEqual([code, { ...asked, git: git.asked }], [1, { ...NOTHING_ASKED, git: ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z'] }]);
+  assert.deepEqual([code, { ...asked, git: git.asked }], [1, { ...NOTHING_ASKED, git: ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z', ...['origin/HEAD', 'origin/main', 'origin/master', 'MERGE_HEAD'].map((ref) => `git rev-parse --verify --quiet ${ref}^{commit}`)] }]);
   assert.deepEqual([namesOf(output), gateRows(output)], [[...STATIC_ROWS, 'gate'], [stoppedRow(['budget'])]]);
   assert.deepEqual(log.events.map(({ event }) => event), ['stopped']);
 }));
@@ -4027,6 +4141,90 @@ test('a commit of one named path is judged by what it holds, not by what else is
   }
 });
 
+// `git commit --amend` runs the hook while HEAD is still the commit it replaces, so an amend of the message
+// alone stages nothing against HEAD; the commit it makes changes against HEAD^ what HEAD did. On 2026-10-15
+// such an amend of a commit of documents ran the whole suite and waited for the lock (JH 17).
+const amended = [
+  'INFO  sensors  no sensor ran (tests): the one path this commit changes against HEAD^ is a document declared in harness.json "documents"',
+  'docs/guide.md',
+];
+
+test('an amend of the message of a commit of documents runs no sensor: it changes against HEAD^ documents alone', async () => {
+  const { repo, home, marker, commit, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    const document = commit(repo);
+    assert.equal(document.status, 0, document.said);
+    assert.equal(fs.existsSync(marker), false, 'the sensor ran for a commit of documents alone');
+
+    const amend = commit(repo, '--amend');
+    assert.equal(amend.status, 0, amend.said);
+    assert.deepEqual(sensorsRow(amend.said), amended, amend.said);
+    assert.equal(fs.existsSync(marker), false, 'the sensor ran for an amend of the message of a commit of documents');
+    assert.equal(fs.existsSync(gateLogDir(home)), false, 'an amend of documents alone wrote the gate log');
+  } finally {
+    remove();
+  }
+});
+
+test('an amend of the message of a commit that holds code runs the sensors', async () => {
+  const { repo, marker, commit, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    writeFile(repo, 'src/app.js');
+    git(repo, 'add', 'docs/guide.md', 'src/app.js');
+    git(repo, ...commitAs, '--no-verify', '-m', 'code and a document');
+
+    const amend = commit(repo, '--amend');
+    assert.equal(amend.status, 0, amend.said);
+    assert.match(amend.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for an amend of a commit that holds a code file');
+  } finally {
+    remove();
+  }
+});
+
+test('a check run by hand with nothing staged runs the sensors, though HEAD changes documents alone against HEAD^', async () => {
+  const { repo, marker, commit, env, remove } = hookedRepo();
+  try {
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    assert.equal(commit(repo).status, 0);
+    assert.equal(fs.existsSync(marker), false);
+
+    // No hook, so no GIT_INDEX_FILE: the check guards no commit.
+    const byHand = spawnSync(process.execPath, [path.join(path.dirname(fileURLToPath(import.meta.url)), 'check.mjs')], { cwd: repo, env, encoding: 'utf8' });
+    const said = `${byHand.stdout}${byHand.stderr}`.replace(/\r\n/g, '\n');
+    assert.doesNotMatch(said, /changes against HEAD\^/, said);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a check by hand with nothing staged');
+  } finally {
+    remove();
+  }
+});
+
+test('an amend of the message of a root commit runs the sensors: there is no HEAD^ to compare with', async () => {
+  const { repo, home, marker, env, remove } = hookedRepo();
+  const root = makeTmpDir();
+  try {
+    for (const file of ['harness.json', 'AGENTS.md']) fs.copyFileSync(path.join(repo, file), path.join(root, file));
+    writeFile(root, 'docs/guide.md');
+    git(root, 'init', '--quiet');
+    git(root, 'config', 'core.hooksPath', path.join(home, 'hooks').replace(/\\/g, '/'));
+    git(root, 'add', '.');
+    git(root, ...commitAs, '--no-verify', '-m', 'root');
+
+    const amend = spawnSync('git', [...commitAs, '--amend', '-m', 'root again'], { cwd: root, env, encoding: 'utf8' });
+    const said = `${amend.stdout}${amend.stderr}`.replace(/\r\n/g, '\n');
+    assert.equal(amend.status, 0, said);
+    assert.doesNotMatch(said, /changes against HEAD\^/, said);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for an amend of a root commit');
+  } finally {
+    remove();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // What git 2.54 hands a pre-commit hook besides: in a main worktree `GIT_INDEX_FILE` alone, `.git/index` for
 // a plain commit and the whole path of `.git/index.lock` for `-a`; in a linked worktree `GIT_DIR` too, both
 // as whole paths under `.git/worktrees/<name>`. Each is the binding of the repository the gate checks.
@@ -4156,6 +4354,27 @@ test('a folder that is not the index has no key: with an untracked file, an unst
     } finally {
       remove();
     }
+  }
+});
+
+test('a gate whose tests passed only by a quarantine proves no tree, so the next gate runs them again (odd/tasks/flaky-ledger.md)', async () => {
+  const quarantined = sameTreeRepo({ sameTree: 'skip', sensors: { tests: 'node --test' } });
+  try {
+    fs.mkdirSync(path.join(quarantined.repo, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'bin', 'a.test.mjs'), '');
+    fs.mkdirSync(path.join(quarantined.repo, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(quarantined.repo, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n- Expires: 2099-01-01\n- Failure: some-failure\n');
+    git(quarantined.repo, 'add', '-A');
+    git(quarantined.repo, ...commitAs, '-m', 'a quarantined test file');
+    const red = { status: 1, signal: null, stdout: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ one (1ms)\n', stderr: '' };
+    let call = 0;
+    quarantined.sensor.answer = () => (call++ % 2 === 0 ? red : { status: 0, signal: null, stdout: '', stderr: '' });
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal((await quarantined.gate()).code, 0);
+    assert.equal(quarantined.sensorRuns(), 4, 'each gate ran the suite and its rerun');
+    assert.deepEqual(quarantined.events().filter((event) => event.event === 'end').map((event) => [event.result, 'code' in event]), [['pass', false], ['pass', false]]);
+  } finally {
+    quarantined.remove();
   }
 });
 
@@ -4344,6 +4563,67 @@ test('a merge git commits by itself goes through the gate: one that brings docum
     assert.match(code.said, /^PASS {2}tests /m);
     assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that brings a code file');
     assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
+  } finally {
+    remove();
+  }
+});
+
+// The merge of the trunk into a branch of documents (odd/tasks/merge-documents-skip.md, S1): what the merge
+// holds differs from the side it merges only in declared documents, so no sensor runs, through the hook of a
+// merge git commits by itself and through `git commit` after `git merge --no-commit`. On 2026-10-14 such a
+// merge held the lock 10 minutes for nothing.
+test('a merge of the trunk into a branch of documents runs no sensor when the merge differs from the side it merges only in documents, by itself or committed by hand', async () => {
+  const { repo, marker, env, remove } = mergingRepo();
+  try {
+    const trunk = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD');
+    const run = (...args) => {
+      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: repo, env, encoding: 'utf8' });
+      return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+    };
+    const onTrunk = (file) => {
+      git(repo, 'checkout', '--quiet', trunk);
+      writeFile(repo, file, `written on the trunk\n`);
+      git(repo, 'add', file);
+      git(repo, ...commitAs, '--no-verify', '-m', `the trunk brings ${file}`);
+      git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    };
+    const merged = (side) => [
+      `INFO  sensors  no sensor ran (tests): the one path this commit changes against ${side} is a document declared in harness.json "documents"`,
+      'docs/guide.md',
+    ];
+
+    git(repo, 'checkout', '--quiet', '-b', 'documents', trunk);
+    writeFile(repo, 'docs/guide.md', 'written on documents\n');
+    git(repo, 'add', 'docs/guide.md');
+    git(repo, ...commitAs, '--no-verify', '-m', 'documents');
+    onTrunk('src/app.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    const byItself = run('merge', '--no-edit', trunk);
+    assert.equal(byItself.status, 0, byItself.said);
+    // git writes no MERGE_HEAD before the hook of a merge it commits by itself: the trunk is the side known there.
+    assert.deepEqual(sensorsRow(byItself.said), merged('origin/main'), byItself.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge that differs from the trunk in documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '1');
+
+    onTrunk('src/other.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    assert.equal(run('merge', '--no-commit', '--no-ff', trunk).status, 0);
+    const byHand = run('commit', '--quiet', '--no-edit');
+    assert.equal(byHand.status, 0, byHand.said);
+    assert.deepEqual(sensorsRow(byHand.said), merged('MERGE_HEAD'), byHand.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge committed by hand that differs from the trunk in documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
+
+    // A branch that holds code of its own differs from the trunk in more than documents: its merge runs them.
+    writeFile(repo, 'src/mine.js', 'written on documents\n');
+    git(repo, 'add', 'src/mine.js');
+    git(repo, ...commitAs, '--no-verify', '-m', 'code on documents');
+    onTrunk('src/third.js');
+    git(repo, 'checkout', '--quiet', 'documents');
+    const withCode = run('merge', '--no-edit', trunk);
+    assert.equal(withCode.status, 0, withCode.said);
+    assert.match(withCode.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that differs from both sides in code');
   } finally {
     remove();
   }
@@ -4618,3 +4898,164 @@ test('the mark of a time that ran out counts only beside the exit status of time
   assert.equal(failed.code, 1);
   assert.match(failed.output, /^FAIL {2}tests {2}npm run test exited 1 in WSL2 \(Ubuntu\)$/m);
 }));
+
+// The names of the tests that failed are kept in the gate's end line (odd/tasks/gate-log-failing-tests.md,
+// S1): a WSL2 run's output lives in the mirror and the report, and on 2026-10-14 JH 11 could not get back
+// which test had failed once the report was gone.
+const SPEC_FAILURE = [
+  '✔ one that passes (2.1ms)',
+  '✖ the first that fails (12.5ms)',
+  'ℹ tests 3',
+  'ℹ fail 2',
+  '',
+  '✖ failing tests:',
+  '',
+  'test at bin/a.test.mjs:10:1',
+  '✖ the first that fails (12.5ms)',
+  '  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:',
+  '',
+  'test at bin/b.test.mjs:4:1',
+  '\u001b[31m✖ a second, in another file (3ms)\u001b[39m',
+  '  Error: boom',
+].join('\n');
+const TAP_FAILURE = ['TAP version 13', 'ok 1 - fine', '    not ok 1 - a subtest', 'not ok 2 - the one that fails', '# fail 1'].join('\n');
+
+test('failingTests reads the names of the failing tests in the spec form and, without it, the tap form; none for a pass or other output', () => {
+  assert.deepEqual(failingTests(SPEC_FAILURE), ['the first that fails', 'a second, in another file']);
+  assert.deepEqual(failingTests(TAP_FAILURE), ['the one that fails']);
+  assert.deepEqual(failingTests('ℹ pass 3\nℹ fail 0\n'), []);
+  assert.deepEqual(failingTests('npm ERR! missing script: test\n'), []);
+  // Twenty at most, each two hundred characters at most, and each once.
+  const many = ['✖ failing tests:', ...Array.from({ length: 25 }, (_, i) => `✖ test ${i} ${'x'.repeat(300)} (1ms)`), '✖ test 0 (1ms)'].join('\n');
+  const names = failingTests(many);
+  assert.equal(names.length, 20);
+  assert.ok(names.every((name) => name.length <= 200), JSON.stringify(names.map((name) => name.length)));
+});
+
+test('a gate whose sensors fail keeps the names of their failing tests in its end line, and a sensor that passes has none', () => withGate({ tests: 'run-tests', lint: 'run-lint', more: 'run-more' }, async (dir, home) => {
+  const outputs = { 'run-tests': { status: 1, stdout: SPEC_FAILURE }, 'run-lint': { status: 1, stdout: '', stderr: TAP_FAILURE }, 'run-more': { status: 0, stdout: 'ℹ pass 1\n' } };
+  const spawn = async (command) => ({ signal: null, stderr: '', ...outputs[command] });
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, ...log.deps }));
+  assert.equal(code, 1, output);
+  const end = log.events.find((event) => event.event === 'end');
+  assert.deepEqual(end.sensors.map(({ name, pass, failing }) => ({ name, pass, failing })), [
+    { name: 'tests', pass: false, failing: ['the first that fails', 'a second, in another file'] },
+    { name: 'lint', pass: false, failing: ['the one that fails'] },
+    { name: 'more', pass: true, failing: undefined },
+  ]);
+}));
+
+// The sub-agents row of `check --subagents` (odd/tasks/honesty-audit.md, T13). Plain check runs none of it.
+const SUBAGENT_NOW = Date.parse('2026-10-14T20:00:00Z'); // 15:00 in Bogota, UTC-5
+const BOGOTA_OFFSET = -300;
+const recordLine = (entries) => `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`;
+const turnAt = (stamp, model) => ({ type: 'assistant', timestamp: stamp, effort: 'high', message: { id: `m-${stamp}`, model, usage: { input_tokens: 10, output_tokens: 1 }, content: [] } });
+
+/** `run` answering git as a main checkout at `dir` with no other worktree, as `recordFolders` asks it. */
+function gitOf(dir) {
+  return (command, args) => {
+    if (args[0] === 'rev-parse') return { status: 0, stdout: `${path.join(dir, '.git')}\n` };
+    if (args[0] === 'worktree') return { status: 0, stdout: `worktree ${dir}\nHEAD abc\nbranch refs/heads/main\n\n` };
+    return { status: 1, stdout: '' };
+  };
+}
+
+/** A project of today's sub-agents: a writer on haiku and an explorer on sonnet, the explorer off the reader's
+ * rule (opus). `rules` gives the project the harness's rules file, the one the rules are read from; `records`
+ * gives it a config folder with the records. */
+function subagentProject({ rules = true, records = true } = {}) {
+  const dir = makeTmpDir();
+  const config = makeTmpDir();
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+  if (rules) {
+    fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+    fs.copyFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib', 'rules-data.mjs'), path.join(dir, 'bin', 'lib', 'rules-data.mjs'));
+  }
+  if (records) {
+    const folder = path.join(config, 'projects', projectSlug(dir));
+    const agents = path.join(folder, 's1', 'subagents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(folder, 's1.jsonl'), recordLine([turnAt('2026-10-14T14:00:00Z', 'claude-opus-5-5')]));
+    const agent = (id, meta, model, stamp) => {
+      fs.writeFileSync(path.join(agents, `agent-${id}.jsonl`), recordLine([turnAt(stamp, model)]));
+      fs.writeFileSync(path.join(agents, `agent-${id}.meta.json`), JSON.stringify(meta));
+    };
+    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, 'claude-haiku-5-5', '2026-10-14T14:02:00Z');
+    agent('e1', { agentType: 'Explore', description: 'Map things' }, 'claude-sonnet-5-5', '2026-10-14T14:03:00Z');
+  }
+  return { dir, config, cleanup: () => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(config, { recursive: true, force: true }); } };
+}
+
+/** The deps `main` takes for the sub-agents row, with the day and the machine's zone fixed. */
+const subagentDeps = (project, extra = {}) => ({ run: gitOf(project.dir), now: () => SUBAGENT_NOW, offsetMinutes: BOGOTA_OFFSET, ...extra });
+
+/** The lines of `output` that open the sub-agents row. */
+const subagentRows = (output) => output.split('\n').filter((line) => line.startsWith('INFO  subagents  ') || line.startsWith('PASS  subagents  ') || line.startsWith('FAIL  subagents  '));
+
+test('plain check prints no subagents row and reads no record', async () => {
+  const project = subagentProject();
+  const gitCalls = [];
+  const run = gitOf(project.dir);
+  try {
+    const { code, output } = await runCheck(['--cwd', project.dir], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project, { run: (command, args, options) => { gitCalls.push(args); return run(command, args, options); } }));
+    assert.equal(subagentRows(output).length, 0, output);
+    assert.equal(gitCalls.filter((args) => args[0] === 'worktree').length, 0, JSON.stringify(gitCalls));
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents prints an INFO subagents row that counts today\'s launches against the rules', async () => {
+  const project = subagentProject();
+  try {
+    const { code, output, errOutput } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    assert.equal(errOutput, '', output);
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /2 launches today: 1 on a model off the rules/, output);
+    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('subagent-reader-model')), output);
+    assert.notEqual(code, 2, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says the sub-agent rules are not in force here, and compares nothing', async () => {
+  const project = subagentProject({ rules: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /not in force/, output);
+    assert.doesNotMatch(row, /launches today/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says no sub-agent launched today when the project has no records folder', async () => {
+  const project = subagentProject({ records: false });
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1', CLAUDE_CONFIG_DIR: project.config }, subagentDeps(project));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  no sub-agent launched today: no Claude Code records folder/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test('check --subagents says what it cannot tell when reading the records throws, and fails nothing', async () => {
+  const project = subagentProject();
+  try {
+    const { output } = await runCheck(['--cwd', project.dir, '--subagents'], { JS_HARNESS_CHECK_INNER: '1' }, subagentDeps(project, { homedir: () => { throw new Error('no home directory here'); } }));
+    const [row] = subagentRows(output);
+    assert.ok(row?.startsWith('INFO  subagents  '), output);
+    assert.match(row, /^INFO  subagents  cannot tell: .*no home directory here/, output);
+  } finally {
+    project.cleanup();
+  }
+});
+

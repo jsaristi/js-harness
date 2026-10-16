@@ -9,6 +9,8 @@ import { PART_MAX_CHANGED_LINES } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG } from './lib/codex-review-plan.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
+import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
+import { priorLine } from './lib/codex-review-recheck.mjs';
 import { gitDirs } from './lib/project.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
@@ -167,6 +169,89 @@ test('an uncovered code commit fails, naming it and the command that records it'
   assert.ok(lines.includes(`js-harness codex-review --base ${short(root, second)}^`), lines);
 });
 
+/** Writes one line of the Codex run log, which a record names by its `id`, told where the git folder is. */
+const run = (root, line) => appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, outcome: 'reviewed', ...line }, { where: whereOf(root) });
+
+const finding = { file: 'bin/b.js', start: 3, end: 5, severity: 'P2', title: 'The guard reads the wrong field', body: 'It reads `a` where it means `b`.', confidence: 0.8 };
+
+/** A feature commit reviewed by a record whose run line found `answer`: the repository, its base and head. */
+function reviewedWith(answer) {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'run-1', answer });
+  record(root, base, head, { run: 'run-1' });
+  return { root, base, head };
+}
+
+test('a head whose last review owes a correction is refused, naming its open findings and the recheck', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  const lines = row.lines.join('\n');
+  assert.ok(lines.includes(priorLine(finding)), lines);
+  assert.ok(lines.includes(`js-harness codex-review --base ${short(root, head)}`), lines);
+});
+
+test('a skip ending at a later document commit does not clear the correction the review owes', () => {
+  const { root, base, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const doc = commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  record(root, base, doc, { outcome: 'unavailable', reason: 'codex was down' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('a correction its recheck found fixed passes', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');
+  run(root, { id: 'run-2', answer: { verdict: 'correct', findings: [] }, recheck: { of: head, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /2 code commits since origin.main, all covered by a Codex review record/);
+});
+
+test('a recheck that left a finding not fixed passes, with a warning that names the findings and leaves their waiver to the user', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, half fixed', 'fix: read the right field, once');
+  const left = { ...finding, title: '[not fixed] 1 The guard reads the wrong field' };
+  run(root, { id: 'run-2', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: head, findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /2 code commits since origin.main, all covered by a Codex review record/);
+  const lines = row.lines.join('\n');
+  assert.match(lines, new RegExp(`warning: the Codex recheck that ended at ${short(root, fix)} left 1 finding open`));
+  assert.ok(lines.includes(priorLine(left)), lines);
+  assert.match(lines, /the user decides whether they are waived/);
+  // A skip records no correction: it is not offered.
+  assert.ok(!lines.includes('--unavailable'), lines);
+});
+
+test('a recheck whose counts were not kept passes with the warning too', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, half fixed', 'fix: read the right field, once');
+  run(root, { id: 'run-2', answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.lines.join('\n'), /warning: the Codex recheck that ended at .* left findings open \(its counts were not kept\)/);
+});
+
+test('a review that found nothing, or a branch with no run log, passes as before', () => {
+  const { root } = reviewedWith({ verdict: 'correct', findings: [] });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
+  const { root: bare, base } = makeRepo();
+  feature(bare);
+  const head = commit(bare, 'b.js', 'two', 'feat: two');
+  record(bare, base, head, { run: 'run-1' });
+  const row = checkCodexReviews(bare, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /1 code commit since origin.main, all covered by a Codex review record/);
+});
+
 test('with several uncovered commits the fix starts from the oldest', () => {
   const { root } = makeRepo();
   feature(root);
@@ -215,6 +300,46 @@ test('a merge commit needs no review of its own', () => {
   // commit itself is skipped: only `own` needed a review, and the record covers it.
   assert.equal(row.pass, true, `${row.detail}\n${(row.lines ?? []).join('\n')}`);
   assert.match(row.detail, /1 code commit since origin\/main/);
+});
+
+// Failure 15 (docs/FAILURES.md, assessment-counts-main; T2 of odd/tasks/commands-and-doctor.md): after
+// `main` was merged in, the hint named the commit before the oldest uncovered one, the `main` the branch
+// left, so its range read again all `main` gained since (41 parts where 6 were due, 2026-10-09).
+test('after main is merged in, the push row hints the base the plain row sizes, never the main the branch left', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const own = commit(root, 'b.js', 'two', 'feat: two');
+  git(root, 'checkout', 'main');
+  commit(root, 'other.js', 'elsewhere', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-ff', '-m', 'merge main into feature', 'main');
+  commit(root, 'c.js', 'three', 'feat: three');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  const hint = row.lines.at(-1);
+  assert.notEqual(hint, `make the record with: js-harness codex-review --base ${short(root, own)}^`);
+  // The plain row's base is the one whose review it sized: both rows name one review.
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(hint, debt.lines.find((line) => line.startsWith('make the record with: ')), debt.lines.join('\n'));
+});
+
+test('after main is merged in with the commits before it covered, the hint starts at the merge commit', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const own = commit(root, 'b.js', 'two', 'feat: two');
+  record(root, base, own);
+  git(root, 'checkout', 'main');
+  commit(root, 'other.js', 'elsewhere', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-ff', '-m', 'merge main into feature', 'main');
+  const merge = git(root, 'rev-parse', 'HEAD');
+  const after = commit(root, 'c.js', 'three', 'feat: three');
+  const row = checkCodexReviews(root, 'HEAD');
+  // `<after>^` is the merge commit: the range from there holds only what came after it.
+  assert.equal(git(root, 'rev-parse', `${after}^`), merge);
+  assert.equal(row.lines.at(-1), `make the record with: js-harness codex-review --base ${short(root, after)}^`);
 });
 
 test('a merge commit somebody wrote code in needs a record, as the commit it is', () => {
@@ -876,6 +1001,45 @@ test('a repository with no refs of the remote fails, naming the command that set
   assert.ok(row.lines.some((line) => line.includes('git remote set-head origin --auto')), row.lines.join('\n'));
 });
 
+// S10: the first push of a project to an empty repository passes and says so: what went unread, and the
+// command that reviews it, which plans its cost first. Only where the remote holds no branch at all.
+
+/** A repository whose `origin` is a bare repository on disk, with no refs of it fetched; `branch` pushed
+ * there first when given, so the remote holds it. */
+function makeFirstPushRepo(branch = null) {
+  const remote = tmp('js-harness-check-empty-remote-');
+  git(remote, 'init', '--bare');
+  const { root, base } = makeRepo(null);
+  git(root, 'remote', 'set-url', 'origin', remote);
+  if (branch) {
+    git(root, 'push', '-q', 'origin', `HEAD:refs/heads/${branch}`);
+    // A push writes the remote-tracking ref of what it pushed: drop it, as a clone that never fetched holds none.
+    git(root, 'update-ref', '-d', `refs/remotes/origin/${branch}`);
+  }
+  return { root, base };
+}
+
+test('the first push to an empty repository passes, says what went unread and the command that reviews it', () => {
+  const { root, base } = makeFirstPushRepo();
+  commit(root, 'b.js', 'two\nthree\n', 'feat: two');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /origin holds no branch yet, so this first push passes with no Codex review/);
+  const lines = row.lines.join('\n');
+  assert.match(lines, /2 commits went unread by Codex: 3 changed lines in 2 files/);
+  assert.match(lines, new RegExp(`js-harness codex-review --base ${base.slice(0, 7)} --plan`));
+  assert.match(lines, new RegExp(`${base.slice(0, 7)} itself, the first commit, is in no range`));
+});
+
+test('a remote that holds a branch not fetched here is no first push: the row still fails', () => {
+  const { root } = makeFirstPushRepo('main');
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false);
+  assert.match(row.detail, /no default branch of origin/i);
+});
+
 test('a local main is never the base: with no origin refs it still fails', () => {
   const { root } = makeRepo(null);
   git(root, 'branch', 'master');
@@ -1260,6 +1424,8 @@ const CANNOT_TELL = {
     make: () => {
       const root = tmp('js-harness-check-plain-');
       git(root, 'init');
+      // A program not yet committed: with none, the review is off here and the row says that first (S7).
+      fs.writeFileSync(path.join(root, 'a.js'), 'one', 'utf8');
       return [root];
     },
     why: 'HEAD does not name a commit',
@@ -1385,8 +1551,10 @@ test('plain check exits 0 where the row cannot tell: a project with no remote, a
   const noRemote = tmp('js-harness-check-plain-');
   git(noRemote, 'init');
   const noRepository = tmp('js-harness-check-plain-nongit-');
+  // A program in each, not committed: with none, the review is off there and the row says that first (S7).
   for (const root of [noRemote, noRepository]) {
     fs.writeFileSync(path.join(root, 'AGENTS.md'), 'short', 'utf8');
+    fs.writeFileSync(path.join(root, 'a.js'), 'one', 'utf8');
     const { code, output } = await runCheck(['--cwd', root, '--home', tmp('js-harness-check-push-home-')]);
     assert.equal(code, 0, output);
     assert.match(output, /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /m);

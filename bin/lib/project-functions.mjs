@@ -31,13 +31,17 @@ const names = (stdout) => stdout.split('\0').filter(Boolean);
  * untracked and does not ignore, since a program an agent has just written counts before its first
  * commit. `{ paths }`, or `{ unknown }` where git could not say (no repository, no git). */
 export function workingTree(git) {
-  const listed = git(['ls-files', '--cached', '--others', '--exclude-standard', '-z']);
+  // `:/` and `--full-name`: every file of the repository, named from its top, from whatever folder git runs in.
+  // Run from a folder below, git lists that folder alone, and a project whose programs lie elsewhere read as
+  // one with none.
+  const listed = git(['ls-files', '--cached', '--others', '--exclude-standard', '--full-name', '-z', '--', ':/']);
   return listed === null ? { unknown: 'git could not list the files' } : { paths: names(listed) };
 }
 
 /** The names of the files of the commit `rev`: `{ paths }`, or `{ unknown }`. */
 export function commitTree(git, rev) {
-  const listed = git(['ls-tree', '-r', '--name-only', '-z', rev]);
+  // `--full-tree`: the whole commit, from whatever folder git runs in, not the part below that folder.
+  const listed = git(['ls-tree', '-r', '--full-tree', '--name-only', '-z', rev]);
   return listed === null ? { unknown: `git could not list the files of ${rev}` } : { paths: names(listed) };
 }
 
@@ -75,7 +79,9 @@ export function harnessOfTree(root) {
 /** `harness.json` of the commit `rev`, with the same answers. A commit git cannot read is an error and
  * never "declares nothing": a check must not take a commit it could not open for one with every default. */
 export function harnessOfCommit(git, rev) {
-  const listed = git(['ls-tree', '--name-only', '-z', rev, '--', HARNESS]);
+  // The `harness.json` at the top of the commit, as `<rev>:harness.json` names it below: `ls-tree` names a
+  // path from the folder git runs in unless it is told the whole tree.
+  const listed = git(['ls-tree', '--full-tree', '--name-only', '-z', rev, '--', HARNESS]);
   if (listed === null) return { error: `git could not read ${rev}` };
   if (names(listed).length === 0) return { declared: undefined };
   const text = git(['show', `${rev}:${HARNESS}`]);

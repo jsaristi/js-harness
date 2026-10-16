@@ -172,6 +172,34 @@ test('a state that depends on another file fails nothing: stale, lost and seen a
   });
 });
 
+test('a failure measured is settled while its file holds the dated phrase, lost when only a comment holds it, and seen again after it', async () => {
+  const measured = (id, phrase, ...seen) => [
+    `### ${id}`,
+    'A control was measured and found not worth building.',
+    '- Class: wrong-information',
+    '- Seen: 2026-10-10 — relief file, line 140 — a claim that was not checked',
+    ...seen,
+    `- Control: measured — odd/tasks/honesty-audit.md — "${phrase}" — since 2026-10-15`,
+  ];
+  const files = {
+    'docs/FAILURES.md': register(
+      measured('measured-and-back', '2026-10-15: the audit caught 2 or 3 of 14', '- Seen: 2026-10-16 — relief file, line 300 — again'),
+      measured('measured-in-a-comment', '2026-10-15: an old count kept in a comment'),
+      measured('measured-same-day', '2026-10-15: the audit caught 2 or 3 of 14', '- Seen: 2026-10-15 — relief file, line 290 — that day'),
+    ),
+    'odd/tasks/honesty-audit.md': ['## Measured', '- [x] T15 2026-10-15: the audit caught 2 or 3', '  of 14', '<!-- 2026-10-15: an old count kept in a comment -->', ''].join('\r\n'),
+  };
+  await inProject(files, (dir) => {
+    const [row] = checkFailures(dir);
+    assert.equal(row.pass, true);
+    assert.match(row.detail, /^3 failures, 5 sightings, 2 seen more than once, 2 not settled; /);
+    assert.deepEqual(row.lines, [
+      'measured-and-back  measured, seen again  first seen 2026-10-10',
+      'measured-in-a-comment  measure lost  first seen 2026-10-10',
+    ]);
+  });
+});
+
 test('an owed phrase is found in a wrapped item that is not checked off, in a file with carriage returns', async () => {
   await inProject({ 'docs/FAILURES.md': register(QUESTION), 'odd/tasks/rule-hierarchy.md': TASKS }, (dir) => {
     assert.deepEqual(checkFailures(dir)[0].lines, []);

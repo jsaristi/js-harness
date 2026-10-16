@@ -191,29 +191,29 @@ test('runSession: a session it does not know, or a line that is not one, reads a
 test('runSession reads the log as it is: old lines and new ones side by side', () => {
   const root = makeRepo();
   appendCodexReviewRun(root, run);
-  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000005', session: 'lean', model: 'gpt-6.1-sol', effort: 'medium' });
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000005', session: 'lean', model: 'gpt-fixture', effort: 'medium' });
   appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000006', session: 'current' });
   assert.deepEqual(readCodexReviewRuns(root).map(runSession), ['current', 'lean', 'current']);
 });
 
 // What an attempt adds to its line once the model its session ran with is read from its rollout file.
-const measured = { sessionModel: 'gpt-6.1-sol', sessionEffort: 'low' };
+const measured = { sessionModel: 'gpt-fixture', sessionEffort: 'low' };
 
 test('runSessionModel: the model and the effort the session ran with, and null for every line that measured none', () => {
-  assert.deepEqual(runSessionModel({ ...run, session: 'lean', model: 'gpt-6.1-sol', effort: 'medium', ...measured }), { model: 'gpt-6.1-sol', effort: 'low' });
+  assert.deepEqual(runSessionModel({ ...run, session: 'lean', model: 'gpt-fixture', effort: 'medium', ...measured }), { model: 'gpt-fixture', effort: 'low' });
   // A line written before the session's model was read: it has neither field, and what the command passed
   // (`model`, `effort`) is not what the session ran with.
   assert.equal('sessionModel' in run, false, 'the fixture is a line as they were first written');
   assert.equal(runSessionModel(run), null);
-  assert.equal(runSessionModel({ ...run, session: 'lean', model: 'gpt-6.1-sol', effort: 'medium' }), null);
+  assert.equal(runSessionModel({ ...run, session: 'lean', model: 'gpt-fixture', effort: 'medium' }), null);
   // The same of the `current` session, which the command names a model and an effort to since 2026-10-08
   // and which, as a person runs it, measures none: what was asked for is not read as what ran.
-  assert.equal(runSessionModel({ ...run, session: 'current', model: 'gpt-6.1-sol', effort: 'high', sessionModel: null, sessionEffort: null }), null);
+  assert.equal(runSessionModel({ ...run, session: 'current', model: 'gpt-fixture', effort: 'high', sessionModel: null, sessionEffort: null }), null);
   // A line of a session whose home held no such line: both are there, and `null`.
   assert.equal(runSessionModel({ ...run, sessionModel: null, sessionEffort: null }), null);
   // A session that named its model and no effort is measured, with an effort that is not known.
-  assert.deepEqual(runSessionModel({ ...run, sessionModel: 'gpt-6.1-sol', sessionEffort: null }), { model: 'gpt-6.1-sol', effort: null });
-  assert.deepEqual(runSessionModel({ ...run, sessionModel: 'gpt-6.1-sol' }), { model: 'gpt-6.1-sol', effort: null });
+  assert.deepEqual(runSessionModel({ ...run, sessionModel: 'gpt-fixture', sessionEffort: null }), { model: 'gpt-fixture', effort: null });
+  assert.deepEqual(runSessionModel({ ...run, sessionModel: 'gpt-fixture' }), { model: 'gpt-fixture', effort: null });
   // Only what the reader knows is given, so a field a later version adds is not handed on by accident.
   assert.deepEqual(Object.keys(runSessionModel({ ...run, ...measured, sessionSummary: 'auto' })), ['model', 'effort']);
 });
@@ -222,17 +222,17 @@ test('runSessionModel: a model that is no name, or a line that is not one, reads
   for (const sessionModel of ['', 7, true, ['gpt'], { name: 'gpt' }]) assert.equal(runSessionModel({ ...run, ...measured, sessionModel }), null, JSON.stringify(sessionModel));
   // An effort with no model beside it measures nothing: there is no session to say it of.
   assert.equal(runSessionModel({ ...run, sessionEffort: 'low' }), null);
-  for (const sessionEffort of ['', 7, true, ['low']]) assert.deepEqual(runSessionModel({ ...run, ...measured, sessionEffort }), { model: 'gpt-6.1-sol', effort: null }, JSON.stringify(sessionEffort));
-  for (const line of [null, undefined, 'gpt-6.1-sol', 7]) assert.equal(runSessionModel(line), null, JSON.stringify(line));
+  for (const sessionEffort of ['', 7, true, ['low']]) assert.deepEqual(runSessionModel({ ...run, ...measured, sessionEffort }), { model: 'gpt-fixture', effort: null }, JSON.stringify(sessionEffort));
+  for (const line of [null, undefined, 'gpt-fixture', 7]) assert.equal(runSessionModel(line), null, JSON.stringify(line));
 });
 
 test('runSessionModel reads the log as it is: old lines and new ones side by side', () => {
   const root = makeRepo();
   appendCodexReviewRun(root, run);
-  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000c', session: 'lean', model: 'gpt-6.1-sol', effort: 'medium', ...measured });
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000c', session: 'lean', model: 'gpt-fixture', effort: 'medium', ...measured });
   appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000d', session: 'current', sessionModel: 'gpt-user', sessionEffort: 'high' });
   appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000e', session: 'current', sessionModel: null, sessionEffort: null });
-  assert.deepEqual(readCodexReviewRuns(root).map(runSessionModel), [null, { model: 'gpt-6.1-sol', effort: 'low' }, { model: 'gpt-user', effort: 'high' }, null]);
+  assert.deepEqual(readCodexReviewRuns(root).map(runSessionModel), [null, { model: 'gpt-fixture', effort: 'low' }, { model: 'gpt-user', effort: 'high' }, null]);
 });
 
 // What a lean attempt adds to its line once the review's answer is read as data.

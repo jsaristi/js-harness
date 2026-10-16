@@ -1,4 +1,8 @@
 {
+  "agents-budget": {
+    "kind": "design",
+    "path": "docs/ROADMAP.md"
+  },
   "codex-review-floor": {
     "kind": "words",
     "quotes": [
@@ -67,9 +71,25 @@
       "by": "session"
     }
   },
+  "contract-run-timeout": {
+    "kind": "design",
+    "path": "odd/tasks/task-contract.md"
+  },
   "control-phrase-min": {
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"
+  },
+  "gate-log-command": {
+    "kind": "design",
+    "path": "odd/tasks/gate-log.md"
+  },
+  "gate-log-size": {
+    "kind": "design",
+    "path": "odd/tasks/gate-log.md"
+  },
+  "gate-max": {
+    "kind": "design",
+    "path": "odd/tasks/gate-turn-guards.md"
   },
   "gate-wait": {
     "kind": "design",
@@ -160,6 +180,10 @@
     "kind": "design",
     "path": "odd/tasks/codex-review-cost.md"
   },
+  "review-timeout": {
+    "kind": "design",
+    "path": "odd/tasks/codex-exec-review.md"
+  },
   "reviewed-commit-lines": {
     "kind": "words",
     "quotes": [
@@ -176,6 +200,10 @@
       "date": "2026-10-11",
       "by": "session"
     }
+  },
+  "sensor-timeout": {
+    "kind": "design",
+    "path": "odd/tasks/remote-control.md"
   },
   "session-effort": {
     "kind": "words",
@@ -208,6 +236,29 @@
     "accepted": "Not put to him as a reading: it is this session's, and his to correct.",
     "checked": {
       "date": "2026-10-12",
+      "by": "session"
+    }
+  },
+  "sessions-open-in-sidebar": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Solo donde se declara (Recomendada)",
+        "date": "2026-10-15",
+        "session": "e152c9d8-53bc-4366-8fa5-526b1576bcb6",
+        "line": 3689
+      },
+      {
+        "quote": "Rechazar y nombrar start_session (Recomendada)",
+        "date": "2026-10-15",
+        "session": "e152c9d8-53bc-4366-8fa5-526b1576bcb6",
+        "line": 3702
+      }
+    ],
+    "reading": "His two answers to the lead's question tool on T16 layer 3 (odd/tasks/session-channel.md, section 17, \"Open for him\"): the guard refuses the tools that open a session in the app's Routines or in the cloud only in a project that declares this rule, which is why it is of this repository only; and a scheduled task he asks for himself is refused too, with start_session named as the way. The value is that way: the one tool whose session is a row in his sidebar.",
+    "accepted": "Each answer is an option the lead offered under its question, picked as it was.",
+    "checked": {
+      "date": "2026-10-15",
       "by": "session"
     }
   },
@@ -267,6 +318,14 @@
       "date": "2026-10-11",
       "by": "session"
     }
+  },
+  "wait-every": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
+  },
+  "wait-for": {
+    "kind": "design",
+    "path": "odd/tasks/session-channel.md"
   },
   "work-sessions": {
     "kind": "words",

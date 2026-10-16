@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  CLOCK_TOLERANCE_MS, identifyProcesses, killProcesses, killSurvivors, killTree, parseSnapshot, resolveRoot, selectDescendants, selectTrees, takeSnapshot,
+  CLOCK_TOLERANCE_MS, groupMembers, identifyProcesses, killProcesses, killSurvivors, killTree, parseSnapshot, resolveRoot, selectDescendants, selectTrees, settleGroup, takeSnapshot, waitGroupGone,
 } from './process-tree.mjs';
 import { createReaper, sweepLater, sweptLater } from './process-tree.testkit.mjs';
 
@@ -365,10 +365,23 @@ test('on POSIX a look is the answer to the number, since no creation time is rea
     if (pid === 322) throw Object.assign(new Error('gone'), { code: 'ESRCH' });
     if (pid === 323) throw Object.assign(new Error('not yours'), { code: 'EPERM' });
   };
-  const looks = createReaper({ platform: 'linux', spawnSync: never, kill }).look([321, 322, 323]);
+  const looks = createReaper({ platform: 'linux', spawnSync: never, kill, procState: () => null }).look([321, 322, 323]);
   assert.deepEqual(looks.map(({ alive }) => alive), [true, false, true], 'a process this user may not signal runs all the same');
   assert.match(looks[0].found, /pid 321 answers/);
   assert.equal(looks[1].found, null);
+});
+
+test('on Linux a number that answers for a zombie is not alive: the process is dead and only waits to be reaped, and the look says so', () => {
+  // A grandchild killed with its group is reparented and stays a zombie until init reaps it; `kill(pid, 0)` still
+  // answers for it (a WSL2 gate, 2026-10-14: evals/suite.test.mjs, alive [false, true] at the exit).
+  const never = () => assert.fail('nothing is spawned on POSIX');
+  const states = { 321: 'Z', 322: 'S', 323: 'X', 324: null };
+  const looks = createReaper({ platform: 'linux', spawnSync: never, kill: () => true, procState: (pid) => states[pid] }).look([321, 322, 323, 324]);
+  assert.deepEqual(looks.map(({ alive }) => alive), [false, true, false, true], 'a zombie or a dead entry is not alive; a sleeping process, or one with no state to read, is');
+  assert.match(looks[0].found, /pid 321 answers, and \/proc says it is a zombie \(Z\): dead, waiting to be reaped/);
+  assert.match(looks[1].found, /^pid 322 answers \(state S; no creation time is read on POSIX/);
+  assert.match(looks[2].found, /^pid 323 answers, and \/proc says it is dead \(X\)/);
+  assert.match(looks[3].found, /^pid 324 answers \(no creation time is read on POSIX/);
 });
 
 test('on POSIX there is no creation time to read, so a learned pid is signalled by its number, and no command runs', () => {
@@ -711,4 +724,51 @@ test('real: a pid now held by a process this user cannot read is "gone" when its
   const result = killProcesses([{ pid: other.pid, createdAt: other.createdAt - 60 * 60 * 1000 }]);
   assert.deepEqual(result, { killed: [], gone: [other.pid], running: [] }, 'another process holds the pid: the one seen is gone');
   assert.ok(takeSnapshot().some((entry) => entry.pid === other.pid && entry.createdAt === other.createdAt), 'it was not touched');
+});
+
+// ---- after a POSIX group kill: the group is waited for, bounded, so a run does not end while a member still runs ----
+
+// A /proc/<pid>/stat line: pid, (comm), state, ppid, pgrp, ...; a comm may hold spaces and parentheses.
+const stat = (pid, comm, state, pgrp) => `${pid} (${comm}) ${state} 1 ${pgrp} ${pgrp} 0 -1 4194560`;
+
+test('the live members of a process group are read from /proc: its pgrp field, a zombie or a dead entry not counted', () => {
+  const stats = {
+    100: stat(100, 'node', 'S', 100),
+    101: stat(101, 'fake (agent) x', 'R', 100),
+    102: stat(102, 'node', 'Z', 100),
+    103: stat(103, 'node', 'X', 100),
+    104: stat(104, 'node', 'R', 200),
+  };
+  const members = groupMembers(100, { readdir: () => ['self', ...Object.keys(stats), '105'], readStat: (pid) => stats[pid] ?? null });
+  assert.deepEqual(members, [100, 101]);
+});
+
+test('waiting for a killed group ends as soon as it is gone, and past its bound names the members that still run', async () => {
+  let clock = 0;
+  const sleep = async (ms) => { clock += ms; };
+  const sequence = [[101], [101], []];
+  const gone = await waitGroupGone(100, { ms: 2000, every: 50, now: () => clock, sleep, members: () => sequence.shift() ?? [] });
+  assert.deepEqual(gone, []);
+  assert.equal(clock, 100, 'two waits of 50 ms, then it was gone');
+
+  clock = 0;
+  const left = await waitGroupGone(100, { ms: 2000, every: 50, now: () => clock, sleep, members: () => [101] });
+  assert.deepEqual(left, [101]);
+  assert.equal(clock, 2000, 'it waits its whole bound and no longer');
+});
+
+test('settling a killed child waits for its group on POSIX, nothing on Windows, and a POSIX system with no /proc is not waited for', async () => {
+  const waited = [];
+  const wait = async (pgid) => { waited.push(pgid); return [7]; };
+  assert.deepEqual(await settleGroup({ pid: 42 }, { platform: 'linux', wait }), [7]);
+  assert.deepEqual(waited, [42]);
+  assert.deepEqual(await settleGroup({ pid: 42 }, { platform: 'win32', wait }), [], 'a Windows kill already waits for each process');
+  assert.deepEqual(await settleGroup({}, { platform: 'linux', wait }), [], 'a child that never started has no group');
+  const noProc = Object.assign(new Error('no /proc'), { code: 'ENOENT' });
+  assert.deepEqual(await settleGroup({ pid: 42 }, { platform: 'darwin', wait: async () => { throw noProc; } }), []);
+});
+
+test('a lookup of the group that fails for another reason is no proof the group is gone: it rejects', async () => {
+  const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+  await assert.rejects(settleGroup({ pid: 42 }, { platform: 'linux', wait: async () => { throw denied; } }), /permission denied/);
 });

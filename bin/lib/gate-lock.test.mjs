@@ -261,6 +261,31 @@ test('a waiting gate is told, with each gate it waits for, the whole of its boun
   second.release();
 }));
 
+test('a waiting gate whose launcher is gone leaves the line at its next look and takes nothing; the holder keeps the lock', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  clock.onSleep = () => first.beat();
+  let looks = 0;
+  const second = await take(home, clock, { pid: 22, stillWanted: () => (looks += 1) < 3 });
+  assert.equal(second.refused, 'launcher gone');
+  assert.equal(looks, 3, 'asked at every look, and left at the first that said no');
+  assert.equal(second.holder, null);
+  assert.equal(typeof second.waitedMs, 'number');
+  assert.deepEqual(waitFolders(home), [], 'its place in the line is given up');
+  assert.equal(first.lost(), false);
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 11);
+  first.release();
+  // At the head of the line, with the lock free, a gate whose launcher is gone takes nothing either.
+  const alone = await take(home, clock, { pid: 33, stillWanted: () => false });
+  assert.equal(alone.refused, 'launcher gone');
+  assert.equal(readGateHolder(home, { now: clock.now }), null);
+  assert.deepEqual(waitFolders(home), []);
+  // And one whose launcher lives takes the lock as before.
+  const live = await take(home, clock, { pid: 44, stillWanted: () => true });
+  assert.equal(live.refused, undefined);
+  live.release();
+}));
+
 test('the wait is bounded: past it the gate is refused and the holder keeps the lock', withHome(async (home) => {
   const clock = fakeClock();
   const first = await take(home, clock, { pid: 11 });

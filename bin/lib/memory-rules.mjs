@@ -1,0 +1,51 @@
+// The `memory-rules` check of `doctor` (C6 of odd/tasks/rule-hierarchy.md, built as T4 of
+// odd/tasks/commands-and-doctor.md): a note of the project's Claude Code memory whose type is
+// `feedback` or `project` is a rule or a decision kept where nothing acts on it, since memory is read
+// by an agent that may or may not recall it. `user` and `reference` notes are facts of the machine
+// and are left. The note's type is the one Claude Code's memory instructions define, in its front
+// matter: at the top, or under `metadata:` as this host writes it (31 notes read on 2026-10-14).
+import fs from 'node:fs';
+import path from 'node:path';
+import { mainCheckout, projectSlug } from './sessions.mjs';
+
+const RULE_TYPES = new Set(['feedback', 'project']);
+const INDEX = 'MEMORY.md';
+
+/** The fix of a `stale` row: where a rule goes, in order, then what is done to the note. The protocol
+ * is the one `odd/tasks/rule-hierarchy.md` names; until its skill ships, the order is the whole of it. */
+export const MEMORY_RULES_FIX =
+  'place each note with the protocol "recording a new rule" (a check first, else a line of AGENTS.md, else a protocol), then delete the note:';
+
+/** The `type:` of a note's leading `---` front matter, at any indentation, or `null` when it has
+ * none. A flat reader: the front matter of a memory note is a few `key: value` lines. */
+export function memoryNoteType(text) {
+  const lines = text.split(/\r?\n/);
+  if (lines[0] !== '---') return null;
+  for (const line of lines.slice(1)) {
+    if (line === '---') return null;
+    const match = /^\s*type:\s*([A-Za-z]+)\s*$/.exec(line);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/** The check's cells and lines: `stale` with one line per rule note (`<file> (<type>)`, by name),
+ * `ok` when the memory folder holds none, `n/a` when the project has no memory folder, `unknown`
+ * when anything throws. The folder is the main checkout's, so a worktree reads the same notes as
+ * the checkout: Claude Code keeps one memory for a repository. */
+export function memoryRulesState({ home, project, spawn }) {
+  try {
+    const run = (command, args, options) => spawn(command, args, { ...options, encoding: 'utf8', windowsHide: true });
+    const folder = path.join(home, '.claude', 'projects', projectSlug(mainCheckout(run, project)), 'memory');
+    if (!fs.existsSync(folder)) return { claude: 'n/a', codex: 'n/a', lines: [] };
+    const lines = [];
+    for (const name of fs.readdirSync(folder).sort()) {
+      if (name === INDEX || !name.endsWith('.md')) continue;
+      const type = memoryNoteType(fs.readFileSync(path.join(folder, name), 'utf8'));
+      if (RULE_TYPES.has(type)) lines.push(`${name} (${type})`);
+    }
+    return { claude: lines.length > 0 ? 'stale' : 'ok', codex: 'n/a', lines };
+  } catch {
+    return { claude: 'unknown', codex: 'n/a', lines: [] };
+  }
+}

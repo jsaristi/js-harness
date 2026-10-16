@@ -76,7 +76,7 @@ local check, with what it leaves unproven on his machine said beside it.
 - Every code commit goes through the machine's gate with `js-harness gate`, and no test, board
   read or reviewer runs beside a gate that is running — because the lock is one for the machine.
 - Zero dependencies, every operating system, and each thing that ships judged twice: here, and
-  in a project that installed the harness (`docs/ROADMAP.md`, "Session channel") — because
+  in a project that installed the harness (`odd/tasks/session-channel.md`, section 16) — because
   `check` ships, and whether `init` writes a workflow is a product choice of his.
 - A Codex review runs without asking only inside the rate (`js-harness codex-review --plan` at
   most 1.05 times the larger of 300,000 input tokens and 1,200 a changed line); over it, the
@@ -594,7 +594,8 @@ version).**
 - [x] T7 · The design of the exchange (R1): how a pull request is tested again once `main`
       moved, its minutes against 2,000, what it loses, what the gate log must record to
       measure it; two readers; to the orchestrator for him ("avísame cuando llegue el diseño
-      del canje"). Route: inline, then delegated readers.
+      del canje"). Route: inline, then delegated readers. **Superseded by merge-queue on
+      2026-10-16** (Progress, his answer at line 7753): its open question is closed.
 
 ## Progress
 - 2026-10-13 · T1, T2. The opening read and the orchestrator told (title, hour, context 23
@@ -744,15 +745,63 @@ version).**
   **When to come back to it:** the orchestrator brings it back to him with measured numbers if
   the lock stays saturated once the Linux gate runs locally (JH 8's WSL gate). The design above
   is the starting point then: its month, its losses and the reopen still to prove.
+- 2026-10-14 · **The exchange is taken.** Later the same day he typed (orchestrator transcript
+  `ffe99ebf`, line 5394, 19:15:14Z, read with `sessions --quote`): "Sí, tomemos el intercambio
+  con verde de GitHub". "The exchange, R1" (second version) is now the rule, with what the
+  orchestrator settled when it relayed the decision (14:21 local):
+  - **Reading the tested base:** from the run's checkout log, the line "HEAD is now at <merge>
+    Merge <head> into <base>". The design's own reading, the `HEAD^1` printed by the workflow, is
+    not built.
+  - **A stale base:** the orchestrator closes and reopens the pull request to get a fresh run. It
+    did so on pull request 128 at 14:18 local, which proves the reopen the design left unproven.
+  - **Sessions:** they stop merging `main` into their pull requests unless there is a conflict or
+    they need code from `main`.
+- 2026-10-16 · **T7 is closed as superseded by merge-queue.** JH 10's question, "Pregunta 1"
+  on the board ("¿Se puede mergear un PR con una corrida verde en GitHub contra el main donde cae,
+  sin que la rama traiga main ni corra el gate local entero?"), had stayed open. The orchestrator
+  put it to him: merge-queue, which lands everything today, already answers most of it, because
+  branches do not bring `main` in and the gate runs once per batch, not once per branch. He tapped
+  (orchestrator transcript `e152c9d8`, line 7753, 04:37:59Z, read with `sessions --quote`) "Sí,
+  cerrala (Recomendada)" to "¿La cierro como superada por merge-queue?". Nothing more of R1 is
+  built.
 
 ## Next
-1. The exchange is not taken (Progress, his answer of 2026-10-14). Nothing to build for it
-   unless the orchestrator brings it back with measured lock numbers.
+0. **His order, first** (ffe99ebf line 5906, 19:43:44Z: "Listo entonces quiero que pausemos todo e
+   implementemos las soluciones para que funcionemos con todas las soluciones y sin fallas"; line
+   5853: corrections first, "tiene que quedar funcionando como un reloj suizo"). As the
+   orchestrator relayed it (14:45 local), test first, in order:
+   - (1) `js-harness merge-ready <pr>`, the exchange as a command:
+     - checks: the pull request is open, not a draft, mergeable, its base is `main`, and its body
+       has the gentle-ai line;
+     - the run: it finds the run for the head and requires it green;
+     - the tested base: read from the checkout log ("HEAD is now at <m> Merge <head> into
+       <base>"); it must equal `origin/main`, or be behind it only by `docs/` and `odd/tasks/`
+       files, not `AGENTS.md`, with merge-tree clean;
+     - exit codes: 0 ready, 3 stale, 4 run pending or red, 1 otherwise;
+     - a stale reopen waits until `refs/pull/N/merge^1` equals `main`: a reopen right after a
+       merge tested the old base twice that day;
+     - read first the orchestrator's script,
+       `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\ffe99ebf-72fb-48da-a79b-e7db21a20b3f\scratchpad\merge-on-run.sh`.
+   - (2) Then the conflict-hunks Codex review (item 1 below).
+   - **T3 of `odd/tasks/read-from-records.md` is parked:** branch `feat/plan-from-records`
+     (worktree `D:/js-harness-worktrees/plan-from-records`), `f66a822` committed and gated, plus a
+     fix of its plan line (`atPair` counted over the whole log, not the window) committed through
+     the gate after it. Still to do: its Codex review (planned at about 220,000 input tokens,
+     allowance 451,200), push, its pull request.
+   - The session passed 88 percent of context at this point (91 percent), and the state is
+     written here.
+1. The exchange is taken (Progress, his decision at line 5394). What it still asks of the code
+   is the orchestrator's to place; this session's queue holds the next item it gave: a resolved
+   merge's Codex review covers its conflicted hunks only, not the whole branch again (pull
+   request 124 paid 175,025 input tokens for that), test first, after T3 of
+   `odd/tasks/read-from-records.md`.
 2. Spec notes for any further capability go to the orchestrator at the feature's close (his
    "Que me lo manden a mí"); the three so far were sent.
 
 ## Resume here
 Feature document on `docs/gate-on-github-exchange` (worktree `D:/js-harness-worktrees/github-gate`),
-off `main` `9546fb7`. T1 to T6 are done and on `main`. T7 is closed: his answer was "No por
-ahora", with a condition to come back to it (Progress). Read the orchestrator's answers first,
-then Next.
+off `main` `9546fb7`. T1 to T6 are done and on `main`. T7 is closed and taken: he first answered
+"No por ahora", then, at line 5394, "Sí, tomemos el intercambio con verde de GitHub" (Progress).
+Read the orchestrator's answers first, then Next.
+
+- 2026-10-15 · **Fewer runs: his choice "C ahora, A después (Recomendada)"** (tapped, the orchestrator's transcript c47efdf7, line 4991, read with `sessions --quote`). gate.yml runs on `pull_request` only for `opened`, `reopened` and `ready_for_review`, and its job skips a draft: a later push (`synchronize`) starts no run, and a fresh run is asked for by reopening, as merge-ready says. October had 343 minutes in 90 runs; one run a branch would have been about 155. No `workflow_dispatch`: a run asked for by hand tests no merge (merge-ready reads "Merge <head> into <base>" from its checkout) and spends minutes. A, no run per pull request, waits for the first real `--land` of the merge queue. Branch ci/gate-on-ready, by JH 10.

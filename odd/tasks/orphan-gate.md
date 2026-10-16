@@ -1,0 +1,109 @@
+# A waiting gate whose launcher died runs nothing
+
+Locator: `odd/tasks/orphan-gate.md` · Engram mirror: `odd/orphan-gate/tasks` · Branch: `feat/orphan-gate` ·
+Delivery: `ask-on-risk` · Runner: `node --test`
+
+## Goal
+A `js-harness gate` that waits for its turn, and whose launcher has ended, gives up its place in the
+line and runs nothing, and says so in the gate log.
+
+## Why
+On 2026-10-14 a TaskStop of a queued turn killed its shell but left the `gate --wait` node alive (JH 5,
+16:0x); when its turn came that orphan would have run its script and committed a half-edited tree. JH 5
+killed it by hand, and the lead saw the same with two of its own background loops.
+
+## Done when
+- `node --test bin/lib/launcher.test.mjs` exits 0
+- `node --test bin/gate.test.mjs` exits 0
+- `npm run check` exits 0
+- A gate whose launcher is killed while it waits ends with exit 75, a `refused` line in the gate log
+  whose reason is `launcher gone`, and its command never started.
+
+## In scope / Out of scope
+- In: `bin/lib/launcher.mjs` and its test, the wait loop of `bin/lib/gate-lock.mjs`, `takeGateTurn` and
+  `refusalSaid` in `bin/check.mjs`, `bin/gate.mjs`, their tests.
+- Out: a gate whose command already runs (the lead asked for the wait), and `check`'s own wait in a
+  commit's hook: its launcher is git, whose death ends the commit anyway.
+
+## Constraints
+- A launcher that cannot be read is never taken for a dead one — a gate must never give up a live
+  session's turn on a failed look.
+
+## Effort
+high
+
+## Ask me before
+Nothing planned.
+
+## Specs
+- **S1** (the lead, 2026-10-14, after Codex out of the lock): "Fix in the gate: before it commits, a
+  waiting gate checks that the process that started it is still alive (parent pid, or the session's
+  process), and if not it gives up its place and commits nothing, saying so in the gate log. Test first.
+  Tell me if you see a better signal than the parent pid on Windows."
+  - The signal, as built: the gate's launchers are its parent and, when that parent is a `cmd.exe` (the
+    shim of an installed `js-harness`), the process above it too; each is known by its pid and its start
+    time, read once when the gate starts. On Linux the parent is gone when `process.ppid` is no longer it
+    (an orphan is adopted). On Windows a pid is reused and no orphan is adopted, so each poll asks
+    whether every launcher's pid still exists, and the last look before the command starts also asks that
+    its start time is the one read at the start.
+
+## Tasks
+
+| ID | Specs | Route | Status | Evidence |
+|----|-------|-------|--------|----------|
+| T1 | S1 | inline | done, pending its commit | RED then GREEN: the wait loop (`gate-lock.test.mjs`), the two gate cases (`gate.test.mjs`), the broken chain (`launcher.test.mjs`); the real kill test failed first on a real defect (below) |
+
+## Log
+- **L1** (2026-10-14): the lead's order, S1, verbatim.
+- **L2** (2026-10-14, measured on this machine): a node run from a Git Bash script (two commands, so the
+  shell forks) has as its parent a stub `sh.exe`, not the script's shell. With the script's shell killed
+  by `kill -9`, node and that stub both stayed alive (`process.kill(pid, 0)` on each). So the parent pid
+  alone would never have seen JH 5's orphan; the chain of shells above it does. Reading the Windows table
+  (`Get-CimInstance Win32_Process`) took about a second, which is why a gate reads it only once it waits.
+- **L3** (2026-10-14): the first run of the real kill test failed: the PowerShell format used a tab in
+  single quotes, which PowerShell does not expand, so no row parsed and the chain fell back to the parent
+  alone. Fixed with a `|` apart, which no file name holds; the same test then passed. The unit tests of
+  `launcher.mjs` were run only after it was written, so their RED is the missing module, not seen apart.
+- **L4** (2026-10-14): the cost. A gate that takes the lock at its first look reads no table and asks
+  nothing (tested); one that waits reads the chain once at its second look, checks its pids at every
+  look (`process.kill(pid, 0)`), and reads the table once more before its command starts.
+- **L5** (2026-10-14): the first gate failed in WSL2 on the unit test of `launchersAlive`: on Linux the
+  look also asks whether `process.ppid` is still the first launcher, and the test's made-up pids are no
+  parent of the test. The cases that are not about adoption now pass `ppid: null`; 5/5 on Windows and in
+  WSL2 (its node, `/home/oficina/.local/node/bin/node`), the real kill test included.
+- **L6** (2026-10-14): commit `6029616`, gate passed in WSL2. Codex over `eb6abf7..6029616` (156,348 input
+  tokens): two P2, fixed in one batch, test first (RED, then GREEN). The last look moved into `logged`,
+  after the sample of the load (a second) and just before the command starts; and where the launchers are
+  cheap to read (Linux) they are read as the gate starts, since there a shell whose parent ended is adopted
+  and a chain read later would end at its adopter. `gate.test.mjs` 61/61 on Windows. In WSL2 run from
+  `/mnt/d` three "real gate" tests time out on main too (`4edfa0e`, same three), so they are of that place,
+  not of this change; the gate runs them from its mirror.
+- **L7** (2026-10-15 01:14): reopened by the lead's order (his 5853), on JH 5's note of 00:57: a gate started
+  from the Bash tool that had to wait for the lock gave up with 75 though its shell lived. Measured here:
+  from the Bash tool, foreground or background, the chain is node's sh <- the tool's sh <- a wrapper gone
+  within the first second, so the chain read at the second look ended `gone: true` and every wait was
+  refused. Reproduced end to end (`gate --home <tmp>` waiting for another gate, both started by one script
+  in the background): main exits 75 "the process that started this gate ended while it waited"; the fix
+  runs the command and exits 0. The fix: the launchers are read as the gate starts, never later; a parent
+  already gone then ended before the gate and is no launcher, so the chain ends with the shell it left
+  (`readLaunchers` marks no `gone` any more). On Windows the table is read beside the gate
+  (`startLaunchers`, PowerShell without blocking): until it is in the gate keeps its place, and a turn
+  taken at once stops the read. RED then GREEN: `launcher.test.mjs` (the measured chain; a real node whose
+  shell's parent ended reads alive, and gone once that shell ends on a stop file, since the repository's guard
+  forbids signalling a pid), `gate.test.mjs` (an unknown chain
+  keeps its place); 6/6 and 62/62. The real gate test caught `kill EINVAL` on a read already ended.
+- **L8** (2026-10-15 02:32): `1134f84`. gentle-ai, raised to high (item 4: the order of the table's read
+  against the wait of every session's gate): native review, lenses resilience and reliability, approved and
+  acknowledged (lineage `review-ee742770df9c120b`), seven non-blocking advisories. Codex `dfe4345..1134f84`:
+  incorrect, one P2 (152,310 input tokens): a turn that came after a wait, before the table was in, stopped
+  the read and ran with no last look. Corrected alone: such a turn waits for the read (`settle`), bounded at
+  20 s like the blocking read, after which the table is none. RED then GREEN in `bin/gate.test.mjs` (63/63);
+  the end-to-end case still exits 0.
+- **L9** (2026-10-15 02:54): `2d1ba09`; Codex recheck `1134f84..2d1ba09` correct, 1 of 1 fixed (47,845
+  input tokens). PR 180. The seven advisories of the native review, which gave ids and no text, read from
+  their ids and places: the two on a read with no bound were met by `2d1ba09` (20 s); the untested read beside
+  the gate gets a Windows test of `startLaunchers` against this machine's table (settle, and a read stopped
+  first), written after the code, so no RED; the two on a launcher that ends inside the first second are a
+  window kept and now said in `startLaunchers`, since no table tells when a process ended; the stop not
+  reached on a throw is left, as `takeGateTurn` catches the lock's errors and a read left over ends by
+  itself within a second; the real test's timing is left as it is.
