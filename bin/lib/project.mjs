@@ -379,6 +379,11 @@ The owner's wording is the need, not the specification: an answer to a proposal 
 need that was understood, what would be done differently from their words and why, and what it
 costs or is not known; only then is it recorded.
 
+A design before it is built, and a plan, an analysis with figures or a protocol put to the owner,
+first passes two readers that did not write it: one attacks its claims, one looks only for what is
+missing. The owner gets the improved version, with what each reader changed and what stays
+unguaranteed.
+
 A reply ends with one of four states: working (the owner sends nothing; say what wakes the work),
 decision (one question for the owner, never while work runs), cut (a new session, with the text to
 send it), or finished (name where to return).

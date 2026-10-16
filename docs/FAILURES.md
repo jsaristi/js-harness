@@ -833,6 +833,18 @@ ended runs nothing (`bin/gate.test.mjs`, "gate whose launcher ends while it wait
 - Control: check — bin/loop.test.mjs — "stop --take-over kills the loop and every descendant by pid
   and creation time, looks again and removes the record" — since 2026-10-15
 
+### proposal-unreviewed
+A plan, a design or a protocol reached him to decide before any reader that did not write it had
+read it, and he found its holes, or was asked to approve a version its next round replaced.
+- Class: rule-not-acting
+- Seen: 2026-10-11 — relief file, line 254 — the rule-change protocol reached him three times in
+  one day, each round asked to approve the version before it; his words that day, transcript
+  130317af, line 470: "Siempre me gustaria hacewr asi una doble revision con mejora"
+- Seen: 2026-10-16 — the lead's transcript e152c9d8, line 14210 — the lead's improvement plan
+  reached him with no reader: "siempre tenemos que hacer una doble revision a todo para que salga
+  sin errores por favor cementa esto"
+- Control: owed — odd/tasks/rule-hierarchy.md — "the rule declared with its home"
+
 ### push-check-read-as-gate
 The board counted the few seconds of a push's check as a second gate.
 - Class: unseen-state
