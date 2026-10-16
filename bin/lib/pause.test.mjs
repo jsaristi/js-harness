@@ -238,6 +238,19 @@ test('both notices say never to end the turn idle, and to write the state and ke
 // the orchestrator or its relief file it says what they are and where that is taught (first-version T3a).
 const ORCHESTRATOR_SAID = 'the orchestrator (the session that leads this project\'s sessions, where one does: the js-harness-orchestrator skill says how), its relief file instead';
 
+// With no window configured and no compaction measured, the figures rest on an assumed window: the notice says so
+// and how to set it, instead of giving the default as the session's own (first-version T3b).
+const ASSUMED = `No window is configured and no compaction is measured, so these figures assume a window of ${DEFAULT_CONTEXT_WINDOW} tokens: set CLAUDE_AUTO_COMPACT_WINDOW or autoCompactWindow to the host's window.`;
+
+test('a notice resting on the assumed window says so and how to set the window; one on a configured window does not', inHome((home) => {
+  const options = { sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') };
+  const assumed = pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(OVER)]) });
+  assert.ok(assumed.text.includes(ASSUMED), assumed.text);
+  fs.rmSync(path.join(home, '.js-harness'), { recursive: true, force: true });
+  const configured = pauseNotice({ ...options, window: DEFAULT_CONTEXT_WINDOW, transcript: write(home, 't.jsonl', [reply(OVER)]) });
+  assert.ok(configured !== null && !configured.text.includes('No window is configured'), configured?.text);
+}));
+
 test('both notices say what the orchestrator and its relief file are, before the cut names the orchestrator', inHome((home) => {
   const options = { sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') };
   const pause = pauseNotice({ ...options, transcript: write(home, 't.jsonl', [reply(OVER)]) });

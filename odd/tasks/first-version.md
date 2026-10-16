@@ -165,7 +165,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L4)
 - [x] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks (L12)
 - [x] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
-- [ ] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
+- [x] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
 - [x] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4; L13)
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L6)
 - [x] T4b (kind: build) S4: the release source, built as designed; inline, test first (L7)
@@ -279,3 +279,8 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   time they name it, what the orchestrator is and that the js-harness-orchestrator skill teaches it
   (`ORCHESTRATOR_IS`, `bin/lib/sessions.mjs`; RED 1 in `bin/lib/pause.test.mjs`, 25 in `bin/resume.test.mjs`, then 56 and
   92 green). The `init` template stays short. Next: T3b, then Codex, push, a PR, the lead told.
+- L16 (2026-10-16, JH 25): T3b built inline, test first: with no window configured and no compaction measured,
+  the pause's notice says its figures assume the default window of 500,000 tokens and names
+  CLAUDE_AUTO_COMPACT_WINDOW and autoCompactWindow to set it (`bin/lib/pause.mjs`, noticeOf; RED 1 in
+  `bin/lib/pause.test.mjs`, then 57 green). Of the task's two ways this is the second: the notice says the figure is assumed,
+  and the model's own window is not read. Next: Codex on the code commits, push, a PR, the lead told.

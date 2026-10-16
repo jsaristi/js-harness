@@ -296,7 +296,12 @@ function noticeOf(tokens, compaction, stage, configured = null) {
   const whole = Math.round(tokens);
   const share = percentOf(whole, window);
   const room = Math.round(Math.max(0, compaction - tokens));
-  const head = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${compactionShare}%: about ${thousands(room)} tokens are left.`;
+  // With nothing configured and nothing measured the figures rest on the default window: said, never given as the
+  // session's own (odd/tasks/first-version.md, T3b).
+  const assumed = configured === null && compaction === DEFAULT_COMPACTION
+    ? ` No window is configured and no compaction is measured, so these figures assume a window of ${DEFAULT_CONTEXT_WINDOW} tokens: set CLAUDE_AUTO_COMPACT_WINDOW or autoCompactWindow to the host's window.`
+    : '';
+  const head = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${compactionShare}%: about ${thousands(room)} tokens are left.${assumed}`;
   // A project that only installs the harness defines no orchestrator in its AGENTS.md: the first mention says
   // what one is and where that is taught (odd/tasks/first-version.md, T3a).
   const where = `the "Next step" of the session's feature document; for the orchestrator (${ORCHESTRATOR_IS}), its relief file instead`;
