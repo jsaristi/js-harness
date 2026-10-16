@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
 import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
-import { measuresTotal } from './lib/measures.mjs';
+import { dayStartOf, localDay, measuresTotal } from './lib/measures.mjs';
 import { statePath } from './lib/pause.mjs';
 import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
@@ -2272,15 +2272,17 @@ function writeMeasured(machine) {
 }
 
 /** A `run` that answers `git -C <folder> log` with `log` and every other command as `fakeRun` does,
- * recording the log calls apart. */
-function measuringRun(machine, log) {
+ * recording the log calls apart. The reopenings' log (`git -C <root> log -p`, no `--format=%cI`) is answered by
+ * `reopen`, which by default finds no Log line. */
+function measuringRun(machine, log, reopen = () => ok('')) {
   const fake = fakeRun(machine);
   const logs = [];
   const run = (command, args, options) => {
-    if (command === 'git' && args[0] === '-C' && args[2] === 'log') {
+    if (command === 'git' && args[0] === '-C' && args[2] === 'log' && args.includes('--format=%cI')) {
       logs.push(args);
       return log(args);
     }
+    if (command === 'git' && args[0] === '-C' && args[2] === 'log') return reopen(args);
     return fake.run(command, args, options);
   };
   return { run, logs, calls: fake.calls };
@@ -2289,6 +2291,18 @@ function measuringRun(machine, log) {
 const neverListed = () => {
   throw new Error('the measures list no process');
 };
+
+const NO_REOPEN = '0 Log lines name a reopening: candidates for the lead, cause not read. A reopening written in no Log, or closed again inside one pull request, is not seen.';
+const pad2 = (number) => String(number).padStart(2, '0');
+/** The local time of `ms` as `--measures` prints it: `YYYY-MM-DD HH:MM`. */
+const minuteOf = (ms) => {
+  const at = new Date(ms);
+  return `${localDay(ms)} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`;
+};
+/** The lines after the compactions' when the record holds no relief and no Log line names a reopening, over `hours`. */
+const quietTail = (hours = 12) => [`no relieved notice in the record for ${localDay(dayStartOf(NOW - hours * 3600 * 1000))}..${localDay(NOW)}`, NO_REOPEN];
+/** The closing line of the compactions, which `--measures` prints before the reliefs. */
+const totalOf = (stdout) => stdout.split('\n').find((line) => line.includes(' judged in '));
 
 test('--measures prints, per session of the window with a compaction, each one with its three facts read from the pause\'s state and the document\'s commits, then the total', withMachine(async (machine) => {
   const { document } = writeMeasured(machine);
@@ -2303,6 +2317,7 @@ test('--measures prints, per session of the window with a compaction, each one w
     'bbbbbbbb  fix it',
     `  ${before(300).toISOString()}  asked`,
     '2 automatic compactions judged in 1 session: 1 misses a fact (told 1); 1 with a fact not known; 1 asked, not judged',
+    ...quietTail(),
   ]);
   assert.deepEqual(measuring.logs, [['-C', path.dirname(document), 'log', '--format=%cI', '--', 'board.md']], 'git log is asked once, for the compaction whose pause was told');
   assert.deepEqual(measuring.calls.map((made) => made.args[0]), ['rev-parse'], 'no worktree, pull request or gate is read for the measures');
@@ -2312,7 +2327,7 @@ test('--measures reads a stretch whose document has no commit after the notice a
   writeMeasured(machine);
   const late = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok(`${before(5000).toISOString()}\n`)).run, listProcesses: neverListed });
   assert.equal(late.stdout.split('\n')[1], `  ${before(600).toISOString()}  automatic  told yes  kept no  announced yes`);
-  assert.match(late.stdout.split('\n').at(-1), /^2 automatic compactions judged in 1 session: 2 miss a fact \(told 1, kept 1\)/);
+  assert.match(totalOf(late.stdout), /^2 automatic compactions judged in 1 session: 2 miss a fact \(told 1, kept 1\)/);
   const failing = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })).run, listProcesses: neverListed });
   assert.equal(failing.code, 0);
   assert.equal(failing.stdout.split('\n')[1], `  ${before(600).toISOString()}  automatic  told yes  kept unknown  announced yes`);
@@ -2350,14 +2365,14 @@ test('--measures says a transcript it cannot read, and still prints the others',
   const lines = stdout.split('\n');
   assert.ok(lines.includes(`${SESSION_B}  unavailable: EACCES`), stdout);
   assert.equal(lines[0], 'aaaaaaaa  Board feature');
-  assert.match(lines.at(-1), /; 1 transcript could not be read$/);
+  assert.match(totalOf(stdout), /; 1 transcript could not be read$/);
 }));
 
-test('--measures exits 0 with the total alone when nothing was compacted, and 1 when the project has no sessions folder', withMachine(async (machine) => {
+test('--measures exits 0 with the total and the tail alone when nothing was compacted, and 1 when the project has no sessions folder', withMachine(async (machine) => {
   writeAt(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('go', 900), reply('done', 800)), 60);
-  const quiet = await runSessions(machine, ['--measures'], { listProcesses: neverListed });
+  const quiet = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok('')).run, listProcesses: neverListed });
   assert.equal(quiet.code, 0);
-  assert.equal(quiet.stdout, '0 automatic compactions judged in 0 sessions: 0 miss a fact');
+  assert.equal(quiet.stdout, ['0 automatic compactions judged in 0 sessions: 0 miss a fact', ...quietTail()].join('\n'));
   fs.rmSync(machine.projectDir, { recursive: true });
   const none = await runSessions(machine, ['--measures'], { listProcesses: neverListed });
   assert.equal(none.code, 1);
@@ -2404,8 +2419,86 @@ test('--measures keeps an orchestrator\'s compaction by a line of its relief fil
     'bbbbbbbb  JH 2 · board',
     `  ${before(600).toISOString()}  automatic  told yes  kept no  announced yes`,
     '2 automatic compactions judged in 2 sessions: 1 misses a fact (kept 1)',
+    ...quietTail(),
   ]);
   assert.equal(measuring.logs.length, 2, 'the feature document of each session is asked, as before');
+}));
+
+// --- the reliefs and the reopenings of --measures (session channel, T9) ---
+
+const FILLED_TOKENS = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_PAUSE_PERCENT) + 1000;
+
+/** Two reliefs in the record, both within the window. D, a lead renamed "JH ORQ relevada · proj", was at the pause
+ * when it was relieved: its transcript holds a reply of that share. A Codex session, which sends no id, relieved
+ * it too: its relieved session is not known. */
+function writeReliefs(machine) {
+  writeAt(path.join(machine.projectDir, `${SESSION_D}.jsonl`), jsonl({ type: 'custom-title', customTitle: 'JH ORQ relevada · proj', sessionId: SESSION_D }, prompt('go', 900), spoke(FILLED_TOKENS, 800)), 60);
+  writeNotice(machine, 700, sender(SESSION_D, 'JH ORQ relevada · proj'), 'orchestrator', 'relieved', 'the context filled');
+  writeNotice(machine, 300, { host: 'codex', id: null, source: null, title: 'JH ORQ relevada · proj', permissionMode: null, context: null }, 'orchestrator', 'relieved', 'handed over from Codex');
+}
+
+test('--measures prints the reliefs of the record after the compactions, and the reopenings after them', withMachine(async (machine) => {
+  writeReliefs(machine);
+  const measuring = measuringRun(machine, () => ok(''));
+  const { code, stdout, stderr } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
+  assert.deepEqual(stdout.split('\n'), [
+    '0 automatic compactions judged in 0 sessions: 0 miss a fact',
+    `${minuteOf(before(700).getTime())}  dddddddd  peak ${percentOf(FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW)}% of 500k  filled  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    `${minuteOf(before(300).getTime())}  unknown  peak not known  not known  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    '2 reliefs, 1 because the context filled; days with more than one: none',
+    NO_REOPEN,
+  ]);
+  assert.deepEqual(measuring.calls.map((made) => made.args[0]), ['rev-parse'], 'the record is read, not git for the reliefs');
+}));
+
+test('--measures prints the compactions as before the reliefs were added, whatever the record holds', withMachine(async (machine) => {
+  writeMeasured(machine);
+  writeReliefs(machine);
+  const measuring = measuringRun(machine, () => ok(`${before(650).toISOString()}\n${before(5000).toISOString()}\n`));
+  const { stdout } = await runSessions(machine, ['--measures'], { run: measuring.run, listProcesses: neverListed });
+  const lines = stdout.split('\n');
+  assert.deepEqual(lines.slice(0, lines.indexOf(totalOf(stdout)) + 1), [
+    'aaaaaaaa  Board feature',
+    `  ${before(600).toISOString()}  automatic  told yes  kept yes  announced yes`,
+    `  ${before(100).toISOString()}  automatic  told no  kept unknown  announced unknown`,
+    'bbbbbbbb  fix it',
+    `  ${before(300).toISOString()}  asked`,
+    '2 automatic compactions judged in 1 session: 1 misses a fact (told 1); 1 with a fact not known; 1 asked, not judged',
+  ]);
+  assert.deepEqual(lines.slice(lines.indexOf(totalOf(stdout)) + 1), [
+    `${minuteOf(before(700).getTime())}  dddddddd  peak ${percentOf(FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW)}% of 500k  filled  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    `${minuteOf(before(300).getTime())}  unknown  peak not known  not known  pause ${DEFAULT_CONTEXT_PAUSE_PERCENT}%`,
+    '2 reliefs, 1 because the context filled; days with more than one: none',
+    NO_REOPEN,
+  ], 'the reliefs and the reopenings follow the total');
+}));
+
+test('--measures --json gives the reliefs and the reopen candidates as data, and a git that fails as not known', withMachine(async (machine) => {
+  writeReliefs(machine);
+  const measured = await runSessions(machine, ['--measures', '--json'], { run: measuringRun(machine, () => ok('')).run, listProcesses: neverListed });
+  assert.equal(measured.code, 0);
+  const data = JSON.parse(measured.stdout);
+  assert.deepEqual(data.reliefs.total, { reliefs: 2, filled: 1, days: [] });
+  assert.equal(data.reliefs.pausePercent, DEFAULT_CONTEXT_PAUSE_PERCENT);
+  assert.deepEqual(data.reliefs.items.map((one) => [one.at, one.relieved, one.verdict, one.peak?.tokens ?? null, one.window, one.fromContext]), [
+    [before(700).toISOString(), SESSION_D, 'filled', FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW, null],
+    [before(300).toISOString(), null, 'not known', null, DEFAULT_CONTEXT_WINDOW, null],
+  ]);
+  assert.deepEqual(data.reopenCandidates, { known: true, candidates: [] });
+
+  const failing = await runSessions(machine, ['--measures', '--json'], { run: measuringRun(machine, () => ok(''), () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })).run, listProcesses: neverListed });
+  assert.deepEqual(JSON.parse(failing.stdout).reopenCandidates, { known: false, why: 'fatal: not a git repository' });
+  const text = await runSessions(machine, ['--measures'], { run: measuringRun(machine, () => ok(''), () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })).run, listProcesses: neverListed });
+  assert.equal(text.stdout.split('\n').at(-1), 'reopen candidates: not known (fatal: not a git repository)', 'never "0 Log lines"');
+}));
+
+test('--measures says that no relieved notice is in the record for the days it read, when the record holds none', withMachine(async (machine) => {
+  writeAt(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('go', 900), reply('done', 800)), 60);
+  const { stdout } = await runSessions(machine, ['--measures', '--hours', '30'], { run: measuringRun(machine, () => ok('')).run, listProcesses: neverListed });
+  assert.equal(stdout.split('\n').at(-2), `no relieved notice in the record for ${localDay(dayStartOf(NOW - 30 * 3600 * 1000))}..${localDay(NOW)}`);
+  assert.ok(!stdout.includes('no relief'), 'never "no relief"');
 }));
 
 // --- the last automatic compaction that misses a fact, on the board (session channel, T9) ---

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { auditEntries, lastShare, ownShares, shareRefusal } from './audit.mjs';
+import { auditEntries, lastShare, ownShares, shareRefusal, windowBefore } from './audit.mjs';
 
 // Clauses read from this project's transcripts (2026-10-12 to 2026-10-15), each with the share it states of the
 // session that wrote it.
@@ -212,4 +212,16 @@ test('shareRefusal refuses a stated own share more than 2 points from the record
   assert.equal(shareRefusal('JH 9 está al 10 % de contexto.', { tokens: 300000, window: 500000 }), null, 'another session\'s share');
   assert.equal(shareRefusal('Nothing about it.', { tokens: 300000, window: 500000 }), null);
   assert.match(shareRefusal('Mi contexto: 40 %.', { tokens: 300000, window: 350000 }), /records 86% of a 350k window/, 'a share of the window read');
+});
+
+// --- windowBefore: the window of a session's own last get_usage read before a time (session channel, T9) ---
+
+test('windowBefore reads the window of the session\'s own last get_usage read before the time, not one after it or of a side chain', () => {
+  const at = (minute) => `2026-01-01T10:${String(minute).padStart(2, '0')}:00.000Z`;
+  const read = (minute, window, extra = {}) => ({ type: 'user', timestamp: at(minute), ...extra, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_u', content: JSON.stringify({ session: 'self', context: { contextWindow: window } }) }] } });
+  const lines = [read(1, 300000), read(3, 500000), read(9, 350000), read(4, 900000, { isSidechain: true })].map((entry) => JSON.stringify(entry));
+  assert.equal(windowBefore(lines, Date.parse(at(5))), 500000);
+  assert.equal(windowBefore(lines, Date.parse(at(2))), 300000);
+  assert.equal(windowBefore(lines, Date.parse(at(0))), null, 'no read before the time');
+  assert.equal(windowBefore([JSON.stringify(read(2, 900000, { isSidechain: true }))], Date.parse(at(5))), null, 'a side chain\'s read is a sub-agent\'s window');
 });

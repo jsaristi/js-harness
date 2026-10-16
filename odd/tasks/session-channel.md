@@ -1688,7 +1688,11 @@ and 3.
   everything the stretch will need; the Codex meter is read and told in every recap; the
   lead reads a session at that moment before it says what waits for him there; a notice
   when a stretch ends
-- [ ] T9 `--measures`
+- [x] T9 `--measures`
+  Done 2026-10-15, branch `feat/t9-measures`: the compactions (pull requests 194, 228, 229), T9b's
+  first advisory (53c878f), and section 18's two measures, the reliefs from `relieved` notices
+  and the reopen candidates from Log lines, with the skill's handover step that writes the
+  notice (Progress). The relief path is proven by tests only until the first notice is written.
 - [x] T9b A review of 1c9358f (the relief stamp's seconds), which `codex-review` refused to
   recheck a second time. Codex's P2 on edf9e75 was "a relief line in the notice's minute is
   misjudged"; 60618c3 took each bound to its minute and Codex found it still open (10:05:05
@@ -2919,6 +2923,19 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   still a miss, since that reader read no line that could be the state. The other two
   advisories (the same second as a bound; the repeated hour when the clocks go back) stay as
   they are: both need a line written in the bound's own second or in that one hour of the year.
+- 2026-10-15, after 19:00 local, T9 (JH 5), section 18 built by a bounded writer (parallel with
+  T16 layer 3), tests first. `sessions --measures` now prints, after the compactions, the
+  reliefs (`reliefMeasures`: each `relieved` notice of the days the window touches, its sender
+  the relieved session when its title is the relieved one, judged by `peakContextBefore`
+  against the context pause, with the window of its own last `get_usage`, `windowBefore`) and
+  the reopen candidates (`reopenCandidates`: added lines that open with a Log id and hold
+  "reopen", first-parent from the default branch). The orchestrator skill's handover gains the
+  step: the one before, renamed, runs `notify --to orchestrator --kind relieved`; the lead
+  agreed to write it from now on (18:47). The real run over 24 hours printed "no relieved notice
+  in the record for 2026-10-14..2026-10-15" and two candidates, `orphan-gate` L7 (859b0bd) and
+  `lead-tools` L2 (882ce3f), for the lead to judge. Not tested: the line for a record that
+  cannot be read. A countable form of a reopening stays open, as a change to gentle-ai's ODD
+  document.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

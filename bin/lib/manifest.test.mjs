@@ -1918,6 +1918,16 @@ test('the orchestrator skill has a one-line description a host can read, and nam
   }
 });
 
+// T9 of odd/tasks/session-channel.md: the handover ends with a `relieved` notice, which `sessions --measures` counts as a relief.
+test('the orchestrator skill has the one before append a relieved notice as the step after its handover', () => {
+  const lines = components[2].content('0.1.0').split('\n');
+  const handover = lines.findIndex((line) => line.startsWith('- When you start from that prompt, '));
+  assert.notEqual(handover, -1, 'the handover bullet is in the skill');
+  assert.ok(lines[handover + 1].startsWith('- ') && lines[handover + 1].includes('`js-harness notify --to orchestrator --kind relieved "<why it was relieved>"`'), lines[handover + 1]);
+  assert.ok(lines[handover + 1].includes('`<code> ORQ relevada`'), 'the step says it runs once the one before is renamed out of the role\'s title');
+  assert.ok(lines[handover + 1].includes('`js-harness sessions --measures`'), 'the step says the measure counts those notices');
+});
+
 // Two gates at once was a rule each session kept by hand, from the board. `check` keeps it now, so the
 // skill no longer asks for it: it says what a session still has to know, and what is still its own to keep.
 test('the orchestrator skill no longer asks a session to keep by hand the rule that check keeps', () => {
