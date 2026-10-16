@@ -4,6 +4,7 @@
 // calls this for a Bash command and, by his decision (`ffe99ebf` line 5718), refuses the call with the line
 // it answers (odd/tasks/test-run-warning.md). Since first-version T6a a heavy run is refused whatever its size:
 // one file the gate log timed over a minute counts as several, and an eval batch's mark counts as a holder.
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readBatch } from './batch-mark.mjs';
@@ -106,15 +107,40 @@ function fileKey(name, cwd) {
   return path.posix.normalize(relative.replace(/\\/g, '/')).replace(/^(\.\/)+/, '');
 }
 
+/** The repository of `cwd`, as the folder git keeps its objects in, shared by every worktree of it: the nearest
+ * `.git` folder, or the one a worktree's `.git` file names (`gitdir: <common>/worktrees/<name>`). Read from files
+ * only, since the guard runs on every Bash call; `null` where none is found. */
+export function repositoryOf(cwd) {
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    const dotGit = path.join(dir, '.git');
+    try {
+      if (fs.statSync(dotGit).isDirectory()) return path.resolve(dotGit).toLowerCase();
+      const named = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotGit, 'utf8'))?.[1];
+      if (!named) return null;
+      const gitdir = path.resolve(dir, named);
+      return (path.basename(path.dirname(gitdir)) === 'worktrees' ? path.dirname(path.dirname(gitdir)) : gitdir).toLowerCase();
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') return null;
+    }
+    if (path.dirname(dir) === dir) return null;
+  }
+}
+
 /** The longest that a gate of `events` (the gate log's, `readGateLog`) ran `file` alone: the `seconds` of the
  * end of each gate whose command is `gate ... -- node --test` of that one file, or `undefined` when none did. A
  * gate of several files times none of them, nor does a command the log cut at its length (`GATE_COMMAND_MAX`),
  * which may have lost every file after the first. */
-export function timedSeconds(events, file) {
+export function timedSeconds(events, file, { project, projectOf = repositoryOf } = {}) {
   let longest;
+  const projects = new Map();
+  const sameProject = (cwd) => {
+    if (project === undefined) return true;
+    if (!projects.has(cwd)) projects.set(cwd, typeof cwd === 'string' ? projectOf(cwd) : null);
+    return projects.get(cwd) === project;
+  };
   for (const { start, end } of gatesOf(events)) {
     if (!start || !end || typeof start.command !== 'string' || !Number.isFinite(end.seconds)) continue;
-    if (start.command.length >= GATE_COMMAND_MAX) continue;
+    if (start.command.length >= GATE_COMMAND_MAX || !sameProject(start.cwd)) continue;
     const words = gateWraps([{ text: 'js-harness', globbed: false }, ...commandsOf(start.command).flat()]);
     const run = words === null ? null : filesOf(words);
     if (run?.files !== 1 || fileKey(run.names[0], start.cwd) !== file) continue;
@@ -187,7 +213,11 @@ export function testRunWarning(command, {
   home = env.JS_HARNESS_HOME || os.homedir(),
   cwd = process.cwd(),
   holder = () => readGateHolder(home) ?? readBatch(home),
-  fileSeconds = (file) => timedSeconds(readGateLog(home).events, file),
+  // Only gates of this repository time its files: the gate log is the machine's (Codex, 2026-10-16).
+  fileSeconds = (file) => {
+    const project = repositoryOf(cwd);
+    return project === null ? undefined : timedSeconds(readGateLog(home).events, file, { project });
+  },
 } = {}) {
   const run = testRunOf(command);
   if (run === null) return null;

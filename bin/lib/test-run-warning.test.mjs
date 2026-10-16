@@ -143,13 +143,23 @@ test('timedSeconds takes the longest run of a file that a gate ran alone, and no
 test('testRunWarning reads the gate log of its home by default: a file a gate ran alone for over a minute is refused', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-heavy-file-'));
   try {
+    // Two checkouts of one repository (a worktree's .git is a file naming the common folder), and another project.
+    const main = path.join(home, 'repo');
+    const tree = path.join(home, 'tree');
+    const other = path.join(home, 'other');
+    fs.mkdirSync(path.join(main, '.git', 'worktrees', 'tree'), { recursive: true });
+    fs.mkdirSync(tree);
+    fs.writeFileSync(path.join(tree, '.git'), `gitdir: ${path.join(main, '.git', 'worktrees', 'tree')}\n`);
+    fs.mkdirSync(path.join(other, '.git'), { recursive: true });
     let clock = Date.parse('2026-10-16T10:00:00.000Z');
-    const record = gateRecord({ home, cwd: 'D:\\js-harness-worktrees\\one', command: 'gate -- node --test bin/slow.test.mjs', now: () => clock });
+    const record = gateRecord({ home, cwd: main, command: 'gate -- node --test bin/slow.test.mjs', now: () => clock });
     record.start({ lock: 'took', waitedMs: 0, waitedFor: [] });
     clock += (HEAVY_FILE_SECONDS + 30) * 1000;
     record.end({ result: 'exit 0' });
-    assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, home, holder: held }), at(HEAVY_FILE_SECONDS + 30));
-    assert.equal(testRunWarning('node --test bin/quick.test.mjs', { env: {}, home, holder: held }), null);
+    assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, home, cwd: tree, holder: held }), at(HEAVY_FILE_SECONDS + 30));
+    assert.equal(testRunWarning('node --test bin/quick.test.mjs', { env: {}, home, cwd: tree, holder: held }), null);
+    // Codex, 2026-10-16: the gate log is the machine's, so a file of the same name in another project is not timed.
+    assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, home, cwd: other, holder: held }), null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
