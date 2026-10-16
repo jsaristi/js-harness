@@ -99,6 +99,11 @@ remove here, reader B) and a Codex session's fixed input (about 49,000 tokens a 
   every `review-turn-` worktree whose process is gone, and prunes.
 - S8 `baseLeftOutSaid`'s merged line (a run from `--base <M>`) names `--base <M>^`, which now reviews it
   in two turns; the FAILURES control names the test of S1.
+- S9 (Log, T3 finding) A range is cut only when the two turns cost less than the one review the run
+  would be without the cut: each counted as its parts times 100 changed lines plus its changed lines
+  (a part's fixed input, about 49,000 tokens, over about 482 a changed line), a tie being no cut. A
+  constant, not this machine's estimator, so the plan and the debt row decide alike on every machine.
+  `--plan` of a cut range ends with what the turns come to in all and what the one review would be.
 
 ## Design
 
@@ -134,10 +139,10 @@ among them), and the marks at M of its written files.
 
 - [x] T1 (kind: design) This design, read by two readers who did not write it; route: inline, readers
   delegated (Opus). Version 1 21f065e, version 2 this one.
-- [ ] T2 (kind: build) S1, S2, S5 (sizes): the cut, `mergeStart` asked of a merge below HEAD, the sizes
-  of the turns for `--plan` and the debt row; route: inline.
-- [ ] T3 (kind: build) S3-S8: the run in turns, the worktree helper, the stop on a correction, the
-  merged line; route: inline.
+- [x] T2 (kind: build) S1, S2, S5 (sizes): the cut, `mergeStart` asked of a merge below HEAD, the sizes
+  of the turns for `--plan` and the debt row; route: inline. 19935ab.
+- [x] T3 (kind: build) S3-S9: the run in turns, the worktree helper, the stop on a correction, the
+  merged line, the cost rule; route: inline. The T3 commit (Log).
 - [ ] T4 (kind: verify) The "Done when" scratch repository; an independent verifier (risk item 2, the
   push guard's coverage), gentle-ai escalated, Codex.
 
@@ -184,23 +189,26 @@ among them), and the marks at M of its written files.
     common dir (reader A, tested).
 - 2026-10-16, T2 (S1): `mergeTurn` in `bin/lib/codex-review-turns.mjs` (19935ab); RED was the missing module, GREEN 5 of 5. Deviation to record: S7's helper is new in `bin/lib`; the merge queue keeps its own worktree code (changing it is outside this change's risk).
 
+- 2026-10-16, T3 (S3-S9), JH 27. The finding below settled as S9, inline: a technical rule inside the
+  frozen scope, since his answer decided what is reviewed and this decides only when a second session
+  pays. RED: the two-turn plan test printed one plan of 304 lines from `main`; GREEN after the cut. Built:
+  `cutInTurns` in `startingAt` (the coverage `leftByRecords` read, now returned), `firstTurn` (the bound on
+  both turns, the worktree, the in-process turn with `mergeTurnOnly` and `turnIntent`, the stop on an
+  owed correction, the tree checked again), `turnsLines` and `plansAsOne` for `--plan`, the debt row's
+  sum, and the merged line naming `--base <M>^`. Deviations: the plan of the turn at M is made in the
+  parent from `rangeGroups` at M, with no recursion and no worktree, since a plan reads git alone; the
+  parts bound and refusal tests were written after their code, and pin it (they would have launched the
+  merge's turn without the check). A finding while testing S8: from `--base <M>^` the range holds main's
+  commits too, so the cut needs them covered by their own records, as they are in this repo where PRs
+  land as merges; the fixture gives main's commit its record. Not built: a test that the run log is read
+  again before turn 2 (it is reset in code), and a refusal of the turn at HEAD for a switch that is off
+  at M.
+
 ## Next step
 
-**State, 2026-10-16, JH 27 (context pause at 86%):** T1, T2 done (6b3227c, 19935ab). Next, T3 test first in `bin/codex-review.test.mjs` near line 5456, with `makeResolvedMergeRepo` plus a commit after the merge:
-- `--base <main> --plan` prints "Turn 1 of 2, the merge <M7>: what was written in it.", then the recursive plan (`mergeReviewSaid`, `plannedPlan(root, mine, M, m.txt)`), then "Turn 2 of 2, <M7>..<HEAD7>: the commits after the merge.", then `plannedPlan(root, M, after, a.txt)`, then "In all, 2 turns: ..." (parts, lines, files, and tokens when both plans have an estimate);
-- `--again`: no turns;
-- a run with `fakeCodexInParts` writes two records (`mine..M` with `diff: 'remerge'`, then `M..after`) and leaves no worktree;
-- an M review that owes a correction stops before turn 2;
-- `--max-parts` is applied to the sum, with nothing launched;
-- a stale `review-turn-<dead pid>` worktree is swept.
+**State, 2026-10-16, JH 27:** T1-T3 done. Next: T4, the "Done when" scratch repository, the gate (the two
+`--no-verify` commits 5bf351e and 6397e5a go through it with the T3 commit), an independent verifier (risk
+item 2), gentle-ai assess with `--escalate-item 2` (run `granted`), Codex, merge-tree against origin/main,
+push, the PR with its gentle-ai line, and the notice to the lead with the S9 finding.
 
-Implementation in `codexReviewMain` (`bin/codex-review.mjs`):
-- internal deps `turnAt` (the head override, which must take the merge path, else exit 1) and `intent`;
-- `startingAt` calls `mergeTurn` with the coverage that `leftByRecords` then reuses;
-- turn 1 is a recursive `codexReviewMain` with `--cwd` set to a worktree for a run, or to the root for a plan;
-- after it, the parent goes on with `from = base = M`, `merge = null`, `runLog` reset and the tree checked again;
-- the debt row in `bin/check.mjs` `codexReviewDebt` sums `reviewSize(from, M, turn)` and `reviewSize(M, tip)`.
-
-Then the README, SPEC, FAILURES control (`mergeLeftOutSaid` test at 5715), T6d, the gate, a verifier (item 2), gentle-ai escalated, Codex, the PR, and a notice to the lead.
-
-**Finding while writing T3's first test (2026-10-16, JH 27), to settle before building:** from `--base origin/main` the range starts at the main commit the merge brought (`merge-base`), so today's net diff already holds no line `main` brought; in `makeResolvedMergeRepo` plus a commit after, today plans 4 changed lines in one part, and two turns plan 6 + 2 lines in two sessions (one more fixed cost, about 49,000 input tokens, reader B). The cut pays only when today's diff is larger: from `--base <M>^` (the push row's hint, `<oldest uncovered>^`), or when the branch's covered work since the merged main is large. Proposed S9: cut only when the two turns cost less than the review that is left by today's rule, compared by the estimator of the run log when it has measured parts (fixed cost per extra session plus per changed line), else by changed lines with one session's fixed cost taken as 100 changed lines (49,000 / 482, reader B's fit); the test above then needs a fixture whose covered branch work is larger than the turns, and a second test that a small one is not cut. The red test is in `bin/codex-review.test.mjs` (second half: run it as `node --test --test-name-pattern="planned in two turns" bin/codex-review.second.test.mjs`).
+**Finding while writing T3's first test (2026-10-16, JH 27), settled as S9:** from `--base origin/main` the range starts at the main commit the merge brought (`merge-base`), so today's net diff already holds no line `main` brought; in `makeResolvedMergeRepo` plus a commit after, today plans 4 changed lines in one part, and two turns plan 6 + 2 lines in two sessions (one more fixed cost, about 49,000 input tokens, reader B). The cut pays only when today's diff is larger: from `--base <M>^` (the push row's hint, `<oldest uncovered>^`), or when the branch's covered work since the merged main is large. Proposed S9: cut only when the two turns cost less than the review that is left by today's rule, compared by the estimator of the run log when it has measured parts (fixed cost per extra session plus per changed line), else by changed lines with one session's fixed cost taken as 100 changed lines (49,000 / 482, reader B's fit); the test above then needs a fixture whose covered branch work is larger than the turns, and a second test that a small one is not cut. The red test is in `bin/codex-review.test.mjs` (second half: run it as `node --test --test-name-pattern="planned in two turns" bin/codex-review.second.test.mjs`).

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { reviewCoverage } from './codex-review-coverage.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
-import { mergeTurn } from './codex-review-turns.mjs';
+import { addTurnWorktree, mergeTurn, PART_AS_CHANGED_LINES, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './codex-review-turns.mjs';
 
 // Real git in every test, isolated from the host's config: where a review of a range holding a merge of
 // the default branch below HEAD is cut into turns (odd/tasks/merge-below-head.md, S1).
@@ -115,4 +115,37 @@ test('a merge whose written file is marked at the merge and not at HEAD is no cu
   assert.notEqual(turnOf(root, side, c2), null);
   const unmarked = commit(root, '.gitattributes', '', 'chore: unmark w.js');
   assert.equal(turnOf(root, side, unmarked), null);
+});
+
+test('two turns are taken only when they cost less than the one review left today, a part counted as 100 changed lines (S9)', () => {
+  // Today 1 part of 304 lines (404); the turns 1 part of 4 and 1 of 2 (206): cut.
+  assert.equal(turnsCheaper({ parts: 1, changedLines: 304 }, [{ parts: 1, changedLines: 4 }, { parts: 1, changedLines: 2 }]), true);
+  // Today 1 part of 4 lines (104): the second session costs more than every line it saves.
+  assert.equal(turnsCheaper({ parts: 1, changedLines: 4 }, [{ parts: 1, changedLines: 4 }, { parts: 1, changedLines: 2 }]), false);
+  // A tie is no cut: the run stays one review.
+  assert.equal(turnsCheaper({ parts: 1, changedLines: PART_AS_CHANGED_LINES }, [{ parts: 1, changedLines: 0 }, { parts: 1, changedLines: 0 }]), false);
+});
+
+test('the plans of two turns are held to the bound of parts and the allowance as one plan: the parts, lines and estimates add up', () => {
+  const plan = (range, parts, inputTokens, maxParts = 3) => ({ range, parts: parts.map((changedLines, at) => ({ index: at + 1, of: parts.length, files: 1, changedLines })), files: parts.length, changedLines: parts.reduce((a, b) => a + b, 0), inputTokens, inputTokensHigh: inputTokens === null ? null : inputTokens * 2, maxParts, over: false, leftOut: null });
+  const one = plansAsOne([plan('aaaaaaa..bbbbbbb', [4, 5], 100), plan('bbbbbbb..ccccccc', [2, 1], 50)]);
+  assert.deepEqual(
+    { range: one.range, parts: one.parts.map((part) => `${part.index}/${part.of}:${part.changedLines}`), files: one.files, changedLines: one.changedLines, inputTokens: one.inputTokens, high: one.inputTokensHigh, over: one.over },
+    { range: 'aaaaaaa..ccccccc', parts: ['1/4:4', '2/4:5', '3/4:2', '4/4:1'], files: 4, changedLines: 12, inputTokens: 150, high: 300, over: true },
+  );
+  assert.equal(plansAsOne([plan('a..b', [1], 100), plan('b..c', [1], null)]).inputTokens, null, 'no estimate when a turn has none');
+});
+
+test('a turn worktree whose run is gone is removed by the next run, and one whose run is going is left to it (S7)', () => {
+  const { root, merge } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  const gone = addTurnWorktree(root, merge, { commonGitDir, pid: 111, now: () => 1 });
+  const going = addTurnWorktree(root, merge, { commonGitDir, pid: 222, now: () => 2 });
+  assert.ok(fs.existsSync(path.join(gone, 'm.js')) && fs.existsSync(path.join(going, 'm.js')), 'both were made, at the merge');
+  sweepTurnWorktrees(root, { commonGitDir, running: (pid) => pid === 222 });
+  assert.deepEqual([fs.existsSync(gone), fs.existsSync(going)], [false, true]);
+  removeTurnWorktree(root, going);
+  assert.equal(fs.existsSync(going), false);
+  // git holds no worktree of either: only the checkout itself is listed.
+  assert.equal(git(root, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree ')).length, 1);
 });

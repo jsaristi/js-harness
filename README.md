@@ -413,6 +413,12 @@ read and cost, with how close that estimate came on the last reviews this machin
 starts nothing; a run records in each part's run line the figures it was planned at, which that
 line reads; `--unavailable <reason>` records a skip.
 
+A merge of the default branch is reviewed by what was written in it, not by what it brought in. At
+HEAD that is one review. Below HEAD, after code commits that each have a record, the range is cut
+in two turns where two cost less than one review (a part counted as 100 changed lines): the merge,
+in a worktree at it that the run removes, then the commits after it. Each turn writes its record;
+a merge whose review owes a correction stops the run before the commits after it.
+
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again
 Plan of the Codex review of b42a30b..c670cff: gpt-6.1-sol at medium effort, 2 parts, 727 changed lines in 7 files.

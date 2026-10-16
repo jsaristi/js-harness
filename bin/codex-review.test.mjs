@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS,
+  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
   reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
@@ -5355,15 +5355,21 @@ test('a merge somebody wrote in is a commit of the range: with a record for ever
 /** A branch that merged its remote's default branch and resolved a conflict in `m.txt`, while that branch also
  * changed `s.txt`: `{ root, base, mine, main, head }`, with a record over `base..mine`. With `inMain` false,
  * the merged side is a branch of its own, which the remote's default branch does not hold. */
-function makeResolvedMergeRepo({ inMain = true, resolution = 'M1 both\n' } = {}) {
+function makeResolvedMergeRepo({ inMain = true, resolution = 'M1 both\n', mineLines = 0, mainLines = 0 } = {}) {
   const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
   const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
   fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
-  git(root, 'commit', '-am', 'mine');
+  // `mineLines` more lines of the branch's own, in `b.txt`, which the record covers: the work a review from
+  // the merged main reads again when it reads past the merge.
+  if (mineLines > 0) fs.writeFileSync(path.join(root, 'b.txt'), Array.from({ length: mineLines }, (_, at) => `b${at}\n`).join(''), 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'mine');
   const mine = git(root, 'rev-parse', 'HEAD');
   git(root, 'checkout', '--quiet', '-b', 'side', base);
   fs.writeFileSync(path.join(root, 'm.txt'), 'M1 theirs\n', 'utf8');
-  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed on main\n', 'utf8');
+  // `mainLines` more lines of main's own, which the merge brings in.
+  const mainOwn = Array.from({ length: mainLines }, (_, at) => `s${at}\n`).join('');
+  fs.writeFileSync(path.join(root, 's.txt'), `S1 changed on main\n${mainOwn}`, 'utf8');
   git(root, 'commit', '-am', 'main moves');
   const main = git(root, 'rev-parse', 'HEAD');
   if (inMain) {
@@ -5471,28 +5477,114 @@ test('a commit after a merge of main that a record covers is reviewed alone, fro
   ]);
 });
 
-test('a merge of main below HEAD, after commits that each have a record, is planned in two turns: the merge by what was written in it, then the commits after it (merge-below-head, S1, S5)', async () => {
-  const { root, mine, main, head: merge } = makeResolvedMergeRepo();
-  fs.writeFileSync(path.join(root, 'a.txt'), 'A1 after the merge\n', 'utf8');
-  git(root, 'commit', '-qam', 'after the merge');
-  const after = git(root, 'rev-parse', 'HEAD');
+/** `makeResolvedMergeRepo` with `mineLines` of covered branch work and a commit to `a.txt` after the merge:
+ * the merge is then below HEAD. */
+function mergeBelowHead({ mineLines = 0, mainLines = 0 } = {}) {
+  const repo = makeResolvedMergeRepo({ mineLines, mainLines });
+  fs.writeFileSync(path.join(repo.root, 'a.txt'), 'A1 after the merge\n', 'utf8');
+  git(repo.root, 'commit', '-qam', 'after the merge');
+  return { ...repo, merge: repo.head, after: git(repo.root, 'rev-parse', 'HEAD') };
+}
+
+/** The changed lines of what was written in the merge `merge` of `root`. */
+const writtenLines = (root, merge) => numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', merge)).reduce((sum, file) => sum + file.changedLines, 0);
+
+test('a merge of main below HEAD, after commits that each have a record, is planned in two turns: the merge by what was written in it, then the commits after it (merge-below-head, S1, S5, S9)', async () => {
+  // 300 lines of the branch's own, which a record covers: one review from the merged main reads them again.
+  const { root, mine, main, merge, after } = mergeBelowHead({ mineLines: 300 });
   const nothing = startsNothing(root);
   const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
   assert.deepEqual([result.code, result.err], [0, ''], result.err);
   nothing.untouched('the plan of a merge below HEAD');
-  const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', merge)).reduce((sum, file) => sum + file.changedLines, 0);
+  const changedLines = writtenLines(root, merge);
   assert.deepEqual(result.out.split('\n'), [
     `Turn 1 of 2, the merge ${merge.slice(0, 7)}: what was written in it.`,
     mergeReviewSaid({ head: merge, side: main, branch: 'origin/main' }),
-    ...plannedPlan(root, mine, merge, [{ files: ['m.txt'], changedLines }]),
+    ...planned(root, mine, merge, [{ files: ['m.txt'], changedLines }]),
     `Turn 2 of 2, ${merge.slice(0, 7)}..${after.slice(0, 7)}: the commits after the merge.`,
-    ...plannedPlan(root, merge, after, [{ files: ['a.txt'], changedLines: 2 }]),
-    `In all, 2 turns: 2 parts, ${changedLines + 2} changed lines in 2 files.`,
+    ...planned(root, merge, after, [{ files: ['a.txt'], changedLines: 2 }]),
+    `In all, 2 turns: 2 parts, ${changedLines + 2} changed lines in 2 files, where one review from ${main.slice(0, 7)} would be 1 part, 304 changed lines in 3 files.`,
+    methodSaid(root),
   ]);
   // --again takes the range as it was given: one review, no turn.
   const again = await run(['--base', main, '--plan', '--again', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(again.code, 0, again.err);
   assert.doesNotMatch(again.out, /^Turn /m);
+});
+
+/** The fake sessions of the turn at the merge of `mergeBelowHead`: Codex shows the diff of the automatic merge
+ * and the merge, as the merge's prompt tells it to, and answers `said`. */
+function mergeTurnSession({ root, mine, main, merge }, said) {
+  const auto = spawnSync('git', ['merge-tree', '--write-tree', mine, main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0];
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', auto, merge, '--', 'm.txt');
+  return { stdout: jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${auto} ${merge} -- m.txt`, 0, shown), msg(FINDINGS), done), ...(said ? { said } : {}) };
+}
+
+/** The turn worktrees the common git dir of `root` holds now. */
+const turnWorktrees = (root) => listed(path.join(root, '.git', 'js-harness')).filter((name) => name.startsWith('review-turn-'));
+
+test('a merge of main below HEAD is reviewed in two turns: the merge in a worktree at it, by what was written in it, then the commits after it here; a record each, and no worktree is left (merge-below-head, S3, S6, S7)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const { root, mine, merge, after } = repo;
+  const fake = fakeCodexInParts(mergeTurnSession(repo), { stdout: reviewed(root, merge) });
+  const result = await run(['--base', repo.main, '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 2);
+  // The merge's session ran in a checkout of the merge, which is gone; the second ran here.
+  const [atMerge, here] = fake.calls.map((call) => call.opts.cwd);
+  assert.match(path.basename(atMerge), /^review-turn-\d+-\d+$/);
+  assert.equal(path.resolve(here), path.resolve(root));
+  assert.deepEqual(turnWorktrees(root), []);
+  assert.equal(git(root, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree ')).length, 1);
+  const records = readCodexReviews(root).slice(-2).map((record) => [record.base, record.head, record.outcome, record.diff]);
+  assert.deepEqual(records, [[mine, merge, 'reviewed', 'remerge'], [merge, after, 'reviewed', undefined]]);
+  const lines = result.out.split('\n');
+  assert.ok(lines.indexOf(turnSaid(1, { merge, head: after })) < lines.indexOf(turnSaid(2, { merge, head: after })), result.out);
+  assert.ok(lines.includes(turnSaid(1, { merge, head: after })), result.out);
+});
+
+test('a turn at the merge that owes a correction stops the run before the commits after it, which are reviewed once it is made (merge-below-head, S6)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const incorrect = { findings: [found('m.txt', 1, 1, { title: '[P1] The resolution drops a line' })], overall_correctness: 'patch is incorrect', overall_explanation: 'A line is lost.', overall_confidence_score: 0.7 };
+  // A second session would fail the run: only one is listed.
+  const fake = fakeCodexInParts(mergeTurnSession(repo, incorrect));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1);
+  assert.deepEqual(readCodexReviews(repo.root).slice(-1).map((record) => [record.base, record.head]), [[repo.mine, repo.merge]]);
+  assert.ok(result.out.split('\n').includes(turnStopped({ merge: repo.merge, head: repo.after })), result.out);
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
+test('the bound of parts is held to both turns: a run whose two turns are more parts than it may start launches neither (merge-below-head, S5)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const records = contentOf(codexReviewsPath(repo.root));
+  const fake = fakeCodexInParts();
+  const result = await run(['--base', repo.main, '--max-parts', '1', '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /in two turns was not started and nothing was recorded: their 2 parts are more than `--max-parts 1` allows/);
+  assert.equal(fake.calls.length, 0);
+  assert.equal(contentOf(codexReviewsPath(repo.root)), records, 'no record');
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
+test('a turn whose HEAD is not read as a merge of main refuses and launches nothing, instead of reviewing what main brought (merge-below-head, S3)', async () => {
+  const { root, base } = makeRepo();
+  const records = contentOf(codexReviewsPath(root));
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, mergeTurnOnly: true });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /is not read here as a merge of the default branch/);
+  assert.equal(fake.calls.length, 0);
+  assert.equal(contentOf(codexReviewsPath(root)), records, 'no record');
+});
+
+test('a merge of main below HEAD on a branch whose covered work is small is not cut: the second session would cost more than the lines it saves (merge-below-head, S9)', async () => {
+  const { root, main, after } = mergeBelowHead();
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, after, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
 // Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
@@ -5708,6 +5800,21 @@ test('the row of the plain check and the plan of the command size the same revie
   }
 });
 
+test('the debt row sizes a review cut at a merge of main below HEAD as the two turns the command plans from the base it names (merge-below-head, S5)', async () => {
+  // 300 lines of covered branch work, which the one review from the merged main would read again.
+  const { root } = mergeBelowHead({ mineLines: 300 });
+  const row = checkCodexReviewDebt(root);
+  const said = /: the review of (\S+)\.\.HEAD is 2 turns today, the merge [0-9a-f]{7} by what was written in it and then the commits after it: (\d+ parts?), (\d+ changed lines? in \d+ files?)$/.exec(row.detail);
+  assert.ok(said, row.detail);
+  const [, base, parts, size] = said;
+  assert.equal(base, 'origin/main');
+  const nothing = startsNothing(root);
+  const plan = await run(['--base', base, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(plan.code, 0, plan.err);
+  assert.ok(plan.out.split('\n').some((line) => line.startsWith(`In all, 2 turns: ${parts}, ${size},`)), `the row says ${parts}, ${size}; the plan:\n${plan.out}`);
+  assert.deepEqual(row.lines.slice(-2), [`make the record with: js-harness codex-review --base ${base}`, `what it would cost, with nothing spent: js-harness codex-review --base ${base} --plan`]);
+});
+
 /** What a run says of its base when the base is a code commit of its branch that no record covers: `shortId`
  * and `subject` are those of that commit, as git names them. */
 const baseLeftOutSaid = ({ shortId, subject }) =>
@@ -5734,31 +5841,22 @@ test('a run from the first commit of a branch off the default branch says so bef
 
 /** What a run says of its base when the base is a merge of the default branch that no record covers. */
 const mergeLeftOutSaid = ({ shortId, subject }) =>
-  `The base ${shortId} (${subject}) is a merge of origin/main that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it. A merge is reviewed by what was written in it only where it is HEAD, and \`--base ${shortId}^\` here would review everything it brought in: in a worktree at it (\`git worktree add --detach <folder> ${shortId}\`), \`js-harness codex-review --base ${shortId}^\` reviews what was written in it, and every worktree of the clone shares its record.`;
+  `The base ${shortId} (${subject}) is a merge of origin/main that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it, in two turns where every code commit before it has a record and two cost less than one review of all it brought in: the merge by what was written in it, then the commits after it.`;
 
-test('a run from a merge of the default branch below HEAD names the worktree at the merge, not its first parent, which would review everything the merge brought in; and that worktree reviews the merge by what was written in it (merge-review-covers-main)', async () => {
-  const { root, main, head: merge } = makeResolvedMergeRepo();
-  fs.writeFileSync(path.join(root, 'a.txt'), 'A1 after the merge\n', 'utf8');
-  git(root, 'commit', '-am', 'after the merge');
+test('a run from a merge of the default branch below HEAD names its first parent as the base, from which the merge is reviewed in a turn of its own by what was written in it (merge-review-covers-main, merge-below-head S8)', async () => {
+  // Main brought 300 lines, which one review from the merge's first parent would read.
+  const { root, base, main, merge, after } = mergeBelowHead({ mainLines: 300 });
   const nothing = startsNothing(root);
   const result = await run(['--base', merge, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
   assert.deepEqual([result.code, result.err], [0, ''], result.err);
   assert.equal(result.out.split('\n')[0], mergeLeftOutSaid(namedOf(root, merge)), result.out);
-  assert.equal(result.out.includes(`--base ${namedOf(root, merge).shortId}^\` reviews it.`), false, result.out);
   nothing.untouched('a plan from a merge below HEAD');
-
-  // The road the line names: a worktree whose HEAD is the merge reads it by what was written in it.
-  const at = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-worktree-')), 'at-merge');
-  git(root, 'worktree', 'add', '--detach', '--quiet', at, merge);
-  try {
-    const there = startsNothing(at);
-    const plan = await run(['--base', `${merge}^`, '--plan', ...there.home, '--cwd', at], there.deps);
-    assert.deepEqual([plan.code, plan.err], [0, ''], plan.err);
-    assert.equal(plan.out.split('\n')[0], mergeReviewSaid({ head: merge, side: main, branch: 'origin/main' }), plan.out);
-  } finally {
-    git(root, 'worktree', 'remove', '--force', at);
-    fs.rmSync(path.dirname(at), { recursive: true, force: true });
-  }
+  // The road the line names, here: the first turn reads the merge by what was written in it. From the first
+  // parent the range holds main's commit too, which has its record where it was made.
+  appendCodexReview(root, reviewedRecord(base, main));
+  const plan = await run(['--base', `${merge}^`, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([plan.code, plan.err], [0, ''], plan.err);
+  assert.deepEqual(plan.out.split('\n').slice(0, 2), [turnSaid(1, { merge, head: after }), mergeReviewSaid({ head: merge, side: main, branch: 'origin/main' })], plan.out);
 });
 
 test('a run from the default branch says nothing of its base: the base of a branch off the default branch is the default branch\'s own commit', async () => {

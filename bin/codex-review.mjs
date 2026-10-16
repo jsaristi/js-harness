@@ -174,6 +174,7 @@ import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, R
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
+import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
   classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
@@ -945,6 +946,37 @@ export function mergeReviewSaid({ head, side, branch }) {
   return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, a commit of ${branch}: its review reads what was written in the merge (its diff with the automatic merge of its parents), not what the merge brought in.`;
 }
 
+/** The line a run says before turn `index` of a range cut at the merge `merge` below `head` (odd/tasks/merge-below-head.md). */
+export function turnSaid(index, { merge, head }) {
+  return index === 1
+    ? `Turn 1 of 2, the merge ${merge.slice(0, 7)}: what was written in it.`
+    : `Turn 2 of 2, ${merge.slice(0, 7)}..${head.slice(0, 7)}: the commits after the merge.`;
+}
+
+/** What a run says when the turn at the merge of a cut range owes a correction, and it stops there. */
+export function turnStopped({ merge, head }) {
+  const [at, tip] = [merge.slice(0, 7), head.slice(0, 7)];
+  return `The review of the merge ${at} found what owes a correction, so the commits after it (${at}..${tip}) were not reviewed: once the correction is committed, the review from ${at} is a recheck of those findings.`;
+}
+
+/** What `--plan` prints of a range cut in two turns (`cutInTurns`): each turn under its line, then what they
+ * come to in all, with the one review the range would be without the cut, which they cost less than. */
+function turnsLines(turns) {
+  const [first, second] = turns.plans;
+  const one = plansAsOne(turns.plans);
+  const { today } = turns;
+  const sends = one.inputTokens === null ? '' : `, about ${thousands(one.inputTokens)} input tokens`;
+  return [
+    turnSaid(1, turns),
+    mergeReviewSaid({ head: turns.merge, side: turns.side, branch: turns.branch }),
+    ...planLines(first),
+    turnSaid(2, turns),
+    ...planLines(second),
+    `In all, 2 turns: ${counted(one.parts.length, 'part')}, ${counted(one.changedLines, 'changed line')} in ${counted(one.files, 'file')}${sends}, ` +
+      `where one review from ${today.range.split('..')[0]} would be ${counted(today.parts.length, 'part')}, ${counted(today.changedLines, 'changed line')} in ${counted(today.files, 'file')}.`,
+  ];
+}
+
 /** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
  * lines than a part holds or more files (`PART_MAX_FILES`), from its `groups` (`rangeGroups`): `{ parts }`,
  * each `{ index, of, files, changedLines, prompt, expected }` with the prompt its session is asked with and
@@ -1030,7 +1062,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
  * base, so the run does not read the base, and no record of the run covers it. */
 function baseLeftOutSaid({ shortId, subject, merged }) {
   if (merged) {
-    return `The base ${shortId} (${subject}) is a merge of ${merged} that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it. A merge is reviewed by what was written in it only where it is HEAD, and \`--base ${shortId}^\` here would review everything it brought in: in a worktree at it (\`git worktree add --detach <folder> ${shortId}\`), \`js-harness codex-review --base ${shortId}^\` reviews what was written in it, and every worktree of the clone shares its record.`;
+    return `The base ${shortId} (${subject}) is a merge of ${merged} that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it, in two turns where every code commit before it has a record and two cost less than one review of all it brought in: the merge by what was written in it, then the commits after it.`;
   }
   return `The base ${shortId} (${subject}) is a code commit of this branch that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it.`;
 }
@@ -1043,10 +1075,11 @@ function baseLeftOutSaid({ shortId, subject, merged }) {
  *    says which, how many they are and, since covered is not reviewed, how many of the records that cover
  *    them are a skip or a range with nothing to review. The run then starts nothing and records nothing:
  *    a second record of a range adds nothing the first did not say, and a second review of it is paid twice.
- *  - `{ start, said }`: the range from `start`, the commit before the oldest code commit no record covers,
- *    or `from` where starting later is not safe (`reviewStart`). `said` is the line that says the run
+ *  - `{ start, said, coverage }`: the range from `start`, the commit before the oldest code commit no record
+ *    covers, or `from` where starting later is not safe (`reviewStart`). `said` is the line that says the run
  *    starts later than it was asked to, and how many of the records it starts past are no review either;
- *    `null` when it does not start later.
+ *    `null` when it does not start later. `coverage` is what the records were read as (`reviewCoverage`),
+ *    absent when they could not be read.
  *
  * When the records cannot be read against the range, the range is taken as it was given, `from`, and `said`
  * says so and why: in doubt a run does what it was asked, never less. Nothing here throws.
@@ -1072,10 +1105,11 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
     const notReviewed = notReviewedSaid(coverage, ': `js-harness check --push` lists them');
     return { covered: `Nothing to review: ${given} holds ${counted(held, 'code commit')}, and a Codex review record already covers ${held === 1 ? 'it' : 'all of them'}${notReviewed}. ${done}; \`--again\` takes the range as it was given.` };
   }
-  if (start === from) return { start, said: null };
+  if (start === from) return { start, said: null, coverage };
   const covered = held - coverage.uncovered.length;
   return {
     start,
+    coverage,
     said:
       `${given} holds ${counted(held, 'code commit')}, and a Codex review record already covers ${covered === 0 ? 'none' : thousands(covered)} of them${notReviewedSaid(coverage)}: ` +
       `this run starts at ${start.slice(0, 7)}, the commit before the oldest one no record covers. \`--again\` takes the range as it was given.`,
@@ -1137,6 +1171,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
   const { monotonicNow = () => performance.now(), homedir = os.homedir, createLeanHome = makeLeanHome } = deps;
   const { effort = REVIEW_EFFORT, extraCodexConfig = [], onResult = null, everyFile = false } = deps;
+  // A run of the turn at a merge below HEAD (`firstTurn`): the intent its parent already read, and that it must
+  // be read as a merge at HEAD, or it would review what the merged branch brought in.
+  const { turnIntent = null, mergeTurnOnly = false } = deps;
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -1157,7 +1194,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   }
   // The intent the own prompt carries, read before anything runs: a document that cannot be read, or that
   // holds no Goal or no Done when, is a flag given wrong, and no review is started to find that out.
-  let intent = null;
+  let intent = turnIntent;
   if (args.doc !== undefined) {
     try {
       intent = reviewIntent(fs.readFileSync(path.resolve(args.cwd, args.doc), 'utf8'));
@@ -1315,8 +1352,32 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * before what the records say (`baseLeftOutSaid`), whichever way they come out. */
   // The merge a review reads by what was written in it, `{ side, branch }` (`mergeStart`), else `null`.
   let merge = null;
+  // The two turns the range is reviewed in when it is cut at a merge of main below HEAD (`cutInTurns`), else `null`.
+  let turns = null;
+  /** The plan of the review of `from..to`, a range of its own, from how its files group, `split` (`rangeGroups`). */
+  const planBetween = (from, to, split) =>
+    reviewPlan({ base: from, head: to, model: REVIEW_MODEL, effort, parts: split.groups, runs: readRunLog(), maxParts: args.maxParts, leftOut: split.leftOut });
+  /** The two turns of a range the records leave from `left.start` (`leftByRecords`), cut at a merge of main below
+   * HEAD (`mergeTurn`, odd/tasks/merge-below-head.md): `{ merge, from, side, branch, auto, plans, today }`, the
+   * merge, its first parent, what `mergeStart` says of it, the plans of the two turns and the plan of the one
+   * review the run would be without the cut. `null` for a range reviewed as one: one with no such merge, one
+   * whose turns cost no less than that review (`turnsCheaper`), a skip, a measured run, and wherever git or the
+   * records cannot say. */
+  const cutInTurns = (given, left) => {
+    if (args.unavailable !== undefined || onResult !== null || left.coverage === undefined) return null;
+    const at = mergeTurn(root, { given, tip: head, uncovered: left.coverage.uncovered, spawn, where });
+    if (at === null) return null;
+    const groups = (from, to, read) => rangeGroups(spawn, root, { from, head: to, maxChangedLines: args.partLines, everyFile, where, merge: read });
+    const splits = [groups(at.from, at.merge, { side: at.side, branch: at.branch, auto: at.auto }), groups(at.merge, head, null), groups(left.start, head, null)];
+    if (splits.some((split) => split.error)) return null;
+    const [first, second, one] = [planBetween(at.from, at.merge, splits[0]), planBetween(at.merge, head, splits[1]), planBetween(left.start, head, splits[2])];
+    const size = (plan) => ({ parts: plan.parts.length, changedLines: plan.changedLines });
+    if (!turnsCheaper(size(one), [first, second].map(size))) return null;
+    return { ...at, head, plans: [first, second], today: one };
+  };
   const startingAt = (given) => {
     merge = null;
+    turns = null;
     if (args.again || everyFile || given === head) return given;
     // A merge of the default branch at HEAD, after a branch whose every code commit has a record: the review
     // starts at the first parent of the merge and reads what was written in it (`mergeStart`).
@@ -1334,6 +1395,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       log(left.covered);
       return null;
     }
+    // Cut at a merge of main below HEAD: each turn says where it starts, so the line of a later start is not said.
+    turns = cutInTurns(given, left);
+    if (turns !== null) return turns.from;
     if (left.said !== null) log(left.said);
     if (left.start !== given) base = left.start;
     return left.start;
@@ -1354,15 +1418,22 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const from = startingAt(given);
     if (from === null) return 0;
     // What a run of this range would be, when it is not a review as any other. The review of a merge is none
-    // of a recheck: the findings a recheck checks were made of another diff.
-    const state = merge !== null ? { kind: 'review' } : recheckFor(from);
-    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where, merge });
-    if (split.error) {
-      error(`${split.error}, so there is no plan of its review.`);
-      return 1;
+    // of a recheck: the findings a recheck checks were made of another diff, and neither is a cut range, whose
+    // first turn is a merge and whose second starts at the merge, which no review ended at yet.
+    const state = merge !== null || turns !== null ? { kind: 'review' } : recheckFor(from);
+    let plan;
+    if (turns !== null) {
+      for (const line of turnsLines(turns)) log(line);
+      plan = plansAsOne(turns.plans);
+    } else {
+      const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where, merge });
+      if (split.error) {
+        error(`${split.error}, so there is no plan of its review.`);
+        return 1;
+      }
+      plan = planOf(split);
+      for (const line of planLines(plan)) log(line);
     }
-    const plan = planOf(split);
-    for (const line of planLines(plan)) log(line);
     // How close the method came on the reviews this machine recorded, said after the estimate it judges. A
     // plan of no part has no estimate to judge; records that cannot be read are none.
     if (plan.parts.length > 0) {
@@ -1399,6 +1470,75 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`Could not write the record: ${err.message}`);
       return null;
     }
+  };
+
+  /** The turn at the merge of a cut range (`turns`): the bound of parts is held to both turns, then the merge
+   * is reviewed by this command itself, in process with the deps it was given, in a detached worktree at the
+   * merge, so that Codex reads the files of that commit; the worktree is removed whatever happens. `null` when
+   * the run goes on to the commits after the merge; otherwise the exit code it ends with: the turn's own when
+   * it failed, 0 when its record owes a correction (the commits after it are then reviewed as a recheck of its
+   * findings, once the correction is made), and 1 when the run cannot go on. */
+  const firstTurn = async () => {
+    const all = plansAsOne(turns.plans);
+    if (all.over) {
+      error(
+        `The review of ${all.range} in two turns was not started and nothing was recorded: their ${all.parts.length} parts are more than ${partsBound(all)}.\n` +
+          `To run it all the same, pass \`--max-parts ${all.parts.length}\`.`,
+      );
+      return 1;
+    }
+    log(turnSaid(1, turns));
+    const { commonGitDir: common } = where;
+    if (!common) {
+      error('Could not find the git directory, where the worktree of the merge is made, so nothing was started or recorded.');
+      return 1;
+    }
+    sweepTurnWorktrees(root, { commonGitDir: common, spawn });
+    const place = addTurnWorktree(root, turns.merge, { commonGitDir: common, spawn, now: () => now().getTime() });
+    if (place === null) {
+      error(`Could not make a worktree at the merge ${turns.merge.slice(0, 7)}, so nothing was started or recorded.`);
+      return 1;
+    }
+    // Resolved values only: the base by its full id, a home that is absolute, the intent already read.
+    const turnArgv = [
+      '--base', turns.from, '--cwd', place, '--prompt', args.prompt, '--part-lines', String(args.partLines),
+      ...(args.maxParts === undefined ? [] : ['--max-parts', String(args.maxParts)]),
+      ...(args.home ? ['--home', path.resolve(args.home)] : []),
+      ...(args.keepHome ? ['--keep-home'] : []),
+      ...(args.fresh ? ['--fresh'] : []),
+    ];
+    let code;
+    try {
+      code = await codexReviewMain(turnArgv, env, { ...deps, turnIntent: intent, mergeTurnOnly: true });
+    } finally {
+      removeTurnWorktree(root, place, { spawn });
+    }
+    if (code !== 0) return code;
+    let records;
+    let runs;
+    try {
+      records = readCodexReviews(root, { spawn, where });
+      runs = readCodexReviewRuns(root, { spawn, where });
+    } catch (err) {
+      error(`Could not read the record of the turn at the merge (${err.message}), so the commits after it were not reviewed.`);
+      return 1;
+    }
+    if (!records.some((record) => record.base === turns.from && record.head === turns.merge)) {
+      error(`The turn at the merge ${turns.merge.slice(0, 7)} wrote no record, so the commits after it were not reviewed.`);
+      return 1;
+    }
+    if (recheckState({ from: turns.merge, records, runs }).kind !== 'review') {
+      log(turnStopped(turns));
+      return 0;
+    }
+    // The commits after the merge are reviewed as committed: HEAD and the tracked tree as they were before the turn.
+    const still = headAndTree();
+    if (still.headNow !== head || still.tree !== '') {
+      error(`HEAD or the tracked files changed during the turn at the merge, so the commits after it were not reviewed: run the review again.`);
+      return 1;
+    }
+    log(turnSaid(2, turns));
+    return null;
   };
 
   let outcome = 'unavailable';
@@ -1443,8 +1583,23 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     // The review starts where the records end, and there is none to start over a range they cover whole.
-    const from = startingAt(given);
+    let from = startingAt(given);
     if (from === null) return 0;
+    if (mergeTurnOnly && merge === null) {
+      error(`${head.slice(0, 7)} is not read here as a merge of the default branch whose review reads what was written in it, so its turn was not started and nothing was recorded: it would review what that branch brought in.`);
+      return 1;
+    }
+    // A range cut at a merge of main below HEAD: the merge is reviewed first, in a turn of its own, and this run
+    // then reviews the commits after it, from the merge, as a range of its own.
+    if (turns !== null) {
+      const stopped = await firstTurn();
+      if (stopped !== null) return stopped;
+      from = turns.merge;
+      base = turns.merge;
+      turns = null;
+      // What the turn wrote to the run log is read before the review of the commits after it.
+      runLog = undefined;
+    }
     // A range that starts where a review that found something ended is a recheck of those findings, and a
     // second recheck of the same findings is not run (`recheckFor`).
     const state = merge !== null ? { kind: 'review' } : recheckFor(from);
