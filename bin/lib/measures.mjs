@@ -378,9 +378,19 @@ function documentAt(run, root, commit, document) {
  * adds under a document's `## Log` heading, opening with a Log id and saying "reopen" in any form. Nothing is judged here: the
  * cause is not read, and a reopening written in no Log, or closed again inside one pull request, is not seen. `run` is spawnSync-shaped. */
 export function reopenCandidates(run, root, sinceIso) {
+  // The default branch by name (origin/HEAD), not the main checkout's HEAD: a checkout on a feature branch would read its
+  // unmerged Log lines as landed and miss the newer landed ones.
+  let head;
+  try {
+    head = run('git', ['-C', root, 'rev-parse', '--abbrev-ref', 'origin/HEAD'], {});
+  } catch (err) {
+    return { known: false, why: `the default branch is not known: ${err.message}` };
+  }
+  const branch = head && !head.error && head.status === 0 ? String(head.stdout ?? '').trim() : '';
+  if (branch === '' || branch === 'origin/HEAD') return { known: false, why: `the default branch is not known: ${failureOf(head)}` };
   let log;
   try {
-    log = run('git', ['-C', root, 'log', '-p', '-m', '--first-parent', '--format=commit %H %cI %s', `--since=${sinceIso}`, '--', 'odd/tasks/*.md'], {});
+    log = run('git', ['-C', root, 'log', '-p', '-m', '--first-parent', '--format=commit %H %cI %s', `--since=${sinceIso}`, branch, '--', 'odd/tasks/*.md'], {});
   } catch (err) {
     return { known: false, why: err.message };
   }

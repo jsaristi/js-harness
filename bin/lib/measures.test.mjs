@@ -355,10 +355,11 @@ const MERGE_DIFF = [
 ].join('\n');
 
 /** A fake `run` for `git log` (the diff) and `git show` (the document as the merge left it). */
-function gitFor({ log = ok(MERGE_DIFF), show = ok(DOCUMENT_TEXT.join('\n')) } = {}) {
+function gitFor({ log = ok(MERGE_DIFF), show = ok(DOCUMENT_TEXT.join('\n')), head = ok('origin/main\n') } = {}) {
   const calls = [];
   const run = (command, args) => {
     calls.push({ command, args });
+    if (args.includes('rev-parse')) return head;
     return args.includes('show') ? (typeof show === 'function' ? show(args) : show) : (typeof log === 'function' ? log(args) : log);
   };
   return { run, calls };
@@ -368,8 +369,19 @@ test('reopenCandidates names the Log lines that open with a Log id and say reope
   const git = gitFor();
   const found = reopenCandidates(git.run, ROOT, '2026-10-14T00:00:00Z');
   assert.deepEqual(found, { known: true, candidates: [{ at: MERGED_AT, document: DOCUMENT, id: 'L7', commit: MERGE.slice(0, 7) }] });
-  assert.deepEqual(git.calls[0].args, ['-C', ROOT, 'log', '-p', '-m', '--first-parent', '--format=commit %H %cI %s', '--since=2026-10-14T00:00:00Z', '--', 'odd/tasks/*.md'], 'the pathspec goes through as one argument, no shell');
-  assert.deepEqual(git.calls[1].args, ['-C', ROOT, 'show', `${MERGE}:${DOCUMENT}`]);
+  assert.deepEqual(git.calls[0].args, ['-C', ROOT, 'rev-parse', '--abbrev-ref', 'origin/HEAD'], 'the default branch, whatever the main checkout has out');
+  assert.deepEqual(git.calls[1].args, ['-C', ROOT, 'log', '-p', '-m', '--first-parent', '--format=commit %H %cI %s', '--since=2026-10-14T00:00:00Z', 'origin/main', '--', 'odd/tasks/*.md'], 'the pathspec goes through as one argument, no shell');
+  assert.deepEqual(git.calls[2].args, ['-C', ROOT, 'show', `${MERGE}:${DOCUMENT}`]);
+});
+
+// Codex on f8ca1d6: a main checkout on a feature branch must not make its unmerged Log lines read as landed.
+test('reopenCandidates reads the default branch, and is not known when git cannot name it', () => {
+  const git = gitFor({ head: ok('origin/trunk\n') });
+  reopenCandidates(git.run, ROOT, '2026-10-14T00:00:00Z');
+  assert.ok(git.calls[1].args.includes('origin/trunk'), JSON.stringify(git.calls[1].args));
+  const unnamed = reopenCandidates(gitFor({ head: { status: 128, stdout: '', stderr: 'fatal: ambiguous argument origin/HEAD' } }).run, ROOT, '2026-10-14T00:00:00Z');
+  assert.equal(unnamed.known, false);
+  assert.match(unnamed.why, /default branch/);
 });
 
 test('reopenCandidates is not known when git fails, a call throws, or the document cannot be read, and never says zero', () => {
@@ -379,7 +391,7 @@ test('reopenCandidates is not known when git fails, a call throws, or the docume
   const thrown = reopenCandidates(() => {
     throw new Error('spawn git ENOENT');
   }, ROOT, '2026-10-14T00:00:00Z');
-  assert.deepEqual(thrown, { known: false, why: 'spawn git ENOENT' });
+  assert.deepEqual(thrown, { known: false, why: 'the default branch is not known: spawn git ENOENT' }, 'the first call names the branch');
   const unread = reopenCandidates(gitFor({ show: { status: 128, stdout: '', stderr: 'fatal: path not in tree' } }).run, ROOT, '2026-10-14T00:00:00Z');
   assert.equal(unread.known, false);
   assert.match(unread.why, /path not in tree/);

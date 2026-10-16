@@ -2283,6 +2283,8 @@ function measuringRun(machine, log, reopen = () => ok('')) {
       return log(args);
     }
     if (command === 'git' && args[0] === '-C' && args[2] === 'log') return reopen(args);
+    // The reopen candidates name the default branch first (Codex on f8ca1d6).
+    if (command === 'git' && args[0] === '-C' && args[2] === 'rev-parse' && args.includes('origin/HEAD')) return ok('origin/main\n');
     return fake.run(command, args, options);
   };
   return { run, logs, calls: fake.calls };

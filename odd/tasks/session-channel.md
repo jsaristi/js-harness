@@ -1705,6 +1705,11 @@ and 3.
   minute); a line in the same second as a bound is still undecided at second resolution; and a
   local time that occurs twice when the clocks go back is read as its first occurrence, as
   before this change
+- [ ] T9c An independent review of the correction of d2c3bf9, which `codex-review` refused to
+  recheck a second time. Codex on d2c3bf9: "Honor the configured context pause when judging
+  reliefs" (fixed in f8ca1d6); its recheck of f8ca1d6: "Read reopening candidates from the
+  default branch" (fixed after it: `reopenCandidates` names `origin/HEAD` and is not known
+  without it). Owed: one independent read of both fixes before the slice lands.
 - [x] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
 - [ ] T11 The real stretch of "Done when", recorded
