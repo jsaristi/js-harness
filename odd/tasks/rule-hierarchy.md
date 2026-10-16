@@ -2461,8 +2461,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     test (:145-146). Codex on `dc03f8b..bbf7dc2`, two findings, fixed test first (both seen red):
     P1, a merge that makes no commit ran the door on the previous merge and its reset took that
     one back, so no door runs on it and a refusal resets to the commit before the merge; P2, the
-    door's indented lines were dropped, now printed under the notes and in the refusal. Next:
-    Codex recheck `--base bbf7dc2`, push, pull request on `main` after 302, notify the orchestrator
+    door's indented lines were dropped, now printed under the notes and in the refusal
+    (`3d0cc94`, gate passed, gentle-ai medium not due); Codex recheck `bbf7dc2..3d0cc94`
+    correct (0.97), both fixed. Pull request 314 on `main` (302 landed), the orchestrator told.
+    Next: slice (b) once the orchestrator says Sebastián saw the design, then slice (c)
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
