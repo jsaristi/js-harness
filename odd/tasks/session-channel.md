@@ -1705,11 +1705,19 @@ and 3.
   minute); a line in the same second as a bound is still undecided at second resolution; and a
   local time that occurs twice when the clocks go back is read as its first occurrence, as
   before this change
-- [ ] T9c An independent review of the correction of d2c3bf9, which `codex-review` refused to
+- [x] T9c An independent review of the correction of d2c3bf9, which `codex-review` refused to
   recheck a second time. Codex on d2c3bf9: "Honor the configured context pause when judging
   reliefs" (fixed in f8ca1d6); its recheck of f8ca1d6: "Read reopening candidates from the
-  default branch" (fixed after it: `reopenCandidates` names `origin/HEAD` and is not known
-  without it). Owed: one independent read of both fixes before the slice lands.
+  default branch" (fixed in d7703e3: `reopenCandidates` names `origin/HEAD` and is not known
+  without it). Owed: one independent read of both fixes before the slice lands. Done
+  2026-10-15: an independent read-only reviewer gave PASS, no blocker (measures 28, sessions
+  230, the real run with `--context-pause 80%`, probes in a scratch repository). Its
+  advisories, left as they are: the pause is rounded to a whole percent before the reliefs
+  compare with it, so a pause given in tokens off a whole percent may judge a peak within half a
+  percent differently from the board; a session with its own window is judged by its percent,
+  as section 18 says; a project with no remote reads its candidates as not known (a fallback to
+  the local default branch would be a product choice); git's stderr can break the "not known"
+  line; `origin/main` is as fresh as the last fetch.
 - [x] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
 - [ ] T11 The real stretch of "Done when", recorded
