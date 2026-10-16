@@ -346,7 +346,7 @@ Merge into the sibling note, his words copied verbatim, the source file removed:
   compacted session to notify the lead)
 
 The audit with the evidence for each is `jh16-memory-notes-audit.md` in the group's shared notes folder.
-- [ ] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
+- [x] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
   the active lock before recording after-state"): the fix (verify refuses a stamp that does not hold the lock) is
   committed after b3dac0f with its test, and a second recheck is refused by design; a Codex review of the next
   slice that touches `bin/lib/memory-pass.mjs` reads it. That slice (JH 26, 2026-10-16, branch
@@ -356,7 +356,8 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   while another pass holds the lock is refused and writes nothing, since it would write under that pass and its
   verify would take the undo as its own after-state; and a lock that does not parse, or names no stamp, is a
   refusal naming the lock file from plan, verify and undo, where it was a `SyntaxError` the command does not
-  catch. Checked when Codex has reviewed that range and its findings are answered
+  catch. Codex on `6a6ce9e..13619cb` (commit `13619cb`, gate PASS; gentle-ai: medium, 86 lines, not due): "the
+  patch is correct (confidence 0.94)", no finding, 92,937 input tokens, recorded
 - [ ] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
   `~/.js-harness/memory-hygiene/` (so `uninstall` can remove it; `bin/lib/manifest.mjs`), the board row of a due
   pass (`js-harness sessions`), and the rule ids `memory-index-bytes` and `memory-pass-days` the sensor's budgets
