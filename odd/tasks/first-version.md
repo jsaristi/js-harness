@@ -281,6 +281,9 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   92 green). The `init` template stays short. Next: T3b, then Codex, push, a PR, the lead told.
 - L16 (2026-10-16, JH 25): T3b built inline, test first: with no window configured and no compaction measured,
   the pause's notice says its figures assume the default window of 500,000 tokens and names
-  CLAUDE_AUTO_COMPACT_WINDOW and autoCompactWindow to set it (`bin/lib/pause.mjs`, noticeOf; RED 1 in
+  CLAUDE_CODE_AUTO_COMPACT_WINDOW and autoCompactWindow to set it (`bin/lib/pause.mjs`, noticeOf; RED 1 in
   `bin/lib/pause.test.mjs`, then 57 green). Of the task's two ways this is the second: the notice says the figure is assumed,
   and the model's own window is not read. Next: Codex on the code commits, push, a PR, the lead told.
+- L17 (2026-10-16, JH 25): Codex on baec266..3d958ca found one P2, confirmed: the T3b notice named
+  CLAUDE_AUTO_COMPACT_WINDOW, which `configuredWindow` does not read; it now names `WINDOW_VARIABLE`
+  (CLAUDE_CODE_AUTO_COMPACT_WINDOW), test first (RED 1, then 57 green).

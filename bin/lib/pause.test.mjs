@@ -240,7 +240,7 @@ const ORCHESTRATOR_SAID = 'the orchestrator (the session that leads this project
 
 // With no window configured and no compaction measured, the figures rest on an assumed window: the notice says so
 // and how to set it, instead of giving the default as the session's own (first-version T3b).
-const ASSUMED = `No window is configured and no compaction is measured, so these figures assume a window of ${DEFAULT_CONTEXT_WINDOW} tokens: set CLAUDE_AUTO_COMPACT_WINDOW or autoCompactWindow to the host's window.`;
+const ASSUMED = `No window is configured and no compaction is measured, so these figures assume a window of ${DEFAULT_CONTEXT_WINDOW} tokens: set CLAUDE_CODE_AUTO_COMPACT_WINDOW or autoCompactWindow to the host's window.`;
 
 test('a notice resting on the assumed window says so and how to set the window; one on a configured window does not', inHome((home) => {
   const options = { sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') };
