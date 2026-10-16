@@ -67,7 +67,7 @@ The model a session runs on: claude-opus-5-5.
 The one way a session opens another in this repository, so that it is a row in his sidebar: the tools that open one in the app's Routines or in the cloud are refused: start_session.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/guard.mjs`.
-- Since 2026-10-15. Row: reports. Source: his words of 2026-10-15, 2026-10-15, checked by a session on 2026-10-15.
+- Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-10-15, 2026-10-15, checked by a session on 2026-10-15.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.

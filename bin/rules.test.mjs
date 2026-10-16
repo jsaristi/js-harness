@@ -19,6 +19,8 @@ const SOURCES_TEXT = fs.readFileSync(path.join(PACKAGE, 'docs', 'rule-sources.js
 const SOURCES = JSON.parse(SOURCES_TEXT);
 const COUNT_LINE = `${RULES.length} rules, hash ${rulesHash(RULES)}`;
 const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
+// After its line, the count of each scanned rule's findings in the texts in force; no rule carries patterns yet.
+const PATTERNS_LINE = `patterns: none; unscanned: ${RULES.filter((rule) => !Object.hasOwn(rule, 'retired')).length}`;
 const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source]]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
@@ -26,9 +28,12 @@ const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport
 const HOMES = Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
   .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')]));
 
-/** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, the sources, and the
- * home files of the rules in prose. */
-const BASE = () => ({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES), 'docs/rule-sources.json': SOURCES_TEXT });
+/** The package's register, whose entries the rules' `failure` keys name. */
+const REGISTER = fs.readFileSync(path.join(PACKAGE, 'docs', 'FAILURES.md'), 'utf8');
+
+/** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, the sources, the
+ * register, and the home files of the rules in prose. */
+const BASE = () => ({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES), 'docs/rule-sources.json': SOURCES_TEXT, 'docs/FAILURES.md': REGISTER });
 
 /** Writes `files` (path from the top of a project -> content) under `dir`. */
 function write(dir, files) {
@@ -64,7 +69,7 @@ test('render writes docs/RULES.md, and check then passes with its PASS line', as
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['render'], dir), { code: 0, out: [`docs/RULES.md written: ${COUNT_LINE}`], err: [] });
     assert.ok(fs.existsSync(path.join(dir, 'docs', 'RULES.md')));
-    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
   });
 });
 
@@ -80,14 +85,16 @@ test('check fails when docs/RULES.md is edited by hand, and says so in one findi
   });
 });
 
-test('with no docs/ at all check passes, and its two notes say what it did not read', async () => {
+test('with no docs/ at all check passes, and its three notes say what it did not read', async () => {
   await inProject({ ...HOMES, 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
     assert.deepEqual(await run(['check'], dir), {
       code: 0,
       out: [
         PASS_LINE,
+        PATTERNS_LINE,
         'note: no docs/rule-sources.json here: the sources were not checked',
         'note: no docs/RULES.md here: js-harness rules prints the list',
+        "note: no docs/FAILURES.md here: the rules' failures were not checked",
       ],
       err: [],
     });
@@ -158,7 +165,7 @@ test('a test file that reads an undeclared rule is not read', async () => {
   await inProject(BASE(), async (dir) => {
     await run(['render'], dir);
     write(dir, { 'bin/x.test.mjs': READS_UNDECLARED });
-    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
   });
 });
 
@@ -184,7 +191,7 @@ test('a feature document that names an undeclared rule fails check above its Pro
       err: [],
     });
     write(dir, { 'odd/tasks/feature.md': below });
-    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
   });
 });
 

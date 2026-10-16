@@ -11,6 +11,8 @@ import { checkFailures } from './failures.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { ruleValue } from './lib/rules.mjs';
+import { RULES } from './lib/rules-data.mjs';
+import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
@@ -179,12 +181,12 @@ export function discoverSensors(cwd) {
 }
 
 /** The row of a project's own rules (odd/tasks/project-rules.md, "How it is checked"): it acts only when the project
- * keeps a list, docs/rules.json, and never in the harness's own repository, whose list the rule hierarchy's row will
- * hold (its T16d extends this row). It fails on any finding of `js-harness rules check`: a phrase gone from its
+ * keeps a list, docs/rules.json, and never in the harness's own repository, whose row is `checkListRow` (T16d of
+ * odd/tasks/rule-hierarchy.md). The project's row fails on any finding of `js-harness rules check`: a phrase gone from its
  * file, a sensor no longer declared, a rule deleted since HEAD, or a list that cannot be read. A list that cannot be
  * read fails this row only: no other row reads it, so the gate still prints every row before it stops. */
-export function checkOwnRules(cwd) {
-  if (fs.existsSync(path.join(cwd, 'bin', 'lib', 'rules-data.mjs'))) return [];
+export function checkOwnRules(cwd, { rules = RULES, spawn = spawnSync } = {}) {
+  if (fs.existsSync(path.join(cwd, 'bin', 'lib', 'rules-data.mjs'))) return checkListRow(cwd, rules, spawn);
   const found = discoverSensors(cwd);
   let read;
   try {
@@ -201,6 +203,55 @@ export function checkOwnRules(cwd) {
   }
   const count = read.findings.length;
   return [{ name: 'rules', pass: false, detail: `${count} ${count === 1 ? 'finding' : 'findings'} in ${PROJECT_RULES_PATH}`, lines: [...read.findings, ...notes] }];
+}
+
+/** What a finding of the row `rules` says of its rule's stored `row`. */
+function rowState(rule) {
+  if (rule.row?.refuses !== undefined) return `which refuses it since ${rule.row.refuses}`;
+  if (typeof rule.row?.reports === 'string') return `which reports it again since ${rule.row.since} (${rule.row.reports})`;
+  return 'which reports it';
+}
+
+/** `text` trimmed, and cut with an ellipsis past 160 characters, so a long one-line text stays one readable line. */
+const shortLine = (text) => (text.trim().length > 160 ? `${text.trim().slice(0, 159)}…` : text.trim());
+
+/** The row `rules` of the harness's own repository (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)"): each
+ * line the staged change adds to a text in force, renames detected, that restates the value of a rule in `rules`
+ * with patterns. The rule's stored `row` says what its finding is: with none, or `reports`, an INFO line; with
+ * `refuses`, a failure, which stops the gate before its sensors. The fences and a feature document's history are
+ * read on the staged whole file, since a line alone cannot say whether it is inside one. During a merge a line counts
+ * only when it is new against both parents, so a merge is never refused for what a parent brought. `rules` is the
+ * list of the package, which in this repository is the checkout itself. No row when no rule carries patterns, the
+ * change adds no line to a text in force, or git does not answer. */
+function checkListRow(cwd, rules, spawn) {
+  const scanned = rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns));
+  if (scanned.length === 0) return [];
+  const git = hookGit(cwd, spawn);
+  // The sides named a/ and b/ whatever the clone's diff.mnemonicPrefix says, and a path with an accent unquoted.
+  const diffOf = (...against) => git?.(['-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', ...against]) ?? null;
+  const diff = diffOf();
+  if (!diff) return [];
+  const key = (one) => `${one.file}\n${one.line}\n${one.text}`;
+  let added = addedLines(diff).filter((one) => isTextInForce(one.file));
+  if (git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) {
+    const fromTheirs = new Set(addedLines(diffOf('MERGE_HEAD') ?? '').map(key));
+    added = added.filter((one) => fromTheirs.has(key(one)));
+  }
+  if (added.length === 0) return [];
+  const inForce = new Map();
+  const lines = [];
+  for (const one of added) {
+    if (!inForce.has(one.file)) inForce.set(one.file, new Set(inForceLines(one.file, git(['show', `:${one.file}`]) ?? '').map((line) => line.line)));
+    if (inForce.get(one.file).has(one.line)) lines.push({ path: one.file, line: one.line, text: one.text.replace(/\r$/, '') });
+  }
+  const byId = new Map(scanned.map((rule) => [rule.id, rule]));
+  const findings = scanLines(scanned, lines);
+  if (findings.length === 0) return [{ name: 'rules', pass: true, info: true, detail: '0 restated values in the lines this change adds to the texts in force' }];
+  const refusing = findings.filter((finding) => byId.get(finding.id).row?.refuses !== undefined).length;
+  const counted = `${findings.length} restated ${findings.length === 1 ? 'value' : 'values'} in the lines this change adds`;
+  const detail = `${counted}, ${refusing === 0 ? 'none' : refusing} of a rule that ${refusing > 1 ? 'refuses them' : 'refuses it'}`;
+  const found = findings.map((finding) => `${finding.path}:${finding.line} restates rule "${finding.id}", ${rowState(byId.get(finding.id))}: ${shortLine(finding.text)} (write \`rule:${finding.id}\` instead of the value, or change the rule with \`js-harness rules change ${finding.id}\`)`);
+  return [refusing === 0 ? { name: 'rules', pass: true, info: true, detail, lines: found } : { name: 'rules', pass: false, detail, lines: found }];
 }
 
 const DOCUMENTS_SHAPE ='harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
@@ -2158,7 +2209,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

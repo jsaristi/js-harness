@@ -95,9 +95,8 @@ test('a change of form moves neither since nor was, and null removes a key', () 
   assert.equal(what, 'form');
 });
 
-test('set refuses the keys a change manages, the keys of a later letter, and a project key', () => {
+test('set refuses the keys a change manages and a project key', () => {
   refusal(() => changedList(LIST, 'gate-wait', { set: { since: TODAY } }, { today: TODAY }), /"since" is not set/);
-  refusal(() => changedList(LIST, 'gate-wait', { set: { row: { refuses: TODAY } } }, { today: TODAY }), /"row" .*T16d/);
   refusal(() => changedList(LIST, 'gate-wait', { set: { sensor: 'x' } }, { today: TODAY }), /"sensor" .*project/);
 });
 
@@ -221,4 +220,65 @@ test('a design source names a path that exists, and a rule of his takes his word
   refusal(() => sourceOf({ kind: 'design', path: 'docs/NOPE.md' }, CONTEXT), /docs\/NOPE.md is not a file of the repository/);
   refusal(() => sourceOf({ kind: 'design', path: 'docs/ROADMAP.md' }, { ...CONTEXT, owner: 'sebastian' }), /his words/);
   refusal(() => sourceOf({ kind: 'notes' }, CONTEXT), /words or design/);
+});
+
+// ---- the keys of the row `rules` (T16d) -------------------------------------------------------------------
+
+const PATTERNS = ['wait.{0,40}{amount}'];
+const FAILURES = new Set(['old-rule-beside-new']);
+const SCANNED = LIST.map((rule) => (rule.id === 'gate-wait' ? { ...rule, patterns: PATTERNS, failure: 'old-rule-beside-new' } : rule));
+const REFUSING = SCANNED.map((rule) => (rule.id === 'gate-wait' ? { ...rule, row: { refuses: '2026-10-15' } } : rule));
+const none = () => 0;
+
+test('patterns and a failure are a change of form, and a failure names an entry of the register', () => {
+  const { list, what } = changedList(LIST, 'gate-wait', { set: { patterns: PATTERNS, failure: 'old-rule-beside-new' } }, { today: TODAY, failures: FAILURES });
+  assert.deepEqual(ruleOf(list, 'gate-wait'), ruleOf(SCANNED, 'gate-wait'));
+  assert.equal(what, 'form');
+  refusal(() => changedList(LIST, 'gate-wait', { set: { failure: 'no-such-entry' } }, { today: TODAY, failures: FAILURES }), /the failure "no-such-entry" names no entry of docs\/FAILURES\.md/);
+  const cleared = changedList(SCANNED, 'gate-wait', { set: { patterns: null, failure: null } }, { today: TODAY, failures: FAILURES });
+  assert.deepEqual(ruleOf(cleared.list, 'gate-wait'), ruleOf(LIST, 'gate-wait'));
+});
+
+test('a rule turns to refuse today, with patterns, a failure and no finding on origin/main', () => {
+  const counted = [];
+  const { list, what } = changedList(SCANNED, 'gate-wait', { set: { row: { refuses: TODAY } } }, { today: TODAY, failures: FAILURES, countOf: (rule) => { counted.push(rule.id); return 0; } });
+  assert.deepEqual(ruleOf(list, 'gate-wait').row, { refuses: TODAY });
+  assert.equal(ruleOf(list, 'gate-wait').since, '2026-10-11', 'a turn moves no since');
+  assert.deepEqual([what, counted], ['turned to refuse', ['gate-wait']]);
+  refusal(() => changedList(SCANNED, 'gate-wait', { set: { row: { refuses: TODAY } } }, { today: TODAY, failures: FAILURES, countOf: () => 2 }), /"gate-wait" has 2 findings in origin\/main's texts in force/);
+  refusal(() => changedList(LIST, 'gate-wait', { set: { row: { refuses: TODAY } } }, { today: TODAY, failures: FAILURES, countOf: none }), /"gate-wait" has no patterns/);
+  refusal(() => changedList(LIST, 'gate-wait', { set: { patterns: PATTERNS, row: { refuses: TODAY } } }, { today: TODAY, failures: FAILURES, countOf: none }), /"gate-wait" has no failure/);
+  refusal(() => changedList(SCANNED, 'gate-wait', { set: { row: { refuses: '2026-10-01' } } }, { today: TODAY, failures: FAILURES, countOf: none }), /turns to refuse today/);
+});
+
+test('while a rule refuses, its patterns, its failure and its row change only by the switch back', () => {
+  const options = { today: TODAY, failures: FAILURES, countOf: none };
+  for (const set of [{ patterns: ['other {amount}'] }, { patterns: null }, { failure: null }, { row: null }, { row: { refuses: TODAY } }]) {
+    refusal(() => changedList(REFUSING, 'gate-wait', { set }, options), /"gate-wait" refuses since 2026-10-15: its patterns, failure and row change only by the switch back/);
+  }
+  refusal(() => changedList(REFUSING, 'gate-wait', { set: { failure: null, row: { reports: 'a wrong pattern', since: TODAY } } }, options), /only by the switch back/);
+  const { list } = changedList(REFUSING, 'gate-wait', { value: 30 }, options);
+  assert.deepEqual(ruleOf(list, 'gate-wait').row, { refuses: '2026-10-15' }, 'a new value keeps the row');
+});
+
+test('the switch back is accepted only from refuses, gives its reason and today, and names its failure', () => {
+  const options = { today: TODAY, failures: FAILURES, countOf: none };
+  const { list, what } = changedList(REFUSING, 'gate-wait', { set: { row: { reports: 'a wrong pattern', since: TODAY } } }, options);
+  assert.deepEqual(ruleOf(list, 'gate-wait').row, { reports: 'a wrong pattern', since: TODAY });
+  assert.equal(what, 'switched back to report (a wrong pattern), a sighting of failure old-rule-beside-new');
+  refusal(() => changedList(SCANNED, 'gate-wait', { set: { row: { reports: 'a wrong pattern', since: TODAY } } }, options), /"gate-wait" does not refuse: a rule switches back to report only from refuses/);
+  refusal(() => changedList(REFUSING, 'gate-wait', { set: { row: { reports: 'a wrong pattern', since: '2026-10-01' } } }, options), /the switch back gives its reason and today/);
+  refusal(() => changedList(REFUSING, 'gate-wait', { set: { row: { reports: ' ', since: TODAY } } }, options), /the switch back gives its reason and today/);
+  refusal(() => changedList(SCANNED, 'gate-wait', { set: { row: { refuse: TODAY } } }, options), /set\.row is/);
+});
+
+test('a new rule may carry patterns and a failure, and starts with no row', () => {
+  const set = { subject: 'a new bound', owner: 'project', patterns: ['bound {amount}'], failure: 'old-rule-beside-new' };
+  const { rule } = changedList(LIST, 'new-bound', { value: 3, unit: 'minutes', set }, { today: TODAY, failures: FAILURES });
+  assert.deepEqual([rule.patterns, rule.failure], [['bound {amount}'], 'old-rule-beside-new']);
+  refusal(() => changedList(LIST, 'new-bound', { value: 3, unit: 'minutes', set: { ...set, row: { refuses: TODAY } } }, { today: TODAY, failures: FAILURES, countOf: none }), /a new rule starts with no row/);
+});
+
+test('removing the row of a rule that has none is refused: it would change nothing', () => {
+  refusal(() => changedList(SCANNED, 'gate-wait', { set: { row: null } }, { today: TODAY, failures: FAILURES }), /"gate-wait" has no row to remove/);
 });

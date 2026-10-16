@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { OWNERS, readRules, renderList, rulesHash, ruleHere, ruleOf, ruleValue, writeRules } from './rules.mjs';
+import { OWNERS, patternOf, readRules, renderList, rulesHash, ruleHere, ruleOf, ruleValue, writeRules } from './rules.mjs';
 import { RULES } from './rules-data.mjs';
 
 // Marks a field to leave out of a fixture, so one test can take one key away.
@@ -38,14 +38,14 @@ const WHOLE = [
   valueRule('alpha-value', {
     flag: '--wait',
     was: [{ value: 30, until: '2026-10-01' }],
-    patterns: ['a\\d+'],
+    patterns: ['a {amount}'],
     row: { refuses: '2026-10-01' },
     failure: 'language-server-load',
     differs: 'the text of a sibling rule',
     review: '2026-10-20',
   }),
   textRule('beta-text', {
-    patterns: ['gate'],
+    patterns: ['gate {amount}'],
     row: { reports: 'the gate reports it', since: '2026-10-02' },
     failure: 'language-server-load',
     differs: 'the text of a sibling rule',
@@ -55,7 +55,7 @@ const WHOLE = [
     was: [{ value: 9, until: '2026-09-01' }],
     unit: 'minutes',
     successors: ['alpha-value'],
-    patterns: ['x'],
+    patterns: ['x {amount}'],
     row: { refuses: '2026-10-11' },
     failure: 'language-server-load',
     differs: 'the text of a sibling rule',
@@ -449,10 +449,46 @@ test('a pattern that is not a regular expression is refused by its text, one fau
   assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['a('] })]), [
     'rule "alpha-value": the pattern "a(" is not a regular expression',
   ]);
-  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['ok', '(', '[' ] })]), [
+  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['{amount} ok', '(', '[' ] })]), [
     'rule "alpha-value": the pattern "(" is not a regular expression',
     'rule "alpha-value": the pattern "[" is not a regular expression',
   ]);
+});
+
+test('a pattern names its {amount}, and one that matches an empty line is refused', () => {
+  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['wait for the gate'] })]), [
+    'rule "alpha-value": the pattern "wait for the gate" has no {amount}: it finds a value by its subject and any amount',
+  ]);
+  assert.deepEqual(readRules([valueRule('alpha-value', { patterns: ['{amount}|'] })]), [
+    'rule "alpha-value": the pattern "{amount}|" matches an empty line',
+  ]);
+});
+
+test('{amount} stands for any amount in any wording, so a pattern outlives a change of value', () => {
+  const wait = patternOf('wait.{0,40}{amount}');
+  for (const line of ['the gate may wait 60 minutes', 'a wait of 45 min', 'it waits an hour', 'wait half an hour', 'the wait is 3,600 s']) {
+    assert.match(line, wait, line);
+  }
+  assert.doesNotMatch('the wait for its turn', wait);
+  const model = patternOf('review model.{0,20}{amount}');
+  assert.match('the review model is gpt-6.1-sol', model);
+  assert.match('the review model is "claude-opus-5-5"', model);
+  assert.match('THE REVIEW MODEL: gpt-6.1-sol', model);
+  const effort = patternOf('effort.{0,10}{amount}');
+  for (const line of ['the effort is high', 'review effort: medium', 'at effort xhigh', 'effort low', 'effort max']) {
+    assert.match(line, effort, line);
+  }
+  assert.doesNotMatch('the effort of the team', effort);
+});
+
+test('{amount} takes an effort word only as a word: never inside a rule mark, a flag or a call', () => {
+  const stopped = patternOf('gate.{0,50}stopped.{0,30}{amount}');
+  for (const line of ['A gate is stopped at `rule:gate-max`.', 'a gate is stopped by --max', 'a gate is stopped: Math.max(x)', 'a gate is stopped at max-load', 'a gate stopped at high.js']) {
+    assert.doesNotMatch(line, stopped, line);
+  }
+  for (const line of ['a gate is stopped at `max` effort', 'a gate is stopped at max.', 'a gate stopped at high, then']) {
+    assert.match(line, stopped, line);
+  }
 });
 
 test('a row that is not { refuses: day } or { reports: text, since: day } is refused', () => {
@@ -986,6 +1022,11 @@ test('renderList prints each form of the row: reports, refuses since a day, or r
   assert.equal(sinceLine(undefined), '- Since 2026-10-11. Row: reports. Source: none recorded.');
   assert.equal(sinceLine({ refuses: '2026-10-01' }), '- Since 2026-10-11. Row: refuses since 2026-10-01. Source: none recorded.');
   assert.equal(sinceLine({ reports: 'the gate reports it', since: '2026-10-02' }), '- Since 2026-10-11. Row: reports since 2026-10-02 (the gate reports it). Source: none recorded.');
+});
+
+test('renderList names the failure a rule guards against beside its row', () => {
+  const lines = renderList([valueRule('alpha-value', { row: { refuses: '2026-10-01' }, failure: 'old-rule-beside-new' })]).split('\n');
+  assert.ok(lines.includes('- Since 2026-10-11. Row: refuses since 2026-10-01, against the failure `old-rule-beside-new`. Source: none recorded.'), lines.join('\n'));
 });
 
 test('the head of the list says it holds no engine version and no date of a check, as the last line of its explaining paragraph', () => {
