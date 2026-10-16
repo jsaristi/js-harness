@@ -5469,6 +5469,17 @@ test('check --push prints the row rules as INFO and exits 0 with a refusing find
   }
 });
 
+test('check --push gives no row rules in a project whose head has no bin/lib/rules-data.mjs, as the commit gate', async () => {
+  const { dir } = pushRepo('origin', { base: null, change: restateRoadmap });
+  try {
+    const { code, output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /^(INFO|PASS|FAIL) {2}rules /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('check --push reads only the lines the head brings past the remote\'s default branch', async () => {
   const { dir } = pushRepo('origin', { change: restateRoadmap });
   try {
@@ -5477,6 +5488,17 @@ test('check --push reads only the lines the head brings past the remote\'s defau
     git(dir, 'fetch', '-q', 'origin');
     const { code, output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
     assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /restates rule/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push gives no row rules where the remote has no default branch to read the push against', async () => {
+  const { dir } = doorRepo({ change: restateRoadmap });
+  try {
+    const { output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.doesNotMatch(output, /^(INFO|PASS|FAIL) {2}rules /m);
     assert.doesNotMatch(output, /restates rule/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

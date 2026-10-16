@@ -2808,8 +2808,22 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     branch alone, once; a land appends, `--dry-run`, red and exit 3 append none, no proposal says so,
     a push that reported a failure appends); `checkPushRules` in `bin/check.mjs` (the row over
     `<remote>/<default>...<head>`, INFO whatever the row), 2 tests, the first seen red; help, USAGE,
-    README, and T16d's "does not run on `check --push`" amended. Next: commit through the gate,
-    verifier (Risk items 3 and 5), gentle-ai, Codex, pull request on `feat/merge-door-evidence`. Then slice (c), then the throughput plan's item 2
+    README, and T16d's "does not run on `check --push`" amended. Committed as `e6c9c44` (gate passed,
+    tests on CI). State at the context pause (2026-10-16): verifier (opus, high) running on
+    `9ff94fe..e6c9c44`; gentle-ai high (item 5 escalated), lineage `review-2ccf3665c662d927`, lenses
+    risk and reliability, granted, approved and acknowledged. Its findings, informational, for the
+    correction batch: the `landed` callback runs after main moved with the slug's `mainCheckout` and
+    `projectSlug` outside any try (`bin/merge-queue.mjs` the `landed` lambda): guard it so a land
+    that moved main still exits 0 and prints the moved-heads notice; no test of `checkPushRules` with
+    no default branch (it must leave `check --push` at the Codex row alone); `base...head` in
+    `pushSide` is a `git diff`, so a merge-base range, but no test puts the remote ahead of the
+    head. The verifier: item 7 met; one blocker, B1: in a project that installs the harness,
+    `checkPushRules` scans with the harness's own list (the commit gate's `checkOwnRules` uses it
+    only where `bin/lib/rules-data.mjs` exists): return no row when `head` has no
+    `bin/lib/rules-data.mjs`, with a test (a project with no rules-data, README lines restating a
+    value: no row). Advisories kept: A2 a `--check-source` proposal is never confirmed (said);
+    A3 the row costs 20-30 s more on a 37k-line push; A6 a relative `JS_HARNESS_HOME` is not
+    resolved as `notify` does. Correction batch: B1 fixed (`checkPushRules` returns no row when `head` has no `bin/lib/rules-data.mjs`, test seen red), the `landed` call guarded (test seen red: a lost checkout after main moved), and a no-default-branch push test (a pin, green at once). Pull request 328 landed on main meanwhile, so this slice goes to main directly. Next: merge main, Codex `--base origin/main`, push, pull request against main, notify. Then the throughput plan's item 2
     design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block

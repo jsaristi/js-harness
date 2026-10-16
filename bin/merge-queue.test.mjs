@@ -1023,3 +1023,19 @@ test('a land whose push of main reported a failure, with main the candidate all 
   assert.ok(out.some((line) => line.startsWith('The push of main reported a failure')), out.join('\n'));
   assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
 });
+
+test('a land whose relief file cannot be found after main moved still exits 0 and says main moved', async () => {
+  const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00')]);
+  const before = fs.readFileSync(made.reliefFile, 'utf8');
+  let pushed = false;
+  const lost = (run) => (command, args, options) => {
+    if (command === 'git' && args[0] === 'push' && args.some((arg) => arg.endsWith(':refs/heads/main'))) pushed = true;
+    if (pushed && command === 'git' && args[0] === 'rev-parse' && args.includes('--git-common-dir')) throw new Error('the checkout went away');
+    return run(command, args, options);
+  };
+  const { code, out } = await landRule(made, { wrap: lost });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('Landed:')), out.join('\n'));
+  assert.ok(out.includes('Could not write the landing lines of the relief file (the checkout went away): main moved all the same.'), out.join('\n'));
+  assert.equal(fs.readFileSync(made.reliefFile, 'utf8'), before);
+});

@@ -303,6 +303,8 @@ const pushSide = (base, head) => ({
 function checkPushRules(cwd, { rules = RULES, spawn = spawnSync, head = 'HEAD', remote = 'origin' } = {}) {
   const branch = defaultBranch(spawn, cwd, remote);
   if (branch === null) return [];
+  // The harness's own list judges the harness's own repository alone, as `checkOwnRules` has it at a commit.
+  if (!gitOut(spawn, cwd, ['ls-tree', head, '--', RULES_DATA_FILE])?.trim()) return [];
   return checkListRow(cwd, rules, spawn, pushSide(branch.ref, head))
     .map((row) => (row.pass ? row : { ...row, pass: true, info: true, detail: `${row.detail}; a push reports it, the merge door refuses it` }));
 }

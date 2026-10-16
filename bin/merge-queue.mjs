@@ -417,7 +417,12 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     }
   }
   stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
-  landed(candidate, merged);
+  // Main has moved: the relief's lines never turn a land into a failure.
+  try {
+    landed(candidate, merged);
+  } catch (err) {
+    stdout(`Could not write the landing lines of the relief file (${err.message}): main moved all the same.`);
+  }
   // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
   // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
   const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
