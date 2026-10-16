@@ -3193,8 +3193,48 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     - AGENTS.md was refused only by its literal spelling;
     - a design source could name a path outside the repository;
     - the date fixtures depended on the host's time zone.
+- 2026-10-15, T16d built on `feat/rules-row` from `main` b0093b8, tests first, inline. Seven
+  units, each through the gate: 0b292bc (`{amount}`), 8aa9b00 (the scan, `bin/lib/rules-scan.mjs`),
+  bf7d0f7 (the counts), 2012b78 (the two register findings), e000da9 (the row in `checkOwnRules`),
+  85bc94e (the command's three keys), cea42f6 (the help, the failure in `docs/RULES.md`).
+  - The scan, the counts and the two findings are in `bin/lib/rules-scan.mjs`, not in
+    `bin/lib/rules-check.mjs` as the design said: that file keeps the checks of the list itself.
+  - An independent verifier (items 1, 3 and 5) probed every item in a scratch clone. It found
+    three blockers, fixed in aeeeff6 and rechecked fixed:
+    - `{amount}` did not stand for an effort level, which the design names;
+    - the test of the real list was missing; it now asks each rule with patterns for a planted
+      line its patterns find and its mark does not (`PLANTED`, `bin/lib/rules-scan.test.mjs`);
+    - `rules change` said an input that is not JSON before a branch not based on origin/main.
+    Three of its advisories were silent misses of the row, fixed in the same commit: a clone's
+    `diff.mnemonicPrefix`, a path with an accent, and a path with a space (the tab git puts
+    after it, dropped by `addedLines`, so `checkCitations` gains it too). A row removed from a
+    rule that has none is refused. Its other advisories stay as written, not blockers:
+    - the `patterns:` line is printed after PASS only;
+    - a retirement still releases a refusing rule, with a source and its reviews;
+    - no CLI test of a non-zero count, since `rules check` reads the package's own list;
+    - an added line that starts with `++ ` is read as a header, as before T16d;
+    - the tests of `rules-change-run.test.mjs` leave their temporary repositories, as before
+      (a separate task was offered).
+  - gentle-ai, raised to item 1: four lenses over b0093b8..aeeeff6, approved and acknowledged
+    (lineage `review-be897a496eaa9388`), with seven informational findings: two repeated shapes
+    (`bin/lib/rules-change-run.mjs:115-126`, `bin/check.mjs:227`), a set's name
+    (`bin/check.mjs:237`), a dry run that fetches, the row giving no line when git fails or the
+    merge diff fails (the same as `checkCitations`), and the register read in a project, which
+    does not happen: there `rules check` takes the project's form (`bin/rules.mjs:414`).
+  - Codex over b0093b8..aeeeff6, two parts, found one: the counts compiled a malformed pattern
+    again and threw before any finding. The scan now leaves out a pattern that does not compile,
+    which also kept the gate's row and a turn's count from throwing (c55164e). Codex rechecked
+    aeeeff6..c55164e: 1 of 1 fixed. gentle-ai assessed that commit medium and under budget, so no
+    review was due for it.
 
 ## Next step
+**State for a resume, 2026-10-15, T16d built and checked.** The code is draft pull request 247
+(`feat/rules-row`, b0093b8..c55164e, pushed); its design is draft pull request 241, this branch.
+Every check passed: each gate, the verifier and its recheck, gentle-ai (acknowledged), Codex and
+its recheck, and merge-tree against origin/main e019785. Next: both land through the lead's
+queue, and T16d is checked off when 247 lands. Then step 2 of the section's order: the first
+patterns, one `rule/` branch per rule, each with its planted line in `PLANTED`.
+
 **State for a resume, 2026-10-15 at 19:28 by `date`, T16d being built.** On `feat/rules-row`
 (worktree `D:\js-harness-worktrees\rules-row`), each unit through the gate:
 - unit 4, `rules check`'s two findings, `registerFindings` in `bin/lib/rules-scan.mjs` (2012b78);
