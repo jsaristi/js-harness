@@ -234,8 +234,9 @@ What each change counts as:
       did. Route: inline. Risk: none (see Progress, 2026-10-16). Commits `f66a822`, `e23892b` (S1,
       S2) and `44cbf2e` (S3) on `feat/plan-from-records` after the merge of `main`; PR 286.
 - [x] T4 · S4: the plan recorded in the run log, once its readers are read. Route: inline.
-      Risk: none (see Progress, 2026-10-16, T4). Commit: the T4 commit above `44cbf2e`.
-- [ ] T5 · S5 and S6 test first: `progress --pace`. Route: inline.
+      Risk: none (see Progress, 2026-10-16, T4). Commit `2327a0c`, PR 289 (merged).
+- [x] T5 · S5 and S6 test first: `progress --pace`. Route: inline.
+      Risk: none (see Progress, 2026-10-16, T5). Commits `8829caa`, `27b297b` (the Codex fix), PR 292.
 - [x] T6 · A defect of T0 (L8 of odd/tasks/merge-queue.md): a range from the head of a rechecked
       review was refused as a second recheck even on a branch that forked there, without the recheck
       and its correction. Route: inline, branch fix/recheck-fork (PR 170, merged). See Progress,
@@ -301,8 +302,7 @@ What each change counts as:
   was asked whether to merge it once more.
 
 ## Next
-1. T4 (S4) is built above T3 on feat/plan-from-records; its PR follows PR 286.
-2. T5 (S5, S6), on its own branch off main.
+1. Nothing: T0 to T6 are done. PRs 286 (T3) and 289 (T4) are merged; 292 (T5) waits to land.
 
 - 2026-10-14 · **T6, a fork at a rechecked head.** Found by JH 10 on feat/merge-queue (forked at
   e61ae6a, whose findings 8ccd689 rechecked): its own review was refused as "a second recheck".
@@ -366,6 +366,28 @@ What each change counts as:
   each, `--plan` writing nothing, a whole range recording its plan); the "one figure" keys test
   gained the field. Risk: none (an added optional field in the run log, read by nothing that
   could misread it; the schema stays `v1`, as through five additions).
+- 2026-10-16 · **T5 built (JH 22), on `feat/progress-pace` off `main` (PR 292).** Test first: RED
+  by the missing module, then by the four `--pace` tests of the command; GREEN. Decisions and the
+  one change of design:
+  - **One git log instead of log plus cat-file.** `git log -p -U100000` gives every changed file
+    whole, before and after each commit, so the design's second process (`cat-file --batch` for
+    the blobs of `--raw`) is not needed; the two processes are `for-each-ref` (the branch) and
+    that log. Each has a 30 s limit and a 256 MiB buffer. A file of more than 100,000 lines would
+    lose its far lines.
+  - The branch: what `refs/remotes/origin/HEAD` points at, else `refs/heads/main`, else `HEAD`,
+    named on the first line.
+  - Matching is per file: a task by its leading ID (`T3`, `T5b`, bold or not) when both sides have
+    one, in order, and otherwise by its exact text. So a moved file counts its tasks as removed
+    and added, as S6 says.
+  - Reopened is printed beside closed, added and removed, each day and in the totals.
+  - `--relative`, so a `--cwd` below the top of the repository reads its own paths.
+  - A change git writes no `---`/`+++` header for (a mode alone, an empty file born or gone) is no
+    file of the commit. It was Codex's one finding on 8829caa (P2, 0.99), fixed in 27b297b and
+    rechecked fixed.
+  On this repository the whole history closes 511 tasks, the 511 the map counts as done today.
+  Gate PASS on `8829caa` and `27b297b`; gentle-ai on aac0024..27b297b medium, not due
+  (under_budget, 656 lines); Codex 284,946 input tokens, then 47,206 for the recheck. Risk: none
+  (a new flag on a read-only command; no existing output, flag or format changes).
 
 ## Resume here
-Worktree D:/js-harness-worktrees/plan-from-records, branch feat/plan-from-records. T0 to T4 are done (T3: S1, S2 in f66a822, e23892b, S3 in 44cbf2e after the merge of main 6a6ce9e, PR 286; T4 above it). Next: T5 (S5, S6) on its own branch off main. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design.
+Every task is done: T3 in PR 286 (f66a822, e23892b, 44cbf2e), T4 in PR 289 (2327a0c), both merged; T5 in PR 292 (8829caa, 27b297b) on feat/progress-pace, in the worktree D:/js-harness-worktrees/plan-from-records. Once 292 lands the feature is closed.
