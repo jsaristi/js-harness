@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
@@ -488,7 +488,7 @@ test('realHomeFiles names nothing of the gate log, which the gates of the user\'
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-test('the journey is the eleven steps of the feature document, the pause hook, the project rules and the host session, under ids that stay', () => {
+test('the journey is the eleven steps of the feature document, the pause hook, the project rules, the reply hook and the host session, under ids that stay', () => {
   // The ids go into record.jsonl, so a renamed one breaks every line already written: they are pinned here.
   assert.deepEqual(JOURNEY.map((step) => step.id), [
     'real-home-before',
@@ -502,6 +502,7 @@ test('the journey is the eleven steps of the feature document, the pause hook, t
     'global-uninstall',
     'pause-hook',
     'opening-tools',
+    'reply-hook',
     'host-loads',
     'real-home-after',
     'record',
@@ -795,7 +796,7 @@ test('parseArgs names the argument it refused', () => {
 
 // What `install` grafts on a host file, as its own declaration gives it: the list this library checks a
 // host file against must be that one, or a journey would go on passing against an install that changed.
-test('HARNESS_HOOKS is what install declares for each host: the doctor and resume entries for both hosts, the pause and web failure entries for Claude Code', () => {
+test('HARNESS_HOOKS is what install declares for each host: the doctor, resume and reply entries for both hosts, the pause, web failure, guard and share entries for Claude Code', () => {
   const declared = (host) => entryComponents.filter((component) => component.id.startsWith(`${host}-`)).map((component) => {
     const entry = component.entry();
     const hook = { event: component.pointer.at(-1), command: entry.hooks.map((item) => item.command).join(' && ') };
@@ -814,8 +815,9 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor and resum
     { event: 'UserPromptSubmit', command: 'js-harness rules --hook || exit 0' },
     { event: 'SessionStart', matcher: 'compact|clear|resume', command: 'js-harness rules --hook || exit 0' },
     { event: 'SubagentStart', command: 'js-harness rules --hook || exit 0' },
+    { event: 'Stop', command: 'js-harness reply --hook || exit 0' },
   ]);
-  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude']]);
+  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude', 'codex']]);
   assert.deepEqual(declared('claude'), listedFor('claude'));
   assert.deepEqual(declared('codex'), listedFor('codex'));
   assert.ok(Object.isFrozen(HARNESS_HOOKS));
@@ -1049,6 +1051,34 @@ test('openingToolsProblem names a run that does not exit 0, and the refusal that
   const vague = printed(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'no' } })}\n`);
   const named = { ...OPENING_RIGHT.declared, RemoteTrigger: vague };
   assert.match(openingToolsProblem({ ...OPENING_RIGHT, declared: named }), /^the refusal of RemoteTrigger does not name the tool and start_session: no$/);
+});
+
+// The step `reply-hook` (odd/tasks/rule-hierarchy.md, T12): the reply check turned back in a folder whose harness.json
+// turns it on, and silent where it is off.
+const REPLY_BLOCK = printed(`${JSON.stringify({ decision: 'block', reason: 'js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Working (say what wakes you), Decision, Cut, Finished.' })}\n`);
+const REPLY_PASS = printed('{}\n');
+const REPLY_RIGHT = { refused: REPLY_BLOCK, passed: REPLY_PASS, plain: REPLY_PASS };
+
+test('replyHookInput is the JSON the host sends a Stop hook: the session, its folder, the reply and no background work', () => {
+  assert.deepEqual(JSON.parse(replyHookInput({ sessionId: 's1', cwd: 'D:/p', message: 'Done.' })), {
+    session_id: 's1', cwd: 'D:/p', hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'Done.', background_tasks: [],
+  });
+});
+
+test('replyHookProblem finds nothing wrong with the runs the reply check should make', () => {
+  assert.equal(replyHookProblem(REPLY_RIGHT), null);
+});
+
+test('replyHookProblem names the run that let a reply with no state through where the check is on', () => {
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, refused: REPLY_PASS }), 'the reply check let a reply with no state stop in the folder whose harness.json turns it on: {}');
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, refused: printed(`${JSON.stringify({ decision: 'block', reason: 'no' })}\n`) }), 'the reply check turned the reply back without naming the state Working: no');
+});
+
+test('replyHookProblem names a run that turned back a reply it should let stop, and one that printed no JSON or did not exit 0', () => {
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, passed: REPLY_BLOCK }), `the reply check turned back a reply that closes with its state: ${REPLY_BLOCK.stdout.trim()}`);
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: REPLY_BLOCK }), `the reply check turned back a reply in the practice project, whose harness.json does not turn it on: ${REPLY_BLOCK.stdout.trim()}`);
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: printed('') }), 'the reply check printed nothing in the practice project, though a Stop hook answers with JSON');
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, passed: { status: 2, stdout: '' } }), 'the reply check exited 2 on the reply that closes with its state, not 0');
 });
 
 test('pauseHookProblem says the run outside a project printed, though no harness.json is above its folder', () => {

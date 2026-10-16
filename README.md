@@ -713,6 +713,36 @@ $ js-harness guard --stop < stop.json
 {"decision":"block","reason":"js-harness guard: this reply states your context at 40%, and your transcript records 60% of a 500k window (the window of your last get_usage read, else the default). The reply is already sent: correct it in one line with the share mcp__ccd_session_mgmt__get_usage reads now, and say no share you have not just read."}
 ```
 
+### js-harness reply
+
+The reply check. `install` registers `reply --hook` as a `Stop` hook for Claude Code and Codex;
+it acts only in a project whose nearest `harness.json` holds a `reply` key, and prints `{}`
+everywhere else. There it reads the reply that ends the turn and turns the stop back, with the
+hooks contract's `decision: "block"` and the shape to follow, when the reply does not close with
+exactly one state line: working (with what wakes the session on that line), decision (never while
+a background task runs), cut (one code block of what the user sends, under the three labels what
+it is, where it goes and what sending it does, each once) or finished (with the session to return
+to on that line). A block under those labels in any other state is turned back too: a decision is
+asked with the question tool. A state line is a line that starts with a state's label once its
+markdown is taken off, followed by the end of the line or a mark such as a dash or a colon
+(`**Working** — the gate wakes me`); a label inside a sentence, or a sentence that only begins
+with its word (`Working on the docs`), is none.
+
+`"reply": true` takes the English labels (`Working`, `Decision`, `Cut`, `Finished`; `What it is`,
+`Where it goes`, `What sending it does`). An object names the project's own, each over the
+English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decisión", "cut":
+"Corte", "finished": "Terminado"}, "labels": {"what": "Qué es", "where": "Dónde", "effect":
+"Qué pasa"}}`. A key it cannot read, or a
+`harness.json` that is not JSON, is said on standard error and checks nothing. A reply is
+already shown when a `Stop` hook runs, so the session writes its close again in its next words.
+It never turns back a stop the hooks already turned back (`stop_hook_active`), does not run for
+sub-agents, writes nothing and always exits 0.
+
+```console
+$ js-harness reply --hook < stop.json
+{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
+```
+
 ### js-harness fetch
 
 The second rung for a page that refuses WebFetch as AI traffic (a 403, a 402, a challenge

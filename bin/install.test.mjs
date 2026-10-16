@@ -324,10 +324,12 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
       `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (UserPromptSubmit)`,
       `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)`,
       `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (SubagentStart)`,
+      `registered hook entry in ${settings}: js-harness reply --hook || exit 0 (Stop)`,
+      `registered hook entry in ${hooks}: js-harness reply --hook || exit 0 (Stop)`,
     ]);
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
-    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, settings, settings, settings, settings, settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
+    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, settings, settings, settings, settings, settings, settings, settings, hooks, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
     assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
