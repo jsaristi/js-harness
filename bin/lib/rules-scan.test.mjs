@@ -69,6 +69,7 @@ const PLANTED = {
   'sensor-timeout': { line: 'A sensor is stopped after 20 minutes.', marked: 'A sensor is stopped at `rule:sensor-timeout`.' },
   'session-effort': { line: 'A work session runs at `high` effort.', marked: 'A work session runs at the effort of `rule:session-effort`.' },
   'session-model': { line: 'A work session runs on claude-opus-5-5.', marked: 'A work session runs on the model of `rule:session-model`.' },
+  'subagent-reader-model': { line: 'A verifier runs on claude-opus-5-5.', marked: 'A verifier runs on the model of `rule:subagent-reader-model`.' },
   'wait-every': { line: 'js-harness wait looks again every 120 seconds.', marked: 'js-harness wait looks again as often as `rule:wait-every` says.' },
   'wait-for': { line: 'js-harness wait gives up after 480 minutes.', marked: 'js-harness wait gives up at `rule:wait-for`.' },
 };

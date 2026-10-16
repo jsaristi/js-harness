@@ -272,7 +272,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-10",
     "value": "claude-opus-5-5",
-    "alias": "opus"
+    "alias": "opus",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:readers?|verifiers?|reviewers?)\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "subagent-writer-model",
