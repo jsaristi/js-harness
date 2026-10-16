@@ -253,12 +253,13 @@ function given(value, what) {
 /**
  * The source of a change as `docs/rule-sources.json` stores it, checked: his words read from their transcripts, or a
  * design path that is a file of the repository. `owner` is his when the rule is his before or after the change;
+ * `form` is true for a change of the rule's form alone, which a design may source even on a rule of his;
  * `transcriptOf(session)` gives a transcript's text or `null`; `exists(path)` says whether a path is a file inside the
  * repository. It throws a RuleChangeError at the first fault.
  */
-export function sourceOf(source, { owner, today, transcriptOf, exists }) {
+export function sourceOf(source, { owner, form = false, today, transcriptOf, exists }) {
   if (source?.kind === 'design') {
-    if (owner === 'sebastian') throw new RuleChangeError('a rule of his changes only with his words, not a design');
+    if (owner === 'sebastian' && !form) throw new RuleChangeError('a rule of his changes only with his words, not a design, unless the change is of its form alone');
     if (typeof source.path !== 'string' || !exists(source.path)) throw new RuleChangeError(`the design ${source?.path} is not a file of the repository`);
     return { kind: 'design', path: source.path };
   }
