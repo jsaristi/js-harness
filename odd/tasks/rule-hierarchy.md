@@ -31,6 +31,7 @@ fourteen matters two places say different things; each is listed, with the text 
 - `npm run check` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/rule-hierarchy.md` exits 0
 - `node --test bin/reply.test.mjs` exits 0
+- `node --test bin/lib/reply.test.mjs` exits 0
 - `node --test bin/lib/failures.test.mjs` exits 0
 - `node --test bin/failures.test.mjs` exits 0
 - `node bin/js-harness.mjs failures check --settled` exits 0
@@ -697,6 +698,116 @@ questions, of which the line answers two: it happened, three times that day; and
 hold part of it, since the reply check can refuse a decision block of that kind that names no
 review. Its cost on that day: about 500,000 tokens of sub-agents and 25 minutes for the second
 round of three readers. A memory note of the orchestrator holds it until then.
+
+### The double review (T18), version 2 (after two readers)
+
+Designed on 2026-10-16 by `JH 28 · reserva B`, from the lead's brief of that day (a claim of the
+lead's: `jh28-double-review-brief.md` in its notes folder). His words, searched in the relief file,
+this document, the memory note and the lead's transcript, and read where they were typed (both
+with `js-harness sessions --quote`):
+- 2026-10-11 (`130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 470): "Siempre me gustaria hacewr
+  asi una doble revision con mejora quiero añadirlo al harness siempre obtenes mejores resultados".
+- 2026-10-16 (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 14210), after the lead's
+  improvement plan reached him with no reader: "Vuelve a revisar y plan y verifica si falta algo o
+  algo por corregir para mejorar aun mas o para que lo podamos hacer como debe ser, siempre
+  tenemos que hacer una doble revision a todo para que salga sin errores por favor cementa esto".
+
+The reading, not his words, and not accepted by him yet: "a todo" covers everything. Code
+already passes two reviewers that did not write it (Codex at every push; gentle-ai when its
+assessment makes a review due, so a passive commit has Codex alone), and this rule does not
+change that. What has no reviewer is text: a design before it is built, and a plan, a design, an
+analysis with figures, a protocol or a change of the charter that reaches him, asked or
+reported. That text passes two read-only readers that did not write it. The reading goes to him
+as one question (below); the rule's source needs where he accepted it.
+
+The five questions of a new rule: it happened (2026-10-11: the rule-change protocol reached him
+three times, each round asked to approve the version before it; 2026-10-16: the plan above); a
+check can hold its text now and part of its practice later (below); no new protocol, it amends
+protocol 1, "Asking the user for a decision", where the paragraph above placed it, with a
+pointer in protocol 6, "Handing off", since a plan handed over in a report never loads section 1;
+its cost is said below; nothing leaves, and the lead's memory note goes on the next list of
+deletions once the source is in `docs/rule-sources.json`.
+
+Item 8 of "`AGENTS.md`, rewritten" ("Every proposal is judged twice: as it is here, and as it
+works in a project that only uses the harness") stays what T9 made it: this repository's, for
+building the harness. This rule sits beside it and names no project; neither copy says "judged
+twice" or "consent", which `bin/lib/project.test.mjs` keeps out of the template.
+
+The rule double-review (named here without its mark, which `rules check` would find undeclared):
+owner `sebastian`; since the day it lands; subject "a design before it is built, and what reaches
+the user to decide, passes two read-only readers that did not write it"; review a month after it
+lands; failure `proposal-unreviewed` (below). Source, of kind words: the two quotes above
+(session, line, excerpt), the reading above, and `accepted`: where he answers the question.
+Home: `bin/lib/protocols-skill.mjs`, section 1, one bullet:
+
+> A design before it is built, and a plan, a design, an analysis with figures, a protocol or a
+> change of the charter that reaches the user, asked or reported, first passes two read-only
+> readers that did not write it: one attacks its claims, one looks only for what is missing.
+> The writer searches the user's earlier words on the subject and names the search. Each reader
+> gets the whole text, the user's words and the paths it cites; the findings go in the feature
+> document, or the orchestrator's notes when there is none. The version the user gets says what
+> each reader changed and what stays unguaranteed; where readers disagree the writer decides on
+> evidence, and what is not settled is unguaranteed. A second round reads only the first round's
+> blockers; what is still open after it goes to the user as unguaranteed, never a third round.
+> Readers run on the reader model the rules give, or where none is declared on the session's own
+> model at high effort; a host with no sub-agents asks another session. Code is not this: it has
+> its reviews (section 3). Not for a question of fact (a figure or an outcome looked up, nothing
+> proposed), nor for a step or a choice whose reviewed text the question names by path.
+
+Its phrases, held by `rules check`: "first passes two read-only readers that did not write it"
+and "one attacks its claims, one looks only for what is missing". Protocol 6 gains one bullet
+that names the rule: a plan or design handed on passes it first. The orchestrator skill
+(`orchestratorSkillContent`, `bin/lib/manifest.mjs`), "Questions to the user", gains one bullet
+that names the rule: a question that puts a plan, design, analysis or protocol to the user names
+its readers' changes, or the reviewed text it rests on. Both say "the user", never he or him.
+
+The template `init` writes ("Working with the owner") gets one sentence, an exception to "one
+home" with its reason: a project's own `AGENTS.md` is read by hosts that load no skill, and
+`init` writes it once (`sync` never rewrites it), so it reaches new projects only. About 55
+tokens, from 564 of the template's 750. A test holds that the template and the bullet share the
+phrase "one attacks its claims", so the copy cannot drift alone.
+
+This repository's `AGENTS.md` does not change in this task. Its room is 3 tokens on this machine
+(1,497 of 1,500 with CRLF endings; 1,475 in the blob), its wording is his and changes only by
+T8's approved draft, and no rule mark enters it. The line goes to T8 as item 10 of its draft.
+
+A failure entry `proposal-unreviewed` (class `rule-not-acting`) in `docs/FAILURES.md`, with the
+two sightings, its control owed by T18b.
+
+Order, which `rules change` constrains (a `rule/` branch whose tree differs from its head only in
+the rule's home; one open rule change at a time):
+- T18a, now: this design, the failure entry and the template's sentence with its test, one
+  commit.
+- T18b, after pull request 284 (`rule/his-last-patterns`, open) lands and he has answered: edit
+  only the protocols bullet, run `rules change double-review --dry-run`, then the command; add the
+  protocols bullet's test, protocol 6's pointer, the orchestrator line and its test, and the
+  shared-phrase test in the same commit; the failure's control becomes a check.
+
+The question for him, one, through the lead: whether "a todo" is read as above (text passes two
+readers; code keeps gentle-ai and Codex), or more widely (every code commit also gets a second
+reviewer beside Codex). Recommended: as above.
+
+Cost of the rule when it acts: on 2026-10-11 a round of three readers was about 500,000
+sub-agent tokens and 25 minutes; this design's round of two was 351,184 sub-agent tokens and
+about 12 minutes. Size never exempts: a short proposal gets two short readings. Cost of the
+slices: two commits through the gate, gentle-ai, and Codex on the code lines.
+
+Not guaranteed: nothing checks yet that a proposal did pass its readers; only the text that asks
+for it is held. Two cheap checks are later options, not these slices: `notify --kind question`
+taking a `reviewed` field the board shows when it is missing, and the reply check (C1, T2)
+refusing a decision block that names no review. Exemptions are judged by the writer.
+
+What the readers changed from version 1. The reader that attacked: the budget of `AGENTS.md` is 3
+tokens here, not 25; `rules change` refuses while pull request 284 is open; the rule's mark in
+this document would fail `rules check` before the rule exists; the source needs session, line
+and an `accepted` that does not exist yet; the four places gave the rule four scopes; the bullet
+shipped item 8, a rule of this repository, to every project; the exemptions could skip the very
+plan that started it. The reader that looked for what is missing: `AGENTS.md` changes only by
+T8's draft and takes no rule mark; item 8 was not reconciled; the search of his words was dropped
+from the bullet; designs that never reach him were left out (the lead's throughput plan already
+asks for them); the commit order; the lifecycle (who runs the readers, what they get, where
+findings go, disagreement, a bounded second round); a pointer in protocol 6; readers in a project
+with no declared model and in Codex; the memory note's end; an incident entry and a review date.
 
 His, and not asked yet: a run of the static rows on `main` after each merge, on GitHub (spend).
 
@@ -2479,7 +2590,8 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   from the documents alone, not built): one of the two measurements that spend, his to allow before it
   runs, asked once when he is back
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
-  manifest for both hosts, the `reply` key of `harness.json`
+  manifest for both hosts, the `reply` key of `harness.json` (route: inline, JH 25; built on
+  `feat/jh25-spec-reply`, the key waits for his answer to question 9; Progress, 2026-10-16)
 - [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
   writer; the trigger is three files that are not mechanical)
   - [x] T3a The design read by a reader that did not write it, and what it found taken or
@@ -2683,6 +2795,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (`old-rule-beside-new`; its control is owed by T16)
   - [x] T17e The 104 items still open on 2026-10-16, read again and closed where they could be:
     57 checked off, 47 left to their owners (Progress, 2026-10-16)
+- [ ] T18 The double review, by his words of 2026-10-11 and 2026-10-16 ("The double review
+  (T18)"; route: inline, design passed by two read-only readers first)
+  - [x] T18a The design (version 2, after two readers), the failure entry and the template's
+    sentence with its test
+  - [ ] T18b After pull request 284 lands and he has answered: the rule declared with its home,
+    protocol 6's pointer, the orchestrator line, their tests and the shared-phrase test
 
 ## Progress
 - 2026-10-10, T0. The session opened by Sebastián's paste and waited for a line of his (failure
@@ -3896,6 +4014,61 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   took the register outside, where `uninstall` does not follow; its folder is now judged as the
   hooks path is (`resolveHookContainment`), and such a register is kept as outside, never
   written, pinned by a test with a junction.
+- 2026-10-16, JH 25 (`JH 25 · jerarquía de reglas (spec y respuesta)`), given T1, T2 and T12 by the lead;
+  worktree `D:/js-harness-worktrees/jh25`, branch `feat/jh25-spec-reply`, from `main` 6a6ce9e.
+  - Host facts T2 rests on, confirmed: a logging `Stop` hook in a project of this session's scratchpad,
+    run with `claude -p` (Claude Code 2.1.301, Haiku 5.5, one background `sleep 30`), received
+    `stop_hook_active: false`, `last_assistant_message` and `background_tasks: [{ …, "status": "running" }]`
+    (empty at the next stop), plus `session_crons`. Codex's hooks page (learn.chatgpt.com/docs/hooks, read
+    the same day): `Stop` carries `stop_hook_active` and `last_assistant_message` (string or null), no
+    background tasks; exit 0 needs JSON on standard output; `decision: "block"` with a `reason` continues
+    the turn. gentle-ai's own `Stop` hook and `guard --stop` already run beside it here.
+  - T2's design, read against `AGENTS.md` as it stands, not the design of 2026-10-10: a decision is now
+    asked with the question tool and a cut carries one block, so C1 refuses a reply that has no state
+    line or more than one; a state line not in the last paragraph (except a cut); working or finished
+    with nothing after the label; a decision while a background task runs; a cut without its three
+    labels each once, without its block, with an empty one or with two under the labels; and the three
+    labels in any state but a cut. Left out, with the reason: the line at the context pause (the
+    `resume --pause` hook already says it once a stretch); the shapes of a `/compact` cut (retired on
+    2026-10-15); naming which of his items a decision falls under (the lead's inventory of 2026-10-12
+    took it out). Labels default to English with `"reply": true`; an object names the project's own.
+  - Built test first, not committed yet (RED seen on the missing module, then GREEN): `bin/lib/reply.mjs`
+    (15 tests), `bin/reply.mjs` (7), the dispatcher's entry and help, a README section, the entries
+    `claude-reply-hook` and `codex-reply-hook` in `bin/lib/manifest.mjs` (command
+    `js-harness reply --hook || exit 0`), the skill's line, and the tests they move
+    (`bin/lib/manifest.test.mjs` 157 pass, `bin/install.test.mjs`'s hook lines). T12's reply step:
+    `reply-hook` in `JOURNEY`, `replyHookInput` and `replyHookProblem` in `scripts/practice-lib.mjs`
+    (104 pass), the step in `scripts/practice.mjs`, `HARNESS_HOOKS` with the reply entry for both hosts;
+    run by hand against this worktree's `bin/` in a scratch folder: no problem found. T12's template step
+    waits for T9 (the template's lines are his wording).
+  - Not on: this repository's `harness.json` holds no `reply` key. Question 9 to the lead, for him:
+    turn it on here (the key with the Spanish labels, and the next `sync` writes the inert `Stop` entry on
+    his machine), install it off, or hold the pull request. "Ask me before" names the install on this
+    machine, so the pull request says it lands only after his answer.
+  - Next: commit through the gate (one gate for this unit), gentle-ai, Codex with `--base 6a6ce9e`, the
+    pull request, the lead told; then T1 (`docs/SPEC.md` and the row `spec`), from the notes the lead
+    compiled under `~/.js-harness/spec-notes/`, outside the repository (254 lines, six sessions).
+  - Done, 2026-10-16: `020b412` through the gate (exit 0). gentle-ai assessed it medium and not due by size;
+    the session raised it to high by item 5 (it adds `Stop` entries `install` writes on every machine).
+    Review lineage `review-0e9133019c3aab6f`, lenses risk, resilience and reliability, consent pre-granted:
+    approved with no blocker and acknowledged (authority burned). Of its four advisories, three were
+    closed in `1dd9c23` with their tests: a body line that only begins with a label ("Working on the
+    docs") counted as a state line, two labels where one begins the other matched one line, and a
+    `harness.json` that is not JSON turned the check off in silence. The fourth repeats the third.
+    Codex reviewed `6a6ce9e..1dd9c23` in three parts (374,557 input tokens, inside the allowance of
+    840,000): one P2, a fenced block a quote holds (`> ```) was not read as a block; closed in the next
+    commit with its test.
+  - After T1 landed (PR 293, `main` 5cccfc4), this branch merged `main` and `docs/SPEC.md` gained "The
+    reply check" (51 capabilities): the row `spec` had refused the merge on `js-harness reply` and the
+    two hook entries, which no capability claimed. The pull request stays a draft on question 9.
+  - The `reply` key added to this repository's `harness.json`, with the Spanish labels of question 9 and
+    `bin/lib/reply.test.mjs`, on the lead's notice of 21:15 ("282 too, with the reply key"; a claim of the
+    lead's). His answer to question 11, "Prendido por defecto (Recomendada)" (read with `js-harness sessions
+    --quote`, the lead's transcript, line 13566), is for a new project; question 9, this repository, is still
+    open, so the pull request stays a draft and nothing installs the Stop entry until it lands.
+  - Question 9 answered: "Sí, encenderlo acá (Recomendada)", tapped in the lead's chat at 2026-10-16T19:08:32Z
+    (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 13501, read with `js-harness sessions
+    --quote`). So the key stays on and the pull request is marked ready, on the lead's notice of 15:38.
 - 2026-10-16, T16f first part, by JH 27 on `feat/rules-reach`: `rules --hook` built as designed
   (`bin/lib/rules-reach.mjs`, three `entryComponents`, `doctor` tries it, the practice journey
   holds its entries). Its time, 20 runs of `js-harness rules --hook` on a `UserPromptSubmit`
@@ -3984,6 +4157,20 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   Apagado hasta que lo active"): "Prendido por defecto (Recomendada)". So `init` writes the
   reply key on in a new project's `harness.json`; the lead assigns it after C1 lands (pull
   request 282), test first, in a pull request of its own. T9 stays open for that.
+- 2026-10-16, T18a, by `JH 28 · reserva B` on `rule/double-review`, from the lead's brief of that
+  day (a claim of the lead's). His two lines were read where he typed them (`sessions --quote`:
+  `130317af` line 470, `e152c9d8` line 14210). The design, "The double review (T18)", went to two
+  read-only readers on the reader model at high effort, one that attacked its claims and one that
+  looked only for what was missing: 351,184 sub-agent tokens, about 12 minutes in parallel. Each
+  found blockers; version 2 lists what each changed. The ones that moved the plan: `AGENTS.md`
+  has 3 tokens of room on this machine (1,497 of 1,500 with CRLF endings) and changes only by
+  T8's draft, so its line goes there; `rules change` refuses while pull request 284 is open; the
+  rule's source needs where he accepted the reading, which is put to him as one question. Built
+  test first: `agentsTemplate` gains the sentence (RED on the template of `225da7d`, GREEN
+  after; 639 estimated tokens of its 750), the README's example of `check` says so, and
+  `docs/FAILURES.md` gains `proposal-unreviewed`, its control owed by T18b. Left for T18b: the
+  rule with its home in the protocols skill, protocol 6's pointer, the orchestrator line, their
+  tests and the shared-phrase test.
 
 ## Next step
 **State, 2026-10-16, T16f first part built by JH 27** on `feat/rules-reach`: designed, built, checked by the gate, an independent verifier, gentle-ai (acknowledged) and Codex (recorded), each finding fixed with its test (see "Progress"); its pull request waits for the lead to land it. T16f stays open: its next part is the hash in the installed command, with the rest "Left to the other parts of T16f" lists.

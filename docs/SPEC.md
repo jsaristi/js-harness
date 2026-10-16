@@ -180,11 +180,11 @@ proofs and by those tasks.
 ### The stack doctor
 
 **Problem:** A gap was found only by accident: codegraph was registered in Claude Code but not in Codex (`odd/tasks/stack-doctor.md`).
-**Requirement:** The doctor reports each tool of the stack as installed, configured per host and project, and up to date, or unknown, with that tool's own fix command; it caches the latest versions, fails open offline and never installs or configures another tool. A session-start hook speaks only when the list of gaps changed, as a message to the person and never as text for the model, and always exits 0.
-**Reason:** A notice costs no model tokens when it comes only on start or resume, and only when something changed.
-**Proof:** `node --test bin/doctor.test.mjs`, `node --test bin/doctor-hook.test.mjs`, `node --test bin/lib/stack.test.mjs`
+**Requirement:** The doctor reports each tool of the stack as installed, configured per host and project, and up to date, or unknown, with that tool's own fix command; it caches the latest versions, fails open offline and never installs or configures another tool. A session-start hook speaks only when the list of gaps changed, as a message to the person and never as text for the model, and always exits 0. A tool of the stack, or the Claude CLI on PATH, whose version moved since the versions last reviewed is a gap until its review is recorded (`docs/FAILURES.md`, cli-updated-itself).
+**Reason:** A notice costs no model tokens when it comes only on start or resume, and only when something changed. A tool that updates itself was seen only when a measurement was about to run on it.
+**Proof:** `node --test bin/doctor.test.mjs`, `node --test bin/doctor-hook.test.mjs`, `node --test bin/lib/stack.test.mjs`, `node --test bin/lib/stack-update.test.mjs`
 **Discarded:** Plain-text hook output: it enters the model's context. Recommending another tool's own upgrade command where that tool says not to.
-**Today:** `bin/doctor.mjs`, `bin/lib/stack.mjs`, `bin/lib/cache.mjs`, `bin/lib/latest.mjs`, `js-harness doctor`, `claude-hook`, `codex-hook`
+**Today:** `bin/doctor.mjs`, `bin/lib/stack.mjs`, `bin/lib/stack-update.mjs`, `bin/lib/cache.mjs`, `bin/lib/latest.mjs`, `js-harness doctor`, `claude-hook`, `codex-hook`
 
 ### Progress
 
@@ -491,6 +491,15 @@ proofs and by those tasks.
 **Proof:** `node --test scripts/practice-host.test.mjs`
 **Discarded:** Telling the hooks apart by their command: the stream carries none. Proving the sandbox by a new projects folder: an earlier session leaves one. The model alias: it may resolve to an older model, so the model is named. Not proven: that Codex loads its hooks and skills.
 **Today:** `scripts/practice.mjs`, `scripts/practice-lib.mjs`
+
+### The reply check
+
+**Problem:** `AGENTS.md` asks every reply to end with one of four states (working, decision, cut, finished), because the owner often answers from his phone by tapping the suggested prompt and reads only the last lines; the rule acted only through each session's memory, and replies closed with no state, with two, with a decision asked while work ran, or with a block to send outside a cut (`odd/tasks/rule-hierarchy.md`, C1).
+**Requirement:** Where the nearest `harness.json` asks for it, a stop hook reads the reply that ends a turn and turns it back, with the shape to follow, when it does not close with exactly one state in the labels the project names, or when that state lacks what it needs: working says what wakes the session, a decision is never asked while background work runs, a cut carries exactly one block of only what the owner sends under its three labels, finished names the session to return to. Anywhere else it answers that the session may stop; a `harness.json` that is not JSON is said on standard error, never taken for a project that did not ask. It writes nothing and always exits 0, on both hosts.
+**Reason:** A rule that only memory holds is the failure the rule hierarchy exists to end; a stop hook is the one reader every reply meets. It acts only where a project asks, so installing it changes nothing elsewhere.
+**Proof:** `node --test bin/lib/reply.test.mjs`, `node --test bin/reply.test.mjs`
+**Discarded:** A check of the cut's resume prompt and `/compact` shapes: the owner never compacts by hand any more. Naming the owner's open items in the reply: the board already computes them.
+**Today:** `bin/lib/reply.mjs`, `bin/reply.mjs`, `js-harness reply`, `claude-reply-hook`, `codex-reply-hook`
 
 ### The specification stays alive
 

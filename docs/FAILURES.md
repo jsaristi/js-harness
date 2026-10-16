@@ -149,6 +149,10 @@ check said or before its answer was read.
 - Seen: 2026-10-12 — session 9265156a (JH 7), by its own messages to the lead (claimed) — a commit,
   its push and its pull request were joined by `;` in one command, twice; each step succeeded, so
   nothing went out that its check would have stopped
+- Seen: 2026-10-16 — session 265bdd78 (JH 21), its notices to the lead (read here) — the push of pull
+  request 290 and the notice that it was pushed were joined by `;` in one command; the pre-push hook
+  refused the push (a merge that resolved a conflict in code had no Codex record) and the notice said
+  "pushed"; a second notice corrected it, and the push ran alone after the record
 - Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
 
 ### check-survivor-test-fails
@@ -203,6 +207,8 @@ on it.
   of F6 cannot run as planned
 - Seen: 2026-10-10 — relief file, line 146 — `claude` on PATH is 2.1.296, replaced by the native
   updater on 2026-10-09 14:36 (claimed); also odd/tasks/subagent-model-routing.md:399-404
+- Control: check — bin/doctor.test.mjs — "a stack tool updated since the reviewed versions is stale,
+  named by the hook" — since 2026-10-16
 
 ### codex-cap-too-small
 A fixed cap of Codex input tokens per feature was met again and again, and each time finished slices
@@ -826,6 +832,18 @@ ended runs nothing (`bin/gate.test.mjs`, "gate whose launcher ends while it wait
 - Seen: 2026-10-11 — relief file, line 233 — `pkill` did not stop the first watch; two ran at once
 - Control: check — bin/loop.test.mjs — "stop --take-over kills the loop and every descendant by pid
   and creation time, looks again and removes the record" — since 2026-10-15
+
+### proposal-unreviewed
+A plan, a design or a protocol reached him to decide before any reader that did not write it had
+read it, and he found its holes, or was asked to approve a version its next round replaced.
+- Class: rule-not-acting
+- Seen: 2026-10-11 — relief file, line 254 — the rule-change protocol reached him three times in
+  one day, each round asked to approve the version before it; his words that day, transcript
+  130317af, line 470: "Siempre me gustaria hacewr asi una doble revision con mejora"
+- Seen: 2026-10-16 — the lead's transcript e152c9d8, line 14210 — the lead's improvement plan
+  reached him with no reader: "siempre tenemos que hacer una doble revision a todo para que salga
+  sin errores por favor cementa esto"
+- Control: owed — odd/tasks/rule-hierarchy.md — "the rule declared with its home"
 
 ### push-check-read-as-gate
 The board counted the few seconds of a push's check as a second gate.

@@ -1903,6 +1903,14 @@ test('agentsTemplate carries the lines that hold in any project', () => {
   assert.doesNotMatch(text, /One session, one feature|consent|judged twice/i);
 });
 
+// The double review (odd/tasks/rule-hierarchy.md, T18a): a copy of the rule whose home is the protocols
+// skill, kept because a project's AGENTS.md is read by hosts that load no skill.
+test('agentsTemplate asks for two readers before a design is built or a proposal reaches the owner', () => {
+  const text = agentsTemplate('project').replace(/\s+/g, ' ');
+  assert.match(text, /A design before it is built, and a plan, an analysis with figures or a protocol put to the owner, first passes two readers that did not write it: one attacks its claims, one looks only for what is missing\./);
+  assert.match(text, /The owner gets the improved version, with what each reader changed and what stays unguaranteed\./);
+});
+
 // One text for a project with code and one without (odd/tasks/on-demand-functions.md, slice 2): what proves
 // a change is a test where there is code to test, and the evidence where the work is a finding.
 test('agentsTemplate serves a project with code and one without', () => {
