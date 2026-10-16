@@ -153,6 +153,10 @@ check said or before its answer was read.
   request 290 and the notice that it was pushed were joined by `;` in one command; the pre-push hook
   refused the push (a merge that resolved a conflict in code had no Codex record) and the notice said
   "pushed"; a second notice corrected it, and the push ran alone after the record
+- Seen: 2026-10-16 — session JH 26, commit `ff795ff` on `feat/resume-open-task` (read here) — an edit
+  script and the gate's commit were joined by `;` in one command. The script threw on the feature
+  document, and the commit ran with the roadmap change alone and a message saying the document closed.
+  Commit `1f28794` wrote the document. The next tries were joined by `&&` and stopped where they failed
 - Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
 
 ### check-survivor-test-fails
