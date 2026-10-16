@@ -566,6 +566,8 @@ Each is run once by the build, with its result recorded in Progress.
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
 5. After a rename, does the old title stop resolving as an address?
+   Run 2026-10-16 at 18:43 local: it does, at once, and the restored title resolves again
+   (Progress, 23:43Z).
 6. The clean start against the compaction: may a session clear itself while he has it open, and
    does it lose less than a summary?
 
@@ -1655,7 +1657,8 @@ and 3.
   append test proves its writers overlapped, or starts them on a barrier
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
   2 is retired by his answer of 2026-10-15 (section 13); test 1 is run (2026-10-16, typed
-  text); test 3 is run (2026-10-16, not in his sidebar); tests 4, 5 and 6 remain
+  text); test 3 is run (2026-10-16, not in his sidebar); test 5 is run (2026-10-16, the old
+  title stops resolving at once); tests 4 and 6 remain
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
