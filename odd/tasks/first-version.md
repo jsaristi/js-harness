@@ -173,7 +173,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
 - [ ] T6a (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1)
-- [ ] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
+- [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
 - [ ] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
 - [ ] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
@@ -314,3 +314,6 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   third-party tools or process. (5) CircleCI: `ci/circleci: check success` on `c1bf1b5` (2026-10-16T17:35:40Z,
   `gh api`). (6) Not run in this pass: the whole suite and `check` in WSL2, which no command triggers on `main`
   (every gate runs the selected files there); the rerun at the end, once the rest lands, owes them.
+- L19 (2026-10-16, JH 25): T6b, inline: `packedPaths` takes the first pack of either shape, the array of npm 11
+  or the values of npm 12's object; RED was the failure of L18 on this machine's npm 12.2.0, and the file passes
+  now (1 of 1).
