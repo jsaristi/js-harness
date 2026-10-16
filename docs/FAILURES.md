@@ -891,6 +891,8 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
+- Control: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
+  document names a commit, and that commit is reachable from HEAD"
 
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
