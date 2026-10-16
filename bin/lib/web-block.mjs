@@ -30,7 +30,9 @@ function webFailureNotice(input) {
   const url = isObject(input.tool_input) ? input.tool_input.url : undefined;
   const [first] = input.error.trim().split(/\r?\n/);
   if (typeof url !== 'string' || url === '' || first === '') return null;
-  const error = first.length > ERROR_LENGTH ? `${first.slice(0, ERROR_LENGTH - 1)}…` : first;
+  // Counted in characters, so the cut never leaves half of one (an emoji is two UTF-16 units).
+  const characters = Array.from(first);
+  const error = characters.length > ERROR_LENGTH ? `${characters.slice(0, ERROR_LENGTH - 1).join('')}…` : first;
   return `js-harness: WebFetch failed on ${url} (${error}). ${nextRung(url)}`;
 }
 

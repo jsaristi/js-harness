@@ -184,3 +184,9 @@ shape the hook reads).
   call that succeeds. The entry reuses the pause command, which already answers in its input's event, so
   `doctor`'s hook check still tries one command. It changes the host's settings, so the gentle-ai
   assessment is raised with `--escalate-item 5`.
+- **L15** (2026-10-16): `4f96827`, gate green. gentle-ai assessment raised with `--escalate-item 5` (the
+  host's settings): high, due. Consent granted as AGENTS.md pre-grants it; lineage
+  `review-65fad8bd8cb21234`, lenses risk and reliability: approved and acknowledged (`authority: burned`).
+  Risk found nothing; reliability left one suggestion, R3-001: the 200-character cut counted UTF-16 units,
+  so an emoji at the cut lost half of itself. Fixed test first in the next commit (RED: the new test failed,
+  89 of 90): the cut counts characters.

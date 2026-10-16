@@ -1415,6 +1415,14 @@ test('the failure notice takes the first line of the error, cut at 200 character
   assert.ok(said.startsWith(`js-harness: WebFetch failed on ${url} (${'x'.repeat(199)}…). Next rung: js-harness fetch 'https://example.com/a?b=1&c=o%27brien' reads it`), said);
 }));
 
+test('the cut counts characters, not UTF-16 units, so it never splits one in two (gentle-ai review, R3-001)', withMachine(async (machine) => {
+  // 198 letters, then an emoji (two UTF-16 units) as character 199: a cut by units would keep half of it.
+  const error = `${'x'.repeat(198)}😀${'y'.repeat(10)}`;
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFailureOf(REDDIT, error)))).lines);
+  assert.ok(said.includes(`(${'x'.repeat(198)}😀…)`), said);
+  assert.equal(said.isWellFormed(), true);
+}));
+
 test('an interrupted WebFetch, another tool\'s failure and a failure with no URL or no error get no web notice', withMachine(async (machine) => {
   const cases = [
     webFailureOf(REDDIT, 'Claude Code is unable to fetch from www.reddit.com', { is_interrupt: true }),
