@@ -879,11 +879,13 @@ export async function sessionsMain(
     // The reliefs (section 18): the `relieved` notices of the whole local days the window touches, each judged from the
     // transcript of the session it relieves. A record that cannot be read is not known, never a record with no relief.
     const reliefSince = dayStartOf(since);
+    // The pause the reliefs are judged against is the one the board marks with, --context-pause included.
+    const reliefPause = percentOf(parsed.contextPause, parsed.contextWindow);
     const reliefList = record.unavailable === undefined
       ? reliefMeasures(record.notices, {
         since: reliefSince,
         transcriptLines: (id) => readFile(path.join(projectDir, `${id}.jsonl`)).split('\n'),
-        pausePercent: DEFAULT_CONTEXT_PAUSE_PERCENT,
+        pausePercent: reliefPause,
         defaultWindow: parsed.contextWindow,
       })
       : null;
@@ -892,7 +894,7 @@ export async function sessionsMain(
     if (parsed.json) {
       const reliefsData = reliefList === null
         ? { known: false, why: record.unavailable }
-        : { known: true, firstDay: localDay(reliefSince), lastDay: localDay(generatedAt), pausePercent: DEFAULT_CONTEXT_PAUSE_PERCENT, items: reliefList, total: reliefsTotal(reliefList) };
+        : { known: true, firstDay: localDay(reliefSince), lastDay: localDay(generatedAt), pausePercent: reliefPause, items: reliefList, total: reliefsTotal(reliefList) };
       stdout(JSON.stringify({ root, projectDir, hours: parsed.hours, generatedAt: new Date(generatedAt).toISOString(), sessions, total: measuresTotal(sessions), reliefs: reliefsData, reopenCandidates: reopened }, null, 2));
     } else {
       const reliefText = reliefList === null

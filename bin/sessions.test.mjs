@@ -2453,6 +2453,17 @@ test('--measures prints the reliefs of the record after the compactions, and the
   assert.deepEqual(measuring.calls.map((made) => made.args[0]), ['rev-parse'], 'the record is read, not git for the reliefs');
 }));
 
+// Codex on d2c3bf9: a pause given with --context-pause is the one the reliefs are judged against, and printed.
+test('--measures judges the reliefs against the --context-pause it is given', withMachine(async (machine) => {
+  writeReliefs(machine);
+  const measuring = measuringRun(machine, () => ok(''));
+  const { code, stdout } = await runSessions(machine, ['--measures', '--context-pause', '90%'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(code, 0);
+  assert.ok(stdout.split('\n').includes(`${minuteOf(before(700).getTime())}  dddddddd  peak ${percentOf(FILLED_TOKENS, DEFAULT_CONTEXT_WINDOW)}% of 500k  another reason  pause 90%`), stdout);
+  const json = await runSessions(machine, ['--measures', '--json', '--context-pause', '90%'], { run: measuring.run, listProcesses: neverListed });
+  assert.equal(JSON.parse(json.stdout).reliefs.pausePercent, 90);
+}));
+
 test('--measures prints the compactions as before the reliefs were added, whatever the record holds', withMachine(async (machine) => {
   writeMeasured(machine);
   writeReliefs(machine);
