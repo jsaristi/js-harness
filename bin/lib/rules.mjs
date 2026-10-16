@@ -76,8 +76,10 @@ const squash = (text) => text.replace(/\s+/g, ' ').trim();
 // subject and still finds it after the value changes. A number with an optional unit word ("60 minutes", "3,600 s",
 // "88%"), an hour or half of one, a model id ("gpt-6.1-sol", "claude-opus-5-5"), or an effort level ("high"). An
 // effort word counts only as a word of its own: inside a mark (`rule:gate-max`), a flag (`--max`) or a call
-// (`Math.max(`) it is no amount, or the mark that cures a finding would be one.
-const AMOUNT = String.raw`(?:\d[\d,.]*\s*(?:%|[a-z]+\b)?|(?:half )?an? (?:hour|minute|day)\b|[a-z]+(?:-[a-z0-9.]+)*-\d[\w.]*|(?<![\w.:-])(?:low|medium|x?high|max)(?![\w(-]|\.\w))`;
+// (`Math.max(`) it is no amount, or the mark that cures a finding would be one. A number, too, counts only as a
+// number of its own: the digits inside an id ("S1"), a hash ("e5b7588", "3fa2b91") or a line number
+// ("check.mjs:42") are none.
+const AMOUNT = String.raw`(?:(?<![\w.:-])\d[\d,.]*(?:\s*(?:%|[a-z]+\b))?(?!\w)|(?:half )?an? (?:hour|minute|day)\b|[a-z]+(?:-[a-z0-9.]+)*-\d[\w.]*|(?<![\w.:-])(?:low|medium|x?high|max)(?![\w(-]|\.\w))`;
 
 /** The regular expression of `pattern`, its `{amount}` written out, tried case-insensitively on one line. */
 export function patternOf(pattern) {
