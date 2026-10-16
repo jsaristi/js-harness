@@ -23,7 +23,11 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 300000,
-    "unit": "input tokens a review"
+    "unit": "input tokens a review",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bfloor\\b(?!\\s*\\().{0,40}(?<![\\w:.\\x60-]){amount}\\s*input tokens",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.\\x60-]){amount}\\s*input tokens (?:a|per|for each) review\\b"
+    ]
   },
   {
     "id": "codex-review-margin",
