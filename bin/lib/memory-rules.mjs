@@ -7,14 +7,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { mainCheckout, projectSlug } from './sessions.mjs';
+import { PROTOCOLS } from './protocols-skill.mjs';
 
 const RULE_TYPES = new Set(['feedback', 'project']);
 const INDEX = 'MEMORY.md';
 
-/** The fix of a `stale` row: where a rule goes, in order, then what is done to the note. The protocol
- * is the one `odd/tasks/rule-hierarchy.md` names; until its skill ships, the order is the whole of it. */
+/** The fix of a `stale` row: where a rule goes, in order, then what is done to the note. The protocol's home
+ * is section 4 of the protocols skill, whose title is read from there; the order is repeated for a host that
+ * has not loaded it. */
 export const MEMORY_RULES_FIX =
-  'place each note with the protocol "recording a new rule" (a check first, else a line of AGENTS.md, else a protocol), then delete the note:';
+  `place each note with the protocol "${PROTOCOLS[3]}" of the js-harness-protocols skill (a check first, else a line of AGENTS.md, else a protocol), then delete the note:`;
 
 /** The `type:` of a note's leading `---` front matter, at any indentation, or `null` when it has
  * none. A flat reader: the front matter of a memory note is a few `key: value` lines. */

@@ -451,7 +451,7 @@ test('doctorMain reports the rule notes of the project memory as the memory-rule
     const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
     assert.equal(text.code, 0);
     assert.ok(text.output.includes(`\n${'memory-rules'.padEnd(16)}${'n/a'.padEnd(10)}${'stale'.padEnd(10)}${'n/a'.padEnd(10)}${'n/a'.padEnd(10)}n/a\n`), text.output);
-    assert.match(text.output, /\nFix:\n {2}memory-rules \(claude\):\n {4}place each note with the protocol "recording a new rule" .*then delete the note:\n {4}rule\.md \(feedback\)\n/);
+    assert.match(text.output, /\nFix:\n {2}memory-rules \(claude\):\n {4}place each note with the protocol "Changing a rule, a new one included" of the js-harness-protocols skill .*then delete the note:\n {4}rule\.md \(feedback\)\n/);
 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
     const row = JSON.parse(json.output).find((r) => r.id === 'memory-rules');

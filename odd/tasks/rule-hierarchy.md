@@ -2254,9 +2254,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     review is written in a document on the pull request's own branch
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
-  - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
+  - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
     of the relief file's line 245, carries its cost and a review date, and its done is one
-    command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it
+    command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it.
+    Built by JH 27 on 2026-10-16, see "Progress"
 - [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
   then one writer for documents)
   - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
@@ -3450,6 +3451,23 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   journey's host-load check (`hostCallProblems`, `scripts/practice-lib.mjs`) still asks the
   host for the two older skills only, since its fixtures are recorded streams; a step that
   proves the host lists this one belongs to T12.
+- 2026-10-16, T16g built by JH 27 on the lead's notice of 18:05 ("rule-hierarchy T16g (letter H,
+  the protocol's own home, replaces protocol 4), per the doc"), on `feat/rule-hierarchy-t16g`,
+  inline, test first. The home is section 4 of the protocols skill, which T7 built; what letter H
+  still owed:
+  - the incident: the section now opens with the stale 73 percent of the relief file's line 245
+    (his words of 2026-10-11, read at that line by this session), instead of the three changes of
+    the pause alone;
+  - the done: a line "Done: `js-harness rules check` exits 0.", one command, since it holds
+    the list in the harness's checkout and `docs/rules.json` in a project (both read exit 0 on
+    `origin/main` c1bf1b5, the project in an empty `mktemp -d` repository);
+  - the cost and the review date, 2026-11-16, were already there from T7 and are now pinned;
+  - "replaces protocol 4": the one text in force that still named the old protocol, "recording a
+    new rule", was the fix of `doctor`'s `memory-rules` row (`bin/lib/memory-rules.mjs`); it
+    now reads the section's title from `PROTOCOLS` and names the skill. `docs/todo.md` points to
+    the section too. The feature documents that name the old protocol are records and are left.
+  RED: `bin/lib/protocols-skill.test.mjs` failed on the incident (observed); GREEN: that file 8,
+  `bin/lib/memory-rules.test.mjs` 5, `bin/doctor.test.mjs` 71.
 - 2026-10-16, T9's empty register, by `JH 28 · reserva B` on `feat/empty-register`, from the
   lead's notice to 28 (a claim of the lead's, read in the channel record) after PR 280, the
   template's lines, had left it open. Built test first: `init` writes `docs/FAILURES.md`
