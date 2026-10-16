@@ -156,7 +156,10 @@ export const RULES = [
     "subject": "the one model a Codex review runs on",
     "owner": "sebastian",
     "since": "2026-10-08",
-    "value": "gpt-6.1-sol"
+    "value": "gpt-6.1-sol",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?=gpt-){amount}"
+    ]
   },
   {
     "id": "review-part-files",
