@@ -1810,6 +1810,35 @@ test('a host update since the reviewed versions is stale, with the versions and 
   }
 });
 
+// The host check is handed doctor's own home, so `--home` decides which app folder is read (gentle-ai review of
+// PR 242), and `--host-reviewed --json` prints the record it wrote, for a caller that parses it.
+test('the host check reads the home doctor was given, and --host-reviewed --json prints the recorded versions as JSON', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const homes = [];
+    const host = (given) => {
+      homes.push(given);
+      return { found: true, desktop: '2.42304.0', staged: null, code: '2.1.299' };
+    };
+    const now = () => new Date('2026-10-15T23:00:00.000Z');
+
+    await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host, now });
+    const recorded = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed', '--json'], {}, { spawn, fetch: noopFetch, host, now });
+
+    assert.deepEqual(homes, [home, home]);
+    assert.equal(recorded.code, 0);
+    const reviewed = { desktop: '2.42304.0', code: '2.1.299', at: '2026-10-15T23:00:00.000Z' };
+    assert.deepEqual(JSON.parse(recorded.output), { reviewed });
+    assert.deepEqual(readCache(home).host.reviewed, reviewed);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('--host-reviewed with no readable desktop version records nothing and exits 1; without the host check doctor shows no host row', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

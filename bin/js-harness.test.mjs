@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { run as dispatch } from './js-harness.mjs';
 import * as harness from './js-harness.mjs';
 import { ruleValue } from './lib/rules.mjs';
+import { readCache } from './lib/cache.mjs';
 
 const GATE_WAIT = ruleValue('gate-wait', 'minutes');
 const GATE_MAX = ruleValue('gate-max', 'minutes');
@@ -248,6 +249,11 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is.
       ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen', 'host-update'],
     );
+    // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
+    // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.
+    const host = rows.find((r) => r.id === 'host-update');
+    assert.deepEqual([host.version, host.installed, host.claude, host.upToDate], [null, 'n/a', 'n/a', 'n/a']);
+    assert.equal('host' in readCache(home), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(cwd, { recursive: true, force: true });

@@ -188,7 +188,7 @@ export async function buildReport({ home, cwd, offline, interactive }, deps) {
  * records, so an update stays a gap until its review is done. */
 function hostRow(host, home, now) {
   const cache = readCache(home);
-  const { row, record } = hostUpdateRow(host(), cache.host?.reviewed ?? null, now);
+  const { row, record } = hostUpdateRow(host(home), cache.host?.reviewed ?? null, now);
   if (record) writeCache(home, { ...cache, host: { reviewed: record } });
   return row;
 }
@@ -213,7 +213,7 @@ async function unseenRow(unseen, cwd) {
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
     unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd),
-    host: () => readHostVersions({ home: os.homedir() }),
+    host: (home) => readHostVersions({ home }),
   });
 }
 
@@ -238,7 +238,7 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const { home, cwd, json, offline } = parsed;
-  if (argv.includes('--host-reviewed')) return recordHostReview(home, deps);
+  if (argv.includes('--host-reviewed')) return recordHostReview(home, json, deps);
   const rows = await buildReport({ home, cwd, offline, interactive: true }, deps);
 
   if (json) {
@@ -267,15 +267,21 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
 }
 
 /** `doctor --host-reviewed`: records the Claude Desktop and Code tab CLI versions read now as reviewed, the last step
- * of the review the host-update row lists. With no running version read it records nothing and exits 1. */
-function recordHostReview(home, deps) {
-  const versions = deps.host ? deps.host() : { desktop: null };
+ * of the review the host-update row lists; with `--json` it prints `{ reviewed }`, the record written. With no
+ * running version read it records nothing and exits 1. */
+function recordHostReview(home, json, deps) {
+  const versions = deps.host ? deps.host(home) : { desktop: null };
   if (!versions.desktop) {
     console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
     return 1;
   }
   const now = deps.now ?? (() => new Date());
-  writeCache(home, { ...readCache(home), host: { reviewed: { desktop: versions.desktop, code: versions.code, at: now().toISOString() } } });
+  const reviewed = { desktop: versions.desktop, code: versions.code, at: now().toISOString() };
+  writeCache(home, { ...readCache(home), host: { reviewed } });
+  if (json) {
+    console.log(JSON.stringify({ reviewed }));
+    return 0;
+  }
   console.log(`Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.`);
   return 0;
 }
