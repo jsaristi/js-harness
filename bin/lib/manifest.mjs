@@ -235,6 +235,12 @@ export const entryComponents = [
     entry: () => pauseHookEntry(),
   },
   {
+    id: 'claude-web-failure-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'PostToolUseFailure'],
+    entry: () => webFailureHookEntry(),
+  },
+  {
     id: 'claude-guard-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),
     pointer: ['hooks', 'PreToolUse'],
@@ -286,6 +292,18 @@ export const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
  * the hook runs after every tool call. */
 function pauseHookEntry() {
   return {
+    hooks: [{ type: 'command', command: PAUSE_HOOK_COMMAND, timeout: 2 }],
+  };
+}
+
+/** The pause command again, registered as a `PostToolUseFailure` hook on WebFetch: a WebFetch that fails as a tool
+ * error ("Claude Code is unable to fetch from <domain>") reaches no `PostToolUse` hook, so this entry is what tells the
+ * session the next rung of the fallback ladder (T4 of odd/tasks/web-fetch-fallback.md, which he asked for on
+ * 2026-10-16). The command answers in the event of its input, so the one command serves both entries. Claude Code
+ * only: WebFetch is its tool. Two seconds, as the pause hook's. */
+function webFailureHookEntry() {
+  return {
+    matcher: 'WebFetch',
     hooks: [{ type: 'command', command: PAUSE_HOOK_COMMAND, timeout: 2 }],
   };
 }

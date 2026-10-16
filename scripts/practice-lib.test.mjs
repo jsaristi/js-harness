@@ -793,7 +793,7 @@ test('parseArgs names the argument it refused', () => {
 
 // What `install` grafts on a host file, as its own declaration gives it: the list this library checks a
 // host file against must be that one, or a journey would go on passing against an install that changed.
-test('HARNESS_HOOKS is what install declares for each host: the doctor and resume entries for both hosts, the pause entry for Claude Code', () => {
+test('HARNESS_HOOKS is what install declares for each host: the doctor and resume entries for both hosts, the pause and web failure entries for Claude Code', () => {
   const declared = (host) => entryComponents.filter((component) => component.id.startsWith(`${host}-`)).map((component) => {
     const entry = component.entry();
     const hook = { event: component.pointer.at(-1), command: entry.hooks.map((item) => item.command).join(' && ') };
@@ -806,10 +806,11 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor and resum
     { event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' },
     { event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' },
     { event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' },
+    { event: 'PostToolUseFailure', matcher: 'WebFetch', command: 'js-harness resume --pause || exit 0' },
     { event: 'PreToolUse', matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', command: 'js-harness guard --hook || exit 0' },
     { event: 'Stop', command: 'js-harness guard --stop || exit 0' },
   ]);
-  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude']]);
+  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude'], ['claude']]);
   assert.deepEqual(declared('claude'), listedFor('claude'));
   assert.deepEqual(declared('codex'), listedFor('codex'));
   assert.ok(Object.isFrozen(HARNESS_HOOKS));
