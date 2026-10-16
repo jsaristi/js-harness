@@ -10,7 +10,8 @@
 // bin/lib/rules-data.mjs), `rules`, `rules <id>` and `rules check` are about that project's own list, docs/rules.json,
 // beside the rules of the harness in force there, and `render` is refused (bin/lib/project-rules.mjs).
 // `rules change <id>` is the one form that writes a rule: run in the checkout it changes, on a branch rule/<name>, it
-// writes the declaration, its source and docs/RULES.md and appends a relief line (bin/lib/rules-change-run.mjs). It
+// writes the declaration, its source and docs/RULES.md and appends a relief line (bin/lib/rules-change-run.mjs); a
+// change of patterns or failure alone keeps the rule's source and names its own in the relief line. It
 // is refused in a project that installs the harness, whose own list is edited by hand. In the harness's own checkout
 // `rules check` also counts each rule's patterns in the texts in force and checks each rule's failure against the
 // register (bin/lib/rules-scan.mjs); the gate's row `rules` reads the same patterns in what a commit adds.

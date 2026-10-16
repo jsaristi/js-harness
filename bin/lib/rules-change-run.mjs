@@ -227,7 +227,14 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     // A rule of his needs his words whether it is his before the change or after it.
     const owner = before?.owner === 'sebastian' ? 'sebastian' : rule.owner;
     const source = sourceOf(given, { owner, today, transcriptOf, exists: (file) => isFileOf(top, file) });
-    const sources = sortedKeys({ ...startSources, [id]: source });
+    // A change of form alone (patterns or failure, nothing else) says nothing of the value, so the rule keeps the source
+    // of its value, and the relief line names where the change came from; any other change stores its own source.
+    const formOnly = change !== null && what === 'form' && Object.hasOwn(startSources, id)
+      && Object.keys(change).every((key) => key === 'set' || key === 'source')
+      && Object.keys(change.set ?? {}).length > 0 && Object.keys(change.set).every((key) => key === 'patterns' || key === 'failure');
+    const stored = formOnly ? startSources[id] : source;
+    const sources = sortedKeys({ ...startSources, [id]: stored });
+    const sourceSaid = formOnly ? `${source.kind}${source.kind === 'design' ? ` ${source.path}` : ''}, the rule's own source kept` : source.kind;
 
     // The new list, checked against the repository before anything is written.
     const dataText = writeRules(list);
@@ -242,7 +249,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     const reliefFile = reliefPath(home, slug);
     const relief = fs.existsSync(reliefFile) ? fs.readFileSync(reliefFile, 'utf8') : '';
     const previous = lastLineFor(relief, id);
-    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${source.kind}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}`;
+    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}`;
     try {
       reliefLineOf(line);
     } catch (err) {
@@ -259,7 +266,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
 
     if (dryRun) {
       stdout(JSON.stringify(list.find((item) => item.id === id), null, 2));
-      stdout(`Source: ${JSON.stringify(source, null, 2)}`);
+      stdout(`Source: ${formOnly ? "kept, the rule's own: " : ''}${JSON.stringify(stored, null, 2)}`);
       stdout(`Relief line: ${line}`);
       if (countLine !== null) stdout(countLine);
       stdout(memory);
