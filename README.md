@@ -258,7 +258,9 @@ Fix:
 ### js-harness progress
 
 Shows the roadmap's phases and the features, counted from the checkboxes of `docs/ROADMAP.md`
-and `odd/tasks/*.md`.
+and `odd/tasks/*.md`. A feature that keeps its tasks in a table (a header with an `ID` and a
+`Status` cell) is counted by its rows: a row whose ID is a task (`T2`, `T3c`) is done when its
+status starts with `done`.
 
 ```console
 $ js-harness progress

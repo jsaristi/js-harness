@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `progress`: reads a project's docs/ROADMAP.md and odd/tasks/*.md and reports every roadmap phase
 // and feature with its checked and pending steps, a percentage, and what remains — counted from
-// checkboxes by bin/lib/progress.mjs, never reinterpreted by a model. See
+// checkboxes, and the rows of a feature's task table, by bin/lib/progress.mjs, never reinterpreted by a model. See
 // odd/tasks/progress-view.md. Read-only, zero dependencies; `--json` gives the same data so
 // Claude Desktop and mobile can render it as an inline widget on request.
 import fs from 'node:fs';

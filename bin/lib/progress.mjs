@@ -257,13 +257,66 @@ export function parseRoadmap(markdown) {
   };
 }
 
+// A task table's pieces (S2 of odd/tasks/first-version.md): a cell boundary is a pipe no backslash escapes, a task's
+// ID is `T` and a number with an optional letter suffix (`T2`, `T3c`), and a delimiter cell is dashes with optional
+// alignment colons.
+const CELL_BOUNDARY = /(?<!\\)\|/;
+const TASK_ID_PATTERN = /^T\d+[a-z]*$/i;
+const DELIMITER_CELL_PATTERN = /^:?-+:?$/;
+
+/** The trimmed cells of a table row, or `null` for a line that is not one: a row here starts with a pipe. */
+function cellsOf(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|')) return null;
+  const closed = trimmed.length > 1 && trimmed.endsWith('|') && !trimmed.endsWith('\\|');
+  return trimmed.slice(1, closed ? -1 : undefined).split(CELL_BOUNDARY).map((cell) => cell.trim());
+}
+
+/** The steps of `tokens` in document order: every checkbox, and every row of a task table. A task table is one whose
+ * header names an `ID` and a `Status` cell, with a delimiter row under it; it ends at its first line that is not a row.
+ * A row whose ID is a task is a step, its text the row's cells, done when its status cell starts with `done`. */
+function featureSteps(tokens) {
+  const steps = [];
+  let header = null; // { id, status, width } of a header row waiting for its delimiter row
+  let table = null; // { id, status } of the task table being read
+  for (const token of tokens) {
+    if (token.step) {
+      steps.push(token.step);
+      header = table = null;
+      continue;
+    }
+    const cells = token.fence || token.heading ? null : cellsOf(token.line);
+    if (cells === null) {
+      header = table = null;
+      continue;
+    }
+    if (table) {
+      if (TASK_ID_PATTERN.test(cells[table.id] ?? '')) {
+        steps.push({ text: cells.join(' | '), done: /^done/i.test(cells[table.status] ?? '') });
+      }
+      continue;
+    }
+    if (header && cells.length === header.width && cells.every((cell) => DELIMITER_CELL_PATTERN.test(cell))) {
+      table = { id: header.id, status: header.status };
+      header = null;
+      continue;
+    }
+    const names = cells.map((cell) => cell.toLowerCase());
+    const id = names.indexOf('id');
+    const status = names.indexOf('status');
+    header = id >= 0 && status >= 0 ? { id, status, width: cells.length } : null;
+  }
+  return steps;
+}
+
 /** One feature doc: titled by its first level-1 `# ` heading (fallback: `id`), with every checkbox
  * in the file counted as a step — a feature doc has no sections like the roadmap's `## Checklist`,
- * so `## Tasks` and `## Progress` checkboxes (and anything else) all count. */
+ * so `## Tasks` and `## Progress` checkboxes (and anything else) all count — and every row of a task
+ * table (`featureSteps`), so a feature that keeps its tasks in a table is not 0/0. */
 export function parseFeature(markdown, id) {
   const tokens = tokenize(markdown);
   const titleToken = tokens.find((token) => token.heading?.level === 1);
-  const steps = tokens.filter((token) => token.step).map((token) => token.step);
+  const steps = featureSteps(tokens);
   return {
     id,
     title: titleToken ? titleToken.heading.title : id,
