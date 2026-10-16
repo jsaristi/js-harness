@@ -111,7 +111,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-14",
     "value": 15,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:present|here|last wrote|wrote last)\\b.{0,40}\\b(?:within|in the last|for)\\s+{amount}"
+    ]
   },
   {
     "id": "questions-one-place",

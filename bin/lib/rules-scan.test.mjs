@@ -56,6 +56,7 @@ test('a failure that names no register entry, and a switch back with no sighting
 const PLANTED = {
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
+  'person-present': { line: 'He is here when he wrote within 15 minutes.', marked: 'He is here when he wrote within `rule:person-present`.' },
 };
 
 test('on the real list, every rule with patterns finds its own planted line, and loses it to its mark', () => {
