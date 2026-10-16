@@ -295,6 +295,21 @@ Roadmap  docs/ROADMAP.md  61/62  98%
 Features  295/349  85%
 ```
 
+`--pace [--days <n>]` reads the first-parent history of the default branch (origin/HEAD, else
+`main`, else `HEAD`) and prints the tasks closed, reopened, added and removed on each of the last
+14 days, or `n`, by committer day, with the totals and the mean a day; `--json` gives the same as
+data. A task is matched by its ID (`T3`); one reworded without an ID, or in a moved file, counts
+as removed and added. Without `--pace`, `progress` runs no git.
+
+```console
+$ js-harness progress --pace --days 2
+Pace of origin/main, its first-parent line, by committer day over the last 2 days:
+  2026-10-15  closed 81  reopened 0  added 67  removed 1
+  2026-10-16  closed 30  reopened 0  added 22  removed 1  (today, so far)
+Total       closed 111  reopened 0  added 89  removed 2
+A day       closed 55.5  reopened 0  added 44.5  removed 1
+```
+
 ### js-harness contract
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
