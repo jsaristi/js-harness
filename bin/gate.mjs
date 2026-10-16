@@ -324,6 +324,9 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   const record = gateLogSwitchedOff(env)
     ? null
     : gateRecord({ home, cwd: path.resolve(cwd), command, ...deps.gateLog, onFailure: (why) => console.error(`gate: the gate log ${why}`) });
+  // The looks of the lock this gate made (`stillWanted` below counts them), declared before `logged`, which
+  // reads it on every path, the held one and the one without a lock included.
+  let looks = 0;
   /** The command between the two lines of its record: the load is read, the start written, and the end
    * on every way out. `turn` is the state of the lock, and whom this gate waited for. */
   // `goneAtTurn`, after a wait: the last look at what started this gate, made after the sample of the load
@@ -336,8 +339,10 @@ export async function gateMain(argv, env = process.env, deps = {}) {
       return GATE_NOT_RUN;
     }
     // A wait is time in which the tree or the branch could change: the check is asked again before the
-    // command, as the push and the launcher are. With no gate waited for it was asked a moment ago.
-    const why = turn.waitedFor.length > 0 ? await notReady() : null;
+    // command, as the push and the launcher are. A wait is a turn not taken at the first look (`looks`):
+    // a wait behind a gate in the line that left before it held the lock names no gate waited for (Codex,
+    // 2026-10-16). A turn taken at the first look had the check asked a moment ago.
+    const why = looks > 1 ? await notReady() : null;
     if (why !== null) {
       console.error(`gate: nothing ran: its check before the turn, ${ready}, ${why} after the wait, so the command would be refused; the turn goes to the next gate`);
       record?.refused({ reason: 'not ready', waitedMs: turn.waitedMs, waitedFor: turn.waitedFor });
@@ -389,7 +394,6 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   // is not asked, the launcher having started this gate a moment ago.
   const launcher = deps.launchers ?? { ...startLaunchers({ ppid: STARTED_BY }), alive: launchersAlive, eager: true };
   let launchers = launcher.eager ? launcher.read() : null;
-  let looks = 0;
   const stillWanted = () => {
     looks += 1;
     if (looks === 1) return true;

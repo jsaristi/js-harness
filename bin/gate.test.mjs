@@ -349,6 +349,24 @@ test('gate --ready is asked again as the turn comes after a wait: a check that f
   assert.deepEqual(passing.asked.map((ask) => ask.commandLine), ['git diff --quiet', 'git diff --quiet', 'node --test']);
 }));
 
+// Found by Codex (2026-10-16): a wait behind a gate in the line that left before it ever held the lock names
+// no gate waited for, and the check was then not asked again.
+test('gate --ready is asked again after a wait behind a gate in the line alone, with no holder ever seen', withHome(async (home, dir) => {
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 30_000 };
+  const lineOnly = async ({ onWait, stillWanted }) => {
+    assert.equal(stillWanted(), true);
+    onWait(null, 600_000, { head: { cwd: 'C:\\work\\other', pid: 4321 }, ahead: 1 });
+    assert.equal(stillWanted(), true);
+    return lock;
+  };
+  const launchers = { read: () => null, alive: () => true };
+  const spawned = readyThen([0, 1]);
+  const { code, said } = await runGate(['--ready', 'git diff --quiet', '--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned, takeGateLock: lineOnly, launchers });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.deepEqual(spawned.asked.map((ask) => ask.commandLine), ['git diff --quiet', 'git diff --quiet']);
+  assert.equal(said.at(-1), 'gate: nothing ran: its check before the turn, git diff --quiet, exited 1 after the wait, so the command would be refused; the turn goes to the next gate');
+}));
+
 test('gate --ready takes one value, once', withHome(async (home, dir) => {
   for (const [argv, why] of [
     [['--ready', '--', 'x'], '--ready requires a value'],
