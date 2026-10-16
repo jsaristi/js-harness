@@ -22,8 +22,8 @@ js-harness init
 1. `npm i -g` puts the `js-harness` command on the path.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md` and the
-   pre-commit gate of that project.
+3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md`, an empty failures
+   register (`docs/FAILURES.md`) and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
@@ -127,6 +127,7 @@ Enables js-harness in a git repository and records what it wrote in a manifest o
 $ js-harness init
 wrote harness.json
 wrote AGENTS.md
+wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
 ran codegraph init
 manifest: my-project\.git\js-harness\manifest.json
@@ -186,7 +187,9 @@ Inside a project, removes what `init` wrote; with `--global`, removes what `inst
 $ js-harness uninstall
 removed harness.json
 removed AGENTS.md
+removed docs/FAILURES.md
 removed .git/hooks/pre-commit
+removed docs
 removed .codegraph/
 removed manifest my-project\.git\js-harness\manifest.json
 $ js-harness uninstall --global
