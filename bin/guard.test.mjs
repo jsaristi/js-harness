@@ -1,7 +1,12 @@
 // `js-harness guard --hook`, the `PreToolUse` hook: what it prints for each tool call it is handed, and that it
 // always exits 0 (odd/tasks/honesty-audit.md, T13 and T14).
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { guardMain } from './guard.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { writeRules } from './lib/rules.mjs';
@@ -61,6 +66,40 @@ test('a scheduled-task or cloud tool that opens a session is denied in the proje
     assert.match(denied(refused).permissionDecisionReason, /sessions-open-in-sidebar.*start_session/s, tool_name);
   }
   assert.deepEqual(await hook({ tool_name: 'mcp__scheduled-tasks__delete_scheduled_task', cwd: 'D:/project', tool_input: { id: 'x' } }), { code: 0, out: '', err: '' }, 'delete passes');
+});
+
+// Section 17, "The try": the lead's real try, as a hand reproduction makes it, through the public command in this
+// repository, which declares the rule. The payload is read from a file: in Git Bash, `echo` of it turns the path's
+// `\\` into `\`, a bad JSON escape, and the guard, which exits 0 on any failure, prints nothing.
+test('the try of section 17, read from a file, is denied by the public command in this repository', () => {
+  const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-try-'));
+  const guard = (text) => {
+    const file = path.join(dir, 'payload.json');
+    fs.writeFileSync(file, text);
+    const input = fs.openSync(file, 'r');
+    try {
+      return spawnSync(process.execPath, [path.join(repo, 'bin', 'js-harness.mjs'), 'guard', '--hook'], { stdio: [input, 'pipe', 'pipe'], encoding: 'utf8', timeout: 30000 });
+    } finally {
+      fs.closeSync(input);
+    }
+  };
+  try {
+    const payload = {
+      tool_name: 'mcp__scheduled-tasks__create_scheduled_task',
+      tool_input: { taskId: 'jh-t16-harmless-try', prompt: '', description: 'harmless try' },
+      cwd: repo,
+      hook_event_name: 'PreToolUse',
+    };
+    const refused = guard(`${JSON.stringify(payload)}\n`);
+    assert.equal(refused.status, 0, refused.stderr);
+    assert.equal(JSON.parse(refused.stdout).hookSpecificOutput.permissionDecision, 'deny');
+    assert.match(JSON.parse(refused.stdout).hookSpecificOutput.permissionDecisionReason, /^js-harness guard: mcp__scheduled-tasks__create_scheduled_task opens a session.*sessions-open-in-sidebar.*start_session/s);
+    const broken = guard('{"tool_name":"mcp__scheduled-tasks__create_scheduled_task","tool_input":{},"cwd":"D:\\js-harness"}\n');
+    assert.deepEqual([broken.status, broken.stdout], [0, ''], 'a payload whose path lost a backslash is not JSON, and passes');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('in a project without the rules, the tools that open a session pass', async () => {
