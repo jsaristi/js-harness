@@ -440,6 +440,9 @@ not a draft, mergeable, on main and with a gentle-ai line in its body, has a Cod
 every code commit, and merges into the candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
 green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+A candidate whose every changed path is a document main's `harness.json` declares (`documents`) runs
+no suite on this machine, as a commit of documents alone runs none, and takes no turn of the gate
+lock: CircleCI's run of the whole gate is its test.
 No GitHub workflow runs for a pull request: the one workflow, the gate of a commit (`js-harness check`),
 runs for a push to a `gate/` branch alone.
 A candidate red on this machine is bisected: the pull request that turns it red is left out and
