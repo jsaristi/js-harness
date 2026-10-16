@@ -31,6 +31,7 @@ fourteen matters two places say different things; each is listed, with the text 
 - `npm run check` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/rule-hierarchy.md` exits 0
 - `node --test bin/reply.test.mjs` exits 0
+- `node --test bin/lib/reply.test.mjs` exits 0
 - `node --test bin/lib/failures.test.mjs` exits 0
 - `node --test bin/failures.test.mjs` exits 0
 - `node bin/js-harness.mjs failures check --settled` exits 0
@@ -2090,7 +2091,8 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   from the documents alone): one of the two measurements that spend, his to allow before it
   runs, asked once when he is back
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
-  manifest for both hosts, the `reply` key of `harness.json`
+  manifest for both hosts, the `reply` key of `harness.json` (route: inline, JH 25; built on
+  `feat/jh25-spec-reply`, the key waits for his answer to question 9; Progress, 2026-10-16)
 - [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
   writer; the trigger is three files that are not mechanical)
   - [x] T3a The design read by a reader that did not write it, and what it found taken or
@@ -3344,6 +3346,40 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     command to 120 characters".
   The `AMOUNT` fix takes the mid-number false positives; the rest is a second pass of patterns
   after his 13 rules.
+- 2026-10-16, JH 25 (`JH 25 · jerarquía de reglas (spec y respuesta)`), given T1, T2 and T12 by the lead;
+  worktree `D:/js-harness-worktrees/jh25`, branch `feat/jh25-spec-reply`, from `main` 6a6ce9e.
+  - Host facts T2 rests on, confirmed: a logging `Stop` hook in a project of this session's scratchpad,
+    run with `claude -p` (Claude Code 2.1.301, Haiku 5.5, one background `sleep 30`), received
+    `stop_hook_active: false`, `last_assistant_message` and `background_tasks: [{ …, "status": "running" }]`
+    (empty at the next stop), plus `session_crons`. Codex's hooks page (learn.chatgpt.com/docs/hooks, read
+    the same day): `Stop` carries `stop_hook_active` and `last_assistant_message` (string or null), no
+    background tasks; exit 0 needs JSON on standard output; `decision: "block"` with a `reason` continues
+    the turn. gentle-ai's own `Stop` hook and `guard --stop` already run beside it here.
+  - T2's design, read against `AGENTS.md` as it stands, not the design of 2026-10-10: a decision is now
+    asked with the question tool and a cut carries one block, so C1 refuses a reply that has no state
+    line or more than one; a state line not in the last paragraph (except a cut); working or finished
+    with nothing after the label; a decision while a background task runs; a cut without its three
+    labels each once, without its block, with an empty one or with two under the labels; and the three
+    labels in any state but a cut. Left out, with the reason: the line at the context pause (the
+    `resume --pause` hook already says it once a stretch); the shapes of a `/compact` cut (retired on
+    2026-10-15); naming which of his items a decision falls under (the lead's inventory of 2026-10-12
+    took it out). Labels default to English with `"reply": true`; an object names the project's own.
+  - Built test first, not committed yet (RED seen on the missing module, then GREEN): `bin/lib/reply.mjs`
+    (15 tests), `bin/reply.mjs` (7), the dispatcher's entry and help, a README section, the entries
+    `claude-reply-hook` and `codex-reply-hook` in `bin/lib/manifest.mjs` (command
+    `js-harness reply --hook || exit 0`), the skill's line, and the tests they move
+    (`bin/lib/manifest.test.mjs` 157 pass, `bin/install.test.mjs`'s hook lines). T12's reply step:
+    `reply-hook` in `JOURNEY`, `replyHookInput` and `replyHookProblem` in `scripts/practice-lib.mjs`
+    (104 pass), the step in `scripts/practice.mjs`, `HARNESS_HOOKS` with the reply entry for both hosts;
+    run by hand against this worktree's `bin/` in a scratch folder: no problem found. T12's template step
+    waits for T9 (the template's lines are his wording).
+  - Not on: this repository's `harness.json` holds no `reply` key. Question 9 to the lead, for him:
+    turn it on here (the key with the Spanish labels, and the next `sync` writes the inert `Stop` entry on
+    his machine), install it off, or hold the pull request. "Ask me before" names the install on this
+    machine, so the pull request says it lands only after his answer.
+  - Next: commit through the gate (one gate for this unit), gentle-ai, Codex with `--base 6a6ce9e`, the
+    pull request, the lead told; then T1 (`docs/SPEC.md` and the row `spec`), from the notes the lead
+    compiled at `C:\Users\Oficina\.js-harness\spec-notes\D--js-harness.md` (254 lines, six sessions).
 
 ## Next step
 **State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the

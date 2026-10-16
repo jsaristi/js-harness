@@ -323,6 +323,9 @@ const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 /** The command of the share check, as `bin/lib/manifest.mjs` spells it (`SHARE_HOOK_COMMAND`); the same test holds the two together. */
 const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 
+/** The command of the reply check, as `bin/lib/manifest.mjs` spells it (`REPLY_HOOK_COMMAND`); the same test holds the two together. */
+const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
+
 /** The matcher of the guard hook, as `bin/lib/manifest.mjs` spells it: anchored, so that each tool is a whole name. The same test holds the two together. */
 const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$';
 
@@ -330,7 +333,9 @@ const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_mess
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
  * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
  * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
- * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool. The test holds
+ * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool; the guard's before a tool call and the
+ * share check's at a stop, for Claude Code only; and the reply check's at a stop, for both hosts, since it reads only the
+ * reply's text. The test holds
  * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
  * an install that changed. */
 export const HARNESS_HOOKS = Object.freeze([
@@ -340,6 +345,7 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
@@ -474,6 +480,7 @@ export const JOURNEY = Object.freeze([
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
   { id: 'opening-tools', title: 'the guard lets the scheduled-task and cloud tools pass in the project, and refuses them where the rule is declared, naming start_session' },
+  { id: 'reply-hook', title: 'the reply check turns back a reply with no state where harness.json turns it on, lets a closed reply stop, and turns nothing back in the project' },
   { id: 'host-loads', title: 'a real Claude Code session in the project loads the skills and AGENTS.md, runs the three hook entries, and leaves nothing in the real home' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
@@ -908,6 +915,45 @@ export function openingToolsProblem({ plain, declared }) {
     if (!reason.includes(tool) || !reason.includes('start_session')) {
       return `the refusal of ${tool} does not name the tool and start_session: ${reason}`;
     }
+  }
+  return null;
+}
+
+// ---- the reply check, as a Stop hook meets it (odd/tasks/rule-hierarchy.md, T12) ----
+
+/** The hook input the host sends a `Stop` hook on standard input, as JSON text: the session, its folder, the event, the
+ * reply that ends the turn and no background work running, the fields `bin/reply.mjs` reads. */
+export function replyHookInput({ sessionId, cwd, message }) {
+  return JSON.stringify({ session_id: sessionId, cwd, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: message, background_tasks: [] });
+}
+
+/** The run's answer as JSON, or the reason it is none: a `Stop` hook answers with one JSON object, `{}` to let the session
+ * stop. */
+function replyAnswer(run, which) {
+  if (run?.status !== 0) return { problem: `the reply check exited ${run?.status} on ${which}, not 0` };
+  const printed = (run.stdout ?? '').trim();
+  return printed === '' ? { printed } : { printed, answer: (() => { try { return JSON.parse(printed); } catch { return undefined; } })() };
+}
+
+/** What is wrong with the three runs of the reply check, or `null`. `refused` is a reply with no state, in a folder whose
+ * `harness.json` holds `"reply": true`: it must be turned back with `decision: "block"` and a reason that names the
+ * English label `Working`. `passed` is a reply there that closes with `Working — …`, and `plain` the reply with no state
+ * in the practice project, whose `harness.json` from `init` has no `reply` key: both must print `{}`. Each run is
+ * `{ status, stdout }` of the child. */
+export function replyHookProblem({ refused, passed, plain }) {
+  const turned = replyAnswer(refused, 'the reply with no state');
+  if (turned.problem) return turned.problem;
+  if (turned.answer?.decision !== 'block') return `the reply check let a reply with no state stop in the folder whose harness.json turns it on: ${turned.printed}`;
+  const reason = typeof turned.answer.reason === 'string' ? turned.answer.reason : '';
+  if (!reason.includes('Working')) return `the reply check turned the reply back without naming the state Working: ${reason}`;
+  for (const [run, which, where] of [
+    [passed, 'the reply that closes with its state', 'a reply that closes with its state'],
+    [plain, 'the reply in the practice project', 'a reply in the practice project, whose harness.json does not turn it on'],
+  ]) {
+    const read = replyAnswer(run, which);
+    if (read.problem) return read.problem;
+    if (read.printed === '') return `the reply check printed nothing in ${run === plain ? 'the practice project' : 'the folder whose harness.json turns it on'}, though a Stop hook answers with JSON`;
+    if (read.answer === undefined || Object.keys(read.answer).length !== 0) return `the reply check turned back ${where}: ${read.printed}`;
   }
   return null;
 }
