@@ -1179,7 +1179,9 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    --quote` in the lead's transcript `65318fd5`: no payment method on the GitHub account, now or
    later ("no tiene tarjeta, dejémosla sin tarjeta", line 12461); the gate on GitHub runs on
    Linux at each push to a pull request with code ("En cada PR con código (Recomendada)", line
-   12491). JH 10's `odd/tasks/gate-on-github.md` holds the design.
+   12491). JH 10's `odd/tasks/gate-on-github.md` holds the design. **Its exchange (R1, T7) was
+   closed on 2026-10-16 as superseded by merge-queue**: "Sí, cerrala (Recomendada)" (the lead's
+   transcript `e152c9d8`, line 7753, read with `sessions --quote`).
 8. The proposal for the Codex plugin: the `doctor` row, `codex:rescue`, its three hooks
    (`odd/tasks/codex-review-lean.md`, "Proposal for the Codex plugin").
 9. **Answered on 2026-10-13: one page and each command** ("Una página y cada comando", question
