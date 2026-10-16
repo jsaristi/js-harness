@@ -2774,7 +2774,17 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     door's indented lines were dropped, now printed under the notes and in the refusal
     (`3d0cc94`, gate passed, gentle-ai medium not due); Codex recheck `bbf7dc2..3d0cc94`
     correct (0.97), both fixed. Pull request 314 on `main` (302 landed), the orchestrator told.
-    Next: slice (b) once the orchestrator says Sebastián saw the design, then slice (c)
+    Slice (a) landed as pull request 314. Slice (b), his yes of 2026-10-16 (Progress), on
+    `feat/merge-door-evidence` (worktree `D:/js-harness-worktrees/merge-evidence`), not committed
+    yet: `bin/lib/gentle-ai-evidence.mjs` (+ test, 2/2 green), `reviewEvidence` in
+    `bin/merge-queue.mjs` (8 tests seen red, then green), `codexReviewOffAt` exported from
+    `bin/check.mjs`, help and USAGE and README, a `checked-not-read` sighting. Cut-over
+    `2026-10-17T05:00:00Z`. Next: the protocol line in `bin/lib/protocols-skill.mjs` (the review
+    sentence gains "name each code commit ... on a gentle-ai line"; its first replace missed on
+    escaping, use Edit), run `node --test bin/lib/protocols-skill.test.mjs` and
+    `bin/lib/manifest.test.mjs`, commit through the gate, independent verifier (Risk item 5),
+    gentle-ai `--escalate-item 5`, Codex, pull request, notify. Then slice (c), then the
+    throughput plan's item 2 design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
@@ -4171,6 +4181,13 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `docs/FAILURES.md` gains `proposal-unreviewed`, its control owed by T18b. Left for T18b: the
   rule with its home in the protocols skill, protocol 6's pointer, the orchestrator line, their
   tests and the shared-phrase test.
+- 2026-10-16, T16e, his answer to the design, relayed by the lead's notice to 24 at 16:04 and read
+  in the lead's transcript (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 15142) with
+  `js-harness sessions --quote`, a user entry tapped in answer to the lead's question tool. The
+  question: "¿JH 24 construye la parte (b) de T16e así como está diseñada?", options "Sí, así
+  como está (Recomendada) | Solo la cobertura, sin rechazar"; his answer: "Sí, así como está
+  (Recomendada)". So slice (b) is built as designed, items 5 and 6, refusing included. Slice (a)
+  landed as pull request 314 (`225da7d`).
 
 ## Next step
 **State, 2026-10-16, T16f first part built by JH 27** on `feat/rules-reach`: designed, built, checked by the gate, an independent verifier, gentle-ai (acknowledged) and Codex (recorded), each finding fixed with its test (see "Progress"); its pull request waits for the lead to land it. T16f stays open: its next part is the hash in the installed command, with the rest "Left to the other parts of T16f" lists.

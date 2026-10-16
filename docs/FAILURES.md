@@ -187,6 +187,10 @@ session's claim.
 - Seen: 2026-10-11 — relief file, line 290 — a transcript line cited as his words from a text search,
   without reading the entry's type: it was a queue entry with the same text (the orchestrator's own
   report)
+- Seen: 2026-10-12 — relief file, lines 325 and 337 — gentle-ai's review of pull requests 68 and 69
+  was claimed in a message and written in a document of another branch; the merge queue now asks
+  for it on the pull request's own branch (odd/tasks/rule-hierarchy.md, "The merge door (T16e)",
+  item 5)
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### citations-test-reads-clock

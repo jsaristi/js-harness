@@ -8,7 +8,9 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkCodexReviews } from './check.mjs';
+import { checkCodexReviews, codexReviewOffAt } from './check.mjs';
+import { gitOut, reviewCoverage } from './lib/codex-review-coverage.mjs';
+import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
@@ -18,6 +20,10 @@ number. Ready means open, not a draft, mergeable, based on main, a gentle-ai lin
 review record for every code commit, and no conflict with the candidate so far. A pull request GitHub
 has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
 request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
+Each code commit committed after the cut-over (${GENTLE_AI_CUTOVER}) needs gentle-ai's evidence on its own branch: its
+hash (seven characters or more), or a range a..b that holds it (a and what git rev-list a..b lists), on a line the
+pull request adds to a feature document (odd/tasks/<name>.md) that says gentle-ai; a merge of main needs none. For
+each ready pull request the queue prints, commit by commit, the Codex record that covers it and that line.
 
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, then CircleCI's run
@@ -111,6 +117,50 @@ function localSuite(run, place) {
   const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
   const last = failedRows(done.out);
   return { ok: done.ok, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
+}
+
+/** The commits of `main..head` read in `cwd` that change a file that is not Markdown, merges left out, newest first
+ * (`{ id, shortId, parentCount, subject }`): the code commits of a project whose Codex review is off. `null` when git
+ * does not answer. */
+function markdownlessCommits(cwd, main, head) {
+  const log = gitOut(spawnSync, cwd, ['-c', 'core.quotePath=false', 'log', '--no-merges', '--no-renames', '--name-only', '--format=%x00%H%x09%h%x09%s', `${main}..${head}`]);
+  if (log === null) return null;
+  return log.split('\0').filter((entry) => entry.trim()).map((entry) => {
+    const [line, ...files] = entry.split('\n');
+    const [id, shortId, ...subject] = line.split('\t');
+    return { id, shortId, parentCount: 1, subject: subject.join('\t'), files: files.filter(Boolean) };
+  }).filter((commit) => commit.files.some((file) => !/\.md$/i.test(file)));
+}
+
+/** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,
+ * "The merge door (T16e)", items 5 and 6): `{ pass, detail }` as `checkCodexReviews` gives it, refused when a code commit
+ * committed after `cutover` has no gentle-ai line on its branch (`gentleAiEvidence`), and, when it passes, `lines`: one
+ * for each code commit, with the Codex record that covers it and the gentle-ai line that names it, so the lead reads the
+ * coverage commit by commit and needs no look of their own. */
+export function reviewEvidence(cwd, main, head, { cutover = GENTLE_AI_CUTOVER } = {}) {
+  const codex = checkCodexReviews(cwd, head);
+  if (!codex.pass) return codex;
+  const off = codexReviewOffAt(cwd, head);
+  const coverage = off ? null : reviewCoverage(cwd, { from: main, tip: head });
+  const codeCommits = off ? markdownlessCommits(cwd, main, head) : coverage.unknown ? null : coverage.codeCommits;
+  if (codeCommits === null) return { pass: false, detail: 'its code commits could not be read' };
+  const evidence = gentleAiEvidence(cwd, { main, head, codeCommits, cutover });
+  if (evidence.unknown) return { pass: false, detail: 'its gentle-ai lines could not be read' };
+  const refusal = evidenceRefusal(evidence);
+  if (refusal !== null) return { pass: false, detail: refusal };
+  const due = new Set(evidence.due.map((commit) => commit.id));
+  const lines = codeCommits.map((commit) => {
+    const record = coverage?.covers.find(({ covered }) => covered.has(commit.id))?.rec;
+    const codexSaid = off ? 'the Codex review is off'
+      : record ? `Codex ${record.base.slice(0, 7)}..${record.head.slice(0, 7)} ${record.outcome} ${record.reviewedAt.slice(0, 10)}`
+        : 'no Codex record read for it';
+    const named = evidence.where.get(commit.id);
+    // A due commit no line names refused above, so one that is not named here is not due: a merge of main, or older.
+    const notAsked = commit.parentCount > 1 ? 'a merge of main' : 'committed before the cut-over';
+    const gentleSaid = named ? `gentle-ai ${named}` : `gentle-ai not asked, ${notAsked}`;
+    return `${commit.shortId} ${commit.subject}: ${codexSaid}; ${gentleSaid}`;
+  });
+  return { pass: true, detail: codex.detail, lines };
 }
 
 /** Whether main's check.mjs has the merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): its source names
@@ -281,7 +331,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   return 0;
 }
 
-export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawnSync, covered = null, suite = null, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout = console.log, stderr = console.error } = {}) {
+export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout = console.log, stderr = console.error } = {}) {
   if (argv.includes('--help') || argv.includes('-h')) {
     stdout(USAGE);
     return 0;
@@ -297,11 +347,11 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
     return 1;
   };
   const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
-  const isCovered = covered ?? ((head) => checkCodexReviews(cwd, head));
 
   if (!gitIn(cwd, 'fetch', '-q', 'origin').ok) return fail('could not fetch origin.');
   const main = gitIn(cwd, 'rev-parse', 'origin/main').out.trim();
   if (!main) return fail('could not read origin/main.');
+  const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head, { cutover }));
   let listed;
   try {
     listed = JSON.parse(answer(run, 'gh', ['pr', 'list', '--state', 'open', '--base', 'main', '--limit', '100', '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid,headRefName'], cwd).out);
@@ -324,6 +374,10 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
     if (!coverage?.pass) {
       stdout(`PR ${pr.number} is left out: ${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
       continue;
+    }
+    if (coverage.lines?.length) {
+      stdout(`PR ${pr.number}, commit by commit:`);
+      for (const line of coverage.lines) stdout(`  ${line}`);
     }
     candidates.push(pr);
   }
