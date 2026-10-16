@@ -457,6 +457,14 @@ The queue resolves each range itself; a merge of main needs no line, and a pull 
 asks for none. A rebase changes the hashes, and the refusal says so. For each ready pull request
 the queue prints, commit by commit, the Codex record that covers it and the line that names it.
 
+A landed pull request from a `rule/` branch closes what `js-harness rules change` opened: for each
+rule it changed in `bin/lib/rules-data.mjs`, the newest relief line "rule:<id> proposed on
+<branch>, not landed" that no later landing confirms gets one line of the queue's, "rule:<id>
+landed on main <sha> from <branch>: confirms relief line <n>". A branch with no such line is named;
+`--dry-run` and a land that does not move main write none. A rule's row is read three times: the
+commit refuses a restated value, `js-harness check --push` reports it as INFO for the lines the push
+brings past the remote's default branch, and the merge door refuses it.
+
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
 the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's

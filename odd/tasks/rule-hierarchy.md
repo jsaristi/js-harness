@@ -1785,8 +1785,9 @@ nothing.
   - **`{ reports: <reason>, since: <day> }`:** a finding is INFO and the line names the reason.
 - A FAIL line names the rule, the file, the line and the text, and gives the cure: the mark
   instead of the value, or `rules change`.
-- It does not run on `check --push`, nor when nothing is staged. `--no-verify` passes it; the
-  merge door (letter E, T16e) is what closes that.
+- It does not run when nothing is staged. On `check --push` it reports, as INFO whatever the
+  rule's row says (T16e, item 8, amended 2026-10-16). `--no-verify` passes it; the merge door
+  (letter E, T16e) is what closes that.
 - It scans only the added lines, so it costs little at every commit. A probe found the whole
   scan takes about 8 seconds with 90 subject-anchored patterns, so the whole-text count is kept
   out of the gate.
@@ -2797,7 +2798,18 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     another branch with an edit in it pass, now merges are read by `--diff-merges=combined` and
     `gentleAiEvidence` exempts only a merge of main (`c35e195`, gate passed, gentle-ai medium, under
     budget); Codex recheck `647389f..c35e195` correct (0.97), both fixed. Pull request 328 on
-    `main`, the orchestrator told. Next: slice (c). Then slice (c), then the throughput plan's item 2
+    `main`, the orchestrator told; then `main` `a0bc8a0` merged in (`78a5853`), Codex's review of
+    the branch after it found two P2s in the Codex-off reader, fixed in `9ff94fe` (recheck correct).
+    Slice (c), items 7 and 8, on `feat/merge-door-landing` (worktree
+    `D:/js-harness-worktrees/merge-landing`), stacked on slice (b) at `9ff94fe`: `landingLines`,
+    `changedRuleIds` and `recordLandings` in `bin/merge-queue.mjs` (the ids a `rule/` branch changed
+    are those whose declaration differs from the merge base; the relief file is found as `notify`
+    finds it, `env` and `now` injectable), 6 tests seen red then green (the newest proposal on that
+    branch alone, once; a land appends, `--dry-run`, red and exit 3 append none, no proposal says so,
+    a push that reported a failure appends); `checkPushRules` in `bin/check.mjs` (the row over
+    `<remote>/<default>...<head>`, INFO whatever the row), 2 tests, the first seen red; help, USAGE,
+    README, and T16d's "does not run on `check --push`" amended. Next: commit through the gate,
+    verifier (Risk items 3 and 5), gentle-ai, Codex, pull request on `feat/merge-door-evidence`. Then slice (c), then the throughput plan's item 2
     design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
