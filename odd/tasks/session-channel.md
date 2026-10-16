@@ -561,6 +561,8 @@ Each is run once by the build, with its result recorded in Progress.
    `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
    scheduled task, so the test would ask about a way this project no longer opens sessions.
 3. `claude --name` with an initial prompt, from a command: does the session appear in the app?
+   Run 2026-10-16 at 02:37 local: it does not appear in his sidebar, though the session ran
+   (Progress, 02:39).
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
 5. After a rename, does the old title stop resolving as an address?
@@ -1653,7 +1655,7 @@ and 3.
   append test proves its writers overlapped, or starts them on a barrier
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
   2 is retired by his answer of 2026-10-15 (section 13); test 1 is run (2026-10-16, typed
-  text); tests 3, 4, 5 and 6 remain
+  text); test 3 is run (2026-10-16, not in his sidebar); tests 4, 5 and 6 remain
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
@@ -3014,6 +3016,14 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   Neither entry records the device it came from, so which line came from which device is his
   word only. The assumption of section 6 holds: a one-line opening pasted from either device
   arrives as typed text, and nothing has to be typed by hand.
+- 2026-10-16, 02:39 local, T2, test 3 run. To the lead's question 4 he tapped "Sí, ahora
+  (Recomendada)" (`e152c9d8`:8787). He ran `claude --name "JH prueba 3" "Prueba 3 de T2:
+  respondé solo ok."` in a terminal in `D:\js-harness` and wrote: "Prueba 3: no, "JH prueba 3"
+  no aparece en la barra lateral." (`e152c9d8`:9027, read with `sessions --quote`). The session
+  did run: its transcript is `38272b60`, 52 entries from 07:37:31Z, `entrypoint` cli, titled
+  "JH prueba 3". So a session started by a command runs but is not one he sees in the app,
+  as layer 1's `by a command` already marks it, and opening a session stays one line of his
+  or `start_session` (T16).
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
