@@ -1665,11 +1665,12 @@ test('doctorMain shows the pnpm-lock row stale for a global bin lock left over i
     assert.equal(code, 0);
     assert.match(output, /^pnpm-lock\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
     assert.ok(output.includes(`  pnpm-lock (claude):\n    pnpm left its global bin lock behind`), output);
-    assert.ok(output.includes(`\n    rmdir "${lockPath}" (left since ${leftAt.toISOString()})\n`), output);
+    assert.ok(output.includes(`\n    rmdir "${lockPath}"\n    the folder was left there at ${leftAt.toISOString()}\n`), output);
 
     const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
     assert.equal(hook.code, 0);
-    assert.match(hook.output, /"systemMessage":"js-harness: \d+ stack gaps? — run js-harness doctor"/);
+    // The healthy fixture has no other gap, so the one the hook counts is the lock.
+    assert.equal(hook.output.trim(), JSON.stringify({ systemMessage: 'js-harness: 1 stack gap — run js-harness doctor' }));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

@@ -29,7 +29,7 @@ test('a global bin lock older than ten minutes is stale, and its line names the 
     assert.deepEqual(state, {
       claude: 'stale',
       codex: 'n/a',
-      lines: [`rmdir "${home.lockPath}" (left since ${new Date(NOW - 11 * MINUTE).toISOString()})`],
+      lines: [`rmdir "${home.lockPath}"`, `the folder was left there at ${new Date(NOW - 11 * MINUTE).toISOString()}`],
     });
   } finally {
     home.cleanup();
