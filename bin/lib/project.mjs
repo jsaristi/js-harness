@@ -367,6 +367,27 @@ A constraint the gate must hold gets an id in docs/rules.json (\`js-harness rule
 `;
 }
 
+/** The empty failures register `init` writes as `docs/FAILURES.md` when a project has none: what an entry is and how
+ * one is written, with no class and no entry, since the classes are the project's own. `js-harness failures` and the
+ * gate's `failures` row read it (`bin/lib/failures.mjs`); it parses with no fault. */
+export const FAILURES_TEMPLATE = `<!-- Written by \`js-harness init\`. -->
+# Failures
+
+What went wrong in this project: one entry per failure, with each time it was seen and the control
+that corrects it. A failure is work that went wrong in a way a control could prevent. A test that
+fails and is fixed inside its own task is not one: the gate is that control, working.
+
+A class is declared under "## Classes" as a list item: the id in backticks, then what it means. A
+failure is a "### <id>" entry under "## Entries", in the alphabetical order of the ids, with
+"- Class:" and one "- Seen:" line each time it happens, then the "- Control:" that corrects it. Its
+state is never written: \`js-harness failures\` computes it, and \`js-harness failures check
+--settled\` exits 1 while an entry is not settled.
+
+## Classes
+
+## Entries
+`;
+
 /** A semver version (semver.org's grammar, without a leading `v`): what `harness.json` may pin. */
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -824,6 +845,29 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       const hash = sha256(content);
       files.push({ path: agentsRel, sha256: hash });
       actions.push(wrote(agentsRel, hash));
+    }
+
+    // The failures register, empty, under the same terms as AGENTS.md: only when the project has none, and
+    // never by sync in a clone (odd/tasks/rule-hierarchy.md, T9). A `docs/` this run makes is recorded, so
+    // uninstall removes it while it is empty. Its folder is judged as the hooks path is: a link that sends it
+    // outside the working tree is never written through, since uninstall would not follow it back.
+    const registerPath = path.join(root, 'docs', 'FAILURES.md');
+    const registerRel = toRepoRelative(root, registerPath);
+    const register = resolveHookContainment(root, registerPath);
+    if (register.outside) {
+      actions.push(kept(toForwardSlashes(register.real), 'a link sends docs/ outside the repository; the failures register is not written there', true));
+    } else if (register.occupied) {
+      actions.push(kept(registerRel, clone ? 'committed' : 'exists'));
+    } else if (clone) {
+      actions.push({ kind: 'skip', path: registerRel, reason: 'not in this clone; sync does not create one' });
+    } else {
+      const docsShallow = mkdirTracked(path.dirname(registerPath), root, createdDirs);
+      if (docsShallow) reportedDirs.push({ absolute: docsShallow, isWorkingTree: true });
+      createdPaths.push(registerPath);
+      writeFile(registerPath, FAILURES_TEMPLATE, 'utf8');
+      const hash = sha256(FAILURES_TEMPLATE);
+      files.push({ path: registerRel, sha256: hash });
+      actions.push(wrote(registerRel, hash));
     }
 
     // Pre-commit gate (see `writeHookGate`) and codegraph init (see `codegraphStep`): the two steps a

@@ -36,6 +36,7 @@ fourteen matters two places say different things; each is listed, with the text 
 - `node bin/js-harness.mjs failures check --settled` exits 0
 - `node --test bin/lib/spec.test.mjs` exits 0
 - `node --test scripts/practice-lib.test.mjs` exits 0
+- `node --test bin/lib/protocols-skill.test.mjs` exits 0
 - The practice journey, with this feature's steps in it, passes on the machine that builds it
   (here `node scripts/practice.mjs run --root D:\js-harness-practice`), and its record line is
   quoted in Progress. The folder is one machine's, so this is read, not a command of the
@@ -435,8 +436,8 @@ becomes a number that can be other than zero on a green tree: the entries seen a
 `docs/FAILURES.md` exists, the classes are the project's own, and a control owed is a phrase of
 any checkbox item that is not checked, which needs no convention of task numbers; a plan kept
 as plain bullets has to turn the one that owes into a checkbox. Not built in this slice,
-and said so: `init` does not write an empty register (it goes with T9, with the template); no
-command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
+and said so: `init` does not write an empty register (it goes with T9, with the template; built
+with T9 on 2026-10-16, Progress); no command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
 which waits for a reader.
 
 A limit of who writes. The orchestrator writes only its relief file, so what it sees reaches the
@@ -2085,9 +2086,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 - [x] T0 Design: the survey, the placement of the 83 rules, the checks, the outline of
   `AGENTS.md`, the protocols, the signals (route: inline, with three read-only sub-agents for
   the survey and the host documentation)
-- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec`. It takes section D of
+- [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec` (both built, route: inline,
+  JH 25, on `feat/jh25-spec`; Progress, 2026-10-16; open: section D). It takes section D of
   `docs/model-effort.md` (documentation by model, graded by a test that rebuilds a capability
-  from the documents alone): one of the two measurements that spend, his to allow before it
+  from the documents alone, not built): one of the two measurements that spend, his to allow before it
   runs, asked once when he is back
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json`
@@ -2125,7 +2127,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   hints the merge commit as the base after `main` is merged in, failure 15), T5 (the row
   `citations`, INFO) and T6 (the row `memory-rules` of `doctor`). They carry no checkbox here,
   so that `js-harness progress` counts them once
-- [ ] T7 The skill `js-harness-protocols`, six sections, each opening with its incident
+- [x] T7 The skill `js-harness-protocols`, six sections, each opening with its incident (JH 27,
+  branch `feat/protocols-skill`, Progress 2026-10-16; sections 5 and 6 are built on the lead's
+  assignment and stay his to keep or drop)
 - [ ] T8 `AGENTS.md` rewritten within the budget, its wording passed by him. His idea of
   2026-10-11 for how (relief file, line 203), recorded here and not built yet: the text is
   drafted in `docs/agents-build.md`, analysed, reordered and polished there with the budget
@@ -2286,6 +2290,42 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   An eval task is a folder with `task.md`, `task.json`, a fixture, a hidden grader and a
   reference (`evals/runner.mjs:49-75`). The practice journey takes a step as one entry in
   `JOURNEY` and one function in `STEPS` (`scripts/practice-lib.mjs`, `scripts/practice.mjs`).
+- 2026-10-16, JH 25, T1 built on `feat/jh25-spec` (from `origin/main`, apart from T2's draft pull
+  request, by the lead's notice of 13:15). Written now because the roadmap stands at 96% and the lead
+  gave it: his decision that `docs/SPEC.md` comes last, with the code still (`docs/ROADMAP.md`).
+  - The row `spec` (`bin/lib/spec.mjs`, in `bin/check.mjs` after `contracts`): no row where a project
+    keeps no `docs/SPEC.md`. Each `### ` capability under `## Capabilities` must hold the six fields
+    (Problem, Requirement, Reason, Proof, Discarded, Today); a proof holds at least one command in
+    backticks; each item of Today is a file of the repository (it must exist; `path:line` reads as
+    its path), `js-harness <command>`, an id of the manifest or a path under `~/`. Only in the harness's
+    own checkout (its package bears the harness's name), every command of the dispatcher, every id of
+    `components` and `entryComponents` and the two home files no entry stands for
+    (`~/.js-harness/manifest.json`, `~/.claude/settings.json`) must be claimed, and a claimed command
+    the dispatcher lacks is a finding. Files a command names at run time (a launcher, the channel) are
+    not enumerated, and `docs/SPEC.md` says so. RED observed (module missing), then 13 of 13 green.
+  - `docs/SPEC.md`: 49 capabilities, from the notes the lead compiled
+    (`~/.js-harness/spec-notes/`, outside the repository) and two read-only readers' notes over the
+    feature documents for the commands with none (not kept). The feature documents they cite stay
+    the record: each entry names its incident and its proof, so it stands without the notes. JH 10's
+    first note is left out as it stands: the GitHub workflow it describes was removed
+    (`odd/tasks/drop-github-gate.md`), and the merge queue's entry carries that lesson under Discarded.
+    The reply check's entry joins with T2's pull request, which then has the command to claim.
+  - Not done: the line `AGENTS.md` should carry to send an agent to an entry (the roadmap's design):
+    `AGENTS.md` stands at about 1,478 of 1,500 tokens and is rewritten by T8, which places it. Section
+    D's measurement (C5 of `docs/model-effort.md`) is not built: it needs an eval that rebuilds one
+    capability from the documents alone, with held-out tests, and its cost figure before he allows it.
+  - Main gained the CI overflow gate (35a0423) meanwhile: `bbd1b74` adds its capability (50 now) and
+    drops the spec's word that the repository is private.
+  - gentle-ai on `8b3c031..bbd1b74`: medium, not due (`under_budget`), raised to high by item 5 (a row
+    of the commit gate that refuses commits here); lenses risk, readability, reliability; approved and
+    acknowledged (`review-95be76221f6981fc`), its bound STATUS first timing out three times while a
+    whole suite ran outside the gate lock. Of its seven advisories, closed with tests (RED 4, then 17
+    of 17): a field written twice or outside the six is no longer stored; fenced lines are text; a
+    manifest id in a project's spec reads as an id; "own" is the package's name, not the module's path,
+    so the installed command or a junction holds this checkout too; and the absolute path above. Left:
+    a proof is any text in backticks, not a command shape. Those fixes are `a6fe143`.
+  - Codex on `8b3c031..a6fe143` (3 files, 329 lines): the patch is correct (0.84), 91,062 input
+    tokens, recorded.
 - 2026-10-10, host documentation read by a sub-agent: `code.claude.com/docs/en/hooks.md`,
   `statusline.md`, `skills.md`, `commands.md`, `cross-session-messaging.md`, `cli-reference.md`,
   `remote-control.md`; `learn.chatgpt.com/docs/hooks` (as the sub-agent gave it; not opened by
@@ -3344,8 +3384,94 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     command to 120 characters".
   The `AMOUNT` fix takes the mid-number false positives; the rest is a second pass of patterns
   after his 13 rules.
+- 2026-10-16, batch 2 landed as pull request 264 (`main` 8e43e8a): gentle-ai, the verifier and
+  Codex (0.88, no finding) had all passed. His batch A had to wait for it: `rules change` keeps
+  one rule change open at a time. Batch A, built on `rule/his-patterns` as changes of form under
+  his answer of 2026-10-16, with a design for their source: `session-effort`, `session-model`,
+  `subagent-reader-model`, `work-sessions` (0 findings each), `review-model`,
+  `subagent-writer-model`, `reviewed-commit-lines` (1 each), `codex-review-margin` (2),
+  `subagent-effort` and `codex-review-rate` (3 each). The narrowings, each from a probe of the
+  drafts on `main`:
+  - `codex-review-margin` wants a percent, since `odd/tasks/gate-wait.md` speaks of the gate's
+    margin on its bound in seconds;
+  - `codex-review-rate` wants a rate, a cap or "put at" before the amount, since "cost 325 input
+    tokens a changed line" is a measurement;
+  - `reviewed-commit-lines` wants a bound ("up to", "at most", "under", "holds"), since "It is
+    5,222 changed lines" measures a commit;
+  - `subagent-effort`'s second pattern leaves out a line naming a `gpt-` model, since
+    `effort: "medium"` in `stack-v4.md` is Codex's orchestrator, not a subagent of this harness.
+- 2026-10-16, his batch A reviewed. gentle-ai approved it (`review-b85f1114633b9a16`,
+  acknowledged), with two warnings. The first is refuted: it held that `subagent-effort`'s
+  near-miss line, with "medium", cannot test the `gpt-` exclusion. But `{amount}` matches any
+  effort word (`AMOUNT`, `bin/lib/rules.mjs:80`), and a probe found that line without the
+  exclusion and missed it with it. The second stands: `reviewed-commit-lines`' near-miss was
+  missed by word order, not by the bound, so it is now "The commit is 5,222 changed lines.",
+  which a probe found without the bound. The independent verifier (Opus): PASS, no blocker; 8
+  of the 11 findings restate a value, and all three false positives were `subagent-effort`'s:
+  two records of how readers ran, and "subagent" inside a path (`docs/ROADMAP.md:371`). So
+  `subagent-effort`'s first pattern now wants a setting verb ("runs", "launched") before the
+  effort, and a subject that is not inside a path; it keeps one finding,
+  `odd/tasks/rule-hierarchy.md:1892`, a restatement. `NEAR_MISS` takes several lines per rule
+  for it. The verifier's other advisories join batch 2's for the second pass: the aliases `opus`
+  and `haiku`, which `{amount}` cannot match since it needs a digit; model lookaheads that accept
+  any `claude-` or `gpt-` model; measurements; and the overlap between rules, which only a probe
+  checks. gentle-ai's two suggestions go there too: `review-model`'s `\breview\b` misses
+  "reviews", and `codex-review-margin`'s lookbehind on `%` leans on `AMOUNT` taking the unit,
+  which the `AMOUNT` fix must keep or replace.
+- 2026-10-16, T7 built by JH 27 on the lead's notice of 08:45 ("rule-hierarchy T7, the skill
+  js-harness-protocols (six sections, each opening with its incident)"), branch
+  `feat/protocols-skill`, inline, test first. `bin/lib/protocols-skill.mjs` holds the text and
+  `install` writes it for both hosts as the third skill (`components` in `bin/lib/manifest.mjs`;
+  `sync` rewrites it, `uninstall` removes it). RED: `bin/lib/protocols-skill.test.mjs` failed on
+  the missing module; GREEN: 7 tests, and `bin/lib/manifest.test.mjs` 157. The test is the
+  signal "No protocol without its incident": every section opens with `Incident (<date>):`.
+  Where the design and the files of today differ, the files won, and each is said here:
+  - a decision is asked with the question tool, through the orchestrator, since 2026-10-14
+    (`block-read-as-task`, `docs/FAILURES.md`), so section 1 points to the orchestrator skill's
+    "Questions to the user" instead of the block, and section 2 keeps the block only for a cut;
+  - section 6 names the sub-agent rules by id (`subagent-reader-model`, `subagent-writer-model`,
+    `subagent-effort`) and states no model, because T16 declared them since the design was
+    written and the guard enforces them; the model clause that waited on his answer is not
+    restated;
+  - section 4 follows letters A to H as far as they hold in a project that only installs the
+    harness: `rules change` in the harness's own checkout, `docs/rules.json` by hand elsewhere
+    (`bin/rules.mjs:9-16`); its review date, 2026-11-16, is this session's choice;
+  - the skill speaks of "the user", since it ships to every project.
+  The incidents, each from the register: 1 `asked-yes-not-his` (2026-10-09), 2
+  `block-read-as-task` (2026-10-07), 3 `chained-step-not-conditional` (2026-10-10), 4
+  `old-rule-beside-new` (2026-10-11), 5 the memory note on a mistake in five parts (2026-10-10,
+  his words in the orchestrator's chat, quoted in that note and not read at their line here), 6
+  `estimate-passed-as-fact` (2026-10-10). The controls of `chained-step-not-conditional` and
+  `stacked-pr-base-order`, owed to this task, now name a phrase of the skill. Sections 5 and 6
+  are proposals of this document that he has not answered ("Ask me before"); they are built
+  because the lead assigned six, and are his to keep or drop. Not done here: the practice
+  journey's host-load check (`hostCallProblems`, `scripts/practice-lib.mjs`) still asks the
+  host for the two older skills only, since its fixtures are recorded streams; a step that
+  proves the host lists this one belongs to T12.
+- 2026-10-16, T9's empty register, by `JH 28 · reserva B` on `feat/empty-register`, from the
+  lead's notice to 28 (a claim of the lead's, read in the channel record) after PR 280, the
+  template's lines, had left it open. Built test first: `init` writes `docs/FAILURES.md`
+  (`FAILURES_TEMPLATE`, `bin/lib/project.mjs`) when the project has none, under the same terms
+  as `AGENTS.md`: an existing register is kept and listed in `kept`, and `sync` in a clone
+  creates none. It says what a failure is and how a class and an entry are written, and declares
+  no class, since the classes are the project's own. It parses with no fault, so the gate's
+  `failures` row passes on it. The file is in the manifest with its hash, and `docs/`, when this
+  run made it, among the folders `uninstall` removes while empty. RED: two new tests of
+  `bin/lib/project.test.mjs` failed on `main`; GREEN after. Six tests that pin `init`'s folders
+  or the count of what it writes now name `docs`. Checked by hand in a throwaway repository:
+  `init` printed "wrote docs/FAILURES.md", `uninstall` printed "removed docs/FAILURES.md" and
+  "removed docs", and only `.git` was left. The README's examples and `init`'s help line name
+  the register. Codex on `e898283` (P2, 0.98): a `docs` that is a link out of the repository
+  took the register outside, where `uninstall` does not follow; its folder is now judged as the
+  hooks path is (`resolveHookContainment`), and such a register is kept as outside, never
+  written, pinned by a test with a junction.
 
 ## Next step
+**State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
+approved and acknowledged, the verifier passed, `subagent-effort` narrowed and the near-miss fixed
+in one more commit. Next: gentle-ai's assessment of that commit, Codex, `merge-tree`, and a draft
+pull request to the lead's queue; then batch B alone, narrowed first; then the `AMOUNT` fix.
+
 **State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the
 verifier passed, `NEAR_MISS` folded in. Next: Codex (`codex-review --base origin/main`),
 `merge-tree`, push and a draft pull request to the lead's queue; then his batch A (ten rules),

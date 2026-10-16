@@ -25,6 +25,7 @@
 // reads the transcript only when the reply states a share, and a failure inside it lets the session stop.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { memoryIndexRefusal } from './lib/memory-index-guard.mjs';
 
@@ -86,15 +87,22 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
 
 /** Why the reply that ends the turn of the `Stop` payload is to be corrected, or null. The text is the host's
  * `last_assistant_message`, else the transcript's last own reply: the host writes its transcript after the fact, so
- * the recorded share may be the step before the reply's, a tool result short of it. */
-async function stopRefusalOf(payload, readTranscript) {
+ * the recorded share may be the step before the reply's, a tool result short of it. The window the share is of is the one
+ * the host is configured with when a setting gives it, as the pause notice says it (`hostWindow`), ahead of the
+ * session's last get_usage read and of the default: a read of the window before the setting changed would turn back a
+ * reply that says what the notice told it (odd/tasks/session-channel.md, T6b). */
+async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoot }) {
   if (payload?.stop_hook_active === true || typeof payload?.transcript_path !== 'string' || payload.transcript_path === '') return null;
   const { lastShare, shareRefusal } = await import('./lib/audit.mjs');
   const given = typeof payload.last_assistant_message === 'string' ? payload.last_assistant_message : null;
   // A reply that names no context share costs no read of the transcript; the window the share is of comes from it.
   if (given !== null && !(/context/i.test(given) && /\d\s?%/.test(given))) return null;
-  const recorded = lastShare(readTranscript(payload.transcript_path).split(/\r?\n/));
-  if (recorded === null) return null;
+  const read = lastShare(readTranscript(payload.transcript_path).split(/\r?\n/));
+  if (read === null) return null;
+  const { hostWindow } = await import('./lib/pause.mjs');
+  const projectDir = typeof payload.cwd === 'string' && payload.cwd !== '' ? projectRoot(path.resolve(payload.cwd)) : null;
+  const window = hostWindow({ env, home: env.JS_HARNESS_HOME || homedir(), projectDir });
+  const recorded = window === null ? read : { ...read, window };
   return shareRefusal(given ?? recorded.text, recorded);
 }
 
@@ -109,6 +117,8 @@ export async function guardMain(argv, {
   readIndex = (file) => fs.readFileSync(file, 'utf8'),
   claudeConfigDir = process.env.CLAUDE_CONFIG_DIR,
   readTranscript = (file) => fs.readFileSync(file, 'utf8'),
+  env = process.env,
+  homedir = os.homedir,
 } = {}) {
   if (argv.length !== 1 || (argv[0] !== '--hook' && argv[0] !== '--stop')) {
     stderr(USAGE);
@@ -117,7 +127,7 @@ export async function guardMain(argv, {
   if (argv[0] === '--stop') {
     let turnBack = null;
     try {
-      turnBack = await stopRefusalOf(JSON.parse(readStdin()), readTranscript);
+      turnBack = await stopRefusalOf(JSON.parse(readStdin()), readTranscript, { env, homedir, projectRoot });
     } catch {
       return 0;
     }

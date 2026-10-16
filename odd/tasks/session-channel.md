@@ -1696,7 +1696,12 @@ and 3.
   only pasted text (`quoteOf` already returns `pastedOnly`), and can show the question an
   answer was given to, since an answer he sends as a block names no value by itself; the
   contract's "Effort" section as the home of a task's effort. What the hosts' documentation
-  says of part (2) is in Progress, 2026-10-11 23:20
+  says of part (2) is in Progress, 2026-10-11 23:20. JH 26, 2026-10-16 (Progress, 06:51): the pause reads the
+  window the host is configured to compact on (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` of the
+  project's or the user's settings), since 28 of 32 automatic compactions that missed a fact missed `told`, most
+  of them the first compaction of a session after his window went from 500,000 to 350,000; branch
+  `fix/pause-configured-window`. Proof owed once it is installed: `js-harness sessions --measures` counts no
+  `told` miss for a compaction on a configured window
 - [x] T7, MOVED to JH 12 (2026-10-14, by the lead's message; its record is there now), and DONE there: PR 144 (feat/commands-and-doctor, c77ce5d), merged 2026-10-14 at 16:45 local; the state is in odd/tasks/commands-and-doctor.md L8. The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
 - [x] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
@@ -2996,6 +3001,38 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
   scheduled task. Tests 1, 3 and 6 go to him next, one question at a time, through the lead;
   tests 4 and 5 do not need him at the app.
+- 2026-10-16, 06:51 local, T6b (JH 26, by the lead's order): why the pause still missed. `js-harness sessions
+  --measures --hours 24` on this machine at 06:30: "54 automatic compactions judged in 12 sessions: 32 miss a fact
+  (told 28, kept 4)". Each automatic compaction since 2026-10-13 was read again in its transcript (a scratch
+  script, each boundary counted once by `uuid`, side chains skipped): the host compacted between 466,827 and
+  469,728 tokens until 2026-10-15, and from then between 316,910 and 319,101 (and 265,976 to 268,077 in four
+  sessions), because `~/.claude/settings.json` holds `"autoCompactWindow": 350000` since his change of
+  2026-10-15 05:50 (`odd/tasks/fixed-load.md`, "Window"). The host compacts about 33,000 tokens under its
+  window on all three sizes. Nothing in `bin/` read that setting (`grep -rn autoCompactWindow bin/`: no
+  line), so the pause measured a session against the point its last compaction gave, on the old window, or
+  against the default of 500,000: the session reached its compaction under that pause and was never told.
+  Eleven of the misses are of that shape (JH 7 at 267,182 against a pause at 443,236; JH 21, JH ORQ, JH 19,
+  JH 16 twice, JH 5, JH 20, JH 18, the relieved orchestrators at 380,757). One is another: JH 5 ended a turn at
+  435,728, under its pause of 442,309, sat idle 56 minutes, and the host compacted at 441,758 on the next
+  message, before any tool call; no `PostToolUse` hook can see that one. Built, test first (RED: 1 of the
+  pause file's tests, the import, and 2 of the resume file's; then `node --test bin/lib/pause.test.mjs` 55
+  pass, `node --test bin/resume.test.mjs` 92 pass): `configuredWindow` in `bin/lib/pause.mjs` reads the
+  environment's `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, then `autoCompactWindow` of the project's
+  `.claude/settings.local.json`, its `.claude/settings.json` and the user's `settings.json` (the host's own
+  message names the variable and the setting together; that the variable wins is read from it, not tried);
+  `pauseNotice` takes the window, and the point is the session's measured one when it lies within 5 percent
+  of the window from the window less `HOST_COMPACTION_RESERVE` (34,000), else that configured point; the
+  notice's share and the share it says the host compacts at are of the configured window. `resume --pause`
+  hands it the window from the project its `harness.json` walk finds and the Claude home under the hook's
+  home. Not built here: the board (`sessionFacts`) still measures a session that has no compaction of its own
+  against the 500,000 default, and a compaction the host makes early on the first request after an idle turn.
+  That commit is `17266f3` (gate PASS; gentle-ai: medium, 252 lines, not due). Codex on `6a6ce9e..17266f3`
+  (271,027 input tokens): incorrect (0.98), one P2, right: `guard --stop` checks a stated share against the
+  window of the last get_usage read, else 500,000, so a session with no read that says the share the notice gave
+  it (86% of 350,000) was turned back for not saying 60%. Fixed test first in the commit after it (RED: the new
+  test of `bin/guard.test.mjs`; then guard 22, audit 15, resume 92, pause 55 pass): `hostWindow` in the pause
+  library resolves the configured window once for both hooks, and the stop check takes it ahead of a get_usage
+  read and of the default; its refusal names the order.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

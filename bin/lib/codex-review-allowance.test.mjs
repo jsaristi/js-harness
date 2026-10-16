@@ -175,7 +175,8 @@ test('--plan says the allowance after the plan\'s own lines in a project that ho
     assert.equal(done.status, 0, done.stderr);
     const lines = done.stdout.trimEnd().split('\n');
     assert.match(lines[0], /^Plan of the Codex review of /);
-    assert.match(lines.at(-2), /^No estimate: /);
+    assert.match(lines.at(-3), /^No estimate: /);
+    assert.equal(lines.at(-2), 'How the method did: no reviews recorded yet.');
     assert.match(lines.at(-1), /^Allowance of this plan: 300,000 input tokens, .* for the 2 changed lines it reads\. The plan has no estimate, /);
   });
 });
@@ -185,7 +186,8 @@ test('--plan says no allowance in a project without the rules file, and one sent
     const done = plan();
     assert.equal(done.status, 0, done.stderr);
     assert.doesNotMatch(done.stdout, /[Aa]llowance/);
-    assert.match(done.stdout.trimEnd().split('\n').at(-1), /^No estimate: /);
+    assert.match(done.stdout.trimEnd().split('\n').at(-2), /^No estimate: /);
+    assert.equal(done.stdout.trimEnd().split('\n').at(-1), 'How the method did: no reviews recorded yet.');
   });
   withRepository(`${writeRules(RULES)}// another list\n`, (plan) => {
     const done = plan();

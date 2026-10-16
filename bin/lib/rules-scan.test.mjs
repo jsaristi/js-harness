@@ -55,6 +55,8 @@ test('a failure that names no register entry, and a switch back with no sighting
 // its patterns and its planted line in the same change, so a pattern that finds nothing in particular never lands.
 const PLANTED = {
   'agents-budget': { line: 'AGENTS.md stays within its budget of 1500 estimated tokens.', marked: 'AGENTS.md stays within its budget (`rule:agents-budget`).' },
+  'codex-review-margin': { line: 'The plan keeps a margin of 5% of the allowance.', marked: 'The plan keeps its margin (`rule:codex-review-margin`).' },
+  'codex-review-rate': { line: 'A part is put at 1,200 input tokens a changed line.', marked: 'A part is put at the rate of `rule:codex-review-rate`.' },
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
   'gate-log-command': { line: 'The gate log keeps a command cut at 120 characters.', marked: 'The gate log keeps a command cut as `rule:gate-log-command` says.' },
@@ -62,13 +64,21 @@ const PLANTED = {
   'gate-max': { line: 'A gate is stopped after 30 minutes.', marked: 'A gate is stopped at `rule:gate-max`.' },
   'gate-wait': { line: 'A commit waits for its turn of the lock for up to 60 minutes.', marked: 'A commit waits for its turn of the lock as `rule:gate-wait` says.' },
   'person-present': { line: 'He is here when he wrote within 15 minutes.', marked: 'He is here when he wrote within `rule:person-present`.' },
+  'review-model': { line: 'Codex reviews on gpt-6.1-sol.', marked: 'Codex reviews on the model of `rule:review-model`.' },
   'review-part-files': { line: 'A part holds 40 files at most.', marked: 'A part holds the files of `rule:review-part-files` at most.' },
   'review-part-lines': { line: 'A part holds up to 400 changed lines.', marked: 'A part holds up to `rule:review-part-lines`.' },
   'review-parts-unflagged': { line: 'A run of more than 6 parts needs its flag.', marked: 'A run of more parts than `rule:review-parts-unflagged` needs its flag.' },
   'review-timeout': { line: 'A Codex review is stopped after 30 minutes.', marked: 'A Codex review is stopped at `rule:review-timeout`.' },
+  'reviewed-commit-lines': { line: 'A reviewed commit holds up to 1,200 changed lines.', marked: 'A reviewed commit holds up to `rule:reviewed-commit-lines`.' },
   'sensor-timeout': { line: 'A sensor is stopped after 20 minutes.', marked: 'A sensor is stopped at `rule:sensor-timeout`.' },
+  'session-effort': { line: 'A work session runs at `high` effort.', marked: 'A work session runs at the effort of `rule:session-effort`.' },
+  'session-model': { line: 'A work session runs on claude-opus-5-5.', marked: 'A work session runs on the model of `rule:session-model`.' },
+  'subagent-effort': { line: 'Every subagent runs at `high` effort.', marked: 'Every subagent runs at the effort of `rule:subagent-effort`.' },
+  'subagent-reader-model': { line: 'A verifier runs on claude-opus-5-5.', marked: 'A verifier runs on the model of `rule:subagent-reader-model`.' },
+  'subagent-writer-model': { line: 'A narrow writer runs on claude-haiku-5-5.', marked: 'A narrow writer runs on the model of `rule:subagent-writer-model`.' },
   'wait-every': { line: 'js-harness wait looks again every 120 seconds.', marked: 'js-harness wait looks again as often as `rule:wait-every` says.' },
   'wait-for': { line: 'js-harness wait gives up after 480 minutes.', marked: 'js-harness wait gives up at `rule:wait-for`.' },
+  'work-sessions': { line: 'At most 3 work sessions run at once.', marked: 'At most the work sessions of `rule:work-sessions` run at once.' },
 };
 
 test('on the real list, every rule with patterns finds its own planted line, and loses it to its mark', () => {
@@ -80,8 +90,10 @@ test('on the real list, every rule with patterns finds its own planted line, and
   }
 });
 
-// A line each narrowed rule once caught and must not catch again: the probe's false positive it was narrowed for.
+// The lines each narrowed rule once caught and must not catch again: the false positives it was narrowed for.
 const NEAR_MISS = {
+  'codex-review-margin': 'The gate keeps a margin of 30 seconds on its bound.',
+  'codex-review-rate': 'That part cost 325 input tokens a changed line.',
   'gate-log-command': 'The Codex command line is cut to 100 characters.',
   'gate-log-size': 'Search the git log over 3 days.',
   'gate-max': 'The gate is stopped when 90 percent are done.',
@@ -90,11 +102,19 @@ const NEAR_MISS = {
   'review-part-files': 'Each part is read as { of: 1, files }.',
   'review-parts-unflagged': 'A run of 28 parts started without the numbers.',
   'review-timeout': 'The Codex login is stopped past codex-review-prompt.mjs:51.',
+  'reviewed-commit-lines': 'The commit is 5,222 changed lines.',
+  'subagent-effort': [
+    'The orchestrator runs on gpt-6.1-sol with effort: "medium".',
+    'Two readers on Opus at high effort read the first version.',
+    'Measured (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort.',
+  ],
 };
 
 test('on the real list, a narrowed rule no longer finds the line it was narrowed for', () => {
-  for (const [id, line] of Object.entries(NEAR_MISS)) {
-    assert.deepEqual(scanLines(RULES, inForceLines('docs/ROADMAP.md', `${line}\n`)).filter((finding) => finding.id === id), [], id);
+  for (const [id, lines] of Object.entries(NEAR_MISS)) {
+    for (const line of [lines].flat()) {
+      assert.deepEqual(scanLines(RULES, inForceLines('docs/ROADMAP.md', `${line}\n`)).filter((finding) => finding.id === id), [], `${id}: ${line}`);
+    }
   }
 });
 
