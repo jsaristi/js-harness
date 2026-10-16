@@ -2114,6 +2114,16 @@ test('the orchestrator skill no longer asks a session to keep by hand the rule t
   assert.ok(text.includes('\n3. two gates run at once (a gate that waits for its turn is not one of them);\n'));
 });
 
+// T8 of odd/tasks/gate-wait.md: M2 held by the records (Progress, 2026-10-16), so the two reviews run beside a
+// gate; what runs tests still waits, a sub-agent's tests included (`heavy-run-beside-gate`, 2026-10-16).
+test('the orchestrator skill lets both reviews run beside a gate, and keeps a sub-agent that runs tests waiting', () => {
+  const text = components[2].content('0.1.0');
+  assert.doesNotMatch(text, /a reviewer wait for the gate to end/);
+  assert.ok(text.includes(
+    '\n- While a gate runs on the machine, run nothing heavy beside it: a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: `js-harness codex-review` runs beside a gate, since out of a turn Codex\'s `node --test` is refused, and so does a gentle-ai review, whose reviewer has no tools.\n',
+  ));
+});
+
 // The relief of an orchestrator is one prompt, always the same: it is in the skill as the block the user
 // copies, and it leads the new session back to this skill.
 test('the orchestrator skill carries its fixed opening prompt as its one fenced block, and the prompt names the skill', () => {
