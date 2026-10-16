@@ -19,8 +19,11 @@ const SOURCES_TEXT = fs.readFileSync(path.join(PACKAGE, 'docs', 'rule-sources.js
 const SOURCES = JSON.parse(SOURCES_TEXT);
 const COUNT_LINE = `${RULES.length} rules, hash ${rulesHash(RULES)}`;
 const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
-// After its line, the count of each scanned rule's findings in the texts in force; no rule carries patterns yet.
-const PATTERNS_LINE = `patterns: none; unscanned: ${RULES.filter((rule) => !Object.hasOwn(rule, 'retired')).length}`;
+// After its line, the count of each scanned rule's findings in the texts in force: none in a project of these tests,
+// which holds no text that restates a value, so every rule with patterns counts 0.
+const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
+const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
+const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
 const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source]]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
