@@ -149,6 +149,10 @@ check said or before its answer was read.
 - Seen: 2026-10-12 — session 9265156a (JH 7), by its own messages to the lead (claimed) — a commit,
   its push and its pull request were joined by `;` in one command, twice; each step succeeded, so
   nothing went out that its check would have stopped
+- Seen: 2026-10-16 — session 265bdd78 (JH 21), its notices to the lead (read here) — the push of pull
+  request 290 and the notice that it was pushed were joined by `;` in one command; the pre-push hook
+  refused the push (a merge that resolved a conflict in code had no Codex record) and the notice said
+  "pushed"; a second notice corrected it, and the push ran alone after the record
 - Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
 
 ### check-survivor-test-fails
