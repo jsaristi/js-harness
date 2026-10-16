@@ -190,7 +190,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-14",
     "value": 30,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:review|codex)\\b.{0,50}\\b(?:stalled|stopped|timeout|times? out)\\b.{0,40}(?<![\\w:.]){amount}"
+    ]
   },
   {
     "id": "reviewed-commit-lines",
