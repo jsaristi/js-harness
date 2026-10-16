@@ -3344,8 +3344,47 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     command to 120 characters".
   The `AMOUNT` fix takes the mid-number false positives; the rest is a second pass of patterns
   after his 13 rules.
+- 2026-10-16, batch 2 landed as pull request 264 (`main` 8e43e8a): gentle-ai, the verifier and
+  Codex (0.88, no finding) had all passed. His batch A had to wait for it: `rules change` keeps
+  one rule change open at a time. Batch A, built on `rule/his-patterns` as changes of form under
+  his answer of 2026-10-16, with a design for their source: `session-effort`, `session-model`,
+  `subagent-reader-model`, `work-sessions` (0 findings each), `review-model`,
+  `subagent-writer-model`, `reviewed-commit-lines` (1 each), `codex-review-margin` (2),
+  `subagent-effort` and `codex-review-rate` (3 each). The narrowings, each from a probe of the
+  drafts on `main`:
+  - `codex-review-margin` wants a percent, since `odd/tasks/gate-wait.md` speaks of the gate's
+    margin on its bound in seconds;
+  - `codex-review-rate` wants a rate, a cap or "put at" before the amount, since "cost 325 input
+    tokens a changed line" is a measurement;
+  - `reviewed-commit-lines` wants a bound ("up to", "at most", "under", "holds"), since "It is
+    5,222 changed lines" measures a commit;
+  - `subagent-effort`'s second pattern leaves out a line naming a `gpt-` model, since
+    `effort: "medium"` in `stack-v4.md` is Codex's orchestrator, not a subagent of this harness.
+- 2026-10-16, his batch A reviewed. gentle-ai approved it (`review-b85f1114633b9a16`,
+  acknowledged), with two warnings. The first is refuted: it held that `subagent-effort`'s
+  near-miss line, with "medium", cannot test the `gpt-` exclusion. But `{amount}` matches any
+  effort word (`AMOUNT`, `bin/lib/rules.mjs:80`), and a probe found that line without the
+  exclusion and missed it with it. The second stands: `reviewed-commit-lines`' near-miss was
+  missed by word order, not by the bound, so it is now "The commit is 5,222 changed lines.",
+  which a probe found without the bound. The independent verifier (Opus): PASS, no blocker; 8
+  of the 11 findings restate a value, and all three false positives were `subagent-effort`'s:
+  two records of how readers ran, and "subagent" inside a path (`docs/ROADMAP.md:371`). So
+  `subagent-effort`'s first pattern now wants a setting verb ("runs", "launched") before the
+  effort, and a subject that is not inside a path; it keeps one finding,
+  `odd/tasks/rule-hierarchy.md:1892`, a restatement. `NEAR_MISS` takes several lines per rule
+  for it. The verifier's other advisories join batch 2's for the second pass: the aliases `opus`
+  and `haiku`, which `{amount}` cannot match since it needs a digit; model lookaheads that accept
+  any `claude-` or `gpt-` model; measurements; and the overlap between rules, which only a probe
+  checks. gentle-ai's two suggestions go there too: `review-model`'s `\breview\b` misses
+  "reviews", and `codex-review-margin`'s lookbehind on `%` leans on `AMOUNT` taking the unit,
+  which the `AMOUNT` fix must keep or replace.
 
 ## Next step
+**State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
+approved and acknowledged, the verifier passed, `subagent-effort` narrowed and the near-miss fixed
+in one more commit. Next: gentle-ai's assessment of that commit, Codex, `merge-tree`, and a draft
+pull request to the lead's queue; then batch B alone, narrowed first; then the `AMOUNT` fix.
+
 **State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the
 verifier passed, `NEAR_MISS` folded in. Next: Codex (`codex-review --base origin/main`),
 `merge-tree`, push and a draft pull request to the lead's queue; then his batch A (ten rules),
