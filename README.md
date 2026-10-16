@@ -568,9 +568,12 @@ Find there the document of the feature this session was working on, read its "Ne
 
 The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
 `PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
-session, on `Bash`, and on `Write` and `Edit`. `guard --hook` reads the call on standard input
-and refuses six things: a sub-agent launched on a model the project's rules do not give; a
-message whose stamped hour is more than a minute off the clock; a shell command with backticks
+session, on `Bash`, on `Write` and `Edit`, and on the scheduled-task and cloud tools that open a session
+(`create`, `update` and `run` of a scheduled task, and `RemoteTrigger`). `guard --hook` reads the call on
+standard input and refuses seven things: a sub-agent launched on a model the project's rules do not give;
+a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
+declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
+sidebar, even when he asked for it; a message whose stamped hour is more than a minute off the clock; a shell command with backticks
 inside double quotes, which bash runs as commands; a `node --test` of several files outside a
 gate turn while another gate holds the machine's lock; and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index

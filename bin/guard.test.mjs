@@ -51,6 +51,25 @@ test('in a project without the rules, an Agent call on any model passes', async 
   assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { model: 'sonnet' } }, { rulesText: null }), { code: 0, out: '', err: '' });
 });
 
+// odd/tasks/session-channel.md, layer 3 (his answers of 2026-10-15): refused where the rule is declared, even when he asked.
+test('a scheduled-task or cloud tool that opens a session is denied in the project that declares the rule, naming start_session', async () => {
+  for (const tool_name of ['mcp__scheduled-tasks__create_scheduled_task', 'RemoteTrigger']) {
+    const refused = await hook({ tool_name, cwd: 'D:/project', tool_input: { prompt: 'p' } });
+    assert.equal(refused.code, 0, tool_name);
+    assert.equal(denied(refused).permissionDecision, 'deny', tool_name);
+    assert.match(denied(refused).permissionDecisionReason, new RegExp(`^js-harness guard: ${tool_name} opens a session`), tool_name);
+    assert.match(denied(refused).permissionDecisionReason, /sessions-open-in-sidebar.*start_session/s, tool_name);
+  }
+  assert.deepEqual(await hook({ tool_name: 'mcp__scheduled-tasks__delete_scheduled_task', cwd: 'D:/project', tool_input: { id: 'x' } }), { code: 0, out: '', err: '' }, 'delete passes');
+});
+
+test('in a project without the rules, the tools that open a session pass', async () => {
+  const quiet = { code: 0, out: '', err: '' };
+  for (const tool_name of ['mcp__scheduled-tasks__run_scheduled_task', 'RemoteTrigger']) {
+    assert.deepEqual(await hook({ tool_name, cwd: 'D:/project', tool_input: {} }, { rulesText: null }), quiet, tool_name);
+  }
+});
+
 test('a message to another session, by either tool, is denied when its stamped hour is off the clock', async () => {
   for (const tool_name of ['SendMessage', 'mcp__ccd_session_mgmt__send_message']) {
     const refused = await hook({ tool_name, tool_input: { to: 'x', session_id: 'y', message: 'From the lead, 14:48 local by date. Merged.' } });

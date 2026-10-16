@@ -3,6 +3,9 @@
 // hooks contract's deny with its reason; to let the call run, it prints nothing. It exits 0 whatever happens, and a
 // failure inside it lets the call run: a check that cannot read what it checks says nothing rather than block work.
 //   - `Agent`: the sub-agent's model against the rules in force in the project (bin/lib/guard.mjs, `modelRefusal`).
+//   - The four tools that open a session in the app's Routines or in the cloud (`OPENING_TOOLS`): refused where the
+//     rule `sessions-open-in-sidebar` is declared, and the reason names `start_session` (`openingRefusal`;
+//     odd/tasks/session-channel.md, layer 3).
 //   - `SendMessage` and `mcp__ccd_session_mgmt__send_message`: the hour a message stamps as its time of sending
 //     against the clock (`hourRefusal`).
 //   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a `node --test` of
@@ -27,10 +30,11 @@ import { memoryIndexRefusal } from './lib/memory-index-guard.mjs';
 
 const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
-  + '  message whose stamped hour is more than a minute off the clock, a Bash command with backticks inside double\n'
-  + '  quotes, a node --test of several files while another gate holds the lock, and a Write or Edit that puts a line\n'
-  + '  over 150 characters in a memory index (MEMORY.md) or a line in a Markdown file that stamps today with an hour\n'
-  + '  ahead of the clock; always exits 0\n'
+  + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
+  + '  sessions-open-in-sidebar), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
+  + '  with backticks inside double quotes, a node --test of several files while another gate holds the lock, and\n'
+  + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
+  + '  file that stamps today with an hour ahead of the clock; always exits 0\n'
   + '       js-harness guard --stop\n'
   + '  reads a Stop payload on standard input; turns the stop back when the reply states this session\'s context share\n'
   + '  more than 2 points from the share its transcript records, so the session corrects it; always exits 0\n';
@@ -68,12 +72,11 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  if (tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
-  const { allowedModels, backtickRefusal, hourRefusal, modelRefusal } = await import('./lib/guard.mjs');
-  if (tool === 'Agent') {
-    const root = projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
-    return modelRefusal(input, allowedModels(rulesTextOf(root, readFile)));
-  }
+  const { OPENING_TOOLS, allowedModels, backtickRefusal, hourRefusal, modelRefusal, openingRefusal } = await import('./lib/guard.mjs');
+  if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
+  const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
+  if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
+  if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
   const backticks = backtickRefusal(input.command);
   if (backticks !== null) return backticks;
