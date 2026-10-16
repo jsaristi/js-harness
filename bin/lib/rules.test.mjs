@@ -491,6 +491,21 @@ test('{amount} takes an effort word only as a word: never inside a rule mark, a 
   }
 });
 
+test('{amount} takes a number only as a number of its own: never inside an id, a hash or a line number', () => {
+  const stopped = patternOf('gate.{0,50}stopped.{0,30}{amount}');
+  for (const line of ['a gate is stopped at S1', 'a gate is stopped at e5b7588', 'a gate is stopped at check.mjs:42', 'a gate is stopped at x_30', 'a gate is stopped at v2-rc', 'a gate is stopped at 3fa2b91', 'a gate is stopped at 30_000']) {
+    assert.doesNotMatch(line, stopped, line);
+  }
+  for (const line of ['a gate is stopped after 30 minutes', 'a gate is stopped at (30 min)', 'a gate is stopped at 1,200 s', 'a gate is stopped at 1.5 h', 'a gate is stopped at `30` minutes', 'a gate is stopped at 88%', 'a gate is stopped at 30min', 'a gate is stopped at 30-minute marks', 'a gate is stopped at 60.']) {
+    assert.match(line, stopped, line);
+  }
+  // Left out on purpose (the comment of AMOUNT says why): a signed or dotted number and a compact duration.
+  const unit = patternOf('stopped at {amount}\\s*(?:h|min)\\b');
+  for (const line of ['stopped at -5 min', 'stopped at .5 h', 'stopped at 1h30m']) {
+    assert.doesNotMatch(line, unit, line);
+  }
+});
+
 test('a row that is not { refuses: day } or { reports: text, since: day } is refused', () => {
   const shape = 'rule "alpha-value": the row is written { refuses: YYYY-MM-DD } or { reports: <reason>, since: YYYY-MM-DD }';
   const bad = [

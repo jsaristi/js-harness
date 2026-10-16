@@ -391,13 +391,15 @@ const FIXED_WIN = [
   'C:\\Users\\Oficina\\.js-harness\\manifest.json',
   'C:\\Users\\Oficina\\.claude\\skills\\js-harness\\SKILL.md',
   'C:\\Users\\Oficina\\.claude\\skills\\js-harness-orchestrator\\SKILL.md',
+  'C:\\Users\\Oficina\\.claude\\skills\\js-harness-protocols\\SKILL.md',
   'C:\\Users\\Oficina\\.codex\\skills\\js-harness\\SKILL.md',
   'C:\\Users\\Oficina\\.codex\\skills\\js-harness-orchestrator\\SKILL.md',
+  'C:\\Users\\Oficina\\.codex\\skills\\js-harness-protocols\\SKILL.md',
   'C:\\Users\\Oficina\\.claude\\settings.json',
   'C:\\Users\\Oficina\\.codex\\hooks.json',
 ];
 
-test('realHomeFiles without a manifest is the fixed list: the manifest, four skills, two hook files', () => {
+test('realHomeFiles without a manifest is the fixed list: the manifest, six skills, two hook files', () => {
   assert.deepEqual(realHomeFiles(WIN_HOME, undefined, 'win32'), FIXED_WIN);
   assert.deepEqual(realHomeFiles(WIN_HOME, null, 'win32'), FIXED_WIN);
   assert.deepEqual(realHomeFiles('/home/seb', undefined, 'linux').slice(0, 2), [

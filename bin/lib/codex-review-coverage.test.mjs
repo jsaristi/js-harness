@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { baseLeftOut, COMMITS_UNREAD, MARKS_UNREAD, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
+import { repoTemplate } from './git-fixture.testkit.mjs';
 
 // Real git in every test, isolated from the host's config. What `check` says of the records over the range
 // of a push is in `bin/check-codex-reviews.test.mjs`, which is the net of the definition itself; here are
@@ -40,15 +41,20 @@ function commit(root, file, content, message) {
   return git(root, 'rev-parse', 'HEAD');
 }
 
-/** A repository with one commit, `first`, on `main`. No remote: a range here is the one a caller names. */
-function makeRepo() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-coverage-'));
-  made.push(root);
+/** The repository every test starts from, built once and copied (`git-fixture.testkit.mjs`); it answers `first`. */
+const firstCommit = repoTemplate((root) => {
   git(root, 'init');
   git(root, 'symbolic-ref', 'HEAD', 'refs/heads/main');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
-  return { root, first: commit(root, 'a.js', 'one', 'init') };
+  return commit(root, 'a.js', 'one', 'init');
+});
+
+/** A repository with one commit, `first`, on `main`. No remote: a range here is the one a caller names. */
+function makeRepo() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-coverage-'));
+  made.push(root);
+  return { root, first: firstCommit(root) };
 }
 
 function record(root, base, head, extra = {}) {

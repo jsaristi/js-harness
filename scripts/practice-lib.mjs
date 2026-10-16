@@ -240,9 +240,9 @@ export function ownsFolder(markerText) {
 
 // ---- the real home, before and after ---------------------------------------------------------------------------------
 
-// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): two skills
+// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): three skills
 // for each of two hosts, two entries in a file of each host, and the pause entry in Claude Code's (`HARNESS_HOOKS` below).
-const SKILLS = ['js-harness', 'js-harness-orchestrator'];
+const SKILLS = ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols'];
 const HOSTS = ['.claude', '.codex'];
 // The arrays of the manifest whose records name a file by `path`: what `install` wrote, the files it grafted
 // an entry onto, and what was written only when asked (the login launcher, which lies outside the home).
@@ -263,7 +263,7 @@ function recordedPaths(manifestText) {
 }
 
 /** The files the harness owns in the user's REAL home `home`, as absolute paths without duplicates: the
- * manifest, the `SKILL.md` of both skills for both hosts, the two files that hold a `SessionStart` entry,
+ * manifest, the `SKILL.md` of the three skills for both hosts, the two files that hold a `SessionStart` entry,
  * and every file the real manifest (`manifestText`, the content of `<home>/.js-harness/manifest.json`, or
  * `undefined`) records. The manifest records absolute paths; a relative one is taken from `home`. On Windows
  * two paths that differ only in case are one file.

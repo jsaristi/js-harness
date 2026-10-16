@@ -9,6 +9,7 @@ import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { fixedLoadRow } from './lib/fixed-load.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
+import { checkSpec } from './lib/spec.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -25,6 +26,7 @@ import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
+import { watchBusiest } from './lib/machine-busiest.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
@@ -39,6 +41,7 @@ import { ruleHere, ruleOf } from './lib/rules.mjs';
 import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './subagents.mjs';
+import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
 
 export { estimateTokens };
 
@@ -1350,6 +1353,35 @@ function gateLogRows(record) {
  * explains a slow gate, else `pass` or `fail`. */
 const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : rows.every((row) => row.pass) ? 'pass' : 'fail');
 
+/** The watch of who spends the processor over a gate's run (`watchBusiest` of `./lib/machine-busiest.mjs`,
+ * and odd/tasks/gate-wait.md, T19), started where the gate's start is in its log, and only there: what it
+ * finds is kept under that start's id (`busiest` of `gateRecord`), and a start that is not in the log has
+ * nothing to key it by. Returns `null` there, or the step that ends the watch and keeps what it found, for
+ * after the run: it resolves once the end reading is in, and never rejects. `check` and `js-harness gate`
+ * call it as their command or first sensor is about to start, and its first reading is not waited for: it
+ * costs a gate no second before its run, and seconds after it.
+ *
+ * Best effort throughout, as the look before a gate is: a watch that cannot start, an end that fails or
+ * finds nobody keeps nothing and says nothing, and the gate is what it would have been. `watch` stands in
+ * for `watchBusiest` in a test. */
+export function watchRun(record, watch = watchBusiest) {
+  if (!record?.started?.()) return null;
+  let watching;
+  try {
+    watching = watch();
+  } catch {
+    return null;
+  }
+  return async () => {
+    try {
+      const ended = await watching?.end();
+      record.busiest({ seconds: ended?.seconds, busiest: ended?.busiest });
+    } catch {
+      // nobody found: nothing to keep
+    }
+  };
+}
+
 /** One row per sensor, run one after another; a broken declaration, of the sensors or of the documents,
  * is one FAIL row and no sensor at all is one INFO row.
  *
@@ -1392,6 +1424,13 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * and changes nothing else. Nothing is written where no sensor runs, for a caller that is no gate, or with
  * `log: false` in `lock`, which is how a gate passes on the switch of its environment (`GATE_LOG_ENV`).
  * `deps.gateLog` stands in for what the record is written with: `{ append, now, id }`, each optional.
+ *
+ * A gate whose start is in the log also keeps who spent the processor over its run, beside the log in
+ * `busiest.jsonl` (`watchRun`): every process's processor time is read as its first sensor starts, without
+ * being waited for, and again after the last, and the heaviest that lived through the run are written
+ * under the id of its start. Nothing is said of it in the report, and nothing is read with `load: false`
+ * in `lock`: the switch of the sample is the switch of every reading of the machine. `deps.watchBusiest`
+ * stands in for the watch.
  *
  * A gate stops before its sensors when a row it knew before them has already failed, which it says with
  * `stoppedBy` in `lock`, the names of those rows: the commit cannot pass, so the wait for the lock, an hour
@@ -1509,6 +1548,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // written and again after the end, so neither look is in the seconds the log says the sensors took.
     const before = lock ? untrackedPaths(cwd, deps.git) : null;
     record?.start({ ...turn, load });
+    // Who spends the processor over the run, from its first reading on, which is not waited for here; with
+    // the sample of the load switched off, nothing is read of the machine (`GATE_LOAD_ENV`).
+    const keepBusiest = lock && lock.load !== false ? watchRun(record, deps.watchBusiest) : null;
     const ran = [];
     let result = 'error';
     // The key this gate proves: the one it had before its sensors, when all of them passed and the tree
@@ -1564,6 +1606,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
+    // After the end is written, so that the seconds of the log stay the sensors'.
+    await keepBusiest?.();
     return [...rows, ...ran, ...ran.flatMap((row) => (row.rerun ? [row.rerun.row] : [])), ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
   };
   if (!lock) return run();
@@ -1571,7 +1615,33 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return underGateLock(cwd, lock, deps, run, record);
+  return (await testsOnCi(cwd, lock, deps)) ?? underGateLock(cwd, lock, deps, run, record);
+}
+
+/** The rows of a gate whose tests ran on GitHub's machines because its turn at the lock would wait
+ * (./lib/ci-gate.mjs), or null for a gate that runs here: its turn is free, the project has no gate workflow, or
+ * CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its tests
+ * marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate` stand
+ * in for the two halves. */
+async function testsOnCi(cwd, lock, deps) {
+  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, home: lock.home, env: lock.env ?? process.env });
+  if (!why) return null;
+  console.error(`check: ${why}; the tests go to GitHub's machines (${CI_WORKFLOW}) instead of waiting`);
+  const startedAt = Date.now();
+  const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
+  if (!ci.ran) {
+    console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
+    return null;
+  }
+  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
+  let at = startedAt;
+  const record = lock.log !== false && lock.home !== undefined
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', now: () => at, ...deps.gateLog })
+    : null;
+  record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
+  at = Date.now();
+  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci' }] });
+  return [gateRow(`${why}, so the tests ran on CI`), tests, ...gateLogRows(record)];
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
@@ -2210,7 +2280,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));
@@ -2237,7 +2307,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // computed. The inner check and a push are outside this branch, and as they were.
   let stopped = false;
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null };
+    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, env, remote };
     const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
     const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy, wsl: readGateWsl(home, env) });
     rows.push(...sensed);

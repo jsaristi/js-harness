@@ -62,7 +62,7 @@ First request of a one-word prompt, estimated tokens:
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
 | Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
-| Context | `autoCompactWindow: 500000`; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
+| Context | `autoCompactWindow: 350000` (his setting of 2026-10-15), which the context pause reads to know where the host compacts; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
 
 ## Phases
 
@@ -191,7 +191,7 @@ te tienen bloqueado al ser una ia ese es el problema"); measured on nine pages, 
 - [x] `js-harness fetch <url>`: rung 2, read or blocked with the next rung
 - [x] The `resume --pause` hook names the next rung after a blocked WebFetch
 - [x] And after a WebFetch that failed as a tool error, through a `PostToolUseFailure` entry `install` writes (Sebastián, 2026-10-16: "Sí, agregala (Recomendada)")
-- [ ] Reviewed (gentle-ai and Codex) and merged
+- [x] Reviewed (gentle-ai and Codex) and merged (`jsaristi/js-harness#204`, its `PostToolUseFailure` entry `#260`)
 
 ## F5 result
 

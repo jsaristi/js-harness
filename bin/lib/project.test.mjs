@@ -18,6 +18,9 @@ import {
   InitWriteError,
 } from './project.mjs';
 import { sha256 } from './manifest.mjs';
+import { repoTemplate } from './git-fixture.testkit.mjs';
+import { parseRegister } from './failures.mjs';
+import { checkFailures } from '../failures.mjs';
 
 // T2e item 8 (R3-tests-depend-on-host-git-config): every test here runs a real `git` (only
 // `codegraph` is ever faked), so a real `git init`/`commit`/`worktree add` must not silently pick
@@ -43,10 +46,15 @@ after(() => {
   fs.rmSync(configDir, { recursive: true, force: true });
 });
 
-function makeTmpRepo(prefix = 'js-harness-project-') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+/** What `git init` makes, made once and copied (`git-fixture.testkit.mjs`): every empty repository here is the same. */
+const emptyRepo = repoTemplate((dir) => {
   const init = spawnSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
   assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+});
+
+function makeTmpRepo(prefix = 'js-harness-project-') {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  emptyRepo(dir);
   return dir;
 }
 
@@ -147,12 +155,12 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
 
     assert.equal(spawn.codegraphCalls.length, 1);
 
-    // Three files, the push check of a project with code (its Codex review is on), and the two keys of this
-    // clone's settings a project of JavaScript with no TypeScript asks for.
+    // Four files (the failures register among them), the push check of a project with code (its Codex review is
+    // on), and the two keys of this clone's settings a project of JavaScript with no TypeScript asks for.
     const wroteActions = result.actions.filter((a) => a.kind === 'wrote');
     const ranActions = result.actions.filter((a) => a.kind === 'ran');
-    assert.equal(wroteActions.length, 6);
-    assert.deepEqual(wroteActions.slice(3).map((a) => a.path), [
+    assert.equal(wroteActions.length, 7);
+    assert.deepEqual(wroteActions.slice(4).map((a) => a.path), [
       '.git/hooks/pre-push',
       '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
       '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
@@ -163,7 +171,7 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     assert.equal(result.manifest.version, '0.1.0');
     assert.equal(result.manifest.format, 1);
     assert.deepEqual(result.manifest.settings.map((record) => record.key), ['paste', 'languageServer']);
-    assert.equal(result.manifest.files.length, 4);
+    assert.equal(result.manifest.files.length, 5);
     for (const file of result.manifest.files) {
       const abs = path.join(root, ...file.path.split('/'));
       assert.equal(sha256(fs.readFileSync(abs, 'utf8')), file.sha256);
@@ -172,8 +180,8 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     assert.deepEqual(result.manifest.kept, []);
     assert.deepEqual(result.manifest.codegraph, { createdDir: true, status: 'ok' });
     // T2e item 6: `.git/hooks` already exists (git creates it on `git init`), so nothing was
-    // created for it here — `dirs` stays empty.
-    assert.deepEqual(result.manifest.dirs, []);
+    // created for it here; `docs`, for the failures register, is the one folder this run made.
+    assert.deepEqual(result.manifest.dirs, [{ path: 'docs' }]);
 
     assert.ok(fs.existsSync(result.manifestPath));
     assert.deepEqual(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8')), result.manifest);
@@ -270,6 +278,88 @@ test('initProject keeps an existing AGENTS.md untouched and lists it in kept', (
     const keptEntry = result.manifest.kept.find((k) => k.path === 'AGENTS.md');
     assert.ok(keptEntry, 'expected AGENTS.md in kept');
     assert.match(keptEntry.reason, /exists/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- the empty failures register (odd/tasks/rule-hierarchy.md, T9; "The failures register") ---
+
+test('initProject writes an empty failures register the register reads with no fault, and records it', () => {
+  const root = makeTmpRepo();
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+
+    const registerPath = path.join(root, 'docs', 'FAILURES.md');
+    const text = fs.readFileSync(registerPath, 'utf8');
+    assert.deepEqual(parseRegister(text), { classes: [], entries: [], errors: [] });
+    // It says how a class and an entry are written, so the first failure needs no other file to record.
+    assert.match(text.replace(/\s+/g, ' '), /declared under "## Classes" as a list item: the id in backticks, then what it means/);
+    // The gate's row reads it and passes, as `failures check --settled` would.
+    const rows = checkFailures(root);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].pass, true, rows[0].detail);
+
+    const recorded = result.manifest.files.find((file) => file.path === 'docs/FAILURES.md');
+    assert.ok(recorded, 'expected docs/FAILURES.md in the manifest');
+    assert.equal(recorded.sha256, sha256(text));
+    assert.ok(result.actions.some((a) => a.kind === 'wrote' && a.path === 'docs/FAILURES.md'));
+    // `docs/` did not exist, so it is a folder this run made, and uninstall removes it while it is empty.
+    assert.ok(result.manifest.dirs.some((dir) => dir.path === 'docs'), JSON.stringify(result.manifest.dirs));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject keeps an existing failures register untouched and lists it in kept', () => {
+  const root = makeTmpRepo();
+  try {
+    fs.mkdirSync(path.join(root, 'docs'));
+    const original = '# Failures\n\n## Entries\n';
+    fs.writeFileSync(path.join(root, 'docs', 'FAILURES.md'), original, 'utf8');
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(fs.readFileSync(path.join(root, 'docs', 'FAILURES.md'), 'utf8'), original);
+    assert.ok(!result.manifest.files.some((f) => f.path === 'docs/FAILURES.md'));
+    const keptEntry = result.manifest.kept.find((k) => k.path === 'docs/FAILURES.md');
+    assert.ok(keptEntry, 'expected docs/FAILURES.md in kept');
+    assert.match(keptEntry.reason, /exists/);
+    assert.ok(!result.manifest.dirs.some((dir) => dir.path === 'docs'));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Codex P2 on e898283: a `docs` that is a link (a junction on Windows) to a folder outside the project would take the
+// register outside it, where uninstall then refuses to follow. It is judged as the hooks path is, and never written.
+test('initProject never writes the failures register through a docs link that leaves the repository', () => {
+  const root = makeTmpRepo();
+  const outside = makeTmpDir('js-harness-project-outside-docs-');
+  try {
+    fs.symlinkSync(outside, path.join(root, 'docs'), 'junction');
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(fs.readdirSync(outside), []);
+    assert.ok(!result.manifest.files.some((f) => f.path === 'docs/FAILURES.md'));
+    const keptEntry = result.manifest.kept.find((k) => k.outside && /FAILURES\.md$/.test(k.path));
+    assert.ok(keptEntry, `expected the register kept as outside: ${JSON.stringify(result.manifest.kept)}`);
+    assert.match(keptEntry.reason, /link/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject removes the empty failures register init wrote and the docs folder it made', () => {
+  const root = makeTmpRepo();
+  try {
+    assert.equal(initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).code, 0);
+    assert.equal(uninstallProject(root, { spawn: spawnSync }).code, 0);
+    assert.equal(fs.existsSync(path.join(root, 'docs')), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -685,7 +775,7 @@ test('initProject rolls back everything, including a directory it created, when 
     // T2e item 6: the shallowest directory this run actually created (`nested`, not
     // `nested/hooks/dir`) is recorded in `dirs`, repo-relative like `files`; the manifest's own
     // directory (`.git/js-harness`) is never in there.
-    assert.deepEqual(retry.manifest.dirs, [{ path: 'nested' }]);
+    assert.deepEqual(retry.manifest.dirs, [{ path: 'docs' }, { path: 'nested' }]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1486,7 +1576,7 @@ test('initProject records the shallowest created directory chain in an outside g
     assert.ok(fs.existsSync(path.join(hooksDir, 'pre-commit')));
     // The shallowest directory this run created (`custom`), not the deepest (`custom/nested/hooks`).
     const expectedShallowest = path.join(commonGitDir, 'custom').split(path.sep).join('/');
-    assert.deepEqual(result.manifest.dirs, [{ path: expectedShallowest, gitDir: true }]);
+    assert.deepEqual(result.manifest.dirs, [{ path: 'docs' }, { path: expectedShallowest, gitDir: true }]);
   } finally {
     spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
     fs.rmSync(main, { recursive: true, force: true });
@@ -1560,7 +1650,7 @@ test('initProject records the shallowest created directory chain even when the h
     // The shallowest directory this run created (`custom`), not the deepest
     // (`custom/nested/hooks`) — the case mismatch must not stop the climb early. This is the
     // ordinary working tree, so the manifest records it repo-relative, same as `files`.
-    assert.deepEqual(result.manifest.dirs, [{ path: 'custom' }]);
+    assert.deepEqual(result.manifest.dirs, [{ path: 'docs' }, { path: 'custom' }]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1973,7 +2063,7 @@ test('uninstallProject leaves a repo byte-identical to before init when core.hoo
 
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);
-    assert.deepEqual(initResult.manifest.dirs, [{ path: 'custom' }]);
+    assert.deepEqual(initResult.manifest.dirs, [{ path: 'docs' }, { path: 'custom' }]);
     assert.ok(fs.existsSync(path.join(root, 'custom', 'nested', 'hooks', 'pre-commit')));
 
     const uninstallResult = uninstallProject(root, { spawn: spawnSync });
@@ -2846,6 +2936,9 @@ test('syncProject does not create an AGENTS.md a fresh clone lacks, and reports 
     assert.equal(result.code, 0);
     assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
     assert.ok(result.actions.some((a) => a.kind === 'skip' && a.path === 'AGENTS.md'));
+    // The failures register likewise: a clone that has none gets none from sync, and no `docs/` for it.
+    assert.equal(fs.existsSync(path.join(root, 'docs')), false);
+    assert.ok(result.actions.some((a) => a.kind === 'skip' && a.path === 'docs/FAILURES.md'));
     assert.deepEqual(result.manifest.kept, [{ path: 'harness.json', reason: 'committed' }]);
     assert.deepEqual(result.manifest.files.map((f) => f.path), ['.git/hooks/pre-commit']);
   } finally {
@@ -3053,7 +3146,7 @@ test('syncProject records a directory it has to recreate for a gone hook that in
     assert.equal(result.code, 0);
     assert.ok(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')));
     const onDisk = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
-    assert.deepEqual(onDisk.dirs, [{ path: '.git/hooks' }]);
+    assert.deepEqual(onDisk.dirs, [{ path: 'docs' }, { path: '.git/hooks' }]);
 
     assert.equal(uninstallProject(root, { spawn: spawnSync }).code, 0);
     assert.equal(fs.existsSync(path.join(root, '.git', 'hooks')), false); // exactly as it was when sync started
