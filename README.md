@@ -368,6 +368,20 @@ A candidate red on this machine is bisected: the pull request that turns it red 
 named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
 
+On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
+`"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
+the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's
+gate. After each landed batch, the one who landed it runs the whole suite once on Windows, in a lock
+turn on the main just landed, with the temporary files inside the drive the antivirus excludes:
+
+```console
+$ TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node bin/check.mjs
+```
+
+Each sensor's row then ends "on Windows (JS_HARNESS_GATE_WSL=0), its temporary files under
+D:\js-harness-tmp", so a run that forgot `TEMP` shows it. A red run there is fixed like any red main
+(odd/tasks/gate-wsl.md).
+
 ```console
 $ js-harness merge-queue --dry-run
 PR 144 is left out: PR 144 is not mergeable (CONFLICTING).

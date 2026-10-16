@@ -114,8 +114,8 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
 - [x] T2e · S1 · Codex's P2 (L12) · inline · test first · `dfcb058`, its gate in WSL2
 - [x] T3 · S2 · the switch file on this machine (after the orchestrator has it), one gate measured
       through it, docs
-- [ ] T4 · S2 · `.wslconfig` text to the orchestrator; the run per merged batch named where merges
-      are made
+- [x] T4 · S2 · `.wslconfig` text to the orchestrator; the run per merged batch named where merges
+      are made · inline · docs (L13)
 
 ## Log
 - L1 · 2026-10-14 01:03 · the orchestrator: "HIS UBUNTU IS READY … Start now … Send me the .wslconfig
@@ -196,3 +196,8 @@ Anything on his Windows machine outside the js-harness home (`.wslconfig`, servi
   incorrect (0.99), one P2, real: the mark, now taken only alone on its line, would be glued to the
   last line of a suite whose error output did not end it. T2e: the runner ends the open line before
   its marks. RED in WSL2: the new test fails; GREEN: 16 of 16 in WSL2.
+- L13 · 2026-10-16 02:54 · JH 19, from the orchestrator's task: T4's first half (the `.wslconfig` text)
+  was done. Merges are made by `js-harness merge-queue --land`, whose run on this machine goes through
+  the gate and so runs in WSL2 here; the run per merged batch is now written in the README's
+  `js-harness merge-queue` section, with the row it prints to show its temporary files
+  (`bin/check.mjs:971`), and docs/ROADMAP.md points there.
