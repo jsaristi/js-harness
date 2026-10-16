@@ -1016,6 +1016,12 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       run a cheap refusal the queued command declares, when it is queued and again when its
       turn comes. The turn scripts of this session have the same hole: their check of the head
       and of a clean tree runs after the wait. Not sized.
+      Built (2026-10-16, JH 24) on `feat/gate-refuse-early`, test first: `codex-review --plan`
+      says uncommitted tracked changes on stderr, its plan and exit 0 unchanged; `js-harness gate
+      --ready <command>` runs the check before the wait and again as the turn comes after one,
+      and a failure runs nothing (exit 75, `refused` with reason `not ready` in the gate log).
+      The box is checked at T10, so this line and T19's do not meet in a merge. The turn
+      scripts are scratch files of their sessions and are left: `--ready` is what they can use.
 - [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice.
 
