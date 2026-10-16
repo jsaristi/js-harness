@@ -82,6 +82,24 @@ test('readCache keeps a well-formed host record, so every writer of the cache ke
   }
 });
 
+test('readCache keeps a well-formed gentle-ai record beside the host one, and drops a malformed one', () => {
+  const home = makeTmpHome();
+  try {
+    const host = { reviewed: { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' } };
+    const gentleAi = { reviewed: { version: '4.2.0', at: '2026-10-16T00:00:00.000Z' } };
+    writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null, host, gentleAi });
+    writeCache(home, { ...readCache(home), notified: 'abc' });
+    assert.deepEqual(readCache(home).gentleAi, gentleAi, 'a write of another key keeps the record');
+    assert.deepEqual(readCache(home).host, host);
+    for (const broken of [{ reviewed: 'nope' }, { reviewed: { version: 4, at: 'x' } }, { reviewed: { version: '4.2.0' } }, 'nope']) {
+      writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null, gentleAi: broken });
+      assert.equal('gentleAi' in readCache(home), false, JSON.stringify(broken));
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('isStale is true when checkedAt is absent', () => {
   assert.equal(isStale(null), true);
   assert.equal(isStale(undefined), true);

@@ -113,6 +113,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] Reviewed and merged (`jsaristi/js-harness#4`, Windows exit fix `#5`)
 - [x] Installed on this machine; global package matches `main`
 - [x] `doctor` `host-update` row: a Claude Desktop or Code tab CLI update is a gap, with its review steps, until `doctor --host-reviewed` records the review; an update downloaded and not applied is `outdated` (his request of 2026-10-15, `odd/tasks/host-update-check.md`; pull request 242, and its follow-ups: the app folder read under `--home` only, `--host-reviewed --json`)
+- [x] `doctor` `gentle-ai-sync` row: a new gentle-ai version is a gap, with its review steps, until `doctor --gentle-ai-reviewed` records the review; one step diffs the global `CLAUDE.md`, which a sync rewrites and js-harness never writes, against gentle-ai's pre-sync snapshot, and the next checks the changes against `AGENTS.md` (his request of 2026-10-16, `odd/tasks/gentle-ai-update-check.md`; ticked in its own pull request, which lands at once)
 
 ### Progress view
 - [x] Parser for roadmap phases and feature docs

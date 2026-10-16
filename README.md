@@ -234,6 +234,14 @@ records the review; with `--json` it prints the record it wrote. The row also sh
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
 Claude is quit fully, the tray icon included.
 
+Its `gentle-ai-sync` row does the same for gentle-ai. A gentle-ai sync rewrites the global
+`~/.claude/CLAUDE.md`, which gentle-ai owns: js-harness never writes that file, and only reads it
+to measure the per-turn payload (`bin/lib/payload.mjs`). So a new gentle-ai version stays `stale`
+until it is reviewed. One review step diffs the global `CLAUDE.md` against the copy gentle-ai saved
+before the first sync since the last review (`~/.gentle-ai/backups/<stamp>/snapshot.tar.gz`), and
+the next checks each change against the project's `AGENTS.md` for conflicts.
+`js-harness doctor --gentle-ai-reviewed` records the review, and `--json` prints the record.
+
 ```console
 $ js-harness doctor --offline
 tool            version   claude    codex     project   up to date
