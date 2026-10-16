@@ -8,7 +8,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkCodexReviews, discoverDocuments } from './check.mjs';
+import { allDocuments, checkCodexReviews, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
@@ -124,10 +124,9 @@ function localSuite(run, place) {
 function documentsAlone(gitIn, place, main, mainPlace) {
   const { documents, error } = discoverDocuments(mainPlace);
   if (error || documents.length === 0) return false;
-  const diff = gitIn(place, 'diff', '--name-only', '--no-renames', '--no-relative', '-z', main, 'HEAD');
-  if (!diff.ok) return false;
-  const paths = diff.out.split('\0').filter(Boolean);
-  return paths.length > 0 && paths.every((file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry)));
+  // The commit gate's own question and answer (`DOCUMENT_DIFF`, `allDocuments`), so the two never disagree.
+  const diff = gitIn(place, 'diff', ...DOCUMENT_DIFF, main, 'HEAD');
+  return diff.ok && allDocuments(diff.out.split('\0').filter(Boolean), documents);
 }
 
 const DOCUMENTS_ALONE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; CircleCI runs the whole gate on it.';
