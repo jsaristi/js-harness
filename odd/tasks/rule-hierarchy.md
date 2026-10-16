@@ -2330,7 +2330,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   added: a session that edits `AGENTS.md` in its own worktree reads that file on every turn, so
   a half-written version would govern the session that writes it
 - [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
-  reply check on is asked of him
+  reply check on is asked of him. The lines are built and their wording is his yes
+  (`feat/template-lines`, Progress, 2026-10-16); the empty register is built
+  (`feat/empty-register`); open: `init` turning the reply check on by default, his answer,
+  built once C1 is (T2)
 - Moved on 2026-10-14 to "JH 15 · auditoría de honestidad", by the lead's message to this
   session; their state is kept in `odd/tasks/honesty-audit.md`, and only there: T10 (the honesty
   eval: the task and its proof; then, before any spend is asked of him, the number of trials,
@@ -3696,6 +3699,42 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   answer) and 926 (`contract.mjs`, decided with finding 12). Reader C's finding: the memory
   merge of 2026-10-15 copied stale sentences verbatim into the notes it merged them into, so
   they moved instead of going away. T17 stays open until its owners close the rest.
+- 2026-10-16, T9, by `JH 28 · reserva B` on `feat/template-lines`, from the
+  lead's notice to 28 (a claim of the lead's, read in the channel record). Built test first:
+  `agentsTemplate` (`bin/lib/project.mjs`) carries items 1 to 4 and 6 of "`AGENTS.md`,
+  rewritten", worded for any owner, under "What good looks like" (items 1 and 4) and a new
+  section "Working with the owner" (items 2, 3 and 6). RED: the new test of
+  `bin/lib/project.test.mjs` failed on the template of `main`; GREEN after the change. The size
+  test measured characters (under 1,200); it now measures tokens with `estimateTokens`, at most
+  half of `agents-budget`, so an installed project keeps the other half for its own lines. The
+  template measures 564 estimated tokens, from 194 on `main`; the README's example of `check`,
+  which said 122, says so. Three choices of this session, each reversible in one commit:
+  - Item 6 names the four states in a line of their own. The design's wording ("the reply check
+    says how") points at C1, which is not built (T2) and which no installed project has on, so
+    the template says what each state means instead.
+  - Item 2 takes the list of 2026-10-11 with the report published outside that the design adds;
+    T8's draft holds the list he passes, and the template follows it when that changes.
+  - Item 4 enters before C7 has measured it (`odd/tasks/honesty-audit.md`, T10): the eval copies
+    its own text (`evals/configs.mjs`, `HONESTY_SENTENCES`), so this change does not move it, and
+    if the line does not move the score it leaves the template with `AGENTS.md`.
+  Not built, and why: the empty failures register that "The failures register" left to T9
+  (`init` writing `docs/FAILURES.md`). It would add a file that `init` writes in every project
+  and that `uninstall` removes, and the files `init` writes are pinned as exact lists in many
+  test files (`rg -l "AGENTS.md" -g "*.test.mjs" bin scripts`: 19 files); it also turns the
+  `failures` row on in every installed project. It is left open under T9 for the lead to assign.
+  Two questions for him, sent to the lead with `notify --kind question`: (1) the final wording of
+  the template's new lines ("Ask me before"), read in `bin/lib/project.mjs`; (2) whether `init`
+  turns the reply check on in a project, which can be built only once C1 is (T2, JH 25). T9
+  stays open until both are answered.
+- 2026-10-16, T9, his answers to both questions, relayed by the lead's notices to 28 and read
+  in the lead's transcript (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`) with `js-harness
+  sessions --quote`, each a user entry tapped in answer to the lead's question tool. Question
+  10, the template's wording (line 13547, options "Sí, así como está | Esperar"): "Sí, así como
+  está". So the lines stand as built and the pull request is marked ready. Question 11, whether
+  `init` turns the reply check on (line 13566, options "Prendido por defecto (Recomendada) |
+  Apagado hasta que lo active"): "Prendido por defecto (Recomendada)". So `init` writes the
+  reply key on in a new project's `harness.json`; the lead assigns it after C1 lands (pull
+  request 282), test first, in a pull request of its own. T9 stays open for that.
 
 ## Next step
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
