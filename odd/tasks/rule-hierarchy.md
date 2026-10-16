@@ -3407,12 +3407,33 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     cheapest part ever measured is another floor.
   `NEAR_MISS` pins those lines; a probe found each one with the draft and missed it after the
   narrowing.
+- 2026-10-16, his batch B reviewed. gentle-ai approved it (`review-7e114c9078fea2d5`,
+  acknowledged). Its warning is refuted: it held that `NEAR_MISS`'s arrays are tried as one joined
+  line, but the loop tries each line (`[lines].flat()` in `bin/lib/rules-scan.test.mjs`). The
+  independent verifier (Opus) passed it with no blocker. All five findings restate a value; one of
+  them, `odd/tasks/codex-review-cost.md:8` ("at `high`"), restates the value before he changed it,
+  which is the kind of line the row exists for. With pull request 279's `AMOUNT`, every result is
+  the same. A finding in `AGENTS.md` shows only as INFO, since no rule has a `row` yet.
+- 2026-10-16, step 2's batches are done: 28 of the 30 rules carry patterns. What the second pass
+  takes, from the reviews and verifiers of every batch:
+  - Patterns too wide. Measurements are caught ("the session paused at 70% of its window"), and
+    so are other settings: `review-effort` catches any `gpt-` model set "at" an effort, the
+    writer's and the orchestrator's included. Each `NEAR_MISS` line pins only one sentence.
+  - Patterns too narrow. They miss flag and config forms (`--effort medium`,
+    `model_reasoning_effort = "medium"`, `--context-pause`), other verbs ("stays below", "uses"),
+    the order "the review model is …", and the aliases `opus` and `haiku`, which `{amount}`
+    cannot match because it needs a digit.
+  - Tests. Two checks are missing: that each pattern, not only each rule, finds a line of its
+    own, and that no rule finds another rule's planted or marked line. Today the second holds
+    only by the verifiers' probes.
+  The second pass comes before any rule gets a `row` that refuses (step 4), because a refusing
+  row turns a false positive into a failed gate.
 
 ## Next step
-**State for a resume, 2026-10-16, his batch B built on `rule/his-last-patterns`.** Three commits,
-one per rule, and one of `NEAR_MISS` and this document. Next: gentle-ai (item 3), an independent
-verifier, Codex, `merge-tree`, and a draft pull request to the lead's queue. With it, step 2's
-batches are done. Later: a second pass of patterns, from the advisories above.
+**State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai
+approved and acknowledged, the verifier passed. Next: Codex, `merge-tree`, and a draft pull
+request to the lead's queue. With it, step 2's batches are done; the `AMOUNT` fix is pull request
+279. Then the second pass of patterns, above, designed before it is built.
 
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
 approved and acknowledged, the verifier passed, `subagent-effort` narrowed and the near-miss fixed
