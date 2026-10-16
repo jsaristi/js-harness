@@ -651,22 +651,58 @@ test('uninstall with purgeMemory removes the memory hygiene folder, and the .js-
   }
 });
 
+test('uninstall with purgeMemory never takes the snapshot of a pass planned while it purges', () => {
+  const home = makeTmpHome();
+  try {
+    const { stateDir } = leftByMemoryPass(home);
+    const dir = path.dirname(stateDir);
+    const folder = path.join(home, '.claude', 'projects', 'C--proj', 'memory');
+    let planned = null;
+    // The moment between the look at the locks and the removal, where a session runs `memory plan` (Codex, P2).
+    const renameFile = (from, to) => {
+      if (planned !== null) return fs.renameSync(from, to);
+      assert.throws(() => planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: Date.parse('2026-10-16T09:00:00.000Z') }), /a pass holds the lock/);
+      planned = planPass({ folder, stateDir: path.join(dir, 'C--new'), writeSet: ['MEMORY.md'], now: Date.parse('2026-10-16T09:00:00.000Z') });
+      return fs.renameSync(from, to);
+    };
+    const result = uninstall(home, { purgeMemory: true, renameFile });
+    assert.ok(result.removed.includes(dir), result.removed.join('\n'));
+    assert.deepEqual(result.memoryKept, []);
+    assert.equal(fs.existsSync(path.join(dir, 'C--new', 'snapshots', planned.stamp, 'manifest.json')), true, 'the new pass keeps its snapshot');
+    assert.equal(fs.existsSync(path.join(dir, 'C--new', 'lock')), true, 'and its lock');
+    assert.equal(fs.existsSync(stateDir), false, 'the purged project is gone');
+    assert.deepEqual(fs.readdirSync(path.dirname(dir)).filter((name) => name.startsWith('memory-hygiene.')), [], 'no folder is left half purged');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall with purgeMemory keeps the folder while a pass holds its lock, or when it cannot remove it', () => {
   const home = makeTmpHome();
   try {
+    leftByMemoryPass(home, { slug: 'C--other' });
     const { stateDir, stamp } = leftByMemoryPass(home, { verified: false });
     const dir = path.dirname(stateDir);
     const held = uninstall(home, { purgeMemory: true });
     assert.deepEqual(held.memoryKept, [{ path: dir, reason: 'in-use', passes: [`C--proj/${stamp}`] }]);
     assert.equal(fs.existsSync(path.join(stateDir, 'lock')), true, 'a pass that is not verified keeps its lock and snapshot');
+    assert.equal(fs.existsSync(path.join(dir, 'C--other', 'lock')), false, 'the lock the purge took on the other project is let go');
 
     fs.rmSync(path.join(stateDir, 'lock'));
-    const removeFile = (target, options) => {
-      if (target === dir) throw Object.assign(new Error('EPERM: operation not permitted, rmdir'), { code: 'EPERM' });
-      return fs.rmSync(target, options);
+    const refuse = (target) => {
+      if (target.startsWith(dir)) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
     };
-    assert.deepEqual(uninstall(home, { purgeMemory: true, removeFile }).memoryKept, [{ path: dir, reason: 'unremovable', code: 'EPERM' }]);
-    assert.equal(fs.existsSync(dir), true);
+    // A folder that cannot be moved aside stays where it was, with no lock of the purge left in it.
+    const unmoved = uninstall(home, { purgeMemory: true, renameFile: (from, to) => { refuse(from); fs.renameSync(from, to); } });
+    assert.deepEqual(unmoved.memoryKept, [{ path: dir, reason: 'unremovable', code: 'EPERM' }]);
+    assert.deepEqual([fs.existsSync(dir), fs.existsSync(path.join(stateDir, 'lock'))], [true, false]);
+    // One moved aside and not removed is named where it is now.
+    const removeFile = (target, options) => { refuse(target); return fs.rmSync(target, options); };
+    const unremoved = uninstall(home, { purgeMemory: true, removeFile });
+    assert.equal(unremoved.memoryKept.length, 1);
+    assert.deepEqual([unremoved.memoryKept[0].reason, unremoved.memoryKept[0].code], ['unremovable', 'EPERM']);
+    assert.match(unremoved.memoryKept[0].path, /memory-hygiene\.purging-\d+-\d+$/);
+    assert.equal(fs.existsSync(unremoved.memoryKept[0].path), true);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

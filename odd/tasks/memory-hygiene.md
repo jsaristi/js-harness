@@ -361,7 +361,13 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
     `feat/memory-hygiene-uninstall` (route: inline): `bin/lib/manifest.mjs` `memoryHygieneFolder`,
     `bin/install.mjs`, 3 library and 3 CLI tests red first. `manifest.test.mjs` 151/151 and `install.test.mjs`
     74/74. Without the folder, `uninstall --global` prints the same as main's code (sorted output diffed on one
-    home, 11 lines, exit 0). Help line and README updated
+    home, 11 lines, exit 0). Help line and README updated. Commit `3bb2dd5`. gentle-ai 4.2.0 assess: high (item 1
+    escalated), due; its preflight `review status` failed 3 of 3 with `operation_timeout` (25 s budget, mutation
+    `not_started`), also with the gate lock free, while a docs candidate passed in 3 s: asked of him through the
+    lead (question 8). Codex on a99a8e3..3bb2dd5: one P2, "Serialize snapshot purging with new memory plans" (a
+    plan between the purge's look at the locks and its removal lost its snapshot). Fixed test first in the next
+    commit: the purge takes each project's lock as `planPass` does, moves the folder aside in one rename, moves
+    back a project planned just before it, and only then removes; `manifest.test.mjs` 152/152
   - [ ] T9b The board row; T9c the rule ids
 
 ## Log

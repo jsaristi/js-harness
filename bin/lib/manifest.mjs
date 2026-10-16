@@ -1162,7 +1162,7 @@ export function uninstall(home, deps = {}) {
     const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
     const channel = removeChannelFolder(home, removeFile, statFile);
     const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept: [] });
-    const memory = memoryHygieneFolder(home, { purge: deps.purgeMemory === true, removeFile, statFile, listDir });
+    const memory = memoryHygieneFolder(home, { purge: deps.purgeMemory === true, removeFile, statFile, listDir, renameFile: deps.renameFile });
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
     return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed, ...memory.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept, ...memory.result };
   }
@@ -1227,7 +1227,7 @@ export function uninstall(home, deps = {}) {
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
-  const memory = memoryHygieneFolder(home, { purge: deps.purgeMemory === true, removeFile, statFile, listDir });
+  const memory = memoryHygieneFolder(home, { purge: deps.purgeMemory === true, removeFile, statFile, listDir, renameFile: deps.renameFile });
   removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed, ...memory.removed);
   // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
   // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
@@ -1262,32 +1262,77 @@ function memoryHygieneDir(home) {
  * sorted, for `memory undo`; `in-use` names as `passes` each pass that holds its project's lock, planned and not
  * yet verified or undone, whose snapshot even a purge does not take; `unremovable` has the error's `code`, as do
  * the other folders. Nothing records the folder: `memory plan` writes it in any project, with a machine install
- * or without one, so it is looked for with a manifest and without. */
-function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir }) {
+ * or without one, so it is looked for with a manifest and without.
+ *
+ * A purge never races a `memory plan` (found by Codex, 2026-10-16): it takes each project's lock itself, the way
+ * `planPass` does (a file made only if absent), so a plan that starts meanwhile is refused, and one that held the
+ * lock first is seen as `in-use`, and every lock the purge took is let go. Then it moves the folder aside in one
+ * rename and removes the moved one: a plan after the move makes a new folder, which it does not touch, and a
+ * project it did not see, planned just before the move, is moved back first; one that cannot be is left aside,
+ * named as `in-use` with its slug, and nothing is removed. `renameFile` (default `fs.renameSync`) is the seam a
+ * test runs a plan in, before the move. */
+function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir, renameFile = fs.renameSync }) {
   const dir = memoryHygieneDir(home);
   const unremovable = (err) => ({ removed: [], result: { memoryKept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] } });
-  let stamps;
-  let passes;
+  let slugs;
+  const stamps = [];
   try {
     if (!isThere(dir, statFile)) return { removed: [], result: {} };
-    stamps = [];
-    passes = [];
-    for (const slug of listDir(dir).sort()) {
-      const stateDir = path.join(dir, slug);
-      const snapshots = path.join(stateDir, 'snapshots');
+    slugs = listDir(dir).sort();
+    for (const slug of slugs) {
+      const snapshots = path.join(dir, slug, 'snapshots');
       if (isThere(snapshots, statFile)) for (const stamp of listDir(snapshots).sort()) stamps.push(`${slug}/${stamp}`);
-      const lock = path.join(stateDir, 'lock');
-      if (isThere(lock, statFile)) passes.push(`${slug}/${JSON.parse(fs.readFileSync(lock, 'utf8')).stamp}`);
     }
   } catch (err) {
     return unremovable(err);
   }
   if (!purge) return { removed: [], result: { memoryKept: [{ path: dir, reason: 'snapshots', stamps }] } };
-  if (passes.length > 0) return { removed: [], result: { memoryKept: [{ path: dir, reason: 'in-use', passes }] } };
+
+  const taken = [];
+  const passes = [];
+  const letGo = () => { for (const lock of taken) fs.rmSync(lock, { force: true }); };
   try {
-    removeFile(dir, { recursive: true, force: true });
+    for (const slug of slugs) {
+      const lock = path.join(dir, slug, 'lock');
+      if (!isThere(path.join(dir, slug), statFile)) continue;
+      try {
+        fs.writeFileSync(lock, JSON.stringify({ stamp: 'uninstall', pid: process.pid }), { flag: 'wx' });
+        taken.push(lock);
+      } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+        passes.push(`${slug}/${JSON.parse(fs.readFileSync(lock, 'utf8')).stamp}`);
+      }
+    }
   } catch (err) {
+    letGo();
     return unremovable(err);
+  }
+  if (passes.length > 0) {
+    letGo();
+    return { removed: [], result: { memoryKept: [{ path: dir, reason: 'in-use', passes }] } };
+  }
+  const aside = `${dir}.purging-${process.pid}-${Date.now()}`;
+  try {
+    renameFile(dir, aside);
+  } catch (err) {
+    letGo();
+    return unremovable(err);
+  }
+  // A project the purge did not see was planned in the instant before the move: it goes back, untouched.
+  const back = [];
+  for (const slug of listDir(aside).filter((name) => !slugs.includes(name))) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      renameFile(path.join(aside, slug), path.join(dir, slug));
+    } catch {
+      back.push(slug);
+    }
+  }
+  if (back.length > 0) return { removed: [], result: { memoryKept: [{ path: aside, reason: 'in-use', passes: back }] } };
+  try {
+    removeFile(aside, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], result: { memoryKept: [{ path: aside, reason: 'unremovable', code: err.code ?? 'unknown error' }] } };
   }
   return { removed: [dir], result: { memoryKept: [] } };
 }
