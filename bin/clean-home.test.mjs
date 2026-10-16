@@ -15,7 +15,7 @@ import { GAP_STATES } from './lib/digest.mjs';
 const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 // The rows of `doctor` that are the harness's own. The others are tools of the stack (gentle-ai, engram, Codex...),
 // whose state is the machine's, not the install's.
-const OWN_ROWS = ['memory-rules', 'session-classes', 'remote-server', 'hook-commands', 'unseen', 'host-update', 'gentle-ai-sync'];
+const OWN_ROWS = ['memory-rules', 'session-classes', 'remote-server', 'hook-commands', 'pnpm-lock', 'unseen', 'host-update', 'gentle-ai-sync'];
 // Every state a row reports in, so a row whose state is not one of these is a failure of the run, not a pass.
 const STATES = new Set([...GAP_STATES, 'ok', 'n/a', 'unknown']);
 
@@ -100,6 +100,8 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
       HOME: home,
       USERPROFILE: home,
       JS_HARNESS_HOME: home,
+      // A clean machine's pnpm keeps nothing yet: the machine's own global bin lock is not this run's.
+      PNPM_HOME: path.join(home, 'pnpm'),
     };
     const run = (args, options = {}) => spawnSync(process.execPath, [BIN, ...args], { cwd: project, env, encoding: 'utf8', timeout: 60_000, ...options });
 

@@ -31,10 +31,16 @@ export function memoryLocation({ home, project, run }) {
   return { slug, folder: path.join(home, '.claude', 'projects', slug, 'memory') };
 }
 
+/** The folder of memory hygiene under `home`: one folder a project, with its journal, its daily stamp, its
+ * pass lock and its snapshots. `uninstall` removes it (`bin/lib/manifest.mjs`). */
+export function hygieneDir(home) {
+  return path.join(home, '.js-harness', 'memory-hygiene');
+}
+
 /** Where the hygiene journal of a project lives: under `~/.js-harness`, never in the memory folder,
  * which the host owns. */
 export function journalPath(home, slug) {
-  return path.join(home, '.js-harness', 'memory-hygiene', slug, 'journal.jsonl');
+  return path.join(hygieneDir(home), slug, 'journal.jsonl');
 }
 
 /** The journal's entries, one JSON object a line; a line that does not parse is skipped, a missing
@@ -109,6 +115,20 @@ export function dueNotice({ home, slug, folder, now }) {
   return `js-harness: a memory hygiene pass is due for this project (${state.reasons.map((reason) => reason.id).join(', ')}): `
     + 'js-harness memory status says why. The orchestrator runs it at a task boundary, by the js-harness skill, "Memory hygiene"; '
     + 'a work session tells the orchestrator (js-harness notify) and goes on with its task. Said once a day.';
+}
+
+/** What the board of `js-harness sessions` says of memory hygiene for the project (D5): `{ available: true, folder,
+ * due, reasons }` with the ids of the reasons, `{ available: true, folder, na: true }` with no memory folder, or
+ * `{ available: false, reason }` when the folder could not be read. It reads the folder and the journal as `memory
+ * status` does, without the citations: they make candidates, never a reason to be due. */
+export function boardMemory({ home, slug, folder, now }) {
+  try {
+    if (!fs.existsSync(folder)) return { available: true, folder, na: true };
+    const state = hygieneState({ memory: readMemory(folder), journal: readJournal(journalPath(home, slug)), now });
+    return { available: true, folder, due: state.due, reasons: state.reasons.map((reason) => reason.id) };
+  } catch (err) {
+    return { available: false, reason: err.message };
+  }
 }
 
 /** Whether a pass is due, as `{ due, reasons, candidates, lastPass }`: each reason and candidate is

@@ -172,10 +172,11 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
-- [ ] T6a (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1)
+- [ ] T6a (kind: build) S6: a heavy run beside a gate is refused whatever its size: one test file the gate log times over a minute counts as several, and an eval batch shows itself to the guard as a gate holder does; one file stays free by the skill's rule (`odd/tasks/test-run-warning.md`, "One file stays free, as the skill says") and the refusal is his decision, so narrowing it goes to him through the lead first (`docs/FAILURES.md`, heavy-run-beside-gate: two single files of 65 to 200 s beside gates since the protocol line, one of which made a gate fail)
 - [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
 - [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
 - [ ] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4)
+- [ ] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -296,7 +297,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   `D:js-harness-tmp`, `JS_HARNESS_GATE_CI=0`, under `js-harness gate --max 60`): every row passed but `tests`,
   "npm run test timed out after 1200 s on Windows ... skipped 0 of 166 test files", with the machine 97% busy before
   the sensors. Then `node --test` whole on Windows, same settings: 5,687 tests, 5,666 pass, 2 fail, 19 skipped,
-  `duration_ms 1397833`, so the whole suite does not fit the `sensor-timeout` rule's 20 minutes there (T6a; the rule
+  `duration_ms 1397833`, so the whole suite does not fit the `sensor-timeout` rule's 20 minutes there (T6e; the rule
   is `rules.json`, changed only through `js-harness rules change`). (2) The first failure,
   `scripts/package-contents.test.mjs:20`, "object is not iterable": this machine's npm is 12.2.0
   (`C:
