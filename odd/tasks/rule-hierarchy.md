@@ -1721,10 +1721,12 @@ so a turn re-renders `RULES.md` and leaves the hash as it is.
 **In this order.**
 1. **The code.** Its own pull request: the row, the scan, the counts and findings, and the
    command's three keys.
-2. **The first patterns,** in a `rule/` branch per rule, with source `design` naming this
-   section. The first are the rules `rules check` counts fewest findings for once their
-   patterns are in. The session writes the patterns, and each run prints its count in its dry
-   run.
+2. **The first patterns,** in `rule/` branches of several rules each, with source `design`
+   naming this section. The first are the rules `rules check` counts fewest findings for once
+   their patterns are in. The session writes the patterns, and each run prints its count in its
+   dry run. The batches, decided on 2026-10-15 (Progress): the ten lowest counts first, then the
+   rest in two or three batches by count, and `context-pause`, `codex-review-floor` and
+   `review-effort`, the highest, last and alone.
 3. **The texts,** cleaned of each rule's findings by marks, in ordinary pull requests.
 4. **Each turn to refuse,** in its own `rule/` branch, once its count on `main` is zero.
 
@@ -2235,9 +2237,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     backstop). Built on `feat/rules-change`: 3f48e4b, ff3bbf4, d9e0925, 0acb6bf, then the
     verifier's fixes a5877e4 and Codex's fixes 6986330; pull request 238, landed on 2026-10-15
     (`main` e7e97df), its design as pull request 234 (d2441d5)
-  - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
+  - [x] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
-    its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline
+    its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline; built
+    b0093b8..5a57a17, pull request 247, landed on 2026-10-15 (`main` a1e8fb3), its design as
+    pull request 241 (d4ec52d). Its step 2, the first patterns, is in progress in `rule/` batches
   - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
     inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
     loop over what the reviews cover looks at each record itself, and the evidence of a
@@ -3229,8 +3233,46 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     which also kept the gate's row and a turn's count from throwing (c55164e). Codex rechecked
     aeeeff6..c55164e: 1 of 1 fixed. gentle-ai assessed that commit medium and under budget, so no
     review was due for it.
+  - The lead's queue left 247 out once: merged with `main` d4ec52d it went red, "FAIL tests npm
+    run test exited 1 in WSL2 (Ubuntu)". Main had gained `sessions-open-in-sidebar`, the first rule
+    with a `failure`, and that met T16d twice:
+    - `docs/RULES.md` shows a rule's failure now, so it was rendered again;
+    - `rules check` read a missing `docs/FAILURES.md` as a register with no entry, so seven tests
+      of `bin/rules.test.mjs`, whose projects hold the real list and no register, failed on that
+      rule. With no register the failures are now not checked, and a note says so, as for
+      `docs/rule-sources.json`; the test projects carry the package's register.
+    Both are in the merge c4b7a37, tests first. Codex read the merge's own resolution: correct.
+  - 5a57a17: `{amount}` took the `max` of the mark `rule:gate-max`, of `--max` and of
+    `Math.max(` for an effort level, so the mark that cures a finding of `gate-max` was a finding
+    itself. An effort word now counts only as a word of its own. Found by probing step 2's planted
+    lines; tests first; Codex: correct. 247 landed on 2026-10-15 (`main` a1e8fb3).
+  - A sighting of `merge-review-covers-main`: `codex-review` said that `--base c4b7a37^` would
+    review the uncovered merge, but at a HEAD past the merge that range is all `main` brought in,
+    planned as 6 parts and about 1,620,000 input tokens. It was stopped in its first part. A merge
+    is read by what was written in it only when it is HEAD, so it was reviewed from a detached
+    worktree at c4b7a37, 1 part of 18 lines. A separate task was offered to make the hint true.
+- 2026-10-15, step 2 of "The row `rules` (T16d)", the first patterns, changed from a `rule/`
+  branch per rule to batches, by the lead (JH ORQ, 20:38): "Batches. It spends less than the plan
+  named, changes neither order nor outcome, and each pattern is still undone by one rules change".
+  The cost both ways: one branch per rule is 28 pull requests, each changing
+  `bin/lib/rules-data.mjs` and so each with a gentle-ai review and a Codex review, about 4 to 8
+  million Codex input tokens and 28 gentle-ai reviews; batches are about 4 of each. The order:
+  the ten lowest counts in one pull request first, then the rest in two or three batches by
+  count, the highest group (`context-pause`, `codex-review-floor`, `review-effort`) last and
+  alone, since a bad pattern shows there. The drafts were probed against `main` with 247 on it:
+  - `questions-one-place` and `sessions-open-in-sidebar` have no amount for a value, so they get
+    no pattern and stay unscanned;
+  - a pattern names its subject on the line, so a value stated with no subject beside it passes,
+    as the section says (for example "A command is stopped after 30 minutes" in `README.md`, of
+    `gate-max`), and a number written as a word ("three") is no amount.
 
 ## Next step
+**State for a resume, 2026-10-15, step 2 of T16d, its first batch.** T16d is on `main`
+(a1e8fb3) and checked off. The first batch of patterns is built on `rule/first-patterns` from
+`main`: the ten rules with the fewest findings, each through `rules change` with its planted line
+in `PLANTED` (`bin/lib/rules-scan.test.mjs`). Next: its pull request to the lead's queue, then the
+next batches by count, the highest group last and alone.
+
 **State for a resume, 2026-10-15, T16d built and checked.** The code is draft pull request 247
 (`feat/rules-row`, b0093b8..c55164e, pushed); its design is draft pull request 241, this branch.
 Every check passed: each gate, the verifier and its recheck, gentle-ai (acknowledged), Codex and
