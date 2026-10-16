@@ -66,7 +66,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-11",
     "value": 12,
-    "unit": "characters"
+    "unit": "characters",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontrol\\b.{0,50}{amount}\\s*characters"
+    ]
   },
   {
     "id": "gate-log-command",
