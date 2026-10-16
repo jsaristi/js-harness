@@ -335,6 +335,24 @@ test('a plan is refused while an uninstall holds the marker, and leaves no lock 
   });
 });
 
+test('a refused undo of a pass still planned keeps that pass\'s lock: before verify, and while an uninstall holds the marker', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    const lock = path.join(stateDir, 'lock');
+    assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError && /run memory verify/.test(err.message));
+    assert.equal(fs.existsSync(lock), true, 'refused before verify');
+    const marker = markerOf(stateDir);
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, startedAt: NOW }));
+    try {
+      assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError && err.message.includes(marker));
+      assert.equal(fs.existsSync(lock), true, 'refused by the marker');
+    } finally {
+      fs.rmSync(marker, { force: true });
+    }
+    assert.equal(verifyPass({ folder, stateDir, stamp, now: NOW }).ok, true, 'the pass can still be verified');
+  });
+});
+
 test('an undo of a verified pass takes the lock: refused while an uninstall holds the marker, it writes nothing', () => {
   withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
     const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });

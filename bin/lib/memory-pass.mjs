@@ -278,7 +278,8 @@ export function undoPass({ folder, stateDir, stamp, now }) {
   const holder = lockHolder(stateDir);
   if (holder !== null && holder !== stamp) throw new PassError(`pass ${holder} holds the lock; undo ${stamp} once it is verified or undone`);
   // A verified pass holds no lock: the undo takes it for its run, so an uninstall sees it or it sees the uninstall (D7.5).
-  if (holder === null) {
+  const took = holder === null;
+  if (took) {
     try {
       fs.writeFileSync(lockFile(stateDir), JSON.stringify({ stamp, pid: process.pid }), { flag: 'wx' });
     } catch (err) {
@@ -286,11 +287,16 @@ export function undoPass({ folder, stateDir, stamp, now }) {
       throw new PassError(lockLine(stateDir, readLock(stateDir)));
     }
   }
+  // The lock goes when this undo took it, or when the undo of the pass that held it ran: a refused undo leaves a
+  // planned pass its lock, so it can still be verified and no uninstall takes its snapshot.
+  let undone = false;
   try {
     refuseWhilePurging(stateDir);
-    return undoHeld({ folder, stateDir, stamp, now, manifest });
+    const result = undoHeld({ folder, stateDir, stamp, now, manifest });
+    undone = true;
+    return result;
   } finally {
-    releaseLock(stateDir, stamp);
+    if (took || undone) releaseLock(stateDir, stamp);
   }
 }
 
