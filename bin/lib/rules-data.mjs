@@ -10,7 +10,11 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 1500,
-    "unit": "estimated tokens"
+    "unit": "estimated tokens",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*AGENTS\\.md.{0,60}\\bbudget\\b.{0,30}{amount}",
+      "^(?!.*\\bruleValue\\().*\\bbudget\\b\\W{0,3}{amount}\\s*(?:estimated )?tokens"
+    ]
   },
   {
     "id": "codex-review-floor",
@@ -77,7 +81,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 120,
-    "unit": "characters"
+    "unit": "characters",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?:\\bgate log\\b.{0,50}\\bcommand\\b|`command`).{0,50}\\b(?:cut|truncated|shortened|at most|kept to)\\b.{0,20}{amount}\\s*characters"
+    ]
   },
   {
     "id": "gate-log-size",
@@ -97,7 +104,10 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 30,
     "unit": "minutes",
-    "flag": "--max"
+    "flag": "--max",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bgate\\b.{0,50}\\b(?:stopped|killed|ends|at most|longest|max(?:imum)?)\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
   },
   {
     "id": "gate-wait",
@@ -106,7 +116,11 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 60,
     "unit": "minutes",
-    "flag": "--wait"
+    "flag": "--wait",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwaits?\\b.{0,40}\\b(?:turn|lock)\\b.{0,40}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))",
+      "^(?!.*\\bruleValue\\().*\\b(?:turn|lock)\\b.{0,40}\\bwaits?\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
   },
   {
     "id": "person-present",
@@ -150,7 +164,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-09",
     "value": 40,
-    "unit": "files"
+    "unit": "files",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}(?<!:\\s?){amount}\\s*files\\b"
+    ]
   },
   {
     "id": "review-part-lines",
@@ -159,7 +176,11 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 400,
     "unit": "changed lines",
-    "flag": "--part-lines"
+    "flag": "--part-lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}\\b(?:up to|at most|holds?)\\s+{amount}\\s*(?:changed )?lines",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*(?:changed )?lines\\b.{0,20}\\b(?:a|per|each) part\\b"
+    ]
   },
   {
     "id": "review-parts-unflagged",
@@ -168,7 +189,11 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 6,
     "unit": "parts",
-    "flag": "--max-parts"
+    "flag": "--max-parts",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*{amount}\\s*parts\\b.{0,40}(?:--max-parts|\\bunflagged\\b|\\bits flag\\b)",
+      "^(?!.*\\bruleValue\\().*\\bwithout\\b.{0,30}--max-parts.{0,30}{amount}\\s*parts"
+    ]
   },
   {
     "id": "review-timeout",
@@ -176,7 +201,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-14",
     "value": 30,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:review|codex)\\b.{0,50}\\b(?:stalled|stopped|timeout|times? out)\\b.{0,40}(?<![\\w:.]){amount}"
+    ]
   },
   {
     "id": "reviewed-commit-lines",

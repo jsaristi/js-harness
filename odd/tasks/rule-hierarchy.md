@@ -3303,11 +3303,58 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   The remote still held this branch from before the first rebase. He authorized overwriting it,
   asked by the lead ("¿Lo autorizás?"): "Sí, que la pise (Recomendada)". So the push is
   `--force-with-lease`, of this branch only.
+- 2026-10-16, pull requests 253 and 254 landed (`main` a99a8e3). Batch 3 is folded into batch 2,
+  proposed by this session and agreed by the lead: one branch, `rule/second-patterns`, for eight
+  rules (`agents-budget`, `gate-log-command`, `review-part-files`, `review-parts-unflagged`,
+  `review-timeout`, `review-part-lines`, `gate-max`, `gate-wait`). The reason: narrowed, their
+  findings on `main` are 0 to 4 each, all genuine restatements, so a separate batch 3 would have
+  cost one more gentle-ai review and one more Codex run for the same outcome. The narrowings,
+  each from a probe of the drafts on `main`:
+  - `gate-log-command` names the gate log or `` `command` ``, since `bin/codex-review.mjs:563`
+    cuts a Codex command line to 100;
+  - `review-part-files` refuses an amount after a colon, since `bin/lib/codex-review-prompt.mjs`
+    reads `of: 1, files`;
+  - `review-parts-unflagged` names `--max-parts` or "its flag", since `bin/codex-review.mjs:124`
+    tells of 28 parts started "without" the numbers;
+  - `review-timeout` drops "past" and refuses an amount inside a word or a path, since
+    `odd/tasks/codex-parity.md:52` has "the login past 192 h" and a path's line number counted;
+  - `gate-max` and `gate-wait` want an amount that stands alone and is minutes or hours, which
+    leaves out exit codes ("exit 75"), percentages, the sensor's 1,200 s, "S1" and "e5b7588".
+- 2026-10-16, later work found by those probes: `{amount}` (`AMOUNT`, `bin/lib/rules.mjs`) has
+  no left boundary, so the digits inside "S1", "e5b7588" or "mjs:42" count as amounts. Each
+  pattern guards it for now. The lead: after the batches, a fix of `AMOUNT` itself, test first,
+  as its own pull request; it changes what every pattern finds, so it is item 3.
+- 2026-10-16, the lead, while he is away about ten hours: "keep going through the batches
+  without stopping to report between them". His 13 rules follow batch 2, by count, the group of
+  12 to 21 findings (`context-pause`, `codex-review-floor`, `review-effort`) last and alone.
+- 2026-10-16, batch 2 reviewed. gentle-ai approved it (`review-610769fa73a6f19f`, acknowledged)
+  with one warning: no test held a narrowed rule to the line it was narrowed for. Folded in:
+  `NEAR_MISS` in `bin/lib/rules-scan.test.mjs`, one such line per narrowed rule of batches 1 and
+  2. The independent verifier (Opus): PASS, no blocker; all 13 findings on the branch restate a
+  value, two borderline (`agents-budget` on a quoted gate output). Its advisories, left for later
+  because the finding is information only and none turns the check red:
+  - false positives: `agents-budget`'s first pattern has no guard on `{amount}`;
+    `review-part-files`' guard `(?<!:\s?)` fails for two or more digits, since `AMOUNT` starts
+    mid-number; `review-timeout` wants no unit; `gate-max` and `gate-wait` catch measurements
+    ("it ran 3 minutes"). The scan never compares the amount with the value, by design.
+  - misses: `gate-wait`'s "an hour" before any "wait" (`bin/gate.mjs:190`, `bin/check.mjs:2125`,
+    `docs/ROADMAP.md:736`); `agents-budget` without "budget" beside it (`docs/ROADMAP.md:468`,
+    `odd/tasks/f2-context-diet.md:52`); `review-part-lines`' "stays at 400 lines"
+    (`docs/ROADMAP.md:364`); `review-timeout`'s "stops"; `gate-log-command`'s "keeps each
+    command to 120 characters".
+  The `AMOUNT` fix takes the mid-number false positives; the rest is a second pass of patterns
+  after his 13 rules.
 
 ## Next step
-**State for a resume, 2026-10-16, batch 1 ready for its pull request.** Next: Codex over
-`origin/main..HEAD`, `merge-tree`, the push with lease and a draft pull request to the lead's
-queue; then batch 2, and his 13 rules join the batches once pull request 253 lands.
+**State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the
+verifier passed, `NEAR_MISS` folded in. Next: Codex (`codex-review --base origin/main`),
+`merge-tree`, push and a draft pull request to the lead's queue; then his batch A (ten rules),
+then batch B alone, then the `AMOUNT` fix.
+
+**State for a resume, 2026-10-16, batch 2 being built on `rule/second-patterns`.** Each rule is one
+`rules change` with source design `odd/tasks/rule-hierarchy.md`, its entry in `PLANTED`, and one
+commit; then gentle-ai, the verifier, Codex, `merge-tree` and a draft pull request to the lead's
+queue. Then his 13 rules, probed again on `main`, in batches by count; then the `AMOUNT` fix.
 
 **State for a resume, 2026-10-16, paused for an app restart (gentle-ai 4.2.0).** Progress has
 his answer and batch 1's review. `rule/first-patterns` holds batch 1 and `person-present`
