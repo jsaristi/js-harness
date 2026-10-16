@@ -551,6 +551,7 @@ decided today would use them.
 ### 13. Tests owed
 Each is run once by the build, with its result recorded in Progress.
 1. A one-line opening pasted on the phone and on the desktop: typed text or pasted content?
+   Run 2026-10-16 at 02:16 local: typed text, both times (Progress, 02:16).
 2. A session opened by the orchestrator through a scheduled task: can he type in it; can it
    commit in a folder of its own (one gate turn)? His rule of 2026-10-12 is that no session
    opens where he does not see it (T16), and the app files such a session under its routines,
@@ -560,6 +561,8 @@ Each is run once by the build, with its result recorded in Progress.
    `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
    scheduled task, so the test would ask about a way this project no longer opens sessions.
 3. `claude --name` with an initial prompt, from a command: does the session appear in the app?
+   Run 2026-10-16 at 02:37 local: it does not appear in his sidebar, though the session ran
+   (Progress, 02:39).
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
 5. After a rename, does the old title stop resolving as an address?
@@ -1651,7 +1654,8 @@ and 3.
   one test pipes an opening through the dispatcher's real standard input; the concurrent
   append test proves its writers overlapped, or starts them on a barrier
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
-  2 is retired by his answer of 2026-10-15 (section 13); tests 1, 3, 4, 5 and 6 remain
+  2 is retired by his answer of 2026-10-15 (section 13); test 1 is run (2026-10-16, typed
+  text); test 3 is run (2026-10-16, not in his sidebar); tests 4, 5 and 6 remain
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
@@ -2999,6 +3003,30 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
   scheduled task. Tests 1, 3 and 6 go to him next, one question at a time, through the lead;
   tests 4 and 5 do not need him at the app.
+- 2026-10-16, 02:16 local, T2, test 1 run. To the lead's question 3, "Prueba 1 del canal (JH 5):
+  ¿una línea pegada llega a la sesión como texto escrito o como contenido pegado?", he tapped
+  "Sí, ahora (Recomendada)" (`e152c9d8`:8485, read with `sessions --quote`). He then pasted
+  "Prueba 1 de T2: línea pegada para ver cómo llega; no hagas nada con ella." twice into
+  JH 5's chat, once from the desktop and once from the phone (his plan, as he was asked). Both
+  reached the session as typed text: `sessions --quote` read each one as his own words, exit 0,
+  with no pasted-content warning.
+  - `e5376fe9`:36884, 07:16:23Z: a `user` entry whose content is a plain string, with `origin`
+    kind human, `turnOrigin` human and `entrypoint` claude-desktop.
+  - `e5376fe9`:36915, 07:16:38Z: sent while the session was working, so the host queued it as a
+    `queued_command` attachment with `origin` kind human; `sessions --quote` reads it as "sent by
+    the user while the session was working (the host queued it)".
+
+  Neither entry records the device it came from, so which line came from which device is his
+  word only. The assumption of section 6 holds: a one-line opening pasted from either device
+  arrives as typed text, and nothing has to be typed by hand.
+- 2026-10-16, 02:39 local, T2, test 3 run. To the lead's question 4 he tapped "Sí, ahora
+  (Recomendada)" (`e152c9d8`:8787). He ran `claude --name "JH prueba 3" "Prueba 3 de T2:
+  respondé solo ok."` in a terminal in `D:\js-harness` and wrote: "Prueba 3: no, "JH prueba 3"
+  no aparece en la barra lateral." (`e152c9d8`:9027, read with `sessions --quote`). The session
+  did run: its transcript is `38272b60`, 52 entries from 07:37:31Z, `entrypoint` cli, titled
+  "JH prueba 3". So a session started by a command runs but is not one he sees in the app,
+  as layer 1's `by a command` already marks it, and opening a session stays one line of his
+  or `start_session` (T16).
 - 2026-10-16, 06:51 local, T6b (JH 26, by the lead's order): why the pause still missed. `js-harness sessions
   --measures --hours 24` on this machine at 06:30: "54 automatic compactions judged in 12 sessions: 32 miss a fact
   (told 28, kept 4)". Each automatic compaction since 2026-10-13 was read again in its transcript (a scratch
