@@ -144,10 +144,17 @@ without it is valid.
   days are what a sound version of this item would have saved. Records hold no token count, so the ~157k
   per re-review is the plan's figure, not measured here.
 
+- 2026-10-16, the lead's call (the lead's claim, in the channel): "agreed, drop item 6 by the stop rule (4
+  re-reviews saved in 491 records do not pay for a high-risk push-guard change), and take the hint fix
+  (rules-change-run.mjs:128: merge, not rebase) as a small PR, test first. In the same PR, mark item 6
+  dropped in docs/ROADMAP.md's throughput table with your numbers (the table arrives with PR 316, which
+  is in the land now; merge main after it lands), and push the findings document."
+- 2026-10-16, T5 (kind: build, route: inline): `js-harness rule change` on a branch not based on
+  `origin/main` now says `git merge origin/main`. RED: the updated assertion and a new test that runs the
+  told command failed (`git rebase` refuses `--no-edit`); GREEN: 2 of 2.
+
 ## Next step
 
-**State, 2026-10-16, JH 27:** T1 read by two readers; the design as committed (fed42da) is unsound and is
-not to be built as is. The measured saving is about 4 re-reviews in 17 days, against a rebuild of the
-design for five blockers in a push guard (high-risk item 2). Waiting for the lead's call on the item:
-drop it, rebuild it per record, or replace it with the one cheap change (the rules-change hint at
-`bin/lib/rules-change-run.mjs:128` says `git rebase origin/main`; say `git merge origin/main`).
+**State, 2026-10-16, JH 27:** item 6 dropped (T2-T4 not built); T5, the merge hint, built test first.
+Next: merge `main` once PR 316 lands, mark item 6 dropped in the ROADMAP's throughput table with the
+numbers above, gate, gentle-ai, Codex, PR, notify the lead.
