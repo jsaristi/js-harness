@@ -5708,6 +5708,35 @@ test('a run from the first commit of a branch off the default branch says so bef
   nothing.untouched('a plan from the first commit of a branch');
 });
 
+/** What a run says of its base when the base is a merge of the default branch that no record covers. */
+const mergeLeftOutSaid = ({ shortId, subject }) =>
+  `The base ${shortId} (${subject}) is a merge of origin/main that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it. A merge is reviewed by what was written in it only where it is HEAD, and \`--base ${shortId}^\` here would review everything it brought in: in a worktree at it (\`git worktree add --detach <folder> ${shortId}\`), \`js-harness codex-review --base ${shortId}^\` reviews what was written in it, and every worktree of the clone shares its record.`;
+
+test('a run from a merge of the default branch below HEAD names the worktree at the merge, not its first parent, which would review everything the merge brought in; and that worktree reviews the merge by what was written in it (merge-review-covers-main)', async () => {
+  const { root, main, head: merge } = makeResolvedMergeRepo();
+  fs.writeFileSync(path.join(root, 'a.txt'), 'A1 after the merge\n', 'utf8');
+  git(root, 'commit', '-am', 'after the merge');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', merge, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.equal(result.out.split('\n')[0], mergeLeftOutSaid(namedOf(root, merge)), result.out);
+  assert.equal(result.out.includes(`--base ${namedOf(root, merge).shortId}^\` reviews it.`), false, result.out);
+  nothing.untouched('a plan from a merge below HEAD');
+
+  // The road the line names: a worktree whose HEAD is the merge reads it by what was written in it.
+  const at = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-worktree-')), 'at-merge');
+  git(root, 'worktree', 'add', '--detach', '--quiet', at, merge);
+  try {
+    const there = startsNothing(at);
+    const plan = await run(['--base', `${merge}^`, '--plan', ...there.home, '--cwd', at], there.deps);
+    assert.deepEqual([plan.code, plan.err], [0, ''], plan.err);
+    assert.equal(plan.out.split('\n')[0], mergeReviewSaid({ head: merge, side: main, branch: 'origin/main' }), plan.out);
+  } finally {
+    git(root, 'worktree', 'remove', '--force', at);
+    fs.rmSync(path.dirname(at), { recursive: true, force: true });
+  }
+});
+
 test('a run from the default branch says nothing of its base: the base of a branch off the default branch is the default branch\'s own commit', async () => {
   const { root, base } = makeSlicedRepo();
   git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
