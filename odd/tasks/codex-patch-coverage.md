@@ -155,6 +155,7 @@ without it is valid.
 
 ## Next step
 
-**State, 2026-10-16, JH 27:** item 6 dropped (T2-T4 not built); T5, the merge hint, built test first.
-Next: merge `main` once PR 316 lands, mark item 6 dropped in the ROADMAP's throughput table with the
-numbers above, gate, gentle-ai, Codex, PR, notify the lead.
+**State, 2026-10-16, JH 27:** item 6 dropped (T2-T4 not built); T5, the merge hint, built test first
+(641053b): gentle-ai assessed it medium, not due (`under_budget`); Codex reviewed 3b90b97..641053b,
+correct (0.97, 35,901 input tokens). `main` merged after PR 316 (e207dd9); item 6 marked dropped in the
+ROADMAP's throughput table. Next: push, PR, notify the lead.
