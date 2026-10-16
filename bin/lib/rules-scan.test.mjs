@@ -60,6 +60,7 @@ const PLANTED = {
   'gate-log-command': { line: 'The gate log keeps a command cut at 120 characters.', marked: 'The gate log keeps a command cut as `rule:gate-log-command` says.' },
   'gate-log-size': { line: 'When the gate log is past 512 KiB it is renamed.', marked: 'When the gate log is past `rule:gate-log-size` it is renamed.' },
   'gate-max': { line: 'A gate is stopped after 30 minutes.', marked: 'A gate is stopped at `rule:gate-max`.' },
+  'gate-wait': { line: 'A commit waits for its turn of the lock for up to 60 minutes.', marked: 'A commit waits for its turn of the lock as `rule:gate-wait` says.' },
   'person-present': { line: 'He is here when he wrote within 15 minutes.', marked: 'He is here when he wrote within `rule:person-present`.' },
   'review-part-files': { line: 'A part holds 40 files at most.', marked: 'A part holds the files of `rule:review-part-files` at most.' },
   'review-part-lines': { line: 'A part holds up to 400 changed lines.', marked: 'A part holds up to `rule:review-part-lines`.' },

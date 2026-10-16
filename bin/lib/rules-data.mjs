@@ -116,7 +116,11 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 60,
     "unit": "minutes",
-    "flag": "--wait"
+    "flag": "--wait",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwaits?\\b.{0,40}\\b(?:turn|lock)\\b.{0,40}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))",
+      "^(?!.*\\bruleValue\\().*\\b(?:turn|lock)\\b.{0,40}\\bwaits?\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
   },
   {
     "id": "person-present",
