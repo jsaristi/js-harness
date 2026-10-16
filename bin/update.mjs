@@ -311,7 +311,7 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   const opts = parseArgs(argv, env);
   const { latest, problem } = latestFor(opts);
   if (problem) {
-    console.error(`nothing was installed: ${problem}`);
+    console.error(problem);
     return 1;
   }
   if (!latest) {

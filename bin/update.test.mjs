@@ -208,7 +208,8 @@ test('a source folder that is not there is said in a line: update and upgrade ex
     for (const main of [updateMain, upgradeMain]) {
       const { code, out, err } = await runCommand(main, ['--source', missing, '--home', home]);
       assert.equal(code, 1, main.name);
-      assert.match(err, /cannot read the source folder .*no-such-folder: ENOENT/, main.name);
+      // The line is the whole of what it says, as it was before the release source: a script may compare it.
+      assert.equal(err, `cannot read the source folder ${missing}: ENOENT`, main.name);
       assert.equal(out, '', main.name);
     }
   } finally {
