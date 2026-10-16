@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
-import { gitOut, reviewCoverage } from './lib/codex-review-coverage.mjs';
+import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 
@@ -126,13 +126,10 @@ function localSuite(run, place) {
  * the files it leaves as none of its parents has them (`--diff-merges=combined`), which is where an edit made in it
  * is; whether it needs a line is `gentleAiEvidence`'s call. `null` when git does not answer. */
 function markdownlessCommits(cwd, main, head) {
-  const log = gitOut(spawnSync, cwd, ['-c', 'core.quotePath=false', 'log', '--diff-merges=combined', '--no-relative', '--no-renames', '--name-only', '--format=%x00%H%x09%h%x09%P%x09%s', `${main}..${head}`]);
-  if (log === null) return null;
-  return log.split('\0').filter((entry) => entry.trim()).map((entry) => {
-    const [line, ...files] = entry.split('\n');
-    const [id, shortId, parents, ...subject] = line.split('\t');
-    return { id, shortId, parentCount: parents.split(' ').length, subject: subject.join('\t'), files: files.filter(Boolean) };
-  }).filter((commit) => commit.files.some((file) => !/\.md$/i.test(file)));
+  // The log `reviewCoverage` reads, by the same reader: names as git has them (`-z`), no signature before a commit.
+  const log = gitOut(spawnSync, cwd, ['log', '-z', '--diff-merges=combined', '--root', '--no-show-signature', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${main}..${head}`]);
+  const commits = log === null ? null : loggedCommits(log);
+  return commits === null ? null : commits.filter((commit) => commit.files.some((file) => !/\.md$/i.test(file)));
 }
 
 /** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,

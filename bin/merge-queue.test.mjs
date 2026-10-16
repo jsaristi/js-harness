@@ -740,6 +740,25 @@ test('the gentle-ai lines are read from the repository\'s root when the queue ru
   assert.equal(evidence.where.get(code), 'odd/tasks/g.md:2');
 });
 
+test('with the Codex review off, a Markdown file whose name git quotes is no code', async () => {
+  const { root, main, code } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
+  // Written to the index alone, NTFS's guard off: Windows names no file with a double quote, and git quotes such a name.
+  git(root, 'checkout', '--quiet', 'feat/g');
+  const scratch = path.join(root, '.git', 'quoted-blob');
+  fs.writeFileSync(scratch, 'notes\n', 'utf8');
+  const blob = git(root, 'hash-object', '-w', scratch);
+  fs.rmSync(scratch);
+  git(root, 'config', 'core.protectNTFS', 'false');
+  git(root, 'update-index', '--add', '--cacheinfo', `100644,${blob},notes/say "hi".md`);
+  git(root, 'commit', '--quiet', '-m', 'a note with a quoted name');
+  git(root, 'push', '--quiet', 'origin', 'feat/g');
+  const head = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', main);
+  // The evidence alone is asserted: Windows cannot write the file into the candidate, which a merge then says.
+  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.deepEqual(out.slice(0, 2), ['PR 1, commit by commit:', `  ${code.slice(0, 7)} feat/g code: the Codex review is off; gentle-ai odd/tasks/g.md:2`], out.join('\n'));
+});
+
 test('with the Codex review off, a merge of another branch with an edit written in it needs its own line', async () => {
   const { root } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
   git(root, 'checkout', '--quiet', '-b', 'sibling', 'origin/main');
