@@ -25,6 +25,7 @@ import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
+import { watchBusiest } from './lib/machine-busiest.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
@@ -1350,6 +1351,35 @@ function gateLogRows(record) {
  * explains a slow gate, else `pass` or `fail`. */
 const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : rows.every((row) => row.pass) ? 'pass' : 'fail');
 
+/** The watch of who spends the processor over a gate's run (`watchBusiest` of `./lib/machine-busiest.mjs`,
+ * and odd/tasks/gate-wait.md, T19), started where the gate's start is in its log, and only there: what it
+ * finds is kept under that start's id (`busiest` of `gateRecord`), and a start that is not in the log has
+ * nothing to key it by. Returns `null` there, or the step that ends the watch and keeps what it found, for
+ * after the run: it resolves once the end reading is in, and never rejects. `check` and `js-harness gate`
+ * call it as their command or first sensor is about to start, and its first reading is not waited for: it
+ * costs a gate no second before its run, and seconds after it.
+ *
+ * Best effort throughout, as the look before a gate is: a watch that cannot start, an end that fails or
+ * finds nobody keeps nothing and says nothing, and the gate is what it would have been. `watch` stands in
+ * for `watchBusiest` in a test. */
+export function watchRun(record, watch = watchBusiest) {
+  if (!record?.started?.()) return null;
+  let watching;
+  try {
+    watching = watch();
+  } catch {
+    return null;
+  }
+  return async () => {
+    try {
+      const ended = await watching?.end();
+      record.busiest({ seconds: ended?.seconds, busiest: ended?.busiest });
+    } catch {
+      // nobody found: nothing to keep
+    }
+  };
+}
+
 /** One row per sensor, run one after another; a broken declaration, of the sensors or of the documents,
  * is one FAIL row and no sensor at all is one INFO row.
  *
@@ -1392,6 +1422,13 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * and changes nothing else. Nothing is written where no sensor runs, for a caller that is no gate, or with
  * `log: false` in `lock`, which is how a gate passes on the switch of its environment (`GATE_LOG_ENV`).
  * `deps.gateLog` stands in for what the record is written with: `{ append, now, id }`, each optional.
+ *
+ * A gate whose start is in the log also keeps who spent the processor over its run, beside the log in
+ * `busiest.jsonl` (`watchRun`): every process's processor time is read as its first sensor starts, without
+ * being waited for, and again after the last, and the heaviest that lived through the run are written
+ * under the id of its start. Nothing is said of it in the report, and nothing is read with `load: false`
+ * in `lock`: the switch of the sample is the switch of every reading of the machine. `deps.watchBusiest`
+ * stands in for the watch.
  *
  * A gate stops before its sensors when a row it knew before them has already failed, which it says with
  * `stoppedBy` in `lock`, the names of those rows: the commit cannot pass, so the wait for the lock, an hour
@@ -1509,6 +1546,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // written and again after the end, so neither look is in the seconds the log says the sensors took.
     const before = lock ? untrackedPaths(cwd, deps.git) : null;
     record?.start({ ...turn, load });
+    // Who spends the processor over the run, from its first reading on, which is not waited for here; with
+    // the sample of the load switched off, nothing is read of the machine (`GATE_LOAD_ENV`).
+    const keepBusiest = lock && lock.load !== false ? watchRun(record, deps.watchBusiest) : null;
     const ran = [];
     let result = 'error';
     // The key this gate proves: the one it had before its sensors, when all of them passed and the tree
@@ -1564,6 +1604,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
+    // After the end is written, so that the seconds of the log stay the sensors'.
+    await keepBusiest?.();
     return [...rows, ...ran, ...ran.flatMap((row) => (row.rerun ? [row.rerun.row] : [])), ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
   };
   if (!lock) return run();
