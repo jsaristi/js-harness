@@ -95,7 +95,7 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
 | T3 | S2, S6 | inline | T3a done, `d65a527`; T3b and the switch written, committed in the gate turn of this commit | `check`'s `tests` sensor in shadow: it traces, runs the whole suite, and logs what selection would have skipped and which of those failed. T3a: Windows (`bin/check-shadow.test.mjs`, RED then GREEN 2/2). T3b: WSL2 (`bin/lib/gate-wsl-trace.test.mjs` 3/3, `bin/check-shadow-wsl.test.mjs` 2/2, RED then GREEN) and `harness.json` `"exactTests": "shadow"` with the end line's counts (`bin/check-exact-tests.test.mjs`, RED 0/3, GREEN 3/3); this repo's harness.json says it |
 | T3c | S6 | inline | done, `bfb64df`; its range recorded as a refused second recheck (L10) | `assertUntraced` in `bin/lib/trace-reads.test.mjs` accepts the hooks fallback for every reason it asserts (the marker of the clock is set before that fallback, so it holds as it is). No RED: this node has the hooks, and a half simulation would not be the node it stands for; GREEN 13/13. | Codex's recheck of `1532bc2..710a0cb` (96,185 input tokens): 7 of 8 fixed; finding 8 not fixed. On a node of the engines field without `module.registerHooks` (22 before 22.15) the tracer marks every test untraced with that reason first, and later reasons use `??=`, so every assertion of a specific `untraced` reason in `bin/lib/trace-reads.test.mjs` (the home, recursive, shell and git ones, lines 137-140 and 250-251 at `710a0cb`) must accept that fallback there. A test-only change; it gets its own review, since a recheck's range is not rechecked |
 | T3d | S6 | inline | done, committed after T3c (`bfb64df`) in the gate turn of its own commit, reviewed by Codex from `bfb64df` | L9: the citations test made deterministic (fixed commit dates; no RED: the flake is one run in 27, three runs green) and the shadow's results a folder with a file per test file (RED then GREEN) |
-| T4 | S2, S3, S6 | inline | begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; T4a and T4b done (`e0af24e`, L14), T4c done (PR 187); the CI run stays whole (`3299a2b`, L18); switched on at 65 of 30 (L19); after measured (L20 to L22): nine skip gates, median 184 s in the tests sensor, 109 s at best, the floor of the 28 files that always run; the tracer costs nothing visible; check.test.mjs left untraced (19 s at most, L21) | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
+| T4 | S2, S3, S6 | inline | done, L23: gate time and wait after the flip measured at like load; begun (L11): before measured, shadow overhead not visible; S6's count read (L13): 29 of 31 clean, 9 since the last failure; T4a and T4b done (`e0af24e`, L14), T4c done (PR 187); the CI run stays whole (`3299a2b`, L18); switched on at 65 of 30 (L19); after measured (L20 to L22): nine skip gates, median 184 s in the tests sensor, 109 s at best, the floor of the 28 files that always run; the tracer costs nothing visible; check.test.mjs left untraced (19 s at most, L21) | gate time and wait before and after; the shadow count over 30 gates or more; only then a switch to skip |
 
 ## Log
 - **L1** (2026-10-14): S1 to S4, verbatim. The lead's order of the queue puts this after Codex out of the
@@ -305,6 +305,29 @@ too: the store is keyed by content, so sharing it among worktrees is moving it t
   test, killed at the end of the sensor's 2 s pipe grace before a slowed survivor wrote its pid: fixed in
   the test, on the lead's word, in its own pull request, with no quarantine, since an entry in
   `docs/FLAKY.md` would keep the file from ever being skipped.
+- **L23** (2026-10-16 05:2x, JH 21, on the lead's order of 04:12: "next for you: exact-tests T4"): the gate time
+  and wait after the flip, read from the machine's gate log (`~/.js-harness/gate-log`, 2026-10-14T19:21Z to
+  2026-10-16T10:05Z: 687 gates, the commit gates (`check`) grouped by the tests sensor's mode, `waitedSeconds` of
+  each start and the load the gate sampled at its start). Since the load moves a gate more than selection (L22),
+  each mode is compared within a load band:
+
+  | Mode of the tests sensor | Load at start | Gates | Gate, median / p90 | Wait, mean |
+  |---|---|---|---|---|
+  | shadow (whole suite, traced) | under 50 % | 46 | 175 / 245 s | 263 s |
+  | skip, files skipped | under 50 % | 74 | 125 / 189 s | 68 s |
+  | shadow | 50 % or more | 71 | 229 / 318 s | 324 s |
+  | skip, files skipped | 50 % or more | 46 | 155 / 261 s | 135 s |
+  | skip, none skipped | any | 12 | 272 / 326 s | 51 s |
+
+  At like load, a gate that skips files is 29 to 32 percent shorter than the whole suite (50 and 74 s at the
+  median), and the mean wait for a turn fell from 300 s over the 117 shadow gates to 94 s over the 120 skip
+  gates that skipped files. The wait also moves with how many sessions commit at once, which the log does not
+  hold, so its fall is the observed one, not one proven to come from selection alone. Before the shadow
+  (2026-10-14, 98 gates, the whole suite of fewer test files, untraced) the gate took a median 133 s and the
+  mean wait was 484 s. The twelve skip gates that skipped nothing (the key changed: `package.json`, the Node
+  version or the tracer) ran the whole suite, as S2 asks. The floor stays the files that always run (L20 to
+  L22). T4 is closed with this: its three parts (the shadow count, the switch, the measure before and after)
+  are in L13, L19 and here.
 
 ## Resume here (2026-10-14 17:3x, JH 8)
 - Newest (19:25): T3b and the switch are written and green file by file (L5), committed in the gate turn
