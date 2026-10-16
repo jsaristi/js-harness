@@ -159,6 +159,72 @@ The question for him, asked by the lead: the spend. Public repository and GitHub
 repository stays private, either a card on GitHub at about $157 a month (about $298 in a month as busy as
 2026-10-15), or no card, with CI for the first couple of days of each month and the local line after.
 
+## The tests sensor's bound on Windows (T6e's design)
+
+What the bound is for. `SENSOR_TIMEOUT_MS` (`bin/check.mjs:103-107`) exists so a sensor that never
+exits, a watch-mode script or a linter waiting on stdin, cannot hold the commit gate forever; its
+comment says the bound "must stay above a whole run of this repository's own suite on a loaded
+machine". On Windows that no longer holds: the whole suite took 1,398 s there (L18), the rule
+`sensor-timeout` gives 1,200.
+
+The figure is his. The rule's declaration says `owner: project`, but the value 20 is
+Sebastián's: commit `7687b19` (2026-10-04, "give a sensor twenty minutes, not ten") says
+"Decided by Sebastián on 2026-10-04; making the suite faster stays open as its own work". So any
+change to it goes to him (the question is in the Log, L21).
+
+What was measured (`js-harness gate log --last 2000`, the runs over 1,000 s):
+
+| When (local) | Seconds | Result | Load | Busiest by CPU |
+| --- | --- | --- | --- | --- |
+| 10-14 15:11 | 1,193 | timeout | 4.1 of 8 | (not logged then) |
+| 10-15 09:50 | 1,451 | exit 0 | 7.7 of 8 | vmmem first: a WSL2 run beside it |
+| 10-16 12:52 | 1,243 | exit 1 | 8.0 of 8 | MsMpEng 1,435 s, svchost 1,261 s |
+| 10-16 12:52 | 1,221 | timeout | 7.8 of 8 | MsMpEng 1,409 s, svchost 1,238 s |
+| 10-16 13:26 | 1,398 | exit 1 | 7.8 of 8 | MsMpEng 1,750 s, svchost 1,460 s |
+
+In each of the three runs of T6 the busiest process was MsMpEng, Windows Defender's scanner,
+with more CPU seconds than the run lasted: it scans the temporary repositories and the git
+processes the tests make (count-git: 22,475 git processes in a whole run on `8b3c031`,
+`odd/tasks/gate-wait.md`). That is assumed to be most of the gap between WSL2 and Windows; it was
+not measured with Defender out of the way. The trial on GitHub (run 38296748258, `docs/ROADMAP.md`,
+"The wait for the gate, measured and cut") points the same way: on machines of one size the
+suite took 1,258 s on Windows and 184 s on Linux, so a two-core Windows machine is already near
+the bound with nothing else running.
+
+Where a whole suite runs on Windows: here only by hand (`JS_HARNESS_GATE_WSL=0`, T6's stability
+pass), since this repository's gates run in WSL2 (`harness.json` `sensorsInWsl`) on the selected
+files. But on a machine without `~/.js-harness/gate-wsl.json` the sensors run on Windows, and a
+project whose `harness.json` says nothing of `exactTests` runs its whole suite at every commit
+(`discoverExactTests`, `bin/check.mjs:611`): a suite past 20 minutes there is refused whatever its
+tests say. So this is a defect of what ships, not only of the stability pass.
+
+Three ways, and the one proposed:
+
+1. Proposed: the bound measures silence, not length. `runSensor` (`bin/check.mjs:859`) already
+   reads every chunk of the sensor's stdout and stderr; each chunk restarts the timer. A sensor
+   that hangs writes nothing, so it is stopped after the silence bound; a slow suite keeps
+   writing and finishes. A ceiling stays for a sensor that hangs while it writes (a loop that
+   prints). Figures to set after one measure: the longest silence of a whole run on Windows under
+   load, from a run that stamps each chunk's time. The silence bound is then twice that, and
+   assumed to land near 10 minutes (the longest single file seen is about 200 s,
+   `docs/FAILURES.md`, heavy-run-beside-gate; how node's reporter spaces its output across
+   concurrent files is not known yet, which is what the measure is for); the ceiling 60 minutes,
+   the `--max` the T6 run used. A hang is then stopped sooner than today (10 against 20 minutes),
+   and the suite gets three times the room. Cost: one rule change (`sensor-timeout` becomes the
+   silence bound, a new `sensor-ceiling`, through `js-harness rules change`), the timer in
+   `runSensor` with its tests, the WSL2 path (`bin/check.mjs:1064`) the same, and one measuring
+   run of about 25 minutes under the gate lock.
+2. Raise the figure to 30 minutes. One rule change, no code. It fits 1,398 s with 400 s spare
+   on a loaded machine, and the suite grows each week (5,687 tests in L18); a hang then holds the
+   gate 30 minutes. It is the same move as `7687b19` and comes back when the suite grows.
+3. Exclude the temporary folders (`D:\js-harness-tmp`, the system temp) and the worktrees from
+   Defender's real-time scan. It attacks what the table points at, on this machine only; it is a
+   security setting, so only he can make it and no session may, and a user's machine keeps the
+   defect. It goes beside 1 or 2, not instead of them.
+
+Also open, not this task's: making the Windows suite cheaper (the git fixtures, gate-wait T4's
+cuts) shortens the run but does not make any fixed figure true for a growing suite.
+
 ## Tasks
 
 - [x] T1 (kind: build) S1: the three open table rows, closed in their own documents (L11)
@@ -176,7 +242,8 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
 - [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
 - [ ] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4)
-- [ ] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1)
+- [x] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1) (above, L21; the figure is his, asked through the lead)
+- [ ] T6f (kind: build) S6: the bound T6e's design gives, once he answers L21's question; inline, test first
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -323,3 +390,12 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   alone (7 of 7); the rerun at the end of T6 shows whether the room is enough. Seen on the way: the gate of T6b's
   commit (`a478e4a`) ran the whole suite in WSL2 and it passed, since selection could not be asked there; one data
   point for S6's WSL2 check, not yet a run on `main`.
+- L21 (2026-10-16, JH 21): T6e designed (above, "The tests sensor's bound on Windows"). The 20 minutes are his
+  (`7687b19`), so the choice goes to him through the lead. The question: the whole suite on Windows now takes
+  longer than the 20 minutes he gave a sensor on 2026-10-04 (1,398 s, L18), and every project gated on Windows without WSL2
+  meets the same refusal once a suite passes that. A: the bound measures silence, so a sensor that writes
+  nothing for some 10 minutes is stopped (a hang is caught sooner than today) and one that keeps writing may run
+  up to 60; one measuring run of about 25 minutes under the lock sets the figure. B: the bound becomes 30
+  minutes, one rule change, and the question comes back as the suite grows. Beside either, only he can exclude
+  the temporary folders from Defender's scan, the process that led every slow run. Recommended: A. Not
+  measured: the longest silence of a whole run, and the run with Defender out of the way.
