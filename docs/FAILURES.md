@@ -761,6 +761,8 @@ makes the next try wait five minutes and fail.
   found on 2026-10-11 was dated 2026-10-09 17:40
 - Seen: 2026-10-11 — relief file, line 201 — two tries, both exit 1; the lock folder left again,
   removed by hand twice
+- Control: check — bin/doctor.test.mjs — "the pnpm-lock row stale for a global bin lock left over in
+  the given PNPM_HOME" — since 2026-10-16
 
 ### probe-end-hook-flake
 A gate failed on `evals/codex-isolation-probe.test.mjs` as a whole, with no test of it red, and the
