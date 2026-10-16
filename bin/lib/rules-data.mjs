@@ -273,7 +273,11 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-07",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:subagents?|agent calls?|writers?|verifiers?|readers?)\\b.{0,50}\\b(?:at|on) `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\()(?!.*\\bgpt-).*\\beffort: \"{amount}\""
+    ]
   },
   {
     "id": "subagent-reader-model",
