@@ -176,7 +176,7 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
 - [x] T1 (kind: design) This design, read by two readers that did not write it; version 2 says what they changed (S1, S2)
 - [ ] T1b (kind: design) The lead's answer on Part B, recorded in the Log (S1, S2)
 - [x] T2 (kind: build) `tasksOf` gives each task its lines, and `featureParts`, test first (S3, S4)
-- [ ] T3 (kind: build) The hook names the task and its parts, and the mode line follows it, test first; the resume tests updated; SPEC and README (S5, S6, S7)
+- [x] T3 (kind: build) The hook names the task and its parts, and the mode line follows it, test first; the resume tests updated; SPEC and README (S5, S6, S7)
 - [ ] T4 (kind: verify) Gate, gentle-ai, Codex review, PR ready, the lead told (S1)
 
 ## Log
@@ -201,7 +201,13 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
   | `first-version.md` | T6 | — | 31 | 325 |
 
   Most of the named lines are the resume sections themselves.
+- L5 — 2026-10-16, T3 built, test first. RED: 11 resume tests failed on the new lines. The new
+  test of a fixture shaped like `session-channel.md` failed too, and the test of a document with no part
+  passed, as today's line does. GREEN: `node --test bin/resume.test.mjs` gives 94 of 94. Tests that read
+  lines by position now slice past the parts (`4 + PARTS.length`). `thousands` turned out to format
+  tokens ("0k"), so counts of lines use `toLocaleString`. The README and `docs/SPEC.md` ("A compaction
+  resumes from files") name the parts.
 
 ## Next step
 
-T3: test first. The hook prints S6's lines on its two one-document paths, and the mode line follows the same task (S5). Update the eleven tests built on `READ`. T1b waits for the lead and blocks nothing in T3.
+T4: the gate, gentle-ai's assessment of the slice, then Codex on the code, the PR, and the lead told. T1b waits for the lead.
