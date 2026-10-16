@@ -20,7 +20,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
 import { beforeProgress, checkRules } from './lib/rules-check.mjs';
-import { countFindings } from './lib/rules-scan.mjs';
+import { countFindings, registerFindings } from './lib/rules-scan.mjs';
+import { parseRegister } from './lib/failures.mjs';
 import { renderList, rulesHash, ruleHere, ruleOf } from './lib/rules.mjs';
 import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
 import { readRecords } from './lib/rules-applied-read.mjs';
@@ -473,6 +474,10 @@ export async function rulesMain(argv, {
 
   if (parsed.command === 'id') return showRule(parsed.id, { sources: read.sources, readers: result.readers }, stdout, stderr);
   if (parsed.command === 'check') {
+    // A rule's `failure` names an entry of the register, and a switch back to report is a sighting of it (odd/tasks/
+    // rule-hierarchy.md, "The row `rules` (T16d)"). An absent register has no entry, so every `failure` names none.
+    const register = read.readFile('docs/FAILURES.md');
+    result.findings.push(...registerFindings(RULES, register === null ? [] : parseRegister(register).entries));
     const inForce = [...read.codeFiles, ...read.textFiles, ...['AGENTS.md', 'README.md'].map((file) => ({ path: file, text: read.readFile(file) })).filter((file) => file.text !== null)];
     return checkList(result, stdout, countFindings(RULES, inForce));
   }

@@ -1,7 +1,7 @@
 // The scan of the texts in force for restated values (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)").
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { countFindings, inForceLines, scanLines } from './rules-scan.mjs';
+import { countFindings, inForceLines, registerFindings, scanLines } from './rules-scan.mjs';
 
 const WAIT = { id: 'gate-wait', subject: 'the wait for a turn of the gate lock', owner: 'project', since: '2026-10-11', value: 60, unit: 'minutes', patterns: ['wait.{0,40}{amount}'] };
 const PAUSE = { id: 'context-pause', subject: 'the pause', owner: 'project', since: '2026-10-11', value: 88, unit: 'percent' };
@@ -34,4 +34,18 @@ test('the counts name every scanned rule, and the rules with no patterns are lis
     { path: 'odd/tasks/a.md', text: 'wait 60 minutes\n## Progress\nwait 60 minutes\n' },
   ];
   assert.deepEqual(countFindings([WAIT, PAUSE, GONE], files), { counts: { 'gate-wait': 3 }, unscanned: ['context-pause'] });
+});
+
+test('a failure that names no register entry, and a switch back with no sighting since, are findings', () => {
+  const entries = [{ id: 'old-rule-beside-new', seen: [{ date: '2026-10-12' }, { date: '2026-10-16' }] }, { id: 'quiet-entry', seen: [{ date: '2026-10-01' }] }];
+  const rules = [
+    { ...WAIT, failure: 'old-rule-beside-new', row: { refuses: '2026-10-14' } },
+    { ...WAIT, id: 'gate-max', failure: 'no-such-entry' },
+    { ...WAIT, id: 'gate-sat', failure: 'old-rule-beside-new', row: { reports: 'a wrong pattern', since: '2026-10-15' } },
+    { ...WAIT, id: 'gate-cold', failure: 'quiet-entry', row: { reports: 'a wrong pattern', since: '2026-10-15' } },
+  ];
+  assert.deepEqual(registerFindings(rules, entries), [
+    'rule "gate-max": its failure "no-such-entry" names no entry of docs/FAILURES.md',
+    'rule "gate-cold": it reports again since 2026-10-15 (a wrong pattern), and its failure "quiet-entry" has no "- Seen:" line on or after that day',
+  ]);
 });

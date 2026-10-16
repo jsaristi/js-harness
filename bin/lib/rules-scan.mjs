@@ -54,3 +54,21 @@ export function countFindings(rules, files) {
   const unscanned = rules.filter((rule) => !Object.hasOwn(rule, 'retired') && !Array.isArray(rule.patterns)).map((rule) => rule.id);
   return { counts, unscanned };
 }
+
+/** The findings of the rules' `failure` against the register's `entries` (`{ id, seen: [{ date }] }`, as
+ * `parseRegister` gives them): a `failure` that names no entry, and a rule switched back to report whose entry has no
+ * `- Seen:` line on or after the day it was switched, since a switch back is counted as a sighting. */
+export function registerFindings(rules, entries) {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const findings = [];
+  for (const rule of rules) {
+    if (typeof rule.failure !== 'string') continue;
+    const entry = byId.get(rule.failure);
+    if (entry === undefined) {
+      findings.push(`rule "${rule.id}": its failure "${rule.failure}" names no entry of docs/FAILURES.md`);
+    } else if (typeof rule.row?.reports === 'string' && !entry.seen.some((seen) => seen.date >= rule.row.since)) {
+      findings.push(`rule "${rule.id}": it reports again since ${rule.row.since} (${rule.row.reports}), and its failure "${rule.failure}" has no "- Seen:" line on or after that day`);
+    }
+  }
+  return findings;
+}
