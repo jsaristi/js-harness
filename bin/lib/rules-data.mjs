@@ -232,7 +232,10 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort"
+    ]
   },
   {
     "id": "session-model",
