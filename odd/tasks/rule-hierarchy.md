@@ -3200,7 +3200,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
 b0093b8), inline, tests first. Unit 1 is done (0b292bc): `patternOf` and `{amount}` in `bin/lib/rules.mjs`, with `readRules`
 refusing a pattern with no `{amount}` or one matching an empty line. Unit 2, the scan, is
 `bin/lib/rules-scan.mjs` (8aa9b00). Unit 3: `rules check` prints `patterns: none; unscanned: 29`
-after its PASS line (`bin/rules.mjs` `patternsLine`; its commit is going through the gate). Next
+after its PASS line (`bin/rules.mjs` `patternsLine`, bf7d0f7). Next
 units, in order:
 1. `rules check`'s two findings: a `failure` naming no register entry, a switch back with no sighting;
 2. the row in `checkOwnRules`;
