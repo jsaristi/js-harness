@@ -624,8 +624,23 @@ function isEmptyContainer(value) {
  * finds the `hooks` object and the list the first one made, and records them as made too, since they are ours. The
  * set `ours` carries that from one entry to the next, and from the earlier records, so each entry's record says the
  * truth and whichever of the entries is removed last takes its containers with it. */
-function installEntries(home, previousManifest) {
+/** The folders on the way to `target` that are not there, deepest first, below `home` only: the home itself and what
+ * holds it are never install's, even when install is what makes them. */
+function missingFolders(target, home) {
+  const missing = [];
+  for (let dir = path.dirname(target); isBelow(dir, home) && !fs.existsSync(dir); dir = path.dirname(dir)) missing.push(dir);
+  return missing;
+}
+
+/** Whether `inner` is a path strictly inside `outer`. */
+function isBelow(inner, outer) {
+  const relative = path.relative(path.resolve(outer), path.resolve(inner));
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function installEntries(home, previousManifest, missingBefore = new Map()) {
   const createdByTarget = new Map();
+  const foldersByTarget = new Map();
   const ours = oursContainers(previousManifest?.entries);
   return entryComponents.map((component) => {
     const target = component.target(home);
@@ -634,6 +649,9 @@ function installEntries(home, previousManifest) {
     const previousEntry = previousManifest?.entries?.find((e) => e.path === target);
     const result = appendEntryToFile(target, pointer, entry, ours);
     if (!createdByTarget.has(target)) createdByTarget.set(target, previousEntry ? previousEntry.createdFile : result.createdFile);
+    // Like `createdFile`, the folders made for the file are a fact of the file, settled by the first install that wrote
+    // it, from what was missing before install wrote anything (a skill file makes `~/.claude` first). A record from before the field names none, and its folders stay, since nothing says install made them.
+    if (!foldersByTarget.has(target)) foldersByTarget.set(target, previousEntry ? previousEntry.createdFolders ?? [] : (result.createdFile ? missingBefore.get(target) ?? [] : []));
     // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and
     // pointer still holds. Written as none, the next install would take those containers for the user's, and
     // `uninstall` would leave them empty behind it.
@@ -644,6 +662,7 @@ function installEntries(home, previousManifest) {
       entry,
       sha256: sha256(JSON.stringify(entry)),
       createdFile: createdByTarget.get(target),
+      createdFolders: foldersByTarget.get(target),
       createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
@@ -1010,6 +1029,26 @@ export function removeScheduledTask(task, schtasks, look = lookAtScheduledTask(t
  * reported: thrown from here, a failure took the result of `uninstall` with it (found in review,
  * 2026-10-10). `listDir` is the seam of its callers: `deps.listDir` of `uninstall`, `sync` and the two
  * that forget a record. */
+/** Takes out the folders install made for the files of `entries` (`createdFolders`, deepest first), each only once its
+ * file is gone and it is empty, so a host folder that was there before install, `~/.claude` on a machine that already
+ * runs Claude Code, is never touched. A folder that is not empty or cannot be looked at stays, and so do those above it. */
+function removeCreatedFolders(entries, home, listDir = fs.readdirSync) {
+  for (const entry of entries ?? []) {
+    if (fs.existsSync(entry.path)) continue;
+    // Only a folder on the way from the home to the file: a manifest edited by hand or by another tool names no other.
+    const onTheWay = (entry.createdFolders ?? []).filter((folder) => isBelow(folder, home) && isBelow(entry.path, folder));
+    for (const folder of onTheWay) {
+      try {
+        if (!fs.existsSync(folder)) continue;
+        if (listDir(folder).length > 0) break;
+        fs.rmdirSync(folder);
+      } catch {
+        break;
+      }
+    }
+  }
+}
+
 function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
   let current = path.resolve(dir);
   const stop = path.resolve(home);
@@ -1042,6 +1081,7 @@ function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
 export function install(home, version, deps = {}) {
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const previous = readManifest(home);
+  const missingBefore = new Map(entryComponents.map((component) => [component.target(home), missingFolders(component.target(home), home)]));
   const files = [];
   for (const component of components) {
     const target = component.target(home);
@@ -1058,7 +1098,7 @@ export function install(home, version, deps = {}) {
       // else: never installed before, so there is nothing to carry forward or report as orphaned.
     }
   }
-  const entries = installEntries(home, previous);
+  const entries = installEntries(home, previous, missingBefore);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
   const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
@@ -1257,6 +1297,7 @@ export function uninstall(home, deps = {}) {
     fs.rmSync(manifestPath(home), { force: true });
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
+  removeCreatedFolders(manifest.entries, home, listDir);
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
