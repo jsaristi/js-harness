@@ -34,7 +34,8 @@ export function addedLines(diff) {
   let next = 0;
   for (const line of diff.split(/\r?\n/)) {
     if (line.startsWith('+++ ')) {
-      file = line === '+++ /dev/null' ? null : line.slice(4).replace(/^b\//, '');
+      // Git ends the name of a path that holds a space with a tab.
+      file = line === '+++ /dev/null' ? null : line.slice(4).replace(/\t$/, '').replace(/^b\//, '');
       continue;
     }
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);

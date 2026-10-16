@@ -110,18 +110,17 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     if (!branch.startsWith('rule/')) {
       throw new RuleChangeError(`it runs on a branch rule/<name> based on ${BASE}, and this is ${branch}: git switch -c rule/${id} ${BASE}`);
     }
-    let change = null;
-    if (!checkSource) {
-      try {
-        change = JSON.parse(stdin());
-      } catch {
-        throw new RuleChangeError('the change on standard input is not JSON');
-      }
-      if (change === null || typeof change !== 'object' || Array.isArray(change)) throw new RuleChangeError('the change is a JSON object');
+    // The change is read now and refused for its shape later, where it always was. A turn to refuse is counted on
+    // origin/main as it is now, not on a copy fetched days ago (T16d), so it fetches before origin/main is read.
+    const input = checkSource ? null : stdin();
+    let peeked = null;
+    try {
+      peeked = input === null ? null : JSON.parse(input);
+    } catch {
+      peeked = null;
     }
-
-    // A turn to refuse is counted on origin/main as it is now, not on a copy fetched days ago (T16d).
-    if (change?.set?.row !== null && typeof change?.set?.row === 'object' && Object.hasOwn(change.set.row, 'refuses')) {
+    const row = peeked?.set?.row;
+    if (row !== null && typeof row === 'object' && Object.hasOwn(row, 'refuses')) {
       const fetched = git(['fetch', 'origin', 'main']);
       if (fetched.status !== 0) throw new RuleChangeError(`a turn to refuse counts on ${BASE} as it is now, and git fetch origin main failed${fetched.stderr ? `: ${String(fetched.stderr).trim()}` : ''}`);
     }
@@ -174,13 +173,23 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     else delete startSources[id];
     const today = dayOf(now());
 
+    let change = null;
+    if (!checkSource) {
+      try {
+        change = JSON.parse(input);
+      } catch {
+        throw new RuleChangeError('the change on standard input is not JSON');
+      }
+      if (change === null || typeof change !== 'object' || Array.isArray(change)) throw new RuleChangeError('the change is a JSON object');
+    }
+
     // What the keys of the row `rules` are checked against: the entries of the register on this branch, and the
     // findings of a rule's patterns in origin/main's texts in force, read once and only when a count is asked.
     const register = git(['show', `HEAD:${REGISTER}`]);
     const failures = new Set(register.status === 0 ? parseRegister(String(register.stdout)).entries.map((entry) => entry.id) : []);
     let mainTexts = null;
     const countOf = (rule) => {
-      mainTexts ??= out(['ls-tree', '-r', '--name-only', BASE]).split(/\r?\n/).filter(isTextInForce).map((file) => ({ path: file, text: out(['show', `${BASE}:${file}`]) }));
+      mainTexts ??= out(['-c', 'core.quotePath=false', 'ls-tree', '-r', '--name-only', BASE]).split(/\r?\n/).filter(isTextInForce).map((file) => ({ path: file, text: out(['show', `${BASE}:${file}`]) }));
       return countFindings([rule], mainTexts).counts[rule.id] ?? 0;
     };
 

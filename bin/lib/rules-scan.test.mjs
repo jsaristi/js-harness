@@ -1,6 +1,7 @@
 // The scan of the texts in force for restated values (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)").
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { RULES } from './rules-data.mjs';
 import { countFindings, inForceLines, registerFindings, scanLines } from './rules-scan.mjs';
 
 const WAIT = { id: 'gate-wait', subject: 'the wait for a turn of the gate lock', owner: 'project', since: '2026-10-11', value: 60, unit: 'minutes', patterns: ['wait.{0,40}{amount}'] };
@@ -48,4 +49,17 @@ test('a failure that names no register entry, and a switch back with no sighting
     'rule "gate-max": its failure "no-such-entry" names no entry of docs/FAILURES.md',
     'rule "gate-cold": it reports again since 2026-10-15 (a wrong pattern), and its failure "quiet-entry" has no "- Seen:" line on or after that day',
   ]);
+});
+
+// One line for each rule of the real list that carries patterns, restating its value as a text might: a rule gets
+// its patterns and its planted line in the same change, so a pattern that finds nothing in particular never lands.
+const PLANTED = {};
+
+test('on the real list, every rule with patterns finds its own planted line, and loses it to its mark', () => {
+  const withPatterns = RULES.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns)).map((rule) => rule.id);
+  assert.deepEqual(Object.keys(PLANTED).sort(), [...withPatterns].sort(), 'a planted line for each rule with patterns, and for no other');
+  for (const id of withPatterns) {
+    const lines = inForceLines('docs/ROADMAP.md', `${PLANTED[id].line}\n${PLANTED[id].marked}\n`);
+    assert.deepEqual(scanLines(RULES, lines).filter((finding) => finding.id === id).map((finding) => finding.line), [1], id);
+  }
 });

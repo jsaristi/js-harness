@@ -474,6 +474,11 @@ test('{amount} stands for any amount in any wording, so a pattern outlives a cha
   assert.match('the review model is gpt-6.1-sol', model);
   assert.match('the review model is "claude-opus-5-5"', model);
   assert.match('THE REVIEW MODEL: gpt-6.1-sol', model);
+  const effort = patternOf('effort.{0,10}{amount}');
+  for (const line of ['the effort is high', 'review effort: medium', 'at effort xhigh', 'effort low', 'effort max']) {
+    assert.match(line, effort, line);
+  }
+  assert.doesNotMatch('the effort of the team', effort);
 });
 
 test('a row that is not { refuses: day } or { reports: text, since: day } is refused', () => {

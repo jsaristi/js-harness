@@ -185,3 +185,12 @@ test('a gate whose rules row fails stops before its sensors', async () => {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('a git that names the sides of a diff otherwise, and a path with a space or an accent, still give their lines', () => inRepo((root) => {
+  git(root, 'config', 'diff.mnemonicPrefix', 'true');
+  write(root, 'odd/tasks/a b.md', `# A\n${RESTATED}\n`);
+  write(root, 'odd/tasks/café.md', `# B\n${RESTATED}\n`);
+  git(root, 'add', '.');
+  const [row] = checkOwnRules(root, { rules: [{ ...WAIT, row: { refuses: '2026-10-16' } }] });
+  assert.deepEqual(row.lines.map((line) => line.split(' restates')[0]).sort(), ['odd/tasks/a b.md:2', 'odd/tasks/café.md:2']);
+}));

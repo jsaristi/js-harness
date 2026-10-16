@@ -278,3 +278,7 @@ test('a new rule may carry patterns and a failure, and starts with no row', () =
   assert.deepEqual([rule.patterns, rule.failure], [['bound {amount}'], 'old-rule-beside-new']);
   refusal(() => changedList(LIST, 'new-bound', { value: 3, unit: 'minutes', set: { ...set, row: { refuses: TODAY } } }, { today: TODAY, failures: FAILURES, countOf: none }), /a new rule starts with no row/);
 });
+
+test('removing the row of a rule that has none is refused: it would change nothing', () => {
+  refusal(() => changedList(SCANNED, 'gate-wait', { set: { row: null } }, { today: TODAY, failures: FAILURES }), /"gate-wait" has no row to remove/);
+});

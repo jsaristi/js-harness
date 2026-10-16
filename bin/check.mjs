@@ -227,7 +227,8 @@ function checkListRow(cwd, rules, spawn) {
   const scanned = rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns));
   if (scanned.length === 0) return [];
   const git = hookGit(cwd, spawn);
-  const diffOf = (...against) => git?.(['diff', '--cached', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', ...against]) ?? null;
+  // The sides named a/ and b/ whatever the clone's diff.mnemonicPrefix says, and a path with an accent unquoted.
+  const diffOf = (...against) => git?.(['-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', ...against]) ?? null;
   const diff = diffOf();
   if (!diff) return [];
   const key = (one) => `${one.file}\n${one.line}\n${one.text}`;

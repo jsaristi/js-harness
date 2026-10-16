@@ -61,6 +61,7 @@ function withRowKeys(rule, set, { today, failures, countOf }) {
   }
   if (!Object.hasOwn(set, 'row')) return null;
   if (row === null) {
+    if (rule.row === undefined) throw new RuleChangeError(`"${rule.id}" has no row to remove`);
     delete rule.row;
     return 'row removed';
   }

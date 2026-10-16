@@ -444,3 +444,15 @@ test('the switch back from refuses fetches nothing, writes the reason, and its r
   assert.deepEqual([rowOf(repo), asked], [{ reports: 'a wrong pattern', since: TODAY }, []]);
   assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /not landed: switched back to report \(a wrong pattern\), a sighting of failure old-rule-beside-new; source design;/);
 });
+
+test('a branch not based on origin/main is said before an input that is not JSON, as before the row keys', async () => {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', 'main');
+  write(repo.dir, 'docs/ROADMAP.md', '# Roadmap, moved on\n');
+  git(repo.dir, 'commit', '-q', '-am', 'main moves on');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(repo.dir, 'switch', '-q', 'rule/gate-wait');
+  const result = await change(repo, ['gate-wait'], undefined, { stdin: () => 'not json' });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /^not changed: rule\/gate-wait is not based on origin\/main: git rebase origin\/main$/);
+});
