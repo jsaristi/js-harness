@@ -56,6 +56,7 @@ test('a failure that names no register entry, and a switch back with no sighting
 const PLANTED = {
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
+  'gate-log-size': { line: 'When the gate log is past 512 KiB it is renamed.', marked: 'When the gate log is past `rule:gate-log-size` it is renamed.' },
   'person-present': { line: 'He is here when he wrote within 15 minutes.', marked: 'He is here when he wrote within `rule:person-present`.' },
   'sensor-timeout': { line: 'A sensor is stopped after 20 minutes.', marked: 'A sensor is stopped at `rule:sensor-timeout`.' },
 };

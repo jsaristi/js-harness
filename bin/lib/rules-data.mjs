@@ -85,7 +85,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 512,
-    "unit": "KiB"
+    "unit": "KiB",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\blog\\b.{0,80}\\b(?:past|over|above|at most|up to)\\s+{amount}"
+    ]
   },
   {
     "id": "gate-max",
