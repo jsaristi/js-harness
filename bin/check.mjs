@@ -238,7 +238,8 @@ function checkListRow(cwd, rules, spawn, side = STAGED) {
   // The sides named a/ and b/ whatever the clone's diff.mnemonicPrefix says, and a path with an accent unquoted.
   const diffOf = (...against) => git?.(['-c', 'core.quotePath=false', 'diff', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', ...side.revs(...against)]) ?? null;
   const diff = diffOf();
-  if (!diff) return side.strict ? [UNANSWERED] : [];
+  if (diff === null) return side.strict ? [UNANSWERED] : [];
+  if (!diff) return [];
   const key = (one) => `${one.file}\n${one.line}\n${one.text}`;
   let added = addedLines(diff).filter((one) => isTextInForce(one.file));
   if (side.mergeFilter && git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) {
@@ -2356,8 +2357,9 @@ export function parseGateWait(argv) {
 
 const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait', '--first', '--base', '--branch'];
 const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door'];
-// The flags of a gate that runs sensors or waits for the lock: `--door` runs neither, so one of them with it is refused.
-const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--head', '--remote'];
+// The flags of a gate that runs sensors or waits for the lock, and `--home`, where that lock and the gate log live:
+// `--door` uses none of them, so one of them with it is refused rather than ignored.
+const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--head', '--remote', '--home'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
  * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited

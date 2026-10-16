@@ -1192,6 +1192,18 @@ test('check --door refuses a candidate rules-data.mjs that does not parse, and o
   }
 });
 
+test('check --door passes a merge that brings no line, which is not a git that does not answer', async () => {
+  const { dir } = doorRepo({ change: restateRoadmap });
+  try {
+    // The base is HEAD itself: what a merge of a change already in the candidate brings, nothing.
+    const { code, output } = await runCheck(['--door', '--base', 'HEAD', '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /^FAIL /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('check --door judges by the running list alone when the candidate has no list, and the list a pull request changes outside a rule/ branch is refused only with --branch', async () => {
   const noList = doorRepo({ base: null, change: restateRoadmap });
   const edited = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', `${doorListText(doorList())}// touched\n`) });
@@ -1234,6 +1246,7 @@ test('check --door is a usage error without --base, with --push or with a gate f
       [['--door', '--cwd', dir], /--door needs --base <rev>/],
       [['--door', '--base', 'HEAD', '--push', '--cwd', dir], /--door goes with the rule rows, not with --push/],
       [['--door', '--base', 'HEAD', '--first', 'why', '--cwd', dir], /--door runs no gate/],
+      [['--door', '--base', 'HEAD', '--home', dir, '--cwd', dir], /--door runs no gate: --home goes with a gate/],
       [['--base', 'HEAD', '--cwd', dir], /--base and --branch go with --door/],
       [['--branch', 'feat/x', '--cwd', dir], /--base and --branch go with --door/],
     ];

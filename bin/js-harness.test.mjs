@@ -60,6 +60,8 @@ test('--help says what check --door runs, the rule rows of the lines a pull requ
   const result = run(['--help']);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^ {2}check {7}.*check --door --base <rev> \[--branch <name>\] runs only the rule rows/m);
+  // The command names keep their column: the line of `gate` after `check` is not moved by it.
+  assert.match(result.stdout, /^ {2}gate {8}Run a command under the machine's gate lock/m);
 });
 
 // install-update T8: `upgrade` asks the copy on the path which version it is before it lets it sync.
