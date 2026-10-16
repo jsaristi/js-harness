@@ -449,6 +449,14 @@ A candidate red on this machine is bisected: the pull request that turns it red 
 named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
 
+A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
+the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
+what `git rev-list a..b` lists), on a line the pull request adds to a feature document
+(`odd/tasks/<name>.md`) that says gentle-ai, such as `gentle-ai: 6b58f85..3d0cc94 high, approved`.
+The queue resolves each range itself; a merge of main needs no line, and a pull request of documents
+asks for none. A rebase changes the hashes, and the refusal says so. For each ready pull request
+the queue prints, commit by commit, the Codex record that covers it and the line that names it.
+
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
 the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's

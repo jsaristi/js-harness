@@ -74,7 +74,7 @@ function headsPastTip(spawn, cwd, tip, heads) {
 // What `git log` is asked to write for each commit: an empty field, then its line,
 // `<id>\t<short id>\t<parents>\t<subject>` (four fields, the subject last so that a tab inside it
 // survives). `loggedCommits` reads what comes back, and takes for such a line only what `COMMIT_LINE` matches.
-const COMMIT_FORMAT = '%x00%H%x09%h%x09%P%x09%s';
+export const COMMIT_FORMAT = '%x00%H%x09%h%x09%P%x09%s';
 const COMMIT_LINE = /^[0-9a-f]{40,64}\t[0-9a-f]+\t[0-9a-f ]*\t/;
 
 /** The commits of what `git log -z --diff-merges=combined --name-only --format=<COMMIT_FORMAT>` printed, in
@@ -99,7 +99,7 @@ const COMMIT_LINE = /^[0-9a-f]{40,64}\t[0-9a-f]+\t[0-9a-f ]*\t/;
  * whose files it was not asked for, is no list. One such text reads as a list all the same: a merge with
  * nothing after its line and then a commit, which is also a merge whose first name is the line of that
  * commit. The two differ in how many commits they hold, which is what `reviewCoverage` holds a list to. */
-function loggedCommits(log) {
+export function loggedCommits(log) {
   const fields = log.split('\0');
   // Every field ends with a NUL, so what follows the last one is empty unless the text was cut.
   if (fields.pop() !== '') return null;

@@ -74,6 +74,10 @@ test('--version prints the version of this copy, alone on one line, and exits 0;
   assert.match(run(['--help']).stdout, /^js-harness --version /m);
 });
 
+test('the merge-queue help says each code commit needs its gentle-ai line on its branch, and the coverage is printed commit by commit (T16e, slice b)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*Each code commit made after the cut-over is named, by its hash or a range a\.\.b that holds it, on a gentle-ai line its pull request adds to a feature document \(odd\/tasks\), and the queue prints each code commit's Codex record and that line\./);
+});
+
 test('the merge-queue help says each pull request merged into the candidate passes main\'s rule rows first (odd/tasks/rule-hierarchy.md, T16e)', () => {
   assert.match(run(['--help']).stdout, /merge-queue .*passes main's rule rows first \(check --door\), and one that fails leaves the batch/);
 });
