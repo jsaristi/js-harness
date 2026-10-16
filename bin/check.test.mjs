@@ -3186,7 +3186,9 @@ test('check --first issues nothing where the host names no session or two ticket
   assert.match(none.output, /^INFO {2}first {2}no ticket was issued: the host names no session for this gate, and a ticket is for a session$/m);
   // Issued at the same instant, so the id breaks the tie (`readTickets`, bin/lib/gate-first.mjs): on CircleCI two
   // tickets issued in one millisecond with random ids were named in either order (2026-10-16, job 66).
-  const at = () => Date.parse('2026-10-16T18:45:00.000Z');
+  // Now, read once: the check reads the tickets on the real clock, so a fixed date would expire them.
+  const instant = Date.now();
+  const at = () => instant;
   const one = issueTicket({ home, session: 's1', reason: 'one', now: at, id: () => 'ffffffff' }).ticket;
   const two = issueTicket({ home, session: 's2', reason: 'two', now: at, id: () => '00000000' }).ticket;
   const full = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
