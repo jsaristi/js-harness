@@ -112,6 +112,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] TUI stack block above the menu
 - [x] Reviewed and merged (`jsaristi/js-harness#4`, Windows exit fix `#5`)
 - [x] Installed on this machine; global package matches `main`
+- [ ] `doctor` `host-update` row: a Claude Desktop or Code tab CLI update is a gap, with its review steps, until `doctor --host-reviewed` records the review; an update downloaded and not applied is `outdated` (his request of 2026-10-15, `odd/tasks/host-update-check.md`)
 
 ### Progress view
 - [x] Parser for roadmap phases and feature docs
@@ -178,6 +179,14 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 
 ### F7 Future-model protocol
 - [x] Written procedure: measure payload, run evals, strip one component at a time ([future-model.md](future-model.md))
+
+### Web fetch fallback
+When WebFetch is refused as AI traffic, the next rung is said at once (Sebastián, 2026-10-15: "las pagina
+te tienen bloqueado al ser una ia ese es el problema"); measured on nine pages, `odd/tasks/web-fetch-fallback.md`.
+- [x] Measured: which rung (WebFetch, r.jina.ai, the built-in browser) reads each of nine pages
+- [x] `js-harness fetch <url>`: rung 2, read or blocked with the next rung
+- [x] The `resume --pause` hook names the next rung after a blocked WebFetch
+- [ ] Reviewed (gentle-ai and Codex) and merged
 
 ## F5 result
 

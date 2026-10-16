@@ -7,6 +7,7 @@
 // see odd/tasks/stack-doctor.md. Exit code is always 0 for a normal report: this is a report, not
 // a gate, and every probe underneath fails open into `unknown` rather than throwing. `--hook` (T3)
 // is the one exception with its own, stricter contract — see `hookMain` below.
+import crypto from 'node:crypto';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { probeStack, resolveProjectRoot, tools } from './lib/stack.mjs';
@@ -16,11 +17,12 @@ import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 import { unknownArgument } from './lib/args.mjs';
+import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
-const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook]';
+const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed]';
 
 // R3-003 (accepted T1 review follow-up): a flag with no value (end of argv, or immediately
 // followed by another `--flag`) is a usage error, not a silently-swallowed token.
@@ -34,7 +36,7 @@ function requireValue(argv, i, flag) {
 
 // Every flag `doctor` takes, for `unknownArgument`: a flag it does not know is refused before the
 // report, which writes its cache under the home (T1 of odd/tasks/commands-and-doctor.md).
-const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook'] };
+const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook', '--host-reviewed'] };
 
 function parseArgs(argv, env) {
   const unknown = unknownArgument(argv, KNOWN);
@@ -177,7 +179,18 @@ export async function buildReport({ home, cwd, offline, interactive }, deps) {
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
-  return deps.unseen ? [...rows, await unseenRow(deps.unseen, project)] : rows;
+  const withUnseen = deps.unseen ? [...rows, await unseenRow(deps.unseen, project)] : rows;
+  return deps.host ? [...withUnseen, hostRow(deps.host, home, now)] : withUnseen;
+}
+
+/** The host-update row (bin/lib/host-update.mjs): the Claude Desktop app and its Code tab CLI against the versions
+ * last reviewed. The first reading, with no record, is recorded as reviewed; after that only `--host-reviewed`
+ * records, so an update stays a gap until its review is done. */
+function hostRow(host, home, now) {
+  const cache = readCache(home);
+  const { row, record } = hostUpdateRow(host(), cache.host?.reviewed ?? null, now);
+  if (record) writeCache(home, { ...cache, host: { reviewed: record } });
+  return row;
 }
 
 /** The unseen row (`js-harness unseen`): a check of the Claude app, not a tool, so nothing to install and one cell
@@ -195,10 +208,13 @@ async function unseenRow(unseen, cwd) {
   return { ...row, claude: 'stale', fix: { claude: [`unseen: ${toClear.length} to clear: run js-harness unseen`, ...toClear] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen row. The check is loaded only here, so
- * `doctorMain` alone keeps the rows its callers give it. */
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen and host-update rows. Their checks are
+ * given only here, so `doctorMain` alone keeps the rows its callers give it. */
 export function doctorCommand(argv) {
-  return doctorMain(argv, process.env, { unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd) });
+  return doctorMain(argv, process.env, {
+    unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd),
+    host: () => readHostVersions({ home: os.homedir() }),
+  });
 }
 
 export async function doctorMain(argv, env = process.env, deps = {}) {
@@ -222,6 +238,7 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const { home, cwd, json, offline } = parsed;
+  if (argv.includes('--host-reviewed')) return recordHostReview(home, deps);
   const rows = await buildReport({ home, cwd, offline, interactive: true }, deps);
 
   if (json) {
@@ -249,6 +266,20 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   return 0;
 }
 
+/** `doctor --host-reviewed`: records the Claude Desktop and Code tab CLI versions read now as reviewed, the last step
+ * of the review the host-update row lists. With no running version read it records nothing and exits 1. */
+function recordHostReview(home, deps) {
+  const versions = deps.host ? deps.host() : { desktop: null };
+  if (!versions.desktop) {
+    console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
+    return 1;
+  }
+  const now = deps.now ?? (() => new Date());
+  writeCache(home, { ...readCache(home), host: { reviewed: { desktop: versions.desktop, code: versions.code, at: now().toISOString() } } });
+  console.log(`Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.`);
+  return 0;
+}
+
 /** `doctor --hook`: a `SessionStart` hook, at zero model tokens when nothing changed. Computes the
  * same report as the interactive command (network allowed only when the cache is stale), digests
  * its gap list, and prints exactly one `{"systemMessage": ...}` line only when gaps exist and that
@@ -260,7 +291,10 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     const rows = await buildReport({ home, cwd, offline: false }, deps);
 
     const gaps = gapList(rows);
-    const digest = gapDigest(rows);
+    // A host update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md, Decided).
+    // Its versions enter the digest, so another update before the review is recorded is a new notice (Codex, 2026-10-15).
+    const host = hostNotice(rows.find((row) => row.id === 'host-update'));
+    const digest = host ? crypto.createHash('sha256').update(`${gapDigest(rows)}\n${host}`).digest('hex') : gapDigest(rows);
     const cache = readCache(home);
     const shouldNotify = gaps.length > 0 && digest !== cache.notified;
     writeCache(home, { ...cache, notified: digest });
@@ -268,7 +302,7 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     if (shouldNotify) {
       const plural = gaps.length === 1 ? '' : 's';
       console.log(
-        JSON.stringify({ systemMessage: `js-harness: ${gaps.length} stack gap${plural} — run js-harness doctor` }),
+        JSON.stringify({ systemMessage: `js-harness: ${gaps.length} stack gap${plural} — run js-harness doctor${host ? ` (${host})` : ''}` }),
       );
     }
   } catch {

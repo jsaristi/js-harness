@@ -244,8 +244,9 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     assert.deepEqual(
       rows.map((r) => r.id),
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
-      // `unseen` is the row the dispatcher wires in (doctor's `unseen` dependency): last, after the checks.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen'],
+      // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
+      // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen', 'host-update'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
