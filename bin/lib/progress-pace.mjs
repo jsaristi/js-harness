@@ -65,9 +65,11 @@ export function parsePaceLog(text) {
   let commit = null;
   let file = null;
   let inHunk = false;
+  // A change git gives no `---`/`+++` header for has no content to compare: a mode alone, or an empty file
+  // born or gone. It changes no task, and is left out.
   const finish = () => {
     if (file === null) return;
-    commit.files.push({ path: file.path, before: file.born ? null : file.before.join('\n'), after: file.gone ? null : file.after.join('\n') });
+    if (file.path !== null) commit.files.push({ path: file.path, before: file.born ? null : file.before.join('\n'), after: file.gone ? null : file.after.join('\n') });
     file = null;
   };
   for (const raw of text.split('\n')) {

@@ -87,6 +87,33 @@ test('the log is read as commits, each with the content of every file it changed
   ]);
 });
 
+test('a change with no content to compare, a mode alone or an empty file born or gone, is no file of the commit', () => {
+  const log = [
+    `${MARK}ccc ${new Date(2026, 9, 16, 12).toISOString()} bbb`,
+    '',
+    'diff --git a/odd/tasks/f.md b/odd/tasks/f.md',
+    'old mode 100644',
+    'new mode 100755',
+    'diff --git a/odd/tasks/empty.md b/odd/tasks/empty.md',
+    'new file mode 100644',
+    'index 0000000..e69de29',
+    'diff --git a/odd/tasks/gone.md b/odd/tasks/gone.md',
+    'deleted file mode 100644',
+    'index e69de29..0000000',
+    'diff --git a/odd/tasks/g.md b/odd/tasks/g.md',
+    'new file mode 100644',
+    'index 0000000..5555555',
+    '--- /dev/null',
+    '+++ b/odd/tasks/g.md',
+    '@@ -0,0 +1 @@',
+    '+- [x] T1 a',
+    '',
+  ].join('\n');
+  const commits = parsePaceLog(log);
+  assert.deepEqual(commits[0].files, [{ path: 'odd/tasks/g.md', before: null, after: '- [x] T1 a' }]);
+  assert.deepEqual(paceOf({ commits, now: new Date(2026, 9, 16, 15), days: 1 }).total, { closed: 1, reopened: 0, added: 1, removed: 0 });
+});
+
 test('git is asked for the first-parent line of the roadmap and the feature documents, with the full content of each change', () => {
   const args = paceLogArgs({ ref: 'refs/remotes/origin/main', since: '2026-10-03T05:00:00Z' });
   for (const flag of ['--first-parent', '--diff-merges=first-parent', '--no-renames', '-p', '-U100000', '--since=2026-10-03T05:00:00Z', '--src-prefix=a/', '--dst-prefix=b/', '--relative']) {
