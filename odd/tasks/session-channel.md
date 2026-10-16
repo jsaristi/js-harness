@@ -3026,6 +3026,13 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   hands it the window from the project its `harness.json` walk finds and the Claude home under the hook's
   home. Not built here: the board (`sessionFacts`) still measures a session that has no compaction of its own
   against the 500,000 default, and a compaction the host makes early on the first request after an idle turn.
+  That commit is `17266f3` (gate PASS; gentle-ai: medium, 252 lines, not due). Codex on `6a6ce9e..17266f3`
+  (271,027 input tokens): incorrect (0.98), one P2, right: `guard --stop` checks a stated share against the
+  window of the last get_usage read, else 500,000, so a session with no read that says the share the notice gave
+  it (86% of 350,000) was turned back for not saying 60%. Fixed test first in the commit after it (RED: the new
+  test of `bin/guard.test.mjs`; then guard 22, audit 15, resume 92, pause 55 pass): `hostWindow` in the pause
+  library resolves the configured window once for both hooks, and the stop check takes it ahead of a get_usage
+  read and of the default; its refusal names the order.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

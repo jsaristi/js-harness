@@ -36,7 +36,7 @@ import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, 
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { dueNotice } from './lib/memory-hygiene.mjs';
-import { configuredWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
+import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
 import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
@@ -941,7 +941,7 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
   // The window the host compacts on, when a setting gives it: the pause is measured against it, since a session
   // measured on another window, or on none, would be told too late (odd/tasks/session-channel.md, T6b). The Claude
   // home is under the same home as the state, so a made-up home never reads the real settings.
-  const window = own ? configuredWindow({ env, claudeHome: env.CLAUDE_CONFIG_DIR || path.join(home, '.claude'), projectDir: root })?.window ?? null : null;
+  const window = own ? hostWindow({ env, home, projectDir: root }) : null;
   const notice = own ? pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, window, tmpdir: tempOf(env) }) : null;
   // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
   const inbox = own ? inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) }) : null;

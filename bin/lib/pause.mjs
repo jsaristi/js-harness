@@ -72,6 +72,15 @@ export function configuredWindow({ env = {}, claudeHome = null, projectDir = nul
   return null;
 }
 
+/** The configured window in tokens for a hook that runs under `home` (the harness home: `JS_HARNESS_HOME`, else the
+ * user's), or `null`: the Claude home is `CLAUDE_CONFIG_DIR`, else `.claude` under that home, so a made-up home never
+ * reads the real settings. The pause notice and the reply check of `guard --stop` both read it here, so the share the
+ * notice says is the share the check accepts. */
+export function hostWindow({ env = {}, home, projectDir = null, fileSystem = fs } = {}) {
+  const claudeHome = env?.CLAUDE_CONFIG_DIR || (typeof home === 'string' ? path.join(home, '.claude') : null);
+  return configuredWindow({ env, claudeHome, projectDir, fileSystem })?.window ?? null;
+}
+
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** `point` when it is a compaction point a measure may give, else `null`. */
