@@ -24,13 +24,15 @@ import {
 } from './lib/loops.mjs';
 import { readNotices, recordPath } from './lib/channel.mjs';
 import { gateLogDir } from './lib/gate-log.mjs';
+import { ruleValue } from './lib/rules.mjs';
+import { readStalled } from './lib/stall.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness loop run <name> --purpose "<text>" --until "<end condition>" [--owner <session id>] [--restart [--take-over]] -- <command> [args]',
   '       js-harness loop status [--json]',
   '       js-harness loop stop <name> [--owner <session id>] [--take-over]',
-  '       js-harness loop heartbeat [--quiet <minutes>] [--max <hours>] [--every <seconds>]',
+  '       js-harness loop heartbeat [--quiet <minutes>] [--stall <minutes>] [--max <hours>] [--every <seconds>]',
   '       js-harness loop channel-watch [--for <minutes>] [--every <seconds>] [--owner <session id>]',
   '       (each also takes --cwd <path> and --home <path>)',
   '  run: runs the command in the foreground, its output passed through, under an owner record',
@@ -45,7 +47,11 @@ const USAGE = [
   '    when none is left, and only then removes the record (exit 1 when one survives). A live loop another session',
   '    owns is refused (exit 3) unless --take-over is given. A stale record is removed and nothing is killed.',
   '  heartbeat and channel-watch are bodies for run. heartbeat ends with one STALL line (exit 0) when neither the',
-  '    gate log nor the channel record was written for --quiet minutes (30), or after --max hours (10, exit 1);',
+  '    gate log nor the channel record was written for --quiet minutes (30); with a STALLED line per session (exit 0)',
+  '    when a work session the orchestrator handed work to (a notice to its number, or its opening) and that has not',
+  '    given it back (waiting, closed or relieved) makes no commit, notice or gate for --stall minutes (the rule',
+  '    session-stall, 60), and again each time that quiet doubles; one already stalled at the start is named on an',
+  '    "already stalled:" line and waits for its doubling; or after --max hours (10, exit 1);',
   '    channel-watch ends with the first notice in the channel record written by a session other than its owner',
   '    (exit 0), or after --for minutes (30, exit 1).',
   '  Exit 2: a usage error, and nothing is done.',
@@ -61,6 +67,7 @@ const VALUED = new Map([
   ['--cwd', 'cwd'],
   ['--home', 'home'],
   ['--quiet', 'quiet'],
+  ['--stall', 'stall'],
   ['--max', 'max'],
   ['--every', 'every'],
   ['--for', 'for'],
@@ -69,7 +76,7 @@ const FLAGS_OF = {
   run: ['--purpose', '--until', '--owner', '--cwd', '--home', '--restart', '--take-over'],
   status: ['--json', '--cwd', '--home'],
   stop: ['--owner', '--cwd', '--home', '--take-over'],
-  heartbeat: ['--quiet', '--max', '--every', '--cwd', '--home'],
+  heartbeat: ['--quiet', '--max', '--every', '--stall', '--cwd', '--home'],
   'channel-watch': ['--for', '--every', '--owner', '--cwd', '--home'],
 };
 
@@ -316,12 +323,52 @@ function wholeOf(flag, value, fallback) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+// The window of the board (`sessions --hours`, 12 by default): a session quiet for longer has left it, and the
+// heartbeat names no session the board would not list.
+const STALL_WINDOW_MS = 12 * 3600 * 1000;
+const STALL_GIT_TIMEOUT_MS = 10 * 1000;
+
+/** How long `ms` is, in hours and minutes: `1h 30m`, `45m`. */
+const spanOf = (ms) => {
+  const minutes = Math.floor(ms / 60000);
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
+};
+
+/** The heartbeat's line for a stalled work session (`readStalled`): its name, since when it is quiet, what it holds. */
+function stalledLine(item) {
+  const name = item.title ?? `work session ${item.number}`;
+  const held = item.holding.what === 'opening' ? 'its opening' : `a ${item.holding.kind ?? 'notice'} from ${item.holding.from ?? 'an unknown sender'}`;
+  const text = String(item.holding.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  return `STALLED: ${name} — no commit, notice or gate since ${hourOf(Date.parse(item.quietSince))}, holding ${held} of ${hourOf(Date.parse(item.holding.at))}: ${text}`;
+}
+
 /** The body of the lead's heartbeat: ends when neither the gate log nor the channel record was written for
- * `--quiet` minutes (a stall: nothing on the machine moves), or after `--max` hours. */
+ * `--quiet` minutes (a stall: nothing on the machine moves), when a work session that holds handed work crosses
+ * `--stall` minutes with no commit, notice or gate, or after `--max` hours. One silent session among busy ones never
+ * makes the machine quiet (three sat five to six hours on 2026-10-16), so the sessions are asked one by one
+ * (odd/tasks/stalled-sessions.md). A session already stalled at the start is named then, and ends the loop only when
+ * its quiet doubles, so a relaunch is not woken again by what it was just told. */
 async function heartbeat(ctx, parsed, { home, slug }) {
   const quiet = wholeOf('--quiet', parsed.flags.quiet, 30);
   const max = wholeOf('--max', parsed.flags.max, 10);
   const every = wholeOf('--every', parsed.flags.every, 120) * 1000;
+  const stallLimit = wholeOf('--stall', parsed.flags.stall, ruleValue('session-stall', 'minutes')) * 60000;
+  // A git that hangs on a lock costs one read, never the loop: its `--max` and the other sessions' alerts.
+  const boundedRun = (command, args, options) => ctx.run(command, args, { timeout: STALL_GIT_TIMEOUT_MS, ...options });
+  // What could not be read is said once each, so a missing STALLED line is never read as "nobody is stalled".
+  const unread = new Set();
+  const stalledAt = (now) => {
+    const { stalled, unavailable } = readStalled({ home, slug, now, limitMs: stallLimit, windowMs: STALL_WINDOW_MS, run: boundedRun, fileSystem: { readFileSync: (file) => ctx.readFile(file), readdirSync: ctx.readdir } });
+    for (const why of unavailable) {
+      if (!unread.has(why)) ctx.out(`stall detection could not read: ${why}`);
+      unread.add(why);
+    }
+    return stalled;
+  };
+  // How many times the limit fits in a quiet, as a power of two: a stall is said again each time it grows.
+  const crossing = (item) => Math.floor(Math.log2(item.quietMs / stallLimit));
+  const identity = (item) => `${item.number}|${item.quietSince}|${item.holding.at}`;
+  const told = new Map();
   const started = ctx.now();
   const end = started + max * 3600000;
   const gateDir = gateLogDir(home);
@@ -343,12 +390,21 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or after ${plural(max, 'hour')}`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}`);
+  for (const item of stalledAt(started)) {
+    told.set(identity(item), crossing(item));
+    ctx.out(`already stalled: ${item.title ?? `work session ${item.number}`}, quiet ${spanOf(item.quietMs)}`);
+  }
   for (;;) {
     const last = lastWrite();
     const now = ctx.now();
     if (now - last >= quiet * 60000) {
       ctx.out(`STALL: no gate-log or channel write since ${hourOf(last)}`);
+      return 0;
+    }
+    const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
+    if (fresh.length > 0) {
+      for (const item of fresh) ctx.out(stalledLine(item));
       return 0;
     }
     if (now >= end) {
@@ -458,7 +514,7 @@ export async function loopMain(
   const cwd = path.resolve(defaultCwd, parsed.flags.cwd ?? '.');
   const home = path.resolve(defaultCwd, parsed.flags.home ?? (env.JS_HARNESS_HOME || homedir()));
   const slug = projectSlug(mainCheckout(run, cwd));
-  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile };
+  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, run };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));
   if (parsed.verb === 'heartbeat' || parsed.verb === 'channel-watch') {
     try {

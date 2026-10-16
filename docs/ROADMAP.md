@@ -991,8 +991,8 @@ door, not a gate moved off this machine). This is version 2. Baselines are of 20
 | 2 | Ready pull requests land without waiting for a lead turn, with the same checks and reviews | ready to merged: median 48 min, worst 391 | JH 24, design and two readers first |
 | 3 | Stale conflicting pull requests merged with `main` or closed | 8 of 15 open conflicting | the lead |
 | 4 | Shared hot files generated, not hand-edited: the README command list from `--help`, manifest rows derived | README in 26 of 61 merged PRs, ROADMAP 17, manifest 11 | JH 25, after `#282` |
-| 5 | Resume reads the open task, and closed Log sections move to a sibling file | `session-channel.md` 345 KB, `rule-hierarchy.md` 306 KB | JH 26, after `#311` |
-| 6 | Codex coverage survives a rebase (commits matched by patch-id) | about 157k tokens per review redone | JH 27, design and two readers first |
+| 5 | Resume reads the open task (`#332`). Closed Log sections moving to a sibling file is dropped by the stop rule: about 9k to 14k tokens per whole-document read by a verifier, against gentle-ai's one-document rule and 119 shifting citations (`odd/tasks/resume-open-task.md`, Part B) | `session-channel.md` 345 KB, `rule-hierarchy.md` 306 KB; the resume sections 381 and 1,036 lines, the mode line on a stale task in both | JH 26, `#332` |
+| 6 | Dropped by the stop rule. Codex coverage surviving a rebase (commits matched by patch-id): two readers found a per-commit match unsound, since a review reads its range's net diff, and a sound match is a push-guard change (high-risk item 2); measured, 4 re-reviews in 491 records since 2026-09-29 would have been saved. Built instead: the one rebase hint, `js-harness rule change`, now says `git merge origin/main` (`odd/tasks/codex-patch-coverage.md`) | about 157k tokens per review redone (the plan's figure; records keep no token count) | JH 27, dropped by the lead |
 | 7 | A land of only documentation skips the suite (`bin/merge-queue.mjs:95` always runs `check.mjs`) | 14 of 61 merged PRs were documentation | JH 24, before item 2 |
 | 8 | A session silent for 60 minutes with open work is flagged | 3 sessions stalled 5 to 6 h | JH 22, `feat/stalled-sessions` |
 | 9 | Windows Defender's real-time protection off on this machine (his change); gates measured against the day's check median of about 150 s | `MsMpEng` 552 CPU-seconds in gate-start samples | the lead measures |
@@ -1004,7 +1004,13 @@ Codex.
 
 **Later (found after the freeze; not in the first version).**
 
-- (none yet)
+- [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
+  handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
+  hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.
+- [ ] Shorter resume sections in feature documents. The "Next step" and "State for a resume" sections
+  have grown into history: 381 lines in `rule-hierarchy.md` and 1,036 lines in `session-channel.md`
+  at 64933f6. Since `#332` a resumed session reads them through named ranges, but nothing bounds
+  their size. Not tracked yet; it waits for him. Source: `odd/tasks/resume-open-task.md`, "In scope / Out of scope".
 
 **What the first version holds, by his answer of 2026-10-13.** Asked what enters the first
 version, the 1.0.0, he had four options: what is already installed, well finished (the one

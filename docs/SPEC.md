@@ -396,11 +396,11 @@ proofs and by those tasks.
 ### A compaction resumes from files
 
 **Problem:** A compaction arrived with nothing saved (the owner's words of 2026-10-11, `odd/tasks/session-channel.md`, Progress 22:03).
-**Requirement:** After a compaction, a session-start hook prints, read from files: the title, the stored opening, the feature document and whether it was written after the pause, the worktree's state, the work in flight, what the owner wrote, the messages of other sessions and the open questions; it tells the session to notify the orchestrator. It speaks only in a project with a `harness.json`, writes nothing and always exits 0. Installed for both hosts.
+**Requirement:** After a compaction, a session-start hook prints, read from files: the title, the stored opening, the feature document and whether it was written after the pause, and for one document the lines to read in it (its resume sections, the open task its first resume section names first, that task's specs and its last five log entries, each range with its size) and the mode of that task, the worktree's state, the work in flight, what the owner wrote, the messages of other sessions and the open questions; it tells the session to notify the orchestrator. It speaks only in a project with a `harness.json`, writes nothing and always exits 0. Installed for both hosts.
 **Reason:** The compaction's summary is not the record.
-**Proof:** `node --test bin/resume.test.mjs`
-**Discarded:** Trusting the summary.
-**Today:** `bin/resume.mjs`, `js-harness resume`, `claude-resume-hook`, `codex-resume-hook`
+**Proof:** `node --test bin/resume.test.mjs`, `node --test bin/lib/feature-parts.test.mjs`
+**Discarded:** Trusting the summary. Naming the first unchecked task: in the two largest open documents it was stale (`odd/tasks/resume-open-task.md`).
+**Today:** `bin/resume.mjs`, `bin/lib/feature-parts.mjs`, `js-harness resume`, `claude-resume-hook`, `codex-resume-hook`
 
 ### A project declares which functions it runs
 

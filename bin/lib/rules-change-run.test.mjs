@@ -567,7 +567,22 @@ test('a branch not based on origin/main is said before an input that is not JSON
   git(repo.dir, 'switch', '-q', 'rule/gate-wait');
   const result = await change(repo, ['gate-wait'], undefined, { stdin: () => 'not json' });
   assert.equal(result.code, 1);
-  assert.match(result.err, /^not changed: rule\/gate-wait is not based on origin\/main: git rebase origin\/main$/);
+  assert.match(result.err, /^not changed: rule\/gate-wait is not based on origin\/main: git merge origin\/main$/);
+});
+
+test('the command a branch not based on origin/main is told clears that refusal', async () => {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', 'main');
+  write(repo.dir, 'docs/ROADMAP.md', '# Roadmap, moved on\n');
+  git(repo.dir, 'commit', '-q', '-am', 'main moves on');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(repo.dir, 'switch', '-q', 'rule/gate-wait');
+  const told = await change(repo, ['gate-wait'], undefined, { stdin: () => 'not json' });
+  const command = told.err.match(/: (git .+)$/)[1].split(' ').slice(1);
+  git(repo.dir, ...command, '-q', '--no-edit');
+  const result = await change(repo, ['gate-wait'], undefined, { stdin: () => 'not json' });
+  assert.equal(result.code, 1);
+  assert.doesNotMatch(result.err, /is not based on/);
 });
 
 test('a turn to refuse with a pattern that is no regular expression is refused for its pattern, never thrown', async () => {

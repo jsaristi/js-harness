@@ -153,6 +153,14 @@ check said or before its answer was read.
   request 290 and the notice that it was pushed were joined by `;` in one command; the pre-push hook
   refused the push (a merge that resolved a conflict in code had no Codex record) and the notice said
   "pushed"; a second notice corrected it, and the push ran alone after the record
+- Seen: 2026-10-16 — session fc81b0d2 (JH 24), its notices to the lead at 17:39 local (read here)
+  — the push of pull request 328 after a merge of main and the notice "ready to land" were joined
+  by `;`; the pre-push hook refused the push (the merge 78a5853 had no Codex record) and a second
+  notice corrected the first, the same shape as the line above, with the protocol in force
+- Seen: 2026-10-16 — session JH 26, commit `ff795ff` on `feat/resume-open-task` (read here) — an edit
+  script and the gate's commit were joined by `;` in one command. The script threw on the feature
+  document, and the commit ran with the roadmap change alone and a message saying the document closed.
+  Commit `1f28794` wrote the document. The next tries were joined by `&&` and stopped where they failed
 - Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
 
 ### check-survivor-test-fails
@@ -187,6 +195,10 @@ session's claim.
 - Seen: 2026-10-11 — relief file, line 290 — a transcript line cited as his words from a text search,
   without reading the entry's type: it was a queue entry with the same text (the orchestrator's own
   report)
+- Seen: 2026-10-12 — relief file, lines 325 and 337 — gentle-ai's review of pull requests 68 and 69
+  was claimed in a message and written in a document of another branch; the merge queue now asks
+  for it on the pull request's own branch (odd/tasks/rule-hierarchy.md, "The merge door (T16e)",
+  item 5)
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### citations-test-reads-clock
@@ -891,6 +903,8 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
+- Control: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
+  document names a commit, and that commit is reachable from HEAD"
 
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
@@ -941,6 +955,14 @@ without that review, and the choice went to him.
   review
 - Seen: 2026-10-11 — relief file, line 228 — twice on one slice, beside a running gate (an
   observation, not a cause shown); JH 5 stopped on him
+- Seen: 2026-10-15 — odd/tasks/host-update-check.md, L4 — the preflight status of `c307e33` timed
+  out twice (`operation_timeout`, `retry_safe` false, next action stop); the candidate had no
+  gentle-ai review, Codex reviewed it
+- Seen: 2026-10-16 — odd/tasks/first-version.md, L10 — the preflight of T7b timed out three times
+  with `--base-ref=origin/main` while the machine was at 100% CPU, and answered in 9 s with the
+  merge-base commit; that candidate was reviewed
+- Control: owed — odd/tasks/gate-wait.md — "three of its four sightings ran beside
+  a gate or a full machine"
 
 ### rule-only-in-memory
 A rule lived only in an agent's memory note, so he repeated it and sessions already open did not get
@@ -994,6 +1016,8 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
 - Seen: 2026-10-14 — relief file, line 758 — JH 13 idle from 03:13 and JH 15 from 03:44, both told to
   start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
   is armed before he leaves, in the orchestrator skill (JH 5)
+- Control: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
+  in its background work" — since 2026-10-14
 
 ### session-opened-unseen
 A session was opened where he does not see it: a scheduled task opened it in the app's Routines, at
@@ -1237,6 +1261,17 @@ names something that does not exist.
   (odd/tasks/install-update.md, T5)
 - Control: check — bin/update.test.mjs — "upgrade with no source installs nothing and runs no
   sync, whatever a registry would answer" — since 2026-10-13
+
+### wait-blind-to-notices
+A session waited with `js-harness wait` on one event, and the lead's notices to it did not end the
+wait, so it read them hours later.
+- Class: unseen-state
+- Seen: 2026-10-16 — the channel's record, the lead's notices to session 7 of 15:30Z to 18:17Z —
+  JH 7 waited on pull request 284 with `js-harness wait --pr` and ended its turn; no wait watched its
+  number, so none of the lead's notices woke it, and it saw them at 17:04 local (claimed; JH 7's own
+  notice of 22:06Z)
+- Control: owed — odd/tasks/session-channel.md — "every `js-harness wait` also ends on a notice to
+  the waiting session's own number"
 
 ### wait-not-attributable
 A process that waits for a free machine cannot be attributed to its session from the board, and one

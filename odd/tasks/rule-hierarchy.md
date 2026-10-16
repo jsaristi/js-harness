@@ -2774,7 +2774,31 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     door's indented lines were dropped, now printed under the notes and in the refusal
     (`3d0cc94`, gate passed, gentle-ai medium not due); Codex recheck `bbf7dc2..3d0cc94`
     correct (0.97), both fixed. Pull request 314 on `main` (302 landed), the orchestrator told.
-    Next: slice (b) once the orchestrator says Sebastián saw the design, then slice (c)
+    Slice (a) landed as pull request 314. Slice (b), his yes of 2026-10-16 (Progress), on
+    `feat/merge-door-evidence` (worktree `D:/js-harness-worktrees/merge-evidence`), branched at
+    `64933f6`, committed as `b2efbd2` through the gate (the protocol line is in it; verifier and
+    gentle-ai on `64933f6..b2efbd2` high (item 5 escalated), risk and reliability, approved and
+    acknowledged; the independent verifier passed it with no blocker, 38/38 and 2/2, probes of CRLF,
+    a non-ASCII path, an edited line and merges of a sibling branch). One correction batch, test
+    first (both seen red): the rebase hint named `a` of a range whose `b` is no commit of the
+    branch, now `b`; an added line starting "++ " read as a file header, and a header git ends with
+    a tab (a path with a space) missed its document, now a `+++ ` line is a header only before a
+    file's first hunk and loses its tab. Recorded only: a committer date set before the cut-over,
+    or an old branch rebased after it; a seven-digit number on the line read as the stray id; an
+    ambiguous short hash reads as stray; with the review off a merge of another branch asks
+    nothing; no test of a commit named only in the body (the body is never read). Files:
+    `bin/lib/gentle-ai-evidence.mjs` (+ test), `reviewEvidence` in `bin/merge-queue.mjs` (9 tests
+    seen red, then green), `codexReviewOffAt` exported from `bin/check.mjs`, help and USAGE and
+    README, the protocol line in `bin/lib/protocols-skill.mjs`, a `checked-not-read` sighting.
+    Cut-over `2026-10-17T05:00:00Z`. The correction is `647389f` (gate passed, gentle-ai medium,
+    under budget). Codex on `64933f6..647389f`, incorrect (0.98), two P2s fixed test first (both
+    seen red): the feature documents' pathspec was relative to the folder the queue ran in, now
+    `:(top)odd/tasks/` with `--no-relative`; with the Codex review off `--no-merges` let a merge of
+    another branch with an edit in it pass, now merges are read by `--diff-merges=combined` and
+    `gentleAiEvidence` exempts only a merge of main (`c35e195`, gate passed, gentle-ai medium, under
+    budget); Codex recheck `647389f..c35e195` correct (0.97), both fixed. Pull request 328 on
+    `main`, the orchestrator told. Next: slice (c). Then slice (c), then the throughput plan's item 2
+    design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
@@ -4171,8 +4195,70 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `docs/FAILURES.md` gains `proposal-unreviewed`, its control owed by T18b. Left for T18b: the
   rule with its home in the protocols skill, protocol 6's pointer, the orchestrator line, their
   tests and the shared-phrase test.
+- 2026-10-16, T16e, his answer to the design, relayed by the lead's notice to 24 at 16:04 and read
+  in the lead's transcript (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 15142) with
+  `js-harness sessions --quote`, a user entry tapped in answer to the lead's question tool. The
+  question: "¿JH 24 construye la parte (b) de T16e así como está diseñada?", options "Sí, así
+  como está (Recomendada) | Solo la cobertura, sin rechazar"; his answer: "Sí, así como está
+  (Recomendada)". So slice (b) is built as designed, items 5 and 6, refusing included. Slice (a)
+  landed as pull request 314 (`225da7d`).
+
+- 2026-10-16, his batch A landed as pull request 272 (`main` 8c74001), after Codex (0.88, no
+  finding). The register's entry the lead asked for, `pnpm-cleanup-deleted-link-targets`, is pull
+  request 267.
+- 2026-10-16, the `AMOUNT` fix, built test first on `feat/amount-boundary`, is draft pull request
+  279. A number now counts only when it stands on its own, with no word character, dot, colon or
+  hyphen before it and no word character after it or its unit. Left out on purpose: "-5", ".5 h",
+  the second half of "30-60" and "1h30m". No rule's value is written that way, and taking back a
+  digit after a letter would take the hashes back. Over the texts in force, the findings are the
+  same before and after, with `main`'s rules, with batch A's patterns and with batch B's drafts.
+  Five lines of history sections and of `docs/RULES.md` that match no longer do, which is what
+  the fix is for. The patterns' own guards stay. gentle-ai approved it
+  (`review-6f412cfda9dac68c`, acknowledged); its findings are folded in: one named boundary
+  `OWN`, the exclusions written down, more test cases. The verifier (Opus) passed it with no
+  blocker; Codex, 0.9, found nothing.
+- 2026-10-16, his batch B, last and alone, built on `rule/his-last-patterns`: `context-pause`
+  (1 finding, `AGENTS.md:74`, "near 88% of its window"), `review-effort` and
+  `codex-review-floor` (2 each), every finding a restatement. Each was narrowed after the probe
+  of the drafts on `main` (13, 21 and 22 findings):
+  - `context-pause` wants a percent beside a pause, a compaction or the state written. "The
+    parent was at 70% of its window" is a measurement, "24 hours of the window" is a span, and
+    `--context-limit` (73%) is the board's own setting.
+  - `review-effort` names Codex, or wants a setting verb before the model. The roadmap's tables of
+    measured runs name a model and an effort with no setting, and "review" alone caught Claude's
+    reviewers ("explore, review and verify stay on Opus 5.5 at high effort").
+  - `codex-review-floor` wants input tokens after the amount, and no `Math.floor(`. The plan's
+    cheapest part ever measured is another floor.
+  `NEAR_MISS` pins those lines; a probe found each one with the draft and missed it after the
+  narrowing.
+- 2026-10-16, his batch B reviewed. gentle-ai approved it (`review-7e114c9078fea2d5`,
+  acknowledged). Its warning is refuted: it held that `NEAR_MISS`'s arrays are tried as one joined
+  line, but the loop tries each line (`[lines].flat()` in `bin/lib/rules-scan.test.mjs`). The
+  independent verifier (Opus) passed it with no blocker. All five findings restate a value; one of
+  them, `odd/tasks/codex-review-cost.md:8` ("at `high`"), restates the value before he changed it,
+  which is the kind of line the row exists for. With pull request 279's `AMOUNT`, every result is
+  the same. A finding in `AGENTS.md` shows only as INFO, since no rule has a `row` yet.
+- 2026-10-16, step 2's batches are done: 28 of the 30 rules carry patterns. What the second pass
+  takes, from the reviews and verifiers of every batch:
+  - Patterns too wide. Measurements are caught ("the session paused at 70% of its window"), and
+    so are other settings: `review-effort` catches any `gpt-` model set "at" an effort, the
+    writer's and the orchestrator's included. Each `NEAR_MISS` line pins only one sentence.
+  - Patterns too narrow. They miss flag and config forms (`--effort medium`,
+    `model_reasoning_effort = "medium"`, `--context-pause`), other verbs ("stays below", "uses"),
+    the order "the review model is …", and the aliases `opus` and `haiku`, which `{amount}`
+    cannot match because it needs a digit.
+  - Tests. Two checks are missing: that each pattern, not only each rule, finds a line of its
+    own, and that no rule finds another rule's planted or marked line. Today the second holds
+    only by the verifiers' probes.
+  The second pass comes before any rule gets a `row` that refuses (step 4), because a refusing
+  row turns a false positive into a failed gate.
 
 ## Next step
+**State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai
+approved and acknowledged, the verifier passed. Next: Codex, `merge-tree`, and a draft pull
+request to the lead's queue. With it, step 2's batches are done; the `AMOUNT` fix is pull request
+279. Then the second pass of patterns, above, designed before it is built.
+
 **State, 2026-10-16, T16f first part built by JH 27** on `feat/rules-reach`: designed, built, checked by the gate, an independent verifier, gentle-ai (acknowledged) and Codex (recorded), each finding fixed with its test (see "Progress"); its pull request waits for the lead to land it. T16f stays open: its next part is the hash in the installed command, with the rest "Left to the other parts of T16f" lists.
 
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai

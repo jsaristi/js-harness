@@ -48,7 +48,8 @@ only those files, and all of them. Measured on Windows with an empty home and an
 ## Commands
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
-`my-project` is the project's folder. A line `…` marks output left out.
+`my-project` is the project's folder. A line `…` marks output left out; output that grows with
+each feature, such as install's hook lines or check's rows, is shown in part and cut with it.
 
 ### js-harness check
 
@@ -148,13 +149,7 @@ $ js-harness install
 installed js-harness 0.1.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
-registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
-registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
-registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (UserPromptSubmit)
-registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)
-registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SubagentStart)
+…
 ```
 
 ### js-harness loop
@@ -166,6 +161,20 @@ owner session, its own process and the command's by pid and creation time, the p
 ends it. `stop` refuses a live loop another session owns unless `--take-over`, and exits 0 only when
 a second look at the process table finds none of its processes left. `heartbeat` and
 `channel-watch` are bodies for `run`.
+
+`heartbeat` ends on a quiet machine (no gate-log or channel write for `--quiet` minutes) and on a
+stalled work session: one the orchestrator handed work to, by a notice to its number or its
+opening, that has not given it back with a `waiting`, `closed` or `relieved` notice and has made no
+commit of its own, sent no notice and run no gate for `--stall` minutes (the rule `session-stall`,
+an hour). It prints a `STALLED:` line naming the session, since when it is quiet and what it holds,
+and says it again each time that quiet doubles. `js-harness sessions` lists the same sessions in
+its `Stalled` section, and its `--watch` says each one as it crosses.
+
+```console
+$ js-harness loop heartbeat
+js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours
+STALLED: JH 19 · skill del orquestador (T8) — no commit, notice or gate since 11:49, holding a note from JH ORQ · js-harness (350k) of 11:49: 17:00 JH ORQ: first-version T3 moved to JH 25 after 6h without an answer…
+```
 
 ```console
 $ js-harness loop run heartbeat --purpose "wake the lead on a stall" --until "30 min with no gate or channel write" -- js-harness loop heartbeat
@@ -437,11 +446,22 @@ not a draft, mergeable, on main and with a gentle-ai line in its body, has a Cod
 every code commit, and merges into the candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
 green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+A candidate whose every changed path is a document main's `harness.json` declares (`documents`) runs
+no suite on this machine, as a commit of documents alone runs none, and takes no turn of the gate
+lock: CircleCI's run of the whole gate is its test.
 No GitHub workflow runs for a pull request: the one workflow, the gate of a commit (`js-harness check`),
 runs for a push to a `gate/` branch alone.
 A candidate red on this machine is bisected: the pull request that turns it red is left out and
 named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
+
+A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
+the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
+what `git rev-list a..b` lists), on a line the pull request adds to a feature document
+(`odd/tasks/<name>.md`) that says gentle-ai, such as `gentle-ai: 6b58f85..3d0cc94 high, approved`.
+The queue resolves each range itself; a merge of main needs no line, and a pull request of documents
+asks for none. A rebase changes the hashes, and the refusal says so. For each ready pull request
+the queue prints, commit by commit, the Codex record that covers it and the line that names it.
 
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
@@ -663,7 +683,10 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
-document it works on and what to read there, so nobody pastes a resume prompt. It writes
+document it works on and what to read there, so nobody pastes a resume prompt. For one document
+it names the lines to read, not the whole file: its resume sections ("Next step", "State for a
+resume"), the open task the first of them names first, that task's specs and its last log entries,
+each range with its size. It writes
 nothing and always exits 0. `resume --pause` is the hook of the context pause, measured against the window the host is configured to compact on when a setting gives one (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` of the project's `.claude/settings.local.json`, its `.claude/settings.json` or the user's settings), and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too; so it does after a WebFetch that failed as a tool error ("Claude Code is unable to fetch from <domain>"), which reaches no `PostToolUse` hook: `install` registers the same command as a `PostToolUseFailure` entry on WebFetch for that.
 
 ```console
