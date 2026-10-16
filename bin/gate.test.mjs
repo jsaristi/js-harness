@@ -9,6 +9,7 @@ import { GATE_MAX_MINUTES, GATE_NOT_RUN, commandLineOf, gateMain } from './gate.
 import { ruleValue } from './lib/rules.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { GATE_COMMAND_MAX, appendGateBusiest, appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
+import { readTickets } from './lib/gate-first.mjs';
 
 // `js-harness gate -- <command>` runs any command under the machine's gate lock, for the heavy runs that
 // are not a commit's gate. The lock itself is tested in lib/gate-lock.test.mjs and what `check` does with
@@ -97,6 +98,7 @@ function gateClock() {
 const USAGE = [
   'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--ready <command>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
+  '       js-harness gate first [--session <id> --reason <why> [--tree <path>] [--minutes <n>] | --cancel <id>] [--home <path>]',
   `       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (${ruleValue('gate-wait', 'minutes')} when not given); --no-wait: refuse at once instead of waiting`,
   `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
   '       --ready <command>: a quick check, one shell command line, run before the wait and again as the turn comes after one; when it fails, nothing runs (exit 75), so a command that would refuse at once does not wait for a turn',
@@ -1412,6 +1414,65 @@ test('gate log errors with usage on stderr and exits 2 for arguments it cannot t
   for (const [argv, why] of refusals) {
     assert.deepEqual(await runGateLog(argv, { JS_HARNESS_HOME: home }), { code: 2, printed: [], said: [`${why}\n\n${USAGE}`] }, argv.join(' '));
   }
+}));
+
+// --- `gate first`: a ticket that puts one session's next check first in the line (odd/tasks/gate-first.md) ---
+
+const ticketEvents = (home) => readGateLog(home).events.filter(({ event }) => event.startsWith('first-'));
+
+test('gate first issues a ticket for a session\'s next check, lists the open ones, and cancels one; the gate log keeps the issue and the cancellation, with who issued it', withHome(async (home) => {
+  const env = { JS_HARNESS_HOME: home, CLAUDE_CODE_SESSION_ID: 'the-orchestrator' };
+  const issued = await runGateLog(['first', '--session', 'sess-a', '--reason', 'unblocks the others', '--minutes', '20'], env);
+  assert.equal(issued.code, 0, issued.said.join('\n'));
+  const [ticket] = readTickets(home).open;
+  assert.deepEqual([ticket.session, ticket.reason, ticket.by, ticket.tree], ['sess-a', 'unblocks the others', 'the-orchestrator', null]);
+  assert.deepEqual(issued.printed, [`ticket ${ticket.id}: the next check of session sess-a goes first, until ${ticket.until}: unblocks the others (cancel: js-harness gate first --cancel ${ticket.id})`]);
+
+  const listed = await runGateLog(['first'], env);
+  assert.deepEqual([listed.code, listed.printed], [0, [`${ticket.id}  session sess-a  until ${ticket.until}  by the-orchestrator  unblocks the others`]]);
+
+  const cancelled = await runGateLog(['first', '--cancel', ticket.id], env);
+  assert.deepEqual([cancelled.code, cancelled.printed], [0, [`ticket ${ticket.id} cancelled: session sess-a, unblocks the others`]]);
+  assert.deepEqual(readTickets(home).open, []);
+  assert.deepEqual(ticketEvents(home).map(({ event, id, by }) => [event, id, by]), [['first-issued', ticket.id, 'the-orchestrator'], ['first-cancelled', ticket.id, 'the-orchestrator']]);
+
+  const none = await runGateLog(['first'], env);
+  assert.deepEqual([none.code, none.printed], [0, ['no ticket is open']]);
+  const again = await runGateLog(['first', '--cancel', ticket.id], env);
+  assert.deepEqual([again.code, again.said], [1, [`gate first: no open ticket ${ticket.id}`]]);
+}));
+
+test('gate first refuses a third open ticket, naming the two, and writes nothing; a ticket for a tree names it', withHome(async (home, dir) => {
+  const env = { JS_HARNESS_HOME: home };
+  assert.equal((await runGateLog(['first', '--session', 'sess-a', '--reason', 'one', '--tree', dir], env)).code, 0);
+  assert.equal(readTickets(home).open[0].tree, path.resolve(dir));
+  assert.equal(readTickets(home).open[0].by, null);
+  assert.equal((await runGateLog(['first', '--session', 'sess-b', '--reason', 'two'], env)).code, 0);
+  const third = await runGateLog(['first', '--session', 'sess-c', '--reason', 'three'], env);
+  assert.equal(third.code, 1);
+  // Named in the order `readTickets` gives (issued, then id): two tickets issued in one millisecond tie on the time.
+  const said = readTickets(home).open.map((ticket) => (ticket.session === 'sess-a' ? `${ticket.id} \\(session sess-a, tree .*: one; until .*\\)` : `${ticket.id} \\(session sess-b: two; until .*\\)`));
+  assert.match(third.said.join('\n'), new RegExp(`^gate first: two tickets are open already: ${said.join(', ')}`));
+  assert.equal(readTickets(home).open.length, 2);
+  assert.equal(ticketEvents(home).length, 2);
+}));
+
+test('gate first takes its flags as gate log takes its own: what is no ticket is a usage error, exit 2, and nothing is written', withHome(async (home) => {
+  const refusals = [
+    [['first', '--session', 'sess-a'], 'a ticket says why: give a reason'],
+    [['first', '--reason', 'why'], 'a ticket is for a session: give a session id'],
+    [['first', '--session', 'sess-a', '--reason', 'why', '--minutes', '61'], '--minutes takes a number from 1 to 60, not "61"'],
+    [['first', '--session', 'sess-a', '--reason', 'why', '--minutes', 'soon'], '--minutes takes a number from 1 to 60, not "soon"'],
+    [['first', '--session'], '--session requires a value'],
+    [['first', '--cancel', 'abc'], 'a ticket id is eight hex characters, not "abc"'],
+    [['first', '--cancel', '0a0a0a0a', '--session', 's'], '--cancel takes no other flag but --home'],
+    [['first', '--wait', '5'], 'unknown argument: --wait'],
+    [['first', '--session', 'a', '--session', 'b', '--reason', 'r'], '--session given twice'],
+  ];
+  for (const [argv, why] of refusals) {
+    assert.deepEqual(await runGateLog(argv, { JS_HARNESS_HOME: home }), { code: 2, printed: [], said: [`${why}\n\n${USAGE}`] }, argv.join(' '));
+  }
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
 }));
 
 // --- the real thing: the dispatcher, a real shell, the real lock and the real clock, in a temporary home ---

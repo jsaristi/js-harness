@@ -12,6 +12,7 @@ import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
+import { issueTicket, readTickets } from './lib/gate-first.mjs';
 import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 
 function makeTmpDir() {
@@ -1934,7 +1935,7 @@ test('main errors with usage on stderr, exits 2 and runs no row for a --wait it 
     assert.match(errOutput, /Usage: js-harness check .*\[--wait <minutes> \| --no-wait\]/);
     // And what the two flags mean, since a bound that counts from the last change of hands is not what
     // "--wait <minutes>" says by itself.
-    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
+    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator's batch run on main \(odd\/tasks\/gate-first\.md\)\n$/);
   }
 });
 
@@ -3128,6 +3129,124 @@ test('main tells the lock which session started the gate, from the environment i
   await runCheck(argv, { CLAUDE_CODE_SESSION_ID: 'a-session' }, gateDeps({ spawn }));
   assert.deepEqual([during?.pid, during?.session], [process.pid, 'a-session']);
 }));
+
+// --- a ticket that puts a session's next check first (odd/tasks/gate-first.md) ---
+
+test('a gate of a session with a ticket claims it as it arrives, takes the lock with it, and the gate log keeps the claim with the gates it passed', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const { ticket } = issueTicket({ home, session: 'a-session', reason: 'unblocks the others', by: 'the-orchestrator' });
+  // A gate that waits for the lock, of another session, which this one passes.
+  const waiting = path.join(gateDir(home), 'wait-4321-aaaaaaaaaaaa');
+  fs.mkdirSync(waiting, { recursive: true });
+  fs.writeFileSync(path.join(waiting, 'holder-4321-aaaaaaaaaaaa.json'), `${JSON.stringify({ token: '4321-aaaaaaaaaaaa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', waitingSince: new Date().toISOString(), line: 1, session: null })}\n`);
+  const take = lockTakenAtOnce();
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], { CLAUDE_CODE_SESSION_ID: 'a-session' }, gateDeps({ takeGateLock: take, ...log.deps }));
+  assert.equal(code, 0, output);
+  assert.deepEqual(take.asked.map(({ first }) => first), [{ id: ticket.id, reason: 'unblocks the others' }]);
+  assert.deepEqual(readTickets(home).open, [], 'spent at the claim');
+  const claimed = log.events.find(({ event }) => event === 'first-claimed');
+  assert.deepEqual(
+    { ...claimed, at: undefined },
+    { v: 1, event: 'first-claimed', id: ticket.id, at: undefined, session: 'a-session', reason: 'unblocks the others', by: 'the-orchestrator', until: ticket.until, cwd: path.resolve(dir), pid: process.pid, passed: [{ cwd: 'C:\\work\\other', pid: 4321 }] },
+  );
+  assert.match(output, new RegExp(`^INFO {2}gate {2}this gate claimed ticket ${ticket.id} \\(unblocks the others\\), issued by the-orchestrator, and went before every gate that waited$`, 'm'));
+  // The next check of the session has no ticket: it waits as any other, and claims nothing.
+  await runCheck(['--cwd', dir, '--home', home], { CLAUDE_CODE_SESSION_ID: 'a-session' }, gateDeps({ takeGateLock: take, ...log.deps }));
+  assert.deepEqual(take.asked.map(({ first }) => first ?? null), [{ id: ticket.id, reason: 'unblocks the others' }, null]);
+}));
+
+test('a ticket is spent by a gate that stops before its sensors, and is claimed by no gate of another session or with no session', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  issueTicket({ home, session: 'a-session', reason: 'unblocks the others' });
+  const take = lockTakenAtOnce();
+  for (const env of [{}, { CLAUDE_CODE_SESSION_ID: 'another-session' }]) await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ takeGateLock: take }));
+  assert.deepEqual(take.asked.map(({ first }) => first ?? null), [null, null]);
+  assert.equal(readTickets(home).open.length, 1);
+  const rows = await checkSensors(dir, gateDeps({ takeGateLock: take }), { home, wait: true, waitMinutes: 1, session: 'a-session', stoppedBy: ['budget'] });
+  assert.equal(rows[0].stopped, true);
+  assert.deepEqual(readTickets(home).open, [], 'a stopped gate spends it');
+}));
+
+// S2: "The orchestrator's own batch run on `main` may carry one by itself (`--first` on that one command)."
+test('check --first <reason> issues its session a ticket for this tree and claims it as it arrives; the issue is in the gate log', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const log = capturedLog();
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take, ...log.deps }));
+  assert.equal(code, 0, output);
+  const issued = log.events.find(({ event }) => event === 'first-issued');
+  assert.deepEqual([issued?.session, issued?.by, issued?.tree, issued?.reason], ['the-orchestrator', 'the-orchestrator', path.resolve(dir), 'the batch run on main']);
+  assert.deepEqual(take.asked.map(({ first }) => first), [{ id: issued.id, reason: 'the batch run on main' }]);
+  assert.deepEqual(readTickets(home).open, [], 'spent at the claim');
+  assert.match(output, new RegExp(`^INFO {2}gate {2}this gate claimed ticket ${issued.id} \\(the batch run on main\\), issued by the-orchestrator,`, 'm'));
+}));
+
+test('check --first issues nothing where the host names no session or two tickets are open, says why in a row, and the gate runs all the same', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const none = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], {}, gateDeps({ takeGateLock: take }));
+  assert.equal(none.code, 0, none.output);
+  assert.match(none.output, /^INFO {2}first {2}no ticket was issued: the host names no session for this gate, and a ticket is for a session$/m);
+  // Issued at the same instant, so the id breaks the tie (`readTickets`, bin/lib/gate-first.mjs): on CircleCI two
+  // tickets issued in one millisecond with random ids were named in either order (2026-10-16, job 66).
+  // Now, read once: the check reads the tickets on the real clock, so a fixed date would expire them.
+  const instant = Date.now();
+  const at = () => instant;
+  const one = issueTicket({ home, session: 's1', reason: 'one', now: at, id: () => 'ffffffff' }).ticket;
+  const two = issueTicket({ home, session: 's2', reason: 'two', now: at, id: () => '00000000' }).ticket;
+  const full = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
+  assert.equal(full.code, 0, full.output);
+  assert.match(full.output, new RegExp(`^INFO {2}first {2}no ticket was issued: two tickets are open already: ${two.id} .*${one.id} `, 'm'));
+  assert.deepEqual(take.asked.map(({ first }) => first ?? null), [null, null]);
+}));
+
+// Codex (2026-10-16): a second ticket was issued beside an open one of the session, and one this check
+// never claims (a gate that takes no lock) stayed open for a later check to jump the line with.
+test('check --first reuses an open ticket of its session for this tree, and cancels the one it issued when its gate claims none', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const open = issueTicket({ home, session: 'the-orchestrator', tree: dir, reason: 'issued before' }).ticket;
+  const reused = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: take }));
+  assert.match(reused.output, new RegExp(`^INFO {2}first {2}no ticket was issued: ticket ${open.id} of this session is open already for this tree, and this gate claims it$`, 'm'));
+  assert.deepEqual(take.asked.map(({ first }) => first?.id), [open.id]);
+  assert.deepEqual(readTickets(home).open, []);
+}));
+
+test('check --first cancels the ticket it issued when its gate runs no sensor under the lock and so claims none', () => withGate({}, async (dir, home) => {
+  const { output } = await runCheck(['--cwd', dir, '--home', home, '--first', 'the batch run on main'], { CLAUDE_CODE_SESSION_ID: 'the-orchestrator' }, gateDeps({ takeGateLock: lockTakenAtOnce() }));
+  assert.deepEqual(readTickets(home).open, [], output);
+  assert.match(output, /^INFO {2}first {2}ticket [0-9a-f]{8} was cancelled: this gate ran no sensor under the lock, so it claimed none$/m);
+}));
+
+test('check --first takes one reason, and does not go with --push', async () => {
+  for (const [argv, why] of [[['--first'], '--first requires a value'], [['--first', ' '], '--first needs a reason, not an empty one'], [['--push', '--first', 'x'], '--first goes with a gate that runs its sensors, not with --push']]) {
+    const { code, errOutput } = await runCheck(argv, {}, {});
+    assert.deepEqual([code, errOutput.split('\n')[0]], [2, why]);
+  }
+});
+
+test('takeGateTurn hands the lock the ticket it claimed, and says of a gate that went first by a ticket which ticket and why; the gates it waited for mark that one first', async () => {
+  const holder = { token: '4321-aa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', session: null, startedAt: '2026-10-11T07:00:00.000Z', beatAt: 1, stale: false, first: '0a0a0a0a', firstReason: 'unblocks the others' };
+  const waiter = { token: '77-bb', pid: 77, cwd: 'C:\\work\\two', command: 'check', waitingSince: '2026-10-11T06:59:00.000Z', session: null, first: '0b0b0b0b', firstReason: 'the batch run on main' };
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 6000 };
+  const said = [];
+  const originalError = console.error;
+  console.error = (line) => said.push(String(line));
+  let asked;
+  let turn;
+  try {
+    turn = await takeGateTurn({ name: 'check', home: 'C:\\home', cwd: 'C:\\work\\mine', command: 'check', wait: true, waitMinutes: 1, first: { id: '0c0c0c0c', reason: 'mine' } }, async (options) => {
+      asked = options;
+      options.onWait(null, 60_000, { ahead: 2, head: waiter });
+      options.onWait(holder, 60_000, { ahead: 1, head: null });
+      return lock;
+    });
+  } finally {
+    console.error = originalError;
+  }
+  assert.deepEqual(asked.first, { id: '0c0c0c0c', reason: 'mine' });
+  assert.deepEqual(said, [
+    "check: waiting behind the gate of C:\\work\\two (pid 77, waiting since 2026-10-11T06:59:00.000Z, first by ticket 0b0b0b0b: the batch run on main), which waits for its turn at the machine's gate lock, for 1 minute at most; 2 gates are ahead of this one, that one included",
+    'check: waiting for the gate of C:\\work\\other (pid 4321, started 2026-10-11T07:00:00.000Z, first by ticket 0a0a0a0a: unblocks the others) to finish, for 1 minute at most',
+  ]);
+  assert.deepEqual(turn.waitedFor, [{ cwd: 'C:\\work\\other', pid: 4321, command: 'check', first: true }]);
+});
 
 const LOCK_NAMES = ['own', 'parent', 'none'];
 

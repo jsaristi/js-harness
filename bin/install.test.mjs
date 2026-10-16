@@ -11,6 +11,7 @@ import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
 import { remoteDir, remoteFiles } from './lib/remote.mjs';
+import { hygieneDir, journalPath } from './lib/memory-hygiene.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
@@ -654,6 +655,36 @@ test('uninstallMain says a folder of the session channel it could not remove was
     const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
     assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
     assert.deepEqual(unseen.errLines, [`could not remove ${channelDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain names the memory snapshots it keeps and what removes them, and says a folder of memory hygiene it could not remove', async () => {
+  const home = makeTmpHome();
+  try {
+    const project = path.dirname(journalPath(home, 'C--proj'));
+    fs.mkdirSync(path.join(project, 'snapshots', '20261015T120606108Z'), { recursive: true });
+    fs.writeFileSync(journalPath(home, 'C--proj'), '');
+    const kept = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([kept.code, kept.outLines, kept.errLines], [0, [
+      `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed, with the project's journal; remove the folder by hand to drop them`,
+    ], []]);
+    fs.rmSync(journalPath(home, 'C--proj'));
+    const alone = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual(alone.outLines, [
+      `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed; remove the folder by hand to drop them`,
+    ], 'no journal is named where there is none');
+
+    fs.rmSync(path.join(project, 'snapshots'), { recursive: true });
+    const removeFile = (target, options) => {
+      if (target === hygieneDir(home)) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+    const busy = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { removeFile }));
+    assert.deepEqual([busy.code, busy.outLines, busy.errLines], [1, [], [
+      `could not remove ${hygieneDir(home)} (EBUSY): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`,
+    ]]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

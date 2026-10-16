@@ -56,6 +56,17 @@ test('a mistake is reported in its five parts, and a handoff always fills what w
   assert.ok(handoff.lines.join('\n').includes('"Not checked" and "failed" are always filled, with "nothing" when that is true'));
 });
 
+// Letter H of the protocol for changing a rule (odd/tasks/rule-hierarchy.md, "One home for every rule (T16)", T16g):
+// its home is this section, which opens with the incident of a stale 73 percent, carries its cost and a review date,
+// and ends a change at one command that exits 0.
+test('the protocol for changing a rule opens with the stale 73 percent, and its done is one command that exits 0', () => {
+  const change = sections(TEXT)[3];
+  const first = change.lines.find((line) => line.trim() !== '');
+  assert.match(first, /^Incident \(2026-10-11\): .*73 percent/);
+  assert.ok(change.lines.some((line) => /^- Cost: .+ Reviewed by \d{4}-\d{2}-\d{2}\.$/.test(line)), change.lines.join('\n'));
+  assert.ok(change.lines.includes('- Done: `js-harness rules check` exits 0.'), change.lines.join('\n'));
+});
+
 // One home for every rule: the skill names a rule by its id and never restates its value, and every id it names is
 // declared, so that a rule changed by `js-harness rules change` reaches this text with nothing to carry by hand.
 test('every rule id the protocols skill names is declared, and none of their values is written in it', () => {

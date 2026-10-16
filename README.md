@@ -87,11 +87,11 @@ over 100,000 tokens.
 
 ```console
 $ js-harness check
-PASS  budget  122 estimated tokens (budget 1500)
+PASS  budget  564 estimated tokens (budget 1500)
 PASS  contracts  no contracts under odd/tasks
-INFO  payload claude  122 estimated tokens per turn from files (tools and hook output not counted)
+INFO  payload claude  564 estimated tokens per turn from files (tools and hook output not counted)
       global CLAUDE.md   not found  ~\.claude\CLAUDE.md
-      project AGENTS.md        122  my-project\AGENTS.md
+      project AGENTS.md        564  my-project\AGENTS.md
 …
 INFO  fixed load  95570 tokens at the first turn, median of the latest 5 sessions (budget 100000)
 …
@@ -118,6 +118,11 @@ a heavy run, one at a time
 $ js-harness gate log --last 2
 10-14 04:24:38  0 s  exit 0  load 8.0 of 8 (vmmem, MsMpEng, claude)  my-project
 ```
+
+A ticket puts one session's next whole check before every gate that waits: the orchestrator issues it
+with `gate first --session <id> --reason <why>`, or its own batch run carries one with `check --first
+<reason>`. Two are open at most, for an hour at most; `js-harness sessions` prints them with their
+issuer and flags one the orchestrator did not issue, and the gate log keeps each issue and claim.
 
 ### js-harness init
 
@@ -461,8 +466,8 @@ watchdog task: off
 ### js-harness sessions
 
 The board of the project's recent Claude Code sessions: each one's state, context size and
-last reply, the worktrees and their feature plans, the running gates and the open pull
-requests. It only reads. `--watch` waits until the board changes in a way that needs a
+last reply, the worktrees and their feature plans, the running gates, the open pull
+requests and whether a memory hygiene pass is due. It only reads. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
 the host made, whether the session was told the pause and committed its feature document (the
@@ -503,7 +508,9 @@ It reads the main checkout's memory folder, so a worktree sees the same notes, a
 pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
 of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
 user is lost and no file another session wrote is overwritten, and an undo that puts back only what
-nobody wrote since and refuses while another pass holds the lock. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+nobody wrote since and refuses while another pass holds the lock. `uninstall --global` removes that
+folder, except a project's folder that holds snapshots: they are the only copy of what a pass changed,
+so it is kept, with its journal, and its stamps are named. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
 
 ```console
 $ js-harness memory status

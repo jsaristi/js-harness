@@ -21,6 +21,8 @@ import { sha256 } from './manifest.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
 import { parseRegister } from './failures.mjs';
 import { checkFailures } from '../failures.mjs';
+import { estimateTokens } from './payload.mjs';
+import { TOKEN_BUDGET } from '../check.mjs';
 
 // T2e item 8 (R3-tests-depend-on-host-git-config): every test here runs a real `git` (only
 // `codegraph` is ever faked), so a real `git init`/`commit`/`worktree add` must not silently pick
@@ -1874,8 +1876,31 @@ test('agentsTemplate titles the doc with the folder name and stays short', () =>
   assert.match(template, /## How it works/);
   assert.match(template, /## What good looks like/);
   assert.match(template, /## Constraints/);
-  // ~250 tokens at ~4 chars/token: comfortably under 1200 chars.
-  assert.ok(template.length < 1200, `template is ${template.length} chars`);
+  // The template loads on every turn of the project, so it takes at most half the budget `check` holds
+  // AGENTS.md to, and leaves the other half to the project's own lines.
+  const tokens = estimateTokens(template);
+  assert.ok(tokens <= TOKEN_BUDGET / 2, `template is ${tokens} estimated tokens, over ${TOKEN_BUDGET / 2}`);
+});
+
+// odd/tasks/rule-hierarchy.md, T9: the lines of this repository's AGENTS.md that hold in any project (items 1 to 4
+// and 6 of "`AGENTS.md`, rewritten"), worded for any owner. Read with the wrapping undone, so a line may wrap anywhere.
+test('agentsTemplate carries the lines that hold in any project', () => {
+  const text = agentsTemplate('project').replace(/\s+/g, ' ');
+  // Item 1: the six principles once, with the meaning of done.
+  assert.match(text, /Work here is done properly, not to comply: no shortcut; under the agreed protocols; nothing stated that was not checked; what is passed on is complete and true; and each mistake leaves a control, of the smallest kind that does the job\./);
+  assert.match(text, /A rule is not recorded until it has its place in a check, a line of this file or a protocol\./);
+  // Item 2: what is the owner's, asked one at a time; the rest is decided and goes on.
+  assert.match(text, /The owner decides spend outside the plan, anything installed or changed on a machine, a product choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report published outside this project\./);
+  assert.match(text, /Ask those one at a time, never while work runs, naming which it is\. Everything else is decided, its cost said, and the work goes on\./);
+  // Item 3: the owner's wording is the need.
+  assert.match(text, /The owner's wording is the need, not the specification: an answer to a proposal of theirs says the need that was understood, what would be done differently from their words and why, and what it costs or is not known; only then is it recorded\./);
+  // Item 4: every claim is one of three; a report from elsewhere is a claim.
+  assert.match(text, /Every claim is checked \(with its evidence\), assumed, or not known\./);
+  assert.match(text, /What another session, a sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it\. What is passed on says what failed and what was not checked, "nothing" when that is true\./);
+  // Item 6: a reply ends with one of four states.
+  assert.match(text, /A reply ends with one of four states: working \(the owner sends nothing; say what wakes the work\), decision \(one question for the owner, never while work runs\), cut \(a new session, with the text to send it\), or finished \(name where to return\)\./);
+  // Items 5, 7 and 8 are rules for building the harness and stay in its own AGENTS.md only.
+  assert.doesNotMatch(text, /One session, one feature|consent|judged twice/i);
 });
 
 // One text for a project with code and one without (odd/tasks/on-demand-functions.md, slice 2): what proves
@@ -1891,7 +1916,6 @@ test('agentsTemplate serves a project with code and one without', () => {
 test('agentsTemplate writes the rule of a project whose Codex review is off', () => {
   const template = agentsTemplate('project');
   assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), gentle-ai reviews every change of medium\nor high risk\.$/m);
-  assert.ok(template.length < 1200, `template is ${template.length} chars`);
 });
 
 // --- runCodegraphInit spawn shape ---

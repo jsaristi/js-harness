@@ -8,9 +8,11 @@ import { cachePath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
+import { gateFirstDir } from './gate-first.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
+import { hygieneDir } from './memory-hygiene.mjs';
 
 function skillContent(version) {
   return `---
@@ -1248,6 +1250,15 @@ export function sync(home, version, deps = {}) {
  * `recordScheduledTask` creates), and `uninstall`, or `remote stop --at-login`, can be run again. An optional file
  * that could not be removed has no such second chance: that older gap is left as it is. */
 export function uninstall(home, deps = {}) {
+  // The folder of memory hygiene first, on its own: what is left of `.js-harness` once it is gone is then removed
+  // by the steps below, with a manifest and without, as when `memory` never ran.
+  const memory = removeMemoryHygieneFolder(home, deps.removeFile ?? fs.rmSync, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync);
+  const result = uninstallInstalled(home, deps);
+  return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory) };
+}
+
+/** `uninstall` without the folder of memory hygiene, which it removes before calling this. */
+function uninstallInstalled(home, deps) {
   const removeFile = deps.removeFile ?? fs.rmSync;
   const statFile = deps.statFile ?? fs.statSync;
   const listDir = deps.listDir ?? fs.readdirSync;
@@ -1259,10 +1270,11 @@ export function uninstall(home, deps = {}) {
     // they leave empty goes with them.
     const gate = removeGateFolder(home, removeFile, statFile);
     const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
+    const tickets = removeTicketFolder(home, removeFile, statFile);
     const channel = removeChannelFolder(home, removeFile, statFile);
     const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept: [] });
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
-    return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+    return { removed: [...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
   }
 
   const removed = [];
@@ -1323,9 +1335,10 @@ export function uninstall(home, deps = {}) {
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
+  const tickets = removeTicketFolder(home, removeFile, statFile);
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
-  removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed);
+  removed.push(...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed);
   // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
   // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
   // task to leave the marker under it. It then stays recorded, and its entry says so (`recorded`).
@@ -1342,7 +1355,7 @@ export function uninstall(home, deps = {}) {
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
@@ -1425,6 +1438,22 @@ function removeGateLogFolder(home, removeFile, statFile, gateKept, lockUnseen = 
   return { removed: [dir], gateKept };
 }
 
+/** Removes the folder of the gate's tickets under `home` (`gateFirstDir` of `gate-first.mjs`), as
+ * `{ removed, kept }` like `removeChannelFolder`. `js-harness gate first` writes it, with a manifest or
+ * without, and no process lives in it: a gate claims its ticket in an instant. A folder that could not be
+ * looked at or removed is kept with reason `unremovable` and the error's `code`, and `uninstall` says it
+ * among the gates' folders (`gateKept`), for which `install` already says to remove it by hand. */
+function removeTicketFolder(home, removeFile, statFile) {
+  const dir = gateFirstDir(home);
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  return { removed: [dir], kept: [] };
+}
+
 /** Removes the folder of the session channel under `home` (`channelDir` of `channel.mjs`) with whatever is
  * in it, the record of every project and the openings of their sessions, as `{ removed, kept }`, like
  * `removeGateFolder`: `removed` holds its path when it was there and is gone, `kept` says why it was left,
@@ -1447,6 +1476,58 @@ function removeChannelFolder(home, removeFile, statFile) {
   }
   return { removed: [dir], kept: [] };
 }
+
+/** Removes the folder of memory hygiene under `home` (`hygieneDir` of `memory-hygiene.mjs`), as `{ removed, kept }`
+ * (odd/tasks/memory-hygiene.md, D4 and T9). A project's folder that holds a snapshot is kept, with the stamps of its
+ * snapshots and whether its journal is beside them: a snapshot is the only copy of what a memory pass changed, so it
+ * is never removed on its way out. The other projects' folders go; with none kept, the whole folder goes. A folder
+ * that cannot be looked at or removed is kept with the error code, like the channel's, one project at a time, so
+ * one held open does not hide what was removed before it, the projects after it, or the stamps kept. */
+function removeMemoryHygieneFolder(home, removeFile, statFile, listDir) {
+  const dir = hygieneDir(home);
+  const unremovable = (folder, err) => ({ path: folder, reason: 'unremovable', code: err.code ?? 'unknown error' });
+  let projects;
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
+    projects = listDir(dir).sort().map((name) => path.join(dir, name));
+  } catch (err) {
+    return { removed: [], kept: [unremovable(dir, err)] };
+  }
+  const kept = [];
+  const goes = [];
+  for (const project of projects) {
+    try {
+      const snapshots = path.join(project, 'snapshots');
+      const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
+      if (stamps.length > 0) kept.push({ path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile) });
+      else goes.push(project);
+    } catch (err) {
+      kept.push(unremovable(project, err));
+    }
+  }
+  if (kept.length === 0) {
+    try {
+      removeFile(dir, { recursive: true, force: true });
+      return { removed: [dir], kept: [] };
+    } catch (err) {
+      return { removed: [], kept: [unremovable(dir, err)] };
+    }
+  }
+  const removed = [];
+  for (const project of goes) {
+    try {
+      removeFile(project, { recursive: true, force: true });
+      removed.push(project);
+    } catch (err) {
+      kept.push(unremovable(project, err));
+    }
+  }
+  kept.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { removed, kept };
+}
+
+/** `memoryKept` of `uninstall`'s result, there only when a folder of memory hygiene is kept, the one case it speaks of. */
+const memoryResult = (memory) => (memory.kept.length > 0 ? { memoryKept: memory.kept } : {});
 
 /** Removes the folder `js-harness remote` writes under `home` (`remoteDir` of `remote.mjs`) with what is left in
  * it, the logs of the servers and the markers of their stops, as `{ removed, kept }`, like `removeChannelFolder`:

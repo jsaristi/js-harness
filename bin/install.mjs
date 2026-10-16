@@ -479,6 +479,19 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
       console.error(`could not remove ${remote.path} (${remote.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
     }
   }
+  // The folder of memory hygiene, which `memory` writes under the home. A project's folder that holds snapshots is
+  // kept on purpose and said on stdout, since they are the only copy of what a pass changed; one that could not be
+  // looked at or removed goes to stderr and fails the uninstall, like the channel's.
+  const memoryKept = result.memoryKept ?? [];
+  for (const folder of memoryKept) {
+    if (folder.stamps) {
+      const count = folder.stamps.length;
+      console.log(`kept ${folder.path}: ${count} snapshot${count === 1 ? '' : 's'} of a memory pass (${folder.stamps.join(', ')}), the only copy of what ${count === 1 ? 'that pass' : 'those passes'} changed${folder.journal ? ", with the project's journal" : ''}; remove the folder by hand to drop them`);
+    } else {
+      console.error(`could not remove ${folder.path} (${folder.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
+    }
+  }
+  const memoryNotUndone = memoryKept.filter((folder) => !folder.stamps);
   if (
     result.removed.length === 0 &&
     result.kept.length === 0 &&
@@ -488,10 +501,11 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     result.tasksKept.length === 0 &&
     result.gateKept.length === 0 &&
     result.channelKept.length === 0 &&
-    result.remoteKept.length === 0
+    result.remoteKept.length === 0 &&
+    memoryKept.length === 0
   ) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 ? 1 : 0;
+  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
 }

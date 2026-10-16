@@ -1081,14 +1081,28 @@ export function readGateLock(read) {
   try {
     const { holder, waiters, readAt } = read();
     const beatAt = holder === null || holder.beatAt === null ? null : new Date(holder.beatAt).toISOString();
+    // The ticket a gate went first by (./gate-first.mjs), where its file names one.
+    const firstOf = (gate) => (typeof gate.first === 'string' ? { first: gate.first, firstReason: gate.firstReason ?? null } : {});
     return {
       available: true,
-      holder: holder && { pid: holder.pid, cwd: holder.cwd, command: holder.command, startedAt: holder.startedAt, beatAt, stale: holder.stale },
-      waiters: waiters.map(({ pid, cwd, command, waitingSince }) => ({ pid, cwd, command, waitingSince })),
+      holder: holder && { pid: holder.pid, cwd: holder.cwd, command: holder.command, startedAt: holder.startedAt, beatAt, stale: holder.stale, ...firstOf(holder) },
+      waiters: waiters.map((waiter) => ({ pid: waiter.pid, cwd: waiter.cwd, command: waiter.command, waitingSince: waiter.waitingSince, ...firstOf(waiter) })),
       ...(readAt !== undefined && { readAt: new Date(readAt).toISOString() }),
     };
   } catch (err) {
     return { available: false, reason: `the gate lock: ${err.message}` };
+  }
+}
+
+/** The tickets that put a session's next check first in the gate lock (`bin/lib/gate-first.mjs`):
+ * `{ available: true, open, unreadable }`, from `read()`, which gives them as `readTickets` does and throws
+ * when the folder cannot be read; or `{ available: false, reason }`. An expired ticket is no ticket. */
+export function readGateTickets(read) {
+  try {
+    const { open, unreadable } = read();
+    return { available: true, open, unreadable };
+  } catch (err) {
+    return { available: false, reason: `the gate tickets: ${err.message}` };
   }
 }
 
@@ -1136,7 +1150,8 @@ export function boardGates(board) {
     const named = gate.cwd === null ? undefined : (trees.find((tree) => comparable(tree) === comparable(gate.cwd)) ?? gate.cwd);
     const worktree = named ?? process?.worktree ?? { unavailable: 'the gate lock does not say which folder it checks' };
     const none = process ? undefined : noProcess(gate.pid);
-    return { pid: gate.pid, startedAt: process?.startedAt ?? none, worktree, commandLine: process?.commandLine ?? none, lock: { ...role, since, command: gate.command } };
+    const first = typeof gate.first === 'string' ? { first: gate.first, firstReason: gate.firstReason ?? null } : {};
+    return { pid: gate.pid, startedAt: process?.startedAt ?? none, worktree, commandLine: process?.commandLine ?? none, lock: { ...role, since, command: gate.command, ...first } };
   };
   const { holder } = lock;
   const holding = holder ? [ofLock(holder, holder.startedAt, { role: 'holder', beatAt: holder.beatAt, stale: holder.stale })] : [];
@@ -2751,6 +2766,10 @@ export function askingRule(personAt, now, { waiting = 1 } = {}) {
  * away: nothing to send. The user no longer compacts by hand (odd/tasks/no-manual-compact.md S1): the host compacts a
  * session by itself inside a turn, and a session that stops gets its next prompt from the orchestrator, so no
  * block of the bare command is handed to anyone and no time of the user's last message is read for it. */
+/** What the orchestrator is, said where a hook first names it: a project that only installs the harness defines
+ * no orchestrator in its AGENTS.md, and the skill that teaches the role is installed beside it. */
+export const ORCHESTRATOR_IS = 'the session that leads this project\'s sessions, where one does: the js-harness-orchestrator skill says how';
+
 export function cutRule() {
   return 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 }
@@ -2874,6 +2893,17 @@ export const RELIEF_LINES = 5;
 export function reliefTail(text, count = RELIEF_LINES) {
   const lines = text.split(/\r?\n/).filter((line) => line.trim() !== '');
   return { lineCount: lines.length, lines: lines.slice(lines.length - Math.min(count, lines.length)) };
+}
+
+/** The section that says whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5),
+ * with the ids of its reasons; `memory status` says why, and the pass is the orchestrator's, at a task boundary. */
+function memoryLines(memory) {
+  let line;
+  if (!memory.available) line = `  unavailable: ${memory.reason}`;
+  else if (memory.na) line = `  n/a: no memory folder at ${memory.folder}`;
+  else if (!memory.due) line = '  nothing due';
+  else line = `  a pass is due (${memory.reasons.join(', ')}): js-harness memory status says why; the orchestrator runs it at a task boundary`;
+  return ['Memory hygiene', line, ''];
 }
 
 /** The `Relief` section: the file's path with its last lines, or that there is none yet (and where the
@@ -3056,6 +3086,14 @@ function gateSession(gate, roster) {
  * was read at, against which what the lock gives is said: when a gate took it or began to wait, and the
  * holder's last beat. */
 function gateState(gate, now, lockRead, lockNow = now) {
+  const state = lockState(gate, now, lockRead, lockNow);
+  // A gate of the lock that went first by a ticket says which, and why (odd/tasks/gate-first.md, T4).
+  const first = gate.lock?.first;
+  return typeof first === 'string' ? `${state}, first by ticket ${first}: ${gate.lock.firstReason ?? 'no reason read'}` : state;
+}
+
+/** What `gateState` says of a gate before any ticket it went first by. */
+function lockState(gate, now, lockRead, lockNow) {
   const { lock } = gate;
   if (!lock) {
     const started = gate.startedAt?.unavailable ? `start unavailable: ${gate.startedAt.unavailable}` : `started ${ago(gate.startedAt, now)}`;
@@ -3095,7 +3133,31 @@ function gateLines(board, now) {
   if (!board.gates.available) lines.push(`  unavailable: ${board.gates.reason}`);
   else if (lines.length === 0) lines.push('  none running');
   if (board.gateLock && !board.gateLock.available) lines.push(`  unavailable: ${board.gateLock.reason}`);
+  lines.push(...ticketLines(board.gateTickets, board.roster, now));
   return ['Gates', ...lines, ''];
+}
+
+/** The lines of the open tickets of the gate lock (`readGateTickets`), each with the session whose next check it
+ * puts first, until when, why, and who issued it. Any process of the user can write a ticket, so a ticket is made
+ * seen instead (odd/tasks/gate-first.md, S2): one whose issuer is not the orchestrator by its title on the roster
+ * (`roleOfTitle`) is flagged, and so is one whose issuer is not known. None for a board with no tickets. */
+function ticketLines(tickets, roster, now) {
+  if (!tickets) return [];
+  if (!tickets.available) return [`  unavailable: ${tickets.reason}`];
+  const rowOf = (id) => (typeof id === 'string' ? roster?.rows.find((row) => row.transcripts.some((transcript) => transcript.id === id)) : undefined);
+  const named = (id) => rowOf(id)?.title ?? `session ${String(id).slice(0, 8)}`;
+  const issuer = (by) => {
+    if (typeof by !== 'string') return 'issued by a session the ticket does not name, so not known to be the orchestrator';
+    const row = rowOf(by);
+    if (!row) return `issued by session ${by.slice(0, 8)}, on no row of the roster, so not known to be the orchestrator`;
+    const title = row.title ?? `transcript ${by.slice(0, 8)}`;
+    return roleOfTitle(row.title)?.role === 'orchestrator' ? `issued by ${title}` : `issued by ${title}, which is not the orchestrator`;
+  };
+  const left = (until) => `for ${Math.max(0, Math.ceil((Date.parse(until) - now) / 60_000))}m more`;
+  return [
+    ...tickets.open.map((ticket) => `  ticket ${ticket.id}  the next check of ${named(ticket.session)}${ticket.tree ? ` in ${ticket.tree}` : ''} goes first, ${left(ticket.until)}: ${ticket.reason}  ${issuer(ticket.by)}`),
+    ...tickets.unreadable.map((name) => `  ticket file ${name} could not be read as a ticket, so no gate claims it`),
+  ];
 }
 
 const QUESTION_STATE_WORDS = { closed: 'closed by the user without an answer', pending: 'on the user\'s screen, no answer yet', unanswered: 'no answer in its result' };
@@ -3183,6 +3245,7 @@ export function renderBoard(board, { now }) {
     }),
     ...gateLines(board, now),
     ...sectionLines('Pull requests', board.pullRequests, 'none open', (pr) => `  #${pr.number}  ${pr.title}  (${pr.branch})`),
+    ...(board.memory ? memoryLines(board.memory) : []),
     ...(board.relief ? reliefLines(board.relief) : []),
     NOT_VISIBLE,
   );

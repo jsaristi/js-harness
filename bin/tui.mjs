@@ -142,9 +142,9 @@ export function summarizeStackRow(row) {
  * the network. Any probe failure (a thrown error, a broken home, ...) must never stop the TUI from
  * opening: it falls back to the literal string `'unknown'`, which `render` shows as a single
  * `stack: unknown` line instead of the block. */
-export async function computeStackState({ home, cwd, spawn, platform, fetch: fetchImpl, now }) {
+export async function computeStackState({ home, cwd, spawn, platform, fetch: fetchImpl, now, env }) {
   try {
-    const rows = await buildReport({ home, cwd, offline: true }, { spawn, platform, fetch: fetchImpl, now });
+    const rows = await buildReport({ home, cwd, offline: true, env }, { spawn, platform, fetch: fetchImpl, now });
     return rows.map(summarizeStackRow);
   } catch {
     return 'unknown';

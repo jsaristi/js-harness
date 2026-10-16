@@ -28,8 +28,10 @@ import {
 import { cachePath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log.mjs';
+import { gateFirstDir, issueTicket } from './gate-first.mjs';
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
+import { hygieneDir, journalPath } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
 
 function makeTmpHome() {
@@ -711,6 +713,32 @@ test('uninstall leaves the orchestrator\'s relief file where it is: it is a log,
   }
 });
 
+test('uninstall removes the folder of gate tickets with a manifest and without, and keeps one it cannot remove among the gates\' folders', () => {
+  const home = makeTmpHome();
+  try {
+    const ticket = () => issueTicket({ home, session: 's1', reason: 'a fix that unblocks the others' });
+    install(home, '0.1.0');
+    ticket();
+    const installed = uninstall(home);
+    assert.ok(installed.removed.includes(gateFirstDir(home)), installed.removed.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    // `gate first` runs in a project with no machine install, so a home with no manifest can hold the folder.
+    ticket();
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [gateFirstDir(home)] });
+
+    const removeFile = (target, options) => {
+      if (target === gateFirstDir(home)) throw Object.assign(new Error('EPERM: operation not permitted, rmdir'), { code: 'EPERM' });
+      return fs.rmSync(target, options);
+    };
+    ticket();
+    assert.deepEqual(uninstall(home, { removeFile }), { ...NOTHING_ELSE, removed: [], gateKept: [{ path: gateFirstDir(home), reason: 'unremovable', code: 'EPERM' }] });
+    assert.deepEqual(uninstall(home).removed, [gateFirstDir(home)]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall keeps a folder of the session channel it cannot look at or remove, reports it with the error code, and still finishes', () => {
   const home = makeTmpHome();
   try {
@@ -737,6 +765,102 @@ test('uninstall keeps a folder of the session channel it cannot look at or remov
       assert.deepEqual([result.removed, result.channelKept], [[], []], code);
     }
     assert.deepEqual(uninstall(home).removed, [channelDir(home)]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The folder of memory hygiene (odd/tasks/memory-hygiene.md, D4 and T9): `memory` writes a project's journal, its
+// daily stamp and, for each pass, a snapshot of the memory folder under it. Nothing records it, like the channel's,
+// and `uninstall` is how it goes; but a snapshot is the only copy of what a pass changed, so a project's folder
+// that holds one is kept, with its stamps.
+
+/** What `memory` leaves under `home` for the project `slug`: a journal and the daily stamp, and a snapshot of
+ * the pass `stamp` when one is given. Returns the project's folder. */
+function leftByMemory(home, slug, stamp) {
+  const project = path.dirname(journalPath(home, slug));
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(journalPath(home, slug), '{"kind":"verify","at":"2026-10-15T12:06:06.108Z","stamp":"20261015T120606108Z"}\n');
+  fs.writeFileSync(path.join(project, 'told'), '2026-10-16T08:00:00.000Z');
+  if (stamp) {
+    fs.mkdirSync(path.join(project, 'snapshots', stamp, 'files'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'snapshots', stamp, 'manifest.json'), '{"writeSet":["MEMORY.md"],"before":{}}');
+  }
+  return project;
+}
+
+test('uninstall removes the folder of memory hygiene when no project holds a snapshot, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    leftByMemory(home, 'C--proj');
+    leftByMemory(home, 'C--other');
+    const installed = uninstall(home);
+    assert.ok(installed.removed.includes(hygieneDir(home)), installed.removed.join('\n'));
+    assert.equal(Object.hasOwn(installed, 'memoryKept'), false, 'said only when a folder is kept');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    leftByMemory(home, 'C--proj');
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [hygieneDir(home)] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    install(home, '0.1.0');
+    assert.equal(uninstall(home).removed.includes(hygieneDir(home)), false, 'nothing is said of a folder that is not there');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps the folder of a project whose memory passes left snapshots, names their stamps, and removes the rest', () => {
+  const home = makeTmpHome();
+  try {
+    for (const withManifest of [true, false]) {
+      if (withManifest) install(home, '0.1.0');
+      const kept = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+      fs.mkdirSync(path.join(kept, 'snapshots', '20261016T090000000Z'), { recursive: true });
+      const gone = leftByMemory(home, 'C--other');
+      const result = uninstall(home);
+      assert.deepEqual(result.memoryKept, [{ path: kept, stamps: ['20261015T120606108Z', '20261016T090000000Z'], journal: true }], String(withManifest));
+      assert.ok(result.removed.includes(gone), result.removed.join('\n'));
+      assert.equal(result.removed.includes(hygieneDir(home)), false);
+      assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true, 'a snapshot is never removed');
+      assert.equal(fs.existsSync(journalPath(home, 'C--proj')), true, 'nor the journal beside it');
+      assert.equal(fs.existsSync(gone), false);
+    }
+
+    // An empty snapshots folder holds no copy of anything: that project's folder goes.
+    fs.rmSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'), { recursive: true });
+    fs.mkdirSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'));
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [hygieneDir(home)] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall goes on past a project folder of memory hygiene it cannot remove, and still names the stamps it keeps', () => {
+  const home = makeTmpHome();
+  try {
+    const first = leftByMemory(home, 'C--a');
+    const busy = leftByMemory(home, 'C--b');
+    const last = leftByMemory(home, 'C--c');
+    const kept = leftByMemory(home, 'C--k', '20261015T120606108Z');
+    fs.rmSync(journalPath(home, 'C--k'));
+    const removeFile = (target, options) => {
+      if (target === busy) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    };
+    const result = uninstall(home, { removeFile });
+    assert.deepEqual(result.removed, [first, last]);
+    assert.deepEqual(result.memoryKept, [
+      { path: busy, reason: 'unremovable', code: 'EBUSY' },
+      { path: kept, stamps: ['20261015T120606108Z'], journal: false },
+    ]);
+    assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true);
+
+    // With no snapshot anywhere, a folder that cannot be removed is the whole folder's, said once.
+    fs.rmSync(kept, { recursive: true });
+    const whole = uninstall(home, { removeFile: (target) => { throw Object.assign(new Error('EPERM'), { code: 'EPERM', target }); } });
+    assert.deepEqual(whole.memoryKept, [{ path: hygieneDir(home), reason: 'unremovable', code: 'EPERM' }]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

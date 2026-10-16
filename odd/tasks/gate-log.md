@@ -6,8 +6,7 @@ Locator: `odd/tasks/gate-log.md` · Engram mirror: `odd/gate-log/tasks` · Branc
 `JH ORQ · js-harness`
 
 State 2026-10-11: opened by the orchestrator's prompt, inside the order Sebastián asked for
-(`docs/ROADMAP.md`, "The order he asked for", item 2; `odd/tasks/gate-lock.md`, "Next"). He is
-away: what is his is written under "Ask me before" and sent as a notice, and the rest goes on.
+(`docs/ROADMAP.md`, "The order he asked for", item 2; `odd/tasks/gate-lock.md`, "Next").
 The design below was written by this session and read, before anything was built on it, by a
 reader that did not write it; Progress says what the reader changed.
 
@@ -26,8 +25,8 @@ processes, so a slow gate is explained by a file and the usual gate has less wor
   name a gate log as the proof they lacked (`odd/tasks/gate-lock.md:1122-1131`). A gate's time
   is also only known to the session that ran it: the list `885, 728, 872, …` in
   `odd/tasks/gate-lock.md:1294` was kept by hand.
-- The gate is as long as its work: some fifty thousand git processes that slow each other down
-  on four cores, and arranging the files differently gave nothing (`docs/ROADMAP.md:760-768`).
+- The gate is as long as its work: 15,467 git processes in the whole suite (counted, Progress)
+  that slow each other down on four cores, and arranging the files differently gave nothing (`docs/ROADMAP.md:760-768`).
   What shortens it is fewer of them. Measured on 2026-10-10 in `bin/codex-review.test.mjs`
   alone: 12,591 git processes, 10,008 of them started by the command under test in 546 runs,
   and 6,509 of those a `git rev-parse` (`odd/tasks/gate-lock.md:917-921`). So the larger part
@@ -42,7 +41,7 @@ processes, so a slow gate is explained by a file and the usual gate has less wor
 - `node --test bin/lib/manifest.test.mjs` exits 0
 - `node --test scripts/count-git.test.mjs` exits 0
 - A real gate on this machine prints a `load` row, quoted in Progress
-- After his answer on where the log lives: a real gate's two lines in the log, and
+- A real gate's two lines in the log, and
   `gate log` reading them, quoted in Progress
 - The git processes started by `bin/codex-review.test.mjs` and by
   `bin/check-codex-reviews.test.mjs`, counted by `scripts/count-git.mjs` before and after, are
@@ -102,10 +101,10 @@ processes, so a slow gate is explained by a file and the usual gate has less wor
 high
 
 ## Ask me before
-- **Answered 2026-10-11 18:33 UTC: the log lives in `<home>/.js-harness/gate-log/`, the
-  recommendation below.** His words, typed in the orchestrator's chat to the question of
-  keeping the gates' log in a folder of its own there, removed whole by `uninstall`: "Sí,
-  en .js-harness/gate-log" (the beginning of a longer entry;
+- **Answered 2026-10-11 18:33 UTC: the log lives in `<home>/.js-harness/gate-log/`.**
+  His words, typed in the orchestrator's chat to the question of keeping the gates' log in a
+  folder of its own there, removed whole by `uninstall`: "Sí, en .js-harness/gate-log" (the
+  beginning of a longer entry;
   `C:\Users\Oficina\.claude\projects\D--js-harness\7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`,
   line 1360, a user entry whose origin is a human, read by this session before it was
   used). So S2's pull request is merged like the others, when it is green and both reviews
@@ -117,39 +116,13 @@ high
   review in a turn of the lock, tell the orchestrator afterwards; a report outside stays
   his), and the Codex cap as a rate, up to 1,200 input tokens a changed line of a slice by
   `codex-review --plan`, over which a session asks. That reading is the orchestrator's;
-  his words are those quoted. The question as it stood:
-- Where the lasting file of the gate log lives. It is the first thing the gate leaves on disk
-  after it ends, outside the repository, so it is his. Recommendation: a folder of its own,
-  `<home>/.js-harness/gate-log/`, beside the lock's folder and not in it, holding two files at
-  most. Reasons: the lock is the machine's, so its record is too (gates of two projects wait
-  for each other and must appear in one file); `home` is resolved as the lock resolves it, so
-  a test's throwaway home gets a throwaway log; a folder is removed whole by `uninstall`, the
-  way it removes the lock's (`removeGateFolder`), so nothing a rotation leaves behind needs a
-  name. The alternatives: inside `gate/` (breaks "a gate leaves nothing" and the "in use"
-  rule); in the repository's git folder, where the Codex review records are (nothing outside
-  the repository, but one log per project, so a gate that waited for another project's gate
-  names a gate the file does not hold).
-  Until he answers, S2 is built on the recommendation with tests that use a throwaway home;
-  its pull request is not merged, and no gate of this session writes his real home, without
-  his answer. S1 and S3 do not depend on it.
+  his words are those quoted.
 - Anything that changes what a commit proves, the 1,200 s bound, or the gate on GitHub.
-- Spend outside the plan (the Codex cap for this feature is 3 million input tokens).
-  **Answered 2026-10-11 17:55 UTC: the cap is 7,000,000 input tokens for this feature.** His
-  words, typed in the orchestrator's chat to the question of raising the cap of the session
-  channel and of the gate log from 3 to 7 million each: "Sí, 7 millones para cada una"
-  (`C:\Users\Oficina\.claude\projects\D--js-harness\a5471f0a-66fb-4c5b-8495-6e5fb17af777.jsonl`,
-  line 1540, a user entry whose origin is a human; read by this session before it was used,
-  since the orchestrator's message about it is no word of his). What was asked, as it stood:
-  sent to the orchestrator for him at 12:40: the cap does not hold the three slices. S1 alone took 1,772,493 input tokens, in five runs, because Codex found a P1
-  and two P2 and each fix was reviewed again. `codex-review --plan` prints 1,520,000 for S3
-  (5 parts, 1,289 changed lines) and between 2,000,000 and 2,860,000 for S2 (10 parts with
-  the commits of S1 it stands on, fewer without them); what a run really took today was
-  between 57% and 80% of its plan. Without a Codex record the pre-push hook refuses a
-  branch, so S3 and S2 are finished, approved by gentle-ai and not pushed. The question, one:
-  the cap raised to 7,000,000 (the three slices by plan), to 3,500,000 (S3 alone), or left
-  (S3 and S2 wait). Recommendation: 7,000,000: what Codex found in S1 was a password
-  printed in a gate's report and a lock that could be lost, and S2 writes a file in his
-  home. The skip is not recorded as `--unavailable`: Codex can run, the spend is his.
+- Spend outside the plan: Codex reviews are budgeted by rate, rule `codex-review-rate`. This
+  feature's cap of 3 million input tokens was raised by him to 7,000,000 on 2026-10-11 ("Sí, 7
+  millones para cada una",
+  `C:\Users\Oficina\.claude\projects\D--js-harness\a5471f0a-66fb-4c5b-8495-6e5fb17af777.jsonl`,
+  line 1540); its spend is in Progress.
 
 ## TDD
 Mode: strict. Runner: `node --test`, one file at a time while a task is open. Exceptions: T6's
@@ -234,7 +207,7 @@ profile and the counts before and after are measurements, recorded here.
 - Which gates: every `check` that runs sensors as a gate and every `gate -- <command>`, the
   ones that ran without the lock included: a gate beside another is what the log is for. Not
   under `JS_HARNESS_CHECK_INNER`, `check` or `gate`.
-- Where: `gateLogDir(home)`, one function, whose answer is his (see "Ask me before"). The
+- Where: `gateLogDir(home)`, one function: `<home>/.js-harness/gate-log/`. The
   writer makes the folder itself: a gate without the lock has made nothing under the home.
 - Bounded by rotation, never by rewriting: when `log.jsonl` is past 512 KiB (about 700 gates)
   the gate about to append renames it to `log.1.jsonl`, over the older one, and appends to a
@@ -289,9 +262,8 @@ profile and the counts before and after are measurements, recorded here.
     know the commit.
 - The stop rule: a cut is made when the profile shows it removes a thousand processes or
   more from the two files together. If nothing does, S3 closes with the tool and the profile
-  recorded, and says so. The arithmetic before the count: the three items above are about
-  2,500 of the suite's fifty thousand, under what one whole gate can show, so the profile has
-  to find the larger part, or the honest result is "a few per cent".
+  recorded, and says so. Counted (Progress): the suite
+  starts 15,467 git processes, and the cuts chosen by this rule are about 2,800 of them.
 - The tests do not change what they prove: only helpers and how often git is asked.
 - Judged by the counts. One whole gate before and one after are recorded with their `load`
   rows, for the record.
@@ -299,8 +271,8 @@ profile and the counts before and after are measurements, recorded here.
 ### Delivery
 Three slices in the order `odd/tasks/gate-lock.md` gave ("the gate log, and with it the load
 … ; fewer git processes"), each its own pull request to `main`, each reviewed by gentle-ai
-and then by Codex: S1 (T1, T2) on `feat/gate-log`; S2 (T3 to T5) on a branch stacked on S1,
-its merge waiting for his answer; S3 (T6 to T8) on a branch cut from `main`, since it shares
+and then by Codex: S1 (T1, T2) on `feat/gate-log`; S2 (T3 to T5) on a branch stacked on S1;
+S3 (T6 to T8) on a branch cut from `main`, since it shares
 no file with the other two.
 
 Discarded: reading the load with PowerShell on every gate (seconds and Windows only, for a
@@ -337,8 +309,7 @@ Progress.
   (orchestrator told before `bin/lib/manifest.mjs` is touched); the practice run's hash;
   `docs/ROADMAP.md`.
 - [x] T6 · `scripts/count-git.mjs` with its test, then the profile of the two files, recorded
-  here, and the cuts chosen from it by the stop rule. (The tool's second commit, `--frames`
-  and the review's findings, is still to make.)
+  here, and the cuts chosen from it by the stop rule.
 - [x] T7 · The first cut, chosen from the profile: where the repository is, asked once per
   `codex-review` run and handed on. The git folder (`jsonLinesPath`) and the top of the
   repository (`topOf`) in the options objects, and whatever else the run asks git twice
