@@ -675,6 +675,8 @@ review covers everything the merge brought, code that already had its review.
   parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
   in its first part. A merge is read by what was written in it only at HEAD, so a detached
   worktree at c4b7a37 reviewed it in 1 part of 18 lines
+- Control: check — bin/codex-review.test.mjs — "a run from a merge of the default branch below HEAD
+  names the worktree at the merge" — since 2026-10-16
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he
@@ -799,6 +801,8 @@ makes the next try wait five minutes and fail.
   found on 2026-10-11 was dated 2026-10-09 17:40
 - Seen: 2026-10-11 — relief file, line 201 — two tries, both exit 1; the lock folder left again,
   removed by hand twice
+- Control: check — bin/doctor.test.mjs — "the pnpm-lock row stale for a global bin lock left over in
+  the given PNPM_HOME" — since 2026-10-16
 
 ### probe-end-hook-flake
 A gate failed on `evals/codex-isolation-probe.test.mjs` as a whole, with no test of it red, and the

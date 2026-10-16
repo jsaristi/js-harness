@@ -427,15 +427,15 @@ test('computeStackState resolves real rows from local probes without ever callin
   };
   const spawn = () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' });
   try {
-    const stack = await computeStackState({ home, cwd: home, spawn, fetch: fetchImpl });
+    const stack = await computeStackState({ home, cwd: home, spawn, fetch: fetchImpl, env: {} });
     assert.equal(fetchCalled, false, 'the stack block must never touch the network');
     assert.ok(Array.isArray(stack));
     assert.deepEqual(
       stack.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'pnpm-lock'],
     );
-    assert.deepEqual(stack.at(-2), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');
-    assert.deepEqual(stack.at(-1), { id: 'remote-server', version: 'n/a', state: 'ok' }, 'an empty home records no launcher, so no server is down');
+    assert.deepEqual(stack.find((row) => row.id === 'claude-account'), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');
+    assert.deepEqual(stack.find((row) => row.id === 'remote-server'), { id: 'remote-server', version: 'n/a', state: 'ok' }, 'an empty home records no launcher, so no server is down');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -451,7 +451,7 @@ test('computeStackState shows accounts that differ as a mismatch in the stack bl
     fs.mkdirSync(path.dirname(appConfig), { recursive: true });
     fs.writeFileSync(appConfig, JSON.stringify({ lastKnownAccountUuid: app }));
 
-    const stack = await computeStackState({ home, cwd: home, spawn, platform: 'win32' });
+    const stack = await computeStackState({ home, cwd: home, spawn, platform: 'win32', env: {} });
 
     assert.deepEqual(stack.find((row) => row.id === 'claude-account'), { id: 'claude-account', version: 'n/a', state: 'mismatch claude' });
     const state = { ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), stack };
@@ -478,16 +478,16 @@ test('computeStackState shows a recorded launcher whose server is not running as
     fs.writeFileSync(launcher, content);
     recordOptionalFile(home, launcher, content);
 
-    const down = await computeStackState({ home, cwd: home, spawn, platform: 'win32' });
-    assert.deepEqual(down.at(-1), { id: 'remote-server', version: 'n/a', state: 'down claude' });
+    const down = await computeStackState({ home, cwd: home, spawn, platform: 'win32', env: {} });
+    assert.deepEqual(down.find((row) => row.id === 'remote-server'), { id: 'remote-server', version: 'n/a', state: 'down claude' });
     const text = render({ ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), stack: down }).join('\n');
     assert.match(text, /remote-server\s+n\/a\s+down claude/);
 
     const { statePath } = remoteFiles(home, remoteId(root, 'win32'));
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
     fs.writeFileSync(statePath, JSON.stringify({ pid: 4242, startedAt: 1759700000000 }));
-    const running = await computeStackState({ home, cwd: home, spawn, platform: 'win32' });
-    assert.deepEqual(running.at(-1), { id: 'remote-server', version: 'n/a', state: 'ok' });
+    const running = await computeStackState({ home, cwd: home, spawn, platform: 'win32', env: {} });
+    assert.deepEqual(running.find((row) => row.id === 'remote-server'), { id: 'remote-server', version: 'n/a', state: 'ok' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
