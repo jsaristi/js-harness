@@ -864,6 +864,8 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
+- Control: owed — odd/tasks/first-version.md — "a task the staged change ticks in a feature document
+  cites the commit that holds it"
 
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
@@ -914,6 +916,8 @@ without that review, and the choice went to him.
   review
 - Seen: 2026-10-11 — relief file, line 228 — twice on one slice, beside a running gate (an
   observation, not a cause shown); JH 5 stopped on him
+- Control: owed — odd/tasks/first-version.md — "a gentle-ai review whose bound status times out is
+  asked again"
 
 ### rule-only-in-memory
 A rule lived only in an agent's memory note, so he repeated it and sessions already open did not get
