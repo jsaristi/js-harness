@@ -466,6 +466,41 @@ test('a change of form on a rule of his still needs his words, and a design is r
   assert.deepEqual(snapshot(repo), before);
 });
 
+test('patterns removed alone, or a failure set alone, is a change of form too and keeps the source', async () => {
+  const repo = repository({ list: SCANNED, files: { 'docs/FAILURES.md': REGISTER } });
+  const removed = await change(repo, ['gate-wait'], { set: { patterns: null }, source: SCAN_DESIGN });
+  assert.equal(removed.code, 0, removed.err);
+  assert.equal(rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs')).find((rule) => rule.id === 'gate-wait').patterns, undefined);
+  assert.deepEqual(sourcesOf(repo), SOURCES);
+  git(repo.dir, 'commit', '-q', '-am', 'patterns removed');
+  const failure = await change(repo, ['control-phrase-min'], { set: { failure: 'old-rule-beside-new' }, source: SCAN_DESIGN });
+  assert.equal(failure.code, 0, failure.err);
+  assert.deepEqual(sourcesOf(repo), SOURCES);
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /rule:control-phrase-min proposed on rule\/gate-wait, not landed: form; source design docs\/PROTO\.md, the rule's own source kept;/);
+});
+
+test('a change of form on a rule of his, given his words, keeps the rule\'s source and names his words as its own', async () => {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', 'main');
+  const his = LIST.map((rule) => (rule.id === 'gate-wait' ? { ...rule, owner: 'sebastian' } : rule));
+  const session = '11111111-2222-3333-4444-555555555555';
+  // The source of his value, his words of an earlier day, as the command stored them.
+  const valueWords = { kind: 'words', quotes: [{ quote: 'una hora', date: '2026-10-11', session, line: 1 }], reading: 'an hour', accepted: 'he typed it', checked: { date: '2026-10-11', by: 'command' } };
+  const hisSources = { ...SOURCES, 'gate-wait': valueWords };
+  write(repo.dir, 'bin/lib/rules-data.mjs', writeRules(his));
+  write(repo.dir, 'docs/rule-sources.json', `${JSON.stringify(hisSources, null, 2)}\n`);
+  write(repo.dir, 'docs/RULES.md', listTextOf(repo.dir, his, hisSources));
+  git(repo.dir, 'commit', '-q', '-am', 'his rule');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(repo.dir, 'switch', '-q', '-C', 'rule/gate-wait', 'main');
+  write(path.join(repo.claude, 'projects', repo.slug), `${session}.jsonl`, `${JSON.stringify({ type: 'user', origin: { kind: 'human' }, timestamp: '2026-10-15T17:00:00.000Z', message: { role: 'user', content: 'Ponele patterns a la espera' } })}\n`);
+  const words = { kind: 'words', quotes: [{ session, line: 1, excerpt: 'Ponele patterns' }], reading: 'patterns for the wait', accepted: 'he typed it' };
+  const result = await change(repo, ['gate-wait'], { set: { patterns: ['wait.{0,40}{amount}'] }, source: words });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(sourcesOf(repo)['gate-wait'], valueWords);
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /not landed: form; source words, the rule's own source kept;/);
+});
+
 test('a value given with patterns is no change of form: the change stores its own source, as before', async () => {
   const repo = repository();
   const result = await change(repo, ['gate-wait'], { value: 30, set: { patterns: ['wait.{0,40}{amount}'] }, source: SCAN_DESIGN });

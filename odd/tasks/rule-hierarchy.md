@@ -1706,7 +1706,8 @@ command stops refusing the three keys. It is given the count and the register by
   change of form: they move neither `since` nor `was`. `failure` must name an entry of
   `docs/FAILURES.md`. Given alone, they also keep the rule's stored source, which is the source
   of its value, and the relief line names the change's own (decided on 2026-10-15 by the lead:
-  "a correctness fix, not a policy"). A rule of his still takes only his words as that source.
+  "a correctness fix, not a policy"). A rule of his still needs his words to change at all,
+  form included: they are checked and named in the relief line, and the stored source stays.
 
 **The failure.** It is `old-rule-beside-new` (`docs/FAILURES.md:664-673`), whose control is
 owed to T16. Its `Control:` line names the row once the first rule refuses. No new entry is
