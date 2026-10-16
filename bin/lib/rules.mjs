@@ -517,8 +517,11 @@ function sourceText(source) {
   return `his words of ${dates}, checked by ${who} on ${show(source.checked.date)}`;
 }
 
-/** The line that gives a rule's day, its row and its source. */
-const sinceLine = (rule, sources) => `- Since ${rule.since}. Row: ${rowText(rule.row)}. Source: ${sourceText(lookup(sources, rule.id))}.`;
+/** The failure of the register a rule's row guards against, after the row, or nothing for a rule that names none. */
+const failureText = (rule) => (typeof rule.failure === 'string' ? `, against the failure ${code(rule.failure)}` : '');
+
+/** The line that gives a rule's day, its row with its failure, and its source. */
+const sinceLine = (rule, sources) => `- Since ${rule.since}. Row: ${rowText(rule.row)}${failureText(rule)}. Source: ${sourceText(lookup(sources, rule.id))}.`;
 
 /** The line of a rule's earlier values, each with the rule's unit, in the order the rule gives them. */
 const wasLine = (rule) => `- Was: ${rule.was.map((item) => `${amount(item.value, rule.unit)} until ${item.until}`).join('; ')}.`;

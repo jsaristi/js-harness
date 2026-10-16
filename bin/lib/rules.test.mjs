@@ -1009,6 +1009,11 @@ test('renderList prints each form of the row: reports, refuses since a day, or r
   assert.equal(sinceLine({ reports: 'the gate reports it', since: '2026-10-02' }), '- Since 2026-10-11. Row: reports since 2026-10-02 (the gate reports it). Source: none recorded.');
 });
 
+test('renderList names the failure a rule guards against beside its row', () => {
+  const lines = renderList([valueRule('alpha-value', { row: { refuses: '2026-10-01' }, failure: 'old-rule-beside-new' })]).split('\n');
+  assert.ok(lines.includes('- Since 2026-10-11. Row: refuses since 2026-10-01, against the failure `old-rule-beside-new`. Source: none recorded.'), lines.join('\n'));
+});
+
 test('the head of the list says it holds no engine version and no date of a check, as the last line of its explaining paragraph', () => {
   const head = renderList([]).split('\n').slice(0, 5);
   assert.deepEqual([head[0], head[1], head[3], head[4]], [
