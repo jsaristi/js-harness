@@ -191,6 +191,39 @@ test('a repeat install and a sync keep the host folders the first install made, 
   }
 });
 
+test('install into a home that is not there yet names no folder at or above the home as one it made', () => {
+  const root = makeTmpHome();
+  try {
+    const home = path.join(root, 'new-home');
+    install(home, '0.1.0');
+    const folders = readManifest(home).entries.flatMap((entry) => entry.createdFolders);
+    assert.ok(folders.length > 0);
+    for (const folder of folders) assert.ok(folder.startsWith(home + path.sep), folder);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps a folder install made once the user put something in it, and one a manifest names off the way to its file', () => {
+  const home = makeTmpHome();
+  const outside = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    fs.writeFileSync(path.join(home, '.claude', 'mine.txt'), 'the user\'s');
+    const manifest = readManifest(home);
+    manifest.entries[0].createdFolders.unshift(outside, path.join(home, 'elsewhere'));
+    fs.mkdirSync(path.join(home, 'elsewhere'));
+    fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
+    uninstall(home);
+    assert.ok(fs.existsSync(path.join(home, '.claude', 'mine.txt')));
+    assert.ok(fs.existsSync(outside));
+    assert.ok(fs.existsSync(path.join(home, 'elsewhere')));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
 test('uninstall keeps a host folder that was there before install, even an empty one', () => {
   const home = makeTmpHome();
   try {
