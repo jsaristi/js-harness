@@ -164,7 +164,7 @@ How long one sensor of the gate may run before it is stopped and the commit refu
 
 ### session-stall
 How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.
-- Read by: `bin/sessions.mjs`.
+- Read by: `bin/lib/manifest.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
 - Since 2026-10-16. Row: reports. Source: design, `odd/tasks/stalled-sessions.md`.
 
 ### wait-every

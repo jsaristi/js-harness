@@ -99,7 +99,7 @@ Every question of the project reaches the user in one place: the orchestrator's 
 ## The lead
 
 What you run:
-- \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the worktrees with their feature plans, the running gates, the open pull requests and your relief file.
+- \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the work sessions that hold work you handed them and have made no commit, notice or gate for ${ruleValue('session-stall', 'minutes')} minutes (\`Stalled\`), the worktrees with their feature plans, the running gates, the open pull requests and your relief file. \`js-harness loop heartbeat\` ends on such a session too, with a \`STALLED:\` line.
 - \`js-harness sessions --watch\`, in the background — your way of waiting. It is silent until the board changes in a way that needs a decision, then prints the changes and the board. Launch it again each time it returns. A return with "nothing changed" is not news: relaunch it and say nothing.
 - \`js-harness progress\` — the map: the roadmap's phases and the features, from their checkboxes; \`--pace\` gives the tasks closed and added each day on the default branch.
 - \`js-harness loop run <name> --purpose "<what it is for>" --until "<what ends it>" -- <command>\`, in the background — each loop you keep (\`js-harness loop heartbeat\`, \`js-harness loop channel-watch\`, a merge keeper): it records you as its owner, runs the command, and its end wakes you. \`js-harness loop status\` lists the project's loops with their owners; \`js-harness loop stop <name>\` stops one of yours and says only when nothing of it is left.
@@ -173,6 +173,7 @@ How a lead is rotated, where the host nests a session under the one that started
 - When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line, and close with \`js-harness notify --to orchestrator --kind closed "<what you delivered>"\`: nothing more goes to you.
+- When you are free and wait for the orchestrator with nothing handed to you, say so with \`js-harness notify --to orchestrator --kind waiting "<on what>"\`: until a \`waiting\` or a \`closed\`, the work last handed to you is yours, and ${ruleValue('session-stall', 'minutes')} minutes with no commit, notice or gate show you as stalled to the orchestrator.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
 - Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
 `;

@@ -116,3 +116,40 @@ test('channel-watch ends with exit 1 after --for minutes with no notice of anoth
   assert.equal(state.clock, T0 + 60000);
   assert.match(state.out.at(-1), /no notice of another session in 1 minute/);
 });
+
+// odd/tasks/stalled-sessions.md S5: the heartbeat also ends on a work session that holds handed work and went quiet.
+const LEAD = { host: 'claude-code', id: 'e152c9d8-0000-4000-8000-000000000000', source: 'environment', title: 'JH ORQ · lead', permissionMode: 'bypassPermissions' };
+const handedTo = (number, at, text = 'T3 is yours') => `${JSON.stringify({ schema: NOTICE_SCHEMA, at: new Date(at).toISOString(), from: LEAD, to: { role: 'work', number }, kind: 'note', text, cwd: CWD })}\n`;
+// The gate log is written at every tick, so the machine never goes quiet and only a stalled session can end the loop.
+const busy = (s) => {
+  s.files[GATE_LOG] = s.clock;
+};
+
+test('heartbeat ends with a STALLED line when a work session crosses the hour with no commit, notice or gate since its handed work', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: handedTo(19, T0 - 50 * 60000), onSleep: busy });
+  const code = await loopMain(['heartbeat', '--every', '120'], {}, deps);
+  assert.equal(code, 0);
+  assert.equal(state.clock, T0 + 10 * 60000, 'it ends at the tick the quiet reaches the hour');
+  assert.equal(state.out.at(-1), `STALLED: work session 19 — no commit, notice or gate since ${hour(T0 - 50 * 60000)}, holding a note from JH ORQ · lead of ${hour(T0 - 50 * 60000)}: T3 is yours`);
+  assert.match(state.out[0], /or a work session holds handed work with no commit, notice or gate for 60 minutes/);
+});
+
+test('heartbeat: a session already stalled when it starts is named at the start and ends it only when its quiet doubles', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: handedTo(19, T0 - 90 * 60000), onSleep: busy });
+  const code = await loopMain(['heartbeat', '--every', '120'], {}, deps);
+  assert.equal(code, 0);
+  assert.equal(state.out[1], 'already stalled: work session 19, quiet 1h 30m');
+  assert.equal(state.clock, T0 + 30 * 60000, 'two hours of quiet, not the next tick');
+  assert.match(state.out.at(-1), /^STALLED: work session 19 /);
+});
+
+test('heartbeat: --stall sets the minutes, and a value that is no whole number above zero is a usage error', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: handedTo(19, T0 - 5 * 60000), onSleep: busy });
+  assert.equal(await loopMain(['heartbeat', '--stall', '10', '--every', '60'], {}, deps), 0);
+  assert.equal(state.clock, T0 + 5 * 60000);
+  for (const bad of ['0', 'soon', '1.5']) {
+    const { state: other, deps: otherDeps } = world();
+    assert.equal(await loopMain(['heartbeat', '--stall', bad], {}, otherDeps), 2, bad);
+    assert.match(other.err.join('\n'), /--stall/);
+  }
+});

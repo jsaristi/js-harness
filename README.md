@@ -164,6 +164,20 @@ ends it. `stop` refuses a live loop another session owns unless `--take-over`, a
 a second look at the process table finds none of its processes left. `heartbeat` and
 `channel-watch` are bodies for `run`.
 
+`heartbeat` ends on a quiet machine (no gate-log or channel write for `--quiet` minutes) and on a
+stalled work session: one the orchestrator handed work to, by a notice to its number or its
+opening, that has not given it back with a `waiting`, `closed` or `relieved` notice and has made no
+commit of its own, sent no notice and run no gate for `--stall` minutes (the rule `session-stall`,
+an hour). It prints a `STALLED:` line naming the session, since when it is quiet and what it holds,
+and says it again each time that quiet doubles. `js-harness sessions` lists the same sessions in
+its `Stalled` section, and its `--watch` says each one as it crosses.
+
+```console
+$ js-harness loop heartbeat
+js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours
+STALLED: JH 19 · skill del orquestador (T8) — no commit, notice or gate since 11:49, holding a note from JH ORQ · js-harness (350k) of 11:49: 17:00 JH ORQ: first-version T3 moved to JH 25 after 6h without an answer…
+```
+
 ```console
 $ js-harness loop run heartbeat --purpose "wake the lead on a stall" --until "30 min with no gate or channel write" -- js-harness loop heartbeat
 js-harness loop: heartbeat runs (pid 60332, command pid 65396), owned by 053e19d7: wake the lead on a stall; until 30 min with no gate or channel write. Stop it with js-harness loop stop heartbeat
