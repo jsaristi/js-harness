@@ -104,7 +104,10 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 30,
     "unit": "minutes",
-    "flag": "--max"
+    "flag": "--max",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bgate\\b.{0,50}\\b(?:stopped|killed|ends|at most|longest|max(?:imum)?)\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
   },
   {
     "id": "gate-wait",
