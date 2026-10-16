@@ -157,6 +157,20 @@ test('a list at the merge base that does not parse is a fault, and nothing is re
   }
 });
 
+test('a git that fails at the merge base for any reason but a missing path is a fault, and records nothing', () => {
+  const m = machine({ refs: { 'origin/HEAD': [{ ...pause, value: 90 }], BASE: [pause] }, base: 'BASE' });
+  try {
+    const timedOut = (args) => (args[0] === 'show' && args[1].startsWith('BASE:') ? { status: null, stdout: '', stderr: '' } : m.git(args));
+    const result = reachHook(m.input('UserPromptSubmit'), { home: m.home, git: timedOut });
+    assert.equal(result.context, null);
+    assert.match(result.fault, /could not be read at BASE/);
+    assert.equal(fs.existsSync(m.seen()), false);
+    assert.match(m.run('UserPromptSubmit').context, /88 percent -> 90 percent/, 'the next good read tells what is owed');
+  } finally {
+    m.done();
+  }
+});
+
 test('a branch that changed a rule itself is told nothing, since what is compared is its merge base', () => {
   const m = machine({ refs: { 'origin/HEAD': [pause], BASE: [pause] }, base: 'BASE' });
   try {

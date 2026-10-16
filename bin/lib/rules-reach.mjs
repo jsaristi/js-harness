@@ -197,8 +197,10 @@ export function reachHook(input, { home = os.homedir(), git = runGit, now = Date
   if (seen !== null && seen.main === main && seen.commit === commit) return { event, context: null };
   const listAt = (rev) => {
     const shownText = ask(['show', `${rev}:${list.path}`]);
-    if (shownText?.status !== 0) return { fault: `${list.path} could not be read at ${rev}`, absent: true };
-    return readListText(shownText.stdout, list.kind);
+    if (shownText?.status === 0) return readListText(shownText.stdout, list.kind);
+    // Only git saying the path is not in that tree means no list; a timeout or any other failure is a fault.
+    const absent = shownText?.status === 128 && /does not exist|exists on disk, but not in/.test(shownText.stderr ?? '');
+    return { fault: `${list.path} could not be read at ${rev}`, absent };
   };
   const onMain = listAt(main);
   if (onMain.fault) return quiet(onMain.fault);
