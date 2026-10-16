@@ -3700,6 +3700,15 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   names it; the practice journey's check of the three events is moved to the parts left; git
   missing reads as "no origin/HEAD…", and four slow gits can pass the 5 s timeout (accepted by
   the design), both left.
+- 2026-10-16, T16f first part, gentle-ai review `review-0c22414105516f00` (escalated to item 5;
+  lenses risk, resilience, reliability) over `origin/main..9eb3a1e`: one correction, R3
+  "merge base fault read as absent" (a timed-out `git show` at the merge base set the starting
+  point to main's list and recorded it, so a change owed was never told), fixed in 756293f with
+  its test; validated, approved and acknowledged. Advisories left for the next parts: a branch
+  that adds `docs/rules.json` before main has it faults on every turn, at two gits, where
+  "main declares no list" is expected; the 30-day prune has no test; a failed `for-each-ref`
+  reads as "no origin/HEAD…" (the verifier's advisory too); four slow gits on a
+  `SubagentStart`, which never takes the fast path, can pass the 5 s timeout.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f first part being built by JH 27** on `feat/rules-reach` in `D:/js-harness-worktrees/rules-reach`. The design ("Reach: the turn-start hook") is committed (fdc62a9). Built so far, not committed: `bin/lib/rules-reach.mjs` and its test (11 green); three `entryComponents` in `bin/lib/manifest.mjs` with `manifest.test.mjs` (160 green); `rules --hook` routed in `bin/js-harness.mjs` and `bin/rules.mjs` (`rules.test.mjs` 34 green); `doctor` tries the command (`stack.mjs`, `stack.test.mjs` 120 green); `HASH_KEYS` exported. In progress: `scripts/practice-lib.mjs` (`HARNESS_HOOKS` gains the three entries; `hostHooksProblem` checks `UserPromptSubmit` and `SubagentStart` like `postToolUseProblem`), its tests written RED. Next: `docs/SPEC.md` claims the three ids; README (install output, a `rules --hook` section); `rules` usage, the dispatcher help and the skill command list; T16f sub-item and a Progress entry; commit; the time measured (20 turns, p95 under 1,000 ms); a verifier (item 5); gentle-ai escalated item 5; Codex; PR; notify the lead.
