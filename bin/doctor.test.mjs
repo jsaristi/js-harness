@@ -1855,6 +1855,25 @@ test('a stack tool updated since the reviewed versions is stale, named by the ho
   }
 });
 
+test('--stack-reviewed keeps the reviewed version of a tool whose probe failed this time', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeCache(home, { ...readCache(home), stack: { reviewed: { versions: { claude: '2.1.290', codex: '0.120.0' }, at: '2026-10-09T00:00:00.000Z' } } });
+    // The Claude CLI does not answer: only the codex update is reviewed, and claude's baseline stays for its own review.
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, { spawn, fetch: noopFetch, stackUpdate: true });
+    assert.equal(reviewed.code, 0);
+    const { versions } = readCache(home).stack.reviewed;
+    assert.equal(versions.codex, '0.130.0');
+    assert.equal(versions.claude, '2.1.290');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('--stack-reviewed with no tool version read records nothing and exits 1; without the switch doctor shows no stack-update row', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

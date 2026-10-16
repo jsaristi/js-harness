@@ -348,8 +348,11 @@ function recordStackReview({ home, cwd, json }, deps) {
     return 1;
   }
   const now = deps.now ?? (() => new Date());
-  const reviewed = { versions, at: now().toISOString() };
-  writeCache(home, { ...readCache(home), stack: { reviewed } });
+  // A tool whose probe failed this time keeps the version reviewed before: dropped, its next reading would join the
+  // record as a new tool and an update since would never be named (Codex, 2026-10-16).
+  const cache = readCache(home);
+  const reviewed = { versions: { ...cache.stack?.reviewed.versions, ...versions }, at: now().toISOString() };
+  writeCache(home, { ...cache, stack: { reviewed } });
   const named = Object.entries(versions).map(([id, version]) => `${id} ${version}`).join(', ');
   console.log(json ? JSON.stringify({ reviewed }) : `Recorded ${named} as reviewed.`);
   return 0;
