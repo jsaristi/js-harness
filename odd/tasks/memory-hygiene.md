@@ -287,23 +287,30 @@ Two independent read-only readers, 2026-10-15, neither the writer.
 ## Tasks
 - [x] T1 (kind: design) This document: measured, audited, attacked by two readers, sent to the
   lead, approved by him (commit `5397771`, L4)
-- [ ] T2 (kind: build) `memory status`, its library, candidates and `--history`, tests first.
+- [x] T2 (kind: build) `memory status`, its library, candidates and `--history`, tests first.
   Built (route: inline): `bin/memory.mjs`, `bin/lib/memory-hygiene.mjs`; 10 library and 6 CLI
   tests, red first; on this project it is due for no-pass, index-bytes, line-chars and one
-  orphan. Reviewed: gentle-ai under budget, Codex 4 findings fixed (T8); in PR #188 with T3, T5, T6
-- [ ] T3 (kind: build) `memory plan`, `verify`, `undo`, the lock, the journal and the install record.
+  orphan. Reviewed: gentle-ai under budget, Codex 4 findings fixed (T8); in PR #188 with T3, T5, T6.
+  Landed: #188, merge `483f09c`, 2026-10-15
+- [x] T3 (kind: build) `memory plan`, `verify`, `undo`, the lock, the journal and the install record.
   Built (route: inline): `bin/lib/memory-pass.mjs`, 15 library and 2 more CLI tests (the library's
   red was not run apart: the module was missing; the CLI's and the index-quote test's red were
   seen). On a copy of the live folder (43 notes): an unchanged pass reports no quotation falsely;
   the mechanical pass (each note gets its old index line verbatim, the index gets short lines)
   takes the index from 11,077 B to 3,920 B, verifies, leaves `status` with nothing due, and `undo`
   makes the copy byte-identical to the live folder (`diff -rq`). The install record of
-  `~/.js-harness/memory-hygiene/` waits on `bin/lib/manifest.mjs` (JH 8). Reviewed with T2; PR #188
-- [ ] T4 (kind: build) The index rule in the guard hook (asked of JH 8 first). PR #191 (draft), branch
+  `~/.js-harness/memory-hygiene/` waits on `bin/lib/manifest.mjs` (JH 8). Reviewed with T2; PR #188.
+  Landed: #188, merge `483f09c`; the install record is not built and moves to T9
+- [x] T4 (kind: build) The index rule in the guard hook (asked of JH 8 first). PR #191 (draft), branch
   `feat/guard-memory-index`: gentle-ai high (item 3), approved twice; verifier blocker fixed; Codex P2 fixed and
-  rechecked. Merges after #188
-- [ ] T5 (kind: build) The due line in the channel's hook and the board row (asked of their owner first)
-- [ ] T6 (kind: docs) The protocol section of the installed skill, with its incident and expiry; help text
+  rechecked. Merges after #188. Landed: #191, merge `d7a22da`, 2026-10-15. Its install left a second guard entry
+  on this machine; fixed by #220 (install replaces its own entry by command), merged
+- [x] T5 (kind: build) The due line in the channel's hook and the board row (asked of their owner first).
+  The due line landed with #188: `js-harness resume --pause` says, at most once a day for the project, that a
+  pass is due (`bin/resume.mjs`, D5). The board row is not built and moves to T9
+- [x] T6 (kind: docs) The protocol section of the installed skill, with its incident and expiry; help text.
+  Landed with #188: the skill's "Memory hygiene" section (`bin/lib/manifest.mjs`) and the `memory` help line
+  (`bin/js-harness.mjs`)
 - [x] T7 (kind: verify) The first pass on this project with T11's owner, after his answers, journaled and measured.
   Mechanical part done 2026-10-15 (pass `20261015T120606108Z`, verified and journaled): each of the 42 index
   lines appended verbatim to its note, the index replaced by 43 short lines; index 11,077 B -> 3,920 B (65
@@ -343,6 +350,10 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   the active lock before recording after-state"): the fix (verify refuses a stamp that does not hold the lock) is
   committed after b3dac0f with its test, and a second recheck is refused by design; a Codex review of the next
   slice that touches `bin/lib/memory-pass.mjs` reads it
+- [ ] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
+  `~/.js-harness/memory-hygiene/` (so `uninstall` can remove it; `bin/lib/manifest.mjs`), the board row of a due
+  pass (`js-harness sessions`), and the rule ids `memory-index-bytes` and `memory-pass-days` the sensor's budgets
+  are to be read from
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para
@@ -363,8 +374,15 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   slice; JH 7 is paused, so T11's moves come through the lead; JH 8 owns `guard.mjs` and the
   manifest and is asked first; the three contradictions in shipped text are this feature's, in
   D3, settled by his words of 2026-10-15; the deletions go to him as one list.
+- L5 2026-10-15 evening, the lead (JH ORQ), after #188, #191, #202, #220 and #235 landed: mark T2-T7 done on
+  main by a short branch. T2-T6 marked with where each landed; the pieces T3 and T5 left unbuilt became T9.
 
-## Next step (2026-10-15, context pause at 88%)
+## Next step (2026-10-15 evening)
+- T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
+  reads the lock fix `2e082ca`) and T9 (install record, board row, rule ids; each waits on its owner).
+  The sections below are the history of the build.
+
+## Next step, history (2026-10-15, context pause at 88%)
 - Commit `feat(memory): a hygiene sensor, a safe pass, a daily due line and the protocol` (T2, T3, T5, T6,
   1,228 lines) is in the gate from `D:/js-harness-worktrees/memory-hygiene` (background). The first try failed
   only on `bin/readme.test.mjs` (no README section for `memory`), fixed. After it lands: gentle-ai assess with
