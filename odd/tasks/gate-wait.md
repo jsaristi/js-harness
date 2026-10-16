@@ -972,8 +972,11 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
 - [ ] T7 · M2: what a review spends against its number, and one review beside one gate.
       Route: inline, with the reviews of S1. gentle-ai measured; Codex not yet (Progress).
 - [ ] T8 · If M2 holds: the texts. Route: delegated, one writer.
-- [ ] T9 · The trial on GitHub: the workflow on its branch, one run, what it answered, the
+- [x] T9 · The trial on GitHub: the workflow on its branch, one run, what it answered, the
       figure and the two questions sent to the orchestrator. Route: inline, one file.
+      Superseded, not built further (2026-10-16, JH 24, by the orchestrator's brief): the gates on
+      GitHub are `first-version.md` T7, owned by the session "JH 21", which builds the workflow
+      this trial was to inform; its branch `trial/gate-on-github` stays unmerged as evidence.
 - [x] T11 · The merge hook, first and alone: `.githooks/pre-merge-commit` on
       `feat/gate-merge-hook`, both reviews, its pull request. Route: inline.
 - [x] T12 · The identical-tree proof (Design, "No repeated control"), after the cut of git
@@ -1004,11 +1007,17 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
       Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
       before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
-- [ ] T19 · A gate keeps who spent the processor over its run (2026-10-13, from the measure of
+- [x] T19 · A gate keeps who spent the processor over its run (2026-10-13, from the measure of
       the slower check in Progress; ordered by the orchestrator at 20:13, after the stretch of
       "JH 9" on `bin/check.mjs` is on `main`). With it, the comment at the head of
-      `bin/gate.mjs` says the whole rule for runs beside a gate. Route: inline, with a reader
-      for the design.
+      `bin/gate.mjs` says the whole rule for runs beside a gate. Route: delegated (one writer,
+      by the context backstop of JH 24), reviewed by JH 24. Evidence: `feat/gate-busiest-run`;
+      `watchBusiest`, `busiestOverRun`, `processTimes` (`machine-busiest.mjs`), `busiest.jsonl`
+      keyed by the start's id (`appendGateBusiest`, `readGateBusiest`, `gateRecord.busiest`),
+      `watchRun` in `check` and `gate`, `gate log` ending a line with the three heaviest; 21
+      tests seen red then green; `check.test.mjs` 219/219. Cost: the end reading runs before
+      the lock is released, about 3 to 4 s a gate on a loaded machine (11 s at most), since one
+      after the release would count the next gate's run.
 - [ ] T20 · A queued command is refused before it waits, not after (candidate, 2026-10-13, the
       orchestrator's, from a failure of the session "JH 9": its Codex review waited about 40
       minutes for the lock and then started nothing, "Tracked files have uncommitted changes").
@@ -2751,6 +2760,10 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   - *T19 is ordered:* after the stretch of the session "JH 9" on `bin/check.mjs` is on
     `main`. The antivirus is his and nothing is recommended there: the numbers are 1,139
     processor-seconds in a run of 805 s, 859 in one of 533.
+- 2026-10-16 07:05 by `date` · **JH 24 takes T19, T20 and T9.** T9 is closed as superseded by
+  `first-version.md` T7 (the gates on GitHub, the session "JH 21"); nothing of it is built here.
+  T19 is built on `feat/gate-busiest-run` (worktree `gate-busiest`, from main `6a6ce9e`); T20
+  follows on a branch of its own.
 
 ## Next
 
