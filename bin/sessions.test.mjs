@@ -8,6 +8,7 @@ import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
 import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
 import { dayStartOf, localDay, measuresTotal } from './lib/measures.mjs';
 import { statePath } from './lib/pause.mjs';
+import { issueTicket } from './lib/gate-first.mjs';
 import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
@@ -2159,6 +2160,21 @@ test('each wait on the board is printed with the session it hangs from: two gate
     ['pid 4250', slashes(machine.worktree), 'waiting for the gate of pid 4242, began 1m ago', `session ${WORKER} (its notices were written from this folder)`],
     ['pid 4260', other, 'waiting for the gate of pid 4242, began 30s ago', 'session JH 3 · the lock (its transcript records this folder)'],
   ]);
+}));
+
+// odd/tasks/gate-first.md, T4: the tickets of the harness home are on the board, read from their folder, and a
+// gate of the lock that went first by one says so from its own file.
+test('the board prints the open tickets of the gate lock with their issuer, and a gate that went first by one', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_A, ORCHESTRATOR, 600, { cwd: machine.root });
+  writeTitled(machine, SESSION_B, WORKER, 60, { cwd: machine.root });
+  const home = machine.userHome;
+  withLockLibrary(machine.root);
+  writeGateFile(home, 'lock', { pid: 4242, cwd: machine.root, startedAt: before(125).toISOString(), waitingSince: before(125).toISOString(), first: '0a0a0a0a', firstReason: 'the batch of main' }, 3);
+  issueTicket({ home, session: SESSION_A, reason: 'his fix waits on it', by: SESSION_B, now: () => NOW, id: () => '0b0b0b0b' });
+  const { stdout } = await runSessions(machine, [], { listProcesses: () => [checkProcess(4242, machine.root, 130)] });
+  const lines = gatesSection(stdout);
+  assert.equal(lines[0].split('  ')[3], 'running, took the gate lock 2m ago, first by ticket 0a0a0a0a: the batch of main');
+  assert.deepEqual(lines.slice(1), [`  ticket 0b0b0b0b  the next check of ${ORCHESTRATOR} goes first, for 60m more: his fix waits on it  issued by ${WORKER}, which is not the orchestrator`]);
 }));
 
 // 8: stopped tasks and archived sessions printed as live.

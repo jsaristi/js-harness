@@ -24,7 +24,7 @@ import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './l
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, readGateWaiters, takeGateLock } from './lib/gate-lock.mjs';
-import { claimTicket, logTicket } from './lib/gate-first.mjs';
+import { GateFirstError, claimTicket, issueTicket, logTicket } from './lib/gate-first.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
@@ -1327,6 +1327,30 @@ async function underGateLock(cwd, { home, wait, waitMinutes, session, first = nu
   return rows;
 }
 
+/** `check --first <reason>`: issues the session of `lock` a ticket for the tree `cwd`, issued by that session
+ * itself, which the gate then claims as it arrives (`claimOf`), and writes the issue in the gate log as `gate
+ * first` does. Returns the rows to add: none when it was issued, and an INFO row that says why when it was not
+ * (no session, two tickets open already, or a gate in the turn of the process that holds the lock, which waits
+ * for nobody); the gate runs all the same. The board flags a ticket whose issuer is not the orchestrator. */
+function ownTicketRows(reason, cwd, lock, env, deps) {
+  const notIssued = (why) => [{ name: 'first', pass: true, info: true, detail: `no ticket was issued: ${why}` }];
+  if (lock.held) return notIssued('this gate runs in the turn of the process that holds the gate lock, and waits for nobody');
+  if (lock.session === null) return notIssued('the host names no session for this gate, and a ticket is for a session');
+  let issued;
+  try {
+    issued = issueTicket({ home: lock.home, session: lock.session, tree: path.resolve(cwd), reason, by: lock.session });
+  } catch (err) {
+    if (!(err instanceof GateFirstError)) throw err;
+    return notIssued(err.message);
+  }
+  if (!gateLogSwitchedOff(env)) {
+    const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
+    for (const gone of issued.expired) logTicket(lock.home, 'first-expired', gone, {}, written);
+    logTicket(lock.home, 'first-issued', issued.ticket, {}, written);
+  }
+  return [];
+}
+
 /** Claims the ticket of the session of `lock` for the gate that checks `cwd` (`claimTicket`), and writes in
  * the gate log what the claim did: the tickets its sweep found expired, and the claim, with the gates that
  * waited then, which this one passes. Nothing is written with the log switched off (`lock.log` false).
@@ -2139,8 +2163,9 @@ export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Dat
 }
 
 const USAGE = [
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
+  '       --first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator\'s batch run on main (odd/tasks/gate-first.md)',
 ].join('\n');
 
 // A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage
@@ -2173,7 +2198,7 @@ export function parseGateWait(argv) {
   return { noWait, waitMinutes: wait === undefined ? GATE_WAIT_MS / 60_000 : Number(wait) };
 }
 
-const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait'];
+const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait', '--first'];
 const BARE_FLAGS = ['--push', '--no-wait', '--subagents'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
@@ -2199,7 +2224,11 @@ function parseArgs(argv, env) {
   // Read first, as it always was: a `--wait` that cannot be taken is said before any other flag's fault.
   const { noWait, waitMinutes } = parseGateWait(argv);
   refuseUnknown(argv);
+  const first = get('--first');
+  if (first !== undefined && first.trim() === '') throw new CheckArgError('--first needs a reason, not an empty one');
+  if (first !== undefined && argv.includes('--push')) throw new CheckArgError('--first goes with a gate that runs its sensors, not with --push');
   return {
+    first: first?.trim(),
     cwd: get('--cwd') ?? process.cwd(),
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
     push: argv.includes('--push'),
@@ -2271,6 +2300,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   let stopped = false;
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
     const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null };
+    // `--first`: the ticket is issued here and claimed as the gate arrives, as one the orchestrator issued is.
+    if (parsed.first !== undefined) rows.push(...ownTicketRows(parsed.first, cwd, lock, env, deps));
     const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
     const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy, wsl: readGateWsl(home, env) });
     rows.push(...sensed);
