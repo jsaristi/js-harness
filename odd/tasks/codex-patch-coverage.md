@@ -120,6 +120,34 @@ without it is valid.
   the record written at `bin/codex-review.mjs:1394`; the cut by file at `bin/lib/codex-review-scope.mjs:204`;
   `git patch-id --verbatim` present in git 2.53.
 
+- 2026-10-16, T1 read by two Opus readers (version 1 committed as fed42da). Both found that the design,
+  as written, counts unreviewed code as reviewed:
+  - A review reads the net diff of its range (`bin/codex-review.mjs:1462`), not each commit's patch. A
+    range holding A (adds a line) and R (reverts it) reads an empty diff; a rebase that drops R leaves A'
+    with A's patch id, covered though no review read the line. A match must be per record: every
+    `patchId` of the record matched in order by one run of commits, whose combined cut diff equals a
+    `rangePatchId` of what Codex read.
+  - Nothing-to-review records (`onlyWhole`) and remerge records must carry no patch ids.
+  - `correctionOwed` (`bin/check.mjs:2013`), `notReviews`, `mergeStart` and the recheck anchor
+    (`bin/lib/codex-review-recheck.mjs:72-117`) key on commit ids: a match must enter `covered`, and a
+    record that owed a correction must not cover by patch, or a rebase escapes the recheck.
+  - The diff must be pinned (`-U3`, `--full-index`, `--no-textconv`, `--no-renames`, ...): repository
+    `diff.context=0` drops context from the id, and binary diffs hash the `index` line.
+  - S4 as written costs two git processes (0.5-0.7 s) at nearly every commit, since an uncovered commit
+    and a record with patch ids is the normal state between reviews.
+  - Reader B: nothing in the repository rebases on purpose (the merge queue merges `--no-ff`,
+    `bin/merge-queue.mjs:142`; conflicts are cleared by merging `main`; a merge already costs only its
+    remerge diff), so the saving needs a baseline.
+- 2026-10-16, the baseline, measured on `codex-reviews.jsonl` (491 records since 2026-09-29): 15 records'
+  heads are on no branch; 10 of them had their commits moved and reviewed again; in 4 the moved commit's
+  code-only patch id equals the reviewed one (2012aa5, 4b53504, 3aaed99, fca77f0), so 4 re-reviews in 17
+  days are what a sound version of this item would have saved. Records hold no token count, so the ~157k
+  per re-review is the plan's figure, not measured here.
+
 ## Next step
 
-**State, 2026-10-16, JH 27:** T1 design written (this file, uncommitted, worktree `D:/js-harness-worktrees/codex-patch-coverage`, branch `feat/codex-patch-coverage` from 225da7d). Next: commit it through the gate; two Opus readers on the design; fold their findings; build T2/T3 test first only after PR 315 lands (lead: "after 315 lands"); then gate, gentle-ai, Codex (never edit the worktree while Codex runs), PR, notify the lead "JH 27: PR <n> ready to land (...)", re-arm `js-harness wait --notice-to 27 --every 60`.
+**State, 2026-10-16, JH 27:** T1 read by two readers; the design as committed (fed42da) is unsound and is
+not to be built as is. The measured saving is about 4 re-reviews in 17 days, against a rebuild of the
+design for five blockers in a push guard (high-risk item 2). Waiting for the lead's call on the item:
+drop it, rebuild it per record, or replace it with the one cheap change (the rules-change hint at
+`bin/lib/rules-change-run.mjs:128` says `git rebase origin/main`; say `git merge origin/main`).
