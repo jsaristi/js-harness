@@ -269,7 +269,11 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 480,
     "unit": "minutes",
-    "flag": "--for"
+    "flag": "--for",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])(?:for|up to|at most|gives up after)\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--for minutes\\W{0,3}{amount}"
+    ]
   },
   {
     "id": "work-sessions",
