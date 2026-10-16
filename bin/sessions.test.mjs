@@ -497,10 +497,12 @@ test('--context-pause and --context-compaction take tokens or a percentage of --
 test('a pause that is not below the compaction point the board will use is refused with both figures, whichever flag gave either and in either unit', withMachine(async (machine) => {
   writeSessions(machine);
   const figure = (tokens, window) => `${tokens} tokens (${percentOf(tokens, window)}% of the window)`;
-  const refusal = (pause, compaction, window = WINDOW) => `--context-pause must be below --context-compaction, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
+  // Each figure is named by what gave it: its flag, or the default with its share when no flag did.
+  const named = (argv, flag, word, percent) => (argv.includes(flag) ? flag : `the default ${word} (${percent}% of the window)`);
+  const refusal = (argv, pause, compaction, window = WINDOW) => `${named(argv, '--context-pause', 'pause', PAUSE_PERCENT)} must be below ${named(argv, '--context-compaction', 'compaction', COMPACTION_PERCENT)}, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
   const refused = async (argv, pause, compaction, window) => {
     const { code, stdout, stderr } = await runSessions(machine, argv);
-    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(pause, compaction, window)], argv.join(' '));
+    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(argv, pause, compaction, window)], argv.join(' '));
     assert.match(stderr, /Usage: js-harness sessions/);
   };
   const accepted = async (argv, pause, compaction) => {
@@ -528,6 +530,13 @@ test('a pause that is not below the compaction point the board will use is refus
   await refused(['--context-pause', '18000', '--context-compaction', '90%', '--context-window', '20000'], 18000, 18000, 20000);
   await refused(['--context-window', '20000', '--context-pause', '95%', '--context-compaction', '18999'], 19000, 18999, 20000);
   await accepted(['--context-window', '20000', '--context-pause', '17999', '--context-compaction', '90%'], 17999, 18000);
+  // A window so small that the two default shares round to one token: neither flag was given, so the
+  // refusal names the two defaults and no flag.
+  const tiny = 10;
+  assert.equal(shareOf(tiny, PAUSE_PERCENT), shareOf(tiny, COMPACTION_PERCENT), 'the window must make the defaults meet');
+  await refused(['--context-window', String(tiny)], shareOf(tiny, PAUSE_PERCENT), shareOf(tiny, COMPACTION_PERCENT), tiny);
+  const { stderr } = await runSessions(machine, ['--context-window', String(tiny)]);
+  assert.doesNotMatch(stderr.split('\n')[0], /--context-(pause|compaction)/, 'no flag nobody gave is named');
 }));
 
 test('--context-limit, the flag of the limit mark that left, is refused with the two flags that replaced it and their defaults, read from the constants', withMachine(async (machine) => {

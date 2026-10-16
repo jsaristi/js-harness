@@ -627,7 +627,7 @@ test('a title that names several openings gets their titles and no command: sess
   const second = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the channel, reworded', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   writeOpening(machine.home, machine.slug, { title: 'JH 6 · other', text: 'Another.\n', at: AT, from });
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = (count, more = '') => `Opening: ${count} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${more})`;
+  const several = (count, more = '') => `Opening: ${count} openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it${more})`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
   assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several(2), `  "JH 5 · the channel, reworded"  (${second})`, `  "JH 5 · the channel"  (${first})`, document, READ, NOTIFY]);
@@ -649,7 +649,7 @@ test('the titles of several openings are listed as the files hold them: a second
   const single = opened(machine).path;
   const double = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the  channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it)`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
   assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the  channel"  (${double})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
@@ -661,7 +661,7 @@ test('a title the list prints stays on its line: a quote, a line break and a lin
   const quoted = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the "odd" channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   const single = opened(machine).path;
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it)`;
   const { lines } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the \\"odd\\" channel"  (${quoted})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
   // A hand-written file may hold what writeOpening refuses: a line break and a line separator. Two files with that title are found by the whole title and listed on one line each.

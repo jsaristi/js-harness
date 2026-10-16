@@ -166,7 +166,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks (L12)
 - [ ] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
 - [ ] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
-- [ ] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4)
+- [x] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4; L13)
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L6)
 - [x] T4b (kind: build) S4: the release source, built as designed; inline, test first (L7)
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
@@ -266,3 +266,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   in double quotes (`bin/resume.mjs:384`), and the row on "the last task" still says "before T9" though T9 is done;
   the yardstick itself waits on his decision: T3c. (7) no `vX.Y.Z` tag on origin and `package.json` says 0.1.0:
   the tag is his and outside this document (Not in scope), so no task. Each of T3a to T3c is small and inline.
+- L13 (2026-10-16, JH 25): T3c built inline, test first, on `feat/first-version-t3abc`: the pause refusal names
+  each figure by its flag or its default (`bin/sessions.mjs`), the openings hint asks in words with single quotes
+  (`bin/resume.mjs`), and the yardstick row no longer waits on T9; detail in `odd/tasks/session-channel.md`,
+  Progress, 2026-10-16.

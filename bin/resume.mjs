@@ -381,7 +381,7 @@ function openingLines(found, title) {
   const uncounted = unread === null ? '' : `; ${unread} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`;
   if (openings.length === 1) return [`Opening: ${openings[0].path}  (${printing(title)}${uncounted})`];
   return [
-    `Opening: ${openings.length} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${uncounted})`,
+    `Opening: ${openings.length} openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it${uncounted})`,
     ...openings.map((opening) => `  ${printedTitle(opening.title)}  (${opening.path})`),
   ];
 }
