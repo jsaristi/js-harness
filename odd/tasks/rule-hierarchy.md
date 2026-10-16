@@ -1723,10 +1723,12 @@ so a turn re-renders `RULES.md` and leaves the hash as it is.
 **In this order.**
 1. **The code.** Its own pull request: the row, the scan, the counts and findings, and the
    command's three keys.
-2. **The first patterns,** in a `rule/` branch per rule, with source `design` naming this
-   section. The first are the rules `rules check` counts fewest findings for once their
-   patterns are in. The session writes the patterns, and each run prints its count in its dry
-   run.
+2. **The first patterns,** in `rule/` branches of several rules each, with source `design`
+   naming this section. The first are the rules `rules check` counts fewest findings for once
+   their patterns are in. The session writes the patterns, and each run prints its count in its
+   dry run. The batches, decided on 2026-10-15 (Progress): the ten lowest counts first, then the
+   rest in two or three batches by count, and `context-pause`, `codex-review-floor` and
+   `review-effort`, the highest, last and alone.
 3. **The texts,** cleaned of each rule's findings by marks, in ordinary pull requests.
 4. **Each turn to refuse,** in its own `rule/` branch, once its count on `main` is zero.
 
@@ -2237,9 +2239,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     backstop). Built on `feat/rules-change`: 3f48e4b, ff3bbf4, d9e0925, 0acb6bf, then the
     verifier's fixes a5877e4 and Codex's fixes 6986330; pull request 238, landed on 2026-10-15
     (`main` e7e97df), its design as pull request 234 (d2441d5)
-  - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
+  - [x] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
-    its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline
+    its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline; built
+    b0093b8..5a57a17, pull request 247, landed on 2026-10-15 (`main` a1e8fb3), its design as
+    pull request 241 (d4ec52d). Its step 2, the first patterns, is in progress in `rule/` batches
   - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
     inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
     loop over what the reviews cover looks at each record itself, and the evidence of a
@@ -3231,8 +3235,113 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     which also kept the gate's row and a turn's count from throwing (c55164e). Codex rechecked
     aeeeff6..c55164e: 1 of 1 fixed. gentle-ai assessed that commit medium and under budget, so no
     review was due for it.
+  - The lead's queue left 247 out once: merged with `main` d4ec52d it went red, "FAIL tests npm
+    run test exited 1 in WSL2 (Ubuntu)". Main had gained `sessions-open-in-sidebar`, the first rule
+    with a `failure`, and that met T16d twice:
+    - `docs/RULES.md` shows a rule's failure now, so it was rendered again;
+    - `rules check` read a missing `docs/FAILURES.md` as a register with no entry, so seven tests
+      of `bin/rules.test.mjs`, whose projects hold the real list and no register, failed on that
+      rule. With no register the failures are now not checked, and a note says so, as for
+      `docs/rule-sources.json`; the test projects carry the package's register.
+    Both are in the merge c4b7a37, tests first. Codex read the merge's own resolution: correct.
+  - 5a57a17: `{amount}` took the `max` of the mark `rule:gate-max`, of `--max` and of
+    `Math.max(` for an effort level, so the mark that cures a finding of `gate-max` was a finding
+    itself. An effort word now counts only as a word of its own. Found by probing step 2's planted
+    lines; tests first; Codex: correct. 247 landed on 2026-10-15 (`main` a1e8fb3).
+  - A sighting of `merge-review-covers-main`: `codex-review` said that `--base c4b7a37^` would
+    review the uncovered merge, but at a HEAD past the merge that range is all `main` brought in,
+    planned as 6 parts and about 1,620,000 input tokens. It was stopped in its first part. A merge
+    is read by what was written in it only when it is HEAD, so it was reviewed from a detached
+    worktree at c4b7a37, 1 part of 18 lines. A separate task was offered to make the hint true.
+- 2026-10-15, step 2 of "The row `rules` (T16d)", the first patterns, changed from a `rule/`
+  branch per rule to batches, by the lead (JH ORQ, 20:38): "Batches. It spends less than the plan
+  named, changes neither order nor outcome, and each pattern is still undone by one rules change".
+  The cost both ways: one branch per rule is 28 pull requests, each changing
+  `bin/lib/rules-data.mjs` and so each with a gentle-ai review and a Codex review, about 4 to 8
+  million Codex input tokens and 28 gentle-ai reviews; batches are about 4 of each. The order:
+  the ten lowest counts in one pull request first, then the rest in two or three batches by
+  count, the highest group (`context-pause`, `codex-review-floor`, `review-effort`) last and
+  alone, since a bad pattern shows there. The drafts were probed against `main` with 247 on it:
+  - `questions-one-place` and `sessions-open-in-sidebar` have no amount for a value, so they get
+    no pattern and stay unscanned;
+  - a pattern names its subject on the line, so a value stated with no subject beside it passes,
+    as the section says (for example "A command is stopped after 30 minutes" in `README.md`, of
+    `gate-max`), and a number written as a word ("three") is no amount.
+
+- 2026-10-15, step 2 blocked before its first write, by two gaps of the design, sent to the lead:
+  - 13 of the 28 rules that get patterns are his, and `rules change` refuses a design for them:
+    "a rule of his changes only with his words, not a design" (`bin/lib/rules-change.mjs:261`),
+    5 of the first batch's ten;
+  - a change stores its source in place of the rule's, so a change of patterns alone from this
+    design would overwrite where the value came from (`contract-run-timeout`'s
+    `odd/tasks/task-contract.md` would become this document).
+  The two ways put to him: his words in one line for patterns on his rules, quoted by each batch,
+  which closes the first gap only; or a change of form (patterns or failure alone) that keeps the
+  rule's source and needs none, its design named in the relief line, which closes both and says
+  that his protection covers values and not patterns. Recommended: the second, with his yes.
+- 2026-10-16, his answer to the first gap, asked by the lead ("¿Cómo seguimos con esas 13?"):
+  "Solo forma, sin mí (Recomendada)". A change of form alone (patterns or failure) on a rule of
+  his needs no words of his and keeps his words as its source; a value still needs them. Built
+  test first on `feat/rules-form-his` (892c006), its own pull request; his 13 rules join the
+  batches once it lands, and until then this branch holds only the 15 project rules.
+- 2026-10-16, batch 1 built and reviewed: seven `rules change` runs, one commit each, after
+  f007601, which derives the expected `patterns:` line of `bin/rules.test.mjs` from the list
+  instead of pinning "none". gentle-ai (item 3, risk and reliability) approved and acknowledged
+  (`review-2824619c451e8364`); the independent verifier found no blocker, and the three findings
+  on `main` real restatements (`odd/tasks/gate-log.md:239`, the help of `wait` in
+  `bin/js-harness.mjs:36`). Both said `person-present` (`here ... for`) and `gate-log-size` (a
+  bare `log`) take ordinary prose; each is narrowed in a commit of its own, `person-present`
+  first. The first try of
+  that correction failed its gate on `checkSensor stops a command that never exits`
+  (`bin/check.test.mjs:494`), which passed alone three times: this session's verifier ran
+  `bin/lib/rules-change-run.test.mjs` (about 200 s) outside the lock beside its own gate, a
+  sighting of `heavy-run-beside-gate`.
+- 2026-10-16, after the restart: `feat/rules-form-his` is draft pull request 253. Its verifier
+  found no blocker, and a differential check of 30 inputs against 87914bf showed only the allowed
+  differences. Codex judged it correct at 0.96. This branch was rebased on `main` 99a4849, and
+  `gate-log-size` was narrowed (d1ede8c); its one finding is still `odd/tasks/gate-log.md:239`.
+  The remote still held this branch from before the first rebase. He authorized overwriting it,
+  asked by the lead ("¿Lo autorizás?"): "Sí, que la pise (Recomendada)". So the push is
+  `--force-with-lease`, of this branch only.
 
 ## Next step
+**State for a resume, 2026-10-16, batch 1 ready for its pull request.** Next: Codex over
+`origin/main..HEAD`, `merge-tree`, the push with lease and a draft pull request to the lead's
+queue; then batch 2, and his 13 rules join the batches once pull request 253 lands.
+
+**State for a resume, 2026-10-16, paused for an app restart (gentle-ai 4.2.0).** Progress has
+his answer and batch 1's review. `rule/first-patterns` holds batch 1 and `person-present`
+narrowed (0187b1f); gentle-ai approved the batch before the narrowing. `gate-log-size`'s
+narrowing (in the scratchpad's `finish-b1.mjs`) is not run: `main` moved to f1a057a (pull
+request 250) and `rules change` refuses a branch not based on it, so the branch is rebased
+first. `feat/rules-form-his`
+(892c006) holds the change of form for his rules: gentle-ai approved it with no finding
+(`review-df2f2cb7d6feebb8`); its independent verifier was stopped by the pause and runs again.
+Neither branch is pushed: the pre-push hook wants Codex's record for their code commits, and
+Codex has run on neither. Next, after the restart: the verifier of `feat/rules-form-his`, then
+Codex, `merge-tree`, push and a draft pull request for each, to the lead's queue; batch 2 after.
+Never run a gate while a verifier's tests run. The state below is otherwise current.
+
+**State for a resume, 2026-10-16 at 03:45 by `date`, step 2 of T16d, batch 1 being built.** Pull
+request 249 landed (`main` 87914bf): a change of patterns or failure alone keeps the rule's stored
+source. The lead split the decision: the 13 rules of his wait for his answer on whether his
+protection covers patterns; the 15 project rules go now, in three batches by count on `main`
+87914bf. Batch 1 (0 to 1): `contract-run-timeout`, `control-phrase-min`, `person-present`,
+`sensor-timeout`, `gate-log-size`, `wait-every`, `wait-for`. Batch 2 (2 to 4): `agents-budget`,
+`gate-log-command`, `review-part-files`, `review-parts-unflagged`, `review-timeout`,
+`review-part-lines`. Batch 3: `gate-max` and `gate-wait`, whose drafts catch lines that only
+mention a number near the word and are narrowed first. Each rule is one `rules change` run with
+source design `odd/tasks/rule-hierarchy.md`, its entry in `PLANTED`, and one commit.
+
+**State for a resume, 2026-10-15, step 2 of T16d, blocked on a decision.** T16d is on `main`
+(a1e8fb3) and checked off. `rule/first-patterns`, from `main`, holds only the documents' commit.
+Step 2 waits on the decision in Progress (his rules, and a change of form that keeps a rule's
+source). The drafts of the patterns and of the planted lines are probed: the ten lowest counts
+are `contract-run-timeout`, `control-phrase-min`, `person-present`, `session-effort`,
+`session-model`, `subagent-reader-model`, `work-sessions` (0 each), `subagent-writer-model`,
+`wait-every` and `wait-for` (1 each). Next, once decided: that batch through `rules change`, each
+with its planted line in `PLANTED` (`bin/lib/rules-scan.test.mjs`), to the lead's queue.
+
 **State for a resume, 2026-10-15, T16d built and checked.** The code is draft pull request 247
 (`feat/rules-row`, b0093b8..c55164e, pushed); its design is draft pull request 241, this branch.
 Every check passed: each gate, the verifier and its recheck, gentle-ai (acknowledged), Codex and

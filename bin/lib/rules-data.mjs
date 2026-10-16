@@ -55,7 +55,10 @@ export const RULES = [
     "since": "2026-10-14",
     "value": 30,
     "unit": "minutes",
-    "flag": "--timeout"
+    "flag": "--timeout",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontract\\b.{0,60}\\b(?:stopped|timeout|times? out|at most)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "control-phrase-min",
@@ -63,7 +66,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-11",
     "value": 12,
-    "unit": "characters"
+    "unit": "characters",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontrol\\b.{0,50}{amount}\\s*characters"
+    ]
   },
   {
     "id": "gate-log-command",
@@ -79,7 +85,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 512,
-    "unit": "KiB"
+    "unit": "KiB",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?:\\bgate log\\b|\\blog\\.jsonl\\b|\\blog file\\b).{0,80}\\b(?:past|over|above|at most|up to)\\s+{amount}"
+    ]
   },
   {
     "id": "gate-max",
@@ -105,7 +114,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-14",
     "value": 15,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:(?:is|was|counts as|stays) (?:present|here)|last wrote|wrote last)\\b.{0,40}\\b(?:within|in the last)\\s+{amount}"
+    ]
   },
   {
     "id": "questions-one-place",
@@ -181,7 +193,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 20,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "session-effort",
@@ -241,7 +256,11 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 120,
     "unit": "seconds",
-    "flag": "--every"
+    "flag": "--every",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])every\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--every seconds\\W{0,3}{amount}"
+    ]
   },
   {
     "id": "wait-for",
@@ -250,7 +269,11 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 480,
     "unit": "minutes",
-    "flag": "--for"
+    "flag": "--for",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])(?:for|up to|at most|gives up after)\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--for minutes\\W{0,3}{amount}"
+    ]
   },
   {
     "id": "work-sessions",

@@ -478,6 +478,9 @@ A test run or a count started while a gate, or a batch that measures durations, 
 - Seen: 2026-10-15 — docs/FAILURES.md, gate-mark-hides-failures — JH 9 and its bisecting sub-agent each
   ran the whole of evals/review/compare.test.mjs (65 to 132 s) outside the lock, beside gates in line
   (their own reports)
+- Seen: 2026-10-16 — odd/tasks/rule-hierarchy.md, Progress of 2026-10-16 — JH 7's verifier ran
+  bin/lib/rules-change-run.test.mjs (about 200 s) outside the lock beside JH 7's own gate, which
+  failed on a sensor test that passed alone three times
 - Control: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — since
   2026-10-11
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
@@ -635,6 +638,11 @@ review covers everything the merge brought, code that already had its review.
   merge of `main` with a one-line conflict resolved in `bin/check.mjs` (fbad613) made the push row
   ask a review of the whole branch, 1,405 lines, about 1,030,000 Codex input tokens; the fix owed is
   JH 10's review of a merge's conflict hunks, with a record for each commit (no task line yet)
+- Seen: 2026-10-15 — JH 7's run on `feat/rules-row` (observed) — for the merge c4b7a37 below HEAD
+  5a57a17, `codex-review --base c4b7a37` said `--base c4b7a37^` reviews it; that run planned 6
+  parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
+  in its first part. A merge is read by what was written in it only at HEAD, so a detached
+  worktree at c4b7a37 reviewed it in 1 part of 18 lines
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he

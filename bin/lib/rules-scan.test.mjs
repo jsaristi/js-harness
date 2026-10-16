@@ -53,7 +53,15 @@ test('a failure that names no register entry, and a switch back with no sighting
 
 // One line for each rule of the real list that carries patterns, restating its value as a text might: a rule gets
 // its patterns and its planted line in the same change, so a pattern that finds nothing in particular never lands.
-const PLANTED = {};
+const PLANTED = {
+  'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
+  'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
+  'gate-log-size': { line: 'When the gate log is past 512 KiB it is renamed.', marked: 'When the gate log is past `rule:gate-log-size` it is renamed.' },
+  'person-present': { line: 'He is here when he wrote within 15 minutes.', marked: 'He is here when he wrote within `rule:person-present`.' },
+  'sensor-timeout': { line: 'A sensor is stopped after 20 minutes.', marked: 'A sensor is stopped at `rule:sensor-timeout`.' },
+  'wait-every': { line: 'js-harness wait looks again every 120 seconds.', marked: 'js-harness wait looks again as often as `rule:wait-every` says.' },
+  'wait-for': { line: 'js-harness wait gives up after 480 minutes.', marked: 'js-harness wait gives up at `rule:wait-for`.' },
+};
 
 test('on the real list, every rule with patterns finds its own planted line, and loses it to its mark', () => {
   const withPatterns = RULES.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns)).map((rule) => rule.id);
