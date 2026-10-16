@@ -74,9 +74,11 @@ test('latestTag takes the highest tag named exactly vX.Y.Z and ignores every oth
   assert.equal(latestTag('aaa\trefs/tags/nightly\n'), null);
 });
 
-test('tagSpec names the default repository by its GitHub shorthand and any other by git+, a folder as a file URL', () => {
+test('tagSpec names the default repository by its GitHub shorthand and any other by git+, an scp-style address as git+ssh, a folder as a file URL', () => {
   assert.equal(tagSpec(DEFAULT_REPO, 'v1.2.3'), 'github:jsaristi/js-harness#v1.2.3');
   assert.equal(tagSpec('https://example.com/x.git', 'v1.2.3'), 'git+https://example.com/x.git#v1.2.3');
+  // An scp-style SSH address is a remote, not a folder: npm takes it under git+ssh:// with its colon.
+  assert.equal(tagSpec('git@github.com:jsaristi/js-harness.git', 'v1.2.3'), 'git+ssh://git@github.com:jsaristi/js-harness.git#v1.2.3');
   const folder = path.join(os.tmpdir(), 'some repo');
   assert.equal(tagSpec(folder, 'v1.2.3'), `git+${pathToFileURL(folder).href}#v1.2.3`);
 });

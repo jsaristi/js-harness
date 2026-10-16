@@ -47,10 +47,15 @@ export function latestTag(listing) {
   return best;
 }
 
+/** An scp-style SSH address (`git@github.com:owner/repo.git`): a remote with no scheme, which is not a folder. */
+const SCP_ADDRESS_RE = /^[\w.-]+@[\w.-]+:(?!\/\/)/;
+
 /** What a package manager installs for `tag` of `repo`: the GitHub shorthand for the default repository, as the
- * roadmap writes it, and `git+<url>` for any other, a folder named as a file URL. */
+ * roadmap writes it, and `git+<url>` for any other: an scp-style SSH address under `ssh://` (npm keeps its colon),
+ * a folder as a file URL. */
 export function tagSpec(repo, tag) {
   if (repo === DEFAULT_REPO) return `github:jsaristi/js-harness#${tag}`;
+  if (SCP_ADDRESS_RE.test(repo)) return `git+ssh://${repo}#${tag}`;
   const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(repo) ? repo : pathToFileURL(path.resolve(repo)).href;
   return `git+${url}#${tag}`;
 }

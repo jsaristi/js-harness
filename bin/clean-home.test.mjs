@@ -57,9 +57,11 @@ function releaseRepo(root, version) {
 }
 
 /** A package manager stand-in: `install -g git+file:///<repo>#<tag> --prefix <dir>` checks that tag out where npm
- * puts a global package under a prefix, which is where `upgrade` runs the installed copy's sync from. */
-function packageManager(root) {
-  const script = path.join(root, 'pm.mjs');
+ * puts a global package under a prefix, which is where `upgrade` runs the installed copy's sync from. It is written
+ * into `folder`, where `upgrade` starts it, and named by a relative path with `node` from PATH: `--pm` is split on
+ * spaces, so no path in it may hold one. */
+function packageManager(folder) {
+  const script = path.join(folder, 'pm.mjs');
   fs.writeFileSync(script, [
     "import { spawnSync } from 'node:child_process';",
     "import path from 'node:path';",
@@ -71,7 +73,7 @@ function packageManager(root) {
     "const clone = spawnSync('git', ['clone', '-q', '--depth', '1', '--branch', tag, url, target], { stdio: 'inherit' });",
     "process.exit(clone.status ?? 1);",
   ].join('\n'));
-  return `${process.execPath} ${script}`;
+  return 'node pm.mjs';
 }
 
 /** Every file under `folder`, relative to it, sorted. */
@@ -94,7 +96,7 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
     fs.mkdirSync(project);
     const env = {
       ...process.env,
-      PATH: `${shimFolder(root)}${path.delimiter}${process.env.PATH}`,
+      PATH: [shimFolder(root), path.dirname(process.execPath), process.env.PATH].join(path.delimiter),
       HOME: home,
       USERPROFILE: home,
       JS_HARNESS_HOME: home,
@@ -139,7 +141,7 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
     // The update: the newest release tag of the repository is installed, and that copy's own sync brings the home to it.
     const prefix = path.join(root, 'prefix');
     const repo = releaseRepo(root, '99.0.0');
-    const upgraded = run(['upgrade', '--home', home, '--repo', repo, '--prefix', prefix, '--pm', packageManager(root)]);
+    const upgraded = run(['upgrade', '--home', home, '--repo', repo, '--prefix', prefix, '--pm', packageManager(project)]);
     assert.equal(upgraded.status, 0, upgraded.stderr);
     assert.match(upgraded.stdout, /upgraded to 99\.0\.0/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8')).version, '99.0.0');
