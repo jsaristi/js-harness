@@ -19,6 +19,9 @@ import { roleOfTitle } from './sessions.mjs';
 
 const GIVEN_BACK = new Set(['waiting', 'closed', 'relieved']);
 
+// The events of the gate log that a gate writes as it runs, or is refused, stopped or proven by another's tree.
+const GATE_EVENTS = new Set(['start', 'end', 'refused', 'stopped', 'same']);
+
 const timeOf = (iso) => {
   const at = Date.parse(iso ?? '');
   return Number.isNaN(at) ? null : at;
@@ -38,6 +41,8 @@ function gateActs(gates) {
   for (const event of gates) {
     const at = timeOf(event.at);
     if (at === null) continue;
+    // A ticket's events (`first-*`) name the session the ticket is for, which did nothing by being given one.
+    if (!GATE_EVENTS.has(event.event)) continue;
     if (event.event === 'start') started.set(event.id, event);
     const said = event.event === 'end' ? started.get(event.id) : event;
     if (typeof said?.session === 'string') acts.push({ at, session: said.session });
@@ -55,6 +60,7 @@ const newest = (items) => items.reduce((best, item) => (best === null || item.at
  *
  * - `notices`: the channel's notices (`readNotices`), in any order.
  * - `openings`: `[{ title, at, from, text }]`, every opening of the project.
+ * - `readings`: the record's readings of an opening (`readNotices`), which give a session's id before its first notice.
  * - `gates`: the gate log's events (`readGateLog`).
  * - `commitAt(worktree, branch)`: the time (ms) of the newest commit of the session's worktree that the default
  *   branch does not hold (`branchCommitAt`), or `null`: the lead's merges into a shared checkout are not its work.
@@ -62,7 +68,7 @@ const newest = (items) => items.reduce((best, item) => (best === null || item.at
  *
  * `holding` is what was handed last: `{ what: 'notice' | 'opening', at, from, kind, text }`.
  */
-export function stalledSessions({ notices = [], openings = [], gates = [], commitAt = () => null, now, limitMs, windowMs = Infinity }) {
+export function stalledSessions({ notices = [], openings = [], readings = [], gates = [], commitAt = () => null, now, limitMs, windowMs = Infinity }) {
   const sessions = new Map();
   const of = (number) => {
     if (!sessions.has(number)) sessions.set(number, { number, title: null, titledAt: null, ids: new Set(), own: [], handed: [] });
@@ -94,6 +100,11 @@ export function stalledSessions({ notices = [], openings = [], gates = [], commi
     session.handed.push({ at, holding: { what: 'opening', at: opening.at, from: opening.from?.title ?? null, kind: null, text: opening.text ?? '' } });
   }
 
+  // A session that read its opening is known by that reading's id before it sends a notice: its gates are its own.
+  for (const reading of readings) {
+    const number = workNumber(reading.title);
+    if (number !== null && sessions.has(number) && typeof reading.reader?.id === 'string' && reading.reader.id !== '') sessions.get(number).ids.add(reading.reader.id);
+  }
   const acts = gateActs(gates);
   const found = [];
   for (const session of sessions.values()) {
@@ -178,6 +189,6 @@ export function readStalled({ home, slug, now, limitMs, windowMs, run = runGit, 
   if (noOpenings) unavailable.push(noOpenings);
   const log = readGateLog(home, { fileSystem: io });
   if (log.unavailable) unavailable.push(`the gate log (${log.dir}): ${log.unavailable.join(', ')}`);
-  const stalled = stalledSessions({ notices: record.notices, openings, gates: log.events, commitAt: (worktree) => branchCommitAt(worktree, { run }), now, limitMs, windowMs });
+  const stalled = stalledSessions({ notices: record.notices, openings, readings: record.readings, gates: log.events, commitAt: (worktree) => branchCommitAt(worktree, { run }), now, limitMs, windowMs });
   return { stalled, unavailable };
 }

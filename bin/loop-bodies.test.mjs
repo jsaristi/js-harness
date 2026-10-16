@@ -153,3 +153,31 @@ test('heartbeat: --stall sets the minutes, and a value that is no whole number a
     assert.match(other.err.join('\n'), /--stall/);
   }
 });
+
+test('heartbeat: the git read of a quiet session is bounded by a timeout, so a stuck git cannot hold the loop', async () => {
+  const worker = { ...LEAD, id: '19000000-0000-4000-8000-000000000000', title: 'JH 19 · w' };
+  const own = `${JSON.stringify({ schema: NOTICE_SCHEMA, at: new Date(T0 - 200 * 60000).toISOString(), from: worker, to: { role: 'orchestrator', number: null }, kind: 'note', text: 'on it', cwd: CWD, worktree: CWD, branch: 'feat/x' })}\n`;
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: own + handedTo(19, T0 - 50 * 60000), onSleep: busy });
+  const options = [];
+  deps.run = (command, args, given) => {
+    if (args.includes('log')) options.push(given);
+    return noGit();
+  };
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.ok(options.length > 0, 'the commit was read');
+  assert.ok(options.every((given) => Number.isFinite(given?.timeout) && given.timeout > 0), 'each read has a timeout');
+  assert.match(state.out.at(-1), /^STALLED: JH 19 · w /);
+});
+
+test('heartbeat says once what it could not read for stall detection, so a missing STALLED line is not read as nobody', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  deps.readFile = (file) => {
+    throw Object.assign(new Error(`EACCES: ${file}`), { code: 'EACCES' });
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], {}, deps), 1);
+  // The channel and the gate log both refuse here: each is said once, not at every tick.
+  const said = state.out.filter((line) => line.startsWith('stall detection could not read: '));
+  assert.equal(said.filter((line) => line.includes("the channel's record")).length, 1);
+  assert.equal(said.filter((line) => line.includes('the gate log')).length, 1);
+  assert.equal(said.length, 2);
+});

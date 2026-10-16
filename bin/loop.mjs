@@ -326,6 +326,7 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 // The window of the board (`sessions --hours`, 12 by default): a session quiet for longer has left it, and the
 // heartbeat names no session the board would not list.
 const STALL_WINDOW_MS = 12 * 3600 * 1000;
+const STALL_GIT_TIMEOUT_MS = 10 * 1000;
 
 /** How long `ms` is, in hours and minutes: `1h 30m`, `45m`. */
 const spanOf = (ms) => {
@@ -352,7 +353,18 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   const max = wholeOf('--max', parsed.flags.max, 10);
   const every = wholeOf('--every', parsed.flags.every, 120) * 1000;
   const stallLimit = wholeOf('--stall', parsed.flags.stall, ruleValue('session-stall', 'minutes')) * 60000;
-  const stalledAt = (now) => readStalled({ home, slug, now, limitMs: stallLimit, windowMs: STALL_WINDOW_MS, run: ctx.run, fileSystem: { readFileSync: (file) => ctx.readFile(file), readdirSync: ctx.readdir } }).stalled;
+  // A git that hangs on a lock costs one read, never the loop: its `--max` and the other sessions' alerts.
+  const boundedRun = (command, args, options) => ctx.run(command, args, { timeout: STALL_GIT_TIMEOUT_MS, ...options });
+  // What could not be read is said once each, so a missing STALLED line is never read as "nobody is stalled".
+  const unread = new Set();
+  const stalledAt = (now) => {
+    const { stalled, unavailable } = readStalled({ home, slug, now, limitMs: stallLimit, windowMs: STALL_WINDOW_MS, run: boundedRun, fileSystem: { readFileSync: (file) => ctx.readFile(file), readdirSync: ctx.readdir } });
+    for (const why of unavailable) {
+      if (!unread.has(why)) ctx.out(`stall detection could not read: ${why}`);
+      unread.add(why);
+    }
+    return stalled;
+  };
   // How many times the limit fits in a quiet, as a power of two: a stall is said again each time it grows.
   const crossing = (item) => Math.floor(Math.log2(item.quietMs / stallLimit));
   const identity = (item) => `${item.number}|${item.quietSince}|${item.holding.at}`;

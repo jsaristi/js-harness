@@ -175,3 +175,22 @@ test('readStalled says what it could not read instead of reading it as nothing',
   assert.equal(found.unavailable.length, 1);
   assert.match(found.unavailable[0], /^the channel's record/);
 });
+
+test('a ticket event names a session but is no gate it ran: issued, claimed, expired or cancelled leave its quiet alone', () => {
+  const notices = [said(300), handed(200)];
+  for (const event of ['first-issued', 'first-claimed', 'first-expired', 'first-cancelled']) {
+    assert.equal(stalled({ notices, gates: [{ event, id: 't1', at: ago(10), session: WORKER.id }] }).length, 1, event);
+  }
+  for (const event of ['refused', 'stopped', 'same']) {
+    assert.deepEqual(stalled({ notices, gates: [{ event, id: 'g', at: ago(10), cwd: 'C:/x', session: WORKER.id }] }), [], event);
+  }
+});
+
+test('the session that read its opening is known by that reading: its gates count before it sends any notice', () => {
+  const openings = [{ title: 'JH 23 · nueva', at: ago(90), from: LEAD, text: 'Read x' }];
+  const reader = '23000000-0000-0000-0000-000000000000';
+  const gates = [{ event: 'start', id: 'g', at: ago(10), cwd: 'C:/x', session: reader }];
+  assert.equal(stalled({ openings, gates }).length, 1, 'without the reading the gate is nobody\'s');
+  const readings = [{ reader: { id: reader, title: null }, title: 'JH 23 · nueva', at: ago(85) }];
+  assert.deepEqual(stalled({ openings, gates, readings }), []);
+});
