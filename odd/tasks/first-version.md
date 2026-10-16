@@ -161,7 +161,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 
 ## Tasks
 
-- [ ] T1 (kind: build) S1: the three open table rows, closed in their own documents
+- [x] T1 (kind: build) S1: the three open table rows, closed in their own documents (L11)
 - [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L4)
 - [ ] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L6)
@@ -233,3 +233,9 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   the remote's URL as written; a remote not on GitHub is no answer); a run that ends `timed_out` is no answer, not
   a red; the workflow test finds a secret named by index (`secrets['X']`). RED 4 of 8 in `ci-gate.test.mjs`, then
   8/8, also with no git identity.
+- L11 (2026-10-16 12:40, the lead): "Next: first-version T1 (3 table rows) if JH 16 has no branch for it
+  (js-harness sessions); tell JH 16 you took it." No branch touched those rows; JH 16 was told. All three were
+  already done in code, and only their rows said otherwise: exact-tests T4 was closed by PR 266; exact-tests T3's
+  T3b and switch are `1532bc2` on main; test-run-warning T2 is JH 15's guard, `63fec3c`, which calls
+  `testRunWarning` for a Bash command (`bin/guard.mjs:83`, `bin/guard.test.mjs` 21/21). Each row now says so;
+  `js-harness progress` read 7/8 and 1/2 for those two documents before.
