@@ -94,6 +94,70 @@ Built in T4b, test first, in `bin/update.mjs` and `bin/lib/version.mjs`:
 - Not in T4b: creating any tag (his); `sync`, which for a pin still says it cannot be installed by its
   number, names the tag only once one exists (the roadmap's rule), so it changes with the first tag.
 
+## Gates on CI machines (T7's design)
+
+Designed in T7; T7b builds it only after his yes to the spend below. Nothing here changes a repository setting.
+
+What a gate costs today, from the machine's gate log (`readGateLog`, every run with an end, commits' gates and
+`gate` runs alike): 2026-10-14, 127 runs and 315 minutes; 2026-10-15, 430 runs and 1,214 minutes, median 174 s;
+2026-10-16 to 10:58Z, 148 runs and 436 minutes, median 137 s. One line runs one gate at a time, and two suites at
+once take 303 and 305 s against 158 s alone (S7), so the line is full. On a 2-vCPU CI machine the whole suite
+took a median of 214 s on GitHub, billed 4 minutes, and 239 s on CircleCI, about 40 credits
+(`odd/tasks/merge-queue.md`, L2 and L13). A gate on CI is counted here as
+4 billed minutes.
+
+Where it runs, with its cost (prices read 2026-10-16):
+
+| Where | Minutes it gives | Jobs at once | A month at the 3-day mean (235 runs a day, ~28,200 min) | A month like 2026-10-15 (430 a day, ~51,600 min) |
+| --- | --- | --- | --- | --- |
+| GitHub Actions, public repository | unlimited, free | 20 (Free plan) | $0 | $0 |
+| GitHub Actions, private | 2,000 a month, then $0.006 a minute with a card | 20 | ~$157, or ~2 days of CI and the rest local without a card | ~$298 |
+| CircleCI, public repository | 400,000 open-source credits, ~40,000 medium minutes | 30 | $0 | runs out near day 23; the rest local |
+| CircleCI, private | 30,000 credits, ~3,000 medium minutes | 30 | ~3 days of CI, the rest local | ~2 days |
+
+Sources: GitHub's runner pricing (Linux 2-core $0.006 a minute since 2026-01-01) and its Actions limits page
+(Free plan, 20 concurrent jobs on standard runners); GitHub's runner reference (a public repository's standard
+Linux runner has 4 CPUs and 16 GB, a private one 2 CPUs, so a public run is likely shorter than the 214 s
+measured, unmeasured here); CircleCI's pricing and Free plan pages (30,000 credits, 30 concurrent Docker jobs,
+400,000 credits a month for Linux open-source builds of a public repository).
+
+The recommendation is GitHub Actions on the public repository, which is his flip after the history audit: no
+meter to run out mid-month, and `gh` is already signed in on the machine to read the runs. CircleCI keeps its one
+job, the merge queue's candidate run, unchanged.
+
+How a gate goes to CI, built in T7b, test first:
+
+- Overflow only. A commit's gate runs here, as today, when the gate lock is free. When a turn would have to wait
+  for it, the test sensor runs on CI instead: the local machine stays the fast path for one session (137-174 s
+  median against 214 s plus the runner's start), and CI takes every gate that would otherwise queue. A rule in
+  `bin/lib/rules-data.mjs` switches it on, off by default until his yes.
+- The proof is still the commit's own (AGENTS.md; S7). The hook writes the staged tree as a commit object
+  (`git write-tree`, `git commit-tree` with `HEAD` as parent), pushes it to `refs/heads/gate/<sha>`, waits for
+  the workflow run of that exact sha, reads its conclusion, and deletes the branch. The commit is made only on
+  green, with the same tree. Red prints the failing tests from the run and refuses, as a local red does.
+- `check` runs on CI exactly as it does here, `node bin/check.mjs` with `origin/main` fetched, so the exact-tests
+  selection is the same (the CircleCI job already runs it so). gentle-ai and the Codex record are not on the
+  runner; their rows stay local, in the hook, before the push.
+- When CI cannot answer (no network, `gh` not signed in, no run started within a bound, a run past 15 minutes,
+  minutes spent), the gate falls back to the local lock and says why in one `gate:` line. CI never makes a gate
+  impossible, only shorter to wait for.
+- Each gate on CI leaves its record in the gate log, with where it ran and the run's URL, so `gate log` and the
+  measures of S7 count both lines.
+- The workflow, `.github/workflows/gate.yml`: `on: push` to `gate/**` only, never `pull_request` and never
+  `main`, so a pull request still starts no run (the reason `scripts/github-workflows.test.mjs` exists) and a
+  fork can start none; `permissions: contents: read`; no secret; one job on `ubuntu-24.04` with node 24.21.0 and
+  each action pinned by commit; `timeout-minutes: 15`. That test changes from "no workflow" to "only this one,
+  bounded so": a new trigger, a secret or a write permission fails the gate.
+- What CI cannot prove: it is Linux, and this machine is Windows, so a Windows-only test is skipped there. The
+  merge queue's `--land` still runs the whole suite on this machine under the lock before main moves, so a
+  Windows-only break is caught before main, one step later than today.
+- Done when (T7b): two sessions commit at once and neither waits for the other's gate; the run's start and
+  length on the public runner are measured and written here.
+
+The question for him, asked by the lead: the spend. Public repository and GitHub Actions costs nothing; if the
+repository stays private, either a card on GitHub at about $157 a month (about $298 in a month as busy as
+2026-10-15), or no card, with CI for the first couple of days of each month and the local line after.
+
 ## Tasks
 
 - [ ] T1 (kind: build) S1: the three open table rows, closed in their own documents
@@ -104,7 +168,7 @@ Built in T4b, test first, in `bin/update.mjs` and `bin/lib/version.mjs`:
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
-- [ ] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build
+- [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [ ] T7b (kind: build) S7: the design built, after his yes to its spend
 
 ## Log
@@ -143,3 +207,8 @@ Built in T4b, test first, in `bin/update.mjs` and `bin/lib/version.mjs`:
   the tag into the prefix, then `upgrade` and its sync; the home records 99.0.0 and `uninstall` still leaves it
   empty (1/1, also with a stray `GIT_DIR`). On this machine `git ls-remote --tags --refs` of the private repository
   answered in 3.5 s with no tag, so `update` still says no release is tagged yet.
+- L8 (2026-10-16 06:41, the lead): "next: T7 of first-version.md (S7, on main): design gates on CI machines,
+  several at once. He wants the repo public for it (free unlimited minutes, 20 concurrent jobs); history audit
+  running, the flip is his. Design only; change no repo setting." The design is above, with its cost; no
+  setting was changed. The prices were read that day from GitHub's and CircleCI's pages; the gate figures from
+  this machine's gate log.
