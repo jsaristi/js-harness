@@ -474,9 +474,10 @@ function loadWritten(load) {
  *
  * None of them throws. `append`, `appendBusiest`, `now` and `id` stand in for the writer of the log, the
  * writer of `busiest.jsonl`, the clock and the random id. */
-export function gateRecord({ home, cwd, command, pid = process.pid, append = appendGateEvent, appendBusiest = appendGateBusiest, now = Date.now, id = randomUUID, onFailure }) {
+export function gateRecord({ home, cwd, command, pid = process.pid, session, append = appendGateEvent, appendBusiest = appendGateBusiest, now = Date.now, id = randomUUID, onFailure }) {
   const gate = id();
-  const said = { cwd, command: String(command).slice(0, GATE_COMMAND_MAX), pid };
+  // The session that ran it, where the host gives one: what lets `sessions` tell whose gate it was (./stall.mjs).
+  const said = { cwd, command: String(command).slice(0, GATE_COMMAND_MAX), pid, ...(isText(session) && session !== '' && { session }) };
   let startedAt;
   let failure;
   /** Hands one line to `writer`; `false`, with the failure kept and said, when it could not be written. */

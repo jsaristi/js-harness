@@ -36,6 +36,15 @@ export function assertTrialPort(port, { protectedPorts = [REAL_ENGRAM_PORT] } = 
 /** The ports handed out and not yet released, in this process: two trials that overlap never get one port. */
 const RESERVED = new Set();
 
+/** How many of the ports released last `allocatePort` will not hand out again: Linux may offer a port that was
+ * just closed to the next bind of port 0 (2 of 20,000 in WSL2, 2026-10-16), so two trials in a row could share
+ * one and the probe could not tell their listeners apart. Enough to cover the arms of one run, few enough that
+ * a long run never runs short of ports. */
+export const RECENT_PORTS = 32;
+
+/** The ports released last, oldest first, at most `RECENT_PORTS`. */
+const RECENT = [];
+
 /** Asks the OS for a free loopback port: binds port 0, reads the number, closes. */
 function bindFreePort() {
   return new Promise((resolve, reject) => {
@@ -51,9 +60,9 @@ function bindFreePort() {
 /** A port that was free a moment ago and that no other trial of this process holds, never the real engram
  * port. Allocated per trial, at trial start, by binding port 0 and releasing it: that is the one way to a
  * port that is free on this machine now, and the gap between the release and the server binding it is the
- * only race left (a port from the OS's own ephemeral range is not handed out again at once). `reserved`
- * keeps overlapping trials apart until `releasePort`. `listen` returns a candidate and is injectable. */
-export async function allocatePort({ listen = bindFreePort, attempts = 20, reserved = RESERVED } = {}) {
+ * only race left. `reserved` keeps overlapping trials apart until `releasePort`, and `recent` keeps a trial
+ * off the port one before it just gave back. `listen` returns a candidate and is injectable. */
+export async function allocatePort({ listen = bindFreePort, attempts = 20, reserved = RESERVED, recent = RECENT } = {}) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const port = await listen();
     try {
@@ -61,16 +70,20 @@ export async function allocatePort({ listen = bindFreePort, attempts = 20, reser
     } catch {
       continue;
     }
-    if (reserved.has(port)) continue;
+    if (reserved.has(port) || recent.includes(port)) continue;
     reserved.add(port);
     return port;
   }
   throw new Error(`could not find a free port for the trial's engram server in ${attempts} attempts`);
 }
 
-/** Gives a port back to the pool of `allocatePort`. */
-export function releasePort(port, { reserved = RESERVED } = {}) {
+/** Gives a port back to the pool of `allocatePort`, which skips it until `RECENT_PORTS` others have been released. */
+export function releasePort(port, { reserved = RESERVED, recent = RECENT } = {}) {
   reserved.delete(port);
+  const at = recent.indexOf(port);
+  if (at !== -1) recent.splice(at, 1);
+  recent.push(port);
+  if (recent.length > RECENT_PORTS) recent.shift();
 }
 
 const defaultConnect = (port, host) => new Promise((resolve) => {
