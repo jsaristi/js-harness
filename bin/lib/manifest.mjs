@@ -142,6 +142,7 @@ The relief file. \`js-harness sessions\` prints its path and its last lines unde
 
 Compaction, and a relief only on request. You hold nothing the files do not. A compaction needs no one; a relief needs the user.
 - A watch never reports the session that runs it, so read your own row on every board. At the context pause, write your state to the relief file and go on: the host compacts you, and you resume from the file.
+- The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by \`SendMessage\` to its title; never hand the user a compaction command or a resume prompt to send.
 - Give this opening prompt only when the user asks for a new lead, always the same:
 
 \`\`\`
@@ -170,7 +171,7 @@ How a lead is rotated, where the host nests a session under the one that started
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line, and close with \`js-harness notify --to orchestrator --kind closed "<what you delivered>"\`: nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
-- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
+- Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
 `;
 }
 

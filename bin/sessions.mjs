@@ -44,7 +44,7 @@
 // `--measures` judges each compaction of the transcripts in the window once (odd/tasks/session-channel.md,
 // section 14): told, from the state the pause hook keeps (`toldBetween`, bin/lib/pause.mjs); kept, from the
 // commits of the feature document (`keptByGitLog`, bin/lib/measures.mjs) and, for the orchestrator alone, from a
-// line of its relief file (`keptByRelief`); announced, from the transcript.
+// line of its relief file (`keptByRelief`). No reply's block of the bare command is a fact: the user no longer compacts by hand.
 // It runs `git log` of that document and nothing else of the machine: no worktree, pull request or gate.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -86,9 +86,8 @@ const USAGE = [
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
   '       js-harness sessions --measures [--hours <n>] [--json] [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
   '         prints, for each compaction of the transcripts in the window, whether the user asked for it and, for one the host',
-  '         made, three facts: told (the session was told the pause before it), kept (the feature document has a commit',
-  '         between the notice and the compaction, or for the orchestrator a line of its relief file there) and announced',
-  '         (a reply after the notice holds the /compact block),',
+  '         made, two facts: told (the session was told the pause before it) and kept (the feature document has a commit',
+  '         between the notice and the compaction, or for the orchestrator a line of its relief file there),',
   '         each yes, no or unknown, then how many miss a fact; then the reliefs (each relieved notice of the days the window touches, with the peak of its relieved session against the window: filled at the pause, or another reason) and the Log lines that name a reopening (candidates for the lead, not judged); exit 0 when it printed, 1 when there is no sessions folder',
 ].join('\n');
 
@@ -844,7 +843,7 @@ export async function sessionsMain(
   // that the pause works: each compaction of the transcripts that changed in the window, judged once in the
   // file that holds the stretch before it. Told is read from the pause's state under the harness home (or
   // the temp folder, where the hook keeps it when the home cannot be written), kept from `git log` of the
-  // feature document the session last wrote, announced from the transcript. A sessions folder that cannot
+  // feature document the session last wrote. A sessions folder that cannot
   // be listed is exit 1, as for the board: there is nothing to measure, whatever the reason.
   if (parsed.measures) {
     let names;

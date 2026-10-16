@@ -170,11 +170,11 @@ test('keptEither knows nothing when a reader is undecided and none says kept, an
 
 const asked = (minute) => ({ at: at(minute), automatic: false, inThisFile: true, verdict: null });
 const elsewhere = (minute) => ({ at: at(minute), automatic: true, inThisFile: false, verdict: null });
-const judged = (minute, { told, kept, announced }) => ({
+const judged = (minute, { told, kept }) => ({
   at: at(minute),
   automatic: true,
   inThisFile: true,
-  verdict: { told, kept, announced, missing: ['told', 'kept', 'announced'].filter((name) => ({ told, kept, announced })[name] === false) },
+  verdict: { told, kept, missing: ['told', 'kept'].filter((name) => ({ told, kept })[name] === false) },
 });
 
 const SESSION_A = 'aaaaaaaa-1111-4111-8111-111111111111';
@@ -182,32 +182,36 @@ const SESSION_B = 'bbbbbbbb-2222-4222-8222-222222222222';
 const SESSION_C = 'cccccccc-3333-4333-8333-333333333333';
 const SESSION_D = 'dddddddd-4444-4444-8444-444444444444';
 
-test('measuresLines prints a block per session with a compaction, each compaction oldest first with its three facts, then the total', () => {
+// The facts are two since he stopped compacting by hand (odd/tasks/no-manual-compact.md, S1): no reply announces a
+// compaction to him, so no line names `announced`.
+test('measuresLines prints a block per session with a compaction, each compaction oldest first with its two facts, then the total', () => {
   const sessions = [
-    { id: SESSION_A, title: 'JH 5 board', measures: [asked(6), judged(20, { told: true, kept: null, announced: false })] },
+    { id: SESSION_A, title: 'JH 5 board', measures: [asked(6), judged(20, { told: false, kept: null })] },
     { id: SESSION_B, title: 'nothing compacted', measures: [] },
-    { id: SESSION_C, measures: [judged(40, { told: true, kept: true, announced: true }), elsewhere(30)] },
+    { id: SESSION_C, measures: [judged(40, { told: true, kept: true }), elsewhere(30)] },
   ];
-  assert.deepEqual(measuresLines(sessions), [
+  const lines = measuresLines(sessions);
+  assert.deepEqual(lines, [
     'aaaaaaaa  JH 5 board',
     `  ${at(6)}  asked`,
-    `  ${at(20)}  automatic  told yes  kept unknown  announced no`,
+    `  ${at(20)}  automatic  told no  kept unknown`,
     SESSION_C,
     `  ${at(30)}  automatic  not judged: the stretch before it is not in this transcript`,
-    `  ${at(40)}  automatic  told yes  kept yes  announced yes`,
-    '2 automatic compactions judged in 2 sessions: 1 misses a fact (announced 1); 1 with a fact not known; 1 asked, not judged; 1 automatic not judged here',
+    `  ${at(40)}  automatic  told yes  kept yes`,
+    '2 automatic compactions judged in 2 sessions: 1 misses a fact (told 1); 1 with a fact not known; 1 asked, not judged; 1 automatic not judged here',
   ]);
+  assert.doesNotMatch(lines.join('\n'), /announced/);
 });
 
 test('measuresLines names every fact missed with its count, and says a transcript that could not be read', () => {
   const sessions = [
-    { id: SESSION_A, title: 'one', measures: [judged(10, { told: false, kept: null, announced: null }), judged(20, { told: true, kept: false, announced: false })] },
+    { id: SESSION_A, title: 'one', measures: [judged(10, { told: false, kept: null }), judged(20, { told: true, kept: false })] },
     { id: SESSION_D, unavailable: 'EACCES' },
   ];
   const lines = measuresLines(sessions);
-  assert.deepEqual(lines.slice(1, 3), [`  ${at(10)}  automatic  told no  kept unknown  announced unknown`, `  ${at(20)}  automatic  told yes  kept no  announced no`]);
+  assert.deepEqual(lines.slice(1, 3), [`  ${at(10)}  automatic  told no  kept unknown`, `  ${at(20)}  automatic  told yes  kept no`]);
   assert.equal(lines[3], `${SESSION_D}  unavailable: EACCES`);
-  assert.equal(lines.at(-1), '2 automatic compactions judged in 1 session: 2 miss a fact (told 1, kept 1, announced 1); 1 with a fact not known; 1 transcript could not be read');
+  assert.equal(lines.at(-1), '2 automatic compactions judged in 1 session: 2 miss a fact (told 1, kept 1); 1 with a fact not known; 1 transcript could not be read');
 });
 
 test('measuresLines of sessions with no compaction is the total alone, which says that nothing was judged', () => {
@@ -217,10 +221,10 @@ test('measuresLines of sessions with no compaction is the total alone, which say
 
 test('measuresTotal counts what the total line says, as data', () => {
   const sessions = [
-    { id: SESSION_A, measures: [asked(6), judged(20, { told: true, kept: null, announced: false }), elsewhere(25)] },
+    { id: SESSION_A, measures: [asked(6), judged(20, { told: false, kept: null }), elsewhere(25)] },
     { id: SESSION_D, unavailable: 'EACCES' },
   ];
-  assert.deepEqual(measuresTotal(sessions), { judged: 1, sessions: 1, missing: 1, facts: { told: 0, kept: 0, announced: 1 }, unknown: 1, asked: 1, elsewhere: 1, unreadable: 1 });
+  assert.deepEqual(measuresTotal(sessions), { judged: 1, sessions: 1, missing: 1, facts: { told: 1, kept: 0 }, unknown: 1, asked: 1, elsewhere: 1, unreadable: 1 });
 });
 
 // --- reliefMeasures: the reliefs of the record, judged by the peak of the relieved session (session channel, T9) ---

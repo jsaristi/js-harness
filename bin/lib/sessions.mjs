@@ -1999,21 +1999,6 @@ function within(at, { after, before }) {
   return (after === null || (at !== null && at > after)) && (before === null || (at !== null && at < before));
 }
 
-/** Whether `text` holds a compact block: a fenced code block whose whole content, trimmed, is `/compact`. */
-export function holdsCompactBlock(text) {
-  const lines = text.split('\n').map((line) => line.trim());
-  for (let open = 0; open < lines.length; open += 1) {
-    if (!/^```[\w+#.-]*$/.test(lines[open])) continue;
-    // The block ends at the next bare fence; a fence that closes a block is never an opening one.
-    const close = lines.indexOf('```', open + 1);
-    if (close === -1) return false;
-    const content = lines.slice(open + 1, close).filter((line) => line !== '');
-    if (content.length === 1 && content[0] === '/compact') return true;
-    open = close;
-  }
-  return false;
-}
-
 /** The compactions of `counted` once each, oldest first, as `{ uuid, at, automatic, before, line }`. */
 function boundariesOf(counted) {
   return counted
@@ -2120,18 +2105,9 @@ function keptOf(reader, query) {
   return { known, kept: known && typeof answer.kept === 'boolean' ? answer.kept : null };
 }
 
-/** The first reply of the session in the stretch from `after` to `before` that is at or after `toldAt`, the time the
- * pause was told, and holds the compact block, as `{ line, at }`, or `null` when no reply does. */
-function announcedOf(counted, { after, before, toldAt }) {
-  const found = counted
-    .filter(({ entry, at }) => isOwnReply(entry) && at !== null && at >= toldAt && within(at, { after, before }))
-    .filter(({ entry }) => blocksOf(entry).some((block) => isText(block) && holdsCompactBlock(block.text)))
-    .sort(oldestFirst);
-  return found.length === 0 ? null : { line: found[0].line, at: found[0].at };
-}
-
 /** Each compaction of `text` once, oldest first, with what the transcript holds of the stretch before it:
- * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, announced, verdict }`. The readers
+ * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, verdict }`, the facts being `told` and
+ * `kept` only: the user no longer compacts by hand, so no reply has to hold a block of the bare command (odd/tasks/no-manual-compact.md S2). The readers
  * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each.
  * With `lastAutomaticOnly`, only the newest automatic compaction is judged: the readers are asked for it alone, and
  * every other compaction has no verdict. `kept` is asked with the stretch's `document` only when the stretch has one,
@@ -2148,22 +2124,19 @@ export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => N
     const stretch = { after, before: at };
     const inThisFile = counted.some(({ entry, at: when }) => isOwnReply(entry) && within(when, stretch));
     const document = documentBefore(wrote, at);
-    const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, announced: null, verdict: null };
+    const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, verdict: null };
     if (!automatic || !inThisFile || (lastAutomaticOnly && boundary !== judged)) return item;
     const toldState = toldOf(told, after, at);
     const keptState = toldState.at === null || (document === null && !keptWithoutDocument) ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
-    const announced = toldState.at === null ? null : announcedOf(counted, { after, before: at, toldAt: toldState.at });
     const verdicts = {
       told: toldState.known ? toldState.at !== null : null,
       kept: keptState.kept,
-      announced: toldState.at === null ? null : announced !== null,
     };
     return {
       ...item,
       told: toldState,
       kept: keptState,
-      announced,
-      verdict: { ...verdicts, missing: ['told', 'kept', 'announced'].filter((name) => verdicts[name] === false) },
+      verdict: { ...verdicts, missing: ['told', 'kept'].filter((name) => verdicts[name] === false) },
     };
   });
 }
@@ -2191,14 +2164,15 @@ export function peakContextBefore(lines, atMs) {
 /** The miss of the session's last automatic compaction, as the board says it, or `null`: the session has no automatic
  * compaction judged in `text`, or the judged one misses no fact. `{ at, uuid, missed, unknown }`: `missed` the facts
  * that are false, `unknown` the facts a reader could not answer (never a miss). The readers are asked only for that
- * compaction, and not at all when the text names no automatic one. */
+ * compaction, and not at all when the text names no automatic one. The facts are `told` and `kept`, never a reply's
+ * block of the bare command. */
 export function compactionMissOf(text, readers) {
   if (!text.includes('compact_boundary') || !text.includes('"auto"')) return null;
   const measures = compactionMeasures(text, { ...readers, lastAutomaticOnly: true });
   const judged = measures.filter((measure) => measure.automatic).at(-1);
   if (!judged?.verdict || judged.verdict.missing.length === 0) return null;
   const { verdict } = judged;
-  const unknown = ['told', 'kept', 'announced'].filter((name) => verdict[name] === null);
+  const unknown = ['told', 'kept'].filter((name) => verdict[name] === null);
   return { at: judged.at, uuid: judged.uuid, missed: verdict.missing, unknown };
 }
 
@@ -2773,18 +2747,12 @@ export function askingRule(personAt, now, { waiting = 1 } = {}) {
   return `the user last wrote here ${since} ago: the question tool would hold this session until the user answers, so call it in the reply to the user's next message; until then a reply says in one line that ${waits} and about what, and never writes the options out as text`;
 }
 
-/** The sentence that tells a session at the context pause whether to hand the user the cut, given when the user last
- * wrote in the transcript (`personAt`, as `askingRule` takes it) and `now` in ms. Only while the user is present, by
- * the same `PERSON_PRESENT_MS`: a session that stops for a /compact nobody sends waits for hours, and the host
- * compacts a session inside a turn anyway. */
-export function cutRule(personAt, now) {
-  const at = typeof personAt === 'string' ? Date.parse(personAt) : NaN;
-  const keep = 'do not stop and give them nothing to send: the host compacts this session inside a turn, and your state is read after it';
-  if (Number.isNaN(at)) return `when the user last wrote here is not known: ${keep}`;
-  const elapsed = Math.max(0, now - at);
-  const since = durationOf(Math.round(elapsed / 1000));
-  if (elapsed < PERSON_PRESENT_MS) return `the user wrote here ${since} ago: give them, in your next reply, what they send to compact this session and the prompt that resumes it after`;
-  return `the user last wrote here ${since} ago: ${keep}`;
+/** The sentence that tells a session at the context pause what the user gets, the same whether they are present or
+ * away: nothing to send. The user no longer compacts by hand (odd/tasks/no-manual-compact.md S1): the host compacts a
+ * session by itself inside a turn, and a session that stops gets its next prompt from the orchestrator, so no
+ * block of the bare command is handed to anyone and no time of the user's last message is read for it. */
+export function cutRule() {
+  return 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 }
 
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */

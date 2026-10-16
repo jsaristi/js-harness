@@ -3093,7 +3093,15 @@ test('the skills say who archives and opens sessions, and to check that TaskStop
   assert.ok(components[0].content('0.1.0').includes('TaskStop has been seen to end the shell of a background command and leave its node process running'));
 });
 
-test('the orchestrator skill tells a work session never to end a turn waiting for a message, a compact or an event', () => {
+test('the orchestrator skill tells a work session never to end a turn waiting for a message or an event, present or away', () => {
   const text = components[2].content('0.1.0');
-  assert.ok(text.includes("- While the user is not present, never end a turn waiting for a message, the user's /compact or an event: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn."));
+  assert.ok(text.includes('- Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn.'));
+});
+
+// odd/tasks/no-manual-compact.md, S1 and S3: he no longer compacts by hand, and the lead sends a stopped session its
+// next prompt.
+test('the orchestrator skill says the user never compacts by hand and the lead sends a stopped session its next prompt', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('- The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by `SendMessage` to its title; never hand the user a compaction command or a resume prompt to send.'));
+  assert.doesNotMatch(text, /\/compact/, 'no compaction command is named to the user');
 });
