@@ -1,8 +1,14 @@
 // `gate`: runs any command under the machine's gate lock (bin/lib/gate-lock.mjs), waiting for its turn the
 // way a commit's gate does. For the heavy runs that are not a commit's gate, such as a batch of evals or a
 // whole `node --test` by hand: beside a gate they share its cores, and both miss their time bounds with
-// every test green. One test file run alone during a task stays free; this is for what takes minutes.
-// See odd/tasks/gate-lock.md ("Anything else heavy").
+// every test green. See odd/tasks/gate-lock.md ("Anything else heavy").
+//
+// The whole rule for what runs beside a gate. Free, with no turn: a quote, and one test file that runs in
+// under half a minute. Not free, so through `gate`: a whole run of the suite, a measure, and a read of the
+// board. A Codex review runs beside a gate as well, since the `node --test` runs it would make are refused
+// outside a turn and it is left with reading (odd/tasks/faster-check.md, part 2). And so that a run that
+// was slow anyway can be explained after it, a gate keeps who spent the processor over its run in
+// `busiest.jsonl`, beside its log (odd/tasks/gate-wait.md, T19).
 //
 // It reports nothing of its own on stdout: what the command prints goes to the caller as it is printed,
 // and the exit code is the command's. What `gate` itself has to say (whose gate it waits for, that it ran
@@ -19,9 +25,9 @@
 // what `cmd.exe` cannot be handed whole, and such a command goes as one argument.
 import os from 'node:os';
 import path from 'node:path';
-import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
+import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn, watchRun } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
-import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
 import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -36,10 +42,11 @@ export const GATE_MAX_MINUTES = ruleValue('gate-max', 'minutes');
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
 // `--wait` is not a bound on the whole of a wait.
 const USAGE = [
-  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
+  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--ready <command>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
   GATE_WAIT_USAGE,
   `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
+  `       --ready <command>: a quick check, one shell command line, run before the wait and again as the turn comes after one; when it fails, nothing runs (exit 75), so a command that would refuse at once does not wait for a turn`,
 ].join('\n');
 
 /** How many gates `gate log` prints when `--last` does not say. */
@@ -50,6 +57,10 @@ const GATE_LOG_LAST = 20;
  * sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
  * a caller can tell "did not run" from "ran and failed". A usage error is 2, as everywhere here. */
 export const GATE_NOT_RUN = 75;
+
+/** How long the check of `--ready` may run before it is stopped and taken as failed: it is declared quick,
+ * a `git status` or a `git diff --quiet`, and one that hangs must not hold a turn. */
+const GATE_READY_MS = 60_000;
 
 // The parent this process had when it started, read as the module loads: on Linux an orphan is adopted, and
 // `process.ppid` read later would name its adopter (./lib/launcher.mjs).
@@ -121,7 +132,7 @@ function parseArgs(argv, env, defaultCwd) {
   const given = new Set();
   for (let i = 0; i < own.length; i++) {
     const token = own[i];
-    if (!['--no-wait', '--wait', '--max', '--home', '--cwd'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
+    if (!['--no-wait', '--wait', '--max', '--home', '--cwd', '--ready'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
     if (given.has(token)) throw new GateArgError(`${token} given twice`);
     given.add(token);
     if (token === '--no-wait') continue;
@@ -135,7 +146,7 @@ function parseArgs(argv, env, defaultCwd) {
   const command = argv.slice(split + 1);
   if (command.length === 0) throw new GateArgError('no command after --');
   const maxMinutes = paths.max === undefined ? GATE_MAX_MINUTES : Number(paths.max);
-  return { cwd: paths.cwd ?? defaultCwd, home: paths.home ?? env.JS_HARNESS_HOME ?? os.homedir(), noWait, waitMinutes, maxMinutes, command };
+  return { cwd: paths.cwd ?? defaultCwd, home: paths.home ?? env.JS_HARNESS_HOME ?? os.homedir(), noWait, waitMinutes, maxMinutes, ready: paths.ready ?? null, command };
 }
 
 /** What comes after `gate log`, walked as `parseArgs` walks what comes before `--`: `{ home, last }`. */
@@ -163,7 +174,9 @@ function parseLogArgs(argv, env) {
  * one line and is no error. Lines of the
  * file that are no lines of this log are left out and counted on stderr, and so is a file that could not
  * be read, which is then exit 1: "could not look" is not "no gates". So that one line is said only of a log
- * that was read whole; the gates of a file that could be read are printed all the same. */
+ * that was read whole; the gates of a file that could be read are printed all the same. A gate that kept
+ * who spent the processor over its run (`busiest.jsonl`, `readGateBusiest`) has its line end with the
+ * three heaviest; one that kept nobody, or whose line there cannot be read, prints as it always did. */
 function gateLogMain(argv, env) {
   let parsed;
   try {
@@ -175,7 +188,7 @@ function gateLogMain(argv, env) {
   const { dir, events, skipped, unavailable } = readGateLog(parsed.home);
   const gates = gatesOf(events);
   if (gates.length === 0 && !unavailable) console.log(`no gate in the log of ${dir}`);
-  for (const line of formatGates(gates.slice(-parsed.last))) console.log(line);
+  for (const line of formatGates(gates.slice(-parsed.last), readGateBusiest(parsed.home))) console.log(line);
   if (skipped > 0) console.error(`gate log: ${skipped} unreadable line${skipped === 1 ? '' : 's'} left out (${dir})`);
   if (unavailable) console.error(`gate log: could not read ${unavailable.join(', ')} (${dir})`);
   return unavailable ? 1 : 0;
@@ -238,12 +251,18 @@ function gateLogMain(argv, env) {
  * written inside a gate, whose own record this run is part of, for a usage error, or with the switch
  * `JS_HARNESS_GATE_LOG=off`.
  *
+ * A run whose start is in the log also keeps who spent the processor over it, in `busiest.jsonl` beside
+ * the log, as `check` does (`watchRun`): every process's processor time is read as the command starts,
+ * without being waited for, and again after it ends, after its end line. Nothing is said of it, it
+ * changes no exit code, and nothing is read with `JS_HARNESS_GATE_LOAD=off`.
+ *
  * `js-harness gate log` runs no command: see `gateLogMain`.
  *
  * The lock is released on every way out of the command, a throw included. Killed, this process leaves
  * its holder's file, which the next gate takes over a minute after its last beat, as with `check`.
  * `deps.takeGateLock`, `deps.spawn` (for `runSensor`), `deps.sampleLoad` (for the sampler of the load),
- * `deps.busiest` (for the look for what loads the machine), `deps.launchers` (`{ read, alive }`, for the look
+ * `deps.busiest` (for the look for what loads the machine), `deps.watchBusiest` (for the watch of who spends
+ * the processor over the command), `deps.launchers` (`{ read, alive }`, for the look
  * at what started this gate, ./lib/launcher.mjs), `deps.gateLog` (for what the record is
  * written with: `{ append, now, id }`, each optional) and `deps.cwd` are replaceable, and so is
  * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
@@ -260,7 +279,19 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     console.error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const { cwd, home, noWait, waitMinutes, maxMinutes } = parsed;
+  const { cwd, home, noWait, waitMinutes, maxMinutes, ready } = parsed;
+  /** The check of `--ready`, run as the command is, with its output passed through: `null` when it passed or
+   * none was given, else how it ended, in words for the refusal. A check that runs past `GATE_READY_MS` is
+   * stopped and fails: it was declared quick. */
+  const notReady = async () => {
+    if (ready === null) return null;
+    const result = await (deps.spawn ?? runSensor)(ready, { cwd, env, timeout: GATE_READY_MS, inherit: true });
+    if (result.error?.code === 'ETIMEDOUT') return `ran past ${GATE_READY_MS / 1000} s and was stopped`;
+    if (result.error) return `could not run (${result.error.message})`;
+    if (result.status === null) return `was killed by ${result.signal}`;
+    return result.status === 0 ? null : `exited ${result.status}`;
+  };
+  const refusedBefore = (why) => `gate: nothing ran: its check before the line, ${ready}, ${why}, so the command would be refused; nothing waited for a turn`;
   /** Runs the command: `{ code, result }`, the exit code of this gate and how the command ended, as the
    * log says it. */
   const run = async (given) => {
@@ -295,11 +326,21 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   // Inside a gate there is no sample and no record: the command is one of that gate's sensors or started
   // by one, the gate read the load before them and wrote its own start, and a second here would be a
   // second of every such command.
-  if (env.JS_HARNESS_CHECK_INNER === '1') return (await run(env)).code;
+  if (env.JS_HARNESS_CHECK_INNER === '1') {
+    const why = await notReady();
+    if (why !== null) {
+      console.error(refusedBefore(why));
+      return GATE_NOT_RUN;
+    }
+    return (await run(env)).code;
+  }
   const command = `gate -- ${commandLine}`;
   const record = gateLogSwitchedOff(env)
     ? null
     : gateRecord({ home, cwd: path.resolve(cwd), command, ...deps.gateLog, onFailure: (why) => console.error(`gate: the gate log ${why}`) });
+  // The looks of the lock this gate made (`stillWanted` below counts them), declared before `logged`, which
+  // reads it on every path, the held one and the one without a lock included.
+  let looks = 0;
   /** The command between the two lines of its record: the load is read, the start written, and the end
    * on every way out. `turn` is the state of the lock, and whom this gate waited for. */
   // `goneAtTurn`, after a wait: the last look at what started this gate, made after the sample of the load
@@ -311,16 +352,41 @@ export async function gateMain(argv, env = process.env, deps = {}) {
       record?.refused({ reason: 'launcher gone', waitedMs: turn.waitedMs, waitedFor: turn.waitedFor });
       return GATE_NOT_RUN;
     }
+    // A wait is time in which the tree or the branch could change: the check is asked again before the
+    // command, as the push and the launcher are. A wait is a turn not taken at the first look (`looks`):
+    // a wait behind a gate in the line that left before it held the lock names no gate waited for (Codex,
+    // 2026-10-16). A turn taken at the first look had the check asked a moment ago.
+    const why = looks > 1 ? await notReady() : null;
+    if (why !== null) {
+      console.error(`gate: nothing ran: its check before the turn, ${ready}, ${why} after the wait, so the command would be refused; the turn goes to the next gate`);
+      record?.refused({ reason: 'not ready', waitedMs: turn.waitedMs, waitedFor: turn.waitedFor });
+      return GATE_NOT_RUN;
+    }
     record?.start({ ...turn, load });
+    // Who spends the processor over the command, as `check` keeps it over its sensors (`watchRun`): not
+    // waited for before the command, and nothing read with the sample of the load switched off.
+    const keepBusiest = loadSwitchedOff(env) ? null : watchRun(record, deps.watchBusiest);
     let result = 'error';
+    let code;
     try {
       const ran = await run(given);
       result = ran.result;
-      return ran.code;
+      code = ran.code;
     } finally {
       record?.end({ result });
     }
+    // After the end is written, so that the seconds of the log stay the command's.
+    await keepBusiest?.();
+    return code;
   };
+  // What the command declared would refuse it, asked before any turn is waited for (odd/tasks/gate-wait.md,
+  // T20): a Codex review waited about 40 minutes for the lock and then started nothing, its tree dirty.
+  const unready = await notReady();
+  if (unready !== null) {
+    console.error(refusedBefore(unready));
+    record?.refused({ reason: 'not ready', waitedMs: 0, waitedFor: [] });
+    return GATE_NOT_RUN;
+  }
   if (env[GATE_HELD_ENV] === '1') {
     console.error(`gate: the command runs in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate takes none`);
     // Sampled here as well, as `check` does in the turn of the process that started it: this is a gate
@@ -349,7 +415,6 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   // is not asked, the launcher having started this gate a moment ago.
   const launcher = deps.launchers ?? { ...startLaunchers({ ppid: STARTED_BY }), alive: launchersAlive, eager: true };
   let launchers = launcher.eager ? launcher.read() : null;
-  let looks = 0;
   const stillWanted = () => {
     looks += 1;
     if (looks === 1) return true;

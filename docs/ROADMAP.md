@@ -191,7 +191,7 @@ te tienen bloqueado al ser una ia ese es el problema"); measured on nine pages, 
 - [x] `js-harness fetch <url>`: rung 2, read or blocked with the next rung
 - [x] The `resume --pause` hook names the next rung after a blocked WebFetch
 - [x] And after a WebFetch that failed as a tool error, through a `PostToolUseFailure` entry `install` writes (Sebastián, 2026-10-16: "Sí, agregala (Recomendada)")
-- [ ] Reviewed (gentle-ai and Codex) and merged
+- [x] Reviewed (gentle-ai and Codex) and merged (`jsaristi/js-harness#204`, its `PostToolUseFailure` entry `#260`)
 
 ## F5 result
 

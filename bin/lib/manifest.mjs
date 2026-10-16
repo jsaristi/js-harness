@@ -10,6 +10,7 @@ import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
+import { protocolsSkillContent } from './protocols-skill.mjs';
 
 function skillContent(version) {
   return `---
@@ -165,7 +166,7 @@ How a lead is rotated, where the host nests a session under the one that started
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
 - Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too.
 - Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, \`js-harness gate\` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (\`--cwd <worktree>\`).
-- While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a reviewer wait for the gate to end.
+- While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: \`js-harness codex-review\` runs beside a gate, since out of a turn Codex's \`node --test\` is refused, and so does a gentle-ai review, whose reviewer has no tools.
 - Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
 - When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
@@ -196,6 +197,16 @@ export const components = [
     id: 'codex-orchestrator-skill',
     target: (home) => path.join(home, '.codex', 'skills', 'js-harness-orchestrator', 'SKILL.md'),
     content: orchestratorSkillContent,
+  },
+  {
+    id: 'claude-protocols-skill',
+    target: (home) => path.join(home, '.claude', 'skills', 'js-harness-protocols', 'SKILL.md'),
+    content: protocolsSkillContent,
+  },
+  {
+    id: 'codex-protocols-skill',
+    target: (home) => path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'),
+    content: protocolsSkillContent,
   },
 ];
 

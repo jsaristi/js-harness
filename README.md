@@ -106,7 +106,9 @@ Runs a heavy command under the machine's gate lock, one at a time with the gates
 project, and records the run in the machine's gate log. `gate log` prints the last runs. A
 command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
 in has an open pull request and commits a push would take now, any command but that push or a merge
-is refused, with the push command printed.
+is refused, with the push command printed. `--ready <command>` declares a quick check, such as
+`git diff --quiet`, run before the wait and again as the turn comes after one: when it fails, nothing
+runs (exit 75), so a command that would refuse at once does not wait for a turn first.
 
 ```console
 $ js-harness gate --no-wait -- node -e "console.log('a heavy run, one at a time')"
@@ -137,7 +139,7 @@ manifest of them.
 
 ```console
 $ js-harness install
-installed js-harness 0.1.0 (4 files) into ~
+installed js-harness 0.1.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
@@ -361,7 +363,8 @@ PASS  rules  18 rules, hash 7963ae6d5597
 ### js-harness codex-review
 
 Runs the Codex review of `<base>..HEAD` and records it. `--plan` prints what the review would
-read and cost, and starts nothing; `--unavailable <reason>` records a skip.
+read and cost, with how close that estimate came on the last reviews this machine recorded, and
+starts nothing; `--unavailable <reason>` records a skip.
 
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again

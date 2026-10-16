@@ -9,7 +9,7 @@ import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion } from '
 import { hooksOfHost, hookLabel, hostHooksProblem, uninstalledHostProblem } from './practice-lib.mjs';
 
 // The skills `install` writes for each host, one folder each under `<home>/.<host>/skills/`.
-const SKILLS = ['js-harness', 'js-harness-orchestrator'];
+const SKILLS = ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols'];
 
 function assertThat(condition, message) {
   if (!condition) throw new Error(message);

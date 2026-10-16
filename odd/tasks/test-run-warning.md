@@ -49,7 +49,7 @@ Nothing planned.
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
 | T1 | S1, S2 | inline | done | RED: the module missing; GREEN: 3/3 |
-| T2 | S2 | JH 15 | pending | the Bash case in `js-harness guard --hook` |
+| T2 | S2 | JH 15 | done, `63fec3c` | the Bash case in `js-harness guard --hook`, `bin/guard.mjs:83`: it refuses with the line `testRunWarning` answers while another gate holds the lock (L2). Checked 2026-10-16 (first-version T1): `node --test bin/lib/test-run-warning.test.mjs` 5/5, `node --test bin/guard.test.mjs` 21/21 |
 
 ## Log
 
