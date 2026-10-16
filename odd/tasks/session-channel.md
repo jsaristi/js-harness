@@ -567,7 +567,7 @@ Each is run once by the build, with its result recorded in Progress.
    remote-control`?
 5. After a rename, does the old title stop resolving as an address?
    Run 2026-10-16 at 18:43 local: it does, at once, and the restored title resolves again
-   (Progress, 23:43Z).
+   (Progress, "T2 test 5").
 6. The clean start against the compaction: may a session clear itself while he has it open, and
    does it lose less than a summary?
 
@@ -3063,6 +3063,15 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   test of `bin/guard.test.mjs`; then guard 22, audit 15, resume 92, pause 55 pass): `hostWindow` in the pause
   library resolves the configured window once for both hooks, and the stop check takes it ahead of a get_usage
   read and of the default; its refusal names the order.
+- 2026-10-16, JH 26, T2 test 5, run on its own session only, by the lead's answer ("run it on your own session
+  only ... Touch no other session's title").
+  - Before: `js-harness sessions --address 26 --self 00000000-0000-4000-8000-000000000000` printed
+    `JH 26 · canal y compactación`, exit 0. The `--self` is a made-up id, so that the asking session is counted.
+  - `set_session_title` on this session to `JH 29 · prueba de renombre`; then `--address 26` printed "no session
+    carries the title of work session 26", exit 1, and `--address 29` printed the new title, exit 0.
+  - The title put back exactly; 31 s after the rename, `--address 26` printed `JH 26 · canal y compactación`,
+    exit 0, and `--address 29` exited 1.
+  - So a rename moves the address at once: the board reads the title the session carries now.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
