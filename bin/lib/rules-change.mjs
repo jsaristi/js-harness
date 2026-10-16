@@ -10,8 +10,9 @@ export class RuleChangeError extends Error {}
 
 // The keys `set` may give, the form of a rule beside its body.
 const SET_KEYS = new Set(['subject', 'owner', 'flag', 'alias', 'scope', 'review', 'differs']);
-// The keys a later letter builds: named now so that the change's shape does not move under them.
-const LATER_KEYS = new Set(['row', 'patterns', 'failure']);
+// The keys of the row `rules` (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)"): `patterns` and `failure` are a
+// change of form, and `row` turns a rule to refuse or switches it back. While a rule refuses, the three are guarded.
+const ROW_KEYS = new Set(['row', 'patterns', 'failure']);
 // The keys that make a body, dropped when a rule is retired or changes body.
 const BODY_KEYS = ['value', 'path', 'phrases'];
 // The keys that go with a value only, dropped by a retirement because readRules refuses them on a retired rule.
@@ -33,10 +34,63 @@ function bodyOf(change) {
   return bodies.length === 1 ? bodies[0] : null;
 }
 
-/** `rule` with the keys of `set` applied: a key given `null` is removed. Refuses a key `set` does not take. */
+/** The count of a rule's findings on origin/main when the caller gives none: not known, so no turn is made. */
+const unknownCount = () => {
+  throw new RuleChangeError("the count of the rule's findings on origin/main is not known, so it does not turn to refuse");
+};
+
+/** `rule` with the keys of the row `rules` that `set` gives, and what the change of its row was, or `null` for none.
+ * `failures` holds the ids of the entries of docs/FAILURES.md; `countOf(rule)` counts the rule's findings in
+ * origin/main's texts in force. A turn to refuse needs patterns, a failure and no finding there; while a rule refuses,
+ * only the switch back changes the three keys, so a refusing rule is never disarmed by a change of form. */
+function withRowKeys(rule, set, { today, failures, countOf }) {
+  const named = [...ROW_KEYS].filter((key) => Object.hasOwn(set, key));
+  if (named.length === 0) return null;
+  const refusing = rule.row?.refuses !== undefined;
+  const row = set.row;
+  if (refusing && (named.some((key) => key !== 'row') || typeof row?.reports !== 'string')) {
+    throw new RuleChangeError(`"${rule.id}" refuses since ${rule.row.refuses}: its patterns, failure and row change only by the switch back, set.row { "reports": <reason>, "since": "${today}" }`);
+  }
+  if (Object.hasOwn(set, 'failure') && set.failure !== null && !failures.has(set.failure)) {
+    throw new RuleChangeError(`the failure "${set.failure}" names no entry of docs/FAILURES.md`);
+  }
+  for (const key of ['patterns', 'failure']) {
+    if (!Object.hasOwn(set, key)) continue;
+    if (set[key] === null) delete rule[key];
+    else rule[key] = set[key];
+  }
+  if (!Object.hasOwn(set, 'row')) return null;
+  if (row === null) {
+    delete rule.row;
+    return 'row removed';
+  }
+  if (row !== null && typeof row === 'object' && Object.hasOwn(row, 'refuses')) {
+    if (row.refuses !== today || Object.keys(row).length !== 1) throw new RuleChangeError(`a rule turns to refuse today: set.row { "refuses": "${today}" }`);
+    if (!Array.isArray(rule.patterns) || rule.patterns.length === 0) throw new RuleChangeError(`"${rule.id}" has no patterns: a rule refuses only what its patterns find`);
+    if (typeof rule.failure !== 'string') throw new RuleChangeError(`"${rule.id}" has no failure: a rule that refuses names the entry of docs/FAILURES.md it guards against`);
+    const count = countOf(rule);
+    if (count > 0) {
+      throw new RuleChangeError(`"${rule.id}" has ${count} ${count === 1 ? 'finding' : 'findings'} in origin/main's texts in force: it turns to refuse once marks have replaced them and the count there is zero`);
+    }
+    rule.row = { refuses: today };
+    return 'turned to refuse';
+  }
+  if (row !== null && typeof row === 'object' && Object.hasOwn(row, 'reports')) {
+    if (!refusing) throw new RuleChangeError(`"${rule.id}" does not refuse: a rule switches back to report only from refuses`);
+    if (typeof row.reports !== 'string' || row.reports.trim() === '' || row.since !== today || Object.keys(row).length !== 2) {
+      throw new RuleChangeError(`the switch back gives its reason and today: set.row { "reports": <reason>, "since": "${today}" }`);
+    }
+    rule.row = { reports: row.reports, since: today };
+    return `switched back to report (${row.reports}), a sighting of failure ${rule.failure}`;
+  }
+  throw new RuleChangeError('set.row is { "refuses": <today> }, { "reports": <reason>, "since": <today> } or null');
+}
+
+/** `rule` with the keys of `set` applied: a key given `null` is removed. Refuses a key `set` does not take. The keys
+ * of the row `rules` are `withRowKeys`'s, applied before. */
 function withSet(rule, set) {
   for (const [key, value] of Object.entries(set)) {
-    if (LATER_KEYS.has(key)) throw new RuleChangeError(`"${key}" is set by a later letter (T16d), not built yet`);
+    if (ROW_KEYS.has(key)) continue;
     if (key === 'sensor') throw new RuleChangeError('"sensor" belongs to a project\'s list, docs/rules.json, which is edited by hand');
     if (!SET_KEYS.has(key)) throw new RuleChangeError(`"${key}" is not set by hand: the change writes it, or it is a body`);
     if (value === null) delete rule[key];
@@ -74,13 +128,15 @@ function newValue(rule, change, today) {
 }
 
 /** A new rule, from the change alone. Its keys go in the order of the file when it is written. */
-function newRule(id, change, body, today) {
+function newRule(id, change, body, today, context) {
   const set = change.set ?? {};
+  if (Object.hasOwn(set, 'row')) throw new RuleChangeError(`a new rule starts with no row: "${id}" turns to refuse by a change of its own, once its patterns find nothing on origin/main`);
   if (set.subject === undefined || set.owner === undefined) {
     throw new RuleChangeError(`no rule "${id}" is declared: a new rule gives subject and owner in "set"`);
   }
   if (body === null || body === 'retire') throw new RuleChangeError(`a new rule "${id}" needs a body: a value, or a path with phrases`);
   const rule = withSet({ id }, set);
+  withRowKeys(rule, set, context);
   rule.since = today;
   if (body === 'value') {
     if (typeof change.value === 'number' && change.unit === undefined) throw new RuleChangeError('a number needs its unit');
@@ -95,16 +151,18 @@ function newRule(id, change, body, today) {
 
 /**
  * The list that `change` to the rule `id` gives from `list`, with a short account of it for the relief line:
- * `{ list, rule, what }`. `today` is the day written as YYYY-MM-DD. It throws a RuleChangeError for a change that
+ * `{ list, rule, what }`. `today` is the day written as YYYY-MM-DD; `failures` holds the ids of the entries of
+ * docs/FAILURES.md, and `countOf(rule)` counts the rule's findings in origin/main's texts in force. It throws a RuleChangeError for a change that
  * cannot be made; whether the new list is readable and holds is the check's to say, on the result.
  */
-export function changedList(list, id, change, { today }) {
+export function changedList(list, id, change, { today, failures = new Set(), countOf = unknownCount }) {
+  const context = { today, failures, countOf };
   const body = bodyOf(change);
   if (body === null && change.set === undefined) throw new RuleChangeError('the change names nothing: give a body or "set"');
   const at = list.findIndex((rule) => rule.id === id);
 
   if (at === -1) {
-    const rule = newRule(id, change, body, today);
+    const rule = newRule(id, change, body, today, context);
     return { list: [...list.map(copy), rule].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)), rule, what: 'new' };
   }
   const rule = copy(list[at]);
@@ -141,7 +199,11 @@ export function changedList(list, id, change, { today }) {
     rule.successors = successors;
     what = `retired, successors ${successors.length === 0 ? 'none' : successors.join(', ')}`;
   }
-  if (change.set !== undefined) withSet(rule, change.set);
+  if (change.set !== undefined) {
+    const turned = withRowKeys(rule, change.set, context);
+    withSet(rule, change.set);
+    if (turned !== null) what = what === 'form' ? turned : `${what}; ${turned}`;
+  }
 
   const changed = list.map(copy);
   changed[at] = rule;

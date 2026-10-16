@@ -7,13 +7,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { appendRelief, reliefLineOf, reliefPath } from './channel.mjs';
+import { parseRegister } from './failures.mjs';
 import { checkRules } from './rules-check.mjs';
+import { countFindings, isTextInForce } from './rules-scan.mjs';
 import { RuleChangeError, changedList, sourceOf } from './rules-change.mjs';
 import { renderList, writeRules } from './rules.mjs';
 
 const DATA = 'bin/lib/rules-data.mjs';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
+const REGISTER = 'docs/FAILURES.md';
 const BASE = 'origin/main';
 // The findings the new list gives before docs/RULES.md is rendered for it: the list is about to be written.
 const LIST_FINDINGS = ['docs/RULES.md is missing:', 'docs/RULES.md is not what the declarations render:'];
@@ -107,6 +110,21 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     if (!branch.startsWith('rule/')) {
       throw new RuleChangeError(`it runs on a branch rule/<name> based on ${BASE}, and this is ${branch}: git switch -c rule/${id} ${BASE}`);
     }
+    let change = null;
+    if (!checkSource) {
+      try {
+        change = JSON.parse(stdin());
+      } catch {
+        throw new RuleChangeError('the change on standard input is not JSON');
+      }
+      if (change === null || typeof change !== 'object' || Array.isArray(change)) throw new RuleChangeError('the change is a JSON object');
+    }
+
+    // A turn to refuse is counted on origin/main as it is now, not on a copy fetched days ago (T16d).
+    if (change?.set?.row !== null && typeof change?.set?.row === 'object' && Object.hasOwn(change.set.row, 'refuses')) {
+      const fetched = git(['fetch', 'origin', 'main']);
+      if (fetched.status !== 0) throw new RuleChangeError(`a turn to refuse counts on ${BASE} as it is now, and git fetch origin main failed${fetched.stderr ? `: ${String(fetched.stderr).trim()}` : ''}`);
+    }
     if (git(['merge-base', '--is-ancestor', BASE, 'HEAD']).status !== 0) {
       throw new RuleChangeError(`${branch} is not based on ${BASE}: git rebase ${BASE}`);
     }
@@ -156,16 +174,17 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     else delete startSources[id];
     const today = dayOf(now());
 
-    let change = null;
-    if (!checkSource) {
-      try {
-        change = JSON.parse(stdin());
-      } catch {
-        throw new RuleChangeError('the change on standard input is not JSON');
-      }
-      if (change === null || typeof change !== 'object' || Array.isArray(change)) throw new RuleChangeError('the change is a JSON object');
-    }
-    const { list, rule, what } = checkSource ? { list: head, rule: head.find((item) => item.id === id), what: 'source checked' } : changedList(start, id, change, { today });
+    // What the keys of the row `rules` are checked against: the entries of the register on this branch, and the
+    // findings of a rule's patterns in origin/main's texts in force, read once and only when a count is asked.
+    const register = git(['show', `HEAD:${REGISTER}`]);
+    const failures = new Set(register.status === 0 ? parseRegister(String(register.stdout)).entries.map((entry) => entry.id) : []);
+    let mainTexts = null;
+    const countOf = (rule) => {
+      mainTexts ??= out(['ls-tree', '-r', '--name-only', BASE]).split(/\r?\n/).filter(isTextInForce).map((file) => ({ path: file, text: out(['show', `${BASE}:${file}`]) }));
+      return countFindings([rule], mainTexts).counts[rule.id] ?? 0;
+    };
+
+    const { list, rule, what } = checkSource ? { list: head, rule: head.find((item) => item.id === id), what: 'source checked' } : changedList(start, id, change, { today, failures, countOf });
     if (rule === undefined) throw new RuleChangeError(`no rule "${id}" is declared on ${branch}`);
     if (isAgents(before?.path) || isAgents(rule.path)) {
       throw new RuleChangeError('a phrase of AGENTS.md changes only by its approved draft (letter G), which is not built');
@@ -225,10 +244,15 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       ? `memory: a memory note or engram observation that states ${before.unit === undefined ? before.value : `${before.value} ${before.unit}`} for ${before.subject} is changed to point to rule:${id}; the command reads no memory`
       : `memory: a memory note that restates "${id}" points to rule:${id}; the command reads no memory`;
 
+    // A rule with patterns says how many findings they have on origin/main, so a first pattern is tried by its dry run.
+    const count = !checkSource && Array.isArray(rule.patterns) ? countOf(rule) : null;
+    const countLine = count === null ? null : `count: ${count} ${count === 1 ? 'finding' : 'findings'} of its patterns in ${BASE}'s texts in force`;
+
     if (dryRun) {
       stdout(JSON.stringify(list.find((item) => item.id === id), null, 2));
       stdout(`Source: ${JSON.stringify(source, null, 2)}`);
       stdout(`Relief line: ${line}`);
+      if (countLine !== null) stdout(countLine);
       stdout(memory);
       stdout(COST);
       return 0;
@@ -255,6 +279,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     }
     stdout(`changed: ${id}, ${what}; ${writes.map(([file]) => file).join(', ')} written`);
     stdout(`relief: ${written.line}`);
+    if (countLine !== null) stdout(countLine);
     stdout(memory);
     stdout(COST);
     stdout(`next: commit on ${branch}, through the gate and both reviews, in a pull request of its own against main`);
