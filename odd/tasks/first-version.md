@@ -172,6 +172,11 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
+- [ ] T6a (kind: build) S6: a heavy run beside a gate is refused whatever its size: one test file the gate log times over a minute counts as several, and an eval batch shows itself to the guard as a gate holder does; one file stays free by the skill's rule (`odd/tasks/test-run-warning.md`, "One file stays free, as the skill says") and the refusal is his decision, so narrowing it goes to him through the lead first (`docs/FAILURES.md`, heavy-run-beside-gate: two single files of 65 to 200 s beside gates since the protocol line, one of which made a gate fail)
+- [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
+- [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
+- [ ] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4)
+- [ ] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -287,3 +292,34 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - L17 (2026-10-16, JH 25): Codex on baec266..3d958ca found one P2, confirmed: the T3b notice named
   CLAUDE_AUTO_COMPACT_WINDOW, which `configuredWindow` does not read; it now names `WINDOW_VARIABLE`
   (CLAUDE_CODE_AUTO_COMPACT_WINDOW), test first (RED 1, then 57 green).
+- L18 (2026-10-16, JH 25): T6's first pass, on `main` `c1bf1b5`, from JH 22's list of S6's six checks (shared
+  notes, jh22-first-version-t6-prep.md). (1) `check` on Windows (`JS_HARNESS_GATE_WSL=0`, `TEMP`/`TMP` on
+  `D:js-harness-tmp`, `JS_HARNESS_GATE_CI=0`, under `js-harness gate --max 60`): every row passed but `tests`,
+  "npm run test timed out after 1200 s on Windows ... skipped 0 of 166 test files", with the machine 97% busy before
+  the sensors. Then `node --test` whole on Windows, same settings: 5,687 tests, 5,666 pass, 2 fail, 19 skipped,
+  `duration_ms 1397833`, so the whole suite does not fit the `sensor-timeout` rule's 20 minutes there (T6e; the rule
+  is `rules.json`, changed only through `js-harness rules change`). (2) The first failure,
+  `scripts/package-contents.test.mjs:20`, "object is not iterable": this machine's npm is 12.2.0
+  (`C:
+vm4w
+odejs
+ode_modules
+pm`), whose `pack --dry-run --json` prints an object keyed by the package's
+  name; no command of `bin/` reads that output (grep `pack.*--json|'pack'` over `bin` and `scripts`), so it breaks
+  the test, not what ships (T6b). (3) The second, `bin/lib/launcher.test.mjs:129`, "the child never read its
+  launchers": it passed twice alone right after, so it is the whole run's load against its 20 s bound (T6c).
+  (4) `docs/FAILURES.md`: `failures check --settled` exits 1 with 7 of 92 not settled; a reader classed them and
+  one is a defect of what ships, `merge-review-covers-main`, still open for a merge below HEAD (`mergeStart`,
+  `bin/lib/codex-review-coverage.mjs:427`, narrows only a merge at the tip; the `--base <merge>^` hint is wrong once
+  HEAD moved), which costs input tokens and leaves nothing unreviewed (T6d); the other six are agents' practice,
+  third-party tools or process. (5) CircleCI: `ci/circleci: check success` on `c1bf1b5` (2026-10-16T17:35:40Z,
+  `gh api`). (6) Not run in this pass: the whole suite and `check` in WSL2, which no command triggers on `main`
+  (every gate runs the selected files there); the rerun at the end, once the rest lands, owes them.
+- L19 (2026-10-16, JH 25): T6b, inline: `packedPaths` takes the first pack of either shape, the array of npm 11
+  or the values of npm 12's object; RED was the failure of L18 on this machine's npm 12.2.0, and the file passes
+  now (1 of 1).
+- L20 (2026-10-16, JH 25): T6c, inline: the first read of the launcher test may take 60 s, not 20, and the test
+  120 s, not 60; no load can be made on demand, so the proof is L18's run that starved it and the file passing
+  alone (7 of 7); the rerun at the end of T6 shows whether the room is enough. Seen on the way: the gate of T6b's
+  commit (`a478e4a`) ran the whole suite in WSL2 and it passed, since selection could not be asked there; one data
+  point for S6's WSL2 check, not yet a run on `main`.

@@ -162,8 +162,9 @@ async function resolveNetworkVersions(rows, { home, offline, fetch: fetchImpl, n
  * `resolveLatestVersions`'s caching/offline rules above. Shared by the interactive report, the
  * hook, and (T5, `offline: true`) the TUI's stack block, so all three ever compute `upToDate` the
  * same way. `interactive` is set only by the interactive report: it lets `probeStack` run the checks
- * that start processes (see `interactiveOnly` in stack.mjs). */
-export async function buildReport({ home, cwd, offline, interactive }, deps) {
+ * that start processes (see `interactiveOnly` in stack.mjs). `env` is the one the command was given, for the checks that
+ * read it (the pnpm lock's `PNPM_HOME`); with none (the TUI's own run) those checks read the process's. */
+export async function buildReport({ home, cwd, offline, interactive, env }, deps) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
   const fetchImpl = deps.fetch ?? fetch;
@@ -172,7 +173,7 @@ export async function buildReport({ home, cwd, offline, interactive }, deps) {
   // The project's switches, resolved once for every row: the Codex row is shown only while codexReview is not off.
   const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn)));
 
-  const localRows = probeStack({ home, project, spawn, platform, interactive, functions });
+  const localRows = probeStack({ home, project, spawn, platform, interactive, functions, env });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
@@ -272,7 +273,7 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   if (argv.includes('--host-reviewed')) return recordHostReview(home, json, deps);
   if (argv.includes('--gentle-ai-reviewed')) return recordGentleAiReview(home, json, deps);
   if (argv.includes('--stack-reviewed')) return recordStackReview({ home, cwd, json }, deps);
-  const rows = await buildReport({ home, cwd, offline, interactive: true }, deps);
+  const rows = await buildReport({ home, cwd, offline, interactive: true, env }, deps);
 
   if (json) {
     console.log(JSON.stringify(rows.map((row) => ({ ...row, gaps: rowGaps(row) })), null, 2));
@@ -366,7 +367,7 @@ function recordStackReview({ home, cwd, json }, deps) {
 export async function hookMain(argv, env = process.env, deps = {}) {
   try {
     const { home, cwd } = parseArgs(argv, env);
-    const rows = await buildReport({ home, cwd, offline: false }, deps);
+    const rows = await buildReport({ home, cwd, offline: false, env }, deps);
 
     const gaps = gapList(rows);
     // A host or gentle-ai update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md,

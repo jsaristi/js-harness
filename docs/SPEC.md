@@ -90,9 +90,9 @@ proofs and by those tasks.
 ### Whether a change is due a review
 
 **Problem:** Whether a change was due a review was known only if the agent remembered to ask gentle-ai (`odd/tasks/sensors.md`).
-**Requirement:** Every gate shows gentle-ai's risk tier and whether the pending change is due a review. It informs and fails open: no gentle-ai, review switched off or no change are said, never a failure.
+**Requirement:** Every gate shows gentle-ai's risk tier and whether the pending change is due a review. It informs and fails open: no gentle-ai, review switched off or no change are said, never a failure. Where the rule `reviewed-commit-lines` is in force, the gate fails a staged change with more changed lines a review reads than that rule gives, so it is split before it is made, not refused by the reviewer after (`docs/FAILURES.md`, commit-too-large-to-review).
 **Reason:** Review is gentle-ai's; a missing or failing gentle-ai must not turn a commit red.
-**Proof:** `node --test bin/check.test.mjs`
+**Proof:** `node --test bin/check.test.mjs`, `node --test bin/check-commit-size.test.mjs`
 **Discarded:** A review that blocks a commit or a push: review is the owner's switch, and a slice under budget is committed before it is reviewed.
 **Today:** `bin/check.mjs`
 
@@ -427,7 +427,7 @@ proofs and by those tasks.
 **Reason:** If a rule lives in one place and nothing restates it, an old copy cannot stand beside the new one.
 **Proof:** `node bin/js-harness.mjs rules check`, `node --test bin/rules.test.mjs`, `node --test bin/lib/rules.test.mjs`
 **Discarded:** An index plus a list of retired phrases: two sample phrases caught 2 of 11 wordings, derived values escaped, and nothing forced the list to be written. "Declared beside its home", which is still two places. Storing the engine and date a rule was checked on: a mark written by hand can be false.
-**Today:** `bin/lib/rules-data.mjs`, `bin/lib/rules.mjs`, `bin/lib/rules-check.mjs`, `bin/rules.mjs`, `docs/rule-sources.json`, `docs/RULES.md`, `js-harness rules`
+**Today:** `bin/lib/rules-data.mjs`, `bin/lib/rules.mjs`, `bin/lib/rules-check.mjs`, `bin/rules.mjs`, `docs/rule-sources.json`, `docs/RULES.md`, `js-harness rules`, `bin/lib/rules-reach.mjs`, `claude-rules-turn-hook`, `claude-rules-start-hook`, `claude-rules-subagent-hook`
 
 ### A project's own rules
 
