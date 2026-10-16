@@ -901,7 +901,19 @@ lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 9186, 2026-10-16T
 with `js-harness sessions --quote`). From then on the first version is the tasks open on
 2026-10-16 and the phases already named in this map. A new finding becomes a task only when it
 breaks shipped behaviour or blocks one of those tasks; anything else goes to "Later" below, with
-its source, and waits for him.
+its source, and waits for him. This replaces his answer of 2026-10-13 that ideas keep entering
+as before ("Todo sigue entrando como hoy", in the next paragraph); the rest of that paragraph
+stands.
+
+Three things the count of 44 left out, found by the lead the same morning. Seven phases show
+0/0 in `js-harness progress` because their documents keep tasks in a table, not as checkboxes;
+of their rows, three are still open (`odd/tasks/exact-tests.md` T3 and T4,
+`odd/tasks/test-run-warning.md` T2), read from `main` with `rg '^\| T\d'` on each document. That
+`progress` cannot count those rows is a defect in shipped behaviour, so it enters as a task. And
+the defects with no task and the items with no design, which the next paragraph puts inside the
+first version, are still a list made by readers and never checked in the code; checking each one
+is a task, and each confirmed one becomes a task of its own. The Codex review switch among them
+already ships (`js-harness functions`, `codexReview` in `bin/lib/functions.mjs`).
 
 **Later (found after the freeze; not in the first version).**
 
