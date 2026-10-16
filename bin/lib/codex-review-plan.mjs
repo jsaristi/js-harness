@@ -268,6 +268,68 @@ export function planLines(plan) {
   ];
 }
 
+// How many of the latest reviews the method is judged on.
+const REVIEWS_JUDGED = 10;
+
+const roundedRatio = (value) => (value === null ? null : Math.round(value * 100) / 100);
+
+/** How close the method's estimates came to what the reviews recorded here took, from `records` (the review
+ * records, as `readCodexReviews` gives them) and `runs` (the run log): `{ recorded, reviews, low, median, high }`,
+ * how many reviews the records hold, on how many of the last `REVIEWS_JUDGED` the method is measured, and the
+ * least, the median and the most of their estimate over what they took, to two decimals; `null` in the three
+ * when it is measured on none.
+ *
+ * Each part is measured against its own run line, with the estimate this method gives from the lines written
+ * before that one, on the model and at the effort the line was run with: a replay, since the lines do not hold
+ * the figure they were planned at. A review is the run lines its record names (`runs`, else `run`), since the
+ * run log holds no review id and the parts of one review write their lines out of order. A line an earlier
+ * record named is a part kept from that run, which cost nothing in this one, and is left out; so is a line that
+ * measured no part (`measuredParts`) and one with no measured line before it, which had no estimate. An
+ * attempt that failed is named by no record. A review with no part left is not one the method is measured on. */
+export function methodRecord({ records, runs }) {
+  const at = new Map();
+  runs.forEach((run, index) => {
+    if (typeof run?.id === 'string' && run.id !== '' && !at.has(run.id)) at.set(run.id, index);
+  });
+  const named = new Set();
+  const ratios = [];
+  let recorded = 0;
+  for (const record of records) {
+    if (record?.outcome !== 'reviewed') continue;
+    recorded += 1;
+    const ids = Array.isArray(record.runs) ? record.runs : [record.run];
+    let estimated = 0;
+    let took = 0;
+    for (const id of ids) {
+      if (!at.has(id) || named.has(id)) continue;
+      named.add(id);
+      const index = at.get(id);
+      const [part] = measuredParts([runs[index]]);
+      if (part === undefined) continue;
+      const { estimate } = inputEstimator(runs.slice(0, index), { model: runs[index].model, effort: runs[index].effort });
+      if (estimate === null) continue;
+      estimated += estimate(part.changedLines);
+      took += part.inputTokens;
+    }
+    if (took > 0) ratios.push(estimated / took);
+  }
+  const judged = ratios.slice(-REVIEWS_JUDGED);
+  if (judged.length === 0) return { recorded, reviews: 0, low: null, median: null, high: null };
+  return { recorded, reviews: judged.length, low: roundedRatio(Math.min(...judged)), median: roundedRatio(median(judged)), high: roundedRatio(Math.max(...judged)) };
+}
+
+/** How the method did (`methodRecord`), as the one line `codex-review --plan` prints after its estimate. */
+export function methodRecordLine({ recorded, reviews, low, median: middle, high }) {
+  if (reviews === 0) {
+    return recorded > 0
+      ? 'How the method did: no review this machine recorded has a part it can be measured on yet.'
+      : 'How the method did: no reviews recorded yet.';
+  }
+  const how = 'each part against its own run line, kept parts left out.';
+  if (reviews === 1) return `How the method did: on the last review this machine recorded, its estimate came to ${low} times what it took; ${how}`;
+  return `How the method did: on the last ${reviews} reviews this machine recorded, its estimate came to between ${low} and ${high} times what each took, ${middle} at the median; ${how}`;
+}
+
 /** The bound of parts of `plan`, as what a count is said to be more than: the count the run named, or the
  * one a run starts without naming any. */
 export function partsBound({ maxParts, maxPartsGiven }) {

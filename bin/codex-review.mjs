@@ -114,7 +114,8 @@
 // What a run will cost is said before it is spent (`bin/lib/codex-review-plan.mjs`). `--plan` prints the
 // plan and exits 0: the range, the model and the effort, the parts with their files and changed lines, and
 // an estimate of the input tokens, from a likely figure to a high one, made from this machine's own run log
-// and never from a number written here.
+// and never from a number written here, then one line on how close that method came on the last reviews
+// this machine recorded (`methodRecord`).
 // It starts nothing: no Codex is looked for, no home is made, no login is looked at, and nothing is logged
 // or recorded, so it works on a machine with no Codex and over a tree with uncommitted changes. A real run
 // prints the same plan before its first session; one whose range changes no file has no part, so it starts
@@ -168,7 +169,7 @@ import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAn
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
-import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
+import { MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
@@ -214,7 +215,7 @@ const USAGE =
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
-  `--plan prints what the run would start, what it is estimated to send and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
+  `--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
   'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
@@ -1359,6 +1360,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
+    // How close the method came on the reviews this machine recorded, said after the estimate it judges. A
+    // plan of no part has no estimate to judge; records that cannot be read are none.
+    if (plan.parts.length > 0) {
+      let records;
+      try {
+        records = readCodexReviews(root, { spawn, where });
+      } catch {
+        records = [];
+      }
+      log(methodRecordLine(methodRecord({ records, runs: readRunLog() })));
+    }
     if (state.kind === 'recheck') log(`A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
     if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ of: state.of, open: state.open, base: from }).split('\n')[0]}`);
     // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.

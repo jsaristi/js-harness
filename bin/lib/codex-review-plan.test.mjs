@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ruleValue } from './rules.mjs';
-import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, needsFlagLine, planLines, reviewPlan, RECENT_PARTS, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
+import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, methodRecord, methodRecordLine, needsFlagLine, planLines, reviewPlan, RECENT_PARTS, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
 
 const PAIR = { model: 'gpt-fixture', effort: 'high' };
 
@@ -371,4 +371,86 @@ test('a plan of more parts than a run starts is over the bound, and says which f
   assert.equal(needsFlagLine(under), 'This is more parts than `--max-parts 3` allows: the run would need `--max-parts 4`.');
   // The lines of the plan are the same on either side of the bound: what is said of it is a line of its own.
   assert.equal(planLines(over).some((line) => line.includes('--max-parts')), false);
+});
+
+// --- how the method did ---
+
+/** A run line with an `id`, at `effort`, of a part of `changedLines` that spent `inputTokens`. */
+const lineOf = (id, effort, changedLines, inputTokens, over = {}) => partRun(changedLines, inputTokens, { id, effort, sessionEffort: effort, ...over });
+/** Five lines at `effort` that cost exactly `fixed` plus `perLine` a changed line: a basis the fit reads exactly. */
+const exactBasis = (effort, fixed, perLine) => [100, 200, 300, 1000, 2000].map((lines, at) => lineOf(`${effort}-basis-${at}`, effort, lines, fixed + perLine * lines));
+/** A review record of the run lines `ids`, as `codex-review` writes it: `run` the last, `runs` all of them. */
+const recordOf = (...ids) => ({ outcome: 'reviewed', run: ids.at(-1), runs: ids });
+
+test('how the method did is read from the reviews recorded: each part estimated from the run log before its own line, a review its estimate over what it took', () => {
+  const runs = [
+    ...exactBasis('low', 10000, 100),
+    ...exactBasis('medium', 5000, 50),
+    ...exactBasis('high', 10000, 100),
+    ...exactBasis('xhigh', 10000, 100),
+    // At medium the fit says 10,000 for 100 lines, and it took 20,000: 0.5.
+    lineOf('a', 'medium', 100, 20000),
+    // At high it says 20,000, and it took 10,000: 2.
+    lineOf('b', 'high', 100, 10000),
+    // At low it says 30,000, and it took that: 1.
+    lineOf('c', 'low', 200, 30000),
+    // Two parts at xhigh: 20,000 and 40,000 said, 20,000 and 80,000 taken, 0.6 for the review.
+    lineOf('d1', 'xhigh', 100, 20000),
+    lineOf('d2', 'xhigh', 300, 80000),
+    // An attempt that failed is named by no record, and counts for nothing.
+    lineOf('failed', 'high', 100, 999999, { outcome: 'failed' }),
+  ];
+  const records = [recordOf('a'), recordOf('b'), recordOf('c'), recordOf('d1', 'd2')];
+  assert.deepEqual(methodRecord({ records, runs }), { recorded: 4, reviews: 4, low: 0.5, median: 0.8, high: 2 });
+  assert.equal(
+    methodRecordLine(methodRecord({ records, runs })),
+    'How the method did: on the last 4 reviews this machine recorded, its estimate came to between 0.5 and 2 times what each took, 0.8 at the median; ' +
+      'each part against its own run line, kept parts left out.',
+  );
+  // A part kept from an earlier run cost nothing in this one: a record that names only lines an earlier record
+  // named is no review the method can be measured on, and one that names one more is measured on that one.
+  assert.deepEqual(methodRecord({ records: [...records, recordOf('a')], runs }), { recorded: 5, reviews: 4, low: 0.5, median: 0.8, high: 2 });
+  assert.deepEqual(methodRecord({ records: [recordOf('a'), recordOf('a', 'b')], runs }), { recorded: 2, reviews: 2, low: 0.5, median: 1.25, high: 2 });
+  // One review is said as one.
+  assert.equal(
+    methodRecordLine(methodRecord({ records: [recordOf('b')], runs })),
+    'How the method did: on the last review this machine recorded, its estimate came to 2 times what it took; each part against its own run line, kept parts left out.',
+  );
+});
+
+test('how the method did reads the last ten reviews it can measure, and leaves out what it cannot', () => {
+  const runs = [...exactBasis('low', 10000, 100), ...exactBasis('high', 10000, 100)];
+  const records = [];
+  // Two old reviews at 0.5, then nine on the fit and one over it: the last ten say nothing of the first two.
+  for (const id of ['old1', 'old2']) {
+    runs.push(lineOf(id, 'low', 100, 40000));
+    records.push(recordOf(id));
+  }
+  for (let at = 0; at < 9; at += 1) {
+    runs.push(lineOf(`on${at}`, 'high', 100, 20000));
+    records.push(recordOf(`on${at}`));
+  }
+  runs.push(lineOf('over', 'medium', 100, 10000));
+  runs.push(...exactBasis('medium', 10000, 100).map((line) => ({ ...line, id: `late-${line.id}` })));
+  // `over` is at medium, whose basis is written after it: no part before it at medium, so it rests on all of
+  // them, which put 100 lines above the 10,000 it took.
+  records.push(recordOf('over'));
+  const record = methodRecord({ records, runs });
+  assert.deepEqual([record.reviews, record.low, record.median], [10, 1, 1]);
+  assert.ok(record.high > 1, String(record.high));
+  // A record that is no review, names no line the log holds, or a line that measured no part, is not one.
+  const whole = lineOf('whole', 'high', 100, 20000);
+  delete whole.part;
+  runs.push(whole);
+  const more = [{ outcome: 'unavailable', reason: 'x' }, { outcome: 'reviewed' }, recordOf('missing'), recordOf(null), recordOf('whole'), null, 'not a record'];
+  assert.deepEqual(methodRecord({ records: [...records, ...more], runs }), { ...record, recorded: record.recorded + 4 });
+});
+
+test('with no review recorded, or none it can measure, how the method did says so', () => {
+  assert.deepEqual(methodRecord({ records: [], runs: [] }), { recorded: 0, reviews: 0, low: null, median: null, high: null });
+  assert.equal(methodRecordLine(methodRecord({ records: [], runs: [] })), 'How the method did: no reviews recorded yet.');
+  // A review whose part had no measured part before it has no estimate to be measured by.
+  const first = methodRecord({ records: [recordOf('first')], runs: [lineOf('first', 'high', 100, 20000)] });
+  assert.deepEqual([first.recorded, first.reviews], [1, 0]);
+  assert.equal(methodRecordLine(first), 'How the method did: no review this machine recorded has a part it can be measured on yet.');
 });
