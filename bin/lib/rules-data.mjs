@@ -32,7 +32,11 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-12",
     "value": 5,
-    "unit": "percent of the allowance"
+    "unit": "percent of the allowance",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bmargin\\b.{0,40}(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent))",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent)).{0,20}\\bof the allowance\\b"
+    ]
   },
   {
     "id": "codex-review-rate",
