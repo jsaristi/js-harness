@@ -55,7 +55,10 @@ export const RULES = [
     "since": "2026-10-14",
     "value": 30,
     "unit": "minutes",
-    "flag": "--timeout"
+    "flag": "--timeout",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontract\\b.{0,60}\\b(?:stopped|timeout|times? out|at most)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "control-phrase-min",

@@ -53,7 +53,9 @@ test('a failure that names no register entry, and a switch back with no sighting
 
 // One line for each rule of the real list that carries patterns, restating its value as a text might: a rule gets
 // its patterns and its planted line in the same change, so a pattern that finds nothing in particular never lands.
-const PLANTED = {};
+const PLANTED = {
+  'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
+};
 
 test('on the real list, every rule with patterns finds its own planted line, and loses it to its mark', () => {
   const withPatterns = RULES.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns)).map((rule) => rule.id);
