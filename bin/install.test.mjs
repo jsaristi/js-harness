@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
-import { manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
+import { entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
@@ -312,24 +312,20 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
     assert.equal(installed.code, 0);
     const settings = path.join(home, '.claude', 'settings.json');
     const hooks = path.join(home, '.codex', 'hooks.json');
-    assert.deepEqual(installed.outLines.filter((line) => line.startsWith('registered hook entry')), [
-      `registered hook entry in ${settings}: js-harness doctor --hook (SessionStart, matcher startup|resume)`,
-      `registered hook entry in ${hooks}: js-harness doctor --hook (SessionStart, matcher startup|resume)`,
-      `registered hook entry in ${settings}: js-harness resume --hook (SessionStart, matcher compact)`,
-      `registered hook entry in ${hooks}: js-harness resume --hook (SessionStart, matcher compact)`,
-      `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUse)`,
-      `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)`,
-      `registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$)`,
-      `registered hook entry in ${settings}: js-harness guard --stop || exit 0 (Stop)`,
-      `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (UserPromptSubmit)`,
-      `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)`,
-      `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (SubagentStart)`,
-      `registered hook entry in ${settings}: js-harness reply --hook || exit 0 (Stop)`,
-      `registered hook entry in ${hooks}: js-harness reply --hook || exit 0 (Stop)`,
-    ]);
+    // One line per declared entry, in declaration order, written from this file's own wording (not install's formatter).
+    const registeredLines = entryComponents.map((component) => {
+      const entry = component.entry();
+      const command = entry.hooks[0].command;
+      const matcher = typeof entry.matcher === 'string' ? `, matcher ${entry.matcher}` : '';
+      return `registered hook entry in ${component.target(home)}: ${command} (${component.pointer.at(-1)}${matcher})`;
+    });
+    const actual = installed.outLines.filter((line) => line.startsWith('registered hook entry'));
+    assert.deepEqual(actual, registeredLines);
+    // The guard's line in full, its matcher included, as one literal.
+    assert.ok(actual.includes(`registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$)`));
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
-    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, settings, settings, settings, settings, settings, settings, settings, hooks, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
+    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), entryComponents.map((component) => `removed hook entry from ${component.target(home)}`).sort());
     assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

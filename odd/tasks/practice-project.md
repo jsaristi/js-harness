@@ -164,8 +164,12 @@ A feature that changes what a project receives adds its own step, with its test,
 branch: the gate lock, "two `check` at once in the practice project"; the session board,
 "`sessions --json` exits 0 in a project that is not this one"; the session channel, "past the
 context pause, `resume --pause` tells a session once, says nothing the second time and nothing
-outside a project" (`pause-hook`, 2026-10-12, run before the hashes are compared). The journey so becomes the list of
-what was once proven as installed, run again on every candidate.
+outside a project" (`pause-hook`, 2026-10-12, run before the hashes are compared), and "a notice
+recorded in the installed project is read back on its board, and nothing reaches the real home"
+(`channel`, 2026-10-15, session-channel T10: `notify --to orchestrator --kind note` and then
+`sessions --json` in the project, with the practice home as `HOME`, `USERPROFILE` and
+`JS_HARNESS_HOME` and no live session named; after `pause-hook`, before `host-loads`). The journey
+so becomes the list of what was once proven as installed, run again on every candidate.
 
 ### What it does not prove
 - That a host loads the skills or runs the `SessionStart` entry: no Claude Code or Codex session
@@ -200,7 +204,7 @@ pause entry, the `SessionStart` entry of `compact`, and the project's `AGENTS.md
 leaves nothing in his real home. The entries' Windows shell and matchers have never been run by a
 host (`bin/lib/manifest.mjs:191-195` says so of the shell).
 
-**Where it sits.** After `pause-hook`, before `real-home-after`; the practice home holds a fresh
+**Where it sits.** After `pause-hook` (and, since 2026-10-15, `channel`), before `real-home-after`; the practice home holds a fresh
 `install`. A step of the journey is synchronous (`walkJourney` records a step's return value
 without awaiting it, `scripts/practice-lib.mjs:503`), so every process is `spawnSync`, and a test
 holds that a step returning a promise fails.

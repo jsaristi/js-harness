@@ -2774,7 +2774,31 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     door's indented lines were dropped, now printed under the notes and in the refusal
     (`3d0cc94`, gate passed, gentle-ai medium not due); Codex recheck `bbf7dc2..3d0cc94`
     correct (0.97), both fixed. Pull request 314 on `main` (302 landed), the orchestrator told.
-    Next: slice (b) once the orchestrator says Sebastián saw the design, then slice (c)
+    Slice (a) landed as pull request 314. Slice (b), his yes of 2026-10-16 (Progress), on
+    `feat/merge-door-evidence` (worktree `D:/js-harness-worktrees/merge-evidence`), branched at
+    `64933f6`, committed as `b2efbd2` through the gate (the protocol line is in it; verifier and
+    gentle-ai on `64933f6..b2efbd2` high (item 5 escalated), risk and reliability, approved and
+    acknowledged; the independent verifier passed it with no blocker, 38/38 and 2/2, probes of CRLF,
+    a non-ASCII path, an edited line and merges of a sibling branch). One correction batch, test
+    first (both seen red): the rebase hint named `a` of a range whose `b` is no commit of the
+    branch, now `b`; an added line starting "++ " read as a file header, and a header git ends with
+    a tab (a path with a space) missed its document, now a `+++ ` line is a header only before a
+    file's first hunk and loses its tab. Recorded only: a committer date set before the cut-over,
+    or an old branch rebased after it; a seven-digit number on the line read as the stray id; an
+    ambiguous short hash reads as stray; with the review off a merge of another branch asks
+    nothing; no test of a commit named only in the body (the body is never read). Files:
+    `bin/lib/gentle-ai-evidence.mjs` (+ test), `reviewEvidence` in `bin/merge-queue.mjs` (9 tests
+    seen red, then green), `codexReviewOffAt` exported from `bin/check.mjs`, help and USAGE and
+    README, the protocol line in `bin/lib/protocols-skill.mjs`, a `checked-not-read` sighting.
+    Cut-over `2026-10-17T05:00:00Z`. The correction is `647389f` (gate passed, gentle-ai medium,
+    under budget). Codex on `64933f6..647389f`, incorrect (0.98), two P2s fixed test first (both
+    seen red): the feature documents' pathspec was relative to the folder the queue ran in, now
+    `:(top)odd/tasks/` with `--no-relative`; with the Codex review off `--no-merges` let a merge of
+    another branch with an edit in it pass, now merges are read by `--diff-merges=combined` and
+    `gentleAiEvidence` exempts only a merge of main (`c35e195`, gate passed, gentle-ai medium, under
+    budget); Codex recheck `647389f..c35e195` correct (0.97), both fixed. Pull request 328 on
+    `main`, the orchestrator told. Next: slice (c). Then slice (c), then the throughput plan's item 2
+    design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
@@ -4171,6 +4195,13 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `docs/FAILURES.md` gains `proposal-unreviewed`, its control owed by T18b. Left for T18b: the
   rule with its home in the protocols skill, protocol 6's pointer, the orchestrator line, their
   tests and the shared-phrase test.
+- 2026-10-16, T16e, his answer to the design, relayed by the lead's notice to 24 at 16:04 and read
+  in the lead's transcript (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 15142) with
+  `js-harness sessions --quote`, a user entry tapped in answer to the lead's question tool. The
+  question: "¿JH 24 construye la parte (b) de T16e así como está diseñada?", options "Sí, así
+  como está (Recomendada) | Solo la cobertura, sin rechazar"; his answer: "Sí, así como está
+  (Recomendada)". So slice (b) is built as designed, items 5 and 6, refusing included. Slice (a)
+  landed as pull request 314 (`225da7d`).
 
 - 2026-10-16, his batch A landed as pull request 272 (`main` 8c74001), after Codex (0.88, no
   finding). The register's entry the lead asked for, `pnpm-cleanup-deleted-link-targets`, is pull

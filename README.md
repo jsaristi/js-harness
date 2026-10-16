@@ -449,6 +449,14 @@ A candidate red on this machine is bisected: the pull request that turns it red 
 named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
 
+A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
+the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
+what `git rev-list a..b` lists), on a line the pull request adds to a feature document
+(`odd/tasks/<name>.md`) that says gentle-ai, such as `gentle-ai: 6b58f85..3d0cc94 high, approved`.
+The queue resolves each range itself; a merge of main needs no line, and a pull request of documents
+asks for none. A rebase changes the hashes, and the refusal says so. For each ready pull request
+the queue prints, commit by commit, the Codex record that covers it and the line that names it.
+
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
 the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's
@@ -669,7 +677,10 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
-document it works on and what to read there, so nobody pastes a resume prompt. It writes
+document it works on and what to read there, so nobody pastes a resume prompt. For one document
+it names the lines to read, not the whole file: its resume sections ("Next step", "State for a
+resume"), the open task the first of them names first, that task's specs and its last log entries,
+each range with its size. It writes
 nothing and always exits 0. `resume --pause` is the hook of the context pause, measured against the window the host is configured to compact on when a setting gives one (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` of the project's `.claude/settings.local.json`, its `.claude/settings.json` or the user's settings), and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too; so it does after a WebFetch that failed as a tool error ("Claude Code is unable to fetch from <domain>"), which reaches no `PostToolUse` hook: `install` registers the same command as a `PostToolUseFailure` entry on WebFetch for that.
 
 ```console

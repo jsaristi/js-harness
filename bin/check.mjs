@@ -2097,6 +2097,15 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   return { ...row, lines: [...atTip.errors.map((error) => `read as on: ${error}`), ...(row.lines ?? [])] };
 }
 
+/** Whether the Codex review is off at the commit `head` of the repository `cwd` is in, read as `checkCodexReviews`
+ * reads it (one that cannot be read is on). For the merge queue, whose code commits are then those that change a file
+ * that is not Markdown (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 5). */
+export function codexReviewOffAt(cwd, head, { spawn = spawnSync } = {}) {
+  const git = gitIn(cwd, spawn);
+  const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])?.trim();
+  return tip ? codexSwitchAt(git, tip).value === 'off' : false;
+}
+
 /** The Codex review's switch at the commit `rev`, read from that commit's own files: `{ value, because, errors }`. */
 function codexSwitchAt(git, rev) {
   const { errors, resolved } = functionsOf(harnessOfCommit(git, rev), commitTree(git, rev));
