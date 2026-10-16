@@ -219,7 +219,10 @@ Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bun
 tab, read from the app's folder under the home (`--home`), never from the environment. The first
 reading is recorded as reviewed in the doctor cache. After an update, the row stays `stale` until
 the review is done, listing the old and new versions and the review steps: the two changelogs,
-the harness hooks, Remote Control, and a report to the user. `js-harness doctor --host-reviewed`
+the harness hooks, Remote Control, and a report to the user. A restart of the app turns Remote
+Control off, and the step is to turn it back on in each work session without asking, his
+standing yes of 2026-10-15; a session that has run no turn since the restart refuses it, so it
+is sent a message first. `js-harness doctor --host-reviewed`
 records the review; with `--json` it prints the record it wrote. The row also shows
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
 Claude is quit fully, the tray icon included.
