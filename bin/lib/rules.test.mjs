@@ -481,6 +481,16 @@ test('{amount} stands for any amount in any wording, so a pattern outlives a cha
   assert.doesNotMatch('the effort of the team', effort);
 });
 
+test('{amount} takes an effort word only as a word: never inside a rule mark, a flag or a call', () => {
+  const stopped = patternOf('gate.{0,50}stopped.{0,30}{amount}');
+  for (const line of ['A gate is stopped at `rule:gate-max`.', 'a gate is stopped by --max', 'a gate is stopped: Math.max(x)', 'a gate is stopped at max-load', 'a gate stopped at high.js']) {
+    assert.doesNotMatch(line, stopped, line);
+  }
+  for (const line of ['a gate is stopped at `max` effort', 'a gate is stopped at max.', 'a gate stopped at high, then']) {
+    assert.match(line, stopped, line);
+  }
+});
+
 test('a row that is not { refuses: day } or { reports: text, since: day } is refused', () => {
   const shape = 'rule "alpha-value": the row is written { refuses: YYYY-MM-DD } or { reports: <reason>, since: YYYY-MM-DD }';
   const bad = [
