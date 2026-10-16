@@ -256,7 +256,11 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 120,
     "unit": "seconds",
-    "flag": "--every"
+    "flag": "--every",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])every\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--every seconds\\W{0,3}{amount}"
+    ]
   },
   {
     "id": "wait-for",
