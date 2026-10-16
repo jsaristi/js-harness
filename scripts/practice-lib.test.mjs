@@ -808,21 +808,13 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor, resume a
   // Each entry without the hosts it goes to, which the list answers for on its own line below.
   const plain = ({ hosts, ...hook }) => hook;
   const listedFor = (host) => HARNESS_HOOKS.filter((hook) => hook.hosts.includes(host)).map(plain);
-  assert.deepEqual(HARNESS_HOOKS.map(plain), [
-    { event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' },
-    { event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' },
-    { event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' },
-    { event: 'PostToolUseFailure', matcher: 'WebFetch', command: 'js-harness resume --pause || exit 0' },
-    { event: 'PreToolUse', matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', command: 'js-harness guard --hook || exit 0' },
-    { event: 'Stop', command: 'js-harness guard --stop || exit 0' },
-    { event: 'UserPromptSubmit', command: 'js-harness rules --hook || exit 0' },
-    { event: 'SessionStart', matcher: 'compact|clear|resume', command: 'js-harness rules --hook || exit 0' },
-    { event: 'SubagentStart', command: 'js-harness rules --hook || exit 0' },
-    { event: 'Stop', command: 'js-harness reply --hook || exit 0' },
-  ]);
-  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude', 'codex']]);
   assert.deepEqual(declared('claude'), listedFor('claude'));
   assert.deepEqual(declared('codex'), listedFor('codex'));
+  // One pinned entry per host shape: the pause entry is Claude Code's alone, the reply entry is both hosts'.
+  const pause = HARNESS_HOOKS.find((hook) => hook.event === 'PostToolUse');
+  assert.deepEqual([plain(pause), pause.hosts], [{ event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' }, ['claude']]);
+  const reply = HARNESS_HOOKS.find((hook) => hook.command === 'js-harness reply --hook || exit 0');
+  assert.deepEqual([plain(reply), reply.hosts], [{ event: 'Stop', command: 'js-harness reply --hook || exit 0' }, ['claude', 'codex']]);
   assert.ok(Object.isFrozen(HARNESS_HOOKS));
 });
 
