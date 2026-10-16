@@ -45,7 +45,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "input tokens a changed line"
+    "unit": "input tokens a changed line",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:rate|cap|put at)\\b.{0,20}(?<![\\w:.-]){amount}\\s*(?:input )?tokens (?:a|per|for each) changed line"
+    ]
   },
   {
     "id": "context-pause",
