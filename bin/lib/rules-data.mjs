@@ -190,7 +190,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 20,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "session-effort",
