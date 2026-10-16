@@ -172,8 +172,8 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
-- [ ] T6a (kind: build) S6: a gentle-ai review whose bound status times out is asked again once the machine's gate lock is free, and a second timeout records that candidate's gentle-ai review as unavailable with its reason, as `codex-review --unavailable` does for Codex, so the candidate is neither left unreviewed in silence nor its choice sent to him (`docs/FAILURES.md`, review-tool-timeout; L18)
-- [ ] T6b (kind: build) S6: a task the staged change ticks in a feature document cites the commit that holds it, and the gate refuses the tick when that commit is not in the history of the branch it is made on (`docs/FAILURES.md`, record-states-wrong-fact; L18)
+- [ ] T6e (kind: build) S6: a gentle-ai review whose bound status times out is asked again once the machine's gate lock is free, and a second timeout records that candidate's gentle-ai review as unavailable with its reason, as `codex-review --unavailable` does for Codex, so the candidate is neither left unreviewed in silence nor its choice sent to him (`docs/FAILURES.md`, review-tool-timeout; L18)
+- [ ] T6f (kind: build) S6: a task the staged change ticks in a feature document cites the commit that holds it, and the gate refuses the tick when that commit is not in the history of the branch it is made on (`docs/FAILURES.md`, record-states-wrong-fact; L18)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -290,7 +290,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   CLAUDE_AUTO_COMPACT_WINDOW, which `configuredWindow` does not read; it now names `WINDOW_VARIABLE`
   (CLAUDE_CODE_AUTO_COMPACT_WINDOW), test first (RED 1, then 57 green).
 - L18 (2026-10-16, JH 26, from the lead's task of that day: "A control that does not fit a small change becomes a
-  task line under T6 in odd/tasks/first-version.md"): T6a and T6b are the controls owed by two of the seven entries
+  task line under T6 in odd/tasks/first-version.md"): T6e and T6f are the controls owed by two of the seven entries
   `docs/FAILURES.md` left unsettled (`763df07`). review-tool-timeout: the timeout is gentle-ai's, and a control on
   this side needs a record of a gentle-ai review that could not run, which the harness does not keep yet; the
   candidate is then reviewed or its absence is said, and the question stops reaching him. record-states-wrong-fact:
