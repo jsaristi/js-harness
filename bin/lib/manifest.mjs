@@ -10,6 +10,7 @@ import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
+import { protocolsSkillContent } from './protocols-skill.mjs';
 
 function skillContent(version) {
   return `---
@@ -196,6 +197,16 @@ export const components = [
     id: 'codex-orchestrator-skill',
     target: (home) => path.join(home, '.codex', 'skills', 'js-harness-orchestrator', 'SKILL.md'),
     content: orchestratorSkillContent,
+  },
+  {
+    id: 'claude-protocols-skill',
+    target: (home) => path.join(home, '.claude', 'skills', 'js-harness-protocols', 'SKILL.md'),
+    content: protocolsSkillContent,
+  },
+  {
+    id: 'codex-protocols-skill',
+    target: (home) => path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'),
+    content: protocolsSkillContent,
   },
 ];
 

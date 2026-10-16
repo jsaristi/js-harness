@@ -137,7 +137,7 @@ manifest of them.
 
 ```console
 $ js-harness install
-installed js-harness 0.1.0 (4 files) into ~
+installed js-harness 0.1.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
