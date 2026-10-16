@@ -72,9 +72,10 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
 | T1 | S2: who issues it, undo, two at most | inline | done (slice A) | `js-harness gate first` issues, lists and cancels; `first-issued`, `first-cancelled`; `bin/lib/gate-first.mjs`, its 11 tests, 3 in `gate.test.mjs`; `uninstall` removes the folder (`manifest.test.mjs`) |
 | T2 | S2: the claim, spent at the claim | inline | done (slice A) | the claim at arrival (`claimOf`, `check.mjs`), the order (`inTurnBefore`, `gate-lock.mjs`), the expiry; `first-claimed`, `first-expired`; 3 tests in `gate-lock.test.mjs`, 3 in `check.test.mjs` |
 | T3 | S2: how a waiter sees it was passed | inline | done (slice A) | the wait line says `first by ticket <id>: <reason>`, `first: true` in the start line and ` (first by a ticket)` in `gate log`; 1 test in `gate-log.test.mjs` |
-| T4 | S2: what stops every session marking itself first | inline | pending | the board prints tickets and flags an issuer that is no orchestrator; `--first` on the batch run |
-| T5 | S1, S2 | inline | pending | help, README, ROADMAP, `faster-check.md` T2 |
+| T4 | S2: what stops every session marking itself first | inline | done (slice B) | `js-harness sessions` prints each open ticket with its issuer and flags one whose issuer is not the orchestrator by its title, or not known (`ticketLines`, `readGateTickets`, `bin/lib/sessions.mjs`); a gate of the lock that went first says `first by ticket <id>: <reason>`; `check --first <reason>` issues its session a ticket for its tree, claimed as it arrives; 3 tests in `lib/sessions.test.mjs`, 1 in `sessions.test.mjs`, 3 in `check.test.mjs` |
+| T5 | S1, S2 | inline | done (slice B) | help of `check`, README (`js-harness gate`), ROADMAP (the gate, "The ticket that goes first"), `faster-check.md` T2 |
 | T6 | S2: two tickets at most | inline | pending (follow-up) | Codex reads `e464081` (a ticket written as `<id>.pending`, counted with the other pending ones, renamed to a claimable ticket only once its count passed) inside the review of a later change to `bin/lib/gate-first.mjs`; `codex-review` refuses a second recheck of the review that ended at `b10ce08`, so `828b23b..e464081` is recorded as a skip naming this task |
+| T7 | (tooling) | inline | pending (follow-up, Later) | `codex-review` reads a merge of origin's default branch by what was written in it, but a merge of a stacked base (`cd2b689`, `feat/gate-first` into this branch after that base took `origin/main`) as the whole range from `origin/main`: 4 parts, about 1.2M input tokens, over the allowance, for commits every one of which already has a record. Teach it to read such a merge by what was written in it too; until then `5cccfc4..cd2b689` is recorded as a skip naming this task. The merge's own resolution is two hunks: `bin/check.mjs` takes main's lock fields (`env`, `remote`) beside the `--first` lines, `bin/js-harness.mjs` takes this branch's `check` help beside main's `gate` and `init` help; the gate passed on it |
 
 ## Log
 
@@ -115,6 +116,12 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
   Its non-blocking advisories, for later: a claim whose rename fails on Windows with EPERM or EBUSY is
   silent; the `passed` of a `first-claimed` line overstates when the gate then stops, is proven by its
   tree or is refused; the spent paths of a proven, refused or log-off gate have no test.
+- **L7** (2026-10-16, JH 24): slice B built, T4-T5, test first, on `feat/gate-first-board` stacked on slice
+  A. The flag of "waiters of an older version" in S2 is not built: a gate of a version before tickets writes
+  the same file with no `first` in it, which is what a gate of this version without a ticket writes, so
+  nothing on disk tells the two apart. It waits for a version field in the gate's file. A ticket issued by
+  `check --first` and not claimed (the gate of a commit of documents alone takes no lock) stays open until
+  the session's next check claims it or it expires.
 
 ## Resume here (JH 8, 2026-10-14 15:13 by `date`, context 87%)
 

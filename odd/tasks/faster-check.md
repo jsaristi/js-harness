@@ -210,9 +210,9 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
 ## Tasks
 - [x] T1 · S1-S4 · this design attacked by two Opus readers (effort high); the version after them to
       the orchestrator with what each changed · version 2, "What the readers changed"
-- [ ] T2 · S3 · the priority of the gate, test first (after T1), in `feat/gate-first`
-      (`odd/tasks/gate-first.md`): slice A (the ticket, the claim, the order, the wait line) built; slice B
-      (the board, `check --first`, the docs) next
+- [x] T2 · S3 · the priority of the gate, test first (after T1), in `feat/gate-first`
+      (`odd/tasks/gate-first.md`): slice A (the ticket, the claim, the order, the wait line), pull request
+      287; slice B (the board, `check --first`, the docs) on `feat/gate-first-board`, stacked on it
 - [x] T3 · two guards on a turn of `js-harness gate`, `odd/tasks/gate-turn-guards.md`: a turn is refused
       while a push waits on a branch with an open pull request, and a command is stopped at 30 minutes
       (`--max`). Checked in the branch that builds it, so it is done when that pull request merges.
@@ -253,3 +253,5 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
 - L8 · 2026-10-16 07:05 by `date`, JH 24: T4 found merged, pull request 154 (`4edfa0e` on main, by
   `git log origin/main --grep`); only checked off here. T2 slice A built in `feat/gate-first`, its state in
   `odd/tasks/gate-first.md` L5.
+- L9 · 2026-10-16, JH 24: T2 built in two slices, the second stacked on the first; their reviews and the
+  one follow-up (T6, a Codex recheck refused) are in `odd/tasks/gate-first.md` L6 and L7.

@@ -3058,6 +3058,54 @@ test('renderBoard: each gate that waits is printed with the session it hangs fro
   assert.deepEqual(section(null)[1], ['pid 4250', 'D:/proj-worktrees/board', 'waiting for the gate of pid 4242, began 2m ago', 'check (no process of the listing has this pid)']);
 });
 
+// odd/tasks/gate-first.md, T4: a ticket cannot be made impossible to write, so it is made seen. The board prints
+// each open ticket with who issued it, flags one whose issuer is not the orchestrator, and says of a gate of the
+// lock that went first by a ticket which one and why.
+test('readGateLock carries the ticket a gate of the lock went first by, and nothing for a gate without one', () => {
+  const holder = { token: '11-aaaaaaaaaaaa', pid: 11, cwd: 'D:\\a', command: 'check', startedAt: before(170), beatAt: NOW - 2000, stale: false, first: '0a0a0a0a', firstReason: 'the fix of main' };
+  const waiter = { token: '22-bbbbbbbbbbbb', pid: 22, cwd: 'D:\\b', command: 'check', waitingSince: before(60), first: '0b0b0b0b', firstReason: null };
+  const read = lib.readGateLock(() => ({ holder, waiters: [waiter, { pid: 33, cwd: 'D:\\c', command: 'check', waitingSince: before(30) }] }));
+  assert.deepEqual([read.holder.first, read.holder.firstReason], ['0a0a0a0a', 'the fix of main']);
+  assert.deepEqual([read.waiters[0].first, read.waiters[0].firstReason], ['0b0b0b0b', null]);
+  assert.equal('first' in read.waiters[1], false);
+});
+
+test('renderBoard: the gates of the lock that went first say by which ticket and why, and the open tickets are printed with their issuer, flagged when that is not the orchestrator', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120)];
+  const roster = lib.rosterOf(sessions);
+  const ticket = (id, more = {}) => ({ id, session: B, reason: 'his fix waits on it', by: A, issuedAt: before(300), until: before(-1800), ...more });
+  const lock = { gateLock: { available: true, holder: holds(4242, 'D:\\proj', { first: '0a0a0a0a', firstReason: 'the batch of main' }), waiters: [{ ...waits(4250, 'D:\\proj', 50), first: '0b0b0b0b', firstReason: null }] } };
+  const section = (parts) => {
+    const lines = lib.renderBoard({ ...BOARD, sessions, roster, gates: { available: true, items: [] }, ...lock, ...parts }, { now: NOW });
+    return lines.slice(lines.indexOf('Gates') + 1, lines.indexOf('Pull requests') - 1);
+  };
+  const states = section({}).map((line) => line.split('  ')[3]);
+  assert.deepEqual(states, ['running, took the gate lock 2m ago, first by ticket 0a0a0a0a: the batch of main', 'waiting for the gate of pid 4242, began 50s ago, first by ticket 0b0b0b0b: no reason read']);
+
+  const tickets = section({ gateTickets: { available: true, open: [ticket('0c0c0c0c', { tree: 'D:\\proj-worktrees\\board' }), ticket('0d0d0d0d', { by: B, session: A })], unreadable: ['0e0e0e0e.json'] } }).slice(2);
+  assert.deepEqual(tickets, [
+    '  ticket 0c0c0c0c  the next check of JH 2 · the board in D:\\proj-worktrees\\board goes first, for 30m more: his fix waits on it  issued by JH ORQ · proj',
+    '  ticket 0d0d0d0d  the next check of JH ORQ · proj goes first, for 30m more: his fix waits on it  issued by JH 2 · the board, which is not the orchestrator',
+    '  ticket file 0e0e0e0e.json could not be read as a ticket, so no gate claims it',
+  ]);
+  // An issuer the ticket does not name, or one no row of the roster is, is not known to be the orchestrator.
+  const [unnamed, unknown] = section({ gateTickets: { available: true, open: [ticket('0c0c0c0c', { by: undefined }), ticket('0d0d0d0d', { by: 'ffffffff-0000-0000-0000-000000000000', session: 'ffffffff-1111' })], unreadable: [] } }).slice(2);
+  assert.equal(unnamed.split('  ').at(-1), 'issued by a session the ticket does not name, so not known to be the orchestrator');
+  assert.equal(unknown, '  ticket 0d0d0d0d  the next check of session ffffffff goes first, for 30m more: his fix waits on it  issued by session ffffffff, on no row of the roster, so not known to be the orchestrator');
+  // None open says nothing; a folder that cannot be read says why.
+  assert.deepEqual(section({ gateTickets: { available: true, open: [], unreadable: [] } }).length, 2);
+  assert.deepEqual(section({ gateTickets: { available: false, reason: 'the gate tickets: EACCES' } }).slice(2), ['  unavailable: the gate tickets: EACCES']);
+});
+
+test('readGateTickets gives the open tickets and the unreadable files, and the reason when the folder cannot be read', () => {
+  const open = [{ id: '0a0a0a0a', session: 's', reason: 'r', by: null, issuedAt: before(10), until: before(-10) }];
+  assert.deepEqual(lib.readGateTickets(() => ({ open, expired: [{ id: 'x' }], unreadable: ['bad.json'] })), { available: true, open, unreadable: ['bad.json'] });
+  const noAccess = () => {
+    throw new Error('EACCES: permission denied');
+  };
+  assert.deepEqual(lib.readGateTickets(noAccess), { available: false, reason: 'the gate tickets: EACCES: permission denied' });
+});
+
 // --- `sessions --quote`: whose words a line of a transcript holds ---
 //
 // The shapes are from a tally of this project's transcripts (2026-10-11, keys and values only, 14,878

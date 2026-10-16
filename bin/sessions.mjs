@@ -53,10 +53,11 @@ import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { readTickets } from './lib/gate-first.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -139,6 +140,7 @@ const CONTEXT_MARKS = new Map([
 function parseArgs(argv) {
   const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, watch: false, measures: false };
   const marks = new Map([...CONTEXT_MARKS].map(([flag, mark]) => [flag, `${mark.percent}%`]));
+  const given = new Set();
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
   // would pass for flags.
   const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--tmp', 'tmp'], ['--relief', 'relief']]);
@@ -171,6 +173,7 @@ function parseArgs(argv) {
       if (!(parsed.contextWindow > 0)) throw new SessionsArgError('--context-window takes a whole number of tokens above zero');
     } else if (CONTEXT_MARKS.has(token)) {
       marks.set(token, requireValue(argv, i, token));
+      given.add(token);
     } else if (token === '--context-limit') {
       // The flag of the limit mark the board had before the pause. Taken for the pause it would move the
       // pause to wherever an old command line put the mark; refused as unknown it would not say where to
@@ -228,10 +231,12 @@ function parseArgs(argv) {
   // It is refused whichever flag, or default, gave either figure, and both are said in whole tokens,
   // since two that differ can round to one share. The compaction checked is the one the board uses for a
   // session that has measured none: a session's own point is read from its transcript (`sessionFacts`,
-  // bin/lib/sessions.mjs), is not known when the flags are parsed, and is no part of this check.
+  // bin/lib/sessions.mjs), is not known when the flags are parsed, and is no part of this check. Each
+  // figure is named by what gave it, so a window too small for the two defaults names no flag nobody gave.
   if (!(parsed.contextPause < parsed.contextCompactionDefault)) {
     const figure = (tokens) => `${tokens} tokens (${percentOf(tokens, parsed.contextWindow)}% of the window)`;
-    throw new SessionsArgError(`--context-pause must be below --context-compaction, where the host compacts a session before it could pause: the pause is ${figure(parsed.contextPause)} and the compaction ${figure(parsed.contextCompactionDefault)}`);
+    const named = (flag, word) => (given.has(flag) ? flag : `the default ${word} (${CONTEXT_MARKS.get(flag).percent}% of the window)`);
+    throw new SessionsArgError(`${named('--context-pause', 'pause')} must be below ${named('--context-compaction', 'compaction')}, where the host compacts a session before it could pause: the pause is ${figure(parsed.contextPause)} and the compaction ${figure(parsed.contextCompactionDefault)}`);
   }
   return { ...parsed, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
 }
@@ -597,6 +602,9 @@ export async function sessionsMain(
       const waiters = readGateWaiters(harnessHome, reading);
       return { holder: readGateHolder(harnessHome, reading), waiters, readAt };
     });
+    // The tickets that put a session's next check first in that lock, under the same home and through the
+    // same functions (./lib/gate-first.mjs).
+    const gateTickets = readGateTickets(() => readTickets(harnessHome, { now, fileSystem: lockFiles }));
     return {
       root,
       projectDir,
@@ -624,6 +632,7 @@ export async function sessionsMain(
       worktrees,
       gates,
       gateLock,
+      gateTickets,
       pullRequests: readPullRequests(run, root),
       relief: readRelief(reliefFile, readFile),
       notVisible: NOT_VISIBLE,
