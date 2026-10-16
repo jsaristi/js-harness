@@ -23,7 +23,11 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 300000,
-    "unit": "input tokens a review"
+    "unit": "input tokens a review",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bfloor\\b(?!\\s*\\().{0,40}(?<![\\w:.\\x60-]){amount}\\s*input tokens",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.\\x60-]){amount}\\s*input tokens (?:a|per|for each) review\\b"
+    ]
   },
   {
     "id": "codex-review-margin",
@@ -57,7 +61,11 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 88,
     "unit": "percent of the context window",
-    "flag": "--context-pause"
+    "flag": "--context-pause",
+    "patterns": [
+      "^(?!.*\\bruleValue\\()(?=.*\\b(?:paus\\w*|compact\\w*|writes? its state)\\b).*(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))\\s*of (?:its|the|a|this session's|the session's) (?:context )?window",
+      "^(?!.*\\bruleValue\\().*\\bcontext pause\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))"
+    ]
   },
   {
     "id": "contract-run-timeout",
@@ -156,7 +164,11 @@ export const RULES = [
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
     "since": "2026-10-12",
-    "value": "medium"
+    "value": "medium",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}\\bgpt-[\\w.-]+`?\\s+at\\s+`?{amount}`?"
+    ]
   },
   {
     "id": "review-model",
