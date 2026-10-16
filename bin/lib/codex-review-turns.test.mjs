@@ -45,8 +45,8 @@ function record(root, base, head, extra = {}) {
 }
 
 /** A branch `feat` off `first`: c1, then M, a merge of `trunk` (where `origin/main` points) with a line
- * of `m.js` resolved by hand, then c2. `before` runs on the branch before c1 is made. */
-function branchWithMerge({ before: setUp = () => {}, alsoWritten = {} } = {}) {
+ * of `m.js` resolved by hand, then c2. `before` runs on the branch before c1 is made, `afterMine` after it. */
+function branchWithMerge({ before: setUp = () => {}, afterMine = () => {}, alsoWritten = {} } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-turns-'));
   made.push(root);
   git(root, 'init', '-q');
@@ -57,6 +57,7 @@ function branchWithMerge({ before: setUp = () => {}, alsoWritten = {} } = {}) {
   git(root, 'checkout', '-q', '-b', 'feat');
   setUp(root);
   const c1 = commit(root, 'm.js', 'mine\n', 'feat: mine');
+  afterMine(root);
   git(root, 'checkout', '-q', 'trunk');
   const side = commit(root, 'm.js', 'main moves\n', 'feat: main moves');
   git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
@@ -105,6 +106,15 @@ test('a merge whose first parent ends a review that owes a correction is no cut:
   record(clean.root, clean.first, clean.c1, { run: 'r1' });
   appendCodexReviewRun(clean.root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } });
   assert.equal(turnOf(clean.root, clean.side, clean.c2)?.merge, clean.merge);
+});
+
+test('a merge after a document commit that follows a review owing a correction is no cut: the recheck reads past documents, as a run does (verifier B1)', () => {
+  const docs = (root) => commit(root, 'notes.md', 'a note\n', 'docs: a note');
+  const { root, first, c1, side, c2 } = branchWithMerge({ afterMine: docs });
+  record(root, first, c1, { run: 'r1' });
+  const finding = { file: 'm.js', start: 1, end: 1, severity: 'P1', title: 'The line is lost.', body: 'It is.', confidence: 0.9 };
+  appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } });
+  assert.equal(turnOf(root, side, c2), null);
 });
 
 test('a merge whose written file is marked at the merge and not at HEAD is no cut: its lines would be in neither turn', () => {

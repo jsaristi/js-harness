@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { mergeStart } from './codex-review-coverage.mjs';
-import { recheckState } from './codex-review-recheck.mjs';
+import { RECHECK_LOOK_BACK, recheckAnchor, recheckState } from './codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { readCodexReviews } from './codex-reviews.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
@@ -31,9 +31,25 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
   const atTipMarks = marksAt(tip);
   if (atMergeMarks === null || atTipMarks === null) return null;
   if (oldest.files.some((file) => atMergeMarks.has(file) !== atTipMarks.has(file))) return null;
+  // The review the first parent's findings would be rechecked from is found as a run finds it, past commits
+  // that changed documents alone (`recheckAnchor`): asked at the first parent itself, a document commit
+  // between a review that owes a correction and the merge would let the cut drop that recheck (verifier B1).
+  const lines = (args) => {
+    try {
+      const result = spawn('git', args, { cwd, encoding: 'utf8' });
+      return result && !result.error && result.status === 0 ? String(result.stdout ?? '') : null;
+    } catch {
+      return null;
+    }
+  };
+  const back = lines(['rev-list', `--max-count=${RECHECK_LOOK_BACK}`, atMerge.from]);
+  if (back === null) return null;
+  const changedBetween = (older, newer) => lines(['diff', '--no-renames', '--name-only', '-z', older, newer])?.split('\0').filter(Boolean) ?? null;
   let state;
   try {
-    state = recheckState({ from: atMerge.from, records: readCodexReviews(cwd, { spawn, where }), runs: readCodexReviewRuns(cwd, { spawn }) });
+    const records = readCodexReviews(cwd, { spawn, where });
+    const from = recheckAnchor({ from: atMerge.from, records, back: back.split('\n').filter(Boolean), changedBetween });
+    state = recheckState({ from, records, runs: readCodexReviewRuns(cwd, { spawn }) });
   } catch {
     return null;
   }

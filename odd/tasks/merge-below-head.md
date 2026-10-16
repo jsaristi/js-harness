@@ -204,9 +204,19 @@ among them), and the marks at M of its written files.
   again before turn 2 (it is reset in code), and a refusal of the turn at HEAD for a switch that is off
   at M.
 
+- 2026-10-16, T4, the independent verifier (Opus, high, read-only; scratch under the system temp dir).
+  S1 partial, S7 partial (the helper is not shared with the merge queue, as the Log already says), the rest
+  pass; no way found for a code commit to be covered with no turn's diff showing its lines. Blocker B1:
+  `mergeTurn` asked `recheckState` at the first parent itself, not past document commits as `recheckFor`
+  does through `recheckAnchor`, so a docs commit between a review that owes a correction and the merge let
+  the cut drop the recheck the baseline ran. Fixed: `mergeTurn` anchors as a run does; RED then GREEN in
+  `bin/lib/codex-review-turns.test.mjs` ("after a document commit"). Advisories left: a turn whose run line
+  failed to reach the log reads as owing nothing (as any review does today); the worktree is made before the
+  turn finds Codex missing; a switch off at M says "wrote no record" without why.
+
 ## Next step
 
-**State, 2026-10-16, JH 27:** T1-T3 done. Next: T4, the "Done when" scratch repository, the gate (the two
+**State, 2026-10-16, JH 27:** T1-T3 done, T4's verifier done and B1 fixed. Next: T4, the "Done when" scratch repository, the gate (the two
 `--no-verify` commits 5bf351e and 6397e5a go through it with the T3 commit), an independent verifier (risk
 item 2), gentle-ai assess with `--escalate-item 2` (run `granted`), Codex, merge-tree against origin/main,
 push, the PR with its gentle-ai line, and the notice to the lead with the S9 finding.
