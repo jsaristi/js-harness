@@ -59,13 +59,44 @@ work so no session has to rediscover it.
 - S6. A stability pass at the end: the full suite and `check` green on `main` on Windows and WSL2
   and on CircleCI, and no open defect in `docs/FAILURES.md` that breaks shipped behaviour.
 
+## The release source (T4's design)
+
+Built in T4b, test first, in `bin/update.mjs` and `bin/lib/version.mjs`:
+
+- Where it looks: a git repository, `https://github.com/jsaristi/js-harness.git` unless `--repo <url or folder>`
+  or `JS_HARNESS_REPO` names another (a test's local repository). It runs `git ls-remote --tags --refs <repo>`
+  with the machine's own git and credential helper. `GIT_TERMINAL_PROMPT=0` makes a missing credential fail
+  instead of waiting for a prompt nobody answers, and a 30 s timeout bounds it.
+- Which tag is a release: one named exactly `vX.Y.Z`, three numbers and nothing else; the highest wins. Any
+  other tag is ignored. A repository with no such tag answers "no release is tagged yet", as every command
+  does today.
+- What `upgrade` installs: `<pm> install -g <spec>`, the spec `github:jsaristi/js-harness#vX.Y.Z` for the
+  default repository (the roadmap's) and `git+<url>#vX.Y.Z` for another, a folder as `git+file:///<path>`.
+  The tag has passed the pattern above before it enters the argv, so it can carry no flag. The sync of the
+  installed copy and the manifest check after it are as today.
+- `--source` (a folder of `npm pack` tarballs) keeps working and wins when named: a machine with no
+  credential for the repository upgrades that way.
+- When the tags cannot be listed (no network, no credential, no such repository): `status` says the latest
+  is unknown and why, and exits 0; `update` and `upgrade` print why, say that the repository is private
+  and git needs a credential for it, exit 1 and install nothing.
+- Cost: one `git ls-remote` for each `status --global`, `update` and `upgrade`. `doctor` asks nothing new.
+- The tests use a local repository in a temporary folder, never the network. T5's update step: a local
+  repository holding this checkout's files under a tag newer than the running version; a package manager
+  stand-in that checks that tag out into `--prefix` where npm would put it; then `upgrade`'s own sync and
+  its manifest check, so the home ends recording the newer version. It proves the lookup, the choice, the
+  spec and the sync; npm's own install from git is the one step it does not run.
+- Not in T4b: creating any tag (his); `sync`, which for a pin still says it cannot be installed by its
+  number, names the tag only once one exists (the roadmap's rule), so it changes with the first tag.
+
 ## Tasks
 
 - [ ] T1 (kind: build) S1: the three open table rows, closed in their own documents
-- [ ] T2 (kind: build) S2: `progress` counts table rows; inline, test first
+- [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L3)
 - [ ] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks
-- [ ] T4 (kind: design) S4: the release source, designed; its build follows as T4b
-- [ ] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script
+- [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L5)
+- [ ] T4b (kind: build) S4: the release source, built as designed; inline, test first
+- [ ] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (all but the update step: PR 265, L4)
+- [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L4)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
 
 ## Log
@@ -77,3 +108,17 @@ work so no session has to rediscover it.
   the three table rows (S1), the unchecked 2026-10-13 list (S3), and the `progress` defect (S2).
   The lead added S4, S5 and S6 because "complete, stable and fully working" cannot hold while no
   version can be updated to (S4) and while the whole cycle is never run on a clean machine (S5).
+- L3 (2026-10-16, JH 21): T2 done in PR 262 (`71fa4fc`). RED: `bin/lib/progress.test.mjs` 4 of 43,
+  `bin/progress.test.mjs` 1 of 27; GREEN 43/43 and 27/27. Differential on this repository: only the seven
+  0/0 features changed, total 475/520 to 490/538. Codex: correct (0.92).
+- L4 (2026-10-16, JH 21): T5 in PR 265 (`1190e8e`): `bin/clean-home.test.mjs` runs install, doctor, the
+  session-start hooks and uninstall in a throwaway home on every gate; the update step is a `todo` until T4b.
+  It found that uninstall left `~/.claude` and `~/.codex` empty when install had made them. The lead, 03:36:
+  "Fix it inside T5 (log it as T5a in first-version.md): remove only the folders install created and the
+  manifest names, never one that existed before (a real home already has .claude). Test first." Done in
+  `344e704` and `909c62b` (install records `createdFolders`, strictly inside the home; uninstall removes
+  only those, empty, on the way to their file). gentle-ai high (escalated, item 1), approved
+  (`review-910dd767a40abc02`); Codex: correct (0.88).
+- L5 (2026-10-16 05:15, the lead): "next for you: T4 of odd/tasks/first-version.md, the release source (S4),
+  moved from JH 19 so it runs beside JH 19's T3. Design first in the doc, then build ... Creating any tag is
+  his: test against a local tag only. Then T5's update step." The design is above.
