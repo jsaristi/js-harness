@@ -2320,7 +2320,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     of 17): a field written twice or outside the six is no longer stored; fenced lines are text; a
     manifest id in a project's spec reads as an id; "own" is the package's name, not the module's path,
     so the installed command or a junction holds this checkout too; and the absolute path above. Left:
-    a proof is any text in backticks, not a command shape.
+    a proof is any text in backticks, not a command shape. Those fixes are `a6fe143`.
+  - Codex on `8b3c031..a6fe143` (3 files, 329 lines): the patch is correct (0.84), 91,062 input
+    tokens, recorded.
 - 2026-10-10, host documentation read by a sub-agent: `code.claude.com/docs/en/hooks.md`,
   `statusline.md`, `skills.md`, `commands.md`, `cross-session-messaging.md`, `cli-reference.md`,
   `remote-control.md`; `learn.chatgpt.com/docs/hooks` (as the sub-agent gave it; not opened by
