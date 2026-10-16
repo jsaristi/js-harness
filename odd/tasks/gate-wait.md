@@ -1024,7 +1024,7 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       tests seen red then green; `check.test.mjs` 219/219. Cost: the end reading runs before
       the lock is released, about 3 to 4 s a gate on a loaded machine (11 s at most), since one
       after the release would count the next gate's run.
-- [ ] T20 · A queued command is refused before it waits, not after (candidate, 2026-10-13, the
+- [x] T20 · A queued command is refused before it waits, not after (candidate, 2026-10-13, the
       orchestrator's, from a failure of the session "JH 9": its Codex review waited about 40
       minutes for the lock and then started nothing, "Tracked files have uncommitted changes").
       Two parts: `codex-review --plan` says that the tree is dirty; and `js-harness gate` can

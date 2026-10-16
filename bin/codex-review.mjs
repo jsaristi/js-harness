@@ -1028,7 +1028,10 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
 /** The line that says a run's base is a code commit of its branch that no Codex review record covers, and what
  * reviews it: `commit` is what `baseLeftOut` answers, `{ id, shortId, subject }`. A range starts after its
  * base, so the run does not read the base, and no record of the run covers it. */
-function baseLeftOutSaid({ shortId, subject }) {
+function baseLeftOutSaid({ shortId, subject, merged }) {
+  if (merged) {
+    return `The base ${shortId} (${subject}) is a merge of ${merged} that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it. A merge is reviewed by what was written in it only where it is HEAD, and \`--base ${shortId}^\` here would review everything it brought in: in a worktree at it (\`git worktree add --detach <folder> ${shortId}\`), \`js-harness codex-review --base ${shortId}^\` reviews what was written in it, and every worktree of the clone shares its record.`;
+  }
   return `The base ${shortId} (${subject}) is a code commit of this branch that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it.`;
 }
 
