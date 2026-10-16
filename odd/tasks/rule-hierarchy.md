@@ -1901,6 +1901,193 @@ protocols six, and a new protocol is his, so the two are proposed to him in the 
 and not taken as given. If he says no, the two shapes stay as the one sentence of item 4 of
 `AGENTS.md` and as the fields of `docs/FAILURES.md`. A seventh passes the five questions.
 
+### Reach: the turn-start hook (T16f, first part)
+Letter F's first sentence: a hook at the start of each turn prints the difference with `main` when the
+rules changed, after a compaction too, and to a sub-agent at its start; it is confirmed first with a
+logging hook. His standing yes covers it: "the turn-start hook, opt-in by project, recorded, removed by
+`uninstall`" ("One home for every rule (T16)", what his yes includes, item 2). Designed by JH 27 on
+2026-10-16 from the lead's notice of 18:35, then read by two readers that did not write it (Opus, high).
+One reader attacked: three blockers, six serious findings, seven minor. The other looked only for what
+was missing: fifteen gaps. Every finding is folded in below, and the end of this section says where.
+
+**What the logging hook confirmed, on 2026-10-16.** The setup: Claude Code 2.1.301, `claude -p --model
+haiku --setting-sources project`, in an empty `mktemp -d` folder that was not a repository. Its own
+`.claude/settings.json` held one logging hook on `SessionStart`, `UserPromptSubmit` and `SubagentStart`.
+The hook appended its input to a file and answered `hookSpecificOutput.additionalContext` with a marker
+named after its event. The run cost $0.023 and wrote nothing outside the scratch directory.
+- The session held the markers of `SessionStart` (source `startup`) and `UserPromptSubmit`. The
+  sub-agent held only the marker of `SubagentStart`. So what `SubagentStart` adds reaches the sub-agent
+  alone, and the session's markers do not reach the sub-agent.
+- `UserPromptSubmit` fired again for the `<task-notification>` that ended the sub-agent, with a new
+  `prompt_id`. So the hook also reaches a turn that a task's end wakes.
+- The `SubagentStart` input carries the session's own `session_id` and `cwd`, plus `agent_id` and
+  `agent_type`.
+- `SessionStart` with the source `compact` needs no new run. This repository's resume hook works
+  that way, and this session read its output after its own compaction of that day.
+- Not confirmed:
+  - Codex's events: the hook is Claude Code's alone, as the pause hook is, until a logging hook
+    confirms them;
+  - a sub-agent's sub-agent;
+  - whether `clear` and `resume` keep the `session_id`;
+  - the hook beside the user's other `UserPromptSubmit` and `SubagentStart` entries, in a desktop
+    session in a worktree.
+
+  The practice journey's real-session step owes a check that each of the three events ran, as it
+  already checks `SessionStart:startup`.
+
+**Opt-in by project.** The hook acts only where the project declares rules. It walks up from the input's
+`cwd` to the first folder that holds `.git` (a folder, or a worktree's file), with no git process, and
+looks there for the list:
+- `bin/lib/rules-data.mjs` in the harness's own checkout;
+- `docs/rules.json` in a project.
+
+Anywhere else it ends at once, prints nothing and writes nothing. Declaring a list is the project's
+choice of the mechanism, so this needs no switch of its own.
+
+**What is compared.**
+- `main` is the first of these that exists: `origin/HEAD`, then `origin/main`, then `main`. A project
+  with none is not reached, and that is said under "Not guaranteed". It is read with `git show` and
+  never fetched, since a hook cannot wait on the network.
+- What the session holds is the list at `git merge-base HEAD <main>`, not the working tree. So a
+  branch's own change is never told back to it reversed (a `rule/` branch is the normal path of a rule
+  change), and what is told is exactly what `main` changed that this tree lacks. A merge of `main`
+  into the branch moves that base.
+
+`readListText(text, path)` reads a list without importing anything git gave:
+- `rules-data.mjs` is the text after `export const RULES = ` up to the last `;`, through `JSON.parse`.
+  That is the one shape `writeRules` writes.
+- `docs/rules.json` is read through `parseProjectRules`.
+
+A list that does not parse is a fault. `diffRules(before, after)` reduces each rule to the keys the hash
+reads (`HASH_KEYS`, exported for this) plus a project rule's `sensor`, and returns four groups, each
+sorted by id:
+- added: ids in `after` alone;
+- removed: ids in `before` alone, as after a revert;
+- retired: retired in `after` and not in `before`;
+- changed: any other difference in those keys.
+
+An id that only moved, or a change of its source, subject or row, prints nothing.
+
+**What it prints.** `rulesNotice(diff)` gives one line a rule:
+- `<id>: <old> -> <new>` for a value, with its unit;
+- `<id>: its home is now <path>, phrases <...>` for a rule in prose;
+- the successors for a retired rule.
+
+It opens with "The rules on `<main>` differ from this checkout's (`<n>` rules)". It closes: "These are
+`main`'s; this branch's own checks still read the old ones until `main` is merged into it." The notice
+carries the new declaration itself, because `js-harness rules <id>` prints the installed copy's list and
+a project's working tree, never `main`'s. The command answers with
+`hookSpecificOutput.additionalContext` and the event's `hookEventName`, the form the logging hook proved,
+and never with plain standard output. It reads the event from its input (`hook_event_name`, `source`,
+`agent_id`, `session_id`, `cwd`), never from `process.cwd()`.
+
+**When it prints.** Two inputs are passed over whole: a `SessionStart` or `UserPromptSubmit` input with
+an `agent_id` (a sub-agent's, carrying the session's id, which would spend the session's notice), and a
+`session_id` that is not of the shape `statePath` of `bin/lib/pause.mjs` takes, since it becomes a file
+name. Each event:
+- `UserPromptSubmit`, each turn: the difference between the last seen and `main`, then `main` is recorded
+  as the last seen. The first turn's last seen is the merge base. So a rule changed once is told once,
+  and a rule that lands on `main` during the session is told at the next turn after a fetch.
+- `SessionStart` with the source `compact`, `clear` or `resume`: what the context held may be gone, so
+  it prints the difference between the merge base and `main` when there is one, and records `main`.
+- `SubagentStart`: the same difference, merge base against `main`. Nothing is recorded. The tree is the
+  input's `cwd`, which is the session's, even for a sub-agent in a worktree of its own.
+
+The state is one file a session, `~/.js-harness/channel/rules-seen/<session_id>.json`, holding the last
+seen list reduced to the compared keys. It is written by a temp file and a rename, as the pause state is.
+A write prunes the files of that folder last written more than 30 days before. A fault leaves the record
+as it was, so the next good read prints everything owed.
+
+**The entries.** Three `entryComponents` of `install`, all in `~/.claude/settings.json`:
+- `UserPromptSubmit`, no matcher;
+- `SessionStart`, matcher `compact|clear|resume`;
+- `SubagentStart`, no matcher.
+
+Each runs `js-harness rules --hook || exit 0` with a timeout of 5 seconds. The `|| exit 0` is the pause
+hook's reason: an older copy that answers 2 never blocks a turn. They are recorded and removed like every
+entry, and `sync` writes them again. The state folder is inside `channel/`, so `removeChannelFolder`
+removes it on both of `uninstall`'s paths, with a manifest and without. A session still running after
+`uninstall` may make the folder again; the next `uninstall` removes it, and that is said in the README.
+An older copy's `uninstall` removes the entries it finds in the manifest; the folder goes with `channel`
+or stays, as the rest of `channel` does in that copy.
+
+`rules --hook` is answered before `bin/rules.mjs` loads its other modules, by a lazy import of a small
+`bin/lib/rules-reach.mjs`. Its git calls are `rev-parse` for `main`, `merge-base`, and one or two `show`;
+none of them runs where the walk finds no list.
+
+**What else changes with it.**
+- `doctor`'s `hook-commands` row also tries `js-harness rules --hook`. With empty input it must exit 0
+  and print nothing, so a dead hook behind `|| exit 0` is caught.
+- `docs/SPEC.md` claims the three entry ids, which the `spec` row of `check` requires.
+- The practice journey's `HARNESS_HOOKS` gains the three entries in `entryComponents`' order, and its
+  check of the host file gains `UserPromptSubmit` and `SubagentStart`.
+- `rules`' usage line, the dispatcher's help, the `js-harness` skill's list of commands, and the README:
+  - the install output's list of entries;
+  - a section for `rules --hook`.
+- The payload row lists the hook among the context hooks; it costs no token on a turn with no change.
+
+**Its time.** The hook's 95th percentile on a turn with no change, measured over 20 turns on this
+machine with a gate running, must stay under 1,000 ms; above that, this design is reopened. A host
+timeout is a notice not given, like any fault.
+
+**Failure.** The hook never blocks and never prints a fault into the model's context. A fault goes to
+standard error with exit 0. The faults: a file that cannot be read, git missing, no `main`, or a list
+that does not parse.
+
+**Tests first.** Each one is RED before it is built:
+- `readListText` on both shapes, and on a hand-edited file;
+- `diffRules`: each group, a reorder, a change of source alone, a `sensor`;
+- `rulesNotice`: the text of each group.
+
+The command, run with a fake home, a fake git and a walk over a scratch tree:
+- a project with no list gets nothing, and no git is started;
+- the first turn prints nothing when the merge base equals `main`;
+- a change on `main` is told once, then not again;
+- a branch that changed a rule itself is told nothing about it;
+- a compaction, a clear and a resume print from the merge base;
+- a sub-agent gets the difference, and nothing is recorded;
+- an input with `agent_id` on `SessionStart` or `UserPromptSubmit` records nothing;
+- a bad `session_id` writes nothing;
+- every fault exits 0;
+- empty input prints nothing.
+
+Also: `install` writes the three entries and `uninstall` removes them and the folder; the doctor tries
+the command; the dispatcher reaches the command, and so does a run on its own.
+
+**Not guaranteed.**
+- A rule changed on `main` reaches a session only once `origin/main` was fetched or `main` was pulled.
+- A project whose default branch has none of the three names is not reached.
+- A branch cut before its project declared a list gets nothing until it holds the list.
+- A session that restates a rule in its own words is not corrected by a notice, and a notice given once
+  may still be forgotten. The notice is reach; enforcement is letter D's row.
+- The text of a rule in prose is not compared: rewording a line of `AGENTS.md` that keeps its phrases
+  prints nothing.
+- A desktop session idle for more than 30 days loses its last seen, and is told again from the merge
+  base.
+- Codex sessions get nothing until its events are confirmed.
+
+**Left to the other parts of T16f**, not built here:
+- the hash in the installed command and `doctor` saying it is behind;
+- the template's marked block, rendered by `sync`;
+- a memory note pointing to an id;
+- which of the shipped rules reach an installed project, a field T16b names, whose list is his ninth
+  difference: until then the hook reads only a project's own `docs/rules.json` there;
+- the orchestrator skill's "read the relief file" becoming "read the list";
+- keeping the installed copy current enough to read the list on `main`.
+
+**Where the readers' findings went.**
+- The attacker's blockers: B1 into "What it prints", B2 into "What is compared", B3 into "When it
+  prints".
+- Its serious findings: S1, S2 and S6 into "What else changes" and the confirmations owed, S3 into the
+  lazy import and the walk, S4 into `diffRules`, S5 into `readListText`.
+- Its minor ones: into opt-in, `main`, the state folder, the input's `cwd`, the payload and "Not
+  guaranteed".
+- The gaps reader's fifteen: the same places, plus `clear` and `resume`, the slug made needless by
+  keying on the session alone, the time ceiling, the help texts, and the list of what is left.
+
+Risk: item 5. It writes three entries into the host's settings through `install`. So it takes an
+independent verifier, and a gentle-ai review escalated at its own commit.
+
 ### Signals of done
 The seven of the roadmap, each as something read and not judged.
 
