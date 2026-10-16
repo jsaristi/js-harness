@@ -945,7 +945,9 @@ Creating the 1.0.0 tag stays his.
 
 **Later (found after the freeze; not in the first version).**
 
-- (none yet)
+- [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
+  handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
+  hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.
 
 **What the first version holds, by his answer of 2026-10-13.** Asked what enters the first
 version, the 1.0.0, he had four options: what is already installed, well finished (the one
