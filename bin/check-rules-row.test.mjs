@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkOwnRules, main } from './check.mjs';
+import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 let configDir;
 before(() => {
@@ -36,6 +37,12 @@ const write = (root, file, text) => {
  * in force, committed on `main`. */
 function repo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rules-row-'));
+  harnessRepo(root);
+  return root;
+}
+
+/** Builds in `root` the repository `repo` hands out copies of (`lib/git-fixture.testkit.mjs`). */
+const harnessRepo = repoTemplate((root) => {
   git(root, 'init', '-q', '-b', 'main');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
@@ -45,8 +52,7 @@ function repo() {
   write(root, 'odd/tasks/f.md', '# A feature\nIts specs.\n```\nan example\n```\n## Log\nL1 the request\n');
   git(root, 'add', '.');
   git(root, 'commit', '-q', '-m', 'init');
-  return root;
-}
+});
 
 function inRepo(run) {
   const root = repo();

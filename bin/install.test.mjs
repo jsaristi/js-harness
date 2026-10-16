@@ -11,6 +11,7 @@ import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
 import { remoteDir, remoteFiles } from './lib/remote.mjs';
+import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
 // project.mjs's `gitTopLevel`/`resolveGitPath`) — isolate it from the host's global/system git
@@ -43,10 +44,15 @@ function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-home-'));
 }
 
-function makeTmpProjectRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-project-'));
+/** What `git init` makes, made once and copied (`lib/git-fixture.testkit.mjs`): every empty repository here is the same. */
+const emptyRepo = repoTemplate((dir) => {
   const init = spawnSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
   assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+});
+
+function makeTmpProjectRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-project-'));
+  emptyRepo(dir);
   return dir;
 }
 
