@@ -2790,8 +2790,13 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     `bin/lib/gentle-ai-evidence.mjs` (+ test), `reviewEvidence` in `bin/merge-queue.mjs` (9 tests
     seen red, then green), `codexReviewOffAt` exported from `bin/check.mjs`, help and USAGE and
     README, the protocol line in `bin/lib/protocols-skill.mjs`, a `checked-not-read` sighting.
-    Cut-over `2026-10-17T05:00:00Z`. Next: commit the correction through the gate, assess it,
-    Codex on `64933f6..`, pull request, notify. Then slice (c), then the throughput plan's item 2
+    Cut-over `2026-10-17T05:00:00Z`. The correction is `647389f` (gate passed, gentle-ai medium,
+    under budget). Codex on `64933f6..647389f`, incorrect (0.98), two P2s fixed test first (both
+    seen red): the feature documents' pathspec was relative to the folder the queue ran in, now
+    `:(top)odd/tasks/` with `--no-relative`; with the Codex review off `--no-merges` let a merge of
+    another branch with an edit in it pass, now merges are read by `--diff-merges=combined` and
+    `gentleAiEvidence` exempts only a merge of main. Next: commit through the gate, Codex recheck,
+    pull request, notify. Then slice (c), then the throughput plan's item 2
     design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block

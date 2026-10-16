@@ -70,7 +70,7 @@ export function gentleAiEvidence(cwd, { main, head, codeCommits, cutover = GENTL
   const git = (args) => gitOut(spawn, cwd, args);
   const listed = git(['rev-list', `${main}..${head}`]);
   const dated = git(['log', '--format=%H %cI', `${main}..${head}`]);
-  const diff = git(['-c', 'core.quotePath=false', 'diff', '-U0', '--no-renames', '--no-color', '--no-ext-diff', `${main}...${head}`, '--', 'odd/tasks/']);
+  const diff = git(['-c', 'core.quotePath=false', 'diff', '-U0', '--no-renames', '--no-relative', '--no-color', '--no-ext-diff', `${main}...${head}`, '--', ':(top)odd/tasks/']);
   if (listed === null || dated === null || diff === null) return { unknown: true };
   const inRange = new Set(listed.split('\n').filter(Boolean));
   const dateOf = new Map(dated.split('\n').filter(Boolean).map((line) => line.split(' ')));

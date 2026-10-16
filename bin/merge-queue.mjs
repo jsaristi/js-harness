@@ -119,16 +119,17 @@ function localSuite(run, place) {
   return { ok: done.ok, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
 }
 
-/** The commits of `main..head` read in `cwd` that change a file that is not Markdown, merges left out, newest first
- * (`{ id, shortId, parentCount, subject }`): the code commits of a project whose Codex review is off. `null` when git
- * does not answer. */
+/** The commits of `main..head` read in `cwd` that change a file that is not Markdown, newest first
+ * (`{ id, shortId, parentCount, subject }`): the code commits of a project whose Codex review is off. A merge changes
+ * the files it leaves as none of its parents has them (`--diff-merges=combined`), which is where an edit made in it
+ * is; whether it needs a line is `gentleAiEvidence`'s call. `null` when git does not answer. */
 function markdownlessCommits(cwd, main, head) {
-  const log = gitOut(spawnSync, cwd, ['-c', 'core.quotePath=false', 'log', '--no-merges', '--no-renames', '--name-only', '--format=%x00%H%x09%h%x09%s', `${main}..${head}`]);
+  const log = gitOut(spawnSync, cwd, ['-c', 'core.quotePath=false', 'log', '--diff-merges=combined', '--no-relative', '--no-renames', '--name-only', '--format=%x00%H%x09%h%x09%P%x09%s', `${main}..${head}`]);
   if (log === null) return null;
   return log.split('\0').filter((entry) => entry.trim()).map((entry) => {
     const [line, ...files] = entry.split('\n');
-    const [id, shortId, ...subject] = line.split('\t');
-    return { id, shortId, parentCount: 1, subject: subject.join('\t'), files: files.filter(Boolean) };
+    const [id, shortId, parents, ...subject] = line.split('\t');
+    return { id, shortId, parentCount: parents.split(' ').length, subject: subject.join('\t'), files: files.filter(Boolean) };
   }).filter((commit) => commit.files.some((file) => !/\.md$/i.test(file)));
 }
 

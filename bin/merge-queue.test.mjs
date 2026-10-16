@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 import { circleciState, failedRows, mergeQueueMain } from './merge-queue.mjs';
+import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
@@ -727,4 +728,33 @@ test('a merge of main into the branch, with an edit written in it, asks for no g
   assert.equal(exit, 0, out.join('\n'));
   assert.ok(!out.some((one) => one.includes('left out')), out.join('\n'));
   assert.ok(out.some((one) => one.startsWith(`  ${code.slice(0, 7)} feat/g code:`)), out.join('\n'));
+});
+
+test('the gentle-ai lines are read from the repository\'s root when the queue runs in a folder below it', () => {
+  const { root, main, code, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`);
+  const below = path.join(root, 'odd', 'tasks');
+  fs.mkdirSync(below, { recursive: true });
+  const codeCommits = [{ id: code, shortId: code.slice(0, 7), parentCount: 1 }];
+  const evidence = gentleAiEvidence(below, { main, head, codeCommits, cutover: '2000-01-01T00:00:00Z' });
+  assert.deepEqual(evidence.missing, []);
+  assert.equal(evidence.where.get(code), 'odd/tasks/g.md:2');
+});
+
+test('with the Codex review off, a merge of another branch with an edit written in it needs its own line', async () => {
+  const { root } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
+  git(root, 'checkout', '--quiet', '-b', 'sibling', 'origin/main');
+  fs.writeFileSync(path.join(root, 's.txt'), 's\n', 'utf8');
+  git(root, 'add', 's.txt');
+  git(root, 'commit', '--quiet', '-m', 'sibling code');
+  git(root, 'checkout', '--quiet', 'feat/g');
+  git(root, 'merge', '--quiet', '--no-ff', '--no-commit', 'sibling');
+  fs.writeFileSync(path.join(root, 's.txt'), 's, edited in the merge\n', 'utf8');
+  git(root, 'add', 's.txt');
+  git(root, 'commit', '--quiet', '-m', 'merge sibling');
+  git(root, 'push', '--quiet', 'origin', 'feat/g');
+  const merged = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', 'origin/main');
+  const sibling = git(root, 'rev-parse', 'sibling');
+  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', merged)]);
+  assert.equal(out[0], noEvidence(`${merged.slice(0, 7)}, ${sibling.slice(0, 7)}`), out.join('\n'));
 });
