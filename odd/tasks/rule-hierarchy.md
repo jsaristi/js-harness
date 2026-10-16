@@ -2795,8 +2795,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     seen red): the feature documents' pathspec was relative to the folder the queue ran in, now
     `:(top)odd/tasks/` with `--no-relative`; with the Codex review off `--no-merges` let a merge of
     another branch with an edit in it pass, now merges are read by `--diff-merges=combined` and
-    `gentleAiEvidence` exempts only a merge of main. Next: commit through the gate, Codex recheck,
-    pull request, notify. Then slice (c), then the throughput plan's item 2
+    `gentleAiEvidence` exempts only a merge of main (`c35e195`, gate passed, gentle-ai medium, under
+    budget); Codex recheck `647389f..c35e195` correct (0.97), both fixed. Pull request 328 on
+    `main`, the orchestrator told. Next: slice (c). Then slice (c), then the throughput plan's item 2
     design (two readers). Throughput item 7 is pull request 323
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
