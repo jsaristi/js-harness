@@ -3294,8 +3294,19 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   (`bin/check.test.mjs:494`), which passed alone three times: this session's verifier ran
   `bin/lib/rules-change-run.test.mjs` (about 200 s) outside the lock beside its own gate, a
   sighting of `heavy-run-beside-gate`.
+- 2026-10-16, after the restart: `feat/rules-form-his` is draft pull request 253. Its verifier
+  found no blocker, and a differential check of 30 inputs against 87914bf showed only the allowed
+  differences. Codex judged it correct at 0.96. This branch was rebased on `main` 99a4849, and
+  `gate-log-size` was narrowed (d1ede8c); its one finding is still `odd/tasks/gate-log.md:239`.
+  The remote still held this branch from before the first rebase. He authorized overwriting it,
+  asked by the lead ("¿Lo autorizás?"): "Sí, que la pise (Recomendada)". So the push is
+  `--force-with-lease`, of this branch only.
 
 ## Next step
+**State for a resume, 2026-10-16, batch 1 ready for its pull request.** Next: Codex over
+`origin/main..HEAD`, `merge-tree`, the push with lease and a draft pull request to the lead's
+queue; then batch 2, and his 13 rules join the batches once pull request 253 lands.
+
 **State for a resume, 2026-10-16, paused for an app restart (gentle-ai 4.2.0).** Progress has
 his answer and batch 1's review. `rule/first-patterns` holds batch 1 and `person-present`
 narrowed (0187b1f); gentle-ai approved the batch before the narrowing. `gate-log-size`'s
