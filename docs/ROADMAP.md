@@ -991,7 +991,7 @@ door, not a gate moved off this machine). This is version 2. Baselines are of 20
 | 2 | Ready pull requests land without waiting for a lead turn, with the same checks and reviews | ready to merged: median 48 min, worst 391 | JH 24, design and two readers first |
 | 3 | Stale conflicting pull requests merged with `main` or closed | 8 of 15 open conflicting | the lead |
 | 4 | Shared hot files generated, not hand-edited: the README command list from `--help`, manifest rows derived | README in 26 of 61 merged PRs, ROADMAP 17, manifest 11 | JH 25, after `#282` |
-| 5 | Resume reads the open task (`#332`). Closed Log sections moving to a sibling file is dropped by the stop rule: about 9k to 14k tokens per whole-document read by a verifier, against gentle-ai's one-document rule and 119 shifting citations (`odd/tasks/resume-open-task.md`, Part B) | `session-channel.md` 345 KB, `rule-hierarchy.md` 306 KB; the resume sections 381 and 1,036 lines, the mode line on a stale task in both | JH 26, `#332` |
+| 5 | Resume reads the open task, and closed Log sections move to a sibling file | `session-channel.md` 345 KB, `rule-hierarchy.md` 306 KB | JH 26, after `#311` |
 | 6 | Codex coverage survives a rebase (commits matched by patch-id) | about 157k tokens per review redone | JH 27, design and two readers first |
 | 7 | A land of only documentation skips the suite (`bin/merge-queue.mjs:95` always runs `check.mjs`) | 14 of 61 merged PRs were documentation | JH 24, before item 2 |
 | 8 | A session silent for 60 minutes with open work is flagged | 3 sessions stalled 5 to 6 h | JH 22, `feat/stalled-sessions` |

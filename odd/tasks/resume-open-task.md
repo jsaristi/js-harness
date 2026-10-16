@@ -48,7 +48,7 @@ So a resumed session today finds its sections by search, reads up to about 1,000
   - `docs/SPEC.md` (the resume capability) and the README where it quotes the hook's lines;
   - this document and item 5's row in `docs/ROADMAP.md`.
 - Out:
-  - Part B, closed log entries moved to a sibling file. It is measured below, recommended against, and the lead decides (T1b). It is not built unless the lead says so.
+  - Part B, closed log entries moved to a sibling file. It is measured below and was dropped by the lead under the stop rule (L7).
   - Making the resume sections shorter. Those sections are the largest cost, but bounding them would be a new requirement. Under the freeze it goes to "Later" in the roadmap, with its source.
   - The format of feature documents. The parser reads the shapes the 59 documents already use.
 
@@ -140,7 +140,7 @@ Cost and return:
   - It shows the session each range's size before it reads, so that it can read the Next step's start first.
   - It does not make the 381- and 1,036-line sections smaller.
 
-### Part B: closed log entries in a sibling file (measured, the lead's call)
+### Part B: closed log entries in a sibling file (measured, dropped by the lead, L7)
 
 Measured at 64933f6, LF bytes. An entry is closed when every task id it names is checked done, and `L1`, his request, always stays. Both documents keep their history under `## Progress`, as dated bullets.
 
@@ -174,7 +174,7 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
 ## Tasks
 
 - [x] T1 (kind: design) This design, read by two readers that did not write it; version 2 says what they changed (S1, S2)
-- [ ] T1b (kind: design) The lead's answer on Part B, recorded in the Log (S1, S2)
+- [x] T1b (kind: design) The lead's answer on Part B, recorded in the Log (S1, S2)
 - [x] T2 (kind: build) `tasksOf` gives each task its lines, and `featureParts`, test first (S3, S4)
 - [x] T3 (kind: build) The hook names the task and its parts, and the mode line follows it, test first; the resume tests updated; SPEC and README (S5, S6, S7)
 - [x] T4 (kind: verify) Gate, gentle-ai, Codex review, PR ready, the lead told (S1)
@@ -213,6 +213,15 @@ Recommendation: do not build B. Its return is about 9k to 14k tokens on a read t
   - Codex reviewed b7a7db5..16975f1 in 2 parts and found it correct (0.88 and 0.94), with no findings, using 211,102 input tokens. The review is recorded.
   - Pull request 332 was opened, and the lead was told.
 
+- L7 — 2026-10-16, T1b. The lead's notice of 17:51, verbatim: "Lead: drop B. Part B of item 5 is
+  dropped by the stop rule (relief 17:31); mark it dropped in the ROADMAP throughput table on your
+  branch or a docs PR. 332 goes in the next land." The roadmap change goes in a docs pull request
+  from `origin/main`, because item 5's row sits next to item 6's, which `main` had changed (3be49f7):
+  - Item 5's row says Part B is dropped.
+  - "Later" holds the shorter resume sections, with this document as their source.
+  
+  On this branch, ff795ff had made that change and is reverted here.
+
 ## Next step
 
-T1b: record the lead's answer on Part B. Drop B: close the feature when PR 332 lands. Build B: design it as `odd/log/<doc>.md` for the two open documents, read by two readers first.
+None: every task is closed. The feature closes when pull request 332 lands.
