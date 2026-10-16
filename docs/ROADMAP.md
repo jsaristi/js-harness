@@ -917,6 +917,15 @@ first version, are still a list made by readers and never checked in the code; c
 is a task, and each confirmed one becomes a task of its own. The Codex review switch among them
 already ships (`js-harness functions`, `codexReview` in `bin/lib/functions.mjs`).
 
+**The first version must be complete, stable and fully working, by his order of 2026-10-16.** Told
+the three things above, he wrote "necesitamos si o si que la primera version sea completa y estable
+y ademas super funcional" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 9602,
+2026-10-16T08:10Z). The work it adds is tracked in `odd/tasks/first-version.md`: the three table
+rows, `progress` counting table rows, the 2026-10-13 list checked in the code, the release source
+("Release source" above, decided and not built, without which no machine can update to a new
+version), a clean-home run of install, update and uninstall, and a stability pass at the end.
+Creating the 1.0.0 tag stays his.
+
 **Later (found after the freeze; not in the first version).**
 
 - (none yet)
