@@ -335,8 +335,8 @@ export function defaultBranch(spawn, cwd, remote) {
 }
 
 /** The base of a review, when it is a code commit of the branch that no Codex review record covers: `{ id,
- * shortId, subject }` of `from`, else `null`. `from` is the full id of the commit a review's range starts at
- * (`js-harness codex-review --base`). A git range starts after its base, so the base itself is never read,
+ * shortId, subject }` of `from`, with `merged`, the label of the default branch, when `from` is a merge of it;
+ * else `null`. `from` is the full id of the commit a review's range starts at (`js-harness codex-review --base`). A git range starts after its base, so the base itself is never read,
  * and no record of the range covers it: a branch whose first commit was the base kept that commit with no
  * review and no word about it.
  *
@@ -371,7 +371,13 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
     // which is where the push check reads it.
     let commit = uncoveredUpTo(from);
     if (commit && tip !== undefined && tip !== from) commit = uncoveredUpTo(tip);
-    return commit ? { id: commit.id, shortId: commit.shortId, subject: commit.subject } : null;
+    if (!commit) return null;
+    // A merge of the default branch is read by what was written in it only where it is HEAD (`mergeStart`), so its
+    // first parent is no base that reviews it: the caller names the worktree at it instead (merge-review-covers-main
+    // in docs/FAILURES.md).
+    const parents = gitOut(spawn, cwd, ['rev-list', '--parents', '-n', '1', from])?.split(' ') ?? [];
+    const merged = parents.length === 3 && gitAnswer(spawn, cwd, ['merge-base', '--is-ancestor', parents[2], branch.ref]) === true;
+    return { id: commit.id, shortId: commit.shortId, subject: commit.subject, ...(merged ? { merged: branch.label } : {}) };
   } catch {
     return null;
   }

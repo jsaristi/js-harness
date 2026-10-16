@@ -448,6 +448,32 @@ test('the base of a review that is a code commit of the branch, with no record, 
   assert.deepEqual(baseLeftOut(root, { from: one }), { id: one, shortId: git(root, 'rev-parse', '--short', one), subject: 'feat: two' });
 });
 
+/** A merge of `side` into the branch checked out in `root`, with an edit written in it so it is a code commit. */
+function mergeWithEdit(root, side) {
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', '--quiet', side], { cwd: root });
+  fs.writeFileSync(path.join(root, 'b.js'), `written in the merge of ${side}\n`, 'utf8');
+  git(root, 'add', 'b.js');
+  git(root, 'commit', '--quiet', '-m', `merge ${side}`);
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+test('the base of a review that is a merge of the default branch says so, `merged` naming that branch; a merge of another branch does not (merge-review-covers-main)', () => {
+  const { root, first } = makeRepo();
+  git(root, 'checkout', '--quiet', '-b', 'trunk');
+  const moved = commit(root, 'm.js', 'main moves', 'feat: main moves');
+  remoteMainAt(root, moved);
+  git(root, 'checkout', '--quiet', '-b', 'other', first);
+  commit(root, 'o.js', 'other', 'feat: other');
+  git(root, 'checkout', '--quiet', '-b', 'feat', first);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const ofMain = mergeWithEdit(root, 'trunk');
+  assert.equal(baseLeftOut(root, { from: ofMain })?.merged, 'origin/main');
+  const ofOther = mergeWithEdit(root, 'other');
+  const left = baseLeftOut(root, { from: ofOther });
+  assert.equal(left?.id, ofOther);
+  assert.equal('merged' in left, false);
+});
+
 test('the base of a review that is the tip of the default branch is no base left out, though it is a code commit with no record', () => {
   const { root } = makeRepo();
   const tip = commit(root, 'b.js', 'two', 'feat: two');
