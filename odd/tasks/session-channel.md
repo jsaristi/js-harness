@@ -106,8 +106,9 @@ Three things already put to him and not answered, which this document does not s
   is the lead's, and his to correct.
 - Whether "one session, the orchestrator is the lead" is reopened, now that its measure tripped
   (see "Why").
-- Tests 1, 2, 3 and 6 of "Tests owed" need him at the app, and test 2 creates a scheduled task
-  on his machine: each is asked before it is run.
+- Tests 1, 3 and 6 of "Tests owed" need him at the app: each is asked before it is run. Test 2,
+  which created a scheduled task on his machine, is retired by his answer of 2026-10-15
+  (Progress, 23:32).
 
 ## TDD
 Mode: strict (source: user global config). Runner: `node --test`. The transcript reader is
@@ -554,7 +555,10 @@ Each is run once by the build, with its result recorded in Progress.
    commit in a folder of its own (one gate turn)? His rule of 2026-10-12 is that no session
    opens where he does not see it (T16), and the app files such a session under its routines,
    collapsed in his sidebar, at the default effort: the question that asks him for this test
-   says both, and without his yes it is not run.
+   says both, and without his yes it is not run. Retired 2026-10-15 at 23:32 local. To "¿Retiro
+   la prueba 2?" he answered "Sí, retirala (Recomendada)" (`e152c9d8`:7614, read with
+   `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
+   scheduled task, so the test would ask about a way this project no longer opens sessions.
 3. `claude --name` with an initial prompt, from a command: does the session appear in the app?
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
@@ -1646,7 +1650,8 @@ and 3.
   `--opening` with a lone `--` after it is refused instead of taken (`bin/notify.mjs:89-92`);
   one test pipes an opening through the dispatcher's real standard input; the concurrent
   append test proves its writers overlapped, or starts them on a barrier
-- [ ] T2 The six tests owed, run and recorded, before anything is built on their answers
+- [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
+  2 is retired by his answer of 2026-10-15 (section 13); tests 1, 3, 4, 5 and 6 remain
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
@@ -2985,6 +2990,12 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `lead-tools` L2 (882ce3f), for the lead to judge. Not tested: the line for a record that
   cannot be read. A countable form of a reopening stays open, as a change to gentle-ai's ODD
   document.
+- 2026-10-15, 23:32 local, T2: he retired test 2 of "Tests owed". The lead asked him with the
+  question tool, "¿Retiro la prueba 2?", options "Sí, retirala (Recomendada)" and "No, correla
+  igual", and he tapped "Sí, retirala (Recomendada)" (`e152c9d8`:7614, read by JH 5 with
+  `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
+  scheduled task. Tests 1, 3 and 6 go to him next, one question at a time, through the lead;
+  tests 4 and 5 do not need him at the app.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
