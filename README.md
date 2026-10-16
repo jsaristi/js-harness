@@ -481,7 +481,7 @@ It reads the main checkout's memory folder, so a worktree sees the same notes, a
 pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
 of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
 user is lost and no file another session wrote is overwritten, and an undo that puts back only what
-nobody wrote since. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+nobody wrote since and refuses while another pass holds the lock. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
 
 ```console
 $ js-harness memory status
