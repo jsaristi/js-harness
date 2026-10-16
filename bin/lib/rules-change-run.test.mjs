@@ -434,6 +434,46 @@ test('a failure is an entry of the register on the branch', async () => {
   assert.match(result.out, /^changed: gate-wait, form;/m);
 });
 
+const SCAN_DESIGN = { kind: 'design', path: 'docs/PROTO.md' };
+const sourcesOf = (repo) => JSON.parse(read(repo.dir, 'docs/rule-sources.json'));
+
+test('a change of form alone keeps the source of the rule, and its relief line names the design it came from', async () => {
+  const repo = repository({ files: { 'docs/FAILURES.md': REGISTER } });
+  const form = { set: { patterns: ['wait.{0,40}{amount}'], failure: 'old-rule-beside-new' }, source: SCAN_DESIGN };
+  const dry = await change(repo, ['gate-wait', '--dry-run'], form);
+  assert.equal(dry.code, 0, dry.err);
+  assert.match(dry.out, /^Source: kept, the rule's own: \{\n {2}"kind": "design",\n {2}"path": "docs\/ROADMAP\.md"\n\}$/m);
+  const result = await change(repo, ['gate-wait'], form);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(sourcesOf(repo), SOURCES);
+  const list = rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs'));
+  assert.deepEqual(list.find((rule) => rule.id === 'gate-wait').patterns, ['wait.{0,40}{amount}']);
+  assert.equal(read(repo.dir, 'docs/RULES.md'), listTextOf(repo.dir, list, SOURCES));
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /rule:gate-wait proposed on rule\/gate-wait, not landed: form; source design docs\/PROTO\.md, the rule's own source kept; supersedes no relief line\n$/);
+});
+
+test('a change of form on a rule of his still needs his words, and a design is refused for it as before', async () => {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', 'main');
+  write(repo.dir, 'bin/lib/rules-data.mjs', writeRules(LIST.map((rule) => (rule.id === 'gate-wait' ? { ...rule, owner: 'sebastian' } : rule))));
+  git(repo.dir, 'commit', '-q', '-am', 'his rule');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(repo.dir, 'switch', '-q', '-C', 'rule/gate-wait', 'main');
+  const before = snapshot(repo);
+  const refused = await change(repo, ['gate-wait'], { set: { patterns: ['wait.{0,40}{amount}'] }, source: SCAN_DESIGN });
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /a rule of his changes only with his words, not a design/);
+  assert.deepEqual(snapshot(repo), before);
+});
+
+test('a value given with patterns is no change of form: the change stores its own source, as before', async () => {
+  const repo = repository();
+  const result = await change(repo, ['gate-wait'], { value: 30, set: { patterns: ['wait.{0,40}{amount}'] }, source: SCAN_DESIGN });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(sourcesOf(repo)['gate-wait'], SCAN_DESIGN);
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /not landed: 60 minutes to 30 minutes; source design; supersedes/);
+});
+
 test('the switch back from refuses fetches nothing, writes the reason, and its relief line names the failure', async () => {
   const repo = repository({ list: REFUSING, files: { 'docs/FAILURES.md': REGISTER } });
   const asked = [];
