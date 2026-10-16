@@ -203,6 +203,8 @@ on it.
   of F6 cannot run as planned
 - Seen: 2026-10-10 — relief file, line 146 — `claude` on PATH is 2.1.296, replaced by the native
   updater on 2026-10-09 14:36 (claimed); also odd/tasks/subagent-model-routing.md:399-404
+- Control: check — bin/doctor.test.mjs — "a stack tool updated since the reviewed versions is stale,
+  named by the hook" — since 2026-10-16
 
 ### codex-cap-too-small
 A fixed cap of Codex input tokens per feature was met again and again, and each time finished slices

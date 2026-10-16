@@ -60,7 +60,7 @@ function probeTimedOut(result) {
 /** Runs `<command> <args>` and extracts the first semver from stdout. Never throws: a missing
  * binary (ENOENT, or any non-zero exit) is `missing`; output with no parseable version, or a probe
  * that had to be killed after `PROBE_TIMEOUT_MS`, is `unknown`. */
-function probeVersionCommand(command, args, deps) {
+export function probeVersionCommand(command, args, deps) {
   const result = spawnProbe(command, args, deps);
   if (!result) return { state: 'missing', version: null };
   if (probeTimedOut(result)) return { state: 'unknown', version: null };

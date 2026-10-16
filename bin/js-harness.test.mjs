@@ -246,8 +246,9 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       rows.map((r) => r.id),
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
-      // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen', 'host-update', 'gentle-ai-sync'],
+      // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
+      // is `stack-update`, whatever tools it reads.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen', 'host-update', 'stack-update', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.
