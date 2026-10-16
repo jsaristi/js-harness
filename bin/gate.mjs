@@ -22,6 +22,7 @@ import path from 'node:path';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
+import { GateFirstError, TICKET_ID, cancelTicket, issueTicket, logTicket, readTickets } from './lib/gate-first.mjs';
 import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -38,6 +39,7 @@ export const GATE_MAX_MINUTES = ruleValue('gate-max', 'minutes');
 const USAGE = [
   'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
+  '       js-harness gate first [--session <id> --reason <why> [--tree <path>] [--minutes <n>] | --cancel <id>] [--home <path>]',
   GATE_WAIT_USAGE,
   `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
 ].join('\n');
@@ -181,6 +183,95 @@ function gateLogMain(argv, env) {
   return unavailable ? 1 : 0;
 }
 
+/** What comes after `gate first`, walked as `parseLogArgs` walks what comes after `gate log`: `{ home,
+ * cancel }` for a cancellation, `{ home, session, reason, tree, minutes }` for an issue, and `{ home, list }`
+ * for the list. A value the ticket refuses (no reason, minutes out of range) is a usage error too, said in
+ * the ticket's words (`issueTicket`, `cancelTicket`). */
+function parseFirstArgs(argv, env) {
+  const given = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    const token = argv[i];
+    if (!['--session', '--reason', '--tree', '--minutes', '--cancel', '--home'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
+    if (token in given) throw new GateArgError(`${token} given twice`);
+    const value = argv[i + 1];
+    if (value === undefined || value.startsWith('--')) throw new GateArgError(`${token} requires a value`);
+    given[token] = value;
+  }
+  const home = given['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir();
+  const others = Object.keys(given).filter((flag) => flag !== '--home');
+  if ('--cancel' in given) {
+    if (others.length > 1) throw new GateArgError('--cancel takes no other flag but --home');
+    if (!TICKET_ID.test(given['--cancel'])) throw new GateArgError(`a ticket id is eight hex characters, not "${given['--cancel']}"`);
+    return { home, cancel: given['--cancel'] };
+  }
+  if (others.length === 0) return { home, list: true };
+  const minutes = given['--minutes'];
+  return {
+    home,
+    session: given['--session'],
+    reason: given['--reason'],
+    tree: given['--tree'] ?? null,
+    minutes: minutes === undefined ? undefined : /^\d+(\.\d+)?$/.test(minutes) ? Number(minutes) : minutes,
+  };
+}
+
+/** `js-harness gate first`: the tickets that put one session's next whole check first in the line of the
+ * machine's gate lock (./lib/gate-first.mjs). With `--session` and `--reason` it issues one for the next
+ * check of that session (of the tree `--tree` where given), for `--minutes` at most 60; with `--cancel` it
+ * removes one; with neither it lists the open ones on stdout. The issuer is the session that runs this
+ * (`CLAUDE_CODE_SESSION_ID`), written in the ticket for the board to name. The orchestrator issues them; a
+ * work session only on its word, quoted in `--reason`. Each issue, expiry and cancellation is a line of the
+ * gate log, unless the log is switched off. Exit 0, 1 for a third ticket or an id that is not open, 2 for a
+ * usage error; it takes no lock and runs nothing. */
+function gateFirstMain(argv, env) {
+  let parsed;
+  try {
+    parsed = parseFirstArgs(argv, env);
+  } catch (err) {
+    console.error(`${err.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const logged = (kind, ticket) => {
+    if (!gateLogSwitchedOff(env)) logTicket(parsed.home, kind, ticket);
+  };
+  if (parsed.cancel !== undefined) {
+    const ticket = cancelTicket({ home: parsed.home, id: parsed.cancel });
+    if (ticket === null) {
+      console.error(`gate first: no open ticket ${parsed.cancel}`);
+      return 1;
+    }
+    logged('first-cancelled', ticket);
+    console.log(`ticket ${ticket.id} cancelled: session ${ticket.session}, ${ticket.reason}`);
+    return 0;
+  }
+  if (parsed.list) {
+    const { open } = readTickets(parsed.home);
+    if (open.length === 0) console.log('no ticket is open');
+    for (const ticket of open) {
+      console.log([ticket.id, `session ${ticket.session}`, `until ${ticket.until}`, `by ${ticket.by ?? 'a session it does not name'}`, ticket.reason, ticket.tree && `tree ${ticket.tree}`].filter(Boolean).join('  '));
+    }
+    return 0;
+  }
+  let issued;
+  try {
+    issued = issueTicket({ home: parsed.home, session: parsed.session, reason: parsed.reason, tree: parsed.tree, by: env.CLAUDE_CODE_SESSION_ID || null, ...(parsed.minutes !== undefined && { minutes: parsed.minutes }) });
+  } catch (err) {
+    if (!(err instanceof GateFirstError)) throw err;
+    // A third ticket is refused for what is open, not for how it was asked: no usage after it.
+    if (err.message.startsWith('two tickets')) {
+      console.error(`gate first: ${err.message}`);
+      return 1;
+    }
+    console.error(`${err.message}\n\n${USAGE}`);
+    return 2;
+  }
+  for (const gone of issued.expired) logged('first-expired', gone);
+  const { ticket } = issued;
+  logged('first-issued', ticket);
+  console.log(`ticket ${ticket.id}: the next check of session ${ticket.session}${ticket.tree ? ` in ${ticket.tree}` : ''} goes first, until ${ticket.until}: ${ticket.reason} (cancel: js-harness gate first --cancel ${ticket.id})`);
+  return 0;
+}
+
 /** Runs the command of `argv` while this process holds the machine's gate lock, and returns the exit code:
  * the command's own, 2 for a usage error, `GATE_NOT_RUN` when the lock was held and nothing ran.
  *
@@ -251,6 +342,7 @@ function gateLogMain(argv, env) {
 export async function gateMain(argv, env = process.env, deps = {}) {
   // No command comes before `--`, so a first word `log` was a usage error before it was this.
   if (argv[0] === 'log') return gateLogMain(argv.slice(1), env);
+  if (argv[0] === 'first') return gateFirstMain(argv.slice(1), env);
   let parsed;
   let commandLine;
   try {

@@ -23,7 +23,8 @@ import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
-import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
+import { GATE_WAIT_MS, readGateWaiters, takeGateLock } from './lib/gate-lock.mjs';
+import { claimTicket, logTicket } from './lib/gate-first.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
@@ -1119,9 +1120,11 @@ function duration(ms) {
 const minutes = (count) => `${count} minute${count === 1 ? '' : 's'}`;
 
 /** A gate for a message: the folder it checks, with its pid and `since`, a time with the word for it,
- * where its file says them. A gate of whom nothing is known is "another gate". */
+ * where its file says them, and the ticket it goes first by, with why, where it claimed one. A gate of whom
+ * nothing is known is "another gate". */
 function gateSaid(gate, since) {
-  const said = [gate?.pid != null && `pid ${gate.pid}`, since].filter(Boolean);
+  const ticket = typeof gate?.first === 'string' && `first by ticket ${gate.first}: ${gate.firstReason ?? 'no reason read'}`;
+  const said = [gate?.pid != null && `pid ${gate.pid}`, since, ticket].filter(Boolean);
   return `${gate?.cwd == null ? 'another gate' : `the gate of ${gate.cwd}`}${said.length ? ` (${said.join(', ')})` : ''}`;
 }
 
@@ -1221,10 +1224,12 @@ export const GATE_WAIT_SAID_MS = 1000;
  *
  * `session` is the id of the host's session that started the gate, or `null` where the host gives none:
  * the lock writes it in the gate's file, where the session board reads it. `check` and `js-harness gate`
- * pass what their environment says (`CLAUDE_CODE_SESSION_ID`).
+ * pass what their environment says (`CLAUDE_CODE_SESSION_ID`). `first` is the ticket this gate claimed
+ * (`{ id, reason }`, ./lib/gate-first.mjs), handed to the lock, which puts the gate before every gate that
+ * waits; a gate waited for that went first by a ticket is marked `first: true` among `waitedFor`.
  * `take` stands in for `takeGateLock`, so a test stands in for the lock or runs the real one on its own
  * clock. */
-export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null, stillWanted }, take = takeGateLock) {
+export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null, stillWanted, first = null }, take = takeGateLock) {
   const waitMs = waitMinutes * 60_000;
   const met = new Map();
   // One entry for each token, to which a later telling adds what the entry does not have yet: a holder's
@@ -1235,7 +1240,8 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
     const said = { cwd: holder.cwd ?? null, pid: holder.pid ?? null, command: holder.command ?? null };
     const key = holder.token != null ? `token ${holder.token}` : `no token ${JSON.stringify([said.pid, said.cwd, said.command])}`;
     const known = met.get(key) ?? { cwd: null, pid: null, command: null };
-    met.set(key, { cwd: known.cwd ?? said.cwd, pid: known.pid ?? said.pid, command: known.command ?? said.command });
+    const first = known.first || typeof holder.first === 'string';
+    met.set(key, { cwd: known.cwd ?? said.cwd, pid: known.pid ?? said.pid, command: known.command ?? said.command, ...(first && { first: true }) });
   };
   const waitedFor = () => [...met.values()];
   const onWait = (holder, leftMs = waitMs, line) => {
@@ -1257,7 +1263,7 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
   const askedAt = Date.now();
   try {
     // `stillWanted`, from `js-harness gate` alone: whether its launcher lives (`takeGateLock`).
-    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait, ...(stillWanted ? { stillWanted } : {}) });
+    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait, ...(stillWanted ? { stillWanted } : {}), ...(first ? { first } : {}) });
   } catch (err) {
     return { without: `the machine's gate lock, which could not be taken (${err instanceof Error ? err.message : String(err)})`, waitedMs: Date.now() - askedAt, waitedFor: waitedFor() };
   }
@@ -1295,8 +1301,8 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
  * gate writes in its log. A gate that is refused writes one line there through `record`, where it has
  * one (`gateRecord` of `./lib/gate-log.mjs`), and a line that could not be written is one more row.
  * `takeGateLock` is injectable, as in `takeGateTurn`. */
-async function underGateLock(cwd, { home, wait, waitMinutes, session }, { takeGateLock: take = takeGateLock }, run, record) {
-  const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes, session }, take);
+async function underGateLock(cwd, { home, wait, waitMinutes, session, first = null }, { takeGateLock: take = takeGateLock }, run, record) {
+  const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes, session, first: first && { id: first.id, reason: first.reason } }, take);
   const { waitedMs, waitedFor } = turn;
   if (turn.without) {
     return [gateRow(`the sensors ran without ${turn.without}, so another gate may have run at the same time`), ...(await run({ lock: 'none', waitedMs, waitedFor }))];
@@ -1308,6 +1314,7 @@ async function underGateLock(cwd, { home, wait, waitMinutes, session }, { takeGa
   const { lock } = turn;
   const waited = lock.waitedMs >= GATE_WAIT_SAID_MS;
   const rows = waited ? [gateRow(`waited ${duration(lock.waitedMs)} for the machine's gate lock before the sensors ran`)] : [];
+  if (first) rows.push(gateRow(`this gate claimed ticket ${first.id} (${first.reason}), issued by ${first.by ?? 'a session the ticket does not name'}, and went before every gate that waited`));
   let lost = false;
   try {
     rows.push(...(await run({ lock: 'own', waitedMs, waitedFor })));
@@ -1318,6 +1325,27 @@ async function underGateLock(cwd, { home, wait, waitMinutes, session }, { takeGa
   }
   if (lost) rows.push(gateRow("the machine's gate lock was lost while the sensors ran: this gate was silent for over a minute and another took its lock, so two gates may have run at once"));
   return rows;
+}
+
+/** Claims the ticket of the session of `lock` for the gate that checks `cwd` (`claimTicket`), and writes in
+ * the gate log what the claim did: the tickets its sweep found expired, and the claim, with the gates that
+ * waited then, which this one passes. Nothing is written with the log switched off (`lock.log` false).
+ * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines. */
+function claimOf(lock, cwd, deps) {
+  const { ticket, expired } = claimTicket({ home: lock.home, session: lock.session, cwd: path.resolve(cwd) });
+  if (lock.log === false) return ticket;
+  const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
+  for (const gone of expired) logTicket(lock.home, 'first-expired', gone, {}, written);
+  if (ticket) {
+    let waiting = [];
+    try {
+      waiting = readGateWaiters(lock.home).filter((gate) => typeof gate.first !== 'string');
+    } catch {
+      // a line that cannot be read passes nobody that can be named
+    }
+    logTicket(lock.home, 'first-claimed', ticket, { cwd: path.resolve(cwd), pid: process.pid, passed: waiting.map(({ cwd: folder, pid }) => ({ cwd: folder, pid })) }, written);
+  }
+  return ticket;
 }
 
 /** A row named `gate`: what the machine's gate lock did that a reader of the report must know. It informs
@@ -1461,6 +1489,10 @@ export async function checkSensors(cwd, deps = {}, lock) {
   const record = lock && lock.log !== false && lock.home !== undefined
     ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
     : null;
+  // The ticket of this gate's session, claimed as it arrives and so spent whatever comes next: a gate that
+  // stops, is proven by its tree or is refused spends it too, and its tree cannot jump the line twice
+  // (./lib/gate-first.mjs). Not by a gate in the turn of the process that started it, which waits for nobody.
+  const claimed = lock && lock.held !== true && lock.home !== undefined ? claimOf(lock, cwd, deps) : null;
   // The stop, here and not sooner: both declarations are read and this gate would now run its sensors.
   if (lock?.stoppedBy?.length) {
     record?.stopped({ rows: lock.stoppedBy });
@@ -1571,7 +1603,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return underGateLock(cwd, lock, deps, run, record);
+  return underGateLock(cwd, { ...lock, first: claimed }, deps, run, record);
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */

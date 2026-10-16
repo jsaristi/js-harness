@@ -1,0 +1,161 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { GateFirstError, GATE_FIRST_MAX_MINUTES, cancelTicket, claimTicket, gateFirstDir, issueTicket, readTickets } from './gate-first.mjs';
+
+const AT = Date.parse('2026-10-16T10:00:00.000Z');
+const MINUTE = 60_000;
+
+function withHome(run) {
+  return async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-gate-first-'));
+    try {
+      await run(home);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  };
+}
+
+/** A clock the test moves. */
+function clockAt(start = AT) {
+  let at = start;
+  return { now: () => at, advance: (ms) => { at += ms; } };
+}
+
+/** Ids handed out in order, so a test knows each ticket's name. */
+function ids(...names) {
+  const left = [...names];
+  return () => left.shift();
+}
+
+const issue = (home, clock, fields, id) => issueTicket({ home, now: clock.now, id: () => id, reason: 'unblocks the others', ...fields });
+
+test('a ticket is one file under <home>/.js-harness/gate-first, and reading lists it as open with what it says', withHome((home) => {
+  const clock = clockAt();
+  const { ticket, expired } = issue(home, clock, { session: 'sess-a', tree: 'D:\\work\\a', by: 'sess-orq', minutes: 30 }, '0a0a0a0a');
+  assert.deepEqual(expired, []);
+  assert.deepEqual(ticket, {
+    v: 1,
+    id: '0a0a0a0a',
+    session: 'sess-a',
+    tree: path.resolve('D:\\work\\a'),
+    reason: 'unblocks the others',
+    by: 'sess-orq',
+    issuedAt: '2026-10-16T10:00:00.000Z',
+    until: '2026-10-16T10:30:00.000Z',
+  });
+  assert.deepEqual(fs.readdirSync(gateFirstDir(home)), ['0a0a0a0a.json']);
+  assert.deepEqual(readTickets(home, { now: clock.now }), { open: [ticket], expired: [], unreadable: [] });
+}));
+
+test('a ticket is for 60 minutes when not told, never longer, and needs a session and a reason', withHome((home) => {
+  const clock = clockAt();
+  const { ticket } = issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  assert.equal(ticket.until, new Date(AT + GATE_FIRST_MAX_MINUTES * MINUTE).toISOString());
+  assert.equal(ticket.tree, null);
+  assert.equal(ticket.by, null);
+  for (const [fields, said] of [
+    [{ session: 'sess-b', minutes: 61 }, /--minutes takes a number from 1 to 60/],
+    [{ session: 'sess-b', minutes: 0 }, /--minutes takes a number from 1 to 60/],
+    [{ session: '' }, /a session id/],
+    [{ session: 'sess-b', reason: '  ' }, /a reason/],
+  ]) {
+    assert.throws(() => issue(home, clock, fields, '0b0b0b0b'), (err) => err instanceof GateFirstError && said.test(err.message));
+  }
+  assert.deepEqual(fs.readdirSync(gateFirstDir(home)), ['0a0a0a0a.json']);
+}));
+
+test('two tickets at most are open: a third is refused, naming the two in the order they were issued', withHome((home) => {
+  const clock = clockAt();
+  issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  clock.advance(1000);
+  issue(home, clock, { session: 'sess-b' }, '0b0b0b0b');
+  assert.throws(
+    () => issue(home, clock, { session: 'sess-c' }, '0c0c0c0c'),
+    (err) => err instanceof GateFirstError && /two tickets are open already: 0a0a0a0a \(session sess-a.*\), 0b0b0b0b \(session sess-b/.test(err.message),
+  );
+  assert.deepEqual(readTickets(home, { now: clock.now }).open.map((ticket) => ticket.id), ['0a0a0a0a', '0b0b0b0b']);
+}));
+
+test('a ticket left in place past its expiry is gone: reading calls it expired, and the next issue removes it and says so', withHome((home) => {
+  const clock = clockAt();
+  const { ticket: old } = issue(home, clock, { session: 'sess-a', minutes: 5 }, '0a0a0a0a');
+  issue(home, clock, { session: 'sess-b', minutes: 30 }, '0b0b0b0b');
+  clock.advance(5 * MINUTE);
+  const read = readTickets(home, { now: clock.now });
+  assert.deepEqual([read.open.map((ticket) => ticket.id), read.expired], [['0b0b0b0b'], [old]]);
+  // Reading removes nothing.
+  assert.equal(fs.readdirSync(gateFirstDir(home)).length, 2);
+  const { expired } = issue(home, clock, { session: 'sess-c' }, '0c0c0c0c');
+  assert.deepEqual(expired, [old]);
+  assert.deepEqual(fs.readdirSync(gateFirstDir(home)).sort(), ['0b0b0b0b.json', '0c0c0c0c.json']);
+}));
+
+test('a file that is no ticket is no ticket: it is named unreadable and counts against nothing', withHome((home) => {
+  const clock = clockAt();
+  fs.mkdirSync(gateFirstDir(home), { recursive: true });
+  fs.writeFileSync(path.join(gateFirstDir(home), '0d0d0d0d.json'), '{"v":1,"id":"0d0d');
+  fs.writeFileSync(path.join(gateFirstDir(home), '0e0e0e0e.json'), `${JSON.stringify({ v: 1, id: '0f0f0f0f', session: 's', tree: null, reason: 'r', by: null, issuedAt: new Date(AT).toISOString(), until: new Date(AT + MINUTE).toISOString() })}\n`);
+  assert.deepEqual(readTickets(home, { now: clock.now }), { open: [], expired: [], unreadable: ['0d0d0d0d.json', '0e0e0e0e.json'] });
+  issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  issue(home, clock, { session: 'sess-b' }, '0b0b0b0b');
+  assert.equal(readTickets(home, { now: clock.now }).open.length, 2);
+}));
+
+test('a home with no tickets has none, and an id the folder does not hold cancels nothing', withHome((home) => {
+  assert.deepEqual(readTickets(home, { now: () => AT }), { open: [], expired: [], unreadable: [] });
+  assert.equal(cancelTicket({ home, id: '0a0a0a0a' }), null);
+}));
+
+test('a cancelled ticket is removed and returned, and the folder goes with the last one', withHome((home) => {
+  const clock = clockAt();
+  const { ticket } = issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  assert.deepEqual(cancelTicket({ home, id: '0a0a0a0a' }), ticket);
+  assert.equal(fs.existsSync(gateFirstDir(home)), false);
+  assert.throws(() => cancelTicket({ home, id: '../x' }), GateFirstError);
+}));
+
+test('a gate claims the ticket of its session at once, which spends it: a second gate of the session finds none', withHome((home) => {
+  const clock = clockAt();
+  const { ticket } = issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  issue(home, clock, { session: 'sess-b' }, '0b0b0b0b');
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\anywhere', now: clock.now }), { ticket, expired: [] });
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\anywhere', now: clock.now }), { ticket: null, expired: [] });
+  assert.deepEqual(fs.readdirSync(gateFirstDir(home)), ['0b0b0b0b.json']);
+}));
+
+test('a ticket for a tree is claimed only by a gate of that tree, of its session; no session claims nothing', withHome((home) => {
+  const clock = clockAt();
+  const { ticket } = issue(home, clock, { session: 'sess-a', tree: 'D:\\work\\a' }, '0a0a0a0a');
+  assert.equal(claimTicket({ home, session: 'sess-a', cwd: 'D:\\work\\b', now: clock.now }).ticket, null);
+  assert.equal(claimTicket({ home, session: 'sess-b', cwd: 'D:\\work\\a', now: clock.now }).ticket, null);
+  assert.equal(claimTicket({ home, session: null, cwd: 'D:\\work\\a', now: clock.now }).ticket, null);
+  const tree = process.platform === 'win32' ? 'd:\\WORK\\a\\' : 'D:\\work\\a';
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: tree, now: clock.now }).ticket, ticket);
+}));
+
+test('an expired ticket is not claimed: the claim removes it and says so', withHome((home) => {
+  const clock = clockAt();
+  const { ticket } = issue(home, clock, { session: 'sess-a', minutes: 1 }, '0a0a0a0a');
+  clock.advance(MINUTE);
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now }), { ticket: null, expired: [ticket] });
+  assert.equal(fs.existsSync(gateFirstDir(home)), false);
+}));
+
+test('the claim is the rename of the file: of two gates that read the same ticket, the one whose rename fails has none', withHome((home) => {
+  const clock = clockAt();
+  issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  // The other gate's rename lands between this gate's reading of the folder and its own rename.
+  const io = new Proxy(fs, {
+    get: (target, name) => (name === 'renameSync'
+      ? (from, to) => {
+        if (path.basename(from) === '0a0a0a0a.json') target.renameSync(from, path.join(path.dirname(from), '0a0a0a0a.claimed-other'));
+        return target.renameSync(from, to);
+      }
+      : target[name]),
+  });
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now, fileSystem: io }), { ticket: null, expired: [] });
+}));

@@ -306,11 +306,13 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
   // The two guards of a turn (odd/tasks/gate-turn-guards.md): a bound of wall time, and a push that waits goes first.
   assert.match(run(['--help']).stdout, /^ {2}gate\s+.*--max is how many minutes the command may run before it is stopped with every process it started \(\d+ when not given\)\. While the branch of the folder it runs in has an open pull request and commits a push would take now, it refuses any command but that push or a merge, and prints the push command\./m);
   assert.ok(run(['--help']).stdout.includes(`every process it started (${GATE_MAX} when not given). While`));
+  // The ticket that puts one session's next check first (odd/tasks/gate-first.md).
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+.*js-harness gate first --session <id> --reason <why> \[--tree <path>\] \[--minutes <n>\] issues a ticket .*gate first --cancel <id> undoes one\./m);
   const refused = run(['gate', '--no-wait']);
   assert.equal(refused.status, 2);
   // The last line of the usage says what the two flags of a wait mean, since 2026-10-11: the bound counts from
   // the last time the lock changed hands, which "--wait <minutes>" does not say by itself.
-  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(\d+ when not given\); --no-wait: refuse at once instead of waiting\n {7}--max <minutes>: how long the command may run before it is stopped with every process it started \(\d+ when not given\)\n$/);
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}js-harness gate first \[--session <id> --reason <why> \[--tree <path>\] \[--minutes <n>\] \| --cancel <id>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(\d+ when not given\); --no-wait: refuse at once instead of waiting\n {7}--max <minutes>: how long the command may run before it is stopped with every process it started \(\d+ when not given\)\n$/);
   assert.ok(refused.stderr.includes(`gives up on it (${GATE_WAIT} when not given);`));
   assert.ok(refused.stderr.endsWith(`started (${GATE_MAX} when not given)\n`));
   assert.match(run(['--help']).stdout, /^ {2}gate\s+.*It waits for its turn in the order the gates arrived; --wait is how many minutes the lock may go without changing hands before it gives up \(\d+ when not given\), and --no-wait refuses at once\./m);

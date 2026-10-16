@@ -8,6 +8,7 @@ import { cachePath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
+import { gateFirstDir } from './gate-first.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 
@@ -1218,10 +1219,11 @@ export function uninstall(home, deps = {}) {
     // they leave empty goes with them.
     const gate = removeGateFolder(home, removeFile, statFile);
     const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
+    const tickets = removeTicketFolder(home, removeFile, statFile);
     const channel = removeChannelFolder(home, removeFile, statFile);
     const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept: [] });
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
-    return { removed: [...gate.removed, ...log.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+    return { removed: [...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
   }
 
   const removed = [];
@@ -1282,9 +1284,10 @@ export function uninstall(home, deps = {}) {
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
+  const tickets = removeTicketFolder(home, removeFile, statFile);
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
-  removed.push(...gate.removed, ...log.removed, ...channel.removed, ...remote.removed);
+  removed.push(...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed);
   // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
   // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
   // task to leave the marker under it. It then stays recorded, and its entry says so (`recorded`).
@@ -1301,7 +1304,7 @@ export function uninstall(home, deps = {}) {
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
@@ -1382,6 +1385,22 @@ function removeGateLogFolder(home, removeFile, statFile, gateKept, lockUnseen = 
     return { removed: [], gateKept: [...gateKept, { path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
   }
   return { removed: [dir], gateKept };
+}
+
+/** Removes the folder of the gate's tickets under `home` (`gateFirstDir` of `gate-first.mjs`), as
+ * `{ removed, kept }` like `removeChannelFolder`. `js-harness gate first` writes it, with a manifest or
+ * without, and no process lives in it: a gate claims its ticket in an instant. A folder that could not be
+ * looked at or removed is kept with reason `unremovable` and the error's `code`, and `uninstall` says it
+ * among the gates' folders (`gateKept`), for which `install` already says to remove it by hand. */
+function removeTicketFolder(home, removeFile, statFile) {
+  const dir = gateFirstDir(home);
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  return { removed: [dir], kept: [] };
 }
 
 /** Removes the folder of the session channel under `home` (`channelDir` of `channel.mjs`) with whatever is

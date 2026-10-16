@@ -1797,3 +1797,79 @@ test('a gate writes in its file the session it was started by, with the mark of 
   assert.deepEqual([last.pid, last.session], [23, null]);
   unnamed.lock.release();
 }));
+
+test('a gate that claimed a ticket says so in its file from its first write, with the ticket\'s reason, and both readers return it; a gate without one says nothing of it', withHome(async (home) => {
+  const clock = fakeClock();
+  const holder = await take(home, clock, { pid: 11 });
+  const ticketed = parked(home, clock, { pid: 22, first: { id: '0a0a0a0a', reason: 'unblocks the others' } });
+  const [folder] = waitFolders(home);
+  const file = path.join(gateDir(home), folder, `holder-${folder.slice('wait-'.length)}.json`);
+  assert.deepEqual([JSON.parse(fs.readFileSync(file, 'utf8')).first, JSON.parse(fs.readFileSync(file, 'utf8')).firstReason], ['0a0a0a0a', 'unblocks the others']);
+  const [waiter] = readGateWaiters(home, { now: clock.now, staleMs: STALE_MS });
+  assert.deepEqual([waiter.pid, waiter.first, waiter.firstReason], [22, '0a0a0a0a', 'unblocks the others']);
+  assert.equal('first' in readGateHolder(home, { now: clock.now }), false);
+  holder.release();
+  await ticketed.turn();
+  const now = readGateHolder(home, { now: clock.now });
+  assert.deepEqual([now.pid, now.first, now.firstReason], [22, '0a0a0a0a', 'unblocks the others']);
+  ticketed.lock.release();
+}));
+
+test('a gate with a ticket goes before every gate that waits, whenever it arrived; the holder is never cut, and the gates it passed keep their order', withHome(async (home) => {
+  const clock = fakeClock();
+  const holder = await take(home, clock, { pid: 11 });
+  const older = parked(home, clock, { pid: 22 });
+  clock.advance(1000);
+  const old2 = parked(home, clock, { pid: 23 });
+  clock.advance(1000);
+  const held = [];
+  let sleeps = 0;
+  clock.onSleep = async () => {
+    sleeps += 1;
+    held.push(readGateHolder(home, { now: clock.now })?.pid ?? null);
+    await older.turn();
+    await old2.turn();
+    if (sleeps === 2) holder.release();
+  };
+  const told = [];
+  const onWait = (waitedFor, leftMs, line) => told.push([waitedFor?.pid ?? null, line?.ahead]);
+  const ticketed = await take(home, clock, { pid: 33, onWait, first: { id: '0a0a0a0a', reason: 'unblocks the others' } });
+  assert.equal(ticketed.refused, undefined);
+  // It waited for the holder to finish, with only the holder ahead of it, and took the lock at its first
+  // look after the release; neither gate that arrived before it took it meanwhile.
+  assert.deepEqual(told, [[11, 1]]);
+  assert.deepEqual(held, [11, 11]);
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 33);
+  assert.deepEqual([older.lock, old2.lock], [undefined, undefined]);
+  clock.onSleep = undefined;
+  ticketed.release();
+  await old2.turn();
+  await older.turn();
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 22, 'the older of the two it passed is next');
+  older.lock.release();
+  await old2.turn();
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 23);
+  old2.lock.release();
+}));
+
+test('two gates with a ticket go by their arrival between themselves, both before a gate without one', withHome(async (home) => {
+  const clock = fakeClock();
+  const holder = await take(home, clock, { pid: 11 });
+  const plain = parked(home, clock, { pid: 22 });
+  clock.advance(1000);
+  const firstOne = parked(home, clock, { pid: 33, first: { id: '0a0a0a0a', reason: 'one' } });
+  clock.advance(1000);
+  const secondOne = parked(home, clock, { pid: 44, first: { id: '0b0b0b0b', reason: 'two' } });
+  holder.release();
+  for (const gate of [plain, secondOne, firstOne]) await gate.turn();
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 33);
+  assert.deepEqual([plain.lock, secondOne.lock], [undefined, undefined]);
+  firstOne.lock.release();
+  for (const gate of [plain, secondOne]) await gate.turn();
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 44);
+  assert.equal(plain.lock, undefined);
+  secondOne.lock.release();
+  await plain.turn();
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 22);
+  plain.lock.release();
+}));

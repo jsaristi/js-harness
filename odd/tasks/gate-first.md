@@ -69,9 +69,9 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
 
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
-| T1 | S2: who issues it, undo, two at most | inline | pending | `js-harness gate first` issues, lists and cancels; `first-issued`, `first-cancelled` |
-| T2 | S2: the claim, spent at the claim | inline | pending | the claim at arrival, the order (first, arrival, token), the expiry; `first-claimed`, `first-expired` |
-| T3 | S2: how a waiter sees it was passed | inline | pending | the wait line, and `first: true` in the start line |
+| T1 | S2: who issues it, undo, two at most | inline | done (slice A) | `js-harness gate first` issues, lists and cancels; `first-issued`, `first-cancelled`; `bin/lib/gate-first.mjs`, its 11 tests, 3 in `gate.test.mjs`; `uninstall` removes the folder (`manifest.test.mjs`) |
+| T2 | S2: the claim, spent at the claim | inline | done (slice A) | the claim at arrival (`claimOf`, `check.mjs`), the order (`inTurnBefore`, `gate-lock.mjs`), the expiry; `first-claimed`, `first-expired`; 3 tests in `gate-lock.test.mjs`, 3 in `check.test.mjs` |
+| T3 | S2: how a waiter sees it was passed | inline | done (slice A) | the wait line says `first by ticket <id>: <reason>`, `first: true` in the start line and ` (first by a ticket)` in `gate log`; 1 test in `gate-log.test.mjs` |
 | T4 | S2: what stops every session marking itself first | inline | pending | the board prints tickets and flags an issuer that is no orchestrator; `--first` on the batch run |
 | T5 | S1, S2 | inline | pending | help, README, ROADMAP, `faster-check.md` T2 |
 
@@ -95,6 +95,14 @@ Nothing planned: the design is the one the lead took (`odd/tasks/faster-check.md
   lands on, and sessions stop merging main again. The ticket matters less with that, so it goes last in
   JH 8's queue, after the gate log's failing test names of a WSL run and the warning for a `node --test`
   of several files outside a turn. Nothing of it is built yet: this document is its whole state.
+- **L5** (2026-10-16 07:05 by `date`, JH 24): slice A built, T1-T3, test first (each test seen red, then
+  green): the store `bin/lib/gate-first.mjs`, the lock's order (a gate with a ticket before every gate
+  without, then arrival, then token, from its first write since `gatesAhead` reads each file once), the
+  claim in `check` (only a whole check that takes the lock; an inner check or one under a held lock claims
+  nothing), `js-harness gate first`, the four log kinds, and `uninstall` removing `<home>/.js-harness/gate-first`
+  (an unremovable one is said in `gateKept`, where `install` already tells to remove it by hand). The
+  claimed line logs the waiters it passed by `cwd` and `pid`, not by their record's id. Slice B is T4-T5:
+  the board, `check --first`, the docs. The branch merged main (`6c6201b`), clean by `git merge-tree`.
 
 ## Resume here (JH 8, 2026-10-14 15:13 by `date`, context 87%)
 
