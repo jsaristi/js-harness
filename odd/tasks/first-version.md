@@ -58,6 +58,12 @@ work so no session has to rediscover it.
   a script the gate runs.
 - S6. A stability pass at the end: the full suite and `check` green on `main` on Windows and WSL2
   and on CircleCI, and no open defect in `docs/FAILURES.md` that breaks shipped behaviour.
+- S7. More production lines: each commit's gate can run on a CI machine (GitHub Actions or
+  CircleCI) instead of only on this one, so several sessions' gates run at once. Measured on
+  2026-10-16: two suites at once on this machine take 303 and 305 s against 158 s alone, with a
+  WSL memory peak of 1.86 GB, so the local limit is CPU and a second local line gains nothing.
+  The design names the CI minutes a day it spends and their cost on his plans before anything is
+  built; that spend is his. A commit still never lands without its own proof (AGENTS.md).
 
 ## Tasks
 
@@ -67,6 +73,8 @@ work so no session has to rediscover it.
 - [ ] T4 (kind: design) S4: the release source, designed; its build follows as T4b
 - [ ] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
+- [ ] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build
+- [ ] T7b (kind: build) S7: the design built, after his yes to its spend
 
 ## Log
 
@@ -77,3 +85,8 @@ work so no session has to rediscover it.
   the three table rows (S1), the unchecked 2026-10-13 list (S3), and the `progress` defect (S2).
   The lead added S4, S5 and S6 because "complete, stable and fully working" cannot hold while no
   version can be updated to (S4) and while the whole cycle is never run on a clean machine (S5).
+- L3 (2026-10-16T10:38Z, the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 10728,
+  read with `js-harness sessions --quote`): asked when to build gates on GitHub/CircleCI for more
+  lines, he chose "Ahora, dentro de la v1" over after the first version. It came after the lead's
+  measurement (S7) showed no second line fits on this machine, and after his question of that
+  morning "como no vamos a poder tener mas linea de produccion".
