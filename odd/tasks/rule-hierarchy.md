@@ -3344,8 +3344,28 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     command to 120 characters".
   The `AMOUNT` fix takes the mid-number false positives; the rest is a second pass of patterns
   after his 13 rules.
+- 2026-10-16, batch 2 landed as pull request 264 (`main` 8e43e8a): gentle-ai, the verifier and
+  Codex (0.88, no finding) had all passed. His batch A had to wait for it: `rules change` keeps
+  one rule change open at a time. Batch A, built on `rule/his-patterns` as changes of form under
+  his answer of 2026-10-16, with a design for their source: `session-effort`, `session-model`,
+  `subagent-reader-model`, `work-sessions` (0 findings each), `review-model`,
+  `subagent-writer-model`, `reviewed-commit-lines` (1 each), `codex-review-margin` (2),
+  `subagent-effort` and `codex-review-rate` (3 each). The narrowings, each from a probe of the
+  drafts on `main`:
+  - `codex-review-margin` wants a percent, since `odd/tasks/gate-wait.md` speaks of the gate's
+    margin on its bound in seconds;
+  - `codex-review-rate` wants a rate, a cap or "put at" before the amount, since "cost 325 input
+    tokens a changed line" is a measurement;
+  - `reviewed-commit-lines` wants a bound ("up to", "at most", "under", "holds"), since "It is
+    5,222 changed lines" measures a commit;
+  - `subagent-effort`'s second pattern leaves out a line naming a `gpt-` model, since
+    `effort: "medium"` in `stack-v4.md` is Codex's orchestrator, not a subagent of this harness.
 
 ## Next step
+**State for a resume, 2026-10-16, his batch A built on `rule/his-patterns`.** Ten commits, one
+per rule. Next: gentle-ai (item 3), an independent verifier, Codex, `merge-tree`, and a draft pull
+request to the lead's queue; then batch B alone, narrowed first; then the `AMOUNT` fix.
+
 **State for a resume, 2026-10-16, batch 2 reviewed.** gentle-ai approved and acknowledged, the
 verifier passed, `NEAR_MISS` folded in. Next: Codex (`codex-review --base origin/main`),
 `merge-tree`, push and a draft pull request to the lead's queue; then his batch A (ten rules),

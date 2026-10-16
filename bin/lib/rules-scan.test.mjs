@@ -92,6 +92,8 @@ test('on the real list, every rule with patterns finds its own planted line, and
 
 // A line each narrowed rule once caught and must not catch again: the probe's false positive it was narrowed for.
 const NEAR_MISS = {
+  'codex-review-margin': 'The gate keeps a margin of 30 seconds on its bound.',
+  'codex-review-rate': 'That part cost 325 input tokens a changed line.',
   'gate-log-command': 'The Codex command line is cut to 100 characters.',
   'gate-log-size': 'Search the git log over 3 days.',
   'gate-max': 'The gate is stopped when 90 percent are done.',
@@ -100,6 +102,8 @@ const NEAR_MISS = {
   'review-part-files': 'Each part is read as { of: 1, files }.',
   'review-parts-unflagged': 'A run of 28 parts started without the numbers.',
   'review-timeout': 'The Codex login is stopped past codex-review-prompt.mjs:51.',
+  'reviewed-commit-lines': 'It is 5,222 changed lines, the whole commit.',
+  'subagent-effort': 'The orchestrator runs on gpt-6.1-sol with effort: "medium".',
 };
 
 test('on the real list, a narrowed rule no longer finds the line it was narrowed for', () => {
