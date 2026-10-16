@@ -163,7 +163,10 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 
 - [x] T1 (kind: build) S1: the three open table rows, closed in their own documents (L11)
 - [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L4)
-- [ ] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks
+- [x] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks (L12)
+- [ ] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
+- [ ] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
+- [ ] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4)
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L6)
 - [x] T4b (kind: build) S4: the release source, built as designed; inline, test first (L7)
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
@@ -239,3 +242,27 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   T3b and switch are `1532bc2` on main; test-run-warning T2 is JH 15's guard, `63fec3c`, which calls
   `testRunWarning` for a Bash command (`bin/guard.mjs:83`, `bin/guard.test.mjs` 21/21). Each row now says so;
   `js-harness progress` read 7/8 and 1/2 for those two documents before.
+- L12 (2026-10-16, JH 25): T3, on the lead's notice of 17:00 ("first-version T3 ... JH 19 owned it but has been
+  silent 6h; I move it to you"). A reader (Opus, high, 135k tokens, read-only on `5cccfc4`) checked each item of
+  relief lines 543 to 546 in the code; one claim spot-checked by the parent (item 12, `bin/lib/pause.mjs:300`).
+  Already fixed: (1) `pointersIn`, `dc7d34a` and `c5d3ecb` (`bin/lib/manifest.mjs:542-549`); (2) uninstall's
+  `~/.js-harness/remote/`, `724e14f` (`removeRemoteFolder`, `bin/lib/manifest.mjs:1440`); (3) orphans after a
+  timed-out contract run, `501e67d` (`runSensor`, `bin/contract.mjs:213-243`); (6) `status` on a hand-written
+  `harness.json`, `243794e` (`bin/lib/project.mjs:1742`, `bin/update.mjs:206-210`); (8) on demand,
+  `odd/tasks/on-demand-functions.md` all done; (9) the Codex switch, `bin/lib/functions.mjs:17`, `README.md:442`;
+  (10) the gate on GitHub, `odd/tasks/gate-on-github.md` all done and `35a0423`; (11) a project's own rules,
+  `odd/tasks/project-rules.md` all done; (14) `update` reads git tags, `a252fc7` (`bin/update.mjs:44-54`); (15)
+  `README.md`, `2d42c86`; (16) `package.json` ships `bin/` only, `5502d54`; and line 546's npm name, `a252fc7`.
+  Not a defect: (5) the stale installed orchestrator skill was his machine's copy, which `sync` rewrites
+  (`bin/lib/manifest.mjs:194-199`); his copy holds `e8e14fd`'s line today. No command compares the installed
+  skills with the shipped ones, which matters only while every build says 0.1.0.
+  Confirmed, as tasks: (12) the hook texts name an orchestrator and a relief file (`bin/lib/pause.mjs:300`,
+  `bin/lib/sessions.mjs:2755`, `bin/resume.mjs:47`, `:91`) that the `init` template never defines
+  (`agentsTemplate`, `bin/lib/project.mjs:345`; the cut's two blocks went with `d1a5aa4`): T3a. (13) the pause reads
+  a configured window since `17266f3`, but with none configured and none measured it still assumes 500,000
+  (`bin/lib/pause.mjs:23`, `bin/lib/sessions.mjs:21`): T3b. (4) of the session channel's open points
+  (`odd/tasks/session-channel.md:1843-1852`), the pause refusal names `--context-pause` and
+  `--context-compaction` when neither was given (`bin/sessions.mjs:232-235`), the openings hint quotes the title
+  in double quotes (`bin/resume.mjs:384`), and the row on "the last task" still says "before T9" though T9 is done;
+  the yardstick itself waits on his decision: T3c. (7) no `vX.Y.Z` tag on origin and `package.json` says 0.1.0:
+  the tag is his and outside this document (Not in scope), so no task. Each of T3a to T3c is small and inline.
