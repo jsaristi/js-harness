@@ -542,7 +542,13 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   to JH 21 with closed PR 263's branch, test first, two readers on its design: D7 and T10.
 
 ## Next step (2026-10-16)
-- T10 (JH 21, branch `feat/memory-full-uninstall`): D7 version 2, after its two readers; next the build
+- T10 (JH 21, branch `feat/memory-full-uninstall`, worktree D:js-harness-worktreesmemory-full-uninstall): D7 version 2
+  committed (34094e3) after its two readers. State for a resume: the build has not started; no test is written. Order:
+  memory-pass.mjs first (readLock export, a purgeMarker helper in memory-hygiene.mjs beside hygieneDir, planPass
+  marker check and the two lock lines, undoPass takes the lock and checks hashes), then manifest.mjs
+  (removeMemoryHygieneFolder with full, marker, lock rule, rename aside/back), install.mjs flag and lines, the
+  project line, tui.mjs, dueNotice, docs (D7.10). Each rule RED first (D7.9). Then the verifier (risk 1 and 4),
+  gentle-ai review, Codex reading 2e082ca, a PR, tell the lead. Next: the build
   test first. L6.2 is answered (L7).
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
