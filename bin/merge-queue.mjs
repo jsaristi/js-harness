@@ -78,13 +78,24 @@ export function circleciState(checkRuns, statuses) {
  * sensor's output after a blank line (`main` of bin/check.mjs), and that output can hold a row a test printed; so the
  * rows are the first run of lines that begin with a row's status, up to the first blank line. */
 function rowsWith(output, status) {
+  return rowsAndLines(output, status).map((one) => one.row);
+}
+
+/** `rowsWith`, each row with the lines the gate indents under it (`{ row, lines }`), as the merge door gives its findings. */
+function rowsAndLines(output, status) {
   const lines = String(output ?? '').split(/\r?\n/);
   const start = lines.findIndex((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
   if (start === -1) return [];
   const rows = [];
+  let current = null;
   for (const line of lines.slice(start)) {
     if (line.trim() === '') break;
-    if (line.startsWith(`${status}  `)) rows.push(line.trim());
+    if (/^ {6}\S/.test(line)) {
+      current?.lines.push(line.trim());
+      continue;
+    }
+    current = line.startsWith(`${status}  `) ? { row: line.trim(), lines: [] } : null;
+    if (current !== null) rows.push(current);
   }
   return rows;
 }
@@ -115,37 +126,44 @@ function mainHasDoor(checker) {
 /** The merge of `pr` into the candidate at `place`, then main's merge door on that merge (odd/tasks/rule-hierarchy.md,
  * "The merge door (T16e)"), run in the candidate's worktree on `HEAD^1..HEAD`. `door` is main's check.mjs, or `null`
  * when main has no door, and then nothing runs after the merge. Returns:
- * - `{ kind: 'merged', merge }` when the pull request stays (its merge commit);
+ * - `{ kind: 'merged', merge }` when the pull request stays (its merge commit); a head the candidate already has
+ *   merges without a commit, and no door runs on it;
  * - `{ kind: 'conflict', conflicted, said }` when git does not merge it, the merge aborted, the candidate as it was;
- * - `{ kind: 'door', line }` when the door refuses it or does not answer: the merge is taken back, `line` says why;
+ * - `{ kind: 'door', line }` when the door refuses it or does not answer: the candidate goes back to the commit it was
+ *   before this merge, and `line` says why, with the lines the door indents under its FAIL rows;
  * - `{ kind: 'broken', line }` when the merge cannot be taken back, so the candidate is not known: nothing more may
  *   be merged or tested.
  * `--no-verify`: the repository's pre-merge-commit hook runs the gate on every merge, which the queue runs once on the
  * whole candidate instead (S6); under the hook a merge waited for a turn of the lock and was then refused, and read as a
  * conflict. The merge takes the identity the repository already has (no `git config` is written here). */
 function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
-  const done = answer(run, 'git', ['merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid], place);
   const commit = () => gitIn(place, 'rev-parse', 'HEAD').out.trim();
+  const before = commit();
+  const done = answer(run, 'git', ['merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid], place);
   if (!done.ok) {
     const conflicted = gitIn(place, 'diff', '--name-only', '--diff-filter=U').out.split('\n').map((line) => line.trim()).filter(Boolean);
     gitIn(place, 'merge', '--abort');
     return { kind: 'conflict', conflicted, said: done.err.split('\n').find((line) => line.trim()) ?? 'git gave no reason' };
   }
-  if (door === null) return { kind: 'merged', merge: commit() };
+  // A head the candidate has already merges without a commit: it brings no line, so no door runs on it.
+  if (door === null || commit() === before) return { kind: 'merged', merge: commit() };
   // The door's code is main's, from main's worktree (`door`), and it reads only the lines this pull request brings.
   const ran = answer(run, process.execPath, [door, '--door', '--base', 'HEAD^1', '--branch', pr.headRefName], place);
   if (ran.ok) {
-    const notes = rowsWith(ran.out, 'INFO');
+    const notes = rowsAndLines(ran.out, 'INFO');
     if (notes.length > 0) {
       stdout(`PR ${pr.number} notes from the merge door:`);
-      for (const note of notes) stdout(`  ${note}`);
+      for (const note of notes) {
+        stdout(`  ${note.row}`);
+        for (const line of note.lines) stdout(`      ${line}`);
+      }
     }
     return { kind: 'merged', merge: commit() };
   }
-  const taken = gitIn(place, 'reset', '--hard', 'HEAD^1');
+  const taken = gitIn(place, 'reset', '--hard', before);
   if (!taken.ok) return { kind: 'broken', line: `could not take the merge of PR ${pr.number} back (${taken.err.split('\n')[0] || 'git gave no reason'}): nothing was pushed.` };
   if (ran.status === 1) {
-    const rows = failedRows(ran.out);
+    const rows = rowsAndLines(ran.out, 'FAIL').map((one) => [one.row, ...one.lines].join(': '));
     return { kind: 'door', line: `the merge door refuses it${rows.length > 0 ? `: ${rows.join('; ')}` : ' (no row says why)'}` };
   }
   return { kind: 'door', line: `the merge door did not answer (exit ${ran.status ?? 'none'})` };

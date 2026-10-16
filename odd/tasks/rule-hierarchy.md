@@ -2458,8 +2458,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     found by a string in its source (`bin/merge-queue.mjs:109`); the door runs the `failures`
     row too (`bin/check.mjs:2437`); a door that crashes with exit 1 reads as a refusal
     (`bin/merge-queue.mjs:147-151`); the broken reset and a refusal after a bisection have no
-    test (:145-146). Next: Codex `--base dc03f8b`, push, pull request on `main` after 302,
-    notify the orchestrator
+    test (:145-146). Codex on `dc03f8b..bbf7dc2`, two findings, fixed test first (both seen red):
+    P1, a merge that makes no commit ran the door on the previous merge and its reset took that
+    one back, so no door runs on it and a refusal resets to the commit before the merge; P2, the
+    door's indented lines were dropped, now printed under the notes and in the refusal. Next:
+    Codex recheck `--base bbf7dc2`, push, pull request on `main` after 302, notify the orchestrator
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident

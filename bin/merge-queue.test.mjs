@@ -480,6 +480,38 @@ test('a pull request whose merge door passes stays in the candidate, and the doo
   ]);
 });
 
+test('the merge door\'s rows keep their indented lines: under the INFO notes, and in the line that leaves a refused pull request out', async () => {
+  const { root, main, heads } = makeDoorRepo();
+  const door = (args) => (branchOf(args) === 'feat/b'
+    ? { status: 1, stdout: 'FAIL  rules  1 restated value, 1 of a rule that refuses it\n      AGENTS.md:3 restates 88% (rule:context-pause)\nPASS  failures  none open\n', stderr: '' }
+    : { status: 0, stdout: 'INFO  rules  1 restated value, none of a rule that refuses it\n      AGENTS.md:4 restates 400 lines (rule:slice-size)\n', stderr: '' });
+  const { code, out } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], door);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out, [
+    'PR 1 notes from the merge door:',
+    '  INFO  rules  1 restated value, none of a rule that refuses it',
+    '      AGENTS.md:4 restates 400 lines (rule:slice-size)',
+    'PR 2 is left out: the merge door refuses it: FAIL  rules  1 restated value, 1 of a rule that refuses it: AGENTS.md:3 restates 88% (rule:context-pause).',
+    `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/a).`,
+    'Dry run: nothing was tested or pushed, and the candidate was removed.',
+  ]);
+});
+
+test('a pull request whose merge makes no commit (its head is in the candidate already) runs no door, and a refusal never takes back the pull request before it', async () => {
+  // Codex on dc03f8b..bbf7dc2: a merge that brings nothing leaves HEAD where it was, so HEAD^1..HEAD was the
+  // previous pull request's merge, and the reset that took the refused merge back took that one instead.
+  const { root, main, heads } = makeDoorRepo();
+  const seen = [];
+  const door = (args, options) => {
+    seen.push(`${branchOf(args)} ${fs.readFileSync(path.join(options.cwd, 'a.txt'), 'utf8').trim()}`);
+    return branchOf(args) === 'feat/a-again' ? { status: 1, stdout: 'FAIL  rules  refused\n', stderr: '' } : passes();
+  };
+  const { code, out } = await dryRunWithDoor(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/a-again', heads['feat/a']), pr(3, 'feat/e', heads['feat/e'])], door);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(seen, ['feat/a A from a', 'feat/e A from a'], 'no door ran on the merge that brought nothing, and PR 1 is still in the candidate');
+  assert.ok(out.includes(`Candidate: main ${main.slice(0, 7)} with 3 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/a-again), PR 3 (feat/e).`), out.join('\n'));
+});
+
 test('a pull request whose merge door does not answer leaves the batch, and says the exit code it gave', async () => {
   const { root, main, heads } = makeDoorRepo();
   const door = (args) => (branchOf(args) === 'feat/a' ? { status: 2, stdout: '', stderr: 'unknown flag --door' } : passes());
