@@ -124,8 +124,9 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       const fetched = git(['fetch', 'origin', 'main']);
       if (fetched.status !== 0) throw new RuleChangeError(`a turn to refuse counts on ${BASE} as it is now, and git fetch origin main failed${fetched.stderr ? `: ${String(fetched.stderr).trim()}` : ''}`);
     }
+    // A merge, not a rebase: a rebase gives every commit a new id, and a Codex review record covers commits by id.
     if (git(['merge-base', '--is-ancestor', BASE, 'HEAD']).status !== 0) {
-      throw new RuleChangeError(`${branch} is not based on ${BASE}: git rebase ${BASE}`);
+      throw new RuleChangeError(`${branch} is not based on ${BASE}: git merge ${BASE}`);
     }
 
     // The list and the sources in force, from origin/main.
