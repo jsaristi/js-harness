@@ -48,7 +48,8 @@ only those files, and all of them. Measured on Windows with an empty home and an
 ## Commands
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
-`my-project` is the project's folder. A line `…` marks output left out.
+`my-project` is the project's folder. A line `…` marks output left out; output that grows with
+each feature, such as install's hook lines or check's rows, is shown in part and cut with it.
 
 ### js-harness check
 
@@ -148,13 +149,7 @@ $ js-harness install
 installed js-harness 0.1.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
-registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
-registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
-registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (UserPromptSubmit)
-registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)
-registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SubagentStart)
+…
 ```
 
 ### js-harness loop

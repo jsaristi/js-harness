@@ -132,7 +132,7 @@ another order), conflicted in 5 of the 60 merges (`44c064c`, `b4f526d`, `1050643
 ## Tasks
 - [x] T1 (kind: design) S1-S3: this design, read by two readers that did not write it; their changes in L3
 - [ ] T2 (kind: build) S1: D1 and D2, after pull request 282 lands (route: inline)
-- [ ] T3 (kind: docs) S1: D3, the install example cut and the preface's rule (route: inline)
+- [x] T3 (kind: docs) S1: D3, the install example cut and the preface's rule (route: inline)
 
 ## Log
 - L1 (2026-10-16, the lead's throughput plan, his words as it quotes them): "Ojala podamos optimizar a un
@@ -151,3 +151,6 @@ another order), conflicted in 5 of the 60 merges (`44c064c`, `b4f526d`, `1050643
   the inventory missed four counts; land after pull request 282; weigh `merge=union`. Changed: the Why, the
   map, D1 (helper, pins, uniqueness, order, one literal line and file), D2 (the copy stays), D3 (cut, no
   renderer), D4 and the alternatives added, the order after 282.
+- L4 (2026-10-16, JH 25): T3. The install example keeps its first line and the two doctor lines of its real
+  run, then `…`; the preface says output that grows with each feature is shown in part. `bin/readme.test.mjs`
+  5 of 5. No test was written first: the change is prose, and the README's test checks the shape it keeps.
