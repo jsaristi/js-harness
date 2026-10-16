@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { applyProjectFunctions, initProject, projectLocation, syncProject, uninstallProject, InitWriteError } from './project.mjs';
+import { repoTemplate } from './git-fixture.testkit.mjs';
 
 // Every git call here is real, so none may read the host's config or, under a hook, the repository being
 // committed (the same isolation as project.test.mjs).
@@ -25,10 +26,15 @@ before(() => {
 after(() => fs.rmSync(configDir, { recursive: true, force: true }));
 
 /** A repository holding `files` (name to content), removed after the test. */
+/** What `git init` makes, made once and copied (`git-fixture.testkit.mjs`): every empty repository here is the same. */
+const emptyRepo = repoTemplate((root) => {
+  assert.equal(spawnSync('git', ['init'], { cwd: root, encoding: 'utf8' }).status, 0);
+});
+
 function repo(t, files = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-switches-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  assert.equal(spawnSync('git', ['init'], { cwd: root, encoding: 'utf8' }).status, 0);
+  emptyRepo(root);
   for (const [name, content] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), content, 'utf8');

@@ -9,10 +9,12 @@ import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { fixedLoadRow } from './lib/fixed-load.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
+import { checkSpec } from './lib/spec.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
-import { ruleValue } from './lib/rules.mjs';
+import { readRules, ruleValue } from './lib/rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
+import { rulesOfText } from './lib/rules-change-run.mjs';
 import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
@@ -23,8 +25,10 @@ import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
-import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
+import { GATE_WAIT_MS, readGateWaiters, takeGateLock } from './lib/gate-lock.mjs';
+import { GateFirstError, cancelTicket, claimTicket, issueTicket, logTicket, ofTree, readTickets } from './lib/gate-first.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
+import { watchBusiest } from './lib/machine-busiest.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
 import { addedLines, resolveCitations } from './lib/citations.mjs';
@@ -39,6 +43,7 @@ import { ruleHere, ruleOf } from './lib/rules.mjs';
 import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './subagents.mjs';
+import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
 
 export { estimateTokens };
 
@@ -96,9 +101,9 @@ export function checkPayload(cwd, home) {
 }
 
 // A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
-// gate forever, so the wait is bounded. Twenty minutes, not ten: this repository's own suite takes about
-// eight on a quiet machine and passed ten once other programs held two of eight cores, which refused
-// commits whose tests were green. The figure is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
+// gate forever, so the wait is bounded. The bound must stay above a whole run of this repository's own
+// suite on a loaded machine; the times measured are in the gate log (`js-harness gate log`). The figure
+// is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
 export const SENSOR_TIMEOUT_MS = ruleValue('sensor-timeout', 'minutes') * 60 * 1000;
 const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
@@ -223,18 +228,21 @@ const shortLine = (text) => (text.trim().length > 160 ? `${text.trim().slice(0, 
  * read on the staged whole file, since a line alone cannot say whether it is inside one. During a merge a line counts
  * only when it is new against both parents, so a merge is never refused for what a parent brought. `rules` is the
  * list of the package, which in this repository is the checkout itself. No row when no rule carries patterns, the
- * change adds no line to a text in force, or git does not answer. */
-function checkListRow(cwd, rules, spawn) {
+ * change adds no line to a text in force, or git does not answer. `side` names the two sides of the diff and how a
+ * file's text is read: the commit's are `STAGED`, the merge door's are `doorSide` (odd/tasks/rule-hierarchy.md, "The
+ * merge door (T16e)"), where a git that does not answer is a failure and the merge of a parent is not filtered. */
+function checkListRow(cwd, rules, spawn, side = STAGED) {
   const scanned = rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns));
   if (scanned.length === 0) return [];
   const git = hookGit(cwd, spawn);
   // The sides named a/ and b/ whatever the clone's diff.mnemonicPrefix says, and a path with an accent unquoted.
-  const diffOf = (...against) => git?.(['-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', ...against]) ?? null;
+  const diffOf = (...against) => git?.(['-c', 'core.quotePath=false', 'diff', '-U0', '-M', '--no-relative', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', ...side.revs(...against)]) ?? null;
   const diff = diffOf();
+  if (diff === null) return side.strict ? [UNANSWERED] : [];
   if (!diff) return [];
   const key = (one) => `${one.file}\n${one.line}\n${one.text}`;
   let added = addedLines(diff).filter((one) => isTextInForce(one.file));
-  if (git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) {
+  if (side.mergeFilter && git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) {
     const fromTheirs = new Set(addedLines(diffOf('MERGE_HEAD') ?? '').map(key));
     added = added.filter((one) => fromTheirs.has(key(one)));
   }
@@ -242,7 +250,11 @@ function checkListRow(cwd, rules, spawn) {
   const inForce = new Map();
   const lines = [];
   for (const one of added) {
-    if (!inForce.has(one.file)) inForce.set(one.file, new Set(inForceLines(one.file, git(['show', `:${one.file}`]) ?? '').map((line) => line.line)));
+    if (!inForce.has(one.file)) {
+      const text = side.text(git, one.file);
+      if (text === null && side.strict) return [UNANSWERED];
+      inForce.set(one.file, new Set(inForceLines(one.file, text ?? '').map((line) => line.line)));
+    }
     if (inForce.get(one.file).has(one.line)) lines.push({ path: one.file, line: one.line, text: one.text.replace(/\r$/, '') });
   }
   const byId = new Map(scanned.map((rule) => [rule.id, rule]));
@@ -253,6 +265,80 @@ function checkListRow(cwd, rules, spawn) {
   const detail = `${counted}, ${refusing === 0 ? 'none' : refusing} of a rule that ${refusing > 1 ? 'refuses them' : 'refuses it'}`;
   const found = findings.map((finding) => `${finding.path}:${finding.line} restates rule "${finding.id}", ${rowState(byId.get(finding.id))}: ${shortLine(finding.text)} (write \`rule:${finding.id}\` instead of the value, or change the rule with \`js-harness rules change ${finding.id}\`)`);
   return [refusing === 0 ? { name: 'rules', pass: true, info: true, detail, lines: found } : { name: 'rules', pass: false, detail, lines: found }];
+}
+
+/** The two sides of the commit's row: what it stages (`git diff --cached`), and a file's text as the index holds it. */
+const STAGED = {
+  strict: false,
+  revs: (...against) => ['--cached', ...against],
+  text: (git, file) => git(['show', `:${file}`]),
+  mergeFilter: true,
+};
+
+/** The row `rules` of the merge door, when git does not answer: the door cannot read what the pull request brings. */
+const UNANSWERED = { name: 'rules', pass: false, detail: 'git did not answer, so the door cannot read the lines this pull request brings' };
+const RULES_DATA_FILE = 'bin/lib/rules-data.mjs';
+const DOOR_BRANCH = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch: a rule changes only by js-harness rules change';
+
+/** The two sides of the merge door's row: the lines `base`..HEAD brings, and a file's text as HEAD holds it. */
+const doorSide = (base) => ({
+  strict: true,
+  revs: () => [base, 'HEAD'],
+  text: (git, file) => git(['show', `HEAD:${file}`]),
+  mergeFilter: false,
+});
+
+/** The list `bin/lib/rules-data.mjs` holds at HEAD, read as text and checked as the list the rules accept: `{ list }`,
+ * `list` being `null` when the file is absent, or `{ row }` with the failure of the row `rules` that says why it is
+ * not one. */
+function candidateList(git) {
+  const listed = git(['ls-tree', 'HEAD', '--', RULES_DATA_FILE]);
+  if (listed === null) return { row: UNANSWERED };
+  if (listed.trim() === '') return { list: null };
+  const text = git(['show', `HEAD:${RULES_DATA_FILE}`]);
+  if (text === null) return { row: UNANSWERED };
+  let list;
+  try {
+    list = rulesOfText(text);
+  } catch (err) {
+    return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not parse: ${err.message}` } };
+  }
+  const faults = readRules(list, { declared: list });
+  if (faults.length > 0) return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not validate`, lines: faults } };
+  return { list };
+}
+
+/** The rules the door judges by: the running list's, each with the stricter row of its own and the candidate's. A row
+ * that refuses wins over one that does not; a rule the candidate does not declare keeps its own row. The patterns are
+ * the running list's, so a pull request cannot loosen the judge it is judged by. */
+function stricterRules(running, candidate) {
+  const refuses = (rule) => rule?.row?.refuses !== undefined;
+  return running.map((rule) => {
+    const other = candidate.find((item) => item.id === rule.id);
+    const row = refuses(rule) ? rule.row : refuses(other) ? other.row : (rule.row ?? other?.row);
+    return { ...rule, row };
+  });
+}
+
+/** `check --door --base <rev> [--branch <name>]` (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): the rule rows
+ * of the lines `base`..HEAD brings, which merge-queue runs in the candidate's worktree after each merge. It runs the
+ * running list (`rules`, the patterns of `main`'s copy of this file) and the row `rules` only; the rest of `check` is
+ * not run here. With `branch`, a pull request that changes `bin/lib/rules-data.mjs` from a branch not named `rule/` is
+ * refused, since a rule changes only by `js-harness rules change`. A rule's row is the stricter of the running list's
+ * and the candidate's, and a candidate list that does not parse or validate is refused. A git that does not answer is a
+ * failure of the row, since the door then cannot read what the pull request brings. */
+export function checkDoor(cwd, { rules = RULES, spawn = spawnSync, base = null, branch = null } = {}) {
+  const git = hookGit(cwd, spawn);
+  if (git === null) return [UNANSWERED];
+  const rows = [];
+  if (branch !== null) {
+    const changed = git(['-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', base, 'HEAD']);
+    if (changed === null) return [UNANSWERED];
+    if (!branch.startsWith('rule/') && changed.split(/\r?\n/).includes(RULES_DATA_FILE)) rows.push({ name: 'rules', pass: false, detail: DOOR_BRANCH });
+  }
+  const candidate = candidateList(git);
+  if (candidate.row) return [...rows, candidate.row];
+  return [...rows, ...checkListRow(cwd, stricterRules(rules, candidate.list ?? []), spawn, doorSide(base))];
 }
 
 const DOCUMENTS_SHAPE ='harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
@@ -419,6 +505,41 @@ export function checkCitations(cwd, spawn = spawnSync) {
   const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;
   const row = { name: 'citations', pass: true, info: true, detail: `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}` };
   return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
+}
+
+/** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
+ * a review reads, sized as `js-harness codex-review` sizes a range (documents and marked files left out), against
+ * the rule `reviewed-commit-lines`. Over it the row fails, so the commit is split before it is made: a commit the
+ * reviewer refused had already cost its gate, and remaking it cost two more. The rule is of this repository only,
+ * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
+ * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
+ * own branch), or when git cannot say. */
+export function checkCommitSize(cwd, spawn = spawnSync) {
+  const git = hookGit(cwd, spawn);
+  if (!git || git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) return [];
+  const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
+  if (!Object.hasOwn(rule, 'value')) return [];
+  const most = rule.value;
+  const numstat = git(['diff', '--cached', '--numstat', '-z', '--no-renames', '--no-relative']);
+  if (!numstat) return [];
+  let changed;
+  try {
+    const files = numstatFiles(numstat);
+    // The marks are those of the commit being made, as its review will read them: the tree the index holds, so a
+    // staged `.gitattributes` counts (Codex, 2026-10-16). Writing that tree is what the commit itself does.
+    const tree = git(['write-tree'])?.trim();
+    if (!tree) return [];
+    const why = leftOutOf(files.map((file) => file.path), { cwd, source: tree, spawn });
+    if (why === null) return [];
+    changed = reviewScope(files, why).read.reduce((sum, file) => sum + file.changedLines, 0);
+  } catch {
+    return [];
+  }
+  if (changed === 0) return [];
+  const said = `the staged change has ${counted(changed, 'changed line')} a review reads`;
+  const bound = `the ${counted(most, 'changed line')} of rule reviewed-commit-lines`;
+  if (changed <= most) return [{ name: 'commit-size', pass: true, detail: `${said}, within ${bound}` }];
+  return [{ name: 'commit-size', pass: false, detail: `${said}, over ${bound}: split it into commits under that, each with its own gate, before the reviewer refuses it` }];
 }
 
 /** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
@@ -1119,9 +1240,11 @@ function duration(ms) {
 const minutes = (count) => `${count} minute${count === 1 ? '' : 's'}`;
 
 /** A gate for a message: the folder it checks, with its pid and `since`, a time with the word for it,
- * where its file says them. A gate of whom nothing is known is "another gate". */
+ * where its file says them, and the ticket it goes first by, with why, where it claimed one. A gate of whom
+ * nothing is known is "another gate". */
 function gateSaid(gate, since) {
-  const said = [gate?.pid != null && `pid ${gate.pid}`, since].filter(Boolean);
+  const ticket = typeof gate?.first === 'string' && `first by ticket ${gate.first}: ${gate.firstReason ?? 'no reason read'}`;
+  const said = [gate?.pid != null && `pid ${gate.pid}`, since, ticket].filter(Boolean);
   return `${gate?.cwd == null ? 'another gate' : `the gate of ${gate.cwd}`}${said.length ? ` (${said.join(', ')})` : ''}`;
 }
 
@@ -1221,10 +1344,12 @@ export const GATE_WAIT_SAID_MS = 1000;
  *
  * `session` is the id of the host's session that started the gate, or `null` where the host gives none:
  * the lock writes it in the gate's file, where the session board reads it. `check` and `js-harness gate`
- * pass what their environment says (`CLAUDE_CODE_SESSION_ID`).
+ * pass what their environment says (`CLAUDE_CODE_SESSION_ID`). `first` is the ticket this gate claimed
+ * (`{ id, reason }`, ./lib/gate-first.mjs), handed to the lock, which puts the gate before every gate that
+ * waits; a gate waited for that went first by a ticket is marked `first: true` among `waitedFor`.
  * `take` stands in for `takeGateLock`, so a test stands in for the lock or runs the real one on its own
  * clock. */
-export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null, stillWanted }, take = takeGateLock) {
+export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes, session = null, stillWanted, first = null }, take = takeGateLock) {
   const waitMs = waitMinutes * 60_000;
   const met = new Map();
   // One entry for each token, to which a later telling adds what the entry does not have yet: a holder's
@@ -1235,7 +1360,8 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
     const said = { cwd: holder.cwd ?? null, pid: holder.pid ?? null, command: holder.command ?? null };
     const key = holder.token != null ? `token ${holder.token}` : `no token ${JSON.stringify([said.pid, said.cwd, said.command])}`;
     const known = met.get(key) ?? { cwd: null, pid: null, command: null };
-    met.set(key, { cwd: known.cwd ?? said.cwd, pid: known.pid ?? said.pid, command: known.command ?? said.command });
+    const first = known.first || typeof holder.first === 'string';
+    met.set(key, { cwd: known.cwd ?? said.cwd, pid: known.pid ?? said.pid, command: known.command ?? said.command, ...(first && { first: true }) });
   };
   const waitedFor = () => [...met.values()];
   const onWait = (holder, leftMs = waitMs, line) => {
@@ -1257,7 +1383,7 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
   const askedAt = Date.now();
   try {
     // `stillWanted`, from `js-harness gate` alone: whether its launcher lives (`takeGateLock`).
-    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait, ...(stillWanted ? { stillWanted } : {}) });
+    lock = await take({ home, cwd: path.resolve(cwd), command, session, wait, waitMs, onWait, ...(stillWanted ? { stillWanted } : {}), ...(first ? { first } : {}) });
   } catch (err) {
     return { without: `the machine's gate lock, which could not be taken (${err instanceof Error ? err.message : String(err)})`, waitedMs: Date.now() - askedAt, waitedFor: waitedFor() };
   }
@@ -1295,8 +1421,8 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
  * gate writes in its log. A gate that is refused writes one line there through `record`, where it has
  * one (`gateRecord` of `./lib/gate-log.mjs`), and a line that could not be written is one more row.
  * `takeGateLock` is injectable, as in `takeGateTurn`. */
-async function underGateLock(cwd, { home, wait, waitMinutes, session }, { takeGateLock: take = takeGateLock }, run, record) {
-  const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes, session }, take);
+async function underGateLock(cwd, { home, wait, waitMinutes, session, first = null }, { takeGateLock: take = takeGateLock }, run, record) {
+  const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes, session, first: first && { id: first.id, reason: first.reason } }, take);
   const { waitedMs, waitedFor } = turn;
   if (turn.without) {
     return [gateRow(`the sensors ran without ${turn.without}, so another gate may have run at the same time`), ...(await run({ lock: 'none', waitedMs, waitedFor }))];
@@ -1308,6 +1434,7 @@ async function underGateLock(cwd, { home, wait, waitMinutes, session }, { takeGa
   const { lock } = turn;
   const waited = lock.waitedMs >= GATE_WAIT_SAID_MS;
   const rows = waited ? [gateRow(`waited ${duration(lock.waitedMs)} for the machine's gate lock before the sensors ran`)] : [];
+  if (first) rows.push(gateRow(`this gate claimed ticket ${first.id} (${first.reason}), issued by ${first.by ?? 'a session the ticket does not name'}, and went before every gate that waited`));
   let lost = false;
   try {
     rows.push(...(await run({ lock: 'own', waitedMs, waitedFor })));
@@ -1318,6 +1445,55 @@ async function underGateLock(cwd, { home, wait, waitMinutes, session }, { takeGa
   }
   if (lost) rows.push(gateRow("the machine's gate lock was lost while the sensors ran: this gate was silent for over a minute and another took its lock, so two gates may have run at once"));
   return rows;
+}
+
+/** `check --first <reason>`: issues the session of `lock` a ticket for the tree `cwd`, issued by that session
+ * itself, which the gate then claims as it arrives (`claimOf`), and writes the issue in the gate log as `gate
+ * first` does. Returns the rows to add: none when it was issued, and an INFO row that says why when it was not
+ * (no session, two tickets open already, or a gate in the turn of the process that holds the lock, which waits
+ * for nobody); the gate runs all the same. The board flags a ticket whose issuer is not the orchestrator. */
+function ownTicketRows(reason, cwd, lock, env, deps) {
+  const notIssued = (why) => ({ rows: [{ name: 'first', pass: true, info: true, detail: `no ticket was issued: ${why}` }], issued: null });
+  if (lock.held) return notIssued('this gate runs in the turn of the process that holds the gate lock, and waits for nobody');
+  if (lock.session === null) return notIssued('the host names no session for this gate, and a ticket is for a session');
+  // An open ticket of this session that this gate would claim is the one it goes first by: no second (Codex).
+  const tree = path.resolve(cwd);
+  const mine = readTickets(lock.home).open.find((ticket) => ticket.session === lock.session && (!ticket.tree || ofTree(ticket.tree, tree, process.platform)));
+  if (mine) return notIssued(`ticket ${mine.id} of this session is open already for this tree, and this gate claims it`);
+  let issued;
+  try {
+    issued = issueTicket({ home: lock.home, session: lock.session, tree: path.resolve(cwd), reason, by: lock.session });
+  } catch (err) {
+    if (!(err instanceof GateFirstError)) throw err;
+    return notIssued(err.message);
+  }
+  if (!gateLogSwitchedOff(env)) {
+    const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
+    for (const gone of issued.expired) logTicket(lock.home, 'first-expired', gone, {}, written);
+    logTicket(lock.home, 'first-issued', issued.ticket, {}, written);
+  }
+  return { rows: [], issued: issued.ticket.id };
+}
+
+/** Claims the ticket of the session of `lock` for the gate that checks `cwd` (`claimTicket`), and writes in
+ * the gate log what the claim did: the tickets its sweep found expired, and the claim, with the gates that
+ * waited then, which this one passes. Nothing is written with the log switched off (`lock.log` false).
+ * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines. */
+function claimOf(lock, cwd, deps) {
+  const { ticket, expired } = claimTicket({ home: lock.home, session: lock.session, cwd: path.resolve(cwd) });
+  if (lock.log === false) return ticket;
+  const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
+  for (const gone of expired) logTicket(lock.home, 'first-expired', gone, {}, written);
+  if (ticket) {
+    let waiting = [];
+    try {
+      waiting = readGateWaiters(lock.home).filter((gate) => typeof gate.first !== 'string');
+    } catch {
+      // a line that cannot be read passes nobody that can be named
+    }
+    logTicket(lock.home, 'first-claimed', ticket, { cwd: path.resolve(cwd), pid: process.pid, passed: waiting.map(({ cwd: folder, pid }) => ({ cwd: folder, pid })) }, written);
+  }
+  return ticket;
 }
 
 /** A row named `gate`: what the machine's gate lock did that a reader of the report must know. It informs
@@ -1349,6 +1525,35 @@ function gateLogRows(record) {
 /** What the sensors of a gate came to, for its log: `timeout` when the time of one ran out, which is what
  * explains a slow gate, else `pass` or `fail`. */
 const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : rows.every((row) => row.pass) ? 'pass' : 'fail');
+
+/** The watch of who spends the processor over a gate's run (`watchBusiest` of `./lib/machine-busiest.mjs`,
+ * and odd/tasks/gate-wait.md, T19), started where the gate's start is in its log, and only there: what it
+ * finds is kept under that start's id (`busiest` of `gateRecord`), and a start that is not in the log has
+ * nothing to key it by. Returns `null` there, or the step that ends the watch and keeps what it found, for
+ * after the run: it resolves once the end reading is in, and never rejects. `check` and `js-harness gate`
+ * call it as their command or first sensor is about to start, and its first reading is not waited for: it
+ * costs a gate no second before its run, and seconds after it.
+ *
+ * Best effort throughout, as the look before a gate is: a watch that cannot start, an end that fails or
+ * finds nobody keeps nothing and says nothing, and the gate is what it would have been. `watch` stands in
+ * for `watchBusiest` in a test. */
+export function watchRun(record, watch = watchBusiest) {
+  if (!record?.started?.()) return null;
+  let watching;
+  try {
+    watching = watch();
+  } catch {
+    return null;
+  }
+  return async () => {
+    try {
+      const ended = await watching?.end();
+      record.busiest({ seconds: ended?.seconds, busiest: ended?.busiest });
+    } catch {
+      // nobody found: nothing to keep
+    }
+  };
+}
 
 /** One row per sensor, run one after another; a broken declaration, of the sensors or of the documents,
  * is one FAIL row and no sensor at all is one INFO row.
@@ -1392,6 +1597,13 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * and changes nothing else. Nothing is written where no sensor runs, for a caller that is no gate, or with
  * `log: false` in `lock`, which is how a gate passes on the switch of its environment (`GATE_LOG_ENV`).
  * `deps.gateLog` stands in for what the record is written with: `{ append, now, id }`, each optional.
+ *
+ * A gate whose start is in the log also keeps who spent the processor over its run, beside the log in
+ * `busiest.jsonl` (`watchRun`): every process's processor time is read as its first sensor starts, without
+ * being waited for, and again after the last, and the heaviest that lived through the run are written
+ * under the id of its start. Nothing is said of it in the report, and nothing is read with `load: false`
+ * in `lock`: the switch of the sample is the switch of every reading of the machine. `deps.watchBusiest`
+ * stands in for the watch.
  *
  * A gate stops before its sensors when a row it knew before them has already failed, which it says with
  * `stoppedBy` in `lock`, the names of those rows: the commit cannot pass, so the wait for the lock, an hour
@@ -1459,8 +1671,13 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // Windows, which is there to catch what WSL2 cannot.
   const place = wsl?.distro && (deps.platform ?? process.platform) === 'win32' ? `wsl ${wsl.distro} ${wsl.node}` : undefined;
   const record = lock && lock.log !== false && lock.home !== undefined
-    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, ...deps.gateLog })
     : null;
+  // The ticket of this gate's session, claimed as it arrives and so spent whatever comes next: a gate that
+  // stops, is proven by its tree or is refused spends it too, and its tree cannot jump the line twice
+  // (./lib/gate-first.mjs). Not by a gate in the turn of the process that started it, which waits for nobody.
+  // The ticket rides on `lock` to the turn (`underGateLock`), `first` being `null` where none was claimed.
+  if (lock && lock.held !== true && lock.home !== undefined) lock = { ...lock, first: claimOf(lock, cwd, deps) };
   // The stop, here and not sooner: both declarations are read and this gate would now run its sensors.
   if (lock?.stoppedBy?.length) {
     record?.stopped({ rows: lock.stoppedBy });
@@ -1509,6 +1726,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // written and again after the end, so neither look is in the seconds the log says the sensors took.
     const before = lock ? untrackedPaths(cwd, deps.git) : null;
     record?.start({ ...turn, load });
+    // Who spends the processor over the run, from its first reading on, which is not waited for here; with
+    // the sample of the load switched off, nothing is read of the machine (`GATE_LOAD_ENV`).
+    const keepBusiest = lock && lock.load !== false ? watchRun(record, deps.watchBusiest) : null;
     const ran = [];
     let result = 'error';
     // The key this gate proves: the one it had before its sensors, when all of them passed and the tree
@@ -1564,6 +1784,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
+    // After the end is written, so that the seconds of the log stay the sensors'.
+    await keepBusiest?.();
     return [...rows, ...ran, ...ran.flatMap((row) => (row.rerun ? [row.rerun.row] : [])), ...treeRows(before, after), ...mirrorRows(ran), ...gateLogRows(record)];
   };
   if (!lock) return run();
@@ -1571,7 +1793,33 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return underGateLock(cwd, lock, deps, run, record);
+  return (await testsOnCi(cwd, lock, deps)) ?? underGateLock(cwd, lock, deps, run, record);
+}
+
+/** The rows of a gate whose tests ran on GitHub's machines because its turn at the lock would wait
+ * (./lib/ci-gate.mjs), or null for a gate that runs here: its turn is free, the project has no gate workflow, or
+ * CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its tests
+ * marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate` stand
+ * in for the two halves. */
+async function testsOnCi(cwd, lock, deps) {
+  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, home: lock.home, env: lock.env ?? process.env });
+  if (!why) return null;
+  console.error(`check: ${why}; the tests go to GitHub's machines (${CI_WORKFLOW}) instead of waiting`);
+  const startedAt = Date.now();
+  const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
+  if (!ci.ran) {
+    console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
+    return null;
+  }
+  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
+  let at = startedAt;
+  const record = lock.log !== false && lock.home !== undefined
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, now: () => at, ...deps.gateLog })
+    : null;
+  record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
+  at = Date.now();
+  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci' }] });
+  return [gateRow(`${why}, so the tests ran on CI`), tests, ...gateLogRows(record)];
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
@@ -2106,8 +2354,10 @@ export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Dat
 }
 
 const USAGE = [
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]',
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>] | js-harness check --door --base <rev> [--branch <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
+  '       --first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator\'s batch run on main (odd/tasks/gate-first.md)',
+  '       --door --base <rev> [--branch <name>]: runs only the rule rows over the lines <rev>..HEAD brings, judged by the running list, and exits 1 when one refuses (the merge door of merge-queue, odd/tasks/rule-hierarchy.md); --branch names the pull request\'s branch, which may change bin/lib/rules-data.mjs only when it is a rule/ branch',
 ].join('\n');
 
 // A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage
@@ -2140,8 +2390,11 @@ export function parseGateWait(argv) {
   return { noWait, waitMinutes: wait === undefined ? GATE_WAIT_MS / 60_000 : Number(wait) };
 }
 
-const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait'];
-const BARE_FLAGS = ['--push', '--no-wait', '--subagents'];
+const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait', '--first', '--base', '--branch'];
+const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door'];
+// The flags of a gate that runs sensors or waits for the lock, and `--home`, where that lock and the gate log live:
+// `--door` uses none of them, so one of them with it is refused rather than ignored.
+const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--head', '--remote', '--home'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
  * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited
@@ -2166,7 +2419,19 @@ function parseArgs(argv, env) {
   // Read first, as it always was: a `--wait` that cannot be taken is said before any other flag's fault.
   const { noWait, waitMinutes } = parseGateWait(argv);
   refuseUnknown(argv);
+  const first = get('--first');
+  if (first !== undefined && first.trim() === '') throw new CheckArgError('--first needs a reason, not an empty one');
+  if (first !== undefined && argv.includes('--push')) throw new CheckArgError('--first goes with a gate that runs its sensors, not with --push');
+  const door = argv.includes('--door');
+  const base = get('--base') ?? null;
+  const branch = get('--branch') ?? null;
+  if (door && base === null) throw new CheckArgError('--door needs --base <rev>: the lines it judges are <rev>..HEAD');
+  if (door && argv.includes('--push')) throw new CheckArgError('--door goes with the rule rows, not with --push');
+  const gate = GATE_FLAGS.find((flag) => door && argv.includes(flag));
+  if (gate !== undefined) throw new CheckArgError(`--door runs no gate: ${gate} goes with a gate, not with --door`);
+  if (!door && (base !== null || branch !== null)) throw new CheckArgError('--base and --branch go with --door');
   return {
+    first: first?.trim(),
     cwd: get('--cwd') ?? process.cwd(),
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
     push: argv.includes('--push'),
@@ -2175,6 +2440,9 @@ function parseArgs(argv, env) {
     remote: get('--remote') ?? 'origin',
     noWait,
     waitMinutes,
+    door,
+    base,
+    branch,
   };
 }
 
@@ -2199,6 +2467,12 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     return 2;
   }
   const { cwd, home, push, head, remote, noWait, waitMinutes } = parsed;
+  // The merge door runs the rule rows of the lines a pull request brings, and nothing else: no budget, no sensors, no lock.
+  if (parsed.door) {
+    const rows = [...checkDoor(cwd, { rules: deps.rules, spawn: deps.git, base: parsed.base, branch: parsed.branch }), ...checkFailures(cwd)];
+    for (const row of rows) console.log(formatRow(row));
+    return rows.every((row) => row.pass) ? 0 : 1;
+  }
   // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   //
@@ -2210,7 +2484,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkCitations(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));
@@ -2237,10 +2511,20 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // computed. The inner check and a push are outside this branch, and as they were.
   let stopped = false;
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null };
+    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, env, remote };
+    // `--first`: the ticket is issued here and claimed as the gate arrives, as one the orchestrator issued is.
+    const own = parsed.first === undefined ? null : ownTicketRows(parsed.first, cwd, lock, env, deps);
+    if (own) rows.push(...own.rows);
     const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
     const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy, wsl: readGateWsl(home, env) });
     rows.push(...sensed);
+    // A ticket `--first` issued that this gate did not claim (no sensor ran under the lock) is cancelled: it was
+    // for this one command, and a later check would otherwise jump the line with it (Codex).
+    const unclaimed = own?.issued ? cancelTicket({ home, id: own.issued }) : null;
+    if (unclaimed) {
+      if (!gateLogSwitchedOff(env)) logTicket(home, 'first-cancelled', unclaimed, {}, { ...(deps.gateLog?.append && { append: deps.gateLog.append }) });
+      rows.push({ name: 'first', pass: true, info: true, detail: `ticket ${unclaimed.id} was cancelled: this gate ran no sensor under the lock, so it claimed none` });
+    }
     stopped = sensed.some((row) => row.stopped === true);
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi, git: deps.git }));

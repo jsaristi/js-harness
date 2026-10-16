@@ -346,14 +346,44 @@ Merge into the sibling note, his words copied verbatim, the source file removed:
   compacted session to notify the lead)
 
 The audit with the evidence for each is `jh16-memory-notes-audit.md` in the group's shared notes folder.
-- [ ] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
+- [x] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
   the active lock before recording after-state"): the fix (verify refuses a stamp that does not hold the lock) is
   committed after b3dac0f with its test, and a second recheck is refused by design; a Codex review of the next
-  slice that touches `bin/lib/memory-pass.mjs` reads it
+  slice that touches `bin/lib/memory-pass.mjs` reads it. That slice (JH 26, 2026-10-16, branch
+  `fix/memory-lock-holder`, route: inline) moves every read of the lock into `lockHolder`, so the diff holds the
+  lines of 2e082ca, and closes two edges of the same rule, test first (RED: 2 of 3 new tests; then `node --test
+  bin/lib/memory-pass.test.mjs` 22 pass, `node --test bin/memory.test.mjs` 8 pass): `memory undo` of a pass
+  while another pass holds the lock is refused and writes nothing, since it would write under that pass and its
+  verify would take the undo as its own after-state; and a lock that does not parse, or names no stamp, is a
+  refusal naming the lock file from plan, verify and undo, where it was a `SyntaxError` the command does not
+  catch. Codex on `6a6ce9e..13619cb` (commit `13619cb`, gate PASS; gentle-ai: medium, 86 lines, not due): "the
+  patch is correct (confidence 0.94)", no finding, 92,937 input tokens, recorded
 - [ ] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
   `~/.js-harness/memory-hygiene/` (so `uninstall` can remove it; `bin/lib/manifest.mjs`), the board row of a due
   pass (`js-harness sessions`), and the rule ids `memory-index-bytes` and `memory-pass-days` the sensor's budgets
   are to be read from
+  - [x] The folder at uninstall (JH 27, 2026-10-16, inline, branch `feat/memory-hygiene-t9`). Nothing records the
+    folder, like the channel's: `uninstall --global` removes it, with a manifest and without. A project's folder
+    that holds snapshots is kept with its journal, and its stamps are named on stdout (D4.5: the only copy of what
+    a pass changed). One that cannot be looked at or removed goes to stderr and exits 1. `hygieneDir`
+    (`bin/lib/memory-hygiene.mjs`) is the one home of the path. RED: manifest's import failed, then install's
+    printed "nothing installed"; GREEN: manifest 160/160, install 72/72.
+  - [x] The board row (same branch). `js-harness sessions` prints "Memory hygiene" after the pull requests: due
+    with the ids of its reasons, nothing due, n/a with no memory folder, or unavailable with its reason
+    (`boardMemory`, `memoryLines`); `--json` carries it as `memory`. RED: both tests failed; GREEN:
+    lib/sessions 296/296, sessions 232/232.
+  - [ ] The rule ids: a choice of his, asked in L6.
+  - Verified (item 1: uninstall now deletes the journal, stamp and lock of a project with no snapshot): an
+    independent verifier on `498b418` found no blocker. Twelve uninstall cases never deleted a snapshot, and
+    with no folder the output was identical to the baseline. Three of its advisories are fixed test first:
+    - a project that could not be removed now no longer hides the others or the kept stamps;
+    - the journal is named only when it is there;
+    - a doc comment is back over `reliefLines`.
+    Left as advisories:
+    - a `memory plan` started during an uninstall could lose its snapshot, since uninstall takes no lock;
+    - the board reads the memory folder from `--claude-home`/`CLAUDE_CONFIG_DIR`, `memory status` from
+      `<home>/.claude`;
+    - an unreadable journal reads as `no-pass` (already so at the baseline).
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para
@@ -376,8 +406,26 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   D3, settled by his words of 2026-10-15; the deletions go to him as one list.
 - L5 2026-10-15 evening, the lead (JH ORQ), after #188, #191, #202, #220 and #235 landed: mark T2-T7 done on
   main by a short branch. T2-T6 marked with where each landed; the pieces T3 and T5 left unbuilt became T9.
+- L6 2026-10-16, the lead (JH ORQ) at 17:00, after JH 16 did not answer: "take memory-hygiene T9 items that need
+  no choice of his, per odd/tasks/memory-hygiene.md; write any choice of his as a question in its Log". JH 27 built
+  the folder at uninstall and the board row. **Two questions for him, open:**
+  1. *The rule ids.* `memory-index-bytes` (4,000 bytes) and `memory-pass-days` (7 days) are his values (L4). But
+     both answers were tapped options, and `js-harness rules change` refuses a tapped answer as the source of a
+     rule of his ("the option's text was written by a session, not typed by him", `bin/lib/rules-change.mjs`). Should
+     the two rules be his, which needs him to type the two values once, or the project's, with this document as
+     their source? Until he answers, the values stay constants in `bin/lib/memory-hygiene.mjs`, where they are
+     today.
+  2. *A purge at uninstall.* D4.5 keeps the snapshots "unless asked to purge". Nothing asks yet: `uninstall` keeps a
+     project's folder that holds snapshots and says to remove it by hand. Should `uninstall` take a flag that deletes
+     them? They are the only copy of what a pass changed.
 
-## Next step (2026-10-15 evening)
+## Next step (2026-10-16)
+- T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
+  reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
+  to L6.1; L6.2 adds a flag only if he wants one. The folder at uninstall and the board row are on
+  `feat/memory-hygiene-t9`.
+
+## Next step, earlier (2026-10-15 evening)
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`) and T9 (install record, board row, rule ids; each waits on its owner).
   The sections below are the history of the build.

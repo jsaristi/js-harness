@@ -52,9 +52,24 @@ function readManifest(stateDir, stamp) {
   return JSON.parse(text.toString('utf8'));
 }
 
+/** The stamp of the pass that holds the lock, or `null` when none does. A lock that does not parse, or names no
+ * stamp, is a refusal that names its file: no pass can tell whose it is, so none may act on it. */
+function lockHolder(stateDir) {
+  const file = lockFile(stateDir);
+  const held = readOrNull(file);
+  if (held === null) return null;
+  let stamp;
+  try {
+    stamp = JSON.parse(held.toString('utf8'))?.stamp;
+  } catch {
+    stamp = undefined;
+  }
+  if (typeof stamp !== 'string' || stamp === '') throw new PassError(`the lock ${file} names no pass; remove it once no pass runs`);
+  return stamp;
+}
+
 function releaseLock(stateDir, stamp) {
-  const held = readOrNull(lockFile(stateDir));
-  if (held !== null && JSON.parse(held.toString('utf8')).stamp === stamp) fs.rmSync(lockFile(stateDir));
+  if (lockHolder(stateDir) === stamp) fs.rmSync(lockFile(stateDir));
 }
 
 /** His words in a note: each `"…"` (or `“…”`, `«…»`) of at least twelve characters, outside the front
@@ -92,8 +107,7 @@ export function planPass({ folder, stateDir, writeSet, now }) {
     fs.writeFileSync(lockFile(stateDir), JSON.stringify({ stamp, pid: process.pid }), { flag: 'wx' });
   } catch (err) {
     if (err.code !== 'EEXIST') throw err;
-    const held = JSON.parse(fs.readFileSync(lockFile(stateDir), 'utf8'));
-    throw new PassError(`a pass holds the lock: ${held.stamp} (memory verify or memory undo releases it)`);
+    throw new PassError(`a pass holds the lock: ${lockHolder(stateDir)} (memory verify or memory undo releases it)`);
   }
   const dir = snapshotDir(stateDir, stamp);
   fs.mkdirSync(path.join(dir, 'files'), { recursive: true });
@@ -137,8 +151,7 @@ export function verifyPass({ folder, stateDir, stamp, homes = '', approved = [],
   }
   // Only the pass holding the lock records an after-state: one undone, or overtaken by the next pass, would
   // take another session's writes as its own, and its undo would overwrite them.
-  const held = readOrNull(lockFile(stateDir));
-  if (held === null || JSON.parse(held.toString('utf8')).stamp !== stamp) {
+  if (lockHolder(stateDir) !== stamp) {
     throw new PassError(`pass ${stamp} does not hold the lock (undone, or another pass started); plan a new pass`);
   }
   const after = hashes(folder);
@@ -207,6 +220,10 @@ export function verifyPass({ folder, stateDir, stamp, homes = '', approved = [],
  * Returns `{ restored, removed, refused, indexMerged }`. */
 export function undoPass({ folder, stateDir, stamp, now }) {
   const manifest = readManifest(stateDir, stamp);
+  // While another pass holds the lock its write set is being edited: an undo now would write under it, and that
+  // pass's verify would record the undo as its own after-state.
+  const holder = lockHolder(stateDir);
+  if (holder !== null && holder !== stamp) throw new PassError(`pass ${holder} holds the lock; undo ${stamp} once it is verified or undone`);
   const dir = snapshotDir(stateDir, stamp);
   const afterText = readOrNull(path.join(dir, 'after.json'));
   if (afterText === null) throw new PassError(`run memory verify ${stamp} first: undo needs the after-state it records`);

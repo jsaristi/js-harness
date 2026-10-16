@@ -36,9 +36,9 @@ import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, 
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { dueNotice } from './lib/memory-hygiene.mjs';
-import { pauseNotice, toldBetween } from './lib/pause.mjs';
+import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
-import { askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
+import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness resume --hook',
@@ -88,7 +88,7 @@ const DEADLINE_PASSED = 'this hook\'s own deadline passed';
 
 const NO_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST_COMPACTED = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = `Then tell the orchestrator in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
+const NOTIFY = `Then tell the orchestrator (${ORCHESTRATOR_IS}) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
@@ -381,7 +381,7 @@ function openingLines(found, title) {
   const uncounted = unread === null ? '' : `; ${unread} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`;
   if (openings.length === 1) return [`Opening: ${openings[0].path}  (${printing(title)}${uncounted})`];
   return [
-    `Opening: ${openings.length} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${uncounted})`,
+    `Opening: ${openings.length} openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it${uncounted})`,
     ...openings.map((opening) => `  ${printedTitle(opening.title)}  (${opening.path})`),
   ];
 }
@@ -911,13 +911,14 @@ function nextModeLines(file, input, readFile) {
   return [`Mode of the next open task: ${next.line}. Tell the person: only they set the session's effort.`];
 }
 
-/** Whether `folder` or one of its parents holds a `harness.json`: the walk `--pause` makes, each folder tested with
- * `isFile`, up to the root of the file system. It is a walk of files and no `git` call, since a `git` for each tool
- * call would cost the hook more than the pause is worth; a checkout's root holds the file, and so does a folder under it. */
-function hasHarnessJson(folder, isFile) {
+/** The nearest of `folder` and its parents that holds a `harness.json`, or `null`: the walk `--pause` makes, each folder
+ * tested with `isFile`, up to the root of the file system. It is a walk of files and no `git` call, since a `git` for
+ * each tool call would cost the hook more than the pause is worth; a checkout's root holds the file, and so does a
+ * folder under it. The folder found is the project whose `.claude` settings may configure the host's window. */
+function harnessRootOf(folder, isFile) {
   for (let dir = folder; ; dir = path.dirname(dir)) {
-    if (isFile(path.join(dir, 'harness.json'))) return true;
-    if (path.dirname(dir) === dir) return false;
+    if (isFile(path.join(dir, 'harness.json'))) return dir;
+    if (path.dirname(dir) === dir) return null;
   }
 }
 
@@ -934,9 +935,14 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
   const web = webBlockNotice(input);
   if (!own && web === null) return null;
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
-  if (!hasHarnessJson(cwd, isFile)) return null;
+  const root = harnessRootOf(cwd, isFile);
+  if (root === null) return null;
   const home = env.JS_HARNESS_HOME || homedir();
-  const notice = own ? pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, tmpdir: tempOf(env) }) : null;
+  // The window the host compacts on, when a setting gives it: the pause is measured against it, since a session
+  // measured on another window, or on none, would be told too late (odd/tasks/session-channel.md, T6b). The Claude
+  // home is under the same home as the state, so a made-up home never reads the real settings.
+  const window = own ? hostWindow({ env, home, projectDir: root }) : null;
+  const notice = own ? pauseNotice({ transcript: input.transcript_path, sessionId: input.session_id, home, window, tmpdir: tempOf(env) }) : null;
   // The channel's notes to this session ride on the same call: the record is the main checkout's, as `notify` writes it.
   const inbox = own ? inboxNotice({ transcript: input.transcript_path, sessionId: input.session_id, cwd, home, slugOf: (folder) => projectSlug(mainCheckoutByFiles(folder) ?? mainCheckout(run, folder)) }) : null;
   // A memory hygiene pass that is due, at most once a day for the project (odd/tasks/memory-hygiene.md, D5). It is

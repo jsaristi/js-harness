@@ -240,9 +240,9 @@ export function ownsFolder(markerText) {
 
 // ---- the real home, before and after ---------------------------------------------------------------------------------
 
-// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): two skills
+// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): three skills
 // for each of two hosts, two entries in a file of each host, and the pause entry in Claude Code's (`HARNESS_HOOKS` below).
-const SKILLS = ['js-harness', 'js-harness-orchestrator'];
+const SKILLS = ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols'];
 const HOSTS = ['.claude', '.codex'];
 // The arrays of the manifest whose records name a file by `path`: what `install` wrote, the files it grafted
 // an entry onto, and what was written only when asked (the login launcher, which lies outside the home).
@@ -263,7 +263,7 @@ function recordedPaths(manifestText) {
 }
 
 /** The files the harness owns in the user's REAL home `home`, as absolute paths without duplicates: the
- * manifest, the `SKILL.md` of both skills for both hosts, the two files that hold a `SessionStart` entry,
+ * manifest, the `SKILL.md` of the three skills for both hosts, the two files that hold a `SessionStart` entry,
  * and every file the real manifest (`manifestText`, the content of `<home>/.js-harness/manifest.json`, or
  * `undefined`) records. The manifest records absolute paths; a relative one is taken from `home`. On Windows
  * two paths that differ only in case are one file.
@@ -323,21 +323,35 @@ const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 /** The command of the share check, as `bin/lib/manifest.mjs` spells it (`SHARE_HOOK_COMMAND`); the same test holds the two together. */
 const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 
+/** The command of the reply check, as `bin/lib/manifest.mjs` spells it (`REPLY_HOOK_COMMAND`); the same test holds the two together. */
+const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
+
+/** The command of the rules' turn-start hook, as `bin/lib/manifest.mjs` spells it (`RULES_HOOK_COMMAND`); the same test holds the two together. */
+const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
+
 /** The matcher of the guard hook, as `bin/lib/manifest.mjs` spells it: anchored, so that each tool is a whole name. The same test holds the two together. */
 const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$';
 
 /** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
  * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
- * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from. The test holds
+ * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
+ * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool; the guard's before a tool call and the
+ * share check's at a stop, for Claude Code only; and the reply check's at a stop, for both hosts, since it reads only the
+ * reply's text. The test holds
  * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
  * an install that changed. */
 export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'UserPromptSubmit', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|resume', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
@@ -391,27 +405,34 @@ export function hostHooksProblem(text, seededCommand, host) {
     const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
     return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(entryShown).join(' | ')}`;
   }
-  return postToolUseProblem(data, host);
+  return postToolUseProblem(data, host) ?? tailProblem(data, host, 'UserPromptSubmit') ?? tailProblem(data, host, 'SubagentStart');
 }
 
 /** What is wrong with `hooks.PostToolUse` of a host file, or `null` when nothing is. Claude Code holds the pause
  * entry once, with no matcher, at the end of the list: `install` appends it, so a user's own entry before it stays
  * first and untouched. Codex holds no entry of the harness there, so one found in its file is a problem. */
 function postToolUseProblem(data, host) {
-  const list = data?.hooks?.PostToolUse;
-  const ours = hooksOfHost(host).filter((hook) => hook.event === 'PostToolUse');
-  if (!Array.isArray(list)) return ours.length === 0 ? null : 'the file holds no list at hooks.PostToolUse';
-  const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === 'PostToolUse').map((hook) => hook.command);
+  return tailProblem(data, host, 'PostToolUse');
+}
+
+/** What is wrong with the list `hooks.<event>` of a host file, held as `postToolUseProblem` holds `PostToolUse`: the
+ * harness's entries of that event once each at its end, and none where the host gets none (the rules' turn-start
+ * entries are Claude Code's alone). */
+function tailProblem(data, host, event) {
+  const list = data?.hooks?.[event];
+  const ours = hooksOfHost(host).filter((hook) => hook.event === event);
+  if (!Array.isArray(list)) return ours.length === 0 ? null : `the file holds no list at hooks.${event}`;
+  const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === event).map((hook) => hook.command);
   const harnessFound = list.filter((entry) => harnessCommands.includes(entryCommand(entry)));
   const found = list.length === 0 ? 'no entry' : list.map(entryShown).join(' | ');
-  if (ours.length === 0) return harnessFound.length === 0 ? null : `expected no entry of the harness in hooks.PostToolUse of ${host}; found: ${found}`;
+  if (ours.length === 0) return harnessFound.length === 0 ? null : `expected no entry of the harness in hooks.${event} of ${host}; found: ${found}`;
   const tail = list.slice(-ours.length);
   const asExpected =
     harnessFound.length === ours.length &&
     ours.every((hook, index) => entryCommand(tail[index]) === hook.command && tail[index]?.matcher === hook.matcher);
   if (asExpected) return null;
   const expected = ours.map((hook) => `"${hook.command}" (${hook.matcher === undefined ? 'no matcher' : `matcher ${hook.matcher}`})`).join(', then ');
-  return `expected ${expected} once, at the end of hooks.PostToolUse; found: ${found}`;
+  return `expected ${expected} once, at the end of hooks.${event}; found: ${found}`;
 }
 
 /** What is wrong with a host file after `uninstall`, or `null` when it is the file as `setup` seeded it (`seededText`, the
@@ -428,7 +449,7 @@ export function uninstalledHostProblem(text, seededText) {
   return `expected the file as setup seeded it, byte for byte; found:\n${text}`;
 }
 
-/** The name of an empty `hooks` list of the harness (`SessionStart` or `PostToolUse`) that `text` holds and the seeded file
+/** The name of an empty `hooks` list of the harness (`SessionStart`, `PostToolUse` or `PostToolUseFailure`) that `text` holds and the seeded file
  * does not, or `null`. A text that is not JSON has none. */
 function leftoverList(text, seededText) {
   let data;
@@ -439,7 +460,7 @@ function leftoverList(text, seededText) {
   } catch {
     return null;
   }
-  return ['SessionStart', 'PostToolUse'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
+  return ['SessionStart', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'SubagentStart'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
 }
 
 // ---- the gate log of the practice home -------------------------------------------------------------------------------
@@ -472,6 +493,7 @@ export const JOURNEY = Object.freeze([
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
   { id: 'opening-tools', title: 'the guard lets the scheduled-task and cloud tools pass in the project, and refuses them where the rule is declared, naming start_session' },
+  { id: 'reply-hook', title: 'the reply check turns back a reply with no state where harness.json turns it on, lets a closed reply stop, and turns nothing back in the project' },
   { id: 'host-loads', title: 'a real Claude Code session in the project loads the skills and AGENTS.md, runs the three hook entries, and leaves nothing in the real home' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
@@ -906,6 +928,45 @@ export function openingToolsProblem({ plain, declared }) {
     if (!reason.includes(tool) || !reason.includes('start_session')) {
       return `the refusal of ${tool} does not name the tool and start_session: ${reason}`;
     }
+  }
+  return null;
+}
+
+// ---- the reply check, as a Stop hook meets it (odd/tasks/rule-hierarchy.md, T12) ----
+
+/** The hook input the host sends a `Stop` hook on standard input, as JSON text: the session, its folder, the event, the
+ * reply that ends the turn and no background work running, the fields `bin/reply.mjs` reads. */
+export function replyHookInput({ sessionId, cwd, message }) {
+  return JSON.stringify({ session_id: sessionId, cwd, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: message, background_tasks: [] });
+}
+
+/** The run's answer as JSON, or the reason it is none: a `Stop` hook answers with one JSON object, `{}` to let the session
+ * stop. */
+function replyAnswer(run, which) {
+  if (run?.status !== 0) return { problem: `the reply check exited ${run?.status} on ${which}, not 0` };
+  const printed = (run.stdout ?? '').trim();
+  return printed === '' ? { printed } : { printed, answer: (() => { try { return JSON.parse(printed); } catch { return undefined; } })() };
+}
+
+/** What is wrong with the three runs of the reply check, or `null`. `refused` is a reply with no state, in a folder whose
+ * `harness.json` holds `"reply": true`: it must be turned back with `decision: "block"` and a reason that names the
+ * English label `Working`. `passed` is a reply there that closes with `Working — …`, and `plain` the reply with no state
+ * in the practice project, whose `harness.json` from `init` has no `reply` key: both must print `{}`. Each run is
+ * `{ status, stdout }` of the child. */
+export function replyHookProblem({ refused, passed, plain }) {
+  const turned = replyAnswer(refused, 'the reply with no state');
+  if (turned.problem) return turned.problem;
+  if (turned.answer?.decision !== 'block') return `the reply check let a reply with no state stop in the folder whose harness.json turns it on: ${turned.printed}`;
+  const reason = typeof turned.answer.reason === 'string' ? turned.answer.reason : '';
+  if (!reason.includes('Working')) return `the reply check turned the reply back without naming the state Working: ${reason}`;
+  for (const [run, which, where] of [
+    [passed, 'the reply that closes with its state', 'a reply that closes with its state'],
+    [plain, 'the reply in the practice project', 'a reply in the practice project, whose harness.json does not turn it on'],
+  ]) {
+    const read = replyAnswer(run, which);
+    if (read.problem) return read.problem;
+    if (read.printed === '') return `the reply check printed nothing in ${run === plain ? 'the practice project' : 'the folder whose harness.json turns it on'}, though a Stop hook answers with JSON`;
+    if (read.answer === undefined || Object.keys(read.answer).length !== 0) return `the reply check turned back ${where}: ${read.printed}`;
   }
   return null;
 }

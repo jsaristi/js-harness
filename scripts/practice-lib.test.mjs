@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
@@ -391,13 +391,15 @@ const FIXED_WIN = [
   'C:\\Users\\Oficina\\.js-harness\\manifest.json',
   'C:\\Users\\Oficina\\.claude\\skills\\js-harness\\SKILL.md',
   'C:\\Users\\Oficina\\.claude\\skills\\js-harness-orchestrator\\SKILL.md',
+  'C:\\Users\\Oficina\\.claude\\skills\\js-harness-protocols\\SKILL.md',
   'C:\\Users\\Oficina\\.codex\\skills\\js-harness\\SKILL.md',
   'C:\\Users\\Oficina\\.codex\\skills\\js-harness-orchestrator\\SKILL.md',
+  'C:\\Users\\Oficina\\.codex\\skills\\js-harness-protocols\\SKILL.md',
   'C:\\Users\\Oficina\\.claude\\settings.json',
   'C:\\Users\\Oficina\\.codex\\hooks.json',
 ];
 
-test('realHomeFiles without a manifest is the fixed list: the manifest, four skills, two hook files', () => {
+test('realHomeFiles without a manifest is the fixed list: the manifest, six skills, two hook files', () => {
   assert.deepEqual(realHomeFiles(WIN_HOME, undefined, 'win32'), FIXED_WIN);
   assert.deepEqual(realHomeFiles(WIN_HOME, null, 'win32'), FIXED_WIN);
   assert.deepEqual(realHomeFiles('/home/seb', undefined, 'linux').slice(0, 2), [
@@ -486,7 +488,7 @@ test('realHomeFiles names nothing of the gate log, which the gates of the user\'
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-test('the journey is the eleven steps of the feature document, the pause hook, the project rules and the host session, under ids that stay', () => {
+test('the journey is the eleven steps of the feature document, the pause hook, the project rules, the reply hook and the host session, under ids that stay', () => {
   // The ids go into record.jsonl, so a renamed one breaks every line already written: they are pinned here.
   assert.deepEqual(JOURNEY.map((step) => step.id), [
     'real-home-before',
@@ -500,6 +502,7 @@ test('the journey is the eleven steps of the feature document, the pause hook, t
     'global-uninstall',
     'pause-hook',
     'opening-tools',
+    'reply-hook',
     'host-loads',
     'real-home-after',
     'record',
@@ -793,7 +796,7 @@ test('parseArgs names the argument it refused', () => {
 
 // What `install` grafts on a host file, as its own declaration gives it: the list this library checks a
 // host file against must be that one, or a journey would go on passing against an install that changed.
-test('HARNESS_HOOKS is what install declares for each host: the doctor and resume entries for both hosts, the pause entry for Claude Code', () => {
+test('HARNESS_HOOKS is what install declares for each host: the doctor, resume and reply entries for both hosts, the pause, web failure, guard and share entries for Claude Code', () => {
   const declared = (host) => entryComponents.filter((component) => component.id.startsWith(`${host}-`)).map((component) => {
     const entry = component.entry();
     const hook = { event: component.pointer.at(-1), command: entry.hooks.map((item) => item.command).join(' && ') };
@@ -806,10 +809,15 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor and resum
     { event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' },
     { event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' },
     { event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' },
+    { event: 'PostToolUseFailure', matcher: 'WebFetch', command: 'js-harness resume --pause || exit 0' },
     { event: 'PreToolUse', matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', command: 'js-harness guard --hook || exit 0' },
     { event: 'Stop', command: 'js-harness guard --stop || exit 0' },
+    { event: 'UserPromptSubmit', command: 'js-harness rules --hook || exit 0' },
+    { event: 'SessionStart', matcher: 'compact|clear|resume', command: 'js-harness rules --hook || exit 0' },
+    { event: 'SubagentStart', command: 'js-harness rules --hook || exit 0' },
+    { event: 'Stop', command: 'js-harness reply --hook || exit 0' },
   ]);
-  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude']]);
+  assert.deepEqual(HARNESS_HOOKS.map((hook) => hook.hosts), [['claude', 'codex'], ['claude', 'codex'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude'], ['claude', 'codex']]);
   assert.deepEqual(declared('claude'), listedFor('claude'));
   assert.deepEqual(declared('codex'), listedFor('codex'));
   assert.ok(Object.isFrozen(HARNESS_HOOKS));
@@ -826,6 +834,12 @@ const doctor = group('startup|resume', 'js-harness doctor --hook');
 const resume = group('compact', 'js-harness resume --hook');
 const PAUSE = 'js-harness resume --pause || exit 0';
 const pause = group(undefined, PAUSE);
+const RULES_HOOK = 'js-harness rules --hook || exit 0';
+const rulesStart = group('compact|clear|resume', RULES_HOOK);
+const rulesTurn = group(undefined, RULES_HOOK);
+// A Claude Code file right after install: its SessionStart groups then the rules' own, the PostToolUse list, and the
+// rules' entries under UserPromptSubmit and SubagentStart (`extra` replaces any of those lists).
+const claudeHooksFile = (postToolUse, ...groups) => JSON.stringify({ hooks: { SessionStart: [...groups, rulesStart], PostToolUse: postToolUse, UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn] } }, null, 4);
 
 test('hostHooksProblem finds none in a Codex file that holds its seeded entry and then each entry of the harness once', () => {
   assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume), SEEDED, 'codex'), null);
@@ -834,7 +848,7 @@ test('hostHooksProblem finds none in a Codex file that holds its seeded entry an
 });
 
 test('hostHooksProblem finds none in a Claude Code file right after install: the seeded entry, the doctor and resume entries, then the pause entry once', () => {
-  assert.equal(hostHooksProblem(hooksFile([pause], seeded, doctor, resume), SEEDED, 'claude'), null);
+  assert.equal(hostHooksProblem(claudeHooksFile([pause], seeded, doctor, resume), SEEDED, 'claude'), null);
 });
 
 test('hostHooksProblem says what it expected and what it found: an entry missing, written twice, with another matcher or command, or out of place', () => {
@@ -860,6 +874,14 @@ test('hostHooksProblem says what it expected and what it found: an entry missing
   assert.equal(found(), `${expected}no entry`);
 });
 
+test('hostHooksProblem holds the turn-start entries of the rules at the end of their Claude Code lists, and none in Codex', () => {
+  const file = (lists) => JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume, rulesStart], PostToolUse: [pause], UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn], ...lists } });
+  assert.equal(hostHooksProblem(file({ UserPromptSubmit: [group(undefined, 'echo theirs'), rulesTurn] }), SEEDED, 'claude'), null);
+  assert.equal(hostHooksProblem(file({ UserPromptSubmit: [] }), SEEDED, 'claude'), `expected "${RULES_HOOK}" (no matcher) once, at the end of hooks.UserPromptSubmit; found: no entry`);
+  assert.equal(hostHooksProblem(file({ SubagentStart: undefined }), SEEDED, 'claude'), 'the file holds no list at hooks.SubagentStart');
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume], UserPromptSubmit: [rulesTurn] } }), SEEDED, 'codex'), `expected no entry of the harness in hooks.UserPromptSubmit of codex; found: "${RULES_HOOK}" (no matcher)`);
+});
+
 test('hostHooksProblem says so for a host file that is not one: no JSON, no hooks, a list that is none', () => {
   assert.equal(hostHooksProblem('not json', SEEDED, 'codex'), 'the file is not JSON');
   assert.equal(hostHooksProblem(undefined, SEEDED, 'codex'), 'the file is not JSON');
@@ -875,20 +897,20 @@ test('hostHooksProblem says so for a host file that is not one: no JSON, no hook
 const expectedPause = `expected "${PAUSE}" (no matcher) once, at the end of hooks.PostToolUse; found: `;
 
 test('hostHooksProblem says the pause entry is missing from a Claude Code file, when its PostToolUse list is empty or absent', () => {
-  assert.equal(hostHooksProblem(hooksFile([], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}no entry`);
-  assert.equal(hostHooksProblem(hooksFile(undefined, seeded, doctor, resume), SEEDED, 'claude'), 'the file holds no list at hooks.PostToolUse');
+  assert.equal(hostHooksProblem(claudeHooksFile([], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}no entry`);
+  assert.equal(hostHooksProblem(claudeHooksFile(undefined, seeded, doctor, resume), SEEDED, 'claude'), 'the file holds no list at hooks.PostToolUse');
 });
 
 test('hostHooksProblem says the pause entry is wrong in a Claude Code file when it is written twice, with a matcher, or with another command', () => {
-  assert.equal(hostHooksProblem(hooksFile([pause, pause], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (no matcher) | "${PAUSE}" (no matcher)`);
-  assert.equal(hostHooksProblem(hooksFile([group('startup', PAUSE)], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (matcher startup)`);
-  assert.equal(hostHooksProblem(hooksFile([group(undefined, 'js-harness resume --pause')], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"js-harness resume --pause" (no matcher)`);
+  assert.equal(hostHooksProblem(claudeHooksFile([pause, pause], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (no matcher) | "${PAUSE}" (no matcher)`);
+  assert.equal(hostHooksProblem(claudeHooksFile([group('startup', PAUSE)], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (matcher startup)`);
+  assert.equal(hostHooksProblem(claudeHooksFile([group(undefined, 'js-harness resume --pause')], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"js-harness resume --pause" (no matcher)`);
 });
 
 test('hostHooksProblem keeps a user\'s own PostToolUse entry first: the pause entry must come after it, not before', () => {
   const userPost = group(undefined, 'echo user-post-hook');
-  assert.equal(hostHooksProblem(hooksFile([userPost, pause], seeded, doctor, resume), SEEDED, 'claude'), null);
-  assert.equal(hostHooksProblem(hooksFile([pause, userPost], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (no matcher) | "echo user-post-hook" (no matcher)`);
+  assert.equal(hostHooksProblem(claudeHooksFile([userPost, pause], seeded, doctor, resume), SEEDED, 'claude'), null);
+  assert.equal(hostHooksProblem(claudeHooksFile([pause, userPost], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (no matcher) | "echo user-post-hook" (no matcher)`);
 });
 
 test('hostHooksProblem finds the pause entry where Codex has none, and finds none in a Codex file without it', () => {
@@ -1029,6 +1051,34 @@ test('openingToolsProblem names a run that does not exit 0, and the refusal that
   const vague = printed(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'no' } })}\n`);
   const named = { ...OPENING_RIGHT.declared, RemoteTrigger: vague };
   assert.match(openingToolsProblem({ ...OPENING_RIGHT, declared: named }), /^the refusal of RemoteTrigger does not name the tool and start_session: no$/);
+});
+
+// The step `reply-hook` (odd/tasks/rule-hierarchy.md, T12): the reply check turned back in a folder whose harness.json
+// turns it on, and silent where it is off.
+const REPLY_BLOCK = printed(`${JSON.stringify({ decision: 'block', reason: 'js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Working (say what wakes you), Decision, Cut, Finished.' })}\n`);
+const REPLY_PASS = printed('{}\n');
+const REPLY_RIGHT = { refused: REPLY_BLOCK, passed: REPLY_PASS, plain: REPLY_PASS };
+
+test('replyHookInput is the JSON the host sends a Stop hook: the session, its folder, the reply and no background work', () => {
+  assert.deepEqual(JSON.parse(replyHookInput({ sessionId: 's1', cwd: 'D:/p', message: 'Done.' })), {
+    session_id: 's1', cwd: 'D:/p', hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'Done.', background_tasks: [],
+  });
+});
+
+test('replyHookProblem finds nothing wrong with the runs the reply check should make', () => {
+  assert.equal(replyHookProblem(REPLY_RIGHT), null);
+});
+
+test('replyHookProblem names the run that let a reply with no state through where the check is on', () => {
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, refused: REPLY_PASS }), 'the reply check let a reply with no state stop in the folder whose harness.json turns it on: {}');
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, refused: printed(`${JSON.stringify({ decision: 'block', reason: 'no' })}\n`) }), 'the reply check turned the reply back without naming the state Working: no');
+});
+
+test('replyHookProblem names a run that turned back a reply it should let stop, and one that printed no JSON or did not exit 0', () => {
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, passed: REPLY_BLOCK }), `the reply check turned back a reply that closes with its state: ${REPLY_BLOCK.stdout.trim()}`);
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: REPLY_BLOCK }), `the reply check turned back a reply in the practice project, whose harness.json does not turn it on: ${REPLY_BLOCK.stdout.trim()}`);
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: printed('') }), 'the reply check printed nothing in the practice project, though a Stop hook answers with JSON');
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, passed: { status: 2, stdout: '' } }), 'the reply check exited 2 on the reply that closes with its state, not 0');
 });
 
 test('pauseHookProblem says the run outside a project printed, though no harness.json is above its folder', () => {

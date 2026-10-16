@@ -145,13 +145,13 @@ test('doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead.
-      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -451,7 +451,7 @@ test('doctorMain reports the rule notes of the project memory as the memory-rule
     const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
     assert.equal(text.code, 0);
     assert.ok(text.output.includes(`\n${'memory-rules'.padEnd(16)}${'n/a'.padEnd(10)}${'stale'.padEnd(10)}${'n/a'.padEnd(10)}${'n/a'.padEnd(10)}n/a\n`), text.output);
-    assert.match(text.output, /\nFix:\n {2}memory-rules \(claude\):\n {4}place each note with the protocol "recording a new rule" .*then delete the note:\n {4}rule\.md \(feedback\)\n/);
+    assert.match(text.output, /\nFix:\n {2}memory-rules \(claude\):\n {4}place each note with the protocol "Changing a rule, a new one included" of the js-harness-protocols skill .*then delete the note:\n {4}rule\.md \(feedback\)\n/);
 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
     const row = JSON.parse(json.output).find((r) => r.id === 'memory-rules');
@@ -496,10 +496,11 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
 
     assert.equal(code, 0);
     const lines = output.split('\n').filter(Boolean);
-    assert.equal(lines.at(-3), accountLine('ok'), output);
-    assert.equal(lines.at(-2), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
-    assert.equal(lines.at(-1), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
-    assert.equal(lines.length, 12, 'the header, the six tools and the five checks');
+    assert.equal(lines.at(-4), accountLine('ok'), output);
+    assert.equal(lines.at(-3), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.equal(lines.at(-2), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
+    assert.match(lines.at(-1), /^pnpm-lock\s+n\/a\s+n\/a/, 'then the pnpm lock check, with no PNPM_HOME in the env given');
+    assert.equal(lines.length, 13, 'the header, the six tools and the six checks');
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -708,7 +709,7 @@ test('doctorMain shows the remote server check ok while the recorded supervisor 
     assert.ok(unlisted.output.split('\n').includes(remoteLine('unknown')), unlisted.output);
     assert.doesNotMatch(unlisted.output, /\nFix:/, 'unknown is not a gap');
     const json = await runDoctor([...argv, '--json'], {}, deps);
-    assert.deepEqual(JSON.parse(json.output).at(-1).gaps, []);
+    assert.deepEqual(JSON.parse(json.output).find((row) => row.id === 'remote-server').gaps, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1644,6 +1645,60 @@ test('R3-003: resolveLatestVersions keeps the cache stale for a mixed row set (h
   }
 });
 
+// The pnpm-lock row reads `PNPM_HOME` from the env doctor is given, never from the process: a pnpm install running
+// on the machine while the tests run cannot turn their rows into gaps.
+test('doctorMain shows the pnpm-lock row stale for a global bin lock left over in the given PNPM_HOME, its rmdir under Fix, and the hook notices it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  const pnpmHome = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const lockPath = path.join(pnpmHome, 'bin', '.pnpm-global-bin.lock');
+    fs.mkdirSync(lockPath, { recursive: true });
+    const leftAt = new Date(Date.now() - 60 * 60 * 1000);
+    fs.utimesSync(lockPath, leftAt, leftAt);
+    // The time doctor reads back is the one the file system kept: ext4 under WSL loses a millisecond of leftAt
+    // about one time in three, so the expected line is built from the stored time, not from leftAt.
+    const stored = new Date(fs.statSync(lockPath).mtimeMs);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /^pnpm-lock\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(output.includes(`  pnpm-lock (claude):\n    pnpm left its global bin lock behind`), output);
+    assert.ok(output.includes(`\n    rmdir "${lockPath}"\n    the folder was left there at ${stored.toISOString()}\n`), output);
+
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
+    assert.equal(hook.code, 0);
+    // The healthy fixture has no other gap, so the one the hook counts is the lock.
+    assert.equal(hook.output.trim(), JSON.stringify({ systemMessage: 'js-harness: 1 stack gap — run js-harness doctor' }));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(pnpmHome, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows the pnpm-lock row n/a, with no gap, when the env it is given names no PNPM_HOME', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.match(output, /^pnpm-lock\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.doesNotMatch(output, /pnpm-lock \(/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The unseen row (`js-harness unseen`) is added only when the caller hands doctor the check, as the
 // dispatcher does; the dependency returns the FAIL items' texts, or throws when the check cannot run.
 test('doctorMain shows the unseen row ok, with no gap, when the check has nothing to clear', async () => {
@@ -1810,6 +1865,95 @@ test('a host update since the reviewed versions is stale, with the versions and 
   }
 });
 
+// docs/FAILURES.md, cli-updated-itself: a tool of the stack that updated itself is seen at the next start of a
+// session, not when a measurement is about to run on it.
+test('a stack tool updated since the reviewed versions is stale, named by the hook, until --stack-reviewed records it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawnWith = (claude) => fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', claude: `${claude} (Claude Code)\n` }, gitToplevel: project, codexLogin: 'in' });
+    const deps = (claude) => ({ spawn: spawnWith(claude), fetch: noopFetch, stackUpdate: true });
+
+    const first = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.296'));
+    assert.match(first.output, /^stack-update\s+\d+ tools?\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    const baseline = readCache(home).stack.reviewed.versions;
+    assert.equal(baseline.claude, '2.1.296', 'the first reading is the reviewed one');
+    assert.equal(baseline.codex, '0.130.0');
+    assert.equal(baseline['gentle-ai'], undefined, 'gentle-ai has the gentle-ai-sync row');
+
+    const table = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.299'));
+    assert.match(table.output, /^stack-update\s+stale\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    const steps = [
+      '  stack-update (installed):',
+      '    claude 2.1.296 → 2.1.299 since the last review; review the update:',
+      '    read the changelog of each tool between those versions',
+      '    check that the hooks and commands of the harness that run them still work',
+      '    say it to the user, and to whoever plans a measurement on the versions before',
+      '    then record the review: js-harness doctor --stack-reviewed',
+    ].join('\n');
+    assert.ok(table.output.includes(`\n${steps}\n`), table.output);
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.296', 'a report records nothing while the update is unreviewed');
+
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, deps('2.1.299'));
+    assert.match(JSON.parse(hook.output).systemMessage, /claude 2\.1\.296 → 2\.1\.299 since the last review/);
+
+    const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, deps('2.1.299'));
+    assert.equal(reviewed.code, 0);
+    assert.match(reviewed.output, /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.\n$/);
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
+    const after = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.299'));
+    assert.match(after.output, /^stack-update\s+\d+ tools?\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--stack-reviewed keeps the reviewed version of a tool whose probe failed this time', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeCache(home, { ...readCache(home), stack: { reviewed: { versions: { claude: '2.1.290', codex: '0.120.0' }, at: '2026-10-09T00:00:00.000Z' } } });
+    // The Claude CLI does not answer: only the codex update is reviewed, and claude's baseline stays for its own review.
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, { spawn, fetch: noopFetch, stackUpdate: true });
+    assert.equal(reviewed.code, 0);
+    const { versions } = readCache(home).stack.reviewed;
+    assert.equal(versions.codex, '0.130.0');
+    assert.equal(versions.claude, '2.1.290');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--stack-reviewed with no tool version read records nothing and exits 1; without the switch doctor shows no stack-update row', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const spawn = fakeSpawn({ gitToplevel: project });
+    const errors = [];
+    const original = console.error;
+    console.error = (line) => errors.push(line);
+    let refused;
+    try {
+      refused = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, { spawn, fetch: noopFetch, stackUpdate: true });
+    } finally {
+      console.error = original;
+    }
+    assert.equal(refused.code, 1);
+    assert.deepEqual(errors, ['js-harness doctor: could not read the version of any tool of the stack: nothing was recorded.']);
+    assert.equal(readCache(home).stack, undefined);
+    const plain = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.doesNotMatch(plain.output, /stack-update/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The host check is handed doctor's own home, so `--home` decides which app folder is read (gentle-ai review of
 // PR 242), and `--host-reviewed --json` prints the record it wrote, for a caller that parses it.
 test('the host check reads the home doctor was given, and --host-reviewed --json prints the recorded versions as JSON', async () => {
@@ -1834,6 +1978,83 @@ test('the host check reads the home doctor was given, and --host-reviewed --json
     assert.deepEqual(JSON.parse(recorded.output), { reviewed });
     assert.deepEqual(readCache(home).host.reviewed, reviewed);
   } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs) is added only when the caller hands doctor the snapshot
+// reader, as the dispatcher does; the version is the gentle-ai row's own.
+test('a gentle-ai version since the reviewed one is stale with the CLAUDE.md diff step, until --gentle-ai-reviewed --json records it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const homes = [];
+    const snapshot = { at: '2026-10-16T04:45:56.400Z', dir: path.join(home, '.gentle-ai', 'backups', 'first'), entry: 'files/h/.claude/CLAUDE.md' };
+    const gentleAiSnapshots = (given) => {
+      homes.push(given);
+      return [snapshot];
+    };
+    const now = () => new Date('2026-10-16T12:00:00.000Z');
+    const deps = { spawn, fetch: noopFetch, gentleAiSnapshots, now };
+
+    const baseline = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.match(baseline.output, /^gentle-ai-sync\s+3\.7\.0\s+ok\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.deepEqual(readCache(home).gentleAi.reviewed, { version: '3.7.0', at: '2026-10-16T12:00:00.000Z' });
+
+    writeCache(home, { ...readCache(home), gentleAi: { reviewed: { version: '3.6.0', at: '2026-10-16T04:00:00.000Z' } } });
+    const table = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.match(table.output, /^gentle-ai-sync\s+3\.7\.0\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    const posix = (file) => file.replace(/\\/g, '/');
+    const steps = [
+      '  gentle-ai-sync (claude):',
+      '    gentle-ai 3.6.0 → 3.7.0 since the last review; review the update:',
+      '    read the gentle-ai release notes from 3.6.0 to 3.7.0 (https://github.com/Gentleman-Programming/gentle-ai/releases)',
+      `    diff the global CLAUDE.md, which gentle-ai rewrites on sync, against its copy from before the first sync since the review: diff -u <(cd '${posix(snapshot.dir)}' && tar -xzOf snapshot.tar.gz 'files/h/.claude/CLAUDE.md') '${posix(path.join(home, '.claude', 'CLAUDE.md'))}'`,
+      "    check each change against the project's AGENTS.md for conflicts: a rule that contradicts it, or a tool it mandates that this machine lacks",
+      '    report the changes and any conflict to the user',
+      '    then record the review: js-harness doctor --gentle-ai-reviewed',
+    ].join('\n');
+    assert.ok(table.output.includes(`\n${steps}\n`), table.output);
+    assert.equal(readCache(home).gentleAi.reviewed.version, '3.6.0', 'a report records nothing while the update is unreviewed');
+
+    const recorded = await runDoctor(['--home', home, '--cwd', project, '--gentle-ai-reviewed', '--json'], {}, deps);
+    assert.equal(recorded.code, 0);
+    assert.deepEqual(JSON.parse(recorded.output), { reviewed: { version: '3.7.0', at: '2026-10-16T12:00:00.000Z' } });
+    const text = await runDoctor(['--home', home, '--cwd', project, '--gentle-ai-reviewed'], {}, deps);
+    assert.equal(text.output, 'Recorded gentle-ai 3.7.0 as reviewed.\n');
+    assert.match((await runDoctor(['--home', home, '--cwd', project], {}, deps)).output, /^gentle-ai-sync\s+3\.7\.0\s+ok/m);
+    assert.deepEqual([...new Set(homes)], [home]);
+    assert.ok(readCache(home).host === undefined, 'no host record is written without the host check');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--gentle-ai-reviewed with no readable gentle-ai version records nothing and exits 1; without the snapshot reader doctor shows no gentle-ai-sync row', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  const errors = [];
+  const original = console.error;
+  console.error = (line) => errors.push(line);
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ gitToplevel: project, codexLogin: 'in' });
+    const deps = { spawn, fetch: noopFetch, gentleAiSnapshots: () => [] };
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--gentle-ai-reviewed'], {}, deps);
+    assert.equal(code, 1);
+    assert.equal(output, '');
+    assert.deepEqual(errors, ['js-harness doctor: could not read the gentle-ai version: nothing was recorded.']);
+    assert.equal('gentleAi' in readCache(home), false);
+
+    const plain = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.doesNotMatch(plain.output, /gentle-ai-sync/);
+    assert.equal('gentleAi' in readCache(home), false);
+  } finally {
+    console.error = original;
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
   }

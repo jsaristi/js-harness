@@ -11,6 +11,7 @@ import { checkRules } from './rules-check.mjs';
 import { renderList, writeRules } from './rules.mjs';
 import { rulesOfText } from './rules-change-run.mjs';
 import { projectSlug } from './sessions.mjs';
+import { repoTemplate } from './git-fixture.testkit.mjs';
 
 const NOW = Date.parse('2026-10-16T17:00:00.000Z');
 // The days the command writes are local days, so the fixtures read them by the clock of the host that runs them.
@@ -50,12 +51,26 @@ function listTextOf(dir, list, sources) {
   return renderList(list, { sources, readers: result.readers, sentences: result.sentences });
 }
 
+// Most tests ask for one of a few repositories, so each is built once in a run of this file and copied
+// (`git-fixture.testkit.mjs`), by the options that make it.
+const templates = new Map();
+
 /** A repository with `list` in force on main and origin/main, `files` over the usual ones, on the branch `branch`,
  * and folders for the relief file and the transcripts: `{ dir, home, claude, slug }`. */
 function repository({ branch = 'rule/gate-wait', list = LIST, files = {} } = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-change-'));
   const dir = path.join(base, 'repo');
   fs.mkdirSync(dir);
+  const key = JSON.stringify({ branch, list, files });
+  if (!templates.has(key)) templates.set(key, repoTemplate((template) => buildRepository(template, { branch, list, files })));
+  templates.get(key)(dir);
+  const home = path.join(base, 'home');
+  const claude = path.join(base, 'claude');
+  return { dir, home, claude, slug: projectSlug(path.resolve(dir)) };
+}
+
+/** Builds in `dir` the repository `repository` hands out copies of. */
+function buildRepository(dir, { branch, list, files }) {
   git(dir, 'init', '-q', '-b', 'main');
   git(dir, 'config', 'user.email', 'test@example.com');
   git(dir, 'config', 'user.name', 'test');
@@ -68,9 +83,6 @@ function repository({ branch = 'rule/gate-wait', list = LIST, files = {} } = {})
   git(dir, 'commit', '-q', '-m', 'the list');
   git(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   git(dir, 'switch', '-q', '-c', branch);
-  const home = path.join(base, 'home');
-  const claude = path.join(base, 'claude');
-  return { dir, home, claude, slug: projectSlug(path.resolve(dir)) };
 }
 
 /** Runs `rules change` in `repo` with `change` on standard input: `{ code, out, err }`. */
@@ -555,7 +567,22 @@ test('a branch not based on origin/main is said before an input that is not JSON
   git(repo.dir, 'switch', '-q', 'rule/gate-wait');
   const result = await change(repo, ['gate-wait'], undefined, { stdin: () => 'not json' });
   assert.equal(result.code, 1);
-  assert.match(result.err, /^not changed: rule\/gate-wait is not based on origin\/main: git rebase origin\/main$/);
+  assert.match(result.err, /^not changed: rule\/gate-wait is not based on origin\/main: git merge origin\/main$/);
+});
+
+test('the command a branch not based on origin/main is told clears that refusal', async () => {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', 'main');
+  write(repo.dir, 'docs/ROADMAP.md', '# Roadmap, moved on\n');
+  git(repo.dir, 'commit', '-q', '-am', 'main moves on');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(repo.dir, 'switch', '-q', 'rule/gate-wait');
+  const told = await change(repo, ['gate-wait'], undefined, { stdin: () => 'not json' });
+  const command = told.err.match(/: (git .+)$/)[1].split(' ').slice(1);
+  git(repo.dir, ...command, '-q', '--no-edit');
+  const result = await change(repo, ['gate-wait'], undefined, { stdin: () => 'not json' });
+  assert.equal(result.code, 1);
+  assert.doesNotMatch(result.err, /is not based on/);
 });
 
 test('a turn to refuse with a pattern that is no regular expression is refused for its pattern, never thrown', async () => {

@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PART_MAX_CHANGED_LINES } from './codex-review-parts.mjs';
 import { ruleValue } from './rules.mjs';
-import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, needsFlagLine, planLines, reviewPlan, RUNS_FOR_A_BAND, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
+import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, methodRecord, methodRecordLine, needsFlagLine, partPlanned, PLAN_METHOD, planLines, reviewPlan, RECENT_PARTS, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
 
 const PAIR = { model: 'gpt-fixture', effort: 'high' };
 
@@ -72,60 +71,55 @@ test('with no measured part there is no estimate, and that is said instead of a 
   }
 });
 
-test('the bounds of the estimate: five runs on the model and at the effort stand alone, and a band takes three', () => {
+test('the bounds of the estimate: five runs on the model and at the effort stand alone, and the fit reads the most recent twenty', () => {
   assert.equal(RUNS_TO_STAND_ALONE, 5);
-  assert.equal(RUNS_FOR_A_BAND, 3);
+  assert.equal(RECENT_PARTS, 20);
 });
 
-test('a part is estimated at its changed lines times the median input tokens a changed line cost', () => {
-  // 100, 200 and 600 input tokens a changed line: the median is 200, whatever the mean.
-  const three = inputEstimator([partRun(100, 10000), partRun(100, 20000), partRun(100, 60000)], PAIR);
-  assert.equal(three.runs, 3);
-  assert.equal(three.estimate(300), 60000);
-  // With an even count, the mean of the two in the middle: 100, 200, 300, 600 gives 250.
-  const four = inputEstimator([partRun(100, 10000), partRun(100, 20000), partRun(100, 30000), partRun(100, 60000)], PAIR);
-  assert.equal(four.estimate(300), 75000);
+/** Parts on the line of `fixed` input tokens a part and `perLine` a changed line, one for each of `lines`. */
+const onLine = (fixed, perLine, lines, run = partRun) => lines.map((changed) => run(changed, fixed + perLine * changed));
+
+test('a part is estimated at a fixed cost and a cost a changed line, fitted by least squares to the measured parts', () => {
+  const fit = inputEstimator(onLine(10000, 100, [100, 200, 300]), PAIR);
+  assert.equal(fit.runs, 3);
+  assert.deepEqual([fit.fixed, fit.perChangedLine], [10000, 100]);
+  assert.equal(fit.estimate(500), 60000);
+  assert.equal(fit.estimate(0), 10000, 'a part of binary files alone still costs its fixed cost');
 });
 
-test('an estimate is never under the smallest input total a considered run had', () => {
-  // 200 input tokens a changed line, and no run cost under 20,000.
-  const one = inputEstimator([partRun(100, 20000), partRun(200, 40000), partRun(300, 60000)], PAIR);
-  assert.equal(one.floor, 20000);
-  assert.equal(one.estimate(10), 20000);
-  assert.equal(one.estimate(0), 20000, 'a part of binary files alone is still a session');
-  assert.equal(one.estimate(101), 20200);
+test('the fit reads the most recent twenty measured parts, so an older way of reviewing does not pull it', () => {
+  const older = onLine(1000, 10, [100, 200, 300, 400, 500]);
+  const recent = onLine(10000, 100, Array.from({ length: RECENT_PARTS }, (_, at) => 50 * (at + 1)));
+  const fit = inputEstimator([...older, ...recent], PAIR);
+  assert.equal(fit.runs, RECENT_PARTS);
+  assert.deepEqual([fit.fixed, fit.perChangedLine], [10000, 100]);
+  // Every part it reads ran as the review will, so the plan says nothing of another effort.
+  assert.deepEqual([fit.samePair, fit.atPair], [true, RECENT_PARTS]);
+  assert.doesNotMatch(planLines(reviewPlan({ base: 'a'.repeat(40), head: 'b'.repeat(40), ...PAIR, parts: [{ files: ['x.mjs'], changedLines: 10 }], runs: [...older, ...recent] })).at(-1), /another effort/);
 });
 
-test('parts up to the bound of a part and parts above it are two bands, each with its own median', () => {
-  const runs = [
-    // Up to 400 changed lines: 300 input tokens a changed line.
-    partRun(100, 30000), partRun(200, 60000), partRun(PART_MAX_CHANGED_LINES, 300 * PART_MAX_CHANGED_LINES),
-    // Above: 100.
-    partRun(PART_MAX_CHANGED_LINES + 1, 100 * (PART_MAX_CHANGED_LINES + 1)), partRun(1000, 100000), partRun(3000, 300000),
-  ];
-  const banded = inputEstimator(runs, PAIR);
-  assert.deepEqual(banded.perChangedLine, { upToBound: 300, aboveBound: 100 });
-  assert.equal(banded.estimate(PART_MAX_CHANGED_LINES), 300 * PART_MAX_CHANGED_LINES, 'a part at the bound is in the lower band');
-  assert.equal(banded.estimate(PART_MAX_CHANGED_LINES + 1), 100 * (PART_MAX_CHANGED_LINES + 1));
-  assert.equal(banded.estimate(2000), 200000);
+test('parts whose changed lines do not vary, or a single part, put every part at the median part', () => {
+  const same = inputEstimator([partRun(100, 10000), partRun(100, 20000), partRun(100, 60000)], PAIR);
+  assert.deepEqual([same.fixed, same.perChangedLine, same.estimate(300)], [20000, 0, 20000]);
+  const one = inputEstimator([partRun(100, 30000)], PAIR);
+  assert.deepEqual([one.fixed, one.perChangedLine, one.estimate(200)], [30000, 0, 30000]);
 });
 
-test('a band with fewer than three runs takes the median of them all', () => {
-  // Three small parts at 300 a changed line and two large at 100: the median of the five is 300.
-  const runs = [partRun(100, 30000), partRun(200, 60000), partRun(300, 90000), partRun(1000, 100000), partRun(2000, 200000)];
-  const thin = inputEstimator(runs, PAIR);
-  assert.deepEqual(thin.perChangedLine, { upToBound: 300, aboveBound: 300 });
-  assert.equal(thin.estimate(1000), 300000);
-  // A third large run makes the band one of its own.
-  assert.deepEqual(inputEstimator([...runs, partRun(4000, 400000)], PAIR).perChangedLine, { upToBound: 300, aboveBound: 100 });
+test('a fit whose cost a changed line falls is the median part, and one whose fixed cost is under nothing starts at nothing', () => {
+  const falling = inputEstimator([partRun(100, 50000), partRun(200, 30000), partRun(300, 10000)], PAIR);
+  assert.deepEqual([falling.fixed, falling.perChangedLine], [30000, 0]);
+  // 1,000, 50,000 and 99,000: 490 a changed line from -48,000, which is no cost.
+  const steep = inputEstimator([partRun(100, 1000), partRun(200, 50000), partRun(300, 99000)], PAIR);
+  assert.deepEqual([steep.fixed, steep.perChangedLine], [0, 490]);
+  assert.equal(steep.estimate(100), 49000);
 });
 
 test('five runs on the model and at the effort of the review stand alone, and the runs at another are left out', () => {
-  const same = [100, 100, 100, 100, 100].map((lines) => partRun(lines, lines * 500));
-  const other = [100, 100, 100, 100, 100, 100].map((lines) => atMedium(lines, lines * 200));
+  const same = onLine(10000, 100, [100, 200, 300, 400, 500]);
+  const other = onLine(1000, 10, [100, 200, 300, 400, 500, 600], atMedium);
   const alone = inputEstimator([...other, ...same], PAIR);
   assert.deepEqual([alone.runs, alone.samePair, alone.atPair], [5, true, 5]);
-  assert.equal(alone.estimate(200), 100000);
+  assert.equal(alone.estimate(200), 30000);
   // Held to both: the model alone is not the pair, and neither is a session that named no effort.
   const astra = same.map((line) => ({ ...line, sessionModel: 'gpt-6-astra' }));
   assert.equal(inputEstimator(astra, PAIR).samePair, false);
@@ -133,36 +127,28 @@ test('five runs on the model and at the effort of the review stand alone, and th
 });
 
 test('with fewer than five such runs every measured part counts, and the estimate says it rests on runs at another effort', () => {
-  const same = [100, 100, 100, 100].map((lines) => partRun(lines, lines * 500));
-  const other = [100, 100, 100, 100, 100].map((lines) => atMedium(lines, lines * 200));
+  const same = onLine(0, 300, [100, 200, 300, 400]);
+  const other = onLine(0, 300, [100, 200, 300, 400, 500], atMedium);
   const all = inputEstimator([...other, ...same], PAIR);
   assert.deepEqual([all.runs, all.samePair, all.atPair], [9, false, 4]);
-  // The median of five at 200 and four at 500 is 200.
-  assert.equal(all.estimate(200), 40000);
+  assert.equal(all.estimate(200), 60000);
 });
 
-test('the high figure of a part is its changed lines times the highest input tokens a changed line cost, in its band', () => {
-  const runs = [
-    // Up to 400 changed lines: 100, 300 and 900 input tokens a changed line.
-    partRun(100, 10000), partRun(200, 60000), partRun(300, 270000),
-    // Above: 50, 100 and 400.
-    partRun(1000, 50000), partRun(2000, 200000), partRun(500, 200000),
-  ];
-  const spread = inputEstimator(runs, PAIR);
-  assert.deepEqual(spread.perChangedLine, { upToBound: 300, aboveBound: 100 });
-  assert.deepEqual(spread.highestPerChangedLine, { upToBound: 900, aboveBound: 400 });
-  assert.equal(spread.high(PART_MAX_CHANGED_LINES), 900 * PART_MAX_CHANGED_LINES, 'a part at the bound is in the lower band');
-  assert.equal(spread.high(PART_MAX_CHANGED_LINES + 1), 400 * (PART_MAX_CHANGED_LINES + 1));
-  // Never under what the cheapest run cost, as the estimate is not, and so never under the estimate.
-  assert.equal(spread.floor, 10000);
-  assert.deepEqual([spread.estimate(5), spread.high(5)], [10000, 10000]);
+// Points that pair off around the line of 10,000 a part and 100 a changed line, so the fit is still that line,
+// while what they cost over it spreads: 0.25, 0.5, six at 1, then 1.5 and 1.75. The 90th percentile is 1.5.
+const SPREAD = [
+  partRun(100, 35000), partRun(100, 5000), partRun(200, 45000), partRun(200, 15000),
+  ...onLine(10000, 100, [300, 300, 1000, 1000, 2000, 2000]),
+];
+
+test('the high figure of a part is its estimate times the 90th percentile of what the parts cost over the fit, and never under the estimate', () => {
+  const spread = inputEstimator(SPREAD, PAIR);
+  assert.deepEqual([spread.fixed, spread.perChangedLine, spread.highRatio], [10000, 100, 1.5]);
+  assert.equal(spread.high(500), 90000);
   for (const lines of [0, 1, 40, 400, 401, 5000]) assert.ok(spread.high(lines) >= spread.estimate(lines), `${lines} changed lines`);
-  // A band of fewer than three runs takes the highest of them all, as it takes their median.
-  const thin = inputEstimator(runs.slice(0, 5), PAIR);
-  assert.deepEqual(thin.highestPerChangedLine, { upToBound: 900, aboveBound: 900 });
-  // One measured part: the highest it cost a changed line is what it cost, and the two figures are one.
-  const one = inputEstimator([partRun(100, 30000)], PAIR);
-  assert.deepEqual([one.estimate(200), one.high(200)], [60000, 60000]);
+  // Parts on the line cost what it says, so the two figures are one.
+  const exact = inputEstimator(onLine(10000, 100, [100, 200, 300]), PAIR);
+  assert.deepEqual([exact.highRatio, exact.estimate(200), exact.high(200)], [1, 30000, 30000]);
   // And with no measured part there is no high figure either.
   assert.equal(inputEstimator([], PAIR).high, null);
 });
@@ -176,11 +162,13 @@ const part = (count, changedLines) => ({ files: Array.from({ length: count }, (_
 /** A plan of `parts` for the review the command runs, from `runs`. */
 const planOf = (parts, runs = [], over = {}) => reviewPlan({ base: BASE, head: HEAD, ...PAIR, parts, runs, ...over });
 
-// Six parts measured on the model and at the effort of the review: 300 input tokens a changed line up to
-// the bound of a part, 100 above it, and none under 30,000.
-const MEASURED = [partRun(100, 30000), partRun(200, 60000), partRun(300, 90000), partRun(1000, 100000), partRun(2000, 200000), partRun(4000, 400000)];
-const METHOD =
-  'a part is put at its changed lines times the median input tokens a changed line cost in them, the parts of up to 400 changed lines apart from the larger ones, and never under what the cheapest of them cost.';
+// Six parts measured on the model and at the effort of the review, on the line of 10,000 input tokens a part
+// and 100 a changed line.
+const MEASURED = onLine(10000, 100, [100, 200, 300, 1000, 2000, 4000]);
+/** What the estimate line says of how a part is put, for a fit of `fixed` a part and `perLine` a changed line. */
+const method = (fixed, perLine) =>
+  `a part is put at about ${fixed} input tokens and about ${perLine} more a changed line, a fit by least squares to the most recent ${RECENT_PARTS} of them at most.`;
+const METHOD = method('10,000', '100');
 
 test('a run starts the declared count of parts without being told to', () => {
   assert.equal(MAX_PARTS_WITHOUT_FLAG, ruleValue('review-parts-unflagged', 'parts'));
@@ -194,17 +182,18 @@ test('the plan names the range, the model, the effort, the parts with their file
     model: 'gpt-fixture',
     effort: 'high',
     parts: [
-      // 380 x 300 is 114,000, and 914 x 100 is 91,400: printed to two figures, so neither reads as a measurement.
-      { index: 1, of: 2, files: 2, changedLines: 380, inputTokens: 110000 },
-      { index: 2, of: 2, files: 1, changedLines: 914, inputTokens: 91000 },
+      // 10,000 + 380 x 100 is 48,000, and 10,000 + 914 x 100 is 101,400: printed to two figures, so neither
+      // reads as a measurement.
+      { index: 1, of: 2, files: 2, changedLines: 380, inputTokens: 48000, inputTokensHigh: 48000 },
+      { index: 2, of: 2, files: 1, changedLines: 914, inputTokens: 100000, inputTokensHigh: 100000 },
     ],
     files: 3,
     changedLines: 1294,
     // The sum of what is printed for the parts, so the plan adds up.
-    inputTokens: 201000,
-    // Every measured part of a band cost a changed line the same, so the high figure is the same figure.
-    inputTokensHigh: 201000,
-    basis: { runs: 6, samePair: true, atPair: 6, bandAt: 400 },
+    inputTokens: 148000,
+    // Every measured part cost what the fit says, so the high figure is the same figure.
+    inputTokensHigh: 148000,
+    basis: { runs: 6, samePair: true, atPair: 6, fixed: 10000, perChangedLine: 100, highRatio: 1 },
     maxParts: 6,
     maxPartsGiven: false,
     over: false,
@@ -212,31 +201,29 @@ test('the plan names the range, the model, the effort, the parts with their file
   });
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 1,294 changed lines in 3 files.',
-    '  part 1 of 2: 2 files, 380 changed lines, about 110,000 input tokens',
-    '  part 2 of 2: 1 file, 914 changed lines, about 91,000 input tokens',
-    `Estimate: about 201,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}`,
+    '  part 1 of 2: 2 files, 380 changed lines, about 48,000 input tokens',
+    '  part 2 of 2: 1 file, 914 changed lines, about 100,000 input tokens',
+    `Estimate: about 148,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}`,
   ]);
 });
 
-// The same six, and three more whose sessions looked further into the code than their parts were large: 900
-// input tokens a changed line up to the bound of a part, 400 above it. The medians are still 300 and 100.
-const SPREAD = [...MEASURED, partRun(100, 30000), partRun(200, 60000), partRun(300, 270000), partRun(1000, 100000), partRun(2000, 200000), partRun(500, 200000)];
 const RANGE =
-  ' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: ' +
-  'how far a session looks into the code moves what it costs more than the size of its part does.';
+  ' The higher figure puts every part at that times 1.5, the 90th percentile of what those parts cost over the fit: about one review in ten has cost more, and it is no ceiling.';
 
-test('the estimate of the whole is a range when the measured parts did not cost a changed line alike: from the median to the most one cost', () => {
+test('the estimate of the whole is a range when the measured parts did not cost what the fit says: from the fit to its 90th percentile', () => {
   const plan = planOf([part(2, 380), part(1, 914)], SPREAD);
-  // Each part keeps one figure, the one from the median; the range is of the whole.
-  assert.deepEqual(plan.parts.map((one) => Object.keys(one)), [['index', 'of', 'files', 'changedLines', 'inputTokens'], ['index', 'of', 'files', 'changedLines', 'inputTokens']]);
-  assert.deepEqual(plan.parts.map((one) => one.inputTokens), [110000, 91000]);
-  // 380 x 900 is 342,000 and 914 x 400 is 365,600: each to two figures, as the figures of the parts are, and added up.
-  assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [201000, 710000]);
+  // Each part holds both figures, which its run line records (`partPlanned`); the lines print the range of the whole.
+  const keys = ['index', 'of', 'files', 'changedLines', 'inputTokens', 'inputTokensHigh'];
+  assert.deepEqual(plan.parts.map((one) => Object.keys(one)), [keys, keys]);
+  assert.deepEqual(plan.parts.map((one) => one.inputTokens), [48000, 100000]);
+  // 48,000 x 1.5 is 72,000 and 101,400 x 1.5 is 152,100: each to two figures, as the figures of the parts are, and added up.
+  assert.deepEqual(plan.parts.map((one) => one.inputTokensHigh), [72000, 150000]);
+  assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [148000, 222000]);
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 1,294 changed lines in 3 files.',
-    '  part 1 of 2: 2 files, 380 changed lines, about 110,000 input tokens',
-    '  part 2 of 2: 1 file, 914 changed lines, about 91,000 input tokens',
-    `Estimate: about 201,000 to 710,000 input tokens in all. It rests on 12 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}${RANGE}`,
+    '  part 1 of 2: 2 files, 380 changed lines, about 48,000 input tokens',
+    '  part 2 of 2: 1 file, 914 changed lines, about 100,000 input tokens',
+    `Estimate: about 148,000 to 222,000 input tokens in all. It rests on 10 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}${RANGE}`,
   ]);
   // The high figure is never the smaller of the two, whatever the rounding of each part does.
   for (const lines of [1, 37, 115, 383, 400, 401, 955, 3228]) {
@@ -245,11 +232,11 @@ test('the estimate of the whole is a range when the measured parts did not cost 
   }
 });
 
-test('one figure is said as one: with a single measured part, or parts that all cost a changed line the same, there is no range to speak of', () => {
+test('one figure is said as one: with a single measured part, or parts that all cost what the fit says, there is no range to speak of', () => {
   for (const runs of [[partRun(100, 30000)], MEASURED]) {
     const plan = planOf([part(1, 200)], runs);
-    assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [60000, 60000]);
-    assert.match(planLines(plan).at(-1), /^Estimate: about 60,000 input tokens in all\. /);
+    assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [30000, 30000]);
+    assert.match(planLines(plan).at(-1), /^Estimate: about 30,000 input tokens in all\. /);
     assert.doesNotMatch(planLines(plan).at(-1), /higher figure|about [\d,]+ to /);
   }
   // And where there is no estimate there is no high figure.
@@ -257,18 +244,32 @@ test('one figure is said as one: with a single measured part, or parts that all 
   assert.equal(planOf([], SPREAD).inputTokensHigh, null);
 });
 
-test('an estimate is printed to two figures, whatever its size, and a small part is put at what the cheapest run cost', () => {
-  const plan = planOf([part(1, 1), part(1, 3228), part(3, 399)], [...MEASURED, partRun(10, 1234)]);
-  // The floor, 1,234; 3,228 x 100; 399 x 300 is 119,700.
-  assert.deepEqual(plan.parts.map((one) => one.inputTokens), [1200, 320000, 120000]);
-  assert.equal(plan.inputTokens, 441200);
+test('what a run line records of its part\'s plan: both figures and the version of the method, nothing where there was no estimate', () => {
+  const plan = planOf([part(2, 380), part(1, 914)], SPREAD);
+  assert.equal(PLAN_METHOD, 2);
+  assert.deepEqual(partPlanned(plan, 1), { estimate: 48000, high: 72000, method: 2 });
+  assert.deepEqual(partPlanned(plan, 2), { estimate: 100000, high: 150000, method: 2 });
+  // A range reviewed whole is the one part of its plan.
+  assert.deepEqual(partPlanned(planOf([part(1, 200)], MEASURED)), { estimate: 30000, high: 30000, method: 2 });
+  // No estimate, no part of that index, or no plan: nothing to record.
+  assert.equal(partPlanned(planOf([part(1, 200)]), 1), null);
+  assert.equal(partPlanned(plan, 3), null);
+  assert.equal(partPlanned(null), null);
+});
+
+test('an estimate is printed to two figures, whatever its size, and a small part costs at least the fixed cost', () => {
+  const plan = planOf([part(1, 1), part(1, 3228), part(3, 399)], MEASURED);
+  // 10,100; 332,800; 49,900.
+  assert.deepEqual(plan.parts.map((one) => one.inputTokens), [10000, 330000, 50000]);
+  assert.equal(plan.inputTokens, 390000);
 });
 
 test('with no measured part the plan says there is no estimate and why, and puts no number on a part', () => {
   const plan = planOf([part(2, 6), part(1, 2)]);
   assert.deepEqual(plan.parts.map((one) => one.inputTokens), [null, null]);
+  assert.deepEqual(plan.parts.map((one) => one.inputTokensHigh), [null, null]);
   assert.equal(plan.inputTokens, null);
-  assert.deepEqual(plan.basis, { runs: 0, samePair: false, atPair: 0, bandAt: 400 });
+  assert.deepEqual(plan.basis, { runs: 0, samePair: false, atPair: 0, fixed: null, perChangedLine: null, highRatio: null });
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 8 changed lines in 3 files.',
     '  part 1 of 2: 2 files, 6 changed lines',
@@ -280,12 +281,12 @@ test('with no measured part the plan says there is no estimate and why, and puts
 test('an estimate from runs at another effort says so, with how many parts it rests on and how many ran as the review will', () => {
   const runs = [atMedium(100, 30000), atMedium(200, 60000), atMedium(300, 90000), partRun(100, 30000)];
   const plan = planOf([part(1, 200)], runs);
-  assert.deepEqual(plan.basis, { runs: 4, samePair: false, atPair: 1, bandAt: 400 });
+  assert.deepEqual(plan.basis, { runs: 4, samePair: false, atPair: 1, fixed: 0, perChangedLine: 300, highRatio: 1 });
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 1 part, 200 changed lines in 1 file.',
     '  part 1 of 1: 1 file, 200 changed lines, about 60,000 input tokens',
     'Estimate: about 60,000 input tokens in all. It rests on 4 parts this machine\'s run log measured, 1 of them on gpt-fixture at high effort and the rest at another effort or in a session that named none ' +
-      `(with 5 or more of the first kind it would rest on those alone): ${METHOD}`,
+      `(with 5 or more of the first kind it would rest on those alone): ${method('0', '300')}`,
   ]);
   // One measured part is said as one, and none on the model and at the effort of the review as none.
   assert.match(planLines(planOf([part(1, 200)], [atMedium(100, 30000)])).at(-1), /It rests on 1 part this machine's run log measured, 0 of them on gpt-fixture at high effort and the rest at another effort/);
@@ -295,23 +296,24 @@ test('an estimate from runs at another effort says so, with how many parts it re
 });
 
 test('an estimate from fewer than five parts, all of them on the model and at the effort of the review, says nothing of another effort', () => {
-  for (const [runs, rests] of [
-    [[partRun(100, 30000)], '1 part'],
-    [[partRun(100, 30000), partRun(200, 60000)], '2 parts'],
-    [[partRun(100, 30000), partRun(200, 60000), partRun(300, 90000), partRun(100, 30000)], '4 parts'],
+  for (const [runs, rests, sends] of [
+    [[partRun(100, 30000)], '1 part', '30,000'],
+    [[partRun(100, 30000), partRun(200, 60000)], '2 parts', '60,000'],
+    [[partRun(100, 30000), partRun(200, 60000), partRun(300, 90000), partRun(100, 30000)], '4 parts', '60,000'],
   ]) {
     const plan = planOf([part(1, 200)], runs);
-    assert.deepEqual(plan.basis, { runs: runs.length, samePair: false, atPair: runs.length, bandAt: 400 }, rests);
-    assert.equal(planLines(plan).at(-1), `Estimate: about 60,000 input tokens in all. It rests on ${rests} this machine's run log measured on gpt-fixture at high effort: ${METHOD}`, rests);
+    assert.equal(plan.basis.runs, runs.length, rests);
+    assert.deepEqual([plan.basis.samePair, plan.basis.atPair], [false, runs.length], rests);
+    assert.match(planLines(plan).at(-1), new RegExp(`^Estimate: about ${sends} input tokens in all\\. It rests on ${rests} this machine's run log measured on gpt-fixture at high effort: a part is put at about `), rests);
     assert.doesNotMatch(planLines(plan).at(-1), /another effort|named none/, rests);
   }
 });
 
 test('the plan is of the review the command runs: it names the model and the effort it is handed, and the estimate is held to them', () => {
-  const runs = [100, 100, 100, 100, 100].map((lines) => atMedium(lines, lines * 200));
+  const runs = onLine(0, 200, [100, 200, 300, 400, 500], atMedium);
   const plan = planOf([part(1, 100)], runs, { effort: 'medium' });
   assert.equal(planLines(plan)[0], 'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at medium effort, 1 part, 100 changed lines in 1 file.');
-  assert.deepEqual(plan.basis, { runs: 5, samePair: true, atPair: 5, bandAt: 400 });
+  assert.deepEqual([plan.basis.runs, plan.basis.samePair, plan.basis.atPair], [5, true, 5]);
 });
 
 test('a range that changes nothing is a plan of no part, which still names the model and the effort', () => {
@@ -339,13 +341,13 @@ test('a plan says what the review leaves out, how much of it and why, in a line 
   const plan = planOf([part(2, 380), part(1, 914)], MEASURED, { leftOut: leftOut([3, 1300], [2, 120]) });
   assert.deepEqual(plan.leftOut, leftOut([3, 1300], [2, 120]));
   // The parts, their sizes and the estimate are of what the review reads, as they were.
-  assert.deepEqual([plan.files, plan.changedLines, plan.inputTokens], [3, 1294, 201000]);
+  assert.deepEqual([plan.files, plan.changedLines, plan.inputTokens], [3, 1294, 148000]);
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 1,294 changed lines in 3 files.',
-    '  part 1 of 2: 2 files, 380 changed lines, about 110,000 input tokens',
-    '  part 2 of 2: 1 file, 914 changed lines, about 91,000 input tokens',
+    '  part 1 of 2: 2 files, 380 changed lines, about 48,000 input tokens',
+    '  part 2 of 2: 1 file, 914 changed lines, about 100,000 input tokens',
     'Left out of the review: 5 files, 1,420 changed lines (3 Markdown documents, 1,300 changed lines; 2 files the project marks `-codex-review`, 120 changed lines).',
-    `Estimate: about 201,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}`,
+    `Estimate: about 148,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}`,
   ]);
   assert.equal(planLines(planOf([part(1, 10)], [], { leftOut: leftOut([1, 1], [0, 0]) }))[2], 'Left out of the review: 1 Markdown document, 1 changed line.');
 });
@@ -385,4 +387,108 @@ test('a plan of more parts than a run starts is over the bound, and says which f
   assert.equal(needsFlagLine(under), 'This is more parts than `--max-parts 3` allows: the run would need `--max-parts 4`.');
   // The lines of the plan are the same on either side of the bound: what is said of it is a line of its own.
   assert.equal(planLines(over).some((line) => line.includes('--max-parts')), false);
+});
+
+// --- how the method did ---
+
+/** A run line with an `id`, at `effort`, of a part of `changedLines` that spent `inputTokens`. */
+const lineOf = (id, effort, changedLines, inputTokens, over = {}) => partRun(changedLines, inputTokens, { id, effort, sessionEffort: effort, ...over });
+/** Five lines at `effort` that cost exactly `fixed` plus `perLine` a changed line: a basis the fit reads exactly. */
+const exactBasis = (effort, fixed, perLine) => [100, 200, 300, 1000, 2000].map((lines, at) => lineOf(`${effort}-basis-${at}`, effort, lines, fixed + perLine * lines));
+/** A review record of the run lines `ids`, as `codex-review` writes it: `run` the last, `runs` all of them. */
+const recordOf = (...ids) => ({ outcome: 'reviewed', run: ids.at(-1), runs: ids });
+
+test('how the method did is read from the reviews recorded: each part estimated from the run log before its own line, a review its estimate over what it took', () => {
+  const runs = [
+    ...exactBasis('low', 10000, 100),
+    ...exactBasis('medium', 5000, 50),
+    ...exactBasis('high', 10000, 100),
+    ...exactBasis('xhigh', 10000, 100),
+    // At medium the fit says 10,000 for 100 lines, and it took 20,000: 0.5.
+    lineOf('a', 'medium', 100, 20000),
+    // At high it says 20,000, and it took 10,000: 2.
+    lineOf('b', 'high', 100, 10000),
+    // At low it says 30,000, and it took that: 1.
+    lineOf('c', 'low', 200, 30000),
+    // Two parts at xhigh: 20,000 and 40,000 said, 20,000 and 80,000 taken, 0.6 for the review.
+    lineOf('d1', 'xhigh', 100, 20000),
+    lineOf('d2', 'xhigh', 300, 80000),
+    // An attempt that failed is named by no record, and counts for nothing.
+    lineOf('failed', 'high', 100, 999999, { outcome: 'failed' }),
+  ];
+  const records = [recordOf('a'), recordOf('b'), recordOf('c'), recordOf('d1', 'd2')];
+  assert.deepEqual(methodRecord({ records, runs }), { recorded: 4, reviews: 4, low: 0.5, median: 0.8, high: 2 });
+  assert.equal(
+    methodRecordLine(methodRecord({ records, runs })),
+    'How the method did: on the last 4 reviews this machine recorded, its estimate came to between 0.5 and 2 times what each took, 0.8 at the median; ' +
+      'each part against its own run line, kept parts left out.',
+  );
+  // A part kept from an earlier run cost nothing in this one: a record that names only lines an earlier record
+  // named is no review the method can be measured on, and one that names one more is measured on that one.
+  assert.deepEqual(methodRecord({ records: [...records, recordOf('a')], runs }), { recorded: 5, reviews: 4, low: 0.5, median: 0.8, high: 2 });
+  assert.deepEqual(methodRecord({ records: [recordOf('a'), recordOf('a', 'b')], runs }), { recorded: 2, reviews: 2, low: 0.5, median: 1.25, high: 2 });
+  // One review is said as one.
+  assert.equal(
+    methodRecordLine(methodRecord({ records: [recordOf('b')], runs })),
+    'How the method did: on the last review this machine recorded, its estimate came to 2 times what it took; each part against its own run line, kept parts left out.',
+  );
+});
+
+test('how the method did reads the last ten reviews it can measure, and leaves out what it cannot', () => {
+  const runs = [...exactBasis('low', 10000, 100), ...exactBasis('high', 10000, 100)];
+  const records = [];
+  // Two old reviews at 0.5, then nine on the fit and one over it: the last ten say nothing of the first two.
+  for (const id of ['old1', 'old2']) {
+    runs.push(lineOf(id, 'low', 100, 40000));
+    records.push(recordOf(id));
+  }
+  for (let at = 0; at < 9; at += 1) {
+    runs.push(lineOf(`on${at}`, 'high', 100, 20000));
+    records.push(recordOf(`on${at}`));
+  }
+  runs.push(lineOf('over', 'medium', 100, 10000));
+  runs.push(...exactBasis('medium', 10000, 100).map((line) => ({ ...line, id: `late-${line.id}` })));
+  // `over` is at medium, whose basis is written after it: no part before it at medium, so it rests on all of
+  // them, which put 100 lines above the 10,000 it took.
+  records.push(recordOf('over'));
+  const record = methodRecord({ records, runs });
+  assert.deepEqual([record.reviews, record.low, record.median], [10, 1, 1]);
+  assert.ok(record.high > 1, String(record.high));
+  // A record that is no review, names no line the log holds, or a line that measured no part, is not one.
+  const whole = lineOf('whole', 'high', 100, 20000);
+  delete whole.part;
+  runs.push(whole);
+  const more = [{ outcome: 'unavailable', reason: 'x' }, { outcome: 'reviewed' }, recordOf('missing'), recordOf(null), recordOf('whole'), null, 'not a record'];
+  assert.deepEqual(methodRecord({ records: [...records, ...more], runs }), { ...record, recorded: record.recorded + 4 });
+});
+
+test('how the method did reads the figure a part\'s run line recorded when it is of this method, and replays any other', () => {
+  // One part of 100 lines that took 10,000, after a basis whose fit says 20,000 for it.
+  const ratio = (plan) => {
+    const runs = [...exactBasis('high', 10000, 100), lineOf('one', 'high', 100, 10000, plan === undefined ? {} : { plan })];
+    return methodRecord({ records: [recordOf('one')], runs }).median;
+  };
+  // No plan recorded: replayed, 2. Recorded at 30,000 by this method: 3, whatever the fit says. Recorded by
+  // another version of the method, or not as a number: replayed, 2.
+  assert.deepEqual(
+    [
+      ratio(),
+      ratio({ estimate: 30000, high: 45000, method: PLAN_METHOD }),
+      ratio({ estimate: 90000, high: 90000, method: PLAN_METHOD - 1 }),
+      ratio({ estimate: 'many', high: null, method: PLAN_METHOD }),
+    ],
+    [2, 3, 2, 2],
+  );
+  // A recorded figure needs no run line before it: the part was planned when it ran.
+  const alone = [lineOf('first', 'high', 100, 20000, { plan: { estimate: 30000, high: 30000, method: PLAN_METHOD } })];
+  assert.deepEqual(methodRecord({ records: [recordOf('first')], runs: alone }), { recorded: 1, reviews: 1, low: 1.5, median: 1.5, high: 1.5 });
+});
+
+test('with no review recorded, or none it can measure, how the method did says so', () => {
+  assert.deepEqual(methodRecord({ records: [], runs: [] }), { recorded: 0, reviews: 0, low: null, median: null, high: null });
+  assert.equal(methodRecordLine(methodRecord({ records: [], runs: [] })), 'How the method did: no reviews recorded yet.');
+  // A review whose part had no measured part before it has no estimate to be measured by.
+  const first = methodRecord({ records: [recordOf('first')], runs: [lineOf('first', 'high', 100, 20000)] });
+  assert.deepEqual([first.recorded, first.reviews], [1, 0]);
+  assert.equal(methodRecordLine(first), 'How the method did: no review this machine recorded has a part it can be measured on yet.');
 });

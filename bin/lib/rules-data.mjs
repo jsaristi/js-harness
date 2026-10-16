@@ -10,7 +10,11 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 1500,
-    "unit": "estimated tokens"
+    "unit": "estimated tokens",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*AGENTS\\.md.{0,60}\\bbudget\\b.{0,30}{amount}",
+      "^(?!.*\\bruleValue\\().*\\bbudget\\b\\W{0,3}{amount}\\s*(?:estimated )?tokens"
+    ]
   },
   {
     "id": "codex-review-floor",
@@ -19,7 +23,11 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 300000,
-    "unit": "input tokens a review"
+    "unit": "input tokens a review",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bfloor\\b(?!\\s*\\().{0,40}(?<![\\w:.\\x60-]){amount}\\s*input tokens",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.\\x60-]){amount}\\s*input tokens (?:a|per|for each) review\\b"
+    ]
   },
   {
     "id": "codex-review-margin",
@@ -28,7 +36,11 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-12",
     "value": 5,
-    "unit": "percent of the allowance"
+    "unit": "percent of the allowance",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bmargin\\b.{0,40}(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent))",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent)).{0,20}\\bof the allowance\\b"
+    ]
   },
   {
     "id": "codex-review-rate",
@@ -37,7 +49,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "input tokens a changed line"
+    "unit": "input tokens a changed line",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:rate|cap|put at)\\b.{0,20}(?<![\\w:.-]){amount}\\s*(?:input )?tokens (?:a|per|for each) changed line"
+    ]
   },
   {
     "id": "context-pause",
@@ -46,7 +61,11 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 88,
     "unit": "percent of the context window",
-    "flag": "--context-pause"
+    "flag": "--context-pause",
+    "patterns": [
+      "^(?!.*\\bruleValue\\()(?=.*\\b(?:paus\\w*|compact\\w*|writes? its state)\\b).*(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))\\s*of (?:its|the|a|this session's|the session's) (?:context )?window",
+      "^(?!.*\\bruleValue\\().*\\bcontext pause\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))"
+    ]
   },
   {
     "id": "contract-run-timeout",
@@ -55,7 +74,10 @@ export const RULES = [
     "since": "2026-10-14",
     "value": 30,
     "unit": "minutes",
-    "flag": "--timeout"
+    "flag": "--timeout",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontract\\b.{0,60}\\b(?:stopped|timeout|times? out|at most)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "control-phrase-min",
@@ -63,7 +85,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-11",
     "value": 12,
-    "unit": "characters"
+    "unit": "characters",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontrol\\b.{0,50}{amount}\\s*characters"
+    ]
   },
   {
     "id": "gate-log-command",
@@ -71,7 +96,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 120,
-    "unit": "characters"
+    "unit": "characters",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?:\\bgate log\\b.{0,50}\\bcommand\\b|`command`).{0,50}\\b(?:cut|truncated|shortened|at most|kept to)\\b.{0,20}{amount}\\s*characters"
+    ]
   },
   {
     "id": "gate-log-size",
@@ -79,7 +107,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 512,
-    "unit": "KiB"
+    "unit": "KiB",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?:\\bgate log\\b|\\blog\\.jsonl\\b|\\blog file\\b).{0,80}\\b(?:past|over|above|at most|up to)\\s+{amount}"
+    ]
   },
   {
     "id": "gate-max",
@@ -88,7 +119,10 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 30,
     "unit": "minutes",
-    "flag": "--max"
+    "flag": "--max",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bgate\\b.{0,50}\\b(?:stopped|killed|ends|at most|longest|max(?:imum)?)\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
   },
   {
     "id": "gate-wait",
@@ -97,7 +131,11 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 60,
     "unit": "minutes",
-    "flag": "--wait"
+    "flag": "--wait",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwaits?\\b.{0,40}\\b(?:turn|lock)\\b.{0,40}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))",
+      "^(?!.*\\bruleValue\\().*\\b(?:turn|lock)\\b.{0,40}\\bwaits?\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
   },
   {
     "id": "person-present",
@@ -105,7 +143,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-14",
     "value": 15,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:(?:is|was|counts as|stays) (?:present|here)|last wrote|wrote last)\\b.{0,40}\\b(?:within|in the last)\\s+{amount}"
+    ]
   },
   {
     "id": "questions-one-place",
@@ -123,14 +164,21 @@ export const RULES = [
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
     "since": "2026-10-12",
-    "value": "medium"
+    "value": "medium",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}\\bgpt-[\\w.-]+`?\\s+at\\s+`?{amount}`?"
+    ]
   },
   {
     "id": "review-model",
     "subject": "the one model a Codex review runs on",
     "owner": "sebastian",
     "since": "2026-10-08",
-    "value": "gpt-6.1-sol"
+    "value": "gpt-6.1-sol",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?=gpt-){amount}"
+    ]
   },
   {
     "id": "review-part-files",
@@ -138,7 +186,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-09",
     "value": 40,
-    "unit": "files"
+    "unit": "files",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}(?<!:\\s?){amount}\\s*files\\b"
+    ]
   },
   {
     "id": "review-part-lines",
@@ -147,7 +198,11 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 400,
     "unit": "changed lines",
-    "flag": "--part-lines"
+    "flag": "--part-lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}\\b(?:up to|at most|holds?)\\s+{amount}\\s*(?:changed )?lines",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*(?:changed )?lines\\b.{0,20}\\b(?:a|per|each) part\\b"
+    ]
   },
   {
     "id": "review-parts-unflagged",
@@ -156,7 +211,11 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 6,
     "unit": "parts",
-    "flag": "--max-parts"
+    "flag": "--max-parts",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*{amount}\\s*parts\\b.{0,40}(?:--max-parts|\\bunflagged\\b|\\bits flag\\b)",
+      "^(?!.*\\bruleValue\\().*\\bwithout\\b.{0,30}--max-parts.{0,30}{amount}\\s*parts"
+    ]
   },
   {
     "id": "review-timeout",
@@ -164,7 +223,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-14",
     "value": 30,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:review|codex)\\b.{0,50}\\b(?:stalled|stopped|timeout|times? out)\\b.{0,40}(?<![\\w:.]){amount}"
+    ]
   },
   {
     "id": "reviewed-commit-lines",
@@ -173,7 +235,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "changed lines"
+    "unit": "changed lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcommits?\\b.{0,50}\\b(?:up to|at most|under|no more than|holds?)\\s+(?:about\\s+)?(?<![\\w:.-]){amount}\\s*changed lines"
+    ]
   },
   {
     "id": "sensor-timeout",
@@ -181,7 +246,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-15",
     "value": 20,
-    "unit": "minutes"
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "session-effort",
@@ -189,7 +257,10 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort"
+    ]
   },
   {
     "id": "session-model",
@@ -197,7 +268,19 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "claude-opus-5-5"
+    "value": "claude-opus-5-5",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
+  },
+  {
+    "id": "session-stall",
+    "subject": "how long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 60,
+    "unit": "minutes",
+    "flag": "--stall"
   },
   {
     "id": "sessions-open-in-sidebar",
@@ -214,7 +297,11 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-07",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?<![\\w/.-])(?:subagents?|sub-agents?|agent calls?|writers?|verifiers?|readers?)\\b(?![\\w-]*\\.\\w).{0,40}\\b(?:runs?|launched|launch(?:es)?|go(?:es)?)\\b.{0,20}\\b(?:at|with) `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\()(?!.*\\bgpt-).*\\beffort: \"{amount}\""
+    ]
   },
   {
     "id": "subagent-reader-model",
@@ -223,7 +310,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-10",
     "value": "claude-opus-5-5",
-    "alias": "opus"
+    "alias": "opus",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:readers?|verifiers?|reviewers?)\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "subagent-writer-model",
@@ -232,7 +322,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": "claude-haiku-5-5",
-    "alias": "haiku"
+    "alias": "haiku",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "wait-every",
@@ -241,7 +334,11 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 120,
     "unit": "seconds",
-    "flag": "--every"
+    "flag": "--every",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])every\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--every seconds\\W{0,3}{amount}"
+    ]
   },
   {
     "id": "wait-for",
@@ -250,7 +347,11 @@ export const RULES = [
     "since": "2026-10-15",
     "value": 480,
     "unit": "minutes",
-    "flag": "--for"
+    "flag": "--for",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])(?:for|up to|at most|gives up after)\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--for minutes\\W{0,3}{amount}"
+    ]
   },
   {
     "id": "work-sessions",
@@ -259,6 +360,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-09",
     "value": 3,
-    "unit": "sessions"
+    "unit": "sessions",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:at most|up to|no more than)\\s+{amount}\\s*(?:work )?sessions\\b",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*work sessions\\b"
+    ]
   }
 ];

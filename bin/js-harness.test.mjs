@@ -56,6 +56,14 @@ test('--help prints usage listing check and exits 0', () => {
   assert.match(result.stdout, /check/);
 });
 
+test('--help says what check --door runs, the rule rows of the lines a pull request brings', () => {
+  const result = run(['--help']);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^ {2}check {7}.*check --door --base <rev> \[--branch <name>\] runs only the rule rows/m);
+  // The command names keep their column: the line of `gate` after `check` is not moved by it.
+  assert.match(result.stdout, /^ {2}gate {8}Run a command under the machine's gate lock/m);
+});
+
 // install-update T8: `upgrade` asks the copy on the path which version it is before it lets it sync.
 test('--version prints the version of this copy, alone on one line, and exits 0; the help names it', () => {
   const result = run(['--version']);
@@ -64,6 +72,10 @@ test('--version prints the version of this copy, alone on one line, and exits 0;
   assert.equal(result.stdout, `${version}\n`);
   assert.equal(result.stderr, '');
   assert.match(run(['--help']).stdout, /^js-harness --version /m);
+});
+
+test('the merge-queue help says each pull request merged into the candidate passes main\'s rule rows first (odd/tasks/rule-hierarchy.md, T16e)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*passes main's rule rows first \(check --door\), and one that fails leaves the batch/);
 });
 
 test('unknown command exits 2', () => {
@@ -246,8 +258,9 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       rows.map((r) => r.id),
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
-      // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'unseen', 'host-update'],
+      // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
+      // is `stack-update`, whatever tools it reads.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'unseen', 'host-update', 'stack-update', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.
@@ -306,13 +319,17 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
   // The two guards of a turn (odd/tasks/gate-turn-guards.md): a bound of wall time, and a push that waits goes first.
   assert.match(run(['--help']).stdout, /^ {2}gate\s+.*--max is how many minutes the command may run before it is stopped with every process it started \(\d+ when not given\)\. While the branch of the folder it runs in has an open pull request and commits a push would take now, it refuses any command but that push or a merge, and prints the push command\./m);
   assert.ok(run(['--help']).stdout.includes(`every process it started (${GATE_MAX} when not given). While`));
+  // The ticket that puts one session's next check first (odd/tasks/gate-first.md).
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+.*js-harness gate first --session <id> --reason <why> \[--tree <path>\] \[--minutes <n>\] issues a ticket .*gate first --cancel <id> undoes one\./m);
   const refused = run(['gate', '--no-wait']);
   assert.equal(refused.status, 2);
   // The last line of the usage says what the two flags of a wait mean, since 2026-10-11: the bound counts from
   // the last time the lock changed hands, which "--wait <minutes>" does not say by itself.
-  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(\d+ when not given\); --no-wait: refuse at once instead of waiting\n {7}--max <minutes>: how long the command may run before it is stopped with every process it started \(\d+ when not given\)\n$/);
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--max <minutes>\] \[--ready <command>\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}js-harness gate first \[--session <id> --reason <why> \[--tree <path>\] \[--minutes <n>\] \| --cancel <id>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(\d+ when not given\); --no-wait: refuse at once instead of waiting\n {7}--max <minutes>: how long the command may run before it is stopped with every process it started \(\d+ when not given\)\n {7}--ready <command>: a quick check, one shell command line, run before the wait and again as the turn comes after one; when it fails, nothing runs \(exit 75\), so a command that would refuse at once does not wait for a turn\n$/);
   assert.ok(refused.stderr.includes(`gives up on it (${GATE_WAIT} when not given);`));
-  assert.ok(refused.stderr.endsWith(`started (${GATE_MAX} when not given)\n`));
+  assert.ok(refused.stderr.includes(`started (${GATE_MAX} when not given)\n`));
+  // A queued command refused before it waits (odd/tasks/gate-wait.md, T20).
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+.*--ready <command> is a quick check, run before the wait and again as the turn comes after one: when it fails, nothing runs \(exit 75\)\./m);
   assert.match(run(['--help']).stdout, /^ {2}gate\s+.*It waits for its turn in the order the gates arrived; --wait is how many minutes the lock may go without changing hands before it gives up \(\d+ when not given\), and --no-wait refuses at once\./m);
   assert.ok(run(['--help']).stdout.includes(`before it gives up (${GATE_WAIT} when not given), and`));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-gate-home-'));

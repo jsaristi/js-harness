@@ -8,6 +8,7 @@ import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
 import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
 import { dayStartOf, localDay, measuresTotal } from './lib/measures.mjs';
 import { statePath } from './lib/pause.mjs';
+import { issueTicket } from './lib/gate-first.mjs';
 import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
@@ -497,10 +498,12 @@ test('--context-pause and --context-compaction take tokens or a percentage of --
 test('a pause that is not below the compaction point the board will use is refused with both figures, whichever flag gave either and in either unit', withMachine(async (machine) => {
   writeSessions(machine);
   const figure = (tokens, window) => `${tokens} tokens (${percentOf(tokens, window)}% of the window)`;
-  const refusal = (pause, compaction, window = WINDOW) => `--context-pause must be below --context-compaction, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
+  // Each figure is named by what gave it: its flag, or the default with its share when no flag did.
+  const named = (argv, flag, word, percent) => (argv.includes(flag) ? flag : `the default ${word} (${percent}% of the window)`);
+  const refusal = (argv, pause, compaction, window = WINDOW) => `${named(argv, '--context-pause', 'pause', PAUSE_PERCENT)} must be below ${named(argv, '--context-compaction', 'compaction', COMPACTION_PERCENT)}, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
   const refused = async (argv, pause, compaction, window) => {
     const { code, stdout, stderr } = await runSessions(machine, argv);
-    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(pause, compaction, window)], argv.join(' '));
+    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(argv, pause, compaction, window)], argv.join(' '));
     assert.match(stderr, /Usage: js-harness sessions/);
   };
   const accepted = async (argv, pause, compaction) => {
@@ -528,6 +531,13 @@ test('a pause that is not below the compaction point the board will use is refus
   await refused(['--context-pause', '18000', '--context-compaction', '90%', '--context-window', '20000'], 18000, 18000, 20000);
   await refused(['--context-window', '20000', '--context-pause', '95%', '--context-compaction', '18999'], 19000, 18999, 20000);
   await accepted(['--context-window', '20000', '--context-pause', '17999', '--context-compaction', '90%'], 17999, 18000);
+  // A window so small that the two default shares round to one token: neither flag was given, so the
+  // refusal names the two defaults and no flag.
+  const tiny = 10;
+  assert.equal(shareOf(tiny, PAUSE_PERCENT), shareOf(tiny, COMPACTION_PERCENT), 'the window must make the defaults meet');
+  await refused(['--context-window', String(tiny)], shareOf(tiny, PAUSE_PERCENT), shareOf(tiny, COMPACTION_PERCENT), tiny);
+  const { stderr } = await runSessions(machine, ['--context-window', String(tiny)]);
+  assert.doesNotMatch(stderr.split('\n')[0], /--context-(pause|compaction)/, 'no flag nobody gave is named');
 }));
 
 test('--context-limit, the flag of the limit mark that left, is refused with the two flags that replaced it and their defaults, read from the constants', withMachine(async (machine) => {
@@ -702,6 +712,25 @@ test('the machine facts are on the board: worktrees with their counts, running g
   ]);
   assert.deepEqual(board.gates, { available: true, items: [{ pid: 4242, startedAt: before(180).toISOString(), worktree: slashes(machine.worktree), knowsLock: false, commandLine: `node "${slashes(machine.worktree)}/bin/check.mjs"` }] });
   assert.deepEqual(board.pullRequests, { available: true, items: [{ number: 41, title: 'feat: session board', branch: 'feat/board' }] });
+}));
+
+test('the board says whether a memory hygiene pass is due for the project, read from its memory folder and its journal', withMachine(async (machine) => {
+  writeSessions(machine);
+  const folder = path.join(machine.projectDir, 'memory');
+  const none = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(none.memory, { available: true, folder, na: true });
+
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'MEMORY.md'), '- [A note](a.md) — what it holds\n');
+  fs.writeFileSync(path.join(folder, 'a.md'), '---\nname: a\ndescription: a note\nmetadata:\n  type: user\n---\n\nA fact.\n');
+  const due = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(due.memory, { available: true, folder, due: true, reasons: ['no-pass'] });
+  const { stdout } = await runSessions(machine, []);
+  const lines = stdout.split('\n');
+  assert.deepEqual(lines.slice(lines.indexOf('Memory hygiene'), lines.indexOf('Memory hygiene') + 2), [
+    'Memory hygiene',
+    '  a pass is due (no-pass): js-harness memory status says why; the orchestrator runs it at a task boundary',
+  ]);
 }));
 
 test('a machine fact that cannot be read is unavailable with its reason, and the exit code is still 0', withMachine(async (machine) => {
@@ -2008,6 +2037,25 @@ const sectionOf = (stdout, name, next) => {
   return lines.indexOf(name) === -1 ? null : lines.slice(lines.indexOf(name), lines.indexOf(next));
 };
 
+// odd/tasks/stalled-sessions.md S3: the board reads the stalled sessions from the channel's record and the gate log.
+test('the board lists a work session the orchestrator handed work to and that went quiet past the rule, in the text and in --json', withMachine(async (machine) => {
+  writeRoster(machine);
+  const lead = sender('e152c9d8-0000-4000-8000-000000000000', 'JH ORQ · lead');
+  writeNotice(machine, 2 * 3600, lead, '19', 'note', 'T3 is yours');
+  // A session handed work 30 minutes ago is inside the hour; one that said it waits holds nothing.
+  writeNotice(machine, 1800, lead, '20', 'note', 'T4 is yours');
+  writeNotice(machine, 3 * 3600, lead, '21', 'note', 'T5 is yours');
+  writeNotice(machine, 2.5 * 3600, sender('21000000-0000-4000-8000-000000000000', 'JH 21 · other'), 'orchestrator', 'waiting', 'nothing to do');
+
+  const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.equal(board.stalled.limitMinutes, 60);
+  assert.deepEqual(board.stalled.unavailable, []);
+  assert.deepEqual(board.stalled.items.map((item) => [item.number, item.quietSince, item.holding.text]), [[19, before(2 * 3600).toISOString(), 'T3 is yours']]);
+  const lines = (await runSessions(machine, [])).stdout.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('Stalled  '));
+  assert.deepEqual(lines.slice(start + 1, lines.indexOf('', start)), ['  work session 19  quiet 2h 00m  holding a note from JH ORQ · lead of 2h 00m ago: T3 is yours']);
+}));
+
 test('the board lists the questions put to the user that have no answer, read from the transcripts of its window, in the text and in --json', withMachine(async (machine) => {
   writeRoster(machine);
   const question = 'Pregunta 21: ¿seguimos con la lista?';
@@ -2159,6 +2207,21 @@ test('each wait on the board is printed with the session it hangs from: two gate
     ['pid 4250', slashes(machine.worktree), 'waiting for the gate of pid 4242, began 1m ago', `session ${WORKER} (its notices were written from this folder)`],
     ['pid 4260', other, 'waiting for the gate of pid 4242, began 30s ago', 'session JH 3 · the lock (its transcript records this folder)'],
   ]);
+}));
+
+// odd/tasks/gate-first.md, T4: the tickets of the harness home are on the board, read from their folder, and a
+// gate of the lock that went first by one says so from its own file.
+test('the board prints the open tickets of the gate lock with their issuer, and a gate that went first by one', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_A, ORCHESTRATOR, 600, { cwd: machine.root });
+  writeTitled(machine, SESSION_B, WORKER, 60, { cwd: machine.root });
+  const home = machine.userHome;
+  withLockLibrary(machine.root);
+  writeGateFile(home, 'lock', { pid: 4242, cwd: machine.root, startedAt: before(125).toISOString(), waitingSince: before(125).toISOString(), first: '0a0a0a0a', firstReason: 'the batch of main' }, 3);
+  issueTicket({ home, session: SESSION_A, reason: 'his fix waits on it', by: SESSION_B, now: () => NOW, id: () => '0b0b0b0b' });
+  const { stdout } = await runSessions(machine, [], { listProcesses: () => [checkProcess(4242, machine.root, 130)] });
+  const lines = gatesSection(stdout);
+  assert.equal(lines[0].split('  ')[3], 'running, took the gate lock 2m ago, first by ticket 0a0a0a0a: the batch of main');
+  assert.deepEqual(lines.slice(1), [`  ticket 0b0b0b0b  the next check of ${ORCHESTRATOR} goes first, for 60m more: his fix waits on it  issued by ${WORKER}, which is not the orchestrator`]);
 }));
 
 // 8: stopped tasks and archived sessions printed as live.

@@ -9,5 +9,18 @@
   },
   "sameTree": "skip",
   "sensorsInWsl": true,
-  "exactTests": "skip"
+  "exactTests": "skip",
+  "reply": {
+    "states": {
+      "working": "Sigo solo",
+      "decision": "Necesito tu decisión",
+      "cut": "Corte",
+      "finished": "Terminado"
+    },
+    "labels": {
+      "what": "Qué es",
+      "where": "Dónde",
+      "effect": "Qué pasa"
+    }
+  }
 }

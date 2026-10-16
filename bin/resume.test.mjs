@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseStatus, resumeMain, transcriptTitle } from './resume.mjs';
 import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, recordPath, reliefPath, writeOpening } from './lib/channel.mjs';
-import { pauseNotice, statePath } from './lib/pause.mjs';
+import { HOST_COMPACTION_RESERVE, pauseNotice, statePath } from './lib/pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every test below has a machine of its own under a temp folder: a project with one linked worktree
@@ -128,7 +128,7 @@ const NOT_TOLD = 'The pause: not known whether this session was told (it keeps n
 const NO_USER = 'The user wrote nothing in this stretch.';
 const NONE_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = 'Then tell the orchestrator in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session\'s title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator\'s title, or that there is none).';
+const NOTIFY = 'Then tell the orchestrator (the session that leads this project\'s sessions, where one does: the js-harness-orchestrator skill says how) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session\'s title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator\'s title, or that there is none).';
 const USER_LINE = (count, lines) => `The user wrote at ${count} lines of it, the last at ${lines}: read each with  js-harness sessions --quote ${SESSION} <line>`;
 const REPLY_LINE = (line, at, text) => `This session's last reply with text is line ${line} (${at}); it ended: "${text}"`;
 // The feature document of `titled` and `notified`, and the state line the hook says of it: written 12 minutes before the test's now, committed at 09:00.
@@ -627,7 +627,7 @@ test('a title that names several openings gets their titles and no command: sess
   const second = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the channel, reworded', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   writeOpening(machine.home, machine.slug, { title: 'JH 6 · other', text: 'Another.\n', at: AT, from });
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = (count, more = '') => `Opening: ${count} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${more})`;
+  const several = (count, more = '') => `Opening: ${count} openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it${more})`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
   assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several(2), `  "JH 5 · the channel, reworded"  (${second})`, `  "JH 5 · the channel"  (${first})`, document, READ, NOTIFY]);
@@ -649,7 +649,7 @@ test('the titles of several openings are listed as the files hold them: a second
   const single = opened(machine).path;
   const double = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the  channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it)`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
   assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the  channel"  (${double})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
@@ -661,7 +661,7 @@ test('a title the list prints stays on its line: a quote, a line break and a lin
   const quoted = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the "odd" channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   const single = opened(machine).path;
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it)`;
   const { lines } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the \\"odd\\" channel"  (${quoted})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
   // A hand-written file may hold what writeOpening refuses: a line break and a line separator. Two files with that title are found by the whole title and listed on one line each.
@@ -1257,6 +1257,37 @@ test('past the pause the command prints one JSON line with the notice, and nothi
   assert.deepEqual(first.calls, [], 'no git is asked: the project is found by its harness.json alone');
 }));
 
+// The window the host is configured with moves the pause (odd/tasks/session-channel.md, T6b): read from the
+// environment, the project's settings or the user's, under the home the hook writes to.
+const CONFIGURED = 350000;
+const CONFIGURED_POINT = CONFIGURED - HOST_COMPACTION_RESERVE;
+const CONFIGURED_PAUSED = Math.round((CONFIGURED_POINT * DEFAULT_CONTEXT_PAUSE_PERCENT) / DEFAULT_CONTEXT_COMPACTION_PERCENT) + 1000;
+
+/** Writes `settings` as JSON into `file`, making its folder. */
+function writeSettings(file, settings) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(settings));
+}
+
+test('a window the user settings configure tells the session at that window\'s pause, under the default one', withMachine(async (machine) => {
+  assert.ok(CONFIGURED_PAUSED < PAUSED, 'the context is under the pause of the default window');
+  const input = pauseInput(machine, CONFIGURED_PAUSED);
+  assert.deepEqual((await runPause(machine, input)).lines, [], 'with nothing configured the default pause holds');
+  writeSettings(path.join(machine.home, '.claude', 'settings.json'), { autoCompactWindow: CONFIGURED });
+  const told = await runPause(machine, input);
+  assert.equal(told.lines.length, 1);
+  assert.match(JSON.parse(told.lines[0]).hookSpecificOutput.additionalContext, new RegExp(`^js-harness: this session holds ${percentOf(CONFIGURED_PAUSED, CONFIGURED)}% of its context window, and the host compacts it at about ${percentOf(CONFIGURED_POINT, CONFIGURED)}%: `));
+}));
+
+test('a window the project\'s local settings or the environment configure moves the pause too', withMachine(async (machine) => {
+  writeSettings(path.join(machine.root, '.claude', 'settings.local.json'), { autoCompactWindow: CONFIGURED });
+  assert.equal((await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED))).lines.length, 1);
+  const other = await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED, { id: SECOND }), { env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(CONFIGURED) } });
+  assert.equal(other.lines.length, 1);
+  fs.rmSync(path.join(machine.root, '.claude'), { recursive: true });
+  assert.equal((await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED, { id: THIRD }), { env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(CONFIGURED) } })).lines.length, 1, 'the environment alone');
+}));
+
 // The channel's inbox rides on the same hook: a note to this session reaches it after its next tool call, once.
 /** `pauseInput`, with the session titled `title` at the end of its transcript. */
 function titledPauseInput(machine, tokens, title) {
@@ -1379,6 +1410,61 @@ test('a sub-agent\'s refused WebFetch is told the next rung too, and a call with
   const outside = path.join(machine.dir, 'elsewhere');
   fs.mkdirSync(outside);
   assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, { cwd: outside, ...webFetchOf(403, 'Forbidden') }))).lines, []);
+}));
+
+// T4 of odd/tasks/web-fetch-fallback.md: a WebFetch that fails as a tool error reaches no PostToolUse hook, only the
+// `PostToolUseFailure` entry `install` writes on WebFetch, which runs the same command. Its input carries `error`
+// and `is_interrupt` in place of `tool_response` (Claude Code's hooks reference, read on 2026-10-16); the error is
+// the one measured on reddit.com and stackoverflow.com.
+const REDDIT = 'https://www.reddit.com/r/ClaudeAI/';
+const webFailureOf = (url = REDDIT, error = 'Claude Code is unable to fetch from www.reddit.com', more = {}) => ({
+  hook_event_name: 'PostToolUseFailure',
+  tool_name: 'WebFetch',
+  tool_input: { url, prompt: 'Summarize the posts.' },
+  tool_use_id: 'toolu_made_up',
+  error,
+  is_interrupt: false,
+  ...more,
+});
+const FAILURE_NOTICE = (url = REDDIT, error = 'Claude Code is unable to fetch from www.reddit.com') =>
+  `js-harness: WebFetch failed on ${url} (${error}). Next rung: js-harness fetch '${url}' reads it through r.jina.ai (a public page only: it sends no cookie and no key); if that says blocked, open it in the built-in browser and read it with get_page_text.`;
+
+test('a WebFetch that failed as a tool error gets the notice of the next rung, answered under PostToolUseFailure', withMachine(async (machine) => {
+  const failed = await runPause(machine, pauseInput(machine, UNDER, webFailureOf()));
+  assert.deepEqual([failed.code, failed.stderr, failed.calls, failed.lines.length], [0, '', [], 1]);
+  assert.equal(JSON.parse(failed.lines[0]).hookSpecificOutput.hookEventName, 'PostToolUseFailure');
+  assert.equal(webContext(failed.lines), FAILURE_NOTICE());
+  // A sub-agent's failed call is told too, as a refused one is.
+  const sub = await runPause(machine, pauseInput(machine, PAUSED, { agent_id: 'made-up-agent', ...webFailureOf() }));
+  assert.equal(webContext(sub.lines), FAILURE_NOTICE());
+}));
+
+test('the failure notice takes the first line of the error, cut at 200 characters, and quotes the URL for a shell', withMachine(async (machine) => {
+  const url = "https://example.com/a?b=1&c=o'brien";
+  const long = `${'x'.repeat(250)}\nsecond line`;
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFailureOf(url, long)))).lines);
+  assert.ok(said.startsWith(`js-harness: WebFetch failed on ${url} (${'x'.repeat(199)}…). Next rung: js-harness fetch 'https://example.com/a?b=1&c=o%27brien' reads it`), said);
+}));
+
+test('the cut counts characters, not UTF-16 units, so it never splits one in two (gentle-ai review, R3-001)', withMachine(async (machine) => {
+  // 198 letters, then an emoji (two UTF-16 units) as character 199: a cut by units would keep half of it.
+  const error = `${'x'.repeat(198)}😀${'y'.repeat(10)}`;
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFailureOf(REDDIT, error)))).lines);
+  assert.ok(said.includes(`(${'x'.repeat(198)}😀…)`), said);
+  assert.equal(said.isWellFormed(), true);
+}));
+
+test('an interrupted WebFetch, another tool\'s failure and a failure with no URL or no error get no web notice', withMachine(async (machine) => {
+  const cases = [
+    webFailureOf(REDDIT, 'Claude Code is unable to fetch from www.reddit.com', { is_interrupt: true }),
+    { ...webFailureOf(), tool_name: 'Bash', tool_input: { command: 'curl https://www.reddit.com/' } },
+    { ...webFailureOf(), tool_input: { prompt: 'no url' } },
+    { ...webFailureOf(), error: '' },
+    { ...webFailureOf(), error: 7 },
+  ];
+  for (const input of cases) {
+    assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, input))).lines, [], JSON.stringify(input));
+  }
 }));
 
 test('past the pause a refused WebFetch gets both notices in one line, the web notice first', withMachine(async (machine) => {

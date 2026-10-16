@@ -1,12 +1,10 @@
 # The gate: one at a time on the machine, and a shorter run
 
 Locator: `odd/tasks/gate-lock.md` · Engram mirror: `odd/gate-lock/tasks` · Branch:
-`feat/gate-lock`, in the linked worktree `D:\js-harness-worktrees\gate-lock` · Session:
+`feat/gate-lock` · Session:
 `JH 1 · control de tests`, orchestrator `JH ORQ · js-harness`
 
-State 2026-10-10: plan approved by Sebastián in this session's chat ("Si", to the plan put to
-him in plain words, as he asked on 2026-10-09 for every plan before it is built). His yes covers
-T1 to T6 and T8; it does not cover T7, the update of the global command, or the merge.
+State: closed, merged via #56 (`8b82c38`).
 
 ## Goal
 `check` itself keeps two gates from ever running together on the machine, and a commit waits
@@ -81,8 +79,6 @@ The run is long for two measured reasons, and both are paid on every commit:
   own `bin/check.mjs`, so a branch cut before this one merges has no lock until it merges
   `main`; a project that uses the harness gets it when the global command is updated on the
   machine, which is his to ask for. Until both, the rule in prose stays.
-- Machine shared, no lock yet: before every commit and every test run of this feature, `Gates`
-  in `js-harness sessions` is read, and none is started while another runs.
 - A commit runs in the background; after a failed gate `git config --local core.bare` is read
   in `D:\js-harness` before anything else (`odd/tasks/codex-review-lean.md`, Constraints).
 
@@ -91,8 +87,8 @@ high
 
 ## Ask me before
 T7 before it is built, again, with the list of tests found to read documents: it changes what a
-commit proves. Splitting `bin/codex-review.test.mjs`, if T6 is not enough. Updating the global
-`js-harness` on this machine. Merge of the pull request. Anything about the gate on GitHub.
+commit proves. Splitting `bin/codex-review.test.mjs`, if T6 is not enough. Anything about the
+gate on GitHub.
 
 ## TDD
 Mode: strict. Runner: `node --test`, one file at a time while a task is open. Exceptions: T5 is
@@ -233,11 +229,10 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
 - [x] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first;
       approved by Sebastián on 2026-10-10 with the list in hand). Route: one writer.
 - [x] T8 · Close: `docs/ROADMAP.md` (what the lock covers, what waits for the later slice),
-      gentle-ai and Codex reviews of each slice with code, pull request. Merge is his.
+      gentle-ai and Codex reviews of each slice with code, pull request.
 
 Cost, said before it is spent: about ten commits, each a gate of 8 to 18 minutes of this
-machine until T6 and T7 land; Codex reviews within the 3 million input tokens the charter
-allows a feature. No spend outside the plan.
+machine until T6 and T7 land.
 
 ## Progress
 - 2026-10-10 · Opened. Read the two roadmap sections, `bin/check.mjs`, the hooks; an explorer
@@ -1271,10 +1266,7 @@ allows a feature. No spend outside the plan.
   session runs.
 
 ## Next
-Nothing is left to this session. With others: the orchestrator merges pull request 56 (the
-lead merges code, by his word of 2026-10-10); Sebastián updates the machine's `js-harness`
-command, and until then the installed command takes no lock; the session channel starts
-after the merge.
+Nothing is left to this session. Merged as `8b82c38`.
 For the next slice of the gate, in this order: the gate log, and with it the load on the
 machine said by a gate when it starts (2026-10-11: two gates were slow, one timed out, for
 a video and a language server no session saw); fewer git processes in the two long test
@@ -1296,8 +1288,3 @@ The scripts of this session are in its scratchpad (`commit-after.ps1`, `codex-ru
 `review-open.cjs`, `review-capture.cjs`, `mirror-fit.cjs`, `look.ps1`, `load.ps1`,
 `owner.ps1`, `measure-after.ps1`, `gate-by-hand.ps1`); gates since T4b, in seconds: 885,
 728, 872, 724, 833, 817, 671, 814, 1,069, and on the merged tree 832.
-
-Standing rule, before any test or commit: no private wait script. One look at the process list for
-   `check.mjs`, `node --test` or `evals/suite.mjs`; if one is alive, wait on that process itself and look again,
-   and start nothing beside it (the two mistakes above). A gate that reaches the bound is said
-   and not retried, and the orchestrator is told in one line when a gate ends.

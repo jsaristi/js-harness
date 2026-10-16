@@ -1,8 +1,8 @@
 # A faster whole check of the same quality
 
 Locator: `odd/tasks/faster-check.md` · Engram mirror: `odd/faster-check/tasks` · Branch:
-`docs/faster-check-design` · Delivery: `ask-on-risk` · Runner: `node --test` · State: a design, version 2,
-after its two readers.
+`docs/faster-check-design` · Delivery: `ask-on-risk` · Runner: `node --test` · State: closed
+(2026-10-16, L10): version 2 went to the orchestrator and the parts it ranked first are built.
 
 ## Goal
 Every commit, slice and pull request proven as well as today, with the lock free most of the time and
@@ -210,12 +210,15 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
 ## Tasks
 - [x] T1 · S1-S4 · this design attacked by two Opus readers (effort high); the version after them to
       the orchestrator with what each changed · version 2, "What the readers changed"
-- [ ] T2 · S3 · the priority of the gate, test first (after T1)
+- [x] T2 · S3 · the priority of the gate, test first (after T1), in `feat/gate-first`
+      (`odd/tasks/gate-first.md`): slice A (the ticket, the claim, the order, the wait line), pull request
+      287; slice B (the board, `check --first`, the docs) on `feat/gate-first-board`, stacked on it ·
+      merged as pull requests 287 (`63a7375`) and 291 (`6ca4c7d`; L10)
 - [x] T3 · two guards on a turn of `js-harness gate`, `odd/tasks/gate-turn-guards.md`: a turn is refused
       while a push waits on a branch with an open pull request, and a command is stopped at 30 minutes
       (`--max`). Checked in the branch that builds it, so it is done when that pull request merges.
-- [ ] T4 · S1, S2 · part 2, Codex's review out of the lock, test first, in `feat/codex-out-of-lock`
-      ("Codex's review out of the lock (part 2), as built"; L5)
+- [x] T4 · S1, S2 · part 2, Codex's review out of the lock, test first, in `feat/codex-out-of-lock`
+      ("Codex's review out of the lock (part 2), as built"; L5) · merged as pull request 154 (`4edfa0e`; L8)
 
 ## Log
 - L1 · S1, verbatim above.
@@ -248,3 +251,17 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
   preload's own test quotes the path as a review does (no RED here: this checkout's path has no space).
 - L7 · 2026-10-14, T3 merged: pull request 124, `f819d0b`, at 11:05:42Z by `gh pr view 124`. Its
   follow-ups F1 to F3 are in `odd/tasks/gate-turn-guards.md`.
+- L8 · 2026-10-16 07:05 by `date`, JH 24: T4 found merged, pull request 154 (`4edfa0e` on main, by
+  `git log origin/main --grep`); only checked off here. T2 slice A built in `feat/gate-first`, its state in
+  `odd/tasks/gate-first.md` L5.
+- L9 · 2026-10-16, JH 24: T2 built in two slices, the second stacked on the first; their reviews and the
+  one follow-up (T6, a Codex recheck refused) are in `odd/tasks/gate-first.md` L6 and L7.
+- L10 · 2026-10-16 12:44 by `date`, JH 24: closed, on the orchestrator's word ("close 'A faster whole
+  check' (T2/T4 ticks now on main, ROADMAP row)"). "Done when" holds: this document ends when the
+  orchestrator has version 2 and the order of build is decided, and the parts built have their own
+  documents. Built: part 1, the sensors in WSL2 (`odd/tasks/gate-wsl.md`); part 2, Codex's review out
+  of the lock (T4, pull request 154); part 3, the ticket that goes first (T2, pull requests 287 at
+  `63a7375` and 291 at `6ca4c7d`, by `gh pr view`); and T3's two guards (pull request 124). Parts 4 to
+  10 were not built here, as "Out of scope" says; where one has a document of its own it is that
+  document's, and this one claims nothing of their state. Its row in `docs/ROADMAP.md` is item 2's
+  "A faster whole check".

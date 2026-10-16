@@ -6,7 +6,7 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { spawn as spawnChild } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ASKED_FILE_ENV, BUSIEST_ASK_BOUND_MS, BUSIEST_BOUND_MS, BUSIEST_LOOK_MS, busiestBetween, busiestLines, busiestProcesses, isFileOnDisk, parseProcStat, parseProcessReadings, scriptOf, splitCommandLine } from './machine-busiest.mjs';
+import { ASKED_FILE_ENV, BUSIEST_ASK_BOUND_MS, BUSIEST_BOUND_MS, BUSIEST_LOOK_MS, BUSIEST_OVER_RUN, busiestBetween, busiestLines, busiestOverRun, busiestProcesses, isFileOnDisk, parseProcStat, parseProcessReadings, processTimes, scriptOf, splitCommandLine, watchBusiest } from './machine-busiest.mjs';
 
 // What loads a loaded machine: every process's CPU time read twice, the difference taken, and the three
 // that spent most named by program and script. The tests of the look read recorded output through
@@ -818,4 +818,164 @@ test('the real look of this machine names at most three processes, the busiest f
     });
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- who spent the processor over a gate's run: one reading at its start, one at its end ---
+// A gate keeps the processes that spent most processor time over its run (odd/tasks/gate-wait.md, T19). The
+// readings are the look's, taken once each and minutes apart, and read through the same stand-ins.
+
+test('busiestBetween cuts at the count it is given, and at three where none is given', () => {
+  const before = [1, 2, 3, 4, 5, 6].map((pid) => proc(pid, `p${pid}`, 0));
+  const after = [1, 2, 3, 4, 5, 6].map((pid) => proc(pid, `p${pid}`, pid));
+  assert.deepEqual(busiestBetween(before, after).map(({ pid }) => pid), [6, 5, 4]);
+  assert.deepEqual(busiestBetween(before, after, { count: 5 }).map(({ pid }) => pid), [6, 5, 4, 3, 2]);
+  assert.deepEqual(busiestBetween(before, after, { count: 1, skip: [6] }).map(({ pid }) => pid), [5]);
+});
+
+test('processTimes on Linux is one reading of /proc, taken at once, with no process started and no wait', async () => {
+  const fake = fakeProc({
+    '/proc/1/stat': stat(1, 'systemd', 300, 100),
+    '/proc/600/stat': stat(600, 'node', 2000, 500),
+    '/proc/960/stat': '960 (cut short) S 1\n',
+  });
+  assert.deepEqual(await processTimes({ platform: 'linux', spawn: neverSpawned, proc: fake.proc }), [proc(1, 'systemd', 4), proc(600, 'node', 25)]);
+  assert.deepEqual(fake.slept, []);
+  // No command line is read: the reading is of times alone.
+  assert.deepEqual(fake.read.filter((file) => file.endsWith('/cmdline')), []);
+  const unlisted = fakeProc({});
+  unlisted.proc.list = () => {
+    throw Object.assign(new Error("ENOENT: no such file or directory, scandir '/proc'"), { code: 'ENOENT' });
+  };
+  assert.deepEqual(await processTimes({ platform: 'linux', proc: unlisted.proc }), []);
+});
+
+/** What the helper of Windows prints for one reading: the processes under the mark `2`, then `=`. */
+const ONE_READING = ['2\t0\t5223031\tSystem Idle Process', '2\t4\t\tSystem', '2\t12044\t103200\tnode.exe', '2\t9000\t21600\tchrome.exe', '='];
+
+test('processTimes on Windows is one PowerShell process that takes one reading, is asked about nobody and ends', async () => {
+  const { child, spawn } = helper((helped) => {
+    helped.once('asked', () => helped.emit('close', 0));
+    helped.stdout.emit('data', recorded(...ONE_READING));
+  });
+  assert.deepEqual(await processTimes({ platform: 'win32', spawn }), [proc(0, 'System Idle Process', 5223.031), proc(12044, 'node', 103.2), proc(9000, 'chrome', 21.6)]);
+  assert.deepEqual(child.stdin.sent, ['\n']);
+  assert.equal(child.killed, 0);
+  assert.equal(spawn.asked.length, 1);
+  const [{ command, args, options }] = spawn.asked;
+  assert.match(command, /\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe$/);
+  assert.deepEqual(args.slice(0, 3), ['-NoProfile', '-NonInteractive', '-Command']);
+  assert.equal(args.length, 4);
+  // One reading and no wait: the gate's run is the time between this one and the next.
+  assert.doesNotMatch(args[3], /Start-Sleep/);
+  assert.match(args[3], /Reading '2'/);
+  assert.doesNotMatch(args[3], /Reading '1'/);
+  assert.doesNotMatch(args[3], /"/);
+  assert.equal(options.windowsHide, true);
+});
+
+test('processTimes reads nothing from a helper that is missing, fails, prints no reading or misses its bound, and nothing on any other system', async () => {
+  const missing = helper((helped) => helped.emit('error', Object.assign(new Error('spawn powershell.exe ENOENT'), { code: 'ENOENT' })));
+  assert.deepEqual(await processTimes({ platform: 'win32', spawn: missing.spawn }), []);
+  assert.deepEqual(await processTimes({ platform: 'win32', spawn: neverSpawned }), []);
+  const failed = helper((helped) => {
+    helped.once('asked', () => helped.emit('close', 1));
+    helped.stdout.emit('data', recorded(...ONE_READING));
+  });
+  assert.deepEqual(await processTimes({ platform: 'win32', spawn: failed.spawn }), []);
+  const garbage = helper((helped) => {
+    helped.stdout.emit('data', 'Get-CimInstance : Access denied\r\n');
+    helped.emit('close', 0);
+  });
+  assert.deepEqual(await processTimes({ platform: 'win32', spawn: garbage.spawn }), []);
+  const hangs = helper(() => {});
+  assert.deepEqual(await processTimes({ platform: 'win32', spawn: hangs.spawn, boundMs: 40 }), []);
+  assert.equal(hangs.child.killed, 1);
+  const fake = fakeProc({ '/proc/600/stat': stat(600, 'node', 0, 0) });
+  for (const platform of ['darwin', 'freebsd']) assert.deepEqual(await processTimes({ platform, spawn: neverSpawned, proc: fake.proc }), [], platform);
+  assert.deepEqual(fake.read, []);
+});
+
+test('busiestOverRun keeps the heaviest that lived through the run, the heaviest first and five at most, and names their scripts', async () => {
+  assert.equal(BUSIEST_OVER_RUN, 5);
+  const start = [
+    proc(1, 'systemd', 4), proc(500, 'node', 10), proc(601, 'node', 0), proc(602, 'node', 0), proc(603, 'MsMpEng', 0),
+    proc(604, 'PcaSvc', 0), proc(605, 'svchost', 0), proc(606, 'git', 0), proc(700, 'Web Content', 0), proc(800, 'python3', 0),
+  ];
+  const fake = fakeProc({
+    '/proc/1/stat': stat(1, 'systemd', 300, 100),
+    // This gate (`ownPid`), which spent most of all.
+    '/proc/500/stat': stat(500, 'node', 90000, 0),
+    '/proc/601/stat': stat(601, 'node', 210000, 0),
+    '/proc/602/stat': stat(602, 'node', 5000, 0),
+    '/proc/603/stat': stat(603, 'MsMpEng', 41200, 0),
+    '/proc/604/stat': stat(604, 'PcaSvc', 30000, 8000),
+    '/proc/605/stat': stat(605, 'svchost', 1000, 0),
+    '/proc/606/stat': stat(606, 'git', 500, 0),
+    // 700 ended during the run, 900 started during it, and 800 is another process under a pid reused.
+    '/proc/900/stat': stat(900, 'tsc', 99999, 0),
+    '/proc/800/stat': stat(800, 'make', 99999, 0),
+    '/proc/601/cmdline': '/usr/bin/node\0/home/me/js-harness/bin/check.mjs\0',
+    '/proc/603/cmdline': '/opt/defender/MsMpEng\0--secret=hunter2\0',
+  });
+  const isFile = disk('/home/me/js-harness/bin/check.mjs');
+  const busiest = await busiestOverRun(start, { platform: 'linux', ownPid: 500, spawn: neverSpawned, proc: fake.proc, isFile });
+  assert.deepEqual(busiest, [
+    { name: 'node', script: 'check.mjs', pid: 601, cpuSeconds: 2100 },
+    { name: 'MsMpEng', script: null, pid: 603, cpuSeconds: 412 },
+    { name: 'PcaSvc', script: null, pid: 604, cpuSeconds: 380 },
+    { name: 'node', script: null, pid: 602, cpuSeconds: 50 },
+    { name: 'svchost', script: null, pid: 605, cpuSeconds: 10 },
+  ]);
+  // Only the five kept are asked their command line, and no option of one is ever looked at as a file.
+  assert.deepEqual(fake.read.filter((file) => file.endsWith('/cmdline')), ['/proc/601/cmdline', '/proc/603/cmdline', '/proc/604/cmdline', '/proc/602/cmdline', '/proc/605/cmdline']);
+  assert.deepEqual(isFile.asked, ['/home/me/js-harness/bin/check.mjs']);
+  // The count is a parameter.
+  assert.deepEqual((await busiestOverRun(start, { platform: 'linux', ownPid: 500, proc: fake.proc, isFile, count: 2 })).map(({ pid }) => pid), [601, 603]);
+  // A start that holds nothing, or is no reading, keeps nobody, and the end is then not read.
+  const untouched = fakeProc({});
+  for (const nothing of [[], null, undefined, 'x']) assert.deepEqual(await busiestOverRun(nothing, { platform: 'linux', proc: untouched.proc }), [], String(nothing));
+  assert.deepEqual(untouched.read, []);
+});
+
+test('busiestOverRun on Windows takes the end reading in one PowerShell process, which is asked for the command lines of the kept alone', async () => {
+  const start = [proc(12044, 'node', 100), proc(9000, 'chrome', 20), proc(3064, 'Memory Compression', 1.562), proc(7000, 'Code', 0.5)];
+  const { child, spawn } = helper((helped) => {
+    helped.once('asked', () => {
+      helped.stdout.emit('data', recorded(...COMMAND_LINES));
+      helped.emit('close', 0);
+    });
+    // 4242 is the helper itself, which is in its own reading; 7000 is this gate.
+    helped.stdout.emit('data', recorded('2\t4242\t1900\tpowershell.exe', '2\t7000\t9000\tCode.exe', '2\t3064\t2462\tMemory Compression', '2\t12044\t103200\tnode.exe', '2\t9000\t21600\tchrome.exe', '='));
+  });
+  const isFile = disk('C:\\Users\\me\\my project\\node_modules\\typescript\\lib\\tsserver.js');
+  assert.deepEqual(await busiestOverRun(start, { platform: 'win32', ownPid: 7000, spawn, isFile }), [
+    { name: 'node', script: 'tsserver.js', pid: 12044, cpuSeconds: 3.2 },
+    { name: 'chrome', script: null, pid: 9000, cpuSeconds: 1.6 },
+    { name: 'Memory Compression', script: null, pid: 3064, cpuSeconds: 0.9 },
+  ]);
+  assert.deepEqual(child.stdin.sent, ['12044,9000,3064\n']);
+  assert.equal(spawn.asked.length, 1);
+  assert.doesNotMatch(spawn.asked[0].args[3], /Start-Sleep/);
+  // A helper that fails keeps nobody.
+  const failed = helper((helped) => helped.emit('error', new Error('spawn EINVAL')));
+  assert.deepEqual(await busiestOverRun(start, { platform: 'win32', ownPid: 7000, spawn: failed.spawn, isFile }), []);
+});
+
+test('watchBusiest takes its first reading as it is made and the other at its end, and says the seconds between with who spent the processor', async () => {
+  const fake = fakeProc(
+    { '/proc/600/stat': stat(600, 'node', 0, 0), '/proc/700/stat': stat(700, 'MsMpEng', 0, 0) },
+    { '/proc/600/stat': stat(600, 'node', 100, 0), '/proc/700/stat': stat(700, 'MsMpEng', 41200, 0) },
+  );
+  let at = 1_000_000;
+  const watch = watchBusiest({ platform: 'linux', ownPid: 500, spawn: neverSpawned, proc: fake.proc, isFile: disk(), now: () => at });
+  // The first reading is taken at once: what lives at the end is the next state of `/proc`.
+  assert.ok(fake.read.includes('/proc/600/stat'));
+  await fake.sleep(0);
+  at += 412_340;
+  assert.deepEqual(await watch.end(), { seconds: 412.3, busiest: [{ name: 'MsMpEng', script: null, pid: 700, cpuSeconds: 412 }, { name: 'node', script: null, pid: 600, cpuSeconds: 1 }] });
+  // Where the first reading failed, the end keeps nobody and starts nothing more.
+  const failed = helper((helped) => helped.emit('error', new Error('spawn EINVAL')));
+  const windows = watchBusiest({ platform: 'win32', spawn: failed.spawn });
+  assert.deepEqual((await windows.end()).busiest, []);
+  assert.equal(failed.spawn.asked.length, 1);
 });

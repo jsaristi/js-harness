@@ -10,23 +10,21 @@
 //
 // Where the estimate comes from. From this machine's own run log and nowhere else: no number of tokens is
 // written in this file. A run line of a part holds how many lines the part changed and how many input
-// tokens its session spent (`./codex-review-runs.mjs`), and the estimate of a part is its changed lines
-// times the median of that ratio over the parts measured before. The median, because one session that read
-// far more than its diff must not move the estimate of every part. In two bands, because the ratio falls as
-// a part grows: the parts of up to 400 changed lines of that one run cost 325 input tokens a changed line
-// and the larger ones 178. With no measured part there is no estimate, and the plan says so.
+// tokens its session spent (`./codex-review-runs.mjs`), and the estimate of a part is a fixed cost plus a
+// cost a changed line, fitted by least squares to the most recent `RECENT_PARTS` parts measured before. A
+// part has a fixed cost: about three quarters of what it spends is cached context sent again with each of its
+// requests, whatever its size, and fitted on this machine's log a part cost about 190,000 input tokens at
+// `high` effort and about 122,000 at `medium` before its first changed line. The median a changed line this
+// replaced had no fixed cost, so a small part came out far too low: replayed on the log before each of 101
+// reviews, the last 20 cost a median 2.48 times what it planned, and the fit 0.94 times
+// (odd/tasks/read-from-records.md). With no measured part there is no estimate, and the plan says so.
 //
-// Why the estimate of the whole is a range. Two reviews in parts were planned at about 1,045,000 and 890,000
-// input tokens and cost 2,314,747 and 1,956,411, the second on an estimate that rested on runs at the
-// review's own effort. What a part costs depends less on its size than on how far its session looks into
-// the code: at `high` effort, thirteen parts of 223 to 1,475 changed lines cost from 296 to 2,278 input
-// tokens a changed line, and in each of those two reviews one part cost more a changed line than any part
-// of its band measured before it. A median says what a part is likely to cost, and nothing of that. So the
-// plan gives two figures of the whole: the one its parts add up to, each at the median of its band, and a
-// high one, each part at the most a changed line cost in the measured parts of its band. The most, and not
-// the third quartile: made from the log as it was before each of those two reviews, the third quartile gave
-// 1,450,000 and 1,030,000, under what they cost both times, where the most gave 3,170,000 and 1,690,000. It
-// is the dearest that was measured, not a ceiling: the second review passed it. A part keeps one figure.
+// Why the estimate of the whole is a range. What a part costs depends less on its size than on how far its
+// session looks into the code, so the plan gives two figures of the whole: the one its parts add up to, each
+// at the fit, and a high one, each part at the fit times the 90th percentile of what the measured parts cost
+// over it. Replayed on the same 101 reviews, 12 went over that high figure, about one in ten as it says, and
+// it stood a median 1.8 times over what they cost, where the most a changed line, which it replaced, stood
+// 3.2 times over. It is no ceiling. A part keeps one figure.
 //
 // It estimates input tokens alone, the cached ones included, which is what `usage.inputTokens` counts: the
 // number the cost of the reviews was counted in when this was asked for. What a review writes is not estimated.
@@ -35,7 +33,6 @@
 // (`./codex-review-scope.mjs`). The parts of a plan, their sizes and its estimate are of what the review
 // reads; what it leaves out is said in a line of its own, with how much it is and why, so that a run never
 // passes over a file without having said so.
-import { PART_MAX_CHANGED_LINES } from './codex-review-parts.mjs';
 import { runPart, runSession, runSessionModel } from './codex-review-runs.mjs';
 import { leftOutSaid } from './codex-review-scope.mjs';
 import { ruleValue } from './rules.mjs';
@@ -52,8 +49,13 @@ export const MAX_PARTS_WITHOUT_FLAG = ruleValue('review-parts-unflagged', 'parts
 // estimate from runs at another effort is worth more than none, and less than it looks.
 export const RUNS_TO_STAND_ALONE = 5;
 
-// How many measured parts a band takes to have a median of its own; a thinner one takes that of them all.
-export const RUNS_FOR_A_BAND = 3;
+// How many measured parts the fit reads, the most recent ones: replayed on this machine's log before each of
+// 101 reviews, a fit on the last 20 of the pair erred least (a median absolute log error of 0.27, against
+// 0.45 for the median a changed line it replaced), since it follows a change of prompt or effort without
+// having to know which fields mark one (odd/tasks/read-from-records.md, reader A).
+export const RECENT_PARTS = 20;
+// The share of the parts a high figure is to stand over: the 90th percentile of what they cost over the fit.
+const HIGH_PERCENTILE = 0.9;
 
 /** The parts the run log measured, of `runs` (the lines of the log, as `readCodexReviewRuns` gives them):
  * each `{ changedLines, inputTokens, model, effort }`, the last two what the session itself said it ran on,
@@ -89,42 +91,64 @@ function median(values) {
 /** How the input tokens of a part are estimated from `runs`, the lines of the run log, for a review on
  * `model` at `effort`:
  *
- *  - `runs`, how many measured parts the estimate rests on (`measuredParts`); 0 when there is none, and
- *    then `estimate` is `null`: there is no estimate, and no number stands in for one.
+ *  - `runs`, how many measured parts the estimate rests on (`measuredParts`), the most recent
+ *    `RECENT_PARTS` at most; 0 when there is none, and then `estimate` is `null`: there is no estimate, and
+ *    no number stands in for one.
  *  - `atPair`, how many of the measured parts ran on that model at that effort, as their own sessions said;
  *    `samePair`, whether the estimate rests on those alone, which it does from `RUNS_TO_STAND_ALONE` of
  *    them on. Otherwise it rests on every measured part, at whatever effort.
- *  - `perChangedLine`, the median input tokens a changed line cost, `upToBound` for the parts of at most
- *    `bandAt` changed lines and `aboveBound` for the larger ones; a band of fewer than `RUNS_FOR_A_BAND`
- *    parts has the median of them all.
- *  - `floor`, the smallest input total of those parts: no session costs less than what it loads before it
- *    has read a line of the diff.
- *  - `estimate(changedLines)`, the input tokens of a part of that many changed lines: the lines times the
- *    median of its band, and never under `floor`. Not rounded: `reviewPlan` rounds what is printed.
- *  - `highestPerChangedLine`, the most input tokens a changed line cost in those parts, by the same two
- *    bands, a thin one taking the highest of them all; and `high(changedLines)`, the lines times the
- *    highest of its band, never under `floor`, and so never under `estimate`. `null` with no measured
- *    part. It is the other end of the range a plan gives of the whole (see the top of this file). */
-export function inputEstimator(runs, { model, effort, bandAt = PART_MAX_CHANGED_LINES }) {
+ *  - `fixed` and `perChangedLine`, what a part costs before its first changed line and for each one, by
+ *    least squares over those parts (`fitted`).
+ *  - `estimate(changedLines)`, the input tokens of a part of that many changed lines: `fixed` plus the
+ *    lines times `perChangedLine`. Not rounded: `reviewPlan` rounds what is printed.
+ *  - `highRatio`, the 90th percentile of what those parts cost over their estimate, never under 1; and
+ *    `high(changedLines)`, the estimate times it, so never under `estimate`. `null` with no measured part.
+ *    It is the other end of the range a plan gives of the whole (see the top of this file). */
+export function inputEstimator(runs, { model, effort }) {
   const measured = measuredParts(runs);
   const same = measured.filter((one) => one.model === model && one.effort === effort);
   const samePair = same.length >= RUNS_TO_STAND_ALONE;
-  const basis = samePair ? same : measured;
-  if (basis.length === 0) return { runs: 0, samePair: false, atPair: 0, estimate: null, high: null };
-  const upToBound = basis.filter((one) => one.changedLines <= bandAt);
-  const aboveBound = basis.filter((one) => one.changedLines > bandAt);
-  /** What a changed line cost in each band, as `pick` takes it from the costs of the parts of one: a band
-   * of fewer than `RUNS_FOR_A_BAND` parts has what `pick` takes from them all. */
-  const byBand = (pick) => {
-    const perLine = (parts) => pick(parts.map((one) => one.inputTokens / one.changedLines));
-    const ofBand = (parts) => perLine(parts.length >= RUNS_FOR_A_BAND ? parts : basis);
-    return { upToBound: ofBand(upToBound), aboveBound: ofBand(aboveBound) };
-  };
-  const perChangedLine = byBand(median);
-  const highestPerChangedLine = byBand((costs) => Math.max(...costs));
-  const floor = Math.min(...basis.map((one) => one.inputTokens));
-  const priced = (perLine) => (changedLines) => Math.max(floor, changedLines * (changedLines <= bandAt ? perLine.upToBound : perLine.aboveBound));
-  return { runs: basis.length, samePair, atPair: same.length, perChangedLine, highestPerChangedLine, floor, estimate: priced(perChangedLine), high: priced(highestPerChangedLine) };
+  const basis = (samePair ? same : measured).slice(-RECENT_PARTS);
+  if (basis.length === 0) return { runs: 0, samePair: false, atPair: 0, fixed: null, perChangedLine: null, highRatio: null, estimate: null, high: null };
+  // How many of the parts the fit reads ran on that model at that effort: all of them when the pair stands
+  // alone, since the plan says of the parts it rests on how many ran as the review will.
+  const atPair = basis.filter((one) => one.model === model && one.effort === effort).length;
+  const { fixed, perChangedLine } = fitted(basis);
+  const estimate = (changedLines) => fixed + perChangedLine * changedLines;
+  // What each part cost over what the fit says it should; a fit of nothing a part is a part of no cost, read
+  // as costing what it says.
+  const ratios = basis.map((one) => {
+    const expected = estimate(one.changedLines);
+    return expected > 0 ? one.inputTokens / expected : 1;
+  });
+  const highRatio = Math.max(1, percentile(ratios, HIGH_PERCENTILE));
+  return { runs: basis.length, samePair, atPair, fixed, perChangedLine, highRatio, estimate, high: (changedLines) => estimate(changedLines) * highRatio };
+}
+
+/** The fixed cost of a part and its cost a changed line, by least squares over `parts`. Parts whose changed
+ * lines do not vary, a single part among them, and a fit whose cost a line falls, all put every part at the
+ * median part with no cost a line; a fit whose fixed cost is under nothing starts at nothing. */
+function fitted(parts) {
+  const middle = { fixed: median(parts.map((one) => one.inputTokens)), perChangedLine: 0 };
+  const count = parts.length;
+  const meanLines = parts.reduce((sum, one) => sum + one.changedLines, 0) / count;
+  const meanTokens = parts.reduce((sum, one) => sum + one.inputTokens, 0) / count;
+  let sxx = 0;
+  let sxy = 0;
+  for (const one of parts) {
+    sxx += (one.changedLines - meanLines) ** 2;
+    sxy += (one.changedLines - meanLines) * (one.inputTokens - meanTokens);
+  }
+  if (count < 2 || sxx === 0) return middle;
+  const perChangedLine = sxy / sxx;
+  if (perChangedLine < 0) return middle;
+  return { fixed: Math.max(0, meanTokens - perChangedLine * meanLines), perChangedLine };
+}
+
+/** The `share` percentile of `values` (a list of numbers that is not empty), by nearest rank. */
+function percentile(values, share) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.max(0, Math.ceil(share * sorted.length) - 1)];
 }
 
 /** An estimate as it is printed: to two figures. One printed to the token reads as a measurement. */
@@ -144,22 +168,22 @@ function twoFigures(tokens) {
  * It is data, and `planLines` says it: the `range` by short ids, the `model` and the `effort`, each part
  * with its `index` of `of`, how many `files` and `changedLines` it has and its `inputTokens`, the totals of
  * the three, the `basis` of the estimate (how many `runs`, whether they are on the same model and effort
- * alone, `samePair`, how many are, `atPair`, and where the two bands part, `bandAt`), and whether the plan is
+ * alone, `samePair`, how many are, `atPair`, and the fit, `fixed`, `perChangedLine` and `highRatio`), and whether the plan is
  * `over` the bound of parts. `inputTokens` is `null`, of each part and of the whole, when there is no
  * estimate; otherwise each is to two figures, and that of the whole is the sum of those of the parts.
  * `inputTokensHigh` is the high figure of the whole, `null` with it: the sum of the high figures of the
  * parts (`inputEstimator`), each to two figures as well, so it is never the smaller of the two, and is the
- * same number when every measured part cost a changed line alike. A part holds one figure: the range is
- * of the whole. `leftOut` is the count it was handed, or `null` when no file is left out. */
+ * same number when every measured part cost a changed line alike. Each part holds its own `inputTokensHigh`
+ * as well, which its run line records (`partPlanned`); the lines print the range of the whole alone. `leftOut` is the count it was handed, or `null` when no file is left out. */
 export function reviewPlan({ base, head, model, effort, parts, runs = [], maxParts, leftOut = null }) {
-  const bandAt = PART_MAX_CHANGED_LINES;
-  const { runs: measured, samePair, atPair, estimate, high } = inputEstimator(runs, { model, effort, bandAt });
+  const { runs: measured, samePair, atPair, fixed, perChangedLine, highRatio, estimate, high } = inputEstimator(runs, { model, effort });
   const planned = parts.map((part, at) => ({
     index: at + 1,
     of: parts.length,
     files: part.files.length,
     changedLines: part.changedLines,
     inputTokens: estimate === null ? null : twoFigures(estimate(part.changedLines)),
+    inputTokensHigh: estimate === null ? null : twoFigures(high(part.changedLines)),
   }));
   const total = (pick) => planned.reduce((sum, part) => sum + pick(part), 0);
   const bound = maxParts ?? MAX_PARTS_WITHOUT_FLAG;
@@ -172,8 +196,17 @@ export function reviewPlan({ base, head, model, effort, parts, runs = [], maxPar
     files: total((part) => part.files),
     changedLines: total((part) => part.changedLines),
     inputTokens: estimated ? total((part) => part.inputTokens) : null,
-    inputTokensHigh: estimated ? total((part) => twoFigures(high(part.changedLines))) : null,
-    basis: { runs: measured, samePair, atPair, bandAt },
+    inputTokensHigh: estimated ? total((part) => part.inputTokensHigh) : null,
+    // The fit as it is said: the fixed cost to the token, the rest to two decimals, so that the float of a
+    // least-squares fit does not show as a measurement.
+    basis: {
+      runs: measured,
+      samePair,
+      atPair,
+      fixed: fixed === null ? null : Math.round(fixed),
+      perChangedLine: perChangedLine === null ? null : Math.round(perChangedLine * 100) / 100,
+      highRatio: highRatio === null ? null : Math.round(highRatio * 100) / 100,
+    },
     maxParts: bound,
     maxPartsGiven: maxParts !== undefined,
     over: planned.length > bound,
@@ -210,11 +243,11 @@ function estimateLine({ parts, inputTokens, inputTokensHigh, model, effort, basi
   const ranged = inputTokensHigh > inputTokens;
   return (
     `Estimate: about ${thousands(inputTokens)}${ranged ? ` to ${thousands(inputTokensHigh)}` : ''} input tokens in all. ` +
-    `It rests on ${rests}: a part is put at its changed lines times the median input tokens a changed line cost in them, ` +
-    `the parts of up to ${thousands(basis.bandAt)} changed lines apart from the larger ones, and never under what the cheapest of them cost.` +
+    `It rests on ${rests}: a part is put at about ${thousands(twoFigures(basis.fixed))} input tokens and about ${thousands(Math.round(basis.perChangedLine))} more a changed line, ` +
+    `a fit by least squares to the most recent ${RECENT_PARTS} of them at most.` +
     (ranged
-      ? ' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: ' +
-        'how far a session looks into the code moves what it costs more than the size of its part does.'
+      ? ` The higher figure puts every part at that times ${Math.round(basis.highRatio * 100) / 100}, the ${Math.round(HIGH_PERCENTILE * 100)}th percentile of what those parts cost over the fit: ` +
+        'about one review in ten has cost more, and it is no ceiling.'
       : '')
   );
 }
@@ -234,6 +267,93 @@ export function planLines(plan) {
     ...(leftOut === null ? [] : [`Left out of the review: ${leftOutSaid(leftOut)}.`]),
     estimateLine(plan),
   ];
+}
+
+// The version of the method a run line's `plan` was made by: 2 is the fit of `inputEstimator`, 1 the median
+// cost a changed line it replaced, whose lines recorded no plan. A new way of estimating takes the next one.
+export const PLAN_METHOD = 2;
+
+/** What the run line of part `index` (1 for a range reviewed whole) records of `plan`, the plan the run printed:
+ * `{ estimate, high, method }`, the part's two figures as the plan has them and `PLAN_METHOD`; `null` when the
+ * plan has no such part or no estimate, since then nothing was planned. */
+export function partPlanned(plan, index = 1) {
+  const planned = plan?.parts?.[index - 1];
+  if (planned === undefined || planned.inputTokens === null) return null;
+  return { estimate: planned.inputTokens, high: planned.inputTokensHigh, method: PLAN_METHOD };
+}
+
+// The estimate a run line recorded, when this method made it; `null` for any other line.
+const plannedEstimate = (run) =>
+  run?.plan?.method === PLAN_METHOD && Number.isFinite(run.plan.estimate) ? run.plan.estimate : null;
+
+// The estimate this method gives part `part` of `runs[index]` from the lines written before it, on the model and
+// at the effort the line ran with; `null` when no measured line came before it.
+const replayedEstimate = (runs, index, part) => {
+  const { estimate } = inputEstimator(runs.slice(0, index), { model: runs[index].model, effort: runs[index].effort });
+  return estimate === null ? null : estimate(part.changedLines);
+};
+
+// How many of the latest reviews the method is judged on.
+const REVIEWS_JUDGED = 10;
+
+const roundedRatio = (value) => (value === null ? null : Math.round(value * 100) / 100);
+
+/** How close the method's estimates came to what the reviews recorded here took, from `records` (the review
+ * records, as `readCodexReviews` gives them) and `runs` (the run log): `{ recorded, reviews, low, median, high }`,
+ * how many reviews the records hold, on how many of the last `REVIEWS_JUDGED` the method is measured, and the
+ * least, the median and the most of their estimate over what they took, to two decimals; `null` in the three
+ * when it is measured on none.
+ *
+ * Each part is measured against its own run line, with the estimate the line recorded (`plan`) when this method
+ * made it (`PLAN_METHOD`), and otherwise the one this method gives from the lines written before that one, on
+ * the model and at the effort the line was run with: a replay, for the lines written before they held their
+ * plan. A review is the run lines its record names (`runs`, else `run`), since the
+ * run log holds no review id and the parts of one review write their lines out of order. A line an earlier
+ * record named is a part kept from that run, which cost nothing in this one, and is left out; so is a line that
+ * measured no part (`measuredParts`) and one with no measured line before it, which had no estimate. An
+ * attempt that failed is named by no record. A review with no part left is not one the method is measured on. */
+export function methodRecord({ records, runs }) {
+  const at = new Map();
+  runs.forEach((run, index) => {
+    if (typeof run?.id === 'string' && run.id !== '' && !at.has(run.id)) at.set(run.id, index);
+  });
+  const named = new Set();
+  const ratios = [];
+  let recorded = 0;
+  for (const record of records) {
+    if (record?.outcome !== 'reviewed') continue;
+    recorded += 1;
+    const ids = Array.isArray(record.runs) ? record.runs : [record.run];
+    let estimated = 0;
+    let took = 0;
+    for (const id of ids) {
+      if (!at.has(id) || named.has(id)) continue;
+      named.add(id);
+      const index = at.get(id);
+      const [part] = measuredParts([runs[index]]);
+      if (part === undefined) continue;
+      const planned = plannedEstimate(runs[index]) ?? replayedEstimate(runs, index, part);
+      if (planned === null) continue;
+      estimated += planned;
+      took += part.inputTokens;
+    }
+    if (took > 0) ratios.push(estimated / took);
+  }
+  const judged = ratios.slice(-REVIEWS_JUDGED);
+  if (judged.length === 0) return { recorded, reviews: 0, low: null, median: null, high: null };
+  return { recorded, reviews: judged.length, low: roundedRatio(Math.min(...judged)), median: roundedRatio(median(judged)), high: roundedRatio(Math.max(...judged)) };
+}
+
+/** How the method did (`methodRecord`), as the one line `codex-review --plan` prints after its estimate. */
+export function methodRecordLine({ recorded, reviews, low, median: middle, high }) {
+  if (reviews === 0) {
+    return recorded > 0
+      ? 'How the method did: no review this machine recorded has a part it can be measured on yet.'
+      : 'How the method did: no reviews recorded yet.';
+  }
+  const how = 'each part against its own run line, kept parts left out.';
+  if (reviews === 1) return `How the method did: on the last review this machine recorded, its estimate came to ${low} times what it took; ${how}`;
+  return `How the method did: on the last ${reviews} reviews this machine recorded, its estimate came to between ${low} and ${high} times what each took, ${middle} at the median; ${how}`;
 }
 
 /** The bound of parts of `plan`, as what a count is said to be more than: the count the run named, or the

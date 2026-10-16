@@ -17,7 +17,7 @@ import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf } f
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
-  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
+  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
   HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
 } from './practice-lib.mjs';
 import { agentsTemplate } from '../bin/lib/project.mjs';
@@ -189,6 +189,10 @@ const pauseHook = (ctx, cwd, input) => withOutput(run(process.execPath, [install
 /** The guard run as the host runs its `PreToolUse` hook: the installed entry file, `guard --hook`, the call on standard
  * input and `cwd` as the folder of the call. `input` is the JSON text of `openingToolInput`. */
 const openingHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'guard', '--hook'], { ...childOptions(ctx, cwd), input }));
+
+/** The reply check run as a host runs its `Stop` hook: the installed entry file, `reply --hook`, the hook input on standard
+ * input and `cwd` as the folder of the session. `input` is the JSON text of `replyHookInput`. */
+const replyHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'reply', '--hook'], { ...childOptions(ctx, cwd), input }));
 
 /** The tokens of a made-up reply that is past the context pause: the share the host compacts at, which is above the
  * pause's share of the same window, so the reply passes the pause and is not yet a compaction. Built from the constants
@@ -643,6 +647,24 @@ const STEPS = {
     const problem = openingToolsProblem({ plain, declared });
     assertThat(problem === null, problem);
     return `the guard let the ${OPENING_TOOLS.length} tools pass in ${project}, which declares no rule, and refused each in ${declaring}, which declares it, naming start_session`;
+  },
+
+  'reply-hook': (ctx) => {
+    const { project, root } = ctx.layout;
+    // A folder of the journey's root whose harness.json turns the check on with the English labels; no harness.json lies
+    // above the root, so this file is the nearest one. The practice project keeps init's harness.json, which has no reply
+    // key: a project that installs the harness has the check off until it asks for it.
+    const replying = path.join(root, 'replying');
+    fs.mkdirSync(replying, { recursive: true });
+    fs.writeFileSync(path.join(replying, 'harness.json'), `${JSON.stringify({ reply: true }, null, 2)}\n`);
+    const sessionId = `practice-reply-${randomUUID()}`;
+    const unclosed = 'Merged the change; next I write its documentation.';
+    const refused = replyHook(ctx, replying, replyHookInput({ sessionId, cwd: replying, message: unclosed }));
+    const passed = replyHook(ctx, replying, replyHookInput({ sessionId, cwd: replying, message: 'Merged the change.\n\n**Working** — the gate of the next commit wakes me.' }));
+    const plain = replyHook(ctx, project, replyHookInput({ sessionId, cwd: project, message: unclosed }));
+    const problem = replyHookProblem({ refused, passed, plain });
+    assertThat(problem === null, problem);
+    return `the reply check turned back a reply with no state in ${replying}, whose harness.json turns it on, let a reply that closes with Working stop there, and turned nothing back in ${project}; all three exited 0`;
   },
 
   'host-loads': (ctx) => {

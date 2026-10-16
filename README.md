@@ -22,8 +22,8 @@ js-harness init
 1. `npm i -g` puts the `js-harness` command on the path.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md` and the
-   pre-commit gate of that project.
+3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md`, an empty failures
+   register (`docs/FAILURES.md`) and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
@@ -48,7 +48,8 @@ only those files, and all of them. Measured on Windows with an empty home and an
 ## Commands
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
-`my-project` is the project's folder. A line `…` marks output left out.
+`my-project` is the project's folder. A line `…` marks output left out; output that grows with
+each feature, such as install's hook lines or check's rows, is shown in part and cut with it.
 
 ### js-harness check
 
@@ -70,6 +71,16 @@ quarantine proves no tree for `"sameTree": "skip"`, so the next gate runs the te
 `flaky` row fails a malformed ledger, an empty field included, and lists the expired entries,
 which no longer count.
 
+In a project that holds `.github/workflows/gate.yml`, as this repository does, a gate whose turn
+at the machine's gate lock would wait runs its tests on GitHub's machines instead: it pushes the tree
+being committed to a `gate/<sha>` branch of the remote (`--remote`, `origin` when not given), reads
+that workflow's run in the GitHub repository the remote names with `gh`, deletes the branch, and
+lets the commit through only on green. The `tests` row then names the run. A gate whose turn is
+free runs here, and one that gets no answer from GitHub (a remote not on GitHub, no push, `gh` not
+signed in, no run within 3 minutes, a run cancelled, timed out or past 20) runs here too, after one
+`check:` line on stderr that says why. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
+on Windows is left to the merge queue's run on this machine.
+
 The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,
 before any work: the median of the latest five sessions, read from their transcripts under
 `~/.claude/projects` (and, from a worktree, its main checkout's). It never fails a commit, and warns
@@ -77,11 +88,11 @@ over 100,000 tokens.
 
 ```console
 $ js-harness check
-PASS  budget  122 estimated tokens (budget 1500)
+PASS  budget  639 estimated tokens (budget 1500)
 PASS  contracts  no contracts under odd/tasks
-INFO  payload claude  122 estimated tokens per turn from files (tools and hook output not counted)
+INFO  payload claude  639 estimated tokens per turn from files (tools and hook output not counted)
       global CLAUDE.md   not found  ~\.claude\CLAUDE.md
-      project AGENTS.md        122  my-project\AGENTS.md
+      project AGENTS.md        639  my-project\AGENTS.md
 …
 INFO  fixed load  95570 tokens at the first turn, median of the latest 5 sessions (budget 100000)
 …
@@ -96,7 +107,9 @@ Runs a heavy command under the machine's gate lock, one at a time with the gates
 project, and records the run in the machine's gate log. `gate log` prints the last runs. A
 command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
 in has an open pull request and commits a push would take now, any command but that push or a merge
-is refused, with the push command printed.
+is refused, with the push command printed. `--ready <command>` declares a quick check, such as
+`git diff --quiet`, run before the wait and again as the turn comes after one: when it fails, nothing
+runs (exit 75), so a command that would refuse at once does not wait for a turn first.
 
 ```console
 $ js-harness gate --no-wait -- node -e "console.log('a heavy run, one at a time')"
@@ -107,6 +120,11 @@ $ js-harness gate log --last 2
 10-14 04:24:38  0 s  exit 0  load 8.0 of 8 (vmmem, MsMpEng, claude)  my-project
 ```
 
+A ticket puts one session's next whole check before every gate that waits: the orchestrator issues it
+with `gate first --session <id> --reason <why>`, or its own batch run carries one with `check --first
+<reason>`. Two are open at most, for an hour at most; `js-harness sessions` prints them with their
+issuer and flags one the orchestrator did not issue, and the gate log keeps each issue and claim.
+
 ### js-harness init
 
 Enables js-harness in a git repository and records what it wrote in a manifest of the clone.
@@ -115,6 +133,7 @@ Enables js-harness in a git repository and records what it wrote in a manifest o
 $ js-harness init
 wrote harness.json
 wrote AGENTS.md
+wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
 ran codegraph init
 manifest: my-project\.git\js-harness\manifest.json
@@ -127,12 +146,10 @@ manifest of them.
 
 ```console
 $ js-harness install
-installed js-harness 0.1.0 (4 files) into ~
+installed js-harness 0.1.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
-registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
+…
 ```
 
 ### js-harness loop
@@ -144,6 +161,20 @@ owner session, its own process and the command's by pid and creation time, the p
 ends it. `stop` refuses a live loop another session owns unless `--take-over`, and exits 0 only when
 a second look at the process table finds none of its processes left. `heartbeat` and
 `channel-watch` are bodies for `run`.
+
+`heartbeat` ends on a quiet machine (no gate-log or channel write for `--quiet` minutes) and on a
+stalled work session: one the orchestrator handed work to, by a notice to its number or its
+opening, that has not given it back with a `waiting`, `closed` or `relieved` notice and has made no
+commit of its own, sent no notice and run no gate for `--stall` minutes (the rule `session-stall`,
+an hour). It prints a `STALLED:` line naming the session, since when it is quiet and what it holds,
+and says it again each time that quiet doubles. `js-harness sessions` lists the same sessions in
+its `Stalled` section, and its `--watch` says each one as it crosses.
+
+```console
+$ js-harness loop heartbeat
+js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours
+STALLED: JH 19 · skill del orquestador (T8) — no commit, notice or gate since 11:49, holding a note from JH ORQ · js-harness (350k) of 11:49: 17:00 JH ORQ: first-version T3 moved to JH 25 after 6h without an answer…
+```
 
 ```console
 $ js-harness loop run heartbeat --purpose "wake the lead on a stall" --until "30 min with no gate or channel write" -- js-harness loop heartbeat
@@ -173,7 +204,9 @@ Inside a project, removes what `init` wrote; with `--global`, removes what `inst
 $ js-harness uninstall
 removed harness.json
 removed AGENTS.md
+removed docs/FAILURES.md
 removed .git/hooks/pre-commit
+removed docs
 removed .codegraph/
 removed manifest my-project\.git\js-harness\manifest.json
 $ js-harness uninstall --global
@@ -186,7 +219,7 @@ removed hook entry from ~\.claude\settings.json
 ### js-harness status
 
 Inside a project, shows its pinned version, the running version and whether this clone is set
-up. With `--global`, shows the machine's installed version and its manifest.
+up. With `--global`, shows the machine's installed version, its manifest and the latest release.
 
 ```console
 $ js-harness status
@@ -199,8 +232,10 @@ pin and running version: match
 
 ### js-harness update
 
-Says whether a newer release exists. No release is tagged before 1.0.0, so for now it says that
-and how to get the newest copy.
+Says whether a newer release exists: the newest `vX.Y.Z` tag of the private repository, read with
+`git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
+another repository). No release is tagged before 1.0.0, so for now it says that and how to get
+the newest copy. When the tags cannot be listed it says why and exits 1.
 
 ```console
 $ js-harness update
@@ -209,8 +244,11 @@ no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get 
 
 ### js-harness upgrade
 
-Installs the newer release of `--source <dir>`, a folder of `npm pack` tarballs, then syncs.
-With no source it installs nothing and exits 1; no package registry is ever asked.
+Installs the newer release with the package manager, then syncs the home with the copy it
+installed: the repository at its newest tag (`github:jsaristi/js-harness#vX.Y.Z`), or the newest
+tarball of `--source <dir>`, a folder of `npm pack` tarballs, which wins when named and needs no
+credential. With no release tagged it installs nothing and exits 1; no package registry is ever
+asked.
 
 ```console
 $ js-harness upgrade
@@ -234,6 +272,20 @@ records the review; with `--json` it prints the record it wrote. The row also sh
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
 Claude is quit fully, the tray icon included.
 
+Its `gentle-ai-sync` row does the same for gentle-ai. A gentle-ai sync rewrites the global
+`~/.claude/CLAUDE.md`, which gentle-ai owns: js-harness never writes that file, and only reads it
+to measure the per-turn payload (`bin/lib/payload.mjs`). So a new gentle-ai version stays `stale`
+until it is reviewed. One review step diffs the global `CLAUDE.md` against the copy gentle-ai saved
+before the first sync since the last review (`~/.gentle-ai/backups/<stamp>/snapshot.tar.gz`), and
+the next checks each change against the project's `AGENTS.md` for conflicts.
+`js-harness doctor --gentle-ai-reviewed` records the review, and `--json` prints the record.
+
+Its `stack-update` row does the same for the other tools of the stack and for the `claude` on PATH:
+the first reading is recorded as reviewed, and a tool that updated itself since (engram, codex, the
+Claude CLI's native updater) stays `stale`, named by the session-start hook, until
+`js-harness doctor --stack-reviewed` records its review. A tool installed since joins the record as
+it is; one removed is no update.
+
 ```console
 $ js-harness doctor --offline
 tool            version   claude    codex     project   up to date
@@ -250,7 +302,9 @@ Fix:
 ### js-harness progress
 
 Shows the roadmap's phases and the features, counted from the checkboxes of `docs/ROADMAP.md`
-and `odd/tasks/*.md`.
+and `odd/tasks/*.md`. A feature that keeps its tasks in a table (a header with an `ID` and a
+`Status` cell) is counted by its rows: a row whose ID is a task (`T2`, `T3c`) is done when its
+status starts with `done`.
 
 ```console
 $ js-harness progress
@@ -262,6 +316,21 @@ Roadmap  docs/ROADMAP.md  61/62  98%
       - Block exclusion via gentle-ai #4036, if it ships
 …
 Features  295/349  85%
+```
+
+`--pace [--days <n>]` reads the first-parent history of the default branch (origin/HEAD, else
+`main`, else `HEAD`) and prints the tasks closed, reopened, added and removed on each of the last
+14 days, or `n`, by committer day, with the totals and the mean a day; `--json` gives the same as
+data. A task is matched by its ID (`T3`); one reworded without an ID, or in a moved file, counts
+as removed and added. Without `--pace`, `progress` runs no git.
+
+```console
+$ js-harness progress --pace --days 2
+Pace of origin/main, its first-parent line, by committer day over the last 2 days:
+  2026-10-15  closed 81  reopened 0  added 67  removed 1
+  2026-10-16  closed 30  reopened 0  added 22  removed 1  (today, so far)
+Total       closed 111  reopened 0  added 89  removed 2
+A day       closed 55.5  reopened 0  added 44.5  removed 1
 ```
 
 ### js-harness contract
@@ -332,10 +401,26 @@ $ js-harness rules check
 PASS  rules  18 rules, hash 7963ae6d5597
 ```
 
+`rules --hook` is the turn-start hook of the rules (letter F of `odd/tasks/rule-hierarchy.md`). `install`
+registers it for Claude Code three times: on `UserPromptSubmit`, on `SessionStart` for the
+matcher `compact|clear|resume`, and on `SubagentStart`. Where the project declares rules
+(`bin/lib/rules-data.mjs` in the harness's checkout, `docs/rules.json` in a project), it
+compares the list at the session's merge base with the list on the default branch
+(`origin/HEAD`, else `origin/main`, else `main`, never fetched). It tells the session, once,
+each rule that was added, removed, retired or changed, with the new declaration itself. After a
+compaction, a clear or a resume it tells it again, and a sub-agent is told at its start. Anywhere
+else it prints nothing. A turn with no change prints nothing and costs no token. It never blocks:
+a fault goes to standard error and it exits 0. What a session was last told is kept in
+`~/.js-harness/channel/rules-seen/`, one file a session, pruned after 30 days. `uninstall` removes
+that folder with the channel's; a session still running afterwards may write it again, and the
+next `uninstall` removes it. Codex sessions get nothing until a logging hook confirms its events.
+
 ### js-harness codex-review
 
 Runs the Codex review of `<base>..HEAD` and records it. `--plan` prints what the review would
-read and cost, and starts nothing; `--unavailable <reason>` records a skip.
+read and cost, with how close that estimate came on the last reviews this machine recorded, and
+starts nothing; a run records in each part's run line the figures it was planned at, which that
+line reads; `--unavailable <reason>` records a skip.
 
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again
@@ -355,10 +440,25 @@ not a draft, mergeable, on main and with a gentle-ai line in its body, has a Cod
 every code commit, and merges into the candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
 green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
-That CircleCI run is the repository's only CI run: no GitHub workflow runs for a pull request.
+No GitHub workflow runs for a pull request: the one workflow, the gate of a commit (`js-harness check`),
+runs for a push to a `gate/` branch alone.
 A candidate red on this machine is bisected: the pull request that turns it red is left out and
 named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
+
+On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
+`"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
+the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's
+gate. After each landed batch, the one who landed it runs the whole suite once on Windows, in a lock
+turn on the main just landed, with the temporary files inside the drive the antivirus excludes:
+
+```console
+$ TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node bin/check.mjs
+```
+
+Each sensor's row then ends "on Windows (JS_HARNESS_GATE_WSL=0), its temporary files under
+D:\js-harness-tmp", so a run that forgot `TEMP` shows it. A red run there is fixed like any red main
+(odd/tasks/gate-wsl.md).
 
 ```console
 $ js-harness merge-queue --dry-run
@@ -398,8 +498,8 @@ watchdog task: off
 ### js-harness sessions
 
 The board of the project's recent Claude Code sessions: each one's state, context size and
-last reply, the worktrees and their feature plans, the running gates and the open pull
-requests. It only reads. `--watch` waits until the board changes in a way that needs a
+last reply, the worktrees and their feature plans, the running gates, the open pull
+requests and whether a memory hygiene pass is due. It only reads. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
 the host made, whether the session was told the pause and committed its feature document (the
@@ -440,7 +540,9 @@ It reads the main checkout's memory folder, so a worktree sees the same notes, a
 pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
 of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
 user is lost and no file another session wrote is overwritten, and an undo that puts back only what
-nobody wrote since. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+nobody wrote since and refuses while another pass holds the lock. `uninstall --global` removes that
+folder, except a project's folder that holds snapshots: they are the only copy of what a pass changed,
+so it is kept, with its journal, and its stamps are named. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
 
 ```console
 $ js-harness memory status
@@ -565,7 +667,7 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
 document it works on and what to read there, so nobody pastes a resume prompt. It writes
-nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too.
+nothing and always exits 0. `resume --pause` is the hook of the context pause, measured against the window the host is configured to compact on when a setting gives one (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` of the project's `.claude/settings.local.json`, its `.claude/settings.json` or the user's settings), and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too; so it does after a WebFetch that failed as a tool error ("Claude Code is unable to fetch from <domain>"), which reaches no `PostToolUse` hook: `install` registers the same command as a `PostToolUseFailure` entry on WebFetch for that.
 
 ```console
 $ js-harness resume --hook < hook-input.json
@@ -626,6 +728,36 @@ $ js-harness guard --stop < stop.json
 {"decision":"block","reason":"js-harness guard: this reply states your context at 40%, and your transcript records 60% of a 500k window (the window of your last get_usage read, else the default). The reply is already sent: correct it in one line with the share mcp__ccd_session_mgmt__get_usage reads now, and say no share you have not just read."}
 ```
 
+### js-harness reply
+
+The reply check. `install` registers `reply --hook` as a `Stop` hook for Claude Code and Codex;
+it acts only in a project whose nearest `harness.json` holds a `reply` key, and prints `{}`
+everywhere else. There it reads the reply that ends the turn and turns the stop back, with the
+hooks contract's `decision: "block"` and the shape to follow, when the reply does not close with
+exactly one state line: working (with what wakes the session on that line), decision (never while
+a background task runs), cut (one code block of what the user sends, under the three labels what
+it is, where it goes and what sending it does, each once) or finished (with the session to return
+to on that line). A block under those labels in any other state is turned back too: a decision is
+asked with the question tool. A state line is a line that starts with a state's label once its
+markdown is taken off, followed by the end of the line or a mark such as a dash or a colon
+(`**Working** — the gate wakes me`); a label inside a sentence, or a sentence that only begins
+with its word (`Working on the docs`), is none.
+
+`"reply": true` takes the English labels (`Working`, `Decision`, `Cut`, `Finished`; `What it is`,
+`Where it goes`, `What sending it does`). An object names the project's own, each over the
+English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decisión", "cut":
+"Corte", "finished": "Terminado"}, "labels": {"what": "Qué es", "where": "Dónde", "effect":
+"Qué pasa"}}`. A key it cannot read, or a
+`harness.json` that is not JSON, is said on standard error and checks nothing. A reply is
+already shown when a `Stop` hook runs, so the session writes its close again in its next words.
+It never turns back a stop the hooks already turned back (`stop_hook_active`), does not run for
+sub-agents, writes nothing and always exits 0.
+
+```console
+$ js-harness reply --hook < stop.json
+{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
+```
+
 ### js-harness fetch
 
 The second rung for a page that refuses WebFetch as AI traffic (a 403, a 402, a challenge
@@ -633,7 +765,8 @@ page). It asks `r.jina.ai` for the page, which needs no install and no key, and 
 for a block: `r.jina.ai` answers HTTP 200 with the site's challenge page inside, so its status
 alone would take a block for a page. A page is printed whole with exit 0. A block at this rung
 exits 3 and says why and what the next rung is: the built-in browser's `get_page_text`. The
-`resume --pause` hook names this command after a WebFetch answered 402, 403, 429 or 503.
+`resume --pause` hook names this command after a WebFetch answered 402, 403, 429 or 503, and after one
+that failed as a tool error.
 
 It sends no cookie and no key. The URL goes to a third party, so a host that is not public (no
 dot, loopback, a private address), a URL with a user or a password, or a query parameter named

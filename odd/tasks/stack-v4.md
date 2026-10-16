@@ -21,8 +21,8 @@ F5 A/B run needs the `current` arm fixed at these versions before it measures an
 - `node --test bin/lib/stack.test.mjs bin/lib/payload.test.mjs` exits 0
 - `node bin/js-harness.mjs doctor` shows gentle-ai 4.0.0 with every column `ok`
 - `node bin/js-harness.mjs progress` shows the F2 step "gentle-ai v4 adopted when released" checked
-- `gentle-ai sync` leaves `model = "gpt-6.1-sol"` and `model_reasoning_effort = "high"` in
-  `~/.codex/config.toml`
+- On 2026-10-03, `gentle-ai sync` left `model = "gpt-6.1-sol"` and
+  `model_reasoning_effort = "high"` in `~/.codex/config.toml` (observed, Progress)
 
 ## In scope / Out of scope
 - In: `bin/lib/stack.mjs`, `bin/lib/payload.mjs` and their tests; `docs/ROADMAP.md`;

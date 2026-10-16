@@ -355,10 +355,38 @@ export function agentsTemplate(root) {
 \`<command>\`.
 
 ## What good looks like
+Work here is done properly, not to comply: no shortcut; under the agreed protocols; nothing stated
+that was not checked; what is passed on is complete and true; and each mistake leaves a control, of
+the smallest kind that does the job. A rule is not recorded until it has its place in a check, a
+line of this file or a protocol.
+
 A behavior change arrives with the test that proves it, written first; a finding, with the
 evidence that proves it. A claim about this project carries its evidence.
 Where the Codex review is off (\`js-harness functions\`), gentle-ai reviews every change of medium
 or high risk.
+
+Every claim is checked (with its evidence), assumed, or not known. What another session, a
+sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it.
+What is passed on says what failed and what was not checked, "nothing" when that is true.
+
+## Working with the owner
+The owner decides spend outside the plan, anything installed or changed on a machine, a product
+choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report
+published outside this project. Ask those one at a time, never while work runs, naming which it is.
+Everything else is decided, its cost said, and the work goes on.
+
+The owner's wording is the need, not the specification: an answer to a proposal of theirs says the
+need that was understood, what would be done differently from their words and why, and what it
+costs or is not known; only then is it recorded.
+
+A design before it is built, and a plan, an analysis with figures or a protocol put to the owner,
+first passes two readers that did not write it: one attacks its claims, one looks only for what is
+missing. The owner gets the improved version, with what each reader changed and what stays
+unguaranteed.
+
+A reply ends with one of four states: working (the owner sends nothing; say what wakes the work),
+decision (one question for the owner, never while work runs), cut (a new session, with the text to
+send it), or finished (name where to return).
 
 ## Constraints
 - <a real constraint> — <the reason behind it>
@@ -366,6 +394,27 @@ or high risk.
 A constraint the gate must hold gets an id in docs/rules.json (\`js-harness rules\`).
 `;
 }
+
+/** The empty failures register `init` writes as `docs/FAILURES.md` when a project has none: what an entry is and how
+ * one is written, with no class and no entry, since the classes are the project's own. `js-harness failures` and the
+ * gate's `failures` row read it (`bin/lib/failures.mjs`); it parses with no fault. */
+export const FAILURES_TEMPLATE = `<!-- Written by \`js-harness init\`. -->
+# Failures
+
+What went wrong in this project: one entry per failure, with each time it was seen and the control
+that corrects it. A failure is work that went wrong in a way a control could prevent. A test that
+fails and is fixed inside its own task is not one: the gate is that control, working.
+
+A class is declared under "## Classes" as a list item: the id in backticks, then what it means. A
+failure is a "### <id>" entry under "## Entries", in the alphabetical order of the ids, with
+"- Class:" and one "- Seen:" line each time it happens, then the "- Control:" that corrects it. Its
+state is never written: \`js-harness failures\` computes it, and \`js-harness failures check
+--settled\` exits 1 while an entry is not settled.
+
+## Classes
+
+## Entries
+`;
 
 /** A semver version (semver.org's grammar, without a leading `v`): what `harness.json` may pin. */
 const SEMVER =
@@ -824,6 +873,29 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       const hash = sha256(content);
       files.push({ path: agentsRel, sha256: hash });
       actions.push(wrote(agentsRel, hash));
+    }
+
+    // The failures register, empty, under the same terms as AGENTS.md: only when the project has none, and
+    // never by sync in a clone (odd/tasks/rule-hierarchy.md, T9). A `docs/` this run makes is recorded, so
+    // uninstall removes it while it is empty. Its folder is judged as the hooks path is: a link that sends it
+    // outside the working tree is never written through, since uninstall would not follow it back.
+    const registerPath = path.join(root, 'docs', 'FAILURES.md');
+    const registerRel = toRepoRelative(root, registerPath);
+    const register = resolveHookContainment(root, registerPath);
+    if (register.outside) {
+      actions.push(kept(toForwardSlashes(register.real), 'a link sends docs/ outside the repository; the failures register is not written there', true));
+    } else if (register.occupied) {
+      actions.push(kept(registerRel, clone ? 'committed' : 'exists'));
+    } else if (clone) {
+      actions.push({ kind: 'skip', path: registerRel, reason: 'not in this clone; sync does not create one' });
+    } else {
+      const docsShallow = mkdirTracked(path.dirname(registerPath), root, createdDirs);
+      if (docsShallow) reportedDirs.push({ absolute: docsShallow, isWorkingTree: true });
+      createdPaths.push(registerPath);
+      writeFile(registerPath, FAILURES_TEMPLATE, 'utf8');
+      const hash = sha256(FAILURES_TEMPLATE);
+      files.push({ path: registerRel, sha256: hash });
+      actions.push(wrote(registerRel, hash));
     }
 
     // Pre-commit gate (see `writeHookGate`) and codegraph init (see `codegraphStep`): the two steps a
