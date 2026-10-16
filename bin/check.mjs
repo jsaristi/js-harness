@@ -1492,7 +1492,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // The ticket of this gate's session, claimed as it arrives and so spent whatever comes next: a gate that
   // stops, is proven by its tree or is refused spends it too, and its tree cannot jump the line twice
   // (./lib/gate-first.mjs). Not by a gate in the turn of the process that started it, which waits for nobody.
-  const claimed = lock && lock.held !== true && lock.home !== undefined ? claimOf(lock, cwd, deps) : null;
+  // The ticket rides on `lock` to the turn (`underGateLock`), `first` being `null` where none was claimed.
+  if (lock && lock.held !== true && lock.home !== undefined) lock = { ...lock, first: claimOf(lock, cwd, deps) };
   // The stop, here and not sooner: both declarations are read and this gate would now run its sensors.
   if (lock?.stoppedBy?.length) {
     record?.stopped({ rows: lock.stoppedBy });
@@ -1603,7 +1604,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return underGateLock(cwd, { ...lock, first: claimed }, deps, run, record);
+  return underGateLock(cwd, lock, deps, run, record);
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
