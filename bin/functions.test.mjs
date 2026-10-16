@@ -111,3 +111,132 @@ test('an argument it does not take is a usage error: exit 2, nothing on stdout',
   assert.equal(out, '');
   assert.match(err, /^unknown argument: --apply-everything\n\nUsage: js-harness functions/);
 });
+
+// --- apply and set: what the switches write in this clone (slice 2) ---
+
+/** Real git; a fake `codegraph` that makes `.codegraph` as the real one does. */
+function fakeCodegraph(cmd, args, opts) {
+  if (cmd === 'git') return spawnSync('git', args, opts);
+  fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+  return { status: 0, stdout: '', stderr: '' };
+}
+
+async function run(cwd, ...argv) {
+  const out = [];
+  const err = [];
+  const code = await functionsMain(argv, process.env, {
+    cwd,
+    stdout: (line) => out.push(line),
+    stderr: (line) => err.push(line),
+    spawn: fakeCodegraph,
+    platform: 'linux',
+  });
+  return { code, out, err };
+}
+
+const settingsOf = (root) => JSON.parse(fs.readFileSync(path.join(root, '.claude', 'settings.local.json'), 'utf8'));
+
+test('apply in a project with no pin writes what the switches ask, in a manifest of its own that uninstall undoes', async (t) => {
+  const root = repo(t, { 'bin/a.mjs': 'x', 'harness.json': '{ "sensors": [] }\n' });
+  const applied = await run(root, 'apply');
+  assert.equal(applied.code, 0, applied.err.join('\n'));
+  assert.deepEqual(applied.out, [
+    'wrote .git/hooks/pre-push',
+    'ran codegraph init',
+    'wrote .claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
+    'wrote .claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
+  ]);
+  assert.deepEqual(settingsOf(root), {
+    env: { CODEGRAPH_NO_PROMPT_HOOK: '1' },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': false },
+  });
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, '.git', 'js-harness', 'manifest.json'), 'utf8'));
+  assert.deepEqual(manifest.files.map((f) => f.path), ['.git/hooks/pre-push']);
+  assert.deepEqual(manifest.codegraph, { createdDir: true, status: 'ok' });
+
+  assert.deepEqual(await run(root, 'apply'), { code: 0, out: ['functions: this clone already is what its switches ask'], err: [] });
+
+  const { uninstallProject } = await import('./lib/project.mjs');
+  assert.equal(uninstallProject(root, { spawn: fakeCodegraph }).code, 0);
+  assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), '{ "sensors": [] }\n');
+  for (const gone of ['.claude', '.codegraph', '.git/hooks/pre-push', '.git/js-harness/manifest.json']) {
+    assert.equal(fs.existsSync(path.join(root, gone)), false, gone);
+  }
+});
+
+test('apply where nothing is to be written writes no manifest', async (t) => {
+  // The map always on with its index already there, the plugin on, no push check: nothing to write.
+  const root = repo(t, {
+    'notes.md': 'x',
+    '.codegraph/index.db': 'x',
+    'harness.json': '{ "functions": { "codeMap": "always", "languageServer": "on", "codexReview": "off" } }\n',
+  });
+  assert.deepEqual(await run(root, 'apply'), { code: 0, out: ['functions: this clone already is what its switches ask'], err: [] });
+  assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
+});
+
+test('apply with no harness.json, or a switch that cannot be read, applies nothing and exits 1', async (t) => {
+  const bare = repo(t, { 'bin/a.mjs': 'x' });
+  assert.deepEqual(await run(bare, 'apply'), { code: 1, out: [], err: ['no harness.json here: js-harness init writes one'] });
+
+  const bad = repo(t, { 'bin/a.mjs': 'x', 'harness.json': '{ "functions": { "codeMap": "sometimes" } }\n' });
+  const result = await run(bad, 'apply');
+  assert.equal(result.code, 1);
+  assert.match(result.err.join('\n'), /^harness\.json "functions" failed: .*codeMap.*sometimes.*no switch was applied$/m);
+  assert.equal(fs.existsSync(path.join(bad, '.claude')), false);
+});
+
+test('set writes the switch into harness.json in its own layout, and applies it', async (t) => {
+  const root = repo(t, { 'bin/a.mjs': 'x', 'harness.json': '{\r\n\t"sensors": []\r\n}\r\n' });
+  await run(root, 'apply');
+  const set = await run(root, 'set', 'codeMap', 'always');
+  assert.equal(set.code, 0, set.err.join('\n'));
+  assert.deepEqual(set.out, [
+    'harness.json: functions.codeMap is always',
+    'removed .claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
+  ]);
+  assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), '{\r\n\t"sensors": [],\r\n\t"functions": {\r\n\t\t"codeMap": "always"\r\n\t}\r\n}\r\n');
+  assert.deepEqual(settingsOf(root), { enabledPlugins: { 'typescript-lsp@claude-plugins-official': false } });
+});
+
+test('set refuses a switch or a value the table does not have, and writes nothing', async (t) => {
+  const root = repo(t, { 'harness.json': '{}\n' });
+  assert.deepEqual(await run(root, 'set', 'codeMap', 'sometimes'), {
+    code: 1,
+    out: [],
+    err: ['codeMap takes auto, on-demand, always, off, not sometimes'],
+  });
+  assert.deepEqual(await run(root, 'set', 'paste', 'off'), {
+    code: 1,
+    out: [],
+    err: ['paste is no switch; the switches are codeMap, languageServer, codexReview'],
+  });
+  assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), '{}\n');
+});
+
+test('apply and set take no --json and no other word: a usage error, exit 2', async (t) => {
+  const root = repo(t, { 'harness.json': '{}\n' });
+  for (const argv of [['apply', '--json'], ['set', 'codeMap'], ['apply', 'now'], ['remove']]) {
+    const { code, out, err } = await run(root, ...argv);
+    assert.equal(code, 2, argv.join(' '));
+    assert.deepEqual(out, []);
+    assert.match(err.join('\n'), /^unknown argument: .*\n\nUsage: js-harness functions/);
+  }
+});
+
+test('set and apply outside a git repository write nothing, and a folder that does not exist is said so', async (t) => {
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-functions-cmd-nogit-'));
+  t.after(() => fs.rmSync(plain, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(plain, 'harness.json'), '{}\n');
+  for (const argv of [['set', 'codeMap', 'off'], ['apply']]) {
+    assert.deepEqual(await run(plain, ...argv), {
+      code: 1,
+      out: [],
+      err: ['not inside a git repository: functions apply and set act on a project'],
+    });
+  }
+  assert.equal(fs.readFileSync(path.join(plain, 'harness.json'), 'utf8'), '{}\n');
+
+  const missing = path.join(plain, 'no-such-folder');
+  assert.deepEqual(await run(plain, 'apply', '--cwd', missing), { code: 1, out: [], err: [`no such directory: ${missing}`] });
+});

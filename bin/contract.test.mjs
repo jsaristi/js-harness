@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { contractMain, discoverContracts, validateEntries } from './contract.mjs';
+import { DEFAULT_TIMEOUT_MINUTES, contractMain, discoverContracts, validateEntries } from './contract.mjs';
 import { CONTRACT_TEMPLATE } from './lib/contract.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 
@@ -328,9 +328,9 @@ test('run from a subdirectory runs the commands from the repository root', { ski
 
 // --- run: a timeout for every command ---
 
-test('run gives each command a 30 minute timeout by default, and --timeout <minutes> changes it', async () => {
+test('run gives each command the declared timeout by default, and --timeout <minutes> changes it', async () => {
   const md = contractWith('- `first` exits 0');
-  assert.equal((await runWithFake(md, {})).calls[0].opts.timeout, 30 * 60 * 1000);
+  assert.equal((await runWithFake(md, {})).calls[0].opts.timeout, DEFAULT_TIMEOUT_MINUTES * 60 * 1000);
   assert.equal((await runWithFake(md, {}, { args: ['--timeout', '2'] })).calls[0].opts.timeout, 2 * 60 * 1000);
 });
 
@@ -343,7 +343,7 @@ test('a command that times out is a FAIL row saying so, the next command still r
   assert.match(stdout, /^FAIL {2}first {2}\(timed out after 2 min\)$/m);
   assert.match(stdout, /partial/);
   assert.equal(stdout.split('\n').at(-1), 'not met');
-  assert.match((await runWithFake(md, { first: timedOut })).stdout, /\(timed out after 30 min\)/);
+  assert.ok((await runWithFake(md, { first: timedOut })).stdout.includes(`(timed out after ${DEFAULT_TIMEOUT_MINUTES} min)`));
 });
 
 /** Waits until `holds()` is true, asking every 100 ms for up to `ms`; whether it came true. */
@@ -587,4 +587,71 @@ test('goal exits 1 saying so when the condition is over the 4000-character /goal
   assert.equal(code, 1);
   assert.equal(stdout, '');
   assert.match(stderr, /4,000/);
+});
+const WITH_TASKS = `${GOOD}\n## Tasks\n- [x] T1 (kind: design) Done already\n- [ ] T2 (kind: build) The parser\n- [ ] T3 The rest\n`;
+
+/** `contract modes` (or `goal`) on WITH_TASKS in a repository whose rules-data.mjs is this copy's own,
+ * so the repository rows are declared, or in a folder with none. */
+async function modesFor(argv, { rules = true, markdown = WITH_TASKS } = {}) {
+  const dir = makeTmpDir();
+  try {
+    const file = path.join(dir, 'odd', 'tasks', 'c.md');
+    writeFile(file, markdown);
+    if (rules) writeFile(path.join(dir, 'bin', 'lib', 'rules-data.mjs'), fs.readFileSync(new URL('./lib/rules-data.mjs', import.meta.url), 'utf8'));
+    const spawn = () => ({ status: 0, stdout: `${dir}\n` }); // git rev-parse --show-toplevel answers the folder
+    return await run([argv[0], file, ...argv.slice(1)], { spawn, harnessPath: HARNESS, cwd: dir });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('modes prints one line per open task with its kind, effort and models, and exits 0', async () => {
+  const { code, stdout, stderr } = await modesFor(['modes']);
+  assert.equal(code, 0, stderr);
+  assert.deepEqual(stdout.split('\n'), [
+    'T2 (kind: build): session high; writers haiku, readers opus; every sub-agent at high',
+    'T3 (no kind): session high; writers haiku, readers opus; every sub-agent at high',
+  ]);
+});
+
+test('modes --task prints that task, done or not; an unknown task exits 1 saying so', async () => {
+  const done = await modesFor(['modes', '--task', 'T1']);
+  assert.equal(done.code, 0, done.stderr);
+  assert.equal(done.stdout, 'T1 (kind: design): session high; readers opus; every sub-agent at high');
+  const missing = await modesFor(['modes', '--task', 'T9']);
+  assert.equal(missing.code, 1);
+  assert.match(missing.stderr, /no task T9 in /);
+});
+
+test('modes in a project that declares no rules says so for each open task', async () => {
+  const { code, stdout } = await modesFor(['modes'], { rules: false });
+  assert.equal(code, 0);
+  assert.deepEqual(stdout.split('\n'), [
+    'T2 (kind: build): no effort or model declared in this project',
+    'T3 (no kind): no effort or model declared in this project',
+  ]);
+});
+
+test('modes with no open task says so and exits 0; --task is only modes\' (usage error, exit 2)', async () => {
+  const none = await modesFor(['modes'], { markdown: GOOD });
+  assert.equal(none.code, 0);
+  assert.match(none.stdout, /^no open task in /);
+  const wrong = await run(['run', 'c.md', '--task', 'T1']);
+  assert.equal(wrong.code, 2);
+});
+
+test('goal keeps its stdout the condition alone and prints the open tasks\' modes on stderr', async () => {
+  const { code, stdout, stderr } = await modesFor(['goal']);
+  assert.equal(code, 0, stderr);
+  assert.ok(!stdout.includes('\n') && !stdout.includes('(kind:'), stdout);
+  assert.deepEqual(stderr.split('\n'), [
+    'T2 (kind: build): session high; writers haiku, readers opus; every sub-agent at high',
+    'T3 (no kind): session high; writers haiku, readers opus; every sub-agent at high',
+  ]);
+});
+
+test('goal on a contract with no open task prints nothing on stderr', async () => {
+  const { code, stderr } = await modesFor(['goal'], { markdown: GOOD });
+  assert.equal(code, 0);
+  assert.equal(stderr, '');
 });

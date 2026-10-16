@@ -32,6 +32,13 @@ after(() => {
   fs.rmSync(configDir, { recursive: true, force: true });
 });
 
+/** A program in the repository at `dir`, so the code map resolves on and `codegraph init` runs
+ * (odd/tasks/on-demand-functions.md: an empty repository holds no code). */
+function withProgram(dir) {
+  fs.writeFileSync(path.join(dir, 'index.js'), '', 'utf8');
+  return dir;
+}
+
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-home-'));
 }
@@ -152,7 +159,7 @@ test('installMain refuses a word it does not know before it writes anything: exi
       for (const words of [argv, ['--home', home, ...argv], [...argv, '--home', home]]) {
         const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
         assert.equal(code, 2, words.join(' '));
-        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>]`], words.join(' '));
+        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]`], words.join(' '));
         assert.deepEqual(outLines, [], words.join(' '));
         assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
       }
@@ -168,7 +175,7 @@ test('installMain refuses --home with no path after it: exit 2, and nothing is w
     for (const words of [['--home'], ['--home', '--home', home]]) {
       const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
       assert.equal(code, 2, words.join(' '));
-      assert.deepEqual(errLines, ['--home requires a value\n\nUsage: js-harness install [--home <path>]'], words.join(' '));
+      assert.deepEqual(errLines, ['--home requires a value\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]'], words.join(' '));
       assert.deepEqual(outLines, [], words.join(' '));
       assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
     }
@@ -304,10 +311,13 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
       `registered hook entry in ${settings}: js-harness resume --hook (SessionStart, matcher compact)`,
       `registered hook entry in ${hooks}: js-harness resume --hook (SessionStart, matcher compact)`,
       `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUse)`,
+      `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)`,
+      `registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$)`,
+      `registered hook entry in ${settings}: js-harness guard --stop || exit 0 (Stop)`,
     ]);
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
-    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
+    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, settings, settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
     assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -846,7 +856,7 @@ test('uninstallMain rejects --global combined with --cwd, exit 2', async () => {
 });
 
 test('uninstallMain --cwd undoes the project and prints its own report', async () => {
-  const root = makeTmpProjectRepo();
+  const root = withProgram(makeTmpProjectRepo());
   try {
     const initResult = initProject(root, '0.1.0', { spawn: fakeCodegraphSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);
@@ -1048,7 +1058,7 @@ test('syncMain rejects --global combined with --cwd, exit 2', async () => {
 });
 
 test('syncMain --cwd sets a fresh clone up, prints what it wrote, and a second run says up to date', async () => {
-  const root = makeTmpClone();
+  const root = withProgram(makeTmpClone());
   try {
     const first = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
 
@@ -1100,7 +1110,7 @@ test('syncMain --cwd restores a gone hook and prints it', async () => {
 });
 
 test('syncMain --cwd reports a codegraph failure on stderr and still exits 0', async () => {
-  const root = makeTmpClone();
+  const root = withProgram(makeTmpClone());
   try {
     const failing = (cmd, args, opts) =>
       cmd === 'git' ? spawnSync('git', args, opts) : { status: 1, stdout: '', stderr: 'codegraph exploded' };
@@ -1206,6 +1216,30 @@ test('syncMain --cwd reports a malformed manifest, exit 1', async () => {
 
     assert.equal(code, 1);
     assert.ok(errLines.some((l) => l.includes('is malformed')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// A manifest written by a newer copy holds what this one cannot undo (odd/tasks/on-demand-functions.md, slice 2):
+// both commands refuse, say which copy wrote it, and touch nothing.
+test('syncMain and uninstallMain --cwd refuse a project manifest of a newer format, exit 1', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    const initResult = initProject(root, currentVersion(), projectDeps());
+    const written = JSON.stringify({ ...initResult.manifest, format: 99 });
+    fs.writeFileSync(initResult.manifestPath, written, 'utf8');
+
+    for (const main of [() => syncMain(['--cwd', root], process.env, projectDeps()), () => uninstallMain(['--cwd', root])]) {
+      const { code, errLines } = await captureConsole(main);
+      assert.equal(code, 1);
+      assert.ok(
+        errLines.some((l) => l.includes('in format 99, and this copy reads format 1') && l.includes('run that version of js-harness')),
+        errLines.join('\n'),
+      );
+    }
+    assert.equal(fs.readFileSync(initResult.manifestPath, 'utf8'), written);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -39,8 +39,13 @@ after(() => {
   for (const dir of made) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
 });
 
-/** The environment the comparison is given: the host's, without a Codex home or a state dir of the user's. */
-const hostEnv = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(codex_home|js_harness_home|engram_.*)$/i.test(name)));
+/** The environment the comparison is given: the host's, without a Codex home or a state dir of the user's, and
+ * without the mark of a gate's turn (`JS_HARNESS_GATE_HELD`), which the gate sets for its sensors and a run by
+ * hand does not: inherited, it made these tests pass in the gate and fail by hand (docs/FAILURES.md). */
+const hostEnv = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(codex_home|js_harness_home|js_harness_gate_held|engram_.*)$/i.test(name)));
+
+/** `hostEnv` in a turn of the machine's gate lock, where a cell is run (`js-harness gate -- ...`). */
+const inTurn = () => ({ ...hostEnv(), JS_HARNESS_GATE_HELD: '1' });
 
 function git(cwd, ...args) {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -104,6 +109,9 @@ function fakeRepository(m, extra = {}) {
   git(root, 'config', 'core.autocrlf', 'false');
   fs.writeFileSync(path.join(root, 'odd', 'tasks', 'feature.md'), FEATURE_DOC, 'utf8');
   fs.writeFileSync(path.join(root, 'f.txt'), 'one\n', 'utf8');
+  // A repository with no program reads the Codex review's switch as off and `codex-review` starts nothing
+  // (odd/tasks/on-demand-functions.md, S7): it holds one, unchanged by the range, so a cell's review runs.
+  fs.writeFileSync(path.join(root, 'tool.js'), 'export const tool = 1;\n', 'utf8');
   for (const [name, content] of Object.entries(extra)) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), content, 'utf8');
@@ -253,7 +261,7 @@ async function run(argv, m, fake = nothingStarts(), extra = {}) {
   const code = await compareMain(argv, {
     log: (line) => out.push(line),
     error: (line) => err.push(line),
-    env: hostEnv(),
+    env: inTurn(),
     homedir: () => m.oshome,
     repoRoot: m.repository?.root ?? path.join(m.root, 'no-repository'),
     ranges: m.repository?.ranges ?? RANGES,
@@ -933,6 +941,23 @@ test('lean-codegraph refuses, before anything is made, when the user\'s configur
   const result = await run(['--cell', 'lean-codegraph:real'], m, fake, { configToml: m.configToml });
   assert.equal(result.code, 1);
   assert.match(result.err, /\[mcp_servers\.codegraph\]/);
+  assert.deepEqual([fake.calls.length, fake.tools.length], [0, 0]);
+  assert.deepEqual(entries(m.parent), []);
+  assert.deepEqual(entries(m.readings), []);
+});
+
+// --- a cell runs in a turn of the gate lock ---
+
+// Out of a turn, codex-review asks its own prompt and keeps Codex from the suite (e06cf68), so a `lean` cell
+// would be measured as another configuration than its name. It is refused, with the command that runs it.
+test('a cell out of a turn of the gate lock is refused before anything is made, with the command that runs it', async () => {
+  const m = machine();
+  m.repository = fakeRepository(m);
+  const fake = fakeCodex();
+  const result = await run(['--cell', 'lean:real'], m, fake, { env: hostEnv() });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /^Cell lean:real runs in a turn of the machine's gate lock/m);
+  assert.match(result.err, /js-harness gate -- node evals\/review\/compare\.mjs --cell lean:real/);
   assert.deepEqual([fake.calls.length, fake.tools.length], [0, 0]);
   assert.deepEqual(entries(m.parent), []);
   assert.deepEqual(entries(m.readings), []);

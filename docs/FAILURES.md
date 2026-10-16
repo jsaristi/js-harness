@@ -69,8 +69,8 @@ commits of `main` and answer with a range many times too large.
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — `main` had moved without being merged
   in, and an assessment asked with `--base-ref origin/main` counted 2,552 lines that were not the
   branch's; the branch point as the base gave the real range
-- Control: owed — odd/tasks/commands-and-doctor.md — "The push row hints the merge commit as the base
-  after `main`"
+- Control: check — bin/check-codex-reviews.test.mjs — "after main is merged in, the push row hints
+  the base the plain row sizes" — since 2026-10-14
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
@@ -78,7 +78,11 @@ run.
 - Class: asked-of-him
 - Seen: 2026-10-07 — odd/tasks/codex-review-lean.md:528-529 — read three times as a task to run in
   Codex; also docs/ROADMAP.md:1075-1077 and odd/tasks/rule-hierarchy.md:162
-- Control: line — AGENTS.md — "never an instruction: one was read as his task." — since 2026-10-09
+- Control: protocol — bin/lib/manifest.mjs — "Every question of the project reaches the user in one
+  place" — since 2026-10-14
+- Was: line — AGENTS.md — "never an instruction: one was read as his task." — replaced on
+  2026-10-14, when a decision moved from a block he sends to the question tool, by his words (the
+  lead's transcript 65318fd5, lines 12735 and 13110)
 
 ### block-referred-by-hour
 A block he had not used yet was referred to by the hour it was given ("the block of 08:35") instead
@@ -86,10 +90,15 @@ of being repeated, and he had to search for it from the phone.
 - Class: asked-of-him
 - Aka: failure 3 (odd/tasks/rule-hierarchy.md; relief file, line 143)
 - Seen: 2026-10-10 — relief file, line 142 — his words: "no me aparece el bloque del JH2"
-- Control: owed — odd/tasks/session-channel.md — "The failures this feature owns closed with their
-  proofs"
+- Control: check — bin/notify.test.mjs — "record with the clock, the sender, the role, the kind, the
+  text and where it ran, then prints the address" — since 2026-10-11
 - Proof: notices carried by his paste, counted by the board: 0 in the stretch of its "Done when"
-  (owed: nothing prints it yet)
+  (owed: T9 and T11 of odd/tasks/session-channel.md; nothing prints it yet)
+- Was: owed — odd/tasks/session-channel.md — "The failures this feature owns closed with their
+  proofs" — replaced on 2026-10-15, when T12 closed, by the control the failure's row names in
+  odd/tasks/rule-hierarchy.md ("no block for another session; a notice is a record"): a notice
+  between sessions is a line of the record since pull request 59 (2026-10-11), not a block he
+  carries
 
 ### board-read-loads-gate
 A read of the board is heavy enough to slow a gate, and watches and waiting scripts read it while
@@ -140,6 +149,25 @@ check said or before its answer was read.
   nothing went out that its check would have stopped
 - Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
 
+### check-survivor-test-fails
+A gate failed on one test of `bin/check.test.mjs`, "checkSensor kills a background process the command
+left behind, and still passes", in a change that the test does not read, and the file passed alone. In
+WSL2 the test's command is `node child.js &`: the survivor is the shell's background child, and the test
+asserts the sensor returns within 60 s, passes, and that the survivor is gone within its bound. The
+cause, reproduced in WSL2 by a survivor that writes its pid after 2.5 s: once the shell exits, the sensor
+waits for the pipes only for its grace (`PIPE_GRACE_MS`, 2 s, `bin/check.mjs`) and then kills what the
+shell left, so a survivor slower than that to start dies before it writes its pid. The test's shell now
+waits for the pid before it exits.
+- Class: machine
+- Seen: 2026-10-15 — gate df5cd3cb of `D:\js-harness-worktrees\honesty-audit` (JH 15), in WSL2, end at
+  15:48Z, by the gate log and the lead's notice — the only failing test of the run; its commit on
+  feat/honesty-eval was refused, and the file passed alone on rerun — its output (JH 15's scratchpad
+  `commit-pilot.log`, lines 5650 to 5663, read here): after 2,033 ms, `ENOENT ... survivor.pid` from the
+  `readFileSync` of line 517, so the survivor never wrote its pid file; likely (not yet proven) the
+  shell exits at once and the sensor kills what it left before a node slowed by load has started
+- Control: check — bin/check.test.mjs — "checkSensor kills a background process the command left behind,
+  and still passes" — since 2026-10-15
+
 ### checked-not-read
 A record or a message said "checked" for something that had not been read, or that was another
 session's claim.
@@ -153,8 +181,17 @@ session's claim.
 - Seen: 2026-10-11 — relief file, line 290 — a transcript line cited as his words from a text search,
   without reading the entry's type: it was a queue entry with the same text (the orchestrator's own
   report)
-- Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
-  first"
+- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
+
+### citations-test-reads-clock
+A test of citations cited a fresh commit's short hash, which a citation must hold a digit and a
+letter to be (`bin/lib/citations.mjs:11`): about one run in 27 the hash came out all digits, was no
+citation, and the test failed by the clock alone.
+- Class: tool
+- Seen: 2026-10-14 — odd/tasks/exact-tests.md, L9 — two gates of feat/exact-tests (19:28 and 19:56)
+  failed it, the second in shadow, where selection would have skipped it
+- Control: check — bin/check-citations.test.mjs — "only the lines a staged change adds to a feature
+  document are read, and each unresolved citation is a line" — since 2026-10-14
 
 ### cli-updated-itself
 A tool of the measured stack updated itself and nobody saw it until a measurement was about to run
@@ -208,8 +245,8 @@ A session ran a command it did not know, to read its help, and the command acted
   installed four files and a hook entry on his machine
 - Seen: 2026-10-12 — relief file, line 409 — JH 8 ran `check --help` and it started a gate, which
   went to wait and was stopped before it ran anything (claimed)
-- Control: owed — odd/tasks/commands-and-doctor.md — "The five lenient commands above refuse an
-  unknown"
+- Control: check — bin/writing-flags.test.mjs — "exits 2, names the flag and writes nothing" — since
+  2026-10-14
 
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at
@@ -270,9 +307,11 @@ session can neither be told nor tell, and each notice becomes his paste.
   (given at line 134, pasted at line 143)
 - Seen: 2026-10-13 — relief file, line 550 — three messages of JH 7, written between 00:52 and
   01:10, reached the lead after 04:20, held by the host
-- Control: owed — odd/tasks/session-channel.md — "The row `session-classes` of `doctor`, with the
-  exact fix in its line"
-- Proof: a practice step: a notice read with no message sent (owed: nothing prints it yet)
+- Control: check — bin/doctor.test.mjs — "as the session-classes gap, whose fix is the install
+  flag" — since 2026-10-14
+- Proof: a practice step: a notice read with no message sent (owed: the journey's step `channel`,
+  `scripts/practice-lib.mjs` JOURNEY, ran "13 of 13 steps passed" on b0d0af2 in draft pull request
+  199, not on main yet; odd/tasks/session-channel.md, Progress, 2026-10-15 06:27)
 
 ### design-not-faithful
 A design document passed gentle-ai and its own contract and still dropped or misstated decisions of
@@ -280,7 +319,8 @@ his and named files that do not exist.
 - Class: delivery
 - Seen: 2026-10-10 — relief file, line 181 — four blocking items found by a reader that did not
   write it; also odd/tasks/rule-hierarchy.md:768
-- Control: owed — odd/tasks/commands-and-doctor.md — "The row `citations`, INFO"
+- Control: check — bin/check-citations.test.mjs — "each unresolved citation is a line" — since
+  2026-10-14
 
 ### diagnostic-whole-gate
 A retry command ran a whole gate as a diagnostic after a failed commit, twenty minutes of the
@@ -299,6 +339,15 @@ commit can break a test, pass its own gate, and fail the next gate with code in 
   runs the readers of a staged document, `rules check` is run by hand after such a commit
 - Control: check — bin/check.test.mjs — "a commit of documents alone runs the sensors of documents,
   in their order and with a bound of two minutes" — since 2026-10-12
+
+### documents-merge-runs-gate
+A merge of `main` into a pull request of documents alone staged `main`'s code, so its hook ran a whole
+gate for a change that held no code.
+- Class: machine
+- Seen: 2026-10-14 — relief file, line 720 — the merge into pull request 120 ran a whole Windows check
+  at 03:09 and cost about 10 minutes of the lock; the skip owed (the merge equals its `main` parent
+  plus declared documents) is JH 8's, in docs/todo.md
+- Seen: 2026-10-14 — relief file, line 741 — at 05:40 documents commits still took a whole gate
 
 ### engram-writes-lost
 A session lost what it had written to engram after each of its two compactions.
@@ -325,8 +374,36 @@ on it.
 - Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
   06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
   the first read after 26 percent at about 04:30
-- Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
-  first"
+- Control: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off
+  the recorded one is blocked from stopping, with the reason" — since 2026-10-15
+
+### eval-interrupt-process-alive
+A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
+hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
+when the test looked, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-14 — JH 15's gate in WSL2, about 15:45, by the lead's notice of 2026-10-15 — `alive:
+  [false, true]`, the grandchild in state R at the assertion; the file passes alone
+- Seen: 2026-10-15 — JH 15's gate in WSL2, about 01:30, by the lead's notice — `alive: [false, true]`,
+  the grandchild in state R; the file passed in the gate of cfee7ae
+- Seen: 2026-10-15 — JH 10's gate of fix/pause-no-idle, in WSL2 — `alive: [false, true]` where
+  `[false, false]` was expected, pid 22809; the only failing test of the run
+- Seen: 2026-10-15 — JH 8's gate of fix/launcher-at-start, in WSL2 — the second entry of `alive` true
+  where false was expected, pid 22900 "answers" at the exit; the only failing test of the run, in a
+  change that touched nothing of the evals, and one of the files the shadow would have skipped
+
+### eval-missing-login-workroot-kept
+A run on GitHub failed on one test of `evals/codex-configs.test.mjs`, "a missing login stops the trial
+before the agent starts", because the work root still held the trial's directory when the test read
+it, in a change that touched nothing of the evals.
+- Class: machine
+- Seen: 2026-10-15 — PR 185's GitHub run 38705933668, on Linux, by the lead's notice — line 198,
+  `readdirSync(workRoot)` gave `['eval-m3TuMV']` where `[]` was expected: its cleanup had not ended
+- Seen: 2026-10-15 — PR 185's GitHub run 38722955417, on Linux, by the lead's message to JH 21 —
+  `actual: [ 'eval-k9fHPH' ]` where `[]` was expected, under `--test-concurrency=2`; the only failing
+  test of the run (odd/tasks/drop-github-gate.md L2)
+- Control: check — evals/configs.test.mjs — "the fixture commit starts no git maintenance: nothing of
+  it writes in the workspace once prepare has returned" — since 2026-10-15
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
@@ -348,6 +425,19 @@ row"); that tells the load and stops nothing.
   odd/tasks/gate-log.md:590-596
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — the gate on the result of merging
   `main` in timed out at 1,206 s with 3,195 tests passed and none failed; run again, it passed
+
+### gate-mark-hides-failures
+Tests passed in the gate and failed when run by hand. They inherited the gate's mark of a held turn
+(`JS_HARNESS_GATE_HELD=1`), which changes what the code under test does, so no gate could see them fail.
+The gate also runs its tests in WSL, so a failure that only Windows shows is out of its sight too. Only a
+run by hand on Windows, out of a turn, sees both.
+- Class: unseen-state
+- Seen: 2026-10-15 — evals/review/compare.test.mjs — since e06cf68 ("run the review out of the gate
+  lock"), six tests of the review comparison failed when run by hand and passed in the gate. The failure
+  was taken for a Windows-only one until a bisect of the one test showed that the mark decided it, not
+  the platform
+- Control: check — evals/review/compare.test.mjs — "a cell out of a turn of the gate lock is refused before
+  anything is made, with the command that runs it" — since 2026-10-15
 
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
@@ -385,6 +475,12 @@ A test run or a count started while a gate, or a batch that measures durations, 
   odd/tasks/gate-lock.md:1033-1045
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:594-596 — a writer ran a count outside the lock for about
   four minutes beside a gate (its own report)
+- Seen: 2026-10-15 — docs/FAILURES.md, gate-mark-hides-failures — JH 9 and its bisecting sub-agent each
+  ran the whole of evals/review/compare.test.mjs (65 to 132 s) outside the lock, beside gates in line
+  (their own reports)
+- Seen: 2026-10-16 — odd/tasks/rule-hierarchy.md, Progress of 2026-10-16 — JH 7's verifier ran
+  bin/lib/rules-change-run.test.mjs (about 200 s) outside the lock beside JH 7's own gate, which
+  failed on a sensor test that passed alone three times
 - Control: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — since
   2026-10-11
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
@@ -433,8 +529,18 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
   05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
   relief line, not a feature document
-- Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
-  of the clock, and says the command wrote it" — since 2026-10-11
+- Control: check — bin/guard.test.mjs — "a Write or an Edit of a Markdown file whose line opens with
+  today and an hour ahead of the clock is denied" — since 2026-10-15
+- Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
+  either tool, is denied when its stamped hour is off the clock", on main since pull request 157
+  (2026-10-14); a feature document or a committed block: the control above
+  (bin/lib/document-hour-guard.mjs, T12b), which refuses only an hour ahead of the clock, since a
+  document also records earlier events
+- Was: owed — odd/tasks/session-channel.md — "An hour a session writes in a feature document or a
+  block it commits is read from the clock" — from 2026-10-15 until T12b was built the same day
+- Was: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
+  of the clock, and says the command wrote it" — since 2026-10-11; seen again on 2026-10-12 to
+  2026-10-14 in messages and a feature document, which it does not stamp; replaced on 2026-10-15
 
 ### init-leaves-codegraph-files
 `init` runs `codegraph init`, which writes files under the home that no manifest records, so
@@ -446,6 +552,8 @@ exactly.
   `.codegraph/telemetry.json`, beside the empty `.claude/`, `.codex/` and `AppData/Roaming/`; the
   fix (record what `codegraph init` creates, or remove those two files on uninstall) is JH 9's, in
   docs/todo.md
+- Control: check — bin/lib/project.test.mjs — "runCodegraphInit runs codegraph with DO_NOT_TRACK=1, so it
+  writes nothing under the home, on every platform" — since 2026-10-14
 
 ### installed-copy-stale
 The command on PATH was an old copy with no way to tell: the version reads 0.1.0 before and after,
@@ -526,6 +634,23 @@ review covers everything the merge brought, code that already had its review.
   the rule that makes such a merge a code commit is `bin/lib/codex-review-coverage.mjs:207-215`.
   Narrowing the review to the lines written in the merge changes what a review covers, which is
   his to decide
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 16:20 (claimed) — in JH 12's pull request 144, a
+  merge of `main` with a one-line conflict resolved in `bin/check.mjs` (fbad613) made the push row
+  ask a review of the whole branch, 1,405 lines, about 1,030,000 Codex input tokens; the fix owed is
+  JH 10's review of a merge's conflict hunks, with a record for each commit (no task line yet)
+- Seen: 2026-10-15 — JH 7's run on `feat/rules-row` (observed) — for the merge c4b7a37 below HEAD
+  5a57a17, `codex-review --base c4b7a37` said `--base c4b7a37^` reviews it; that run planned 6
+  parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
+  in its first part. A merge is read by what was written in it only at HEAD, so a detached
+  worktree at c4b7a37 reviewed it in 1 part of 18 lines
+
+### message-cap-ran-out
+The lead's messages to sessions are limited to ten for each message he types; they ran out while he
+was away, and the sessions it could no longer tell stopped.
+- Class: tool
+- Seen: 2026-10-14 — relief file, line 748 — ten of ten sent by 06:03 (the rule at line 714); from
+  then the lead only merged what was ready; JH 8 never got its "merged" message (line 759). The fix
+  owed is JH 5's `js-harness wait` and its rule, so no session waits on a message (line 760)
 
 ### message-to-wrong-session
 A prompt or a message went to a session that was not the one for it: one that never existed, or one
@@ -648,6 +773,16 @@ The board counted the few seconds of a push's check as a second gate.
 - Seen: 2026-10-07 — odd/tasks/session-board.md:978-984 — "gate started ... while another runs" for
   a pre-push hook
 
+### push-waited-behind-measure
+A session queued a long measure in the gate before the push of its reviewed commit, so the push, and
+everything waiting on it, waited behind the measure.
+- Class: delivery
+- Seen: 2026-10-14 — relief file, line 727 — JH 8's review ended at 03:32 and its push went at about
+  03:49, behind its pair measure; the WSL gate reached `main` late; his order to fix it so it never
+  recurs (the lead's transcript ffe99ebf, line 3977)
+- Control: check — bin/gate.test.mjs — "gate refuses a turn while a commit that a push takes now waits
+  on a branch with an open pull request" — since 2026-10-14
+
 ### question-tool-holds-asker
 The question tool holds the session that asks until he answers, so a question asked while he was
 away held the lead, and the merges it owed, for seven hours.
@@ -686,6 +821,25 @@ the harness's.
 - Control: check — evals/paths.test.mjs — "exists says a path below a file is not there, where the
   system says ENOTDIR" — since 2026-10-12
 
+### remerge-chase
+Each code merge sent every other open code pull request back to merge `main` and pass a whole gate
+again, so the queue of gates grew with each merge.
+- Class: delivery
+- Seen: 2026-10-14 — relief file, line 753 — by 06:14, 124 merged `main` three times and 130 twice
+- Seen: 2026-10-14 — relief file, line 755 — by 06:27, 124 three times, 128, 130 and 129 twice, 134
+  once
+- Seen: 2026-10-14 — relief file, line 763 — after 129 merged at 14:12, 128, 130, 131 and 134 lacked
+  `main` again. In place since 14:23, outside the repository: his decision to take the exchange (the
+  lead's transcript ffe99ebf, line 5394), a code pull request merged on a green run on GitHub against
+  the `main` it lands on, by the lead's script (relief file, line 764)
+
+### reopen-tested-old-base
+A pull request reopened right after a merge was tested by GitHub against the old base, since GitHub
+computes the merge ref later.
+- Class: tool
+- Seen: 2026-10-14 — relief file, line 765 — at 14:34; in place since 14:39, outside the repository:
+  the lead's script reopens only once `refs/pull/<n>/merge^1` equals `main` (line 767)
+
 ### resume-names-wrong-maker
 The resume hook said the host had compacted a session by itself when he had typed the command.
 - Class: wrong-information
@@ -715,8 +869,9 @@ it or did not follow it.
   odd/tasks/rule-hierarchy.md:15-18
 - Seen: 2026-10-10 — relief file, line 137 — a rule changed in a memory note; a session with the new
   note loaded still proposed the cut (line 138)
-- Control: owed — odd/tasks/commands-and-doctor.md — "The row `memory-rules` of `doctor`"
-- Proof: `doctor`: no `memory-rules` gap (owed: nothing prints it yet)
+- Control: check — bin/doctor.test.mjs — "reports the rule notes of the project memory as the
+  memory-rules gap" — since 2026-10-14
+- Proof: `doctor`: no `memory-rules` gap
 
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken
@@ -724,6 +879,15 @@ path.
 - Class: tool
 - Seen: 2026-10-10 — odd/tasks/practice-project.md:577-579 — `d639bdf` carries
   `D:js-harnesspractice`
+
+### scripted-turn-hung-lock
+A scripted measure run in a turn of the gate never returned, and it held the machine's lock while the
+sessions waited.
+- Class: machine
+- Seen: 2026-10-14 — relief file, line 728 — `pair()` of the measure waited for all its children,
+  the memory sampler among them, and held the lock from 03:32:27 to 03:56:31, 24 minutes
+- Control: check — bin/gate.test.mjs — "gate hands its command a bound of wall time: 30 minutes, or
+  what --max says" — since 2026-10-14
 
 ### secret-printed
 A secret reached output that is kept: a sub-agent printed a token into its transcript, and a gate's
@@ -735,6 +899,28 @@ report could print a password from a command line.
   (claimed); also odd/tasks/gate-log.md:134
 - Control: check — bin/lib/machine-busiest.test.mjs — "scriptOf says nothing of an argument that is
   not the whole path of a file that exists, however it is spelled" — since 2026-10-11
+
+### session-never-woken
+Sessions told to start after an event armed no wait for it, so nothing woke them when it came.
+- Class: unseen-state
+- Seen: 2026-10-14 — relief file, line 758 — JH 13 idle from 03:13 and JH 15 from 03:44, both told to
+  start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
+  is armed before he leaves, in the orchestrator skill (JH 5)
+
+### session-opened-unseen
+A session was opened where he does not see it: a scheduled task opened it in the app's Routines, at
+the medium effort it inherited, and the board showed it like any other.
+- Class: unseen-state
+- Seen: 2026-10-12 — transcript 130317af, line 3443 — he was told to archive sessions he could not
+  find: "pero ninguna de esas las veo en el tablero de claude desktop, deben estar en otra parte y
+  ese es el problema"; the two sessions, cbca9769 and dd949a0e, ran at medium (measured
+  2026-10-15, odd/tasks/session-channel.md, section 17)
+- Control: check — bin/guard.test.mjs — "a scheduled-task or cloud tool that opens a session is
+  denied in the project that declares the rule, naming start_session" — since 2026-10-15
+- Proof: owed — the command of T16's layer 2, which names such a session or task until none is
+  left, exiting 0 on this machine (layer 1's board check is bin/sessions.test.mjs); the practice
+  step `opening-tools` of scripts/practice.mjs runs the refusal on the candidate; and the one real
+  try of layer 3 on his machine (a create_scheduled_task with no schedule, refused, nothing created)
 
 ### session-state-misreported
 A session was reported to him as waiting for his prompt while it still had a commit in the gate and
@@ -823,6 +1009,23 @@ an untracked path makes the review assessment answer "unassessable".
 - Seen: 2026-10-11 — relief file, line 292 — in a worktree of JH 5 during a gate; which test starts
   PowerShell with a stripped environment is not known, and nobody owns finding it (claimed)
 
+### taskstop-leaves-work-alive
+Stopping a background task of the host ends its shell and not what that shell started, so the work
+went on, and a stop was taken for done without the process list confirming it.
+- Class: tool
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), first case — the lead's keeper,
+  version 1, merged pull requests 141 and 143 after its stop
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), second case — the lead's old
+  heartbeat
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), third case — the lead's monitor
+  tail
+- Seen: 2026-10-14 — the lead's notice to JH 7 at 15:59 (claimed), fourth case — JH 5's queued
+  gate wait, whose node would have committed a half-edited tree
+- Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a — after both of its queued gate turns
+  were stopped at about 14:50, their node waiters, pids 20948 and 19624, were still in the gate's
+  queue; read in the process list by pid and stopped by pid. The fix owed is JH 8's: the gate refuses
+  a turn whose starter is dead; until then every stop is confirmed in the process list
+
 ### temp-folders-left
 A test run killed at the gate's bound never removes its temporary folders; 2,357 of them were on his
 disk.
@@ -877,8 +1080,20 @@ was not so.
   reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
   taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
   a gate now names the processes that spent the processor before its command
-- Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
-  first"
+- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
+
+### turn-ended-waiting
+Sessions ended their turn waiting for his `/compact` or for a message while he was away, so nothing
+ran.
+- Class: asked-of-him
+- Seen: 2026-10-14 — relief file, line 747 — at 06:00 JH 5 stopped to wait for his `/compact`
+  (claimed), the third of the night after JH 9 and JH 11
+- Seen: 2026-10-14 — relief file, line 756 — at 06:27 JH 7 ended on a cut at 76 percent, the fourth
+- Seen: 2026-10-14 — relief file, line 758 — nothing ran from about 06:40 to 13:34, seven hours: JH 7,
+  9, 10, 12 and 14 waited for his `/compact`, JH 5 and JH 11 for an order, JH 8 for a message, and
+  five code pull requests for a merge of `main` (line 759); his order to fix it, the lead's
+  transcript ffe99ebf, line 5141. The fix owed is JH 5's `js-harness wait` and its rule: while he is
+  not there, a turn never ends waiting; it arms a wait and works on (line 760)
 
 ### two-blocks-out-of-order
 Two blocks were given in one reply, he sent them out of order, and it cost a session.
@@ -951,5 +1166,11 @@ context until it has to be relieved.
   percent, each with a hook block of about 16 KB (a reading, not measured)
 - Seen: 2026-10-11 — relief file, line 217 — twelve points of context in an hour, most of it wakes
   with no news
-- Control: owed — odd/tasks/session-channel.md — "the watch wakes on a notice for the orchestrator"
-- Proof: reliefs per working day, from `relieved` lines: at most one (owed: nothing prints it yet)
+- Control: check — bin/sessions.test.mjs — "--watch does not return for a notice to another role,
+  nor for one the watching session wrote itself" — since 2026-10-11
+- Proof: reliefs per working day, from `relieved` lines: at most one (owed: T9 of
+  odd/tasks/session-channel.md; nothing prints it yet)
+- Was: owed — odd/tasks/session-channel.md — "the watch wakes on a notice for the orchestrator" —
+  stale once T4 was checked off; replaced on 2026-10-15 by the tests T4 left, merged in pull
+  request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
+  another role and for its own, and :2080 wakes it for a notice to the orchestrator

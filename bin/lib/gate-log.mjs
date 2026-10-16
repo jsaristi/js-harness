@@ -21,16 +21,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { ruleValue } from './rules.mjs';
 
 /** The version of a line, in each one as `v`. A reader skips the lines of another. */
 export const GATE_LOG_VERSION = 1;
 
-/** The size past which `log.jsonl` is rotated: about 700 gates at two lines each. */
-export const GATE_LOG_MAX_BYTES = 512 * 1024;
+/** The size past which `log.jsonl` is rotated: about 700 gates at two lines each. The figure is the declared
+ * rule `gate-log-size` (./rules-data.mjs). */
+export const GATE_LOG_MAX_BYTES = ruleValue('gate-log-size', 'KiB') * 1024;
 
 /** The longest command a line holds. What comes after `gate --` can hold a secret, and the whole of it is
- * of no use to a reader of the log. */
-export const GATE_COMMAND_MAX = 120;
+ * of no use to a reader of the log. The figure is the declared rule `gate-log-command` (./rules-data.mjs). */
+export const GATE_COMMAND_MAX = ruleValue('gate-log-command', 'characters');
 
 /** The variable that switches the log off, with the value `off`: nothing is written and nothing said of
  * it. For a gate that must leave no file in its home. */

@@ -137,6 +137,32 @@ gets by default. Version 2, after two readers (see "What the readers changed").
 distribution's name and node path (they live in the machine's switch file), the 60-minute ticket and
 the orchestrator's role as defaults (they are this setup's).
 
+## Codex's review out of the lock (part 2), as built
+The lead's decision (L5) and how `bin/codex-review.mjs` carries it out. A review runs in a turn only when
+its caller is in one (`JS_HARNESS_GATE_HELD=1`); otherwise it is out of the lock, and then:
+- **The preload.** Codex's environment gets `NODE_OPTIONS=--require=<bin/lib/no-test-outside-turn.cjs>`,
+  after any `NODE_OPTIONS` it was given (`noTestNodeOptions`; a path with a space goes in double quotes,
+  with each backslash doubled, since node reads one there as an escape). Every `node --test` Codex starts
+  ends at once with exit 97 and one line (`NO_TEST_LINE`); a node without `--test` runs as before, and so
+  does one in a turn or in a gate's sensor (`JS_HARNESS_CHECK_INNER=1`). Probe 2 of 2026-10-14 showed the
+  variable reaches Codex's sandboxed commands and the preload ends them.
+- **The prompt.** The review is asked with this command's own prompt, even under `--prompt codex` (which
+  then says so): only that prompt can carry `SUITE_RAN`, which tells Codex the gate already ran the suite
+  on the range, that a refused `node --test` (exit 97, its line) is expected and is no finding nor a reason
+  to call the patch incorrect, and to read the tests instead. `--prompt codex` stays for a review in a turn.
+- **The verdict.** An `incorrect` with no finding of P0 to P2, whose only failed commands are refused test
+  runs (exit 97 with the line in their output, at least one), owes no correction (`excusedByRefusal`): the
+  next range is a review, not a recheck. The run log's line says why (`EXCUSED_LINE`) and keeps the
+  verdict as Codex gave it; its `answer` and the range's record carry `excused: "refused-tests"`, so how
+  many reviews went through that way is a count of records. Any finding still blocks, and so does an
+  `incorrect` beside another failed command, or one given in a turn.
+- **The way on.** A failed review is rerun as it was run (`js-harness codex-review --base <rev>`), no
+  longer in a turn of the lock.
+
+What it can miss: what Codex would have learned by running the suite; it reads the tests, and the gate
+ran the same tree. A review whose `incorrect` rests on its own reasoning and also saw a refusal is not
+excused unless every failed command was a refusal and it found nothing of P0 to P2.
+
 ## The priority of the gate (S3), version 2
 - **What it is:** a ticket for one session's next whole check (`check`, never `gate -- <command>`): the
   session's id (from the host), optionally its tree, why, who issued it, and until when it may be
@@ -188,6 +214,8 @@ the orchestrator's role as defaults (they are this setup's).
 - [x] T3 · two guards on a turn of `js-harness gate`, `odd/tasks/gate-turn-guards.md`: a turn is refused
       while a push waits on a branch with an open pull request, and a command is stopped at 30 minutes
       (`--max`). Checked in the branch that builds it, so it is done when that pull request merges.
+- [ ] T4 · S1, S2 · part 2, Codex's review out of the lock, test first, in `feat/codex-out-of-lock`
+      ("Codex's review out of the lock (part 2), as built"; L5)
 
 ## Log
 - L1 · S1, verbatim above.
@@ -204,3 +232,19 @@ the orchestrator's role as defaults (they are this setup's).
   line 3977: "ese problema de esperar una medicion que no la necesibata hay que corregirlo para que no
   vuelva a pasar"): a push that waits goes before any turn, and a scripted turn has a bound of wall
   time. Built as T3, in `feat/gate-turn-guards`.
+- L5 · 2026-10-14, the lead's decision on part 2, verbatim: "(1) Out of the lock the review always uses
+  `own`, with the sentence in its intent block; `codex` stays only for a review run inside a turn. (2) An
+  `incorrect` with no P0-P2, on a run where NODE_OPTIONS carried the preload and the only failed commands
+  are refused node --test (exit 97 with the guard's line in the events), owes no correction; the run line
+  says why, any finding still blocks." Added: "the record marks each such run, so a count of reviews let
+  through this way is readable from the records." And: "codex-review must tell Codex the gate already ran
+  the suite on this range and that a refused node --test is expected, not a finding; and the test proves
+  that a review whose only complaint is the refusal is not recorded as blocked." The sentence goes in its
+  own block (`## The tests`) after the intent block, since a review with no feature document has no
+  intent block to put it in. Built as T4.
+- L6 · 2026-10-14, T4's first commit `e06cf68`, gate passed in WSL2. Codex over `c0364f8..e06cf68` in two
+  parts (296,816 input tokens, inside the allowance of 570,780): two P2, fixed in one batch. A part kept
+  from an earlier run of its range now keeps its `excused` mark for the record (RED, then GREEN); the
+  preload's own test quotes the path as a review does (no RED here: this checkout's path has no space).
+- L7 · 2026-10-14, T3 merged: pull request 124, `f819d0b`, at 11:05:42Z by `gh pr view 124`. Its
+  follow-ups F1 to F3 are in `odd/tasks/gate-turn-guards.md`.

@@ -5,6 +5,18 @@
 // gives for the list, and a test holds it to that: a rule is changed there, never in another shape.
 export const RULES = [
   {
+    "id": "agents-budget",
+    "subject": "the most estimated tokens AGENTS.md may hold, since every session pays it on every turn",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 1500,
+    "unit": "estimated tokens",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*AGENTS\\.md.{0,60}\\bbudget\\b.{0,30}{amount}",
+      "^(?!.*\\bruleValue\\().*\\bbudget\\b\\W{0,3}{amount}\\s*(?:estimated )?tokens"
+    ]
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
@@ -41,12 +53,61 @@ export const RULES = [
     "flag": "--context-pause"
   },
   {
+    "id": "contract-run-timeout",
+    "subject": "how long each done-when command of a contract run may run, unless the run says otherwise",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 30,
+    "unit": "minutes",
+    "flag": "--timeout",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontract\\b.{0,60}\\b(?:stopped|timeout|times? out|at most)\\b.{0,30}{amount}"
+    ]
+  },
+  {
     "id": "control-phrase-min",
     "subject": "the shortest phrase by which a control or a rule in prose is found in its file",
     "owner": "project",
     "since": "2026-10-11",
     "value": 12,
-    "unit": "characters"
+    "unit": "characters",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcontrol\\b.{0,50}{amount}\\s*characters"
+    ]
+  },
+  {
+    "id": "gate-log-command",
+    "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 120,
+    "unit": "characters",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?:\\bgate log\\b.{0,50}\\bcommand\\b|`command`).{0,50}\\b(?:cut|truncated|shortened|at most|kept to)\\b.{0,20}{amount}\\s*characters"
+    ]
+  },
+  {
+    "id": "gate-log-size",
+    "subject": "the size past which the gate log is renamed over its older file, so the log stays near a megabyte",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 512,
+    "unit": "KiB",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?:\\bgate log\\b|\\blog\\.jsonl\\b|\\blog file\\b).{0,80}\\b(?:past|over|above|at most|up to)\\s+{amount}"
+    ]
+  },
+  {
+    "id": "gate-max",
+    "subject": "how long a command run under the gate lock may run before it is stopped with every process it started",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 30,
+    "unit": "minutes",
+    "flag": "--max",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bgate\\b.{0,50}\\b(?:stopped|killed|ends|at most|longest|max(?:imum)?)\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
   },
   {
     "id": "gate-wait",
@@ -55,7 +116,33 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 60,
     "unit": "minutes",
-    "flag": "--wait"
+    "flag": "--wait",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwaits?\\b.{0,40}\\b(?:turn|lock)\\b.{0,40}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))",
+      "^(?!.*\\bruleValue\\().*\\b(?:turn|lock)\\b.{0,40}\\bwaits?\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
+    ]
+  },
+  {
+    "id": "person-present",
+    "subject": "how long after the user last wrote in a session a question is put to them at once with the question tool",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 15,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:(?:is|was|counts as|stays) (?:present|here)|last wrote|wrote last)\\b.{0,40}\\b(?:within|in the last)\\s+{amount}"
+    ]
+  },
+  {
+    "id": "questions-one-place",
+    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked",
+    "owner": "sebastian",
+    "since": "2026-10-14",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Every question of the project reaches the user in one place",
+      "Ask the user nothing while an orchestrator holds its role"
+    ]
   },
   {
     "id": "review-effort",
@@ -77,7 +164,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-09",
     "value": 40,
-    "unit": "files"
+    "unit": "files",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}(?<!:\\s?){amount}\\s*files\\b"
+    ]
   },
   {
     "id": "review-part-lines",
@@ -86,7 +176,11 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 400,
     "unit": "changed lines",
-    "flag": "--part-lines"
+    "flag": "--part-lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}\\b(?:up to|at most|holds?)\\s+{amount}\\s*(?:changed )?lines",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*(?:changed )?lines\\b.{0,20}\\b(?:a|per|each) part\\b"
+    ]
   },
   {
     "id": "review-parts-unflagged",
@@ -95,7 +189,22 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 6,
     "unit": "parts",
-    "flag": "--max-parts"
+    "flag": "--max-parts",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*{amount}\\s*parts\\b.{0,40}(?:--max-parts|\\bunflagged\\b|\\bits flag\\b)",
+      "^(?!.*\\bruleValue\\().*\\bwithout\\b.{0,30}--max-parts.{0,30}{amount}\\s*parts"
+    ]
+  },
+  {
+    "id": "review-timeout",
+    "subject": "how long a Codex review may run before it is stopped as stalled",
+    "owner": "project",
+    "since": "2026-10-14",
+    "value": 30,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:review|codex)\\b.{0,50}\\b(?:stalled|stopped|timeout|times? out)\\b.{0,40}(?<![\\w:.]){amount}"
+    ]
   },
   {
     "id": "reviewed-commit-lines",
@@ -105,6 +214,17 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 1200,
     "unit": "changed lines"
+  },
+  {
+    "id": "sensor-timeout",
+    "subject": "how long one sensor of the gate may run before it is stopped and the commit refused",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 20,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "session-effort",
@@ -121,6 +241,15 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-10",
     "value": "claude-opus-5-5"
+  },
+  {
+    "id": "sessions-open-in-sidebar",
+    "subject": "the one way a session opens another in this repository, so that it is a row in his sidebar: the tools that open one in the app's Routines or in the cloud are refused",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-15",
+    "value": "start_session",
+    "failure": "session-opened-unseen"
   },
   {
     "id": "subagent-effort",
@@ -147,6 +276,32 @@ export const RULES = [
     "since": "2026-10-11",
     "value": "claude-haiku-5-5",
     "alias": "haiku"
+  },
+  {
+    "id": "wait-every",
+    "subject": "how often js-harness wait checks its condition, unless --every says otherwise",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 120,
+    "unit": "seconds",
+    "flag": "--every",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])every\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--every seconds\\W{0,3}{amount}"
+    ]
+  },
+  {
+    "id": "wait-for",
+    "subject": "how long js-harness wait waits before it says the time ran out, unless --for says otherwise",
+    "owner": "project",
+    "since": "2026-10-15",
+    "value": 480,
+    "unit": "minutes",
+    "flag": "--for",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])(?:for|up to|at most|gives up after)\\s+{amount}",
+      "^(?!.*\\bruleValue\\()\\s*wait\\s.*--for minutes\\W{0,3}{amount}"
+    ]
   },
   {
     "id": "work-sessions",

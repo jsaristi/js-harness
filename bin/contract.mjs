@@ -2,18 +2,21 @@
 // `contract`: the task contract at the head of a feature document (see odd/tasks/task-contract.md
 // and bin/lib/contract.mjs). `template` prints the template; `check` validates contracts statically
 // and never runs the commands they name; `run` runs them and reports met or not met; `goal` prints
-// the `/goal` condition that makes a session run `run`. Zero dependencies.
+// the `/goal` condition that makes a session run `run`; `modes` prints the effort and sub-agent models
+// each task's kind calls for (odd/tasks/effort-by-task.md). Zero dependencies.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { CONTRACT_TEMPLATE, doneWhen, isContract, parseContract, validateContract } from './lib/contract.mjs';
+import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
+import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 
 const USAGE =
-  'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--timeout <minutes>] [--cwd <dir>] | goal <file> [--cwd <dir>]';
+  'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--timeout <minutes>] [--cwd <dir>] | goal <file> [--cwd <dir>] | modes <file> [--task <id>] [--cwd <dir>]';
 
-// Each done-when command may run this long, unless `run --timeout <minutes>` says otherwise.
-const DEFAULT_TIMEOUT_MINUTES = 30;
+// Each done-when command may run this long, unless `run --timeout <minutes>` says otherwise: the declared
+// rule `contract-run-timeout` (bin/lib/rules-data.mjs).
+export const DEFAULT_TIMEOUT_MINUTES = ruleValue('contract-run-timeout', 'minutes');
 // The `js-harness.mjs` beside this file: the one that is running, whatever `js-harness` is on PATH.
 const RUNNING_HARNESS = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 
@@ -51,9 +54,10 @@ function parseMinutes(raw) {
 const toMilliseconds = (minutes) => Math.round(minutes * 60 * 1000);
 
 /** Walks argv token by token, so an unknown flag is a usage error and never a silently ignored one. */
-function parseArgs(argv, { timeout: allowTimeout = false } = {}) {
+function parseArgs(argv, { timeout: allowTimeout = false, task: allowTask = false } = {}) {
   const files = [];
   let cwd;
+  let task;
   let timeoutMinutes = DEFAULT_TIMEOUT_MINUTES;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
@@ -63,13 +67,16 @@ function parseArgs(argv, { timeout: allowTimeout = false } = {}) {
     } else if (token === '--timeout' && allowTimeout) {
       timeoutMinutes = parseMinutes(requireValue(argv, i, token));
       i += 1;
+    } else if (token === '--task' && allowTask) {
+      task = requireValue(argv, i, token);
+      i += 1;
     } else if (token.startsWith('--')) {
       throw new ContractArgError(`unknown argument: ${token}`);
     } else {
       files.push(token);
     }
   }
-  return { files, cwd, timeoutMinutes };
+  return { files, cwd, timeoutMinutes, task };
 }
 
 /** The repository's top-level directory for `cwd`, else `cwd` itself: where `odd/tasks/` lives. */
@@ -177,9 +184,9 @@ function templateCommand(argv, { stdout, stderr }) {
  * `--timeout`), with the timeout in minutes. */
 function parseOneFile(argv, stderr, defaultCwd, options) {
   try {
-    const { files, cwd, timeoutMinutes } = parseArgs(argv, options);
+    const { files, cwd, timeoutMinutes, task } = parseArgs(argv, options);
     if (files.length !== 1) throw new ContractArgError('expected exactly one contract file');
-    return { file: files[0], cwd: path.resolve(cwd ?? defaultCwd), timeoutMinutes };
+    return { file: files[0], cwd: path.resolve(cwd ?? defaultCwd), timeoutMinutes, task };
   } catch (err) {
     stderr(`${err.message}\n\n${USAGE}`);
     return { code: 2 };
@@ -299,10 +306,70 @@ function goalCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, harnessPath
     return 1;
   }
   stdout(condition);
+  // The modes go to stderr, so the condition stays the whole of stdout: it is pasted into /goal as is.
+  for (const task of modeLines(entry.markdown, projectDir)) if (!task.done) stderr(task.line);
   return 0;
 }
 
-const SUBCOMMANDS = { template: templateCommand, check: checkCommand, run: runCommand, goal: goalCommand };
+/** The rule `id` as a task's mode reads it in the project whose rules-data.mjs text is `projectData` (or
+ * nothing): `ruleHere`'s answer with the rule's short name beside its value, or `null` when the running
+ * list does not declare `id`, as for a kind's own effort row that nobody declared. */
+function ruleReader(projectData) {
+  return (id) => {
+    let rule;
+    try {
+      rule = ruleOf(id);
+    } catch {
+      return null;
+    }
+    const here = ruleHere(id, rule.unit, projectData);
+    return here.off ? here : { value: here.value, alias: rule.alias };
+  };
+}
+
+/** The tasks of `markdown` with their mode lines, read against the rules of the project at `root`:
+ * `[{ id, kind, done, line }]`. Also read by the resume hook (bin/resume.mjs). */
+export function modeLines(markdown, root) {
+  let projectData = null;
+  try {
+    projectData = fs.readFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
+  } catch {
+    // A project that declares no rules: every mode says so.
+  }
+  return taskModes(markdown, ruleReader(projectData)).map((mode) => ({ id: mode.id, kind: mode.kind, done: mode.done, line: modeLine(mode) }));
+}
+
+/** `modes`: the mode each open task calls for (its kind's effort and sub-agent models, from the rules
+ * list), or the one task `--task` names, open or done. It never runs or changes anything. */
+function modesCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn }) {
+  const parsed = parseOneFile(argv, stderr, defaultCwd, { task: true });
+  if (parsed.code) return parsed.code;
+  const file = path.resolve(parsed.cwd, parsed.file);
+  let markdown;
+  try {
+    markdown = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    stderr(`cannot read ${parsed.file}: ${err.code ?? err.message}`);
+    return 1;
+  }
+  const root = gitTopLevel(path.dirname(file), spawn) ?? projectRoot(parsed.cwd, spawn);
+  const tasks = modeLines(markdown, root);
+  if (parsed.task !== undefined) {
+    const task = tasks.find((candidate) => candidate.id === parsed.task);
+    if (!task) {
+      stderr(`no task ${parsed.task} in ${parsed.file}`);
+      return 1;
+    }
+    stdout(task.line);
+    return 0;
+  }
+  const open = tasks.filter((task) => !task.done);
+  if (open.length === 0) stdout(`no open task in ${parsed.file}`);
+  for (const task of open) stdout(task.line);
+  return 0;
+}
+
+const SUBCOMMANDS = { template: templateCommand, check: checkCommand, run: runCommand, goal: goalCommand, modes: modesCommand };
 
 export async function contractMain(
   argv,

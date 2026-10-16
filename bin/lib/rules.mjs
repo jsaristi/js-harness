@@ -15,6 +15,21 @@ const KEYS = new Set([
   'path', 'phrases',
   'retired', 'successors',
   'patterns', 'row', 'failure', 'differs', 'review',
+  'sensor',
+]);
+// The keys only the harness's own list holds, each refused in a project's list with the reason a person reads
+// (odd/tasks/project-rules.md, "What a project can declare").
+const NOT_FOR_A_VALUE = 'a value needs a reader, and the project code cannot import the harness; write the rule in prose';
+const NOT_FOR_A_PATTERN = 'a rule about the code names its sensor';
+const HARNESS_ONLY = new Map([
+  ['scope', 'the list is the project by where it is'],
+  ['alias', 'only the harness speaks to a host'],
+  ['flag', 'only a command of the harness parses one'],
+  ['value', NOT_FOR_A_VALUE],
+  ['unit', NOT_FOR_A_VALUE],
+  ['was', NOT_FOR_A_VALUE],
+  ['patterns', NOT_FOR_A_PATTERN],
+  ['row', NOT_FOR_A_PATTERN],
 ]);
 // Lower-case words joined by hyphens, each word starting with a letter, so no id is a number.
 const ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$/;
@@ -57,10 +72,22 @@ function show(value) {
  * measured by its words and not by the spaces around them. */
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
 
-/** True when `pattern` is a regular expression that `new RegExp` accepts. */
+// What `{amount}` stands for in a pattern: any amount in any wording, so a pattern finds a restated value by its
+// subject and still finds it after the value changes. A number with an optional unit word ("60 minutes", "3,600 s",
+// "88%"), an hour or half of one, a model id ("gpt-6.1-sol", "claude-opus-5-5"), or an effort level ("high"). An
+// effort word counts only as a word of its own: inside a mark (`rule:gate-max`), a flag (`--max`) or a call
+// (`Math.max(`) it is no amount, or the mark that cures a finding would be one.
+const AMOUNT = String.raw`(?:\d[\d,.]*\s*(?:%|[a-z]+\b)?|(?:half )?an? (?:hour|minute|day)\b|[a-z]+(?:-[a-z0-9.]+)*-\d[\w.]*|(?<![\w.:-])(?:low|medium|x?high|max)(?![\w(-]|\.\w))`;
+
+/** The regular expression of `pattern`, its `{amount}` written out, tried case-insensitively on one line. */
+export function patternOf(pattern) {
+  return new RegExp(pattern.split('{amount}').join(AMOUNT), 'i');
+}
+
+/** True when `pattern` is a regular expression that `new RegExp` accepts, its `{amount}` written out. */
 function compiles(pattern) {
   try {
-    new RegExp(pattern);
+    patternOf(pattern);
     return true;
   } catch {
     return false;
@@ -172,6 +199,8 @@ function optionalFaults({ patterns, row, failure, differs, review }) {
     } else {
       for (const pattern of items) {
         if (!compiles(pattern)) faults.push(`the pattern "${pattern}" is not a regular expression`);
+        else if (!pattern.includes('{amount}')) faults.push(`the pattern "${pattern}" has no {amount}: it finds a value by its subject and any amount`);
+        else if (patternOf(pattern).test('')) faults.push(`the pattern "${pattern}" matches an empty line`);
       }
     }
   }
@@ -186,10 +215,12 @@ function optionalFaults({ patterns, row, failure, differs, review }) {
 
 /** The faults of one rule that is a plain object, in the order the file reads them. The id and the
  * order of ids are checked by `readRules`, which owns the whole list. */
-function ruleFaults(rule, { minPhrase, declared }) {
+function ruleFaults(rule, { minPhrase, declared, project }) {
+  if (project) return projectRuleFaults(rule, { minPhrase, declared });
   const faults = [];
   for (const key of Object.keys(rule)) {
     if (!KEYS.has(key)) faults.push(`unknown key "${key}"`);
+    else if (key === 'sensor') faults.push('a sensor body is for a project list');
   }
   if (!isText(rule.subject) || rule.subject.trim() === '') faults.push('the subject is missing');
   else if (DIGIT.test(rule.subject)) {
@@ -229,11 +260,44 @@ function ruleFaults(rule, { minPhrase, declared }) {
   return faults;
 }
 
+/** The faults of one rule of a project's own list (`docs/rules.json`): the keys only the harness's list holds
+ * are refused with their reason, the owner is the project's or absent, and the body is prose, a sensor that
+ * enforces the rule, or a retirement. */
+function projectRuleFaults(rule, { minPhrase, declared }) {
+  const faults = [];
+  for (const key of Object.keys(rule)) {
+    if (HARNESS_ONLY.has(key)) faults.push(`${key} is not for a project list: ${HARNESS_ONLY.get(key)}`);
+    else if (!KEYS.has(key)) faults.push(`unknown key "${key}"`);
+  }
+  if (!isText(rule.subject) || rule.subject.trim() === '') faults.push('the subject is missing');
+  if (rule.owner !== undefined && rule.owner !== 'project') {
+    faults.push(`the owner is "${show(rule.owner)}": in a project list the owner is project, or it is absent`);
+  }
+  if (!isDay(rule.since)) faults.push('since is not a day written YYYY-MM-DD');
+
+  const bodies = [];
+  if (Object.hasOwn(rule, 'path') || Object.hasOwn(rule, 'phrases')) bodies.push('text');
+  if (Object.hasOwn(rule, 'sensor')) bodies.push('sensor');
+  if (Object.hasOwn(rule, 'retired')) bodies.push('retired');
+  const kinds = 'a rule of a project is in prose (a path with phrases), names its sensor, or is retired';
+  if (bodies.length === 0) faults.push(`no body: ${kinds}`);
+  else if (bodies.length > 1) faults.push(`more than one body: ${kinds}`);
+  const body = bodies.length === 1 ? bodies[0] : null;
+
+  if (body === 'text') faults.push(...textFaults(rule, minPhrase));
+  if (body === 'sensor' && !isText(rule.sensor)) faults.push('the sensor is not the name of a sensor');
+  if (body === 'retired') faults.push(...retiredFaults(rule, declared));
+  if (rule.successors !== undefined && body !== 'retired') faults.push('successors go with a retired rule');
+  const { failure, differs, review } = rule;
+  faults.push(...optionalFaults({ failure, differs, review }));
+  return faults;
+}
+
 /** The faults that make `list` unreadable, one line each, every fault of every rule in list order;
  * an empty result means the list is readable. It never throws, and it says every fault it finds,
  * because a list that is read one fault at a time takes one round per fault to repair. The shortest
  * phrase is itself a declared rule, read here when no other bound is given. */
-export function readRules(list, { minPhrase, declared = RULES } = {}) {
+export function readRules(list, { minPhrase, declared = RULES, project = false } = {}) {
   if (!Array.isArray(list)) return ['the rules are not a list'];
   const faults = [];
   // The shortest phrase, read from `declared` when no bound is given. When it cannot be read, that is the first
@@ -275,7 +339,7 @@ export function readRules(list, { minPhrase, declared = RULES } = {}) {
       }
       seen.add(id);
     }
-    for (const message of ruleFaults(rule, { minPhrase: bound, declared: ids })) faults.push(who + message);
+    for (const message of ruleFaults(rule, { minPhrase: bound, declared: ids, project })) faults.push(who + message);
     previous = usable ? id : null;
   }
   return faults;
@@ -365,7 +429,7 @@ const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phr
 // The last line of that paragraph: where the engine version and the day of a check are read, since the list holds neither.
 const LIST_NOTE = 'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
 // The paragraph that docs/RULES.md gives under its title.
-const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.';
+const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.';
 
 /** A copy of `list` sorted by id, with plain `<` on the texts so that no locale changes the order. */
 const byId = (list) => [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -455,8 +519,11 @@ function sourceText(source) {
   return `his words of ${dates}, checked by ${who} on ${show(source.checked.date)}`;
 }
 
-/** The line that gives a rule's day, its row and its source. */
-const sinceLine = (rule, sources) => `- Since ${rule.since}. Row: ${rowText(rule.row)}. Source: ${sourceText(lookup(sources, rule.id))}.`;
+/** The failure of the register a rule's row guards against, after the row, or nothing for a rule that names none. */
+const failureText = (rule) => (typeof rule.failure === 'string' ? `, against the failure ${code(rule.failure)}` : '');
+
+/** The line that gives a rule's day, its row with its failure, and its source. */
+const sinceLine = (rule, sources) => `- Since ${rule.since}. Row: ${rowText(rule.row)}${failureText(rule)}. Source: ${sourceText(lookup(sources, rule.id))}.`;
 
 /** The line of a rule's earlier values, each with the rule's unit, in the order the rule gives them. */
 const wasLine = (rule) => `- Was: ${rule.was.map((item) => `${amount(item.value, rule.unit)} until ${item.until}`).join('; ')}.`;

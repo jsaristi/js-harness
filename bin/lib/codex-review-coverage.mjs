@@ -376,3 +376,71 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
     return null;
   }
 }
+
+/** The git arguments of the diff a review of `from..head` reads, with `shape` (options of the diff) and,
+ * when given, `files` as pathspecs: `git diff <from> <head>`, or, for the review of a merge (`merge`, from
+ * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are off in both,
+ * as everywhere a range is counted, split or shown. */
+export function rangeDiff({ from, head, merge = null }, shape = [], files = null) {
+  const paths = files === null ? [] : ['--', ...files];
+  return ['diff', ...shape, '--no-renames', merge === null ? from : merge.auto, head, ...paths];
+}
+
+/** The full id of the tree that merging `first` and `side` again gives, conflict markers included, as
+ * `git merge-tree --write-tree` writes it into the object store; `null` when git cannot say. Its diff with
+ * the merge holds the lines of the merge's remerge-diff, and reads objects that exist: `git show
+ * --remerge-diff` writes a temporary object directory, and where the object store is read-only, as in
+ * Codex's sandbox, it printed nothing and exited 0 (odd/tasks/merge-review.md, L12). */
+function automaticMerge(spawn, cwd, first, side) {
+  let result;
+  try {
+    result = spawn('git', ['merge-tree', '--write-tree', '--no-messages', first, side], { cwd, encoding: 'utf8' });
+  } catch {
+    return null;
+  }
+  // Exit 1 is a merge with conflicts, whose tree holds their markers: an answer, as exit 0 is.
+  if (!result || result.error || (result.status !== 0 && result.status !== 1)) return null;
+  const tree = result.stdout.split('\n')[0].trim();
+  return /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(tree) ? tree : null;
+}
+
+/** Where the review of `given..head` starts when it is that of a merge of the remote's default branch, read
+ * by what was written in it: `{ from, side, branch, auto }`, the first parent of the merge, the merged parent,
+ * the label of the branch that holds it and the tree of their automatic merge (`automaticMerge`); else
+ * `null`, and the range is read as it would be without this.
+ *
+ * A branch that merges its default branch and resolves a conflict has one code commit no record covers, the
+ * merge (`writtenInMerge` counts it by the files written in it). Its review,
+ * asked from the default branch, started at the merged parent and read the whole branch again, which the
+ * records cannot move past (`reviewStart`: that parent is no ancestor of the first); asked from the first
+ * parent, it read everything the default branch brought in. Pull request 124 paid 175,025 input tokens for
+ * it. What the merge adds of its own is its remerge-diff, the merge against what merging its parents again
+ * gives: the resolution of its conflicts and any edit made in it.
+ *
+ * It is this case when `head` has two parents, the second is a commit of the default branch of `origin`
+ * (`defaultBranch`), and every code commit of `given` up to the first parent has a record. The record of
+ * `<first parent>..head` then covers the merge and the commits of the default branch it brought in, which
+ * had their reviews where they were made; a second parent off that branch would be commits nobody read
+ * called covered. `null` whenever git or the records cannot say. */
+export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, remote = 'origin' }) {
+  const parents = gitOut(spawn, cwd, ['rev-list', '--parents', '-n', '1', head])?.split(' ') ?? [];
+  if (parents.length !== 3 || parents[0] !== head) return null;
+  const [, first, side] = parents;
+  const branch = defaultBranch(spawn, cwd, remote);
+  if (branch === null) return null;
+  if (!gitYes(spawn, cwd, ['merge-base', '--is-ancestor', side, branch.ref])) return null;
+  if (given !== first) {
+    const before = reviewCoverage(cwd, { from: given, tip: first, spawn, where });
+    if (before.unknown !== undefined || before.uncovered.length > 0) return null;
+  }
+  // A merge a record already covers is no review to start: the range is then read as without this, and the
+  // records say it is covered, instead of a second paid review of the same merge (Codex, 2026-10-14).
+  const atMerge = reviewCoverage(cwd, { from: first, tip: head, spawn, where });
+  if (atMerge.unknown !== undefined || atMerge.covers.some(({ covered }) => covered.has(head))) return null;
+  // And only a merge the push check counts as code: one that took a side whole has a remerge-diff of the
+  // markers it removed, and no line anybody wrote (verifier B1, 2026-10-14).
+  if (!atMerge.uncovered.some((commit) => commit.id === head)) return null;
+  const auto = automaticMerge(spawn, cwd, first, side);
+  if (auto === null) return null;
+  return { from: first, side, branch: branch.label, auto };
+}

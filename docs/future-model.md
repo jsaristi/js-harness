@@ -37,15 +37,18 @@ The setup is frozen for the whole run, from Step 4's first trial to the last tri
 update of Claude Code, Codex, gentle-ai, engram or codegraph, and no edit of the global
 `CLAUDE.md`, the output style or the settings. The suite builds the `current` arm from the live
 home once per invocation (`evals/home.mjs`), so arms run in one invocation share one setup; but a
-run is resumed by a new invocation after a cap stops it, and the suite records only the versions
-of Claude Code, gentle-ai, engram and its plugin, not codegraph's nor the js-harness commit the
-workspace is initialized from, so any other change between invocations would go unseen (F6 held
-the same rule, `odd/tasks/codex-parity.md`, Constraints; gap G6).
+run is resumed by a new invocation after a cap stops it. The suite records the versions of Claude
+Code, gentle-ai, engram and its plugin, and the fingerprint of the home template as the run's
+`setup` (G6): a run is continued only on the same setup, and the report refuses to read together
+two runs whose current arms ran on different ones. Not recorded yet: codegraph's version and the
+js-harness commit the workspace is initialized from, so for those the freeze is the only guard
+(F6 held the same rule, `odd/tasks/codex-parity.md`, Constraints).
 
 ## Step 1. Preconditions (no spend)
 
-- The eval model is a constant of the suite: running it on the new model is a change of code,
-  recorded with the run (gap G5). Until then Step 4 cannot run on the new model.
+- The model: `--model <id>` on `evals/suite.mjs` names it (G5); without the flag a run is on the
+  default (`EVAL_MODEL`, `CODEX_EVAL_MODEL`). A Claude model is named by its full id, never an
+  alias. A recorded run continues only on the model it was recorded on.
 - Prices. The new model's row goes, from the official pricing page and with the date read, into
   `evals/prices.mjs` (the list table; `listCost` returns `null` for a model it does not list) and,
   for a Codex model, into `CODEX_LIST_PRICES` of `evals/report.mjs`. The Claude report's cost is
@@ -84,12 +87,17 @@ comparison across models is made by hand, table beside table, and says so.
 
 ## Step 4. Run the evals (**spend**)
 
+Before asking, the same command with `--plan` prints the trials it would run and their agent
+time and list cost, estimated from the recorded runs of the same model, and starts nothing. On a
+new model nothing is recorded yet, so it says "no estimate": the smoke trials are what give the
+first figures, and the plan of each later batch is made from them.
+
 The five tasks of F5, both arms, on the new model:
 
 - Claude: `node evals/suite.mjs --claude <absolute path to claude> --configs minimal,current
-  --efforts medium --repeats 3 --tasks all --permission-mode bypassPermissions --name <model>-ab`
+  --efforts medium --repeats 3 --tasks all --permission-mode bypassPermissions --model <id> --name <model>-ab`
 - Codex: `node evals/suite.mjs --agent codex --codex <absolute path to codex.exe> --configs
-  minimal,current --efforts medium --repeats 3 --tasks all --name <model>-ab`
+  minimal,current --efforts medium --repeats 3 --tasks all --model <id> --name <model>-ab`
 - Report: `node evals/report.mjs --runs <model>-ab`, and for Codex with `--results-dir
   evals/results/codex`. It prints the verdict per task and effort by the rule of the roadmap's row
   "Eval verdict" (score is the floor, cost decides between equals).
@@ -204,11 +212,13 @@ Each one is a task of `odd/tasks/future-model-protocol.md`.
   cost from the last results on the same model, "unknown" for a cell with none, and starts
   nothing (the precedent is `js-harness codex-review --plan`). The cap windows stay unknown: no
   results file records where a cap stopped a run, and the agent time leaves out each trial's
-  setup. Until then the table above is the estimate, by hand.
+  setup. Built: `--plan` on `evals/suite.mjs`; the cap windows are still unknown.
 - G4. The whole first request (tools, MCP, skills list) measured by a committed script.
-- G5. The eval model chosen for a run and recorded with it, in place of the constants.
+- G5. The eval model chosen for a run and recorded with it, in place of the constants. Built:
+  `--model`.
 - G6. The setup recorded with a run: a fingerprint of the home template beside the versions,
   leaving out the counters and timestamps a day of sessions changes, so a run resumed on another
-  setup, or two runs pooled across setups, are refused, not unseen.
+  setup, or two runs pooled across setups, are refused, not unseen. Built: `setup` in the
+  results file; left: codegraph's version and the js-harness commit of the workspace.
 - G7. A new model noticed: a row that compares the model of the session with the eval model and
   the review model, and says when they differ.

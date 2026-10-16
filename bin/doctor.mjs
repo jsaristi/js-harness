@@ -7,6 +7,7 @@
 // see odd/tasks/stack-doctor.md. Exit code is always 0 for a normal report: this is a report, not
 // a gate, and every probe underneath fails open into `unknown` rather than throwing. `--hook` (T3)
 // is the one exception with its own, stricter contract — see `hookMain` below.
+import crypto from 'node:crypto';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { probeStack, resolveProjectRoot, tools } from './lib/stack.mjs';
@@ -15,11 +16,14 @@ import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
+import { unknownArgument } from './lib/args.mjs';
+import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
+import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
-const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook]';
+const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed] [--gentle-ai-reviewed]';
 
 // R3-003 (accepted T1 review follow-up): a flag with no value (end of argv, or immediately
 // followed by another `--flag`) is a usage error, not a silently-swallowed token.
@@ -31,7 +35,13 @@ function requireValue(argv, i, flag) {
   return value;
 }
 
+// Every flag `doctor` takes, for `unknownArgument`: a flag it does not know is refused before the
+// report, which writes its cache under the home (T1 of odd/tasks/commands-and-doctor.md).
+const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook', '--host-reviewed', '--gentle-ai-reviewed'] };
+
 function parseArgs(argv, env) {
+  const unknown = unknownArgument(argv, KNOWN);
+  if (unknown !== null) throw new DoctorArgError(`unknown argument: ${unknown}`);
   const get = (flag) => {
     const i = argv.indexOf(flag);
     return i !== -1 ? requireValue(argv, i, flag) : undefined;
@@ -163,17 +173,76 @@ export async function buildReport({ home, cwd, offline, interactive }, deps) {
 
   const localRows = probeStack({ home, project, spawn, platform, interactive, functions });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
-  return localRows.map((row) => {
+  const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
     // A tool's fix can depend on the latest version (gentle-ai's, across a Go major).
     const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest);
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
+  const withUnseen = deps.unseen ? [...rows, await unseenRow(deps.unseen, project)] : rows;
+  const withHost = deps.host ? [...withUnseen, hostRow(deps.host, home, now)] : withUnseen;
+  if (!deps.gentleAiSnapshots) return withHost;
+  const gentleAi = rows.find((row) => row.id === 'gentle-ai')?.version ?? null;
+  return [...withHost, gentleAiRow(gentleAi, deps.gentleAiSnapshots, home, now)];
+}
+
+/** The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): the gentle-ai version against the one last reviewed,
+ * recorded like the host-update row's, so a sync that rewrote the global CLAUDE.md stays a gap until reviewed. */
+function gentleAiRow(version, snapshots, home, now) {
+  const cache = readCache(home);
+  const { row, record } = gentleAiUpdateRow({ version, reviewed: cache.gentleAi?.reviewed ?? null, snapshots: version ? snapshots(home) : [], home, now });
+  if (record) writeCache(home, { ...cache, gentleAi: { reviewed: record } });
+  return row;
+}
+
+/** The host-update row (bin/lib/host-update.mjs): the Claude Desktop app and its Code tab CLI against the versions
+ * last reviewed. The first reading, with no record, is recorded as reviewed; after that only `--host-reviewed`
+ * records, so an update stays a gap until its review is done. */
+function hostRow(host, home, now) {
+  const cache = readCache(home);
+  const { row, record } = hostUpdateRow(host(home), cache.host?.reviewed ?? null, now);
+  if (record) writeCache(home, { ...cache, host: { reviewed: record } });
+  return row;
+}
+
+/** The unseen row (`js-harness unseen`): a check of the Claude app, not a tool, so nothing to install and one cell
+ * that carries the state. `stale` is a gap while an item is to clear, and its fix names the count and each item.
+ * `unknown` when the check cannot run: it fails open, like every probe here, and is no gap. */
+async function unseenRow(unseen, cwd) {
+  const row = { id: 'unseen', version: null, installed: 'n/a', claude: 'ok', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  let toClear;
+  try {
+    toClear = await unseen(cwd);
+  } catch {
+    return { ...row, claude: 'unknown' };
+  }
+  if (toClear.length === 0) return row;
+  return { ...row, claude: 'stale', fix: { claude: [`unseen: ${toClear.length} to clear: run js-harness unseen`, ...toClear] } };
+}
+
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update and gentle-ai-sync rows. Their checks are
+ * given only here, so `doctorMain` alone keeps the rows its callers give it. */
+export function doctorCommand(argv) {
+  return doctorMain(argv, process.env, {
+    unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd),
+    host: (home) => readHostVersions({ home }),
+    gentleAiSnapshots: (home) => claudeMdSnapshots(home),
+  });
 }
 
 export async function doctorMain(argv, env = process.env, deps = {}) {
-  if (argv.includes('--hook')) return hookMain(argv, env, deps);
+  // The hook refuses an argument it does not know as the report does, before its fail-open part: an
+  // installed entry carries only `--hook`, so an unknown one means the copy on the path is older than
+  // the install that wrote it, and a SessionStart hook's exit 2 shows its one line without stopping it.
+  if (argv.includes('--hook')) {
+    const unknown = unknownArgument(argv, KNOWN);
+    if (unknown !== null) {
+      console.error(`unknown argument: ${unknown}\n\n${USAGE}`);
+      return 2;
+    }
+    return hookMain(argv, env, deps);
+  }
 
   let parsed;
   try {
@@ -183,6 +252,8 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const { home, cwd, json, offline } = parsed;
+  if (argv.includes('--host-reviewed')) return recordHostReview(home, json, deps);
+  if (argv.includes('--gentle-ai-reviewed')) return recordGentleAiReview(home, json, deps);
   const rows = await buildReport({ home, cwd, offline, interactive: true }, deps);
 
   if (json) {
@@ -210,6 +281,42 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   return 0;
 }
 
+/** `doctor --host-reviewed`: records the Claude Desktop and Code tab CLI versions read now as reviewed, the last step
+ * of the review the host-update row lists; with `--json` it prints `{ reviewed }`, the record written. With no
+ * running version read it records nothing and exits 1. */
+function recordHostReview(home, json, deps) {
+  const versions = deps.host ? deps.host(home) : { desktop: null };
+  if (!versions.desktop) {
+    console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
+    return 1;
+  }
+  const now = deps.now ?? (() => new Date());
+  const reviewed = { desktop: versions.desktop, code: versions.code, at: now().toISOString() };
+  writeCache(home, { ...readCache(home), host: { reviewed } });
+  if (json) {
+    console.log(JSON.stringify({ reviewed }));
+    return 0;
+  }
+  console.log(`Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.`);
+  return 0;
+}
+
+/** `doctor --gentle-ai-reviewed`: records the installed gentle-ai version as reviewed, the last step of the review
+ * the gentle-ai-sync row lists; with `--json` it prints `{ reviewed }`, the record written. With no version read it
+ * records nothing and exits 1. */
+function recordGentleAiReview(home, json, deps) {
+  const probe = tools.find((tool) => tool.id === 'gentle-ai').installed({ spawn: deps.spawn ?? spawnSync, platform: deps.platform ?? process.platform, home });
+  if (!probe.version) {
+    console.error('js-harness doctor: could not read the gentle-ai version: nothing was recorded.');
+    return 1;
+  }
+  const now = deps.now ?? (() => new Date());
+  const reviewed = { version: probe.version, at: now().toISOString() };
+  writeCache(home, { ...readCache(home), gentleAi: { reviewed } });
+  console.log(json ? JSON.stringify({ reviewed }) : `Recorded gentle-ai ${probe.version} as reviewed.`);
+  return 0;
+}
+
 /** `doctor --hook`: a `SessionStart` hook, at zero model tokens when nothing changed. Computes the
  * same report as the interactive command (network allowed only when the cache is stale), digests
  * its gap list, and prints exactly one `{"systemMessage": ...}` line only when gaps exist and that
@@ -221,7 +328,13 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     const rows = await buildReport({ home, cwd, offline: false }, deps);
 
     const gaps = gapList(rows);
-    const digest = gapDigest(rows);
+    // A host or gentle-ai update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md,
+    // Decided). Its versions enter the digest, so another update before the review is recorded is a new notice (Codex,
+    // 2026-10-15).
+    const host = [hostNotice(rows.find((row) => row.id === 'host-update')), gentleAiNotice(rows.find((row) => row.id === 'gentle-ai-sync'))]
+      .filter(Boolean)
+      .join('; ');
+    const digest = host ? crypto.createHash('sha256').update(`${gapDigest(rows)}\n${host}`).digest('hex') : gapDigest(rows);
     const cache = readCache(home);
     const shouldNotify = gaps.length > 0 && digest !== cache.notified;
     writeCache(home, { ...cache, notified: digest });
@@ -229,7 +342,7 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     if (shouldNotify) {
       const plural = gaps.length === 1 ? '' : 's';
       console.log(
-        JSON.stringify({ systemMessage: `js-harness: ${gaps.length} stack gap${plural} — run js-harness doctor` }),
+        JSON.stringify({ systemMessage: `js-harness: ${gaps.length} stack gap${plural} — run js-harness doctor${host ? ` (${host})` : ''}` }),
       );
     }
   } catch {

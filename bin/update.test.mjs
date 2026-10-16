@@ -12,6 +12,7 @@ import { resolveLatest, statusMain, updateMain, upgradeMain } from './update.mjs
 // T5: `status` now reads the project the current folder belongs to, and these tests run real `git`,
 // so they must not pick up the host's git config (see project.test.mjs, T2e item 8).
 let configDir;
+let taglessRepo;
 before(() => {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GIT_')) delete process.env[key];
@@ -20,10 +21,18 @@ before(() => {
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+  // The release source is a repository's tags (T4b of odd/tasks/first-version.md): every command here that names
+  // no source and no repository reads this local one, which holds no release tag, and never the network.
+  taglessRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-update-tagless-'));
+  for (const args of [['init', '-q'], ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'x']]) {
+    const run = spawnSync('git', args, { cwd: taglessRepo, encoding: 'utf8' });
+    if (run.status !== 0) throw new Error(run.stderr);
+  }
 });
 // The empty git config lives outside the repository, so it is removed with the suite.
 after(() => {
   fs.rmSync(configDir, { recursive: true, force: true });
+  fs.rmSync(taglessRepo, { recursive: true, force: true });
 });
 
 function makeTmpDir(prefix) {
@@ -63,7 +72,7 @@ async function runCommand(main, argv, env = {}, spawn = noProcess) {
   console.log = (line) => out.push(String(line));
   console.error = (line) => err.push(String(line));
   try {
-    const code = await main(argv, env, spawn);
+    const code = await main(argv, { JS_HARNESS_REPO: taglessRepo, ...env }, spawn);
     return { code, out: out.join('\n'), err: err.join('\n') };
   } finally {
     Object.assign(console, original);
@@ -92,8 +101,8 @@ function makeSource(version) {
 
 const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-test('resolveLatest starts no process and answers nothing when no source is named', () => {
-  assert.equal(resolveLatest({ source: undefined, pm: 'node cli.js' }, { JS_HARNESS_PM: 'my-pm' }, noProcess), null);
+test('resolveLatest asks no package manager and answers nothing when the repository holds no release tag', () => {
+  assert.equal(resolveLatest({ source: undefined, repo: taglessRepo, pm: 'node cli.js' }, { JS_HARNESS_PM: 'my-pm' }, noProcess), null);
 });
 
 test('resolveLatest answers nothing for a source folder that holds no tarball', () => {
@@ -199,7 +208,8 @@ test('a source folder that is not there is said in a line: update and upgrade ex
     for (const main of [updateMain, upgradeMain]) {
       const { code, out, err } = await runCommand(main, ['--source', missing, '--home', home]);
       assert.equal(code, 1, main.name);
-      assert.match(err, /cannot read the source folder .*no-such-folder: ENOENT/, main.name);
+      // The line is the whole of what it says, as it was before the release source: a script may compare it.
+      assert.equal(err, `cannot read the source folder ${missing}: ENOENT`, main.name);
       assert.equal(out, '', main.name);
     }
   } finally {
@@ -259,7 +269,7 @@ test('statusMain reports no manifest when nothing is installed', async () => {
     const original = console.log;
     console.log = (line) => lines.push(String(line));
     try {
-      await statusMain(['--global', '--home', home], {}, noProcess);
+      await statusMain(['--global', '--home', home], { JS_HARNESS_REPO: taglessRepo }, noProcess);
     } finally {
       console.log = original;
     }
@@ -279,7 +289,7 @@ test('statusMain reports not installed for a manifest that only records an optio
     const original = console.log;
     console.log = (line) => lines.push(String(line));
     try {
-      await statusMain(['--global', '--home', home], {}, noProcess);
+      await statusMain(['--global', '--home', home], { JS_HARNESS_REPO: taglessRepo }, noProcess);
     } finally {
       console.log = original;
     }
@@ -324,7 +334,7 @@ test('statusMain and upgradeMain say not installed for a manifest that only reco
     recordScheduledTask(home, { name: 'js-harness-remote-x', command: 'conhost.exe', arguments: '--headless node remote.mjs start --watchdog' });
     console.log = (line) => lines.push(String(line));
     console.error = (line) => lines.push(String(line));
-    await statusMain(['--global', '--home', home], {}, noProcess);
+    await statusMain(['--global', '--home', home], { JS_HARNESS_REPO: taglessRepo }, noProcess);
     const code = await upgradeMain(['--source', source, '--home', home], {}, pathCopyAnswers('0.9.0'));
     assert.equal(code, 1);
     assert.match(lines.join('\n'), /manifest version: \(not installed\)/);
@@ -657,7 +667,7 @@ async function runStatus(argv, env = {}, spawn = noProcess) {
   console.log = (line) => out.push(String(line));
   console.error = (line) => err.push(String(line));
   try {
-    const code = await statusMain(argv, env, spawn);
+    const code = await statusMain(argv, { JS_HARNESS_REPO: taglessRepo, ...env }, spawn);
     return { code, out: out.join('\n'), err: err.join('\n') };
   } finally {
     console.log = originalLog;
@@ -827,6 +837,28 @@ test('status exits 0 in a project whose harness.json holds no version: no pin, h
   }
 });
 
+// A manifest `functions apply` wrote holds the switches and no gate (odd/tasks/on-demand-functions.md, slice 2).
+test('status says a clone whose manifest holds only its switches is not set up', async () => {
+  const root = makeProject({ manifest: true });
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(root, '.git', 'js-harness', 'manifest.json'), '{ "scope": "functions", "files": [] }\n', 'utf8');
+
+    const { code, out } = await runStatus(['--cwd', root, '--home', home], {}, noPackageManager);
+
+    assert.equal(code, 0);
+    assert.match(
+      out,
+      /^this clone: only its switches applied \(manifest: .*manifest\.json\); js-harness sync sets it up once a version is pinned$/m,
+    );
+    assert.doesNotMatch(out, /this clone: set up/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('status in a project with no pin says so in a clone that is set up too', async () => {
   const root = makeProject({ manifest: true });
   const home = makeTmpDir('js-harness-status-home-');
@@ -934,6 +966,27 @@ test('status with no --cwd, inside an initialized project, is the project status
   }
 });
 
+test('status in a project that keeps its own rules says how many and how many findings, and says nothing of them otherwise', async () => {
+  const root = makeProject();
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    const quiet = await inDir(root, () => runStatus(['--home', home], {}, noPackageManager));
+    assert.doesNotMatch(quiet.out, /own rules/);
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    const rule = { id: 'no-direct-deploy', subject: 'a deploy goes through the pipeline', since: '2026-10-14', path: 'AGENTS.md', phrases: ['Never deploy by hand'] };
+    fs.writeFileSync(path.join(root, 'docs', 'rules.json'), JSON.stringify({ format: 1, rules: [rule] }));
+    const found = await inDir(root, () => runStatus(['--home', home], {}, noPackageManager));
+    assert.equal(found.code, 0);
+    assert.match(found.out, /^own rules: 1 in docs\/rules\.json, 1 finding; js-harness rules check names it$/m);
+    fs.appendFileSync(path.join(root, 'AGENTS.md'), '\n- Never deploy by hand.\n');
+    const held = await inDir(root, () => runStatus(['--home', home], {}, noPackageManager));
+    assert.match(held.out, /^own rules: 1 in docs\/rules\.json, all holding$/m);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('status --global is the machine status even inside an initialized project', async () => {
   const root = makeProject();
   const home = makeTmpDir('js-harness-status-home-');
@@ -973,11 +1026,13 @@ test('status rejects --global with --cwd, an unknown flag and a missing value wi
   }
 });
 
-test('updateMain and upgradeMain keep ignoring flags they do not know (parsing unchanged)', async () => {
+// `upgrade` refuses a flag it does not know since T1 of odd/tasks/commands-and-doctor.md
+// (`bin/writing-flags.test.mjs`); `update` writes nothing and keeps ignoring one.
+test('updateMain keeps ignoring flags it does not know (parsing unchanged)', async () => {
   const original = console.log;
   console.log = () => {};
   try {
-    assert.equal(await updateMain(['--bogus', '--cwd'], {}, noProcess), 0);
+    assert.equal(await updateMain(['--bogus', '--cwd'], { JS_HARNESS_REPO: taglessRepo }, noProcess), 0);
   } finally {
     console.log = original;
   }

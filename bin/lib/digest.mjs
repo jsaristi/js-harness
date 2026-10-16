@@ -3,7 +3,8 @@
 // odd/tasks/stack-doctor.md.
 import crypto from 'node:crypto';
 
-/** The states that are a gap, something to fix: `stale` is a host whose hook calls a removed command,
+/** The states that are a gap, something to fix: `stale` is a host whose hook calls a removed command, or a memory
+ * note that holds a rule (`memory-rules`),
  * `mismatch` the Claude CLI and the desktop app signed into different accounts, and `down` a recorded login
  * launcher whose remote server is not running. `unknown` and `n/a` are not gaps. This is the one list: `doctor`
  * (its Fix section and `--json` gaps) and the TUI's stack block read it from here, so the three cannot disagree

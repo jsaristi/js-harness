@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  POWERSHELL_ROW_FUNCTION, killProcesses, killSurvivors, killTree, parseSnapshot, selectTrees,
+  POWERSHELL_ROW_FUNCTION, killProcesses, killSurvivors, killTree, parseSnapshot, selectTrees, settleGroup,
 } from '../bin/lib/process-tree.mjs';
 import { isWithin } from './paths.mjs';
 import { readClaudeOutput } from './agent-output.mjs';
@@ -37,6 +37,12 @@ export function parseTap(text) {
   });
   if (tests === null || pass === null || fail === null || tests === 0 || pass > tests) return null;
   return { tests, pass, fail };
+}
+
+/** The names of the top-level tests a TAP output reports as failed, in order: its unindented `not ok <n> - <name>`
+ * lines, a directive after ` # ` left off. A nested assertion is indented and is not a test of its own here. */
+export function failedTestsOf(text) {
+  return [...String(text).replace(/\r/g, '').matchAll(/^not ok \d+ - (.*?)(?:\s+#\s.*)?$/gm)].map((match) => match[1]);
 }
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
@@ -71,7 +77,14 @@ export function loadTask(dir) {
   if (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string')) throw bad('grader.args', 'must be an array of strings');
   if (!Number.isInteger(spec.timeoutMs) || spec.timeoutMs <= 0) throw bad('timeoutMs', 'must be a positive integer (milliseconds)');
   checkFixtureLinks(id, fixtureDir); // fail before any spend; `copyFixture` repeats the check for tasks built by hand
-  return { id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir };
+  // `recordFailed`: the trial keeps the names of the grader's failed tests (`failedTestsOf`), for a report that reads
+  // which questions failed and not only how many. Absent on every task that does not ask, so their records keep their
+  // shape.
+  if (spec.recordFailed !== undefined && typeof spec.recordFailed !== 'boolean') throw bad('recordFailed', 'must be true or false');
+  return {
+    id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir,
+    ...(spec.recordFailed === true && { recordFailed: true }),
+  };
 }
 
 /** Throws when `fixtureDir` holds a symlink or a junction, anywhere below it. A copy of the fixture
@@ -275,8 +288,11 @@ export function killByPath(roots, { platform = process.platform, spawnSync: sync
  * gets no signal forwarding below, because that kills the tree and then re-raises the signal on this process, which
  * ends it before the caller's own cleanup; the caller aborts, waits for the result and cleans up, then exits. */
 export function runProcess({
-  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors, signal,
+  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors, signal, settle,
 }) {
+  // What the sweep killed is waited for before the run ends (`settleGroup`). A caller that swaps the sweep killed
+  // no real group, so by default it has nothing to wait for.
+  const settling = settle ?? (sweep === killSurvivors ? settleGroup : async () => []);
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     if (signal?.aborted) {
@@ -345,7 +361,19 @@ export function runProcess({
       stop(sweep);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve({ ...out, ...exit, timedOut, ...(aborted && { aborted }), ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) });
+      // A group sent SIGKILL can still run for a moment under load; the run ends once it is gone, or says what was
+      // still running at the bound, as a Windows kill does (`killProcesses`).
+      // Whatever the wait answers or throws, the run resolves: a wait that fails is reported, never a hang.
+      Promise.resolve()
+        .then(() => settling(child))
+        .then((left) => {
+          if (!Array.isArray(left)) throw new Error(`the wait after the kill answered ${JSON.stringify(left)}, not a list of pids`);
+          if (left.length > 0) throw new Error(`still running after the kill: pid ${left.join(', ')}`);
+        })
+        .catch((error) => {
+          sweepError ??= error;
+        })
+        .then(() => resolve({ ...out, ...exit, timedOut, ...(aborted && { aborted }), ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) }));
     };
     signal?.addEventListener('abort', abort, { once: true });
     for (const stream of ['stdout', 'stderr']) {
@@ -432,7 +460,10 @@ export async function gradeWorkspace(task, workspace, {
   if (run.timedOut) return fail('grader-timeout');
   const tap = parseTap(run.stdout);
   if (!tap) return fail('grader-unparsable');
-  return { score: tap.pass / tap.tests, passed: tap.pass, total: tap.tests, error: null };
+  return {
+    score: tap.pass / tap.tests, passed: tap.pass, total: tap.tests, error: null,
+    ...(task.recordFailed && { failed: failedTestsOf(run.stdout) }),
+  };
 }
 
 /** The reader of `config`'s agent output: `config.reader`, a function of the finished run that says what it

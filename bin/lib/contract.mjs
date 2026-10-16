@@ -21,14 +21,16 @@ export const CONTRACT_TEMPLATE = `## Goal
 ## Constraints
 - <real constraint> — because <reason>
 
-## Effort
-medium | high
-
 ## Ask me before
 <the few decisions that are mine: spend, irreversible, product choices>
+
+## Tasks
+- [ ] T1 (kind: design | build | verify | docs) <the first task; its kind sets its effort and sub-agent models>
 `;
 
-const REQUIRED_SECTIONS = ['Goal', 'Why', 'Done when', 'In scope / Out of scope', 'Constraints', 'Effort', 'Ask me before'];
+// `## Effort` is no longer required: a task's kind sets its effort (odd/tasks/effort-by-task.md, S1). It is
+// still validated when present, so the documents that state one stay valid, and nothing reads it.
+const REQUIRED_SECTIONS = ['Goal', 'Why', 'Done when', 'In scope / Out of scope', 'Constraints', 'Ask me before'];
 const EFFORTS = ['medium', 'high'];
 
 const ITEM_PATTERN = /^\s*[-*+]\s+(.*)$/;
@@ -112,7 +114,8 @@ export function doneWhen(markdown) {
 
 /** `{ ok, errors }`: one human-readable reason per problem — a missing or empty section, a `Done
  * when` with no command, a command still holding a placeholder, an `Effort` that is not `medium` or
- * `high`. Static only: it never runs a command. */
+ * `high` when there is one, a task whose `(kind: …)` is not one of TASK_KINDS. Static only: it never runs
+ * a command. */
 export function validateContract(markdown) {
   const errors = [];
   const bodies = parseContract(markdown);
@@ -133,12 +136,100 @@ export function validateContract(markdown) {
     }
   }
 
-  if (usable.has('Effort')) {
+  if (bodies.has('Effort')) {
     const effort = bodies.get('Effort');
-    if (!EFFORTS.includes(effort.toLowerCase())) {
+    if (effort === '') errors.push('section "## Effort" is empty');
+    else if (!EFFORTS.includes(effort.toLowerCase())) {
       errors.push(`"## Effort" must be exactly "medium" or "high", found "${effort}"`);
     }
   }
 
+  for (const { id, kind } of tasksOf(markdown)) {
+    if (kind !== null && !TASK_KINDS.includes(kind)) {
+      errors.push(`task ${id} names the kind "${kind}": one of ${TASK_KINDS.join(', ')}`);
+    }
+  }
+
   return { ok: errors.length === 0, errors };
+}
+
+/** The kinds of work a task names as `(kind: <kind>)` (odd/tasks/effort-by-task.md, S1). They name
+ * work, not a value Sebastián set, so they are a constant here and not rules. */
+export const TASK_KINDS = ['design', 'build', 'verify', 'docs'];
+
+// A checklist line: its box, then the rest of its first line.
+const TASK_LINE_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/;
+// A task's ID, as the session board reads it (`taskId` of bin/lib/sessions.mjs); a test holds the two alike.
+const TASK_ID_PATTERN = /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/;
+const KIND_PATTERN = /\(kind:\s*([^)]*?)\s*\)/;
+
+/** Every checklist line that opens with a task ID, outside fences: `{ id, kind, done, line }` in document
+ * order. `kind` is the text of its `(kind: …)` as written, or `null` when the first line names none. */
+export function tasksOf(markdown) {
+  const tasks = [];
+  for (const token of tokenize(markdown, { stripComments: true })) {
+    if (token.fence || token.heading) continue;
+    const step = token.line.match(TASK_LINE_PATTERN);
+    const id = step && TASK_ID_PATTERN.exec(step[2])?.[1];
+    if (!id) continue;
+    const kind = KIND_PATTERN.exec(step[2])?.[1] ?? null;
+    tasks.push({ id, kind, done: step[1] !== ' ' });
+  }
+  return tasks;
+}
+
+// The rows of the rules list a task's mode is read from (bin/lib/rules-data.mjs). A kind may have its own
+// session effort, `session-effort-<kind>`; none is declared today (his answer of 2026-10-14, "Ninguno
+// todavía"), so every kind takes `session-effort`.
+const MODE_RULES = {
+  session: 'session-effort',
+  writer: 'subagent-writer-model',
+  reader: 'subagent-reader-model',
+  subagent: 'subagent-effort',
+};
+// The kinds whose tasks launch writers; a task with no kind may be any work, so it names both roles.
+const WRITING_KINDS = new Set(['build', null]);
+
+/** The mode of each task of the checklist, done ones included: `{ id, kind, done, effort, writerModel,
+ * readerModel, subagentEffort, off }`. `readRule(id)` is the caller's `ruleHere` bound to the project's
+ * rules text, giving `{ value, alias? }` or `{ off }`, or `null` for a rule the list does not declare.
+ * `off` is `null`, or `'elsewhere'` / `'behind'` as `ruleHere` says, and then the four values are `null`.
+ * A kind that is not one of TASK_KINDS is read as no kind here; `validateContract` names it. */
+export function taskModes(markdown, readRule) {
+  return tasksOf(markdown).map(({ id, kind: written, done }) => {
+    const kind = TASK_KINDS.includes(written) ? written : null;
+    const session = (kind && readRule(`session-effort-${kind}`)) || readRule(MODE_RULES.session);
+    const writer = readRule(MODE_RULES.writer);
+    const reader = readRule(MODE_RULES.reader);
+    const subagent = readRule(MODE_RULES.subagent);
+    const off = [session, writer, reader, subagent].find((rule) => rule?.off)?.off ?? null;
+    if (off) return { id, kind, done, effort: null, writerModel: null, readerModel: null, subagentEffort: null, off };
+    return {
+      id,
+      kind,
+      done,
+      effort: session?.value ?? null,
+      writerModel: WRITING_KINDS.has(kind) ? (writer?.alias ?? writer?.value ?? null) : null,
+      readerModel: reader?.alias ?? reader?.value ?? null,
+      subagentEffort: subagent?.value ?? null,
+      off: null,
+    };
+  });
+}
+
+const OFF_TEXT = {
+  elsewhere: 'no effort or model declared in this project',
+  behind: "this copy of the harness is older than the project's rules",
+};
+
+/** One task's mode as `contract modes` prints it:
+ * `T3 (kind: build): session high; writers haiku, readers opus; every sub-agent at high`. */
+export function modeLine(mode) {
+  const head = `${mode.id} ${mode.kind ? `(kind: ${mode.kind})` : '(no kind)'}`;
+  if (mode.off) return `${head}: ${OFF_TEXT[mode.off]}`;
+  const roles = [mode.writerModel && `writers ${mode.writerModel}`, mode.readerModel && `readers ${mode.readerModel}`].filter(Boolean);
+  const parts = [`session ${mode.effort ?? 'not declared'}`];
+  if (roles.length) parts.push(roles.join(', '));
+  if (mode.subagentEffort) parts.push(`every sub-agent at ${mode.subagentEffort}`);
+  return `${head}: ${parts.join('; ')}`;
 }

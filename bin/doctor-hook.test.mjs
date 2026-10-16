@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { doctorMain } from './doctor.mjs';
-import { readCache } from './lib/cache.mjs';
+import { readCache, writeCache } from './lib/cache.mjs';
 import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
 
@@ -407,6 +407,84 @@ test('doctor --hook starts no copy of js-harness for the hook commands its manif
       [],
       'no recorded js-harness resume command is run by the session-start report',
     );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The host-update row (bin/lib/host-update.mjs) is added when the caller hands doctor the host check, as the
+// dispatcher does. Its notice stays a `systemMessage` (zero model tokens) and names the update after the usual text.
+test('doctor --hook names a host update since the last review and a downloaded version not applied, once', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home, project);
+    const fetchImpl = async (url) => ({
+      ok: true,
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : { tag_name: 'v0.0.1' }),
+    });
+    let versions = { found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' };
+    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32', host: () => versions };
+    const argv = ['--hook', '--home', home, '--cwd', project];
+
+    const baseline = await runHook(argv, {}, deps);
+    assert.equal(baseline.stdout, '', 'the first reading is the reviewed baseline: no gap, no notice');
+    const { at } = readCache(home).host.reviewed;
+    assert.deepEqual(readCache(home).host.reviewed, { desktop: '2.37337.1', code: '2.1.295', at });
+
+    versions = { found: true, desktop: '2.37337.1', staged: '2.42304.0', code: '2.1.295' };
+    const staged = await runHook(argv, {}, deps);
+    assert.deepEqual(JSON.parse(staged.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.42304.0 is downloaded and not applied)' });
+
+    versions = { found: true, desktop: '2.42304.0', staged: '2.42304.0', code: '2.1.299' };
+    const updated = await runHook(argv, {}, deps);
+    assert.equal(updated.code, 0);
+    assert.equal(updated.stderr, '');
+    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review)' });
+    assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');
+
+    // Another update before the review is recorded is a new notice, though the gap's state is the same (Codex, 2026-10-15).
+    versions = { found: true, desktop: '2.45000.0', staged: '2.45000.0', code: '2.1.301' };
+    const again = await runHook(argv, {}, deps);
+    assert.deepEqual(JSON.parse(again.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.45000.0 and its Code tab CLI 2.1.295 → 2.1.301 since the last review)' });
+    versions = { found: true, desktop: '2.45000.0', staged: '2.46000.0', code: '2.1.301' };
+    const stagedAgain = await runHook(argv, {}, deps);
+    assert.match(JSON.parse(stagedAgain.stdout).systemMessage, /Claude Desktop 2\.46000\.0 is downloaded and not applied\)$/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): a gentle-ai sync rewrites the global CLAUDE.md, so a new
+// gentle-ai version is named in the notice, still a `systemMessage`, beside a host update when both are due.
+test('doctor --hook names a gentle-ai version since the last review, once, and beside a host update', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home, project);
+    const fetchImpl = async (url) => ({
+      ok: true,
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : { tag_name: 'v0.0.1' }),
+    });
+    let versions = { found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' };
+    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32', host: () => versions, gentleAiSnapshots: () => [] };
+    const argv = ['--hook', '--home', home, '--cwd', project];
+
+    assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the first reading is the reviewed baseline');
+    assert.equal(readCache(home).gentleAi.reviewed.version, '9.9.9');
+
+    writeCache(home, { ...readCache(home), gentleAi: { reviewed: { version: '9.8.0', at: '2026-10-16T00:00:00.000Z' } } });
+    const updated = await runHook(argv, {}, deps);
+    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (gentle-ai 9.8.0 → 9.9.9 since the last review)' });
+    assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');
+
+    versions = { found: true, desktop: '2.42304.0', staged: null, code: '2.1.295' };
+    const both = await runHook(argv, {}, deps);
+    assert.deepEqual(JSON.parse(both.stdout), {
+      systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 since the last review; gentle-ai 9.8.0 → 9.9.9 since the last review)',
+    });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

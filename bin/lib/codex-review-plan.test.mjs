@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ruleValue } from './rules.mjs';
 import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, needsFlagLine, planLines, reviewPlan, RECENT_PARTS, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
 
-const PAIR = { model: 'gpt-6.1-sol', effort: 'high' };
+const PAIR = { model: 'gpt-fixture', effort: 'high' };
 
 /** The run line of a part that stood, as `js-harness codex-review` writes it, with the fields a plan reads:
  * `changedLines` of the part and the `inputTokens` its session spent. `over` replaces any of them. */
@@ -28,8 +28,8 @@ const atMedium = (changedLines, inputTokens) => partRun(changedLines, inputToken
 
 test('a measured part is a run line of a part that stood, with its changed lines, its input tokens and what its session ran on', () => {
   assert.deepEqual(measuredParts([partRun(200, 60000), atMedium(900, 180000)]), [
-    { changedLines: 200, inputTokens: 60000, model: 'gpt-6.1-sol', effort: 'high' },
-    { changedLines: 900, inputTokens: 180000, model: 'gpt-6.1-sol', effort: 'medium' },
+    { changedLines: 200, inputTokens: 60000, model: 'gpt-fixture', effort: 'high' },
+    { changedLines: 900, inputTokens: 180000, model: 'gpt-fixture', effort: 'medium' },
   ]);
   // A session whose rollout file named no model is measured all the same: its tokens were read.
   assert.deepEqual(measuredParts([partRun(200, 60000, { sessionModel: null, sessionEffort: null })]), [{ changedLines: 200, inputTokens: 60000, model: null, effort: null }]);
@@ -179,7 +179,7 @@ test('the plan names the range, the model, the effort, the parts with their file
   const plan = planOf([part(2, 380), part(1, 914)], MEASURED);
   assert.deepEqual(plan, {
     range: 'aaaaaaa..bbbbbbb',
-    model: 'gpt-6.1-sol',
+    model: 'gpt-fixture',
     effort: 'high',
     parts: [
       // 10,000 + 380 x 100 is 48,000, and 10,000 + 914 x 100 is 101,400: printed to two figures, so neither
@@ -200,10 +200,10 @@ test('the plan names the range, the model, the effort, the parts with their file
     leftOut: null,
   });
   assert.deepEqual(planLines(plan), [
-    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 2 parts, 1,294 changed lines in 3 files.',
+    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 1,294 changed lines in 3 files.',
     '  part 1 of 2: 2 files, 380 changed lines, about 48,000 input tokens',
     '  part 2 of 2: 1 file, 914 changed lines, about 100,000 input tokens',
-    `Estimate: about 148,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-6.1-sol at high effort: ${METHOD}`,
+    `Estimate: about 148,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}`,
   ]);
 });
 
@@ -218,10 +218,10 @@ test('the estimate of the whole is a range when the measured parts did not cost 
   // 48,000 x 1.5 is 72,000 and 101,400 x 1.5 is 152,100: each to two figures, as the figures of the parts are, and added up.
   assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [148000, 222000]);
   assert.deepEqual(planLines(plan), [
-    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 2 parts, 1,294 changed lines in 3 files.',
+    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 1,294 changed lines in 3 files.',
     '  part 1 of 2: 2 files, 380 changed lines, about 48,000 input tokens',
     '  part 2 of 2: 1 file, 914 changed lines, about 100,000 input tokens',
-    `Estimate: about 148,000 to 222,000 input tokens in all. It rests on 10 parts this machine's run log measured on gpt-6.1-sol at high effort: ${METHOD}${RANGE}`,
+    `Estimate: about 148,000 to 222,000 input tokens in all. It rests on 10 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}${RANGE}`,
   ]);
   // The high figure is never the smaller of the two, whatever the rounding of each part does.
   for (const lines of [1, 37, 115, 383, 400, 401, 955, 3228]) {
@@ -255,7 +255,7 @@ test('with no measured part the plan says there is no estimate and why, and puts
   assert.equal(plan.inputTokens, null);
   assert.deepEqual(plan.basis, { runs: 0, samePair: false, atPair: 0, fixed: null, perChangedLine: null, highRatio: null });
   assert.deepEqual(planLines(plan), [
-    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 2 parts, 8 changed lines in 3 files.',
+    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 8 changed lines in 3 files.',
     '  part 1 of 2: 2 files, 6 changed lines',
     '  part 2 of 2: 1 file, 2 changed lines',
     'No estimate: the run log of this machine holds no part whose changed lines and input tokens were measured, and an estimate is never a guess.',
@@ -267,16 +267,16 @@ test('an estimate from runs at another effort says so, with how many parts it re
   const plan = planOf([part(1, 200)], runs);
   assert.deepEqual(plan.basis, { runs: 4, samePair: false, atPair: 1, fixed: 0, perChangedLine: 300, highRatio: 1 });
   assert.deepEqual(planLines(plan), [
-    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 1 part, 200 changed lines in 1 file.',
+    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 1 part, 200 changed lines in 1 file.',
     '  part 1 of 1: 1 file, 200 changed lines, about 60,000 input tokens',
-    'Estimate: about 60,000 input tokens in all. It rests on 4 parts this machine\'s run log measured, 1 of them on gpt-6.1-sol at high effort and the rest at another effort or in a session that named none ' +
+    'Estimate: about 60,000 input tokens in all. It rests on 4 parts this machine\'s run log measured, 1 of them on gpt-fixture at high effort and the rest at another effort or in a session that named none ' +
       `(with 5 or more of the first kind it would rest on those alone): ${method('0', '300')}`,
   ]);
   // One measured part is said as one, and none on the model and at the effort of the review as none.
-  assert.match(planLines(planOf([part(1, 200)], [atMedium(100, 30000)])).at(-1), /It rests on 1 part this machine's run log measured, 0 of them on gpt-6\.1-sol at high effort and the rest at another effort/);
+  assert.match(planLines(planOf([part(1, 200)], [atMedium(100, 30000)])).at(-1), /It rests on 1 part this machine's run log measured, 0 of them on gpt-fixture at high effort and the rest at another effort/);
   // A session whose rollout file named no model is one of the rest.
   const unnamed = partRun(100, 30000, { sessionModel: null, sessionEffort: null });
-  assert.match(planLines(planOf([part(1, 200)], [partRun(100, 30000), unnamed])).at(-1), /It rests on 2 parts this machine's run log measured, 1 of them on gpt-6\.1-sol at high effort and the rest at another effort or in a session that named none /);
+  assert.match(planLines(planOf([part(1, 200)], [partRun(100, 30000), unnamed])).at(-1), /It rests on 2 parts this machine's run log measured, 1 of them on gpt-fixture at high effort and the rest at another effort or in a session that named none /);
 });
 
 test('an estimate from fewer than five parts, all of them on the model and at the effort of the review, says nothing of another effort', () => {
@@ -288,7 +288,7 @@ test('an estimate from fewer than five parts, all of them on the model and at th
     const plan = planOf([part(1, 200)], runs);
     assert.equal(plan.basis.runs, runs.length, rests);
     assert.deepEqual([plan.basis.samePair, plan.basis.atPair], [false, runs.length], rests);
-    assert.match(planLines(plan).at(-1), new RegExp(`^Estimate: about ${sends} input tokens in all\\. It rests on ${rests} this machine's run log measured on gpt-6\\.1-sol at high effort: a part is put at about `), rests);
+    assert.match(planLines(plan).at(-1), new RegExp(`^Estimate: about ${sends} input tokens in all\\. It rests on ${rests} this machine's run log measured on gpt-fixture at high effort: a part is put at about `), rests);
     assert.doesNotMatch(planLines(plan).at(-1), /another effort|named none/, rests);
   }
 });
@@ -296,7 +296,7 @@ test('an estimate from fewer than five parts, all of them on the model and at th
 test('the plan is of the review the command runs: it names the model and the effort it is handed, and the estimate is held to them', () => {
   const runs = onLine(0, 200, [100, 200, 300, 400, 500], atMedium);
   const plan = planOf([part(1, 100)], runs, { effort: 'medium' });
-  assert.equal(planLines(plan)[0], 'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at medium effort, 1 part, 100 changed lines in 1 file.');
+  assert.equal(planLines(plan)[0], 'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at medium effort, 1 part, 100 changed lines in 1 file.');
   assert.deepEqual([plan.basis.runs, plan.basis.samePair, plan.basis.atPair], [5, true, 5]);
 });
 
@@ -305,7 +305,7 @@ test('a range that changes nothing is a plan of no part, which still names the m
     const plan = planOf([], runs);
     assert.deepEqual([plan.parts, plan.files, plan.changedLines, plan.inputTokens, plan.over], [[], 0, 0, null, false]);
     assert.deepEqual(planLines(plan), [
-      'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.',
+      'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 0 parts, 0 changed lines in 0 files.',
       'No estimate: the range changes no file, so there is no part to review.',
     ]);
   }
@@ -327,11 +327,11 @@ test('a plan says what the review leaves out, how much of it and why, in a line 
   // The parts, their sizes and the estimate are of what the review reads, as they were.
   assert.deepEqual([plan.files, plan.changedLines, plan.inputTokens], [3, 1294, 148000]);
   assert.deepEqual(planLines(plan), [
-    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 2 parts, 1,294 changed lines in 3 files.',
+    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 1,294 changed lines in 3 files.',
     '  part 1 of 2: 2 files, 380 changed lines, about 48,000 input tokens',
     '  part 2 of 2: 1 file, 914 changed lines, about 100,000 input tokens',
     'Left out of the review: 5 files, 1,420 changed lines (3 Markdown documents, 1,300 changed lines; 2 files the project marks `-codex-review`, 120 changed lines).',
-    `Estimate: about 148,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-6.1-sol at high effort: ${METHOD}`,
+    `Estimate: about 148,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-fixture at high effort: ${METHOD}`,
   ]);
   assert.equal(planLines(planOf([part(1, 10)], [], { leftOut: leftOut([1, 1], [0, 0]) }))[2], 'Left out of the review: 1 Markdown document, 1 changed line.');
 });
@@ -349,7 +349,7 @@ test('a range whose files are all left out is a plan of no part that says so, an
     const plan = planOf([], runs, { leftOut: leftOut([2, 40], [0, 0]) });
     assert.deepEqual([plan.parts, plan.files, plan.changedLines, plan.inputTokens, plan.over], [[], 0, 0, null, false]);
     assert.deepEqual(planLines(plan), [
-      'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.',
+      'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 0 parts, 0 changed lines in 0 files.',
       'Left out of the review: 2 Markdown documents, 40 changed lines.',
       'No estimate: every file the range changes is left out of the review, so there is no part to review.',
     ]);
