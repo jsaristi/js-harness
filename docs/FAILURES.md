@@ -269,8 +269,10 @@ the cost of more gates.
   as a rule; Codex took it in seven parts
 - Seen: 2026-10-11 — relief file, line 222 — 2,221 lines did not fit one review; reviewed in two
   halves (claimed)
-- Proof: the row `codex-review` (debt) prints the size (`checkCodexReviewDebt`, `bin/check.mjs`);
-  whether it refuses is its session's to name
+- Control: check — bin/check-commit-size.test.mjs — "a staged change over the changed lines a
+  reviewed commit holds fails the gate" — since 2026-10-16
+- Proof: the row `codex-review` (debt) prints the size of a range (`checkCodexReviewDebt`,
+  `bin/check.mjs`), and the row `commit-size` that of each commit before it is made
 
 ### context-cut-by-percentage
 Sessions were told to cut, or proposed a cut, near 70 percent of their context because of a mark of
