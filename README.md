@@ -187,7 +187,7 @@ removed hook entry from ~\.claude\settings.json
 ### js-harness status
 
 Inside a project, shows its pinned version, the running version and whether this clone is set
-up. With `--global`, shows the machine's installed version and its manifest.
+up. With `--global`, shows the machine's installed version, its manifest and the latest release.
 
 ```console
 $ js-harness status
@@ -200,8 +200,10 @@ pin and running version: match
 
 ### js-harness update
 
-Says whether a newer release exists. No release is tagged before 1.0.0, so for now it says that
-and how to get the newest copy.
+Says whether a newer release exists: the newest `vX.Y.Z` tag of the private repository, read with
+`git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
+another repository). No release is tagged before 1.0.0, so for now it says that and how to get
+the newest copy. When the tags cannot be listed it says why and exits 1.
 
 ```console
 $ js-harness update
@@ -210,8 +212,11 @@ no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get 
 
 ### js-harness upgrade
 
-Installs the newer release of `--source <dir>`, a folder of `npm pack` tarballs, then syncs.
-With no source it installs nothing and exits 1; no package registry is ever asked.
+Installs the newer release with the package manager, then syncs the home with the copy it
+installed: the repository at its newest tag (`github:jsaristi/js-harness#vX.Y.Z`), or the newest
+tarball of `--source <dir>`, a folder of `npm pack` tarballs, which wins when named and needs no
+credential. With no release tagged it installs nothing and exits 1; no package registry is ever
+asked.
 
 ```console
 $ js-harness upgrade
