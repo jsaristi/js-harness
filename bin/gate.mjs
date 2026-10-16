@@ -429,7 +429,7 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   const command = `gate -- ${commandLine}`;
   const record = gateLogSwitchedOff(env)
     ? null
-    : gateRecord({ home, cwd: path.resolve(cwd), command, ...deps.gateLog, onFailure: (why) => console.error(`gate: the gate log ${why}`) });
+    : gateRecord({ home, cwd: path.resolve(cwd), command, session: env.CLAUDE_CODE_SESSION_ID || null, ...deps.gateLog, onFailure: (why) => console.error(`gate: the gate log ${why}`) });
   // The looks of the lock this gate made (`stillWanted` below counts them), declared before `logged`, which
   // reads it on every path, the held one and the one without a lock included.
   let looks = 0;

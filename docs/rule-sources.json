@@ -239,6 +239,10 @@
       "by": "session"
     }
   },
+  "session-stall": {
+    "kind": "design",
+    "path": "odd/tasks/stalled-sessions.md"
+  },
   "sessions-open-in-sidebar": {
     "kind": "words",
     "quotes": [

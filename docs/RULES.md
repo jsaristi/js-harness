@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `6ceefeb4a3f8`. In force: 30 (15 of Sebastián, 15 of the project). Retired: 0.
+Hash `de4a8300404e`. In force: 31 (15 of Sebastián, 16 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -161,6 +161,11 @@ How long a Codex review may run before it is stopped as stalled: 30 minutes.
 How long one sensor of the gate may run before it is stopped and the commit refused: 20 minutes.
 - Read by: `bin/check.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `odd/tasks/remote-control.md`.
+
+### session-stall
+How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.
+- Read by: none.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/stalled-sessions.md`.
 
 ### wait-every
 How often js-harness wait checks its condition, unless --every says otherwise: 120 seconds. The flag `--every` overrides it for one run.
