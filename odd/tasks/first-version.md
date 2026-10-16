@@ -129,8 +129,9 @@ How a gate goes to CI, built in T7b, test first:
 
 - Overflow only. A commit's gate runs here, as today, when the gate lock is free. When a turn would have to wait
   for it, the test sensor runs on CI instead: the local machine stays the fast path for one session (137-174 s
-  median against 214 s plus the runner's start), and CI takes every gate that would otherwise queue. A rule in
-  `bin/lib/rules-data.mjs` switches it on, off by default until his yes.
+  median against 214 s plus the runner's start), and CI takes every gate that would otherwise queue. Built
+  (L9): a project that holds `.github/workflows/gate.yml` has it, `JS_HARNESS_GATE_CI=0` switches it off,
+  and a CI machine (`CI` set) never sends its gate on; no rule was needed.
 - The proof is still the commit's own (AGENTS.md; S7). The hook writes the staged tree as a commit object
   (`git write-tree`, `git commit-tree` with `HEAD` as parent), pushes it to `refs/heads/gate/<sha>`, waits for
   the workflow run of that exact sha, reads its conclusion, and deletes the branch. The commit is made only on
@@ -169,7 +170,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
-- [ ] T7b (kind: build) S7: the design built, after his yes to its spend
+- [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
 ## Log
 
@@ -212,3 +213,23 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   running, the flip is his. Design only; change no repo setting." The design is above, with its cost; no
   setting was changed. The prices were read that day from GitHub's and CircleCI's pages; the gate figures from
   this machine's gate log.
+- L9 (2026-10-16, JH 21): the lead, 07:35: "the repo is PUBLIC (his yes after the history audit). T7: build the
+  gates on GitHub-hosted runners (free, 20 concurrent jobs). No pull_request_target; no secrets in workflows; forks
+  must not run on our machines." Checked first: `gh repo view` read PUBLIC. Built in `bin/lib/ci-gate.mjs`,
+  `bin/check.mjs` (`testsOnCi`, before `underGateLock`) and `.github/workflows/gate.yml`, held by
+  `scripts/github-workflows.test.mjs` (push to `gate/**` only, `contents: read`, no secret, actions pinned by
+  commit). RED, then GREEN: the workflow test 6/6 with no workflow there; `bin/lib/ci-gate.test.mjs` 6/6 with no
+  module; `bin/check-ci-gate.test.mjs` 3 of 4 red (the fourth pins a free turn), then 5/5 with the gate log
+  record and `--remote` passed on. A first live run of this tree (run 38894441312) worked end to end, the
+  branch made, read and deleted, 144 s on 4 processors and 16 GB, and was red: the tests of `ci-gate` had no
+  git identity on the runner, reproduced here with no global git config and fixed in the test.
+  The second live run (38895150726) was green: 139 s from the push to its conclusion, 167 s with the push
+  and the delete, against a local median of 137-174 s before any wait.
+- L10 (2026-10-16, JH 21): T7b reviewed. gentle-ai high, lenses risk, resilience and reliability, approved with no
+  finding and acknowledged (`review-114b5da986f80c00`); its preflight timed out three times with `--base-ref=origin/main`
+  while the machine was at 100% CPU, and answered in 9 s with the merge-base SHA. The build commit's own gate went
+  to CI while another gate held the lock: 105 s, run 38895585918. Codex (c644fca..35a0423) said incorrect, three
+  P2s, all taken: `gh` now runs in the project and names the GitHub repository of the remote (`--repo`, read from
+  the remote's URL as written; a remote not on GitHub is no answer); a run that ends `timed_out` is no answer, not
+  a red; the workflow test finds a secret named by index (`secrets['X']`). RED 4 of 8 in `ci-gate.test.mjs`, then
+  8/8, also with no git identity.

@@ -39,6 +39,7 @@ import { ruleHere, ruleOf } from './lib/rules.mjs';
 import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './subagents.mjs';
+import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
 
 export { estimateTokens };
 
@@ -1571,7 +1572,33 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return underGateLock(cwd, lock, deps, run, record);
+  return (await testsOnCi(cwd, lock, deps)) ?? underGateLock(cwd, lock, deps, run, record);
+}
+
+/** The rows of a gate whose tests ran on GitHub's machines because its turn at the lock would wait
+ * (./lib/ci-gate.mjs), or null for a gate that runs here: its turn is free, the project has no gate workflow, or
+ * CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its tests
+ * marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate` stand
+ * in for the two halves. */
+async function testsOnCi(cwd, lock, deps) {
+  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, home: lock.home, env: lock.env ?? process.env });
+  if (!why) return null;
+  console.error(`check: ${why}; the tests go to GitHub's machines (${CI_WORKFLOW}) instead of waiting`);
+  const startedAt = Date.now();
+  const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
+  if (!ci.ran) {
+    console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
+    return null;
+  }
+  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
+  let at = startedAt;
+  const record = lock.log !== false && lock.home !== undefined
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', now: () => at, ...deps.gateLog })
+    : null;
+  record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
+  at = Date.now();
+  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci' }] });
+  return [gateRow(`${why}, so the tests ran on CI`), tests, ...gateLogRows(record)];
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
@@ -2237,7 +2264,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // computed. The inner check and a push are outside this branch, and as they were.
   let stopped = false;
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null };
+    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, env, remote };
     const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
     const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy, wsl: readGateWsl(home, env) });
     rows.push(...sensed);
