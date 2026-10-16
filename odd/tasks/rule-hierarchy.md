@@ -3732,6 +3732,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - After T1 landed (PR 293, `main` 5cccfc4), this branch merged `main` and `docs/SPEC.md` gained "The
     reply check" (51 capabilities): the row `spec` had refused the merge on `js-harness reply` and the
     two hook entries, which no capability claimed. The pull request stays a draft on question 9.
+  - The `reply` key added to this repository's `harness.json`, with the Spanish labels of question 9 and
+    `bin/lib/reply.test.mjs`, on the lead's notice of 21:15 ("282 too, with the reply key"; a claim of the
+    lead's). His answer to question 11, "Prendido por defecto (Recomendada)" (read with `js-harness sessions
+    --quote`, the lead's transcript, line 13566), is for a new project; question 9, this repository, is still
+    open, so the pull request stays a draft and nothing installs the Stop entry until it lands.
 - 2026-10-16, T17e, by `JH 28 · reserva B` on `docs/sweep-close`, from the lead's notice to 28
   (a claim of the lead's, read in the channel record). Three read-only readers took the 104
   unchecked items of `docs/sweep-2026-10-11.md` against `main` at `5cccfc4`, one group each: A
