@@ -18,6 +18,7 @@ import {
   InitWriteError,
 } from './project.mjs';
 import { sha256 } from './manifest.mjs';
+import { repoTemplate } from './git-fixture.testkit.mjs';
 
 // T2e item 8 (R3-tests-depend-on-host-git-config): every test here runs a real `git` (only
 // `codegraph` is ever faked), so a real `git init`/`commit`/`worktree add` must not silently pick
@@ -43,10 +44,15 @@ after(() => {
   fs.rmSync(configDir, { recursive: true, force: true });
 });
 
-function makeTmpRepo(prefix = 'js-harness-project-') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+/** What `git init` makes, made once and copied (`git-fixture.testkit.mjs`): every empty repository here is the same. */
+const emptyRepo = repoTemplate((dir) => {
   const init = spawnSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
   assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+});
+
+function makeTmpRepo(prefix = 'js-harness-project-') {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  emptyRepo(dir);
   return dir;
 }
 

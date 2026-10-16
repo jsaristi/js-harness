@@ -11,6 +11,7 @@ import { forgetOptionalFile, forgetScheduledTask, manifestPath, readManifest, re
 import { identifyProcesses } from './lib/process-tree.mjs';
 import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, remoteDir, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml } from './lib/remote.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
+import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 const SELF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs');
 
@@ -43,10 +44,15 @@ test.before(() => {
 function makeProject(name = 'my-project') {
   const root = path.join(tempDir(), name);
   fs.mkdirSync(root);
-  const init = spawnSync('git', ['init'], { cwd: root, encoding: 'utf8' });
-  assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+  emptyRepo(root);
   return root;
 }
+
+/** What `git init` makes, made once and copied (`lib/git-fixture.testkit.mjs`): every empty repository here is the same. */
+const emptyRepo = repoTemplate((root) => {
+  const init = spawnSync('git', ['init'], { cwd: root, encoding: 'utf8' });
+  assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+});
 
 /** Why a test is skipped off Windows (`false` on it, so every test runs there). The command refuses anywhere
  * else, and a test that takes the fake world below past that refusal fakes `win32` while its paths, and the

@@ -950,7 +950,10 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
 - [x] T3 · M1: one whole run under the lock; the tables in Progress; the cuts chosen, with
       the counts they are judged by. Route: inline, no source written. Evidence: the entry
       of T3 in Progress.
-- [ ] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3.
+- [x] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3. Evidence:
+      cut 1 never reached `main` and T17 took its point; cut 2 is T16; cut 3 is
+      `bin/lib/git-fixture.testkit.mjs`, 1,545 git processes fewer in 15 files; cut 4 is his. The
+      entry of 2026-10-16 in Progress.
 - [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
 - [x] T5b · The four notes gentle-ai left on T5 (Progress; `8bae23f`). Route: delegated, one writer,
       tests first.
@@ -2751,6 +2754,33 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   - *T19 is ordered:* after the stretch of the session "JH 9" on `bin/check.mjs` is on
     `main`. The antivirus is his and nothing is recommended there: the numbers are 1,139
     processor-seconds in a run of 805 s, 859 in one of 533.
+- 2026-10-16 · **T4 closed, with cut 3: repositories of fixtures built once and copied**
+  (JH 21, by the lead's order of 13:50: "Next for JH 21: gate-wait T4 (the cuts T3 chose,
+  each judged by a second run), per odd/tasks/gate-wait.md"). The four cuts of T3:
+  1. *The order the files start in*: its runner (`fc70dc3`) stayed on
+     `feat/gate-wait-count` and never reached `main`; T17 split the long file in two, so no
+     file is the wall that order was for. Nothing built.
+  2. *The git a review asks*: T16, done (7,840 to 6,628 git processes in its file).
+  3. *Fixtures built once*: built here. `bin/lib/git-fixture.testkit.mjs`, `repoTemplate(build)`:
+     `build` runs once in a process, in a folder of its own, and every call after copies that
+     folder with `fs.cpSync`; a build that throws leaves nothing, the template goes at exit.
+     Measured first, on this machine under load: `git init` 276 ms, init with two `config`,
+     `add` and `commit` 1,058 ms, a copy of that repository 84 ms. Taken in 15 test files,
+     where each test gets a repository of its own that never meets another by commit ids
+     (`merge-queue` copies its origin and clone as one folder and points the clone at the
+     copy's origin, one `git remote set-url`). Left as they were: `evals/configs.mjs` (489,
+     the sandbox a trial prepares is the product under test), `bin/codex-review.test.mjs`
+     (it copied already), and the tests that commit in their body.
+     *The second run* (`scripts/count-git.mjs --frames 2`): the whole suite on `origin/main`
+     `8b3c031` before, 22,475 git processes in 40 min 43 s (the machine shared); the 15 files
+     after, alone. In those files **5,729 to 4,184 git processes, 1,545 fewer**; `init` 551 to
+     17, `config` 402 to 95, `commit` 359 to 165, `add` 258 to 143. The new test file adds 27.
+     So 1,518 net, 6.8% of the suite's git, over the twentieth T3 asked of a cut. The largest:
+     `merge-queue` 710 to 269, `rules-change-run` 970 to 738, `codex-review-coverage` 829 to
+     640, `remote` 449 to 270, `project` 1,076 to 941. Their attributed seconds read 2,768 to
+     1,126, a reading under two different loads and no proof. Each file passed alone through
+     `js-harness gate`, 15 of 15.
+  4. *The antivirus*: his; nothing built, the numbers stand in T3's entry.
 
 ## Next
 

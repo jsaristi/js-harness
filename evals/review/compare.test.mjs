@@ -10,6 +10,7 @@ import { codexArgs, REVIEW_EFFORT } from '../../bin/codex-review.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir } from '../../bin/lib/codex-review-home.mjs';
 import { REVIEW_PROMPT_VERSION } from '../../bin/lib/codex-review-prompt.mjs';
 import { windowsCommandLine } from '../../bin/lib/windows-args.mjs';
+import { repoTemplate } from '../../bin/lib/git-fixture.testkit.mjs';
 import {
   buildReading, CELLS, CHECKOUT_NAME, codegraphSettings, compareMain, CONFIGS, EXCLUDED, FINDING_BODY_MAX, RANGES, READING_SCHEMA,
   readingFile, readReading,
@@ -98,10 +99,22 @@ function machine({ config = CONFIG_TOML } = {}) {
 const GOAL = 'Counts are stored once.';
 const FEATURE_DOC = `# A feature\n\n## Goal\n${GOAL}\n\n## Done when\n- \`npm test\` exits 0\n`;
 
+// Each repository is built once in a run of this file, by its `extra`, and copied (`bin/lib/git-fixture.testkit.mjs`).
+const fakeRepositories = new Map();
+
 /** A repository of two commits that stands in for this one, and the `real` range over it: `base` is the
  * first commit and `head` the second. `extra` are more files of the first commit. */
 function fakeRepository(m, extra = {}) {
   const root = path.join(m.root, 'repository');
+  const key = JSON.stringify(extra);
+  if (!fakeRepositories.has(key)) fakeRepositories.set(key, repoTemplate((template) => buildFakeRepository(template, extra)));
+  const { base, head } = fakeRepositories.get(key)(root);
+  const real = { ...RANGES.find((range) => range.name === 'real'), base, head, doc: 'odd/tasks/feature.md' };
+  return { root, base, head, ranges: [real, ...RANGES.filter((range) => range.name !== 'real')] };
+}
+
+/** Builds in `root` the repository `fakeRepository` hands out copies of: `{ base, head }`. */
+function buildFakeRepository(root, extra) {
   fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
   git(root, 'init', '--quiet');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
@@ -121,9 +134,7 @@ function fakeRepository(m, extra = {}) {
   const base = git(root, 'rev-parse', 'HEAD');
   fs.writeFileSync(path.join(root, 'f.txt'), 'two\n', 'utf8');
   git(root, 'commit', '--quiet', '-am', 'two');
-  const head = git(root, 'rev-parse', 'HEAD');
-  const real = { ...RANGES.find((range) => range.name === 'real'), base, head, doc: 'odd/tasks/feature.md' };
-  return { root, base, head, ranges: [real, ...RANGES.filter((range) => range.name !== 'real')] };
+  return { base, head: git(root, 'rev-parse', 'HEAD') };
 }
 
 // The JSONL events `codex exec --json` prints.

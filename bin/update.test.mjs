@@ -8,6 +8,7 @@ import { install, recordOptionalFile, recordScheduledTask } from './lib/manifest
 import { staleManifestMessage } from './lib/project.mjs';
 import { currentVersion } from './install.mjs';
 import { resolveLatest, statusMain, updateMain, upgradeMain } from './update.mjs';
+import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // T5: `status` now reads the project the current folder belongs to, and these tests run real `git`,
 // so they must not pick up the host's git config (see project.test.mjs, T2e item 8).
@@ -634,10 +635,15 @@ test('upgradeMain returns a non-zero code and skips sync when install fails', as
 
 // --- T5: `status` by location (project vs. machine), the "Command scope" rule ---
 
-function makeRepo(prefix = 'js-harness-status-repo-') {
-  const dir = makeTmpDir(prefix);
+/** What `git init` makes, made once and copied (`lib/git-fixture.testkit.mjs`): every empty repository here is the same. */
+const emptyRepo = repoTemplate((dir) => {
   const init = spawnSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
   assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+});
+
+function makeRepo(prefix = 'js-harness-status-repo-') {
+  const dir = makeTmpDir(prefix);
+  emptyRepo(dir);
   return dir;
 }
 
