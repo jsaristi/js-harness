@@ -72,6 +72,7 @@ const PLANTED = {
   'subagent-reader-model': { line: 'A verifier runs on claude-opus-5-5.', marked: 'A verifier runs on the model of `rule:subagent-reader-model`.' },
   'wait-every': { line: 'js-harness wait looks again every 120 seconds.', marked: 'js-harness wait looks again as often as `rule:wait-every` says.' },
   'wait-for': { line: 'js-harness wait gives up after 480 minutes.', marked: 'js-harness wait gives up at `rule:wait-for`.' },
+  'work-sessions': { line: 'At most 3 work sessions run at once.', marked: 'At most the work sessions of `rule:work-sessions` run at once.' },
 };
 
 test('on the real list, every rule with patterns finds its own planted line, and loses it to its mark', () => {

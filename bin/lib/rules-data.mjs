@@ -319,6 +319,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-09",
     "value": 3,
-    "unit": "sessions"
+    "unit": "sessions",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:at most|up to|no more than)\\s+{amount}\\s*(?:work )?sessions\\b",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*work sessions\\b"
+    ]
   }
 ];
