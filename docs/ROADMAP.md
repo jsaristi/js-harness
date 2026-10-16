@@ -1043,15 +1043,19 @@ reasons, is under [Session channel](#session-channel). Also open:
    - working: he sends nothing; the reply says what wakes the agent and what it reports next.
      No block.
    - decision: the work waits on him. One block.
-   - cut: a compact (two numbered blocks, the bare `/compact` and the resume prompt) or a new
-     session.
+   - cut: a new session, one block. He never compacts by hand, present or away (his words of
+     2026-10-15, odd/tasks/no-manual-compact.md S1): near 88% a session writes its state and
+     keeps working, the host compacts it by itself, and a session that stops gets its next
+     prompt from the orchestrator. Until then a compact was two numbered blocks, the bare
+     compaction command and the resume prompt.
    - finished: the session closed; the reply names the session he returns to. No block.
 
    A block sits under three fixed lines: what it is (for example "leave to spend one Codex
    review"), where it is sent (this chat) and what sending it does (the agent runs it; he
    runs nothing). The text of a decision is his answer in his words, as short as "Sí", never
    a technical instruction; the question, with its cost, goes above it in plain words. The
-   resume prompt of a cut is the one long text, labelled as text to paste, not to understand.
+   opening prompt of a new session is the one long text, labelled as text to paste, not to
+   understand.
    A decision is never asked while work still runs: the agent waits for it to end. A decision
    asked again says first that the earlier answer still holds and what changed.
 

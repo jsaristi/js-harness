@@ -1,6 +1,7 @@
 // The measure of the context pause, the proof the user is owed (odd/tasks/session-channel.md, section 14):
-// for each compaction the host made, whether the session was told the pause before it, kept its state in
-// the feature document between the notice and the boundary, and announced the compaction to him. The
+// for each compaction the host made, whether the session was told the pause before it and kept its state in
+// the feature document between the notice and the boundary. A third fact, whether a reply announced the
+// compaction to him, left when he stopped compacting by hand (odd/tasks/no-manual-compact.md, S1). The
 // facts are judged by `compactionMeasures` (bin/lib/sessions.mjs) from a transcript and two readers; this
 // module holds the reader of the document's commits and the lines `sessions --measures` prints. It spawns
 // nothing itself and reads no file: git is reached through the `run` it is given, so a test hands it a fake.
@@ -121,7 +122,7 @@ export function keptEither(...readers) {
   };
 }
 
-const FACTS = ['told', 'kept', 'announced'];
+const FACTS = ['told', 'kept'];
 
 /** Whether a compaction carries a verdict: one the host made, with the stretch before it in this transcript. */
 const isJudged = (measure) => measure.verdict !== null && measure.verdict !== undefined;
@@ -134,7 +135,7 @@ const isJudged = (measure) => measure.verdict !== null && measure.verdict !== un
  * asked for, counted and never judged; `elsewhere` the automatic ones whose stretch is in another transcript
  * (it is judged there, once); `unreadable` the transcripts that could not be read. */
 export function measuresTotal(sessions) {
-  const total = { judged: 0, sessions: 0, missing: 0, facts: { told: 0, kept: 0, announced: 0 }, unknown: 0, asked: 0, elsewhere: 0, unreadable: 0 };
+  const total = { judged: 0, sessions: 0, missing: 0, facts: { told: 0, kept: 0 }, unknown: 0, asked: 0, elsewhere: 0, unreadable: 0 };
   for (const session of sessions) {
     if (session.unavailable !== undefined) {
       total.unreadable += 1;
@@ -158,7 +159,7 @@ export function measuresTotal(sessions) {
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 const said = (fact) => (fact === true ? 'yes' : fact === false ? 'no' : 'unknown');
 
-/** The line of one compaction: its time, who made it, and for one the host made, its three facts. */
+/** The line of one compaction: its time, who made it, and for one the host made, its two facts. */
 function measureLine(measure) {
   const when = measure.at ?? 'no time recorded';
   if (!measure.automatic) return `  ${when}  asked`;

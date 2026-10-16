@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, cutRule, percentOf, personAtOf, shareOf } from './sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, cutRule, percentOf, shareOf } from './sessions.mjs';
 
 /** The most of a transcript's end that the hook reads, in bytes. The hook runs after every tool call, so a
  * file of megabytes costs what this many bytes cost: the end is all it may look at. */
@@ -138,27 +138,6 @@ export function readEnd(file, { bytes = END_BYTES, maxBytes = END_MAX_BYTES, fil
   }
 }
 
-/** When the person last wrote in the last `bytes` of a transcript (`personAtOf`), or `null` when they did not write
- * in that end or the file cannot be read. Read only at a crossing, once a stretch: a person who wrote before that
- * end wrote long ago, so the cut is not handed to them, which is the safe side. */
-function personAtIn(file, { bytes = END_BYTES, fileSystem = fs } = {}) {
-  let fd;
-  try {
-    fd = fileSystem.openSync(file, 'r');
-    const { size } = fileSystem.fstatSync(fd);
-    const text = readBack(fileSystem, fd, Math.max(0, size - bytes), size).toString('utf8');
-    return personAtOf(text.split('\n').map(objectOf).filter((entry) => entry !== null));
-  } catch {
-    return null;
-  } finally {
-    try {
-      if (fd !== undefined) fileSystem.closeSync(fd);
-    } catch {
-      // the look is over either way
-    }
-  }
-}
-
 /** The state file of a session: `<home>/.js-harness/channel/pause/<sessionId>.json`. It is the record of
  * when a session was told the pause, which a measure reads later, and of the compaction point the session
  * was seen to have. A session id that is not of the shape of one throws, since it becomes a file name. */
@@ -251,13 +230,13 @@ function writeStateFile(file, state, fileSystem) {
 /** What the session is told at the pause: its share of the window, the compaction it is measured against
  * and the room left before it, as whole numbers, with the text the session reads. The window is the
  * compaction point of the session scaled to the share the host compacts at, so a session on a window of a
- * different size is measured against its own compaction and not against the default. Whether the user is handed the
- * cut is `cutRule`'s, from when they last wrote (`personAt`) and `now`. `stage` is `pause` at the pause and `last` just
+ * different size is measured against its own compaction and not against the default. What the user is given is
+ * `cutRule`'s: nothing to send, present or away (odd/tasks/no-manual-compact.md S1). `stage` is `pause` at the pause and `last` just
  * before the host compacts: from the pause on the state is kept current after every step and the session stores the
  * prompt that resumes it, so a compaction in the middle of a task resumes from what was written minutes before it. The
  * last notice never says to stop: the host compacts with the session's next requests, so a session that waits for it
  * waits for good. */
-function noticeOf(tokens, compaction, personAt, now, stage) {
+function noticeOf(tokens, compaction, stage) {
   const window = (compaction * 100) / DEFAULT_CONTEXT_COMPACTION_PERCENT;
   const whole = Math.round(tokens);
   const share = percentOf(whole, window);
@@ -268,8 +247,8 @@ function noticeOf(tokens, compaction, personAt, now, stage) {
   // Two sessions near their compaction ended their turn waiting and were never woken (odd/tasks/pause-no-idle.md).
   const noIdle = 'Never end your turn idle: the host compacts only inside a turn, and a turn that ends with nothing running to wake it is never woken. When the work waits on something, write your state, then keep a declared wait running in the background (js-harness wait, which says what it waits for and when it ends, and wakes you when it holds), so the compaction happens inside a turn.';
   const text = stage === 'last'
-    ? `${head} The host compacts this session in a moment: write your state and store your resume prompt now, before anything else, then go on with the task: the compaction comes with your next requests, and never by waiting for it. The state goes where it is read after a compaction (${where}); the prompt with ${opening}. ${noIdle} The cut: ${cutRule(personAt, now)}.`
-    : `${head} This is the context pause. From now on keep your state where it is read after a compaction (${where}): write it after every step you finish, not once, and commit it with your next commit. Store the prompt that resumes you with ${opening}, and store it again when it changes. Say this share to the user in your next reply, once, and go on with the task. ${noIdle} The cut: ${cutRule(personAt, now)}.`;
+    ? `${head} The host compacts this session in a moment: write your state and store your resume prompt now, before anything else, then go on with the task: the compaction comes with your next requests, and never by waiting for it. The state goes where it is read after a compaction (${where}); the prompt with ${opening}. ${noIdle} The cut: ${cutRule()}.`
+    : `${head} This is the context pause. From now on keep your state where it is read after a compaction (${where}): write it after every step you finish, not once, and commit it with your next commit. Store the prompt that resumes you with ${opening}, and store it again when it changes. Say this share to the user in your next reply, once, and go on with the task. ${noIdle} The cut: ${cutRule()}.`;
   return { tokens: whole, share, compactionShare: DEFAULT_CONTEXT_COMPACTION_PERCENT, room, stage, text };
 }
 
@@ -314,7 +293,7 @@ export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(
   };
   if (told || last) {
     if (!writeState(files, next, fileSystem, now)) return null;
-    return noticeOf(end.tokens, compaction, personAtIn(transcript, { fileSystem }), now(), last ? 'last' : 'pause');
+    return noticeOf(end.tokens, compaction, last ? 'last' : 'pause');
   }
   if (next.armed !== state.armed || next.lastArmed !== state.lastArmed || next.compaction !== state.compaction) writeState(files, next, fileSystem, now);
   return null;

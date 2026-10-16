@@ -3872,42 +3872,11 @@ test('a line that does not parse, a line that is not an object and an empty text
   assert.deepEqual(lib.compactionStretch(torn).person, [{ line: 4, at: at(1) }]);
 });
 
-test('holdsCompactBlock is true for a fenced block whose whole content is /compact', () => {
-  assert.equal(lib.holdsCompactBlock('```\n/compact\n```\n'), true);
-});
-
-test('holdsCompactBlock accepts a language word after the opening fence', () => {
-  assert.equal(lib.holdsCompactBlock('```text\n/compact\n```\n'), true);
-});
-
-test('holdsCompactBlock allows blank lines around /compact inside the block', () => {
-  assert.equal(lib.holdsCompactBlock('```\n\n  /compact  \n\n```\n'), true);
-});
-
-test('holdsCompactBlock is false for /compact inside a sentence', () => {
-  assert.equal(lib.holdsCompactBlock('Type `/compact` when the pause comes.\n'), false);
-});
-
-test('holdsCompactBlock is false for a block with any other line besides /compact', () => {
-  assert.equal(lib.holdsCompactBlock('```\n/compact\nand then wait\n```\n'), false);
-  assert.equal(lib.holdsCompactBlock('```\nwait\n/compact\n```\n'), false);
-});
-
-test('holdsCompactBlock finds the compact block among other blocks, and a fence that closes a block is never an opening one', () => {
-  assert.equal(lib.holdsCompactBlock('```\nfirst\n```\n\n```\n/compact\n```\n'), true);
-  assert.equal(lib.holdsCompactBlock('```\nfirst\n```\n/compact\n```\n'), false);
-});
-
-test('holdsCompactBlock reads CRLF line ends', () => {
-  assert.equal(lib.holdsCompactBlock('```\r\n/compact\r\n```\r\n'), true);
-});
-
 test('compactionMeasures of a transcript with no compaction is empty', () => {
   assert.deepEqual(lib.compactionMeasures(transcript(prompt('hello', 1), reply('hi', 2))), []);
 });
 
-test('compactionMeasures judges a host compaction whose pause was told and announced, and asks the reader of the stretch', () => {
-  const COMPACT = '```\n/compact\n```';
+test('compactionMeasures judges a host compaction whose pause was told, and asks the reader of the stretch', () => {
   const asked = [];
   const told = (after, before) => {
     asked.push(['told', after, before]);
@@ -3919,21 +3888,20 @@ test('compactionMeasures judges a host compaction whose pause was told and annou
   };
   const text = transcript(
     prompt('go', 1),
-    reply(`Saved.\n\n${COMPACT}`, 4),
+    reply('Saved.', 4),
     compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
   );
   assert.deepEqual(lib.compactionMeasures(text, { told, kept }), [
     {
       uuid: 'b1', at: at(6), automatic: true, before: 900, line: 3, after: null, inThisFile: true,
       told: { known: true, at: at(3) }, document: null, kept: { known: false, kept: null },
-      announced: { line: 2, at: at(4) }, verdict: { told: true, kept: null, announced: true, missing: [] },
+      verdict: { told: true, kept: null, missing: [] },
     },
   ]);
   assert.deepEqual(asked, [['told', null, at(6)]], 'no feature document was written, so kept is not asked');
 });
 
-test('compactionMeasures of a host compaction told, kept and announced is judged true in every fact, and kept is asked from the notice on', () => {
-  const COMPACT = '```\n/compact\n```';
+test('compactionMeasures of a host compaction told and kept is judged true in both facts, and kept is asked from the notice on', () => {
   const DOCUMENT = 'C:\\proj\\odd\\tasks\\session-channel.md';
   const asked = [];
   const told = (after, before) => {
@@ -3947,45 +3915,36 @@ test('compactionMeasures of a host compaction told, kept and announced is judged
   const text = transcript(
     prompt('go', 1),
     call('e1', 'Edit', { file_path: DOCUMENT, old_string: 'x', new_string: 'y' }, 2),
-    reply(`Saved.\n\n${COMPACT}`, 4),
+    reply('Saved.', 4),
     compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
   );
   const [measure] = lib.compactionMeasures(text, { told, kept });
   assert.deepEqual(measure, {
     uuid: 'b1', at: at(6), automatic: true, before: 900, line: 4, after: null, inThisFile: true,
     told: { known: true, at: at(3) }, document: DOCUMENT, kept: { known: true, kept: true },
-    announced: { line: 3, at: at(4) }, verdict: { told: true, kept: true, announced: true, missing: [] },
+    verdict: { told: true, kept: true, missing: [] },
   });
   assert.deepEqual(asked, [['told', null, at(6)], ['kept', { document: DOCUMENT, after: at(3), before: at(6) }]]);
 });
 
-test('compactionMeasures of a pause told but not announced after the notice is not announced: a reply before the notice, or after the boundary, does not count', () => {
-  const COMPACT = '```\n/compact\n```';
+test('compactionMeasures of a pause told with no /compact block anywhere is not missed: told and kept are the only facts, and no block is read', () => {
   const told = () => ({ known: true, at: at(3) });
-  const before = transcript(
+  const text = transcript(
     prompt('go', 1),
-    reply(COMPACT, 2),
+    reply('still working, no block', 2),
     reply('still working, no block', 4),
     compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
   );
-  assert.deepEqual(lib.compactionMeasures(before, { told })[0].announced, null);
-  assert.deepEqual(lib.compactionMeasures(before, { told })[0].verdict, { told: true, kept: null, announced: false, missing: ['announced'] });
-  const after = transcript(
-    prompt('go', 1),
-    reply('still working, no block', 4),
-    compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
-    reply(COMPACT, 7),
-  );
-  assert.deepEqual(lib.compactionMeasures(after, { told })[0].announced, null);
-  assert.deepEqual(lib.compactionMeasures(after, { told })[0].verdict.missing, ['announced']);
+  const [measure] = lib.compactionMeasures(text, { told });
+  assert.equal('announced' in measure, false);
+  assert.deepEqual(measure.verdict, { told: true, kept: null, missing: [] });
 });
 
 test('compactionMeasures of a host compaction the notice never reached is not told, and kept is not asked; no state is not judged', () => {
-  const COMPACT = '```\n/compact\n```';
   const text = transcript(
     prompt('go', 1),
     call('e1', 'Edit', { file_path: 'C:\\proj\\odd\\tasks\\session-channel.md' }, 2),
-    reply(COMPACT, 3),
+    reply('Saved.', 3),
     compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
   );
   const asked = [];
@@ -3995,12 +3954,12 @@ test('compactionMeasures of a host compaction the notice never reached is not to
   };
   const notTold = lib.compactionMeasures(text, { told: () => ({ known: true, at: null }), kept })[0];
   assert.deepEqual(notTold.told, { known: true, at: null });
-  assert.deepEqual([notTold.kept, notTold.announced], [{ known: false, kept: null }, null]);
-  assert.deepEqual(notTold.verdict, { told: false, kept: null, announced: null, missing: ['told'] });
+  assert.deepEqual(notTold.kept, { known: false, kept: null });
+  assert.deepEqual(notTold.verdict, { told: false, kept: null, missing: ['told'] });
   assert.deepEqual(asked, [], 'kept is not asked when the notice was not told');
   const noState = lib.compactionMeasures(text, { told: () => ({ known: false, at: null }), kept })[0];
   assert.deepEqual(noState.told, { known: false, at: null });
-  assert.deepEqual(noState.verdict, { told: null, kept: null, announced: null, missing: [] });
+  assert.deepEqual(noState.verdict, { told: null, kept: null, missing: [] });
   assert.deepEqual(asked, [], 'kept is not asked when the state is not known');
 });
 
@@ -4025,11 +3984,10 @@ test('compactionMeasures names the last feature document the session wrote befor
   const [measure] = lib.compactionMeasures(text, { told: () => ({ known: true, at: at(2) }), kept });
   assert.equal(measure.document, LAST);
   assert.deepEqual(asked, [{ document: LAST, after: at(2), before: at(6) }]);
-  assert.deepEqual(measure.verdict, { told: true, kept: false, announced: false, missing: ['kept', 'announced'] });
+  assert.deepEqual(measure.verdict, { told: true, kept: false, missing: ['kept'] });
 });
 
 test('compactionMeasures of two compactions of the host in one file: the second stretch starts at the first, and told is asked with each stretch\'s own bounds', () => {
-  const COMPACT = '```\n/compact\n```';
   const asked = [];
   const told = (after, before) => {
     asked.push(['told', after, before]);
@@ -4040,30 +3998,28 @@ test('compactionMeasures of two compactions of the host in one file: the second 
     reply('one', 2),
     compaction(3, 'auto', 900, 300, { uuid: 'b1' }),
     prompt('again', 4),
-    reply(`Saved.\n\n${COMPACT}`, 5),
+    reply('Saved.', 5),
     compaction(6, 'auto', 800, 200, { uuid: 'b2' }),
   );
   const [first, second] = lib.compactionMeasures(text, { told });
   assert.equal(first.after, null);
   assert.equal(second.after, at(3));
-  assert.deepEqual(first.verdict, { told: true, kept: null, announced: false, missing: ['announced'] });
-  assert.deepEqual(second.verdict, { told: true, kept: null, announced: true, missing: [] });
-  assert.deepEqual(second.announced, { line: 5, at: at(5) });
+  assert.deepEqual(first.verdict, { told: true, kept: null, missing: [] });
+  assert.deepEqual(second.verdict, { told: true, kept: null, missing: [] });
   assert.deepEqual(asked, [['told', null, at(3)], ['told', at(3), at(6)]]);
 });
 
 test('compactionMeasures counts a copied entry once: a copy of the first boundary before the second adds no item and moves no line', () => {
-  const COMPACT = '```\n/compact\n```';
   const early = id('p1', prompt('early', 1));
   const earlyReply = id('r1', reply('early answer', 2));
   const boundary = id('b1', compaction(3, 'auto', 900, 300));
   const stretchPrompt = id('p2', prompt('stretch', 4));
-  const stretchReply = id('r2', reply(`Saved.\n\n${COMPACT}`, 5));
+  const stretchReply = id('r2', reply('Saved.', 5));
   const newest = id('b2', compaction(6, 'auto', 800, 200));
   const text = transcript(early, earlyReply, boundary, stretchPrompt, stretchReply, boundary, early, earlyReply, stretchPrompt, stretchReply, newest);
   const measures = lib.compactionMeasures(text, { told: () => ({ known: true, at: at(2) }) });
   assert.deepEqual(measures.map(({ uuid, line, after }) => [uuid, line, after]), [['b1', 3, null], ['b2', 11, at(3)]]);
-  assert.deepEqual(measures[1].announced, { line: 5, at: at(5) });
+  assert.deepEqual(measures[1].verdict, { told: true, kept: null, missing: [] });
 });
 
 test('compactionMeasures of a file the host continued holds no stretch of this file: it is not judged and no reader is asked', () => {
@@ -4079,20 +4035,19 @@ test('compactionMeasures of a file the host continued holds no stretch of this f
 });
 
 test('compactionMeasures reads a reader that throws as not known, and throws nothing', () => {
-  const COMPACT = '```\n/compact\n```';
   const text = transcript(
     prompt('go', 1),
     call('e1', 'Edit', { file_path: 'C:\\proj\\odd\\tasks\\session-channel.md' }, 2),
-    reply(`Saved.\n\n${COMPACT}`, 4),
+    reply('Saved.', 4),
     compaction(6, 'auto', 900, 300, { uuid: 'b1' }),
   );
   const broken = () => {
     throw new Error('unreadable');
   };
   const toldThrows = lib.compactionMeasures(text, { told: broken, kept: broken })[0];
-  assert.deepEqual([toldThrows.told, toldThrows.announced, toldThrows.verdict], [{ known: false, at: null }, null, { told: null, kept: null, announced: null, missing: [] }]);
+  assert.deepEqual([toldThrows.told, toldThrows.verdict], [{ known: false, at: null }, { told: null, kept: null, missing: [] }]);
   const keptThrows = lib.compactionMeasures(text, { told: () => ({ known: true, at: at(2) }), kept: broken })[0];
-  assert.deepEqual([keptThrows.kept, keptThrows.verdict], [{ known: false, kept: null }, { told: true, kept: null, announced: true, missing: [] }]);
+  assert.deepEqual([keptThrows.kept, keptThrows.verdict], [{ known: false, kept: null }, { told: true, kept: null, missing: [] }]);
 });
 
 test('compactionMeasures counts a compaction the user asked for, judges none and asks no one', () => {
@@ -4103,7 +4058,7 @@ test('compactionMeasures counts a compaction the user asked for, judges none and
   };
   const text = transcript(prompt('go', 1), reply('answer', 2), compaction(3, 'manual', 900, 300, { uuid: 'm1' }));
   assert.deepEqual(lib.compactionMeasures(text, { told: reader('told'), kept: reader('kept') }), [
-    { uuid: 'm1', at: at(3), automatic: false, before: 900, line: 3, after: null, inThisFile: true, told: { known: false, at: null }, document: null, kept: { known: false, kept: null }, announced: null, verdict: null },
+    { uuid: 'm1', at: at(3), automatic: false, before: 900, line: 3, after: null, inThisFile: true, told: { known: false, at: null }, document: null, kept: { known: false, kept: null }, verdict: null },
   ]);
   assert.deepEqual(asked, []);
 });
@@ -4567,20 +4522,27 @@ test('compactionMissOf calls no reader for a session with no automatic compactio
   assert.deepEqual(calls, []);
 });
 
+// The user no longer compacts by hand (odd/tasks/no-manual-compact.md S2): a pause told and kept is no miss, whether or
+// not any reply holds a /compact block, so the board never asks anyone for one.
+test('compactionMissOf: a pause told and kept, with no /compact block anywhere in the transcript, misses nothing', () => {
+  const told = () => ({ known: true, at: at(2) });
+  const blockless = transcript(prompt('go', 1), editEntry('e1', 2), reply('Saved. Going on.', 3), compactionEntry('b1', 'auto', 6), reply('working again', 8));
+  assert.equal(lib.compactionMissOf(blockless, { told, kept: () => ({ known: true, kept: true }) }), null, 'the two facts hold: no miss, and no block is asked for');
+});
+
 test('compactionMissOf names the facts the last automatic compaction misses, and not the ones it cannot know', () => {
   const text = transcript(prompt('go', 1), editEntry('e1', 2), reply('Saved.', 3), compactionEntry('b1', 'auto', 6), reply('working again', 8));
   const told = () => ({ known: true, at: at(2) });
-  assert.deepEqual(lib.compactionMissOf(text, { told, kept: () => ({ known: true, kept: false }) }), { at: at(6), uuid: 'b1', missed: ['kept', 'announced'], unknown: [] });
-  assert.deepEqual(lib.compactionMissOf(text, { told, kept: () => ({ known: false }) }), { at: at(6), uuid: 'b1', missed: ['announced'], unknown: ['kept'] }, 'a reader that cannot answer is unknown, never a miss');
+  assert.deepEqual(lib.compactionMissOf(text, { told, kept: () => ({ known: true, kept: false }) }), { at: at(6), uuid: 'b1', missed: ['kept'], unknown: [] });
+  assert.deepEqual(lib.compactionMissOf(text, { told: () => ({ known: true, at: null }), kept: () => ({ known: false }) }), { at: at(6), uuid: 'b1', missed: ['told'], unknown: ['kept'] }, 'a reader that cannot answer is unknown, never a miss');
   assert.equal(lib.compactionMissOf(text, { told: () => { throw new Error('no state'); }, kept: () => ({ known: true, kept: false }) }), null, 'a reader that throws leaves nothing to miss');
-  const announced = transcript(prompt('go', 1), editEntry('e1', 2), reply('```\n/compact\n```', 3), compactionEntry('b1', 'auto', 6), reply('working again', 8));
-  assert.equal(lib.compactionMissOf(announced, { told, kept: () => ({ known: true, kept: true }) }), null, 'a last automatic compaction that misses nothing has no miss');
+  assert.equal(lib.compactionMissOf(text, { told, kept: () => ({ known: true, kept: true }) }), null, 'a last automatic compaction that misses nothing has no miss');
 });
 
 test('renderBoard prints the miss of the last automatic compaction under its session, with what it could not know', () => {
   const lines = (compactionMiss) => lib.renderBoard({ ...BOARD, sessions: [seen(A, 'working', { compactionMiss })] }, { now: NOW }).filter((line) => line.includes('last automatic compaction'));
-  assert.deepEqual(lines(miss(10, 'b1', ['told', 'announced'])), ['    last automatic compaction 10m ago: missed told, announced']);
-  assert.deepEqual(lines(miss(10, 'b1', ['kept'], ['announced'])), ['    last automatic compaction 10m ago: missed kept; not known: announced']);
+  assert.deepEqual(lines(miss(10, 'b1', ['told', 'kept'])), ['    last automatic compaction 10m ago: missed told, kept']);
+  assert.deepEqual(lines(miss(10, 'b1', ['told'], ['kept'])), ['    last automatic compaction 10m ago: missed told; not known: kept']);
   assert.deepEqual(lines(miss(10, 'b1', [], ['kept'])), [], 'only facts not known say nothing');
   assert.deepEqual(lines(null), []);
 });
@@ -4612,7 +4574,7 @@ test('watchBaseline keeps the miss a failed reader leaves unknown, so the same c
   };
   assert.deepEqual(lib.watchBaseline(look(missed('u1', ['told'])), look(null)).sessions[0].compactionMiss, missed('u1', ['told']), 'a null read keeps the miss the look before named');
   assert.deepEqual(chain([look(missed('u1', ['told'])), look(null), look(missed('u1', ['told']))]), [said('told')], 'the same compaction after a failed read is not said again');
-  assert.deepEqual(chain([look(missed('u1', ['told'])), look(missed('u2', ['announced']))]), [said('told'), said('announced')], 'a new compaction that misses is said');
+  assert.deepEqual(chain([look(missed('u1', ['told'])), look(missed('u2', ['kept']))]), [said('told'), said('kept')], 'a new compaction that misses is said');
 });
 
 // --- peakContextBefore: the peak of a session's context before a notice (session channel, T9) ---
