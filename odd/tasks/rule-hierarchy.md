@@ -3737,6 +3737,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     lead's). His answer to question 11, "Prendido por defecto (Recomendada)" (read with `js-harness sessions
     --quote`, the lead's transcript, line 13566), is for a new project; question 9, this repository, is still
     open, so the pull request stays a draft and nothing installs the Stop entry until it lands.
+  - Question 9 answered: "Sí, encenderlo acá (Recomendada)", tapped in the lead's chat at 2026-10-16T19:08:32Z
+    (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 13501, read with `js-harness sessions
+    --quote`). So the key stays on and the pull request is marked ready, on the lead's notice of 15:38.
 - 2026-10-16, T17e, by `JH 28 · reserva B` on `docs/sweep-close`, from the lead's notice to 28
   (a claim of the lead's, read in the channel record). Three read-only readers took the 104
   unchecked items of `docs/sweep-2026-10-11.md` against `main` at `5cccfc4`, one group each: A
