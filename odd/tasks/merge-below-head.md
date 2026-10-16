@@ -216,6 +216,8 @@ among them), and the marks at M of its written files.
 
 ## Next step
 
+**State for a resume (2026-10-16, JH 27, near 88% of context):** B1 fixed in d81494c (gate green). The gentle-ai review of 64933f6..d81494c, lineage review-4f9d361eb6afc479, lenses risk/resilience/reliability, is APPROVED and acknowledged (authority burned). It left 6 informational advisories: R3-first-turn-before-second-turn-refusals, R3-rmsync-throws-in-finally, R3-run-log-read-without-where, R3-untested-turn-failure-paths, R4-pid-reuse-stale-worktree, R4-unguarded-worktree-rm. The rmSync guard (removeTurnWorktree never throws, with a test) is written and NOT committed yet; the other five go as follow-ups in the PR body. Next: commit the rm guard (gate), `git merge origin/main` (merge-tree says it is clean), `js-harness codex-review --base origin/main`, then push, open the PR with its gentle-ai line ("gentle-ai: approved, review-4f9d361eb6afc479, high via item 2"), notify the lead "JH 27: PR <n> ready to land (T6d merge-below-head)" with the S9 finding, and re-arm `js-harness wait --notice-to 27 --every 60`.
+
 **State, 2026-10-16, JH 27:** T1-T3 done, T4's verifier done and B1 fixed. Next: T4, the "Done when" scratch repository, the gate (the two
 `--no-verify` commits 5bf351e and 6397e5a go through it with the T3 commit), an independent verifier (risk
 item 2), gentle-ai assess with `--escalate-item 2` (run `granted`), Codex, merge-tree against origin/main,

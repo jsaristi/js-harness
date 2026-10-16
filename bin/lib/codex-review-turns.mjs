@@ -117,10 +117,16 @@ const gitIn = (cwd, spawn, args) => {
   }
 };
 
-/** Removes the worktree at `place`, and its folder where git did not have it as one: a turn leaves nothing. */
-export function removeTurnWorktree(cwd, place, { spawn = spawnSync } = {}) {
+/** Removes the worktree at `place`, and its folder where git did not have it as one: a turn leaves nothing.
+ * It never throws: it runs in a `finally`, where a throw would hide how the turn ended; a folder it could
+ * not remove is left to the next run's sweep. */
+export function removeTurnWorktree(cwd, place, { spawn = spawnSync, rm = fs.rmSync } = {}) {
   gitIn(cwd, spawn, ['worktree', 'remove', '--force', place]);
-  fs.rmSync(place, { recursive: true, force: true });
+  try {
+    rm(place, { recursive: true, force: true });
+  } catch {
+    // Left for `sweepTurnWorktrees`, which removes it once this run is gone.
+  }
 }
 
 /** Removes every turn worktree under `commonGitDir` whose run is gone, killed before it removed its own, and

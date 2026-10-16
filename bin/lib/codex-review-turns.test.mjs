@@ -154,6 +154,8 @@ test('a turn worktree whose run is gone is removed by the next run, and one whos
   assert.ok(fs.existsSync(path.join(gone, 'm.js')) && fs.existsSync(path.join(going, 'm.js')), 'both were made, at the merge');
   sweepTurnWorktrees(root, { commonGitDir, running: (pid) => pid === 222 });
   assert.deepEqual([fs.existsSync(gone), fs.existsSync(going)], [false, true]);
+  // A folder that cannot be removed throws nothing: the removal runs in a `finally` (gentle-ai, R3/R4).
+  assert.doesNotThrow(() => removeTurnWorktree(root, going, { rm: () => { throw new Error('EBUSY'); } }));
   removeTurnWorktree(root, going);
   assert.equal(fs.existsSync(going), false);
   // git holds no worktree of either: only the checkout itself is listed.
