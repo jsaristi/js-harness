@@ -54,7 +54,7 @@ import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
-import { keptByGitLog, keptByRelief, keptEither, measuresLines, measuresTotal } from './lib/measures.mjs';
+import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
@@ -89,7 +89,7 @@ const USAGE = [
   '         made, three facts: told (the session was told the pause before it), kept (the feature document has a commit',
   '         between the notice and the compaction, or for the orchestrator a line of its relief file there) and announced',
   '         (a reply after the notice holds the /compact block),',
-  '         each yes, no or unknown, then how many miss a fact; exit 0 when it printed, 1 when there is no sessions folder',
+  '         each yes, no or unknown, then how many miss a fact; then the reliefs (each relieved notice of the days the window touches, with the peak of its relieved session against the window: filled at the pause, or another reason) and the Log lines that name a reopening (candidates for the lead, not judged); exit 0 when it printed, 1 when there is no sessions folder',
 ].join('\n');
 
 // How often a watch looks, and how long it waits before it returns with nothing, in seconds. A look is
@@ -856,7 +856,8 @@ export async function sessionsMain(
     }
     const generatedAt = now();
     const since = generatedAt - parsed.hours * 3600 * 1000;
-    const readings = readNotices(harnessHome, slug, { readFile }).readings;
+    const record = readNotices(harnessHome, slug, { readFile });
+    const readings = record.readings;
     const measured = [];
     for (const name of names) {
       if (!name.endsWith('.jsonl')) continue;
@@ -875,10 +876,31 @@ export async function sessionsMain(
     // A session opened from the phone has its title from the opening it read, as on the board.
     const sessions = titledByReadings(measured, readings);
     sessions.sort((a, b) => ((a.modifiedAt ?? '') < (b.modifiedAt ?? '') ? 1 : (a.modifiedAt ?? '') > (b.modifiedAt ?? '') ? -1 : 0));
+    // The reliefs (section 18): the `relieved` notices of the whole local days the window touches, each judged from the
+    // transcript of the session it relieves. A record that cannot be read is not known, never a record with no relief.
+    const reliefSince = dayStartOf(since);
+    // The pause the reliefs are judged against is the one the board marks with, --context-pause included.
+    const reliefPause = percentOf(parsed.contextPause, parsed.contextWindow);
+    const reliefList = record.unavailable === undefined
+      ? reliefMeasures(record.notices, {
+        since: reliefSince,
+        transcriptLines: (id) => readFile(path.join(projectDir, `${id}.jsonl`)).split('\n'),
+        pausePercent: reliefPause,
+        defaultWindow: parsed.contextWindow,
+      })
+      : null;
+    // The reopenings (section 18): the Log lines of the feature documents that name one, in the history of the main checkout.
+    const reopened = reopenCandidates(run, root, new Date(reliefSince).toISOString().replace('.000Z', 'Z'));
     if (parsed.json) {
-      stdout(JSON.stringify({ root, projectDir, hours: parsed.hours, generatedAt: new Date(generatedAt).toISOString(), sessions, total: measuresTotal(sessions) }, null, 2));
+      const reliefsData = reliefList === null
+        ? { known: false, why: record.unavailable }
+        : { known: true, firstDay: localDay(reliefSince), lastDay: localDay(generatedAt), pausePercent: reliefPause, items: reliefList, total: reliefsTotal(reliefList) };
+      stdout(JSON.stringify({ root, projectDir, hours: parsed.hours, generatedAt: new Date(generatedAt).toISOString(), sessions, total: measuresTotal(sessions), reliefs: reliefsData, reopenCandidates: reopened }, null, 2));
     } else {
-      for (const line of measuresLines(sessions)) stdout(line);
+      const reliefText = reliefList === null
+        ? [`reliefs: not known (the record could not be read: ${record.unavailable})`]
+        : reliefLines(reliefList, { since: reliefSince, now: generatedAt });
+      for (const line of [...measuresLines(sessions), ...reliefText, ...reopenLines(reopened)]) stdout(line);
     }
     return 0;
   }
