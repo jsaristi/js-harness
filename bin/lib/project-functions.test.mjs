@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
+import { repoTemplate } from './git-fixture.testkit.mjs';
 
 // Every test here runs a real git, which must not pick up the host's configuration, nor the repository a
 // commit's hook points at through GIT_DIR and its like (the same isolation as bin/lib/project.test.mjs).
@@ -32,11 +33,16 @@ function run(root, ...args) {
   return result.stdout.trim();
 }
 
-function repo(t, files = {}) {
-  const root = folder(t);
+/** An empty repository with an identity, built once and copied (`git-fixture.testkit.mjs`). */
+const emptyRepo = repoTemplate((root) => {
   run(root, 'init');
   run(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   run(root, 'config', 'user.name', 'js-harness test');
+});
+
+function repo(t, files = {}) {
+  const root = folder(t);
+  emptyRepo(root);
   write(root, files);
   return root;
 }

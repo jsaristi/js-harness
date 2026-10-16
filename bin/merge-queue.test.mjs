@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 import { circleciState, failedRows, mergeQueueMain } from './merge-queue.mjs';
+import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
 // would change what they do, so it is left out of every git this file starts (Codex, 2026-10-14).
@@ -25,9 +26,19 @@ const git = (cwd, ...args) => {
 };
 
 /** An origin with main and four branches, and a clone of it: a and b merge cleanly, c conflicts with a, d is
- * a draft. `{ root, origin, main, heads }`. */
+ * a draft. `{ root, origin, main, heads }`. The pair is built once and copied as one folder
+ * (`lib/git-fixture.testkit.mjs`); the copy's clone is then pointed at the copy's origin. */
 function makeQueueRepo() {
   const top = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-'));
+  const origin = path.join(top, 'origin.git');
+  const root = path.join(top, 'clone');
+  const { main, heads } = queueRepo(top);
+  git(root, 'remote', 'set-url', 'origin', origin);
+  return { root, origin, main, heads };
+}
+
+/** Builds in `top` the origin and the clone `makeQueueRepo` hands out copies of: `{ main, heads }`. */
+const queueRepo = repoTemplate((top) => {
   const origin = path.join(top, 'origin.git');
   const root = path.join(top, 'clone');
   git(top, 'init', '--quiet', '--bare', '-b', 'main', origin);
@@ -52,8 +63,8 @@ function makeQueueRepo() {
   }
   git(root, 'checkout', '--quiet', '--detach', main);
   git(root, 'fetch', '--quiet', 'origin');
-  return { root, origin, main, heads };
-}
+  return { main, heads };
+});
 
 const pr = (number, branch, head, over = {}) => ({ number, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'gentle-ai: passive', headRefOid: head, headRefName: branch, ...over });
 
