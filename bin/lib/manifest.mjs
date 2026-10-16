@@ -1260,17 +1260,18 @@ function memoryHygieneDir(home) {
  * an uninstall without it is what it always was, and `{ memoryKept }` otherwise: `[]` when it was purged, or one
  * entry, `{ path, reason, ... }`. `snapshots` (kept, no purge asked) names them as `stamps`, `<slug>/<stamp>`
  * sorted, for `memory undo`; `in-use` names as `passes` each pass that holds its project's lock, planned and not
- * yet verified or undone, whose snapshot even a purge does not take; `unremovable` has the error's `code`, as do
- * the other folders. Nothing records the folder: `memory plan` writes it in any project, with a machine install
- * or without one, so it is looked for with a manifest and without.
+ * yet verified or undone, whose snapshot even a purge does not take; `purging` names the `marker` of another purge
+ * (or of one that stopped), which this one leaves alone; `unremovable` has the error's `code`, as do the other
+ * folders. Nothing records the folder: `memory plan` writes it in any project, with a machine install or without
+ * one, so it is looked for with a manifest and without.
  *
- * A purge never races a `memory plan` (found by Codex, 2026-10-16): it takes each project's lock itself, the way
- * `planPass` does (a file made only if absent), so a plan that starts meanwhile is refused, and one that held the
- * lock first is seen as `in-use`, and every lock the purge took is let go. Then it moves the folder aside in one
- * rename and removes the moved one: a plan after the move makes a new folder, which it does not touch, and a
- * project it did not see, planned just before the move, is moved back first; one that cannot be is left aside,
- * named as `in-use` with its slug, and nothing is removed. `renameFile` (default `fs.renameSync`) is the seam a
- * test runs a plan in, before the move. */
+ * A purge never races a `memory plan` (found by Codex, 2026-10-16, twice): it makes a marker beside the folder, a
+ * file made only if absent, before it looks at the locks, and `planPass` looks for the marker after it takes its
+ * lock, so one of the two always sees the other. A plan that held its lock first is `in-use`; one after the marker
+ * is refused, on a project the purge saw or a new one, and removes what it made. A refused plan's lock can be seen
+ * for an instant, which keeps the folder for this run: the safe side. The folder is moved aside in one rename and
+ * the moved one removed, and the marker is let go whatever happens. `renameFile` (default `fs.renameSync`) is the
+ * seam a test runs plans in, around the move. */
 function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir, renameFile = fs.renameSync }) {
   const dir = memoryHygieneDir(home);
   const unremovable = (err) => ({ removed: [], result: { memoryKept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] } });
@@ -1288,53 +1289,46 @@ function memoryHygieneFolder(home, { purge, removeFile, statFile, listDir, renam
   }
   if (!purge) return { removed: [], result: { memoryKept: [{ path: dir, reason: 'snapshots', stamps }] } };
 
-  const taken = [];
-  const passes = [];
-  const letGo = () => { for (const lock of taken) fs.rmSync(lock, { force: true }); };
+  const marker = `${dir}.purge`;
   try {
-    for (const slug of slugs) {
-      const lock = path.join(dir, slug, 'lock');
-      if (!isThere(path.join(dir, slug), statFile)) continue;
-      try {
-        fs.writeFileSync(lock, JSON.stringify({ stamp: 'uninstall', pid: process.pid }), { flag: 'wx' });
-        taken.push(lock);
-      } catch (err) {
-        if (err.code !== 'EEXIST') throw err;
-        passes.push(`${slug}/${JSON.parse(fs.readFileSync(lock, 'utf8')).stamp}`);
-      }
-    }
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid }), { flag: 'wx' });
   } catch (err) {
-    letGo();
+    if (err.code === 'EEXIST') return { removed: [], result: { memoryKept: [{ path: dir, reason: 'purging', marker }] } };
     return unremovable(err);
   }
-  if (passes.length > 0) {
-    letGo();
-    return { removed: [], result: { memoryKept: [{ path: dir, reason: 'in-use', passes }] } };
-  }
-  const aside = `${dir}.purging-${process.pid}-${Date.now()}`;
   try {
-    renameFile(dir, aside);
-  } catch (err) {
-    letGo();
-    return unremovable(err);
-  }
-  // A project the purge did not see was planned in the instant before the move: it goes back, untouched.
-  const back = [];
-  for (const slug of listDir(aside).filter((name) => !slugs.includes(name))) {
+    // The projects are listed again once the marker is there: a plan whose lock is not seen now sees the marker.
+    const passes = [];
     try {
-      fs.mkdirSync(dir, { recursive: true });
-      renameFile(path.join(aside, slug), path.join(dir, slug));
-    } catch {
-      back.push(slug);
+      for (const slug of listDir(dir).sort()) {
+        let held;
+        try {
+          held = fs.readFileSync(path.join(dir, slug, 'lock'), 'utf8');
+        } catch (err) {
+          if (err.code === 'ENOENT' || err.code === 'ENOTDIR') continue;
+          throw err;
+        }
+        passes.push(`${slug}/${JSON.parse(held).stamp}`);
+      }
+    } catch (err) {
+      return unremovable(err);
     }
+    if (passes.length > 0) return { removed: [], result: { memoryKept: [{ path: dir, reason: 'in-use', passes }] } };
+    const aside = `${dir}.purging-${process.pid}-${Date.now()}`;
+    try {
+      renameFile(dir, aside);
+    } catch (err) {
+      return unremovable(err);
+    }
+    try {
+      removeFile(aside, { recursive: true, force: true });
+    } catch (err) {
+      return { removed: [], result: { memoryKept: [{ path: aside, reason: 'unremovable', code: err.code ?? 'unknown error' }] } };
+    }
+    return { removed: [dir], result: { memoryKept: [] } };
+  } finally {
+    fs.rmSync(marker, { force: true });
   }
-  if (back.length > 0) return { removed: [], result: { memoryKept: [{ path: aside, reason: 'in-use', passes: back }] } };
-  try {
-    removeFile(aside, { recursive: true, force: true });
-  } catch (err) {
-    return { removed: [], result: { memoryKept: [{ path: aside, reason: 'unremovable', code: err.code ?? 'unknown error' }] } };
-  }
-  return { removed: [dir], result: { memoryKept: [] } };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

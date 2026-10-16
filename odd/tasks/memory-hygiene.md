@@ -367,8 +367,19 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
     lead (question 8). Codex on a99a8e3..3bb2dd5: one P2, "Serialize snapshot purging with new memory plans" (a
     plan between the purge's look at the locks and its removal lost its snapshot). Fixed test first in the next
     commit: the purge takes each project's lock as `planPass` does, moves the folder aside in one rename, moves
-    back a project planned just before it, and only then removes; `manifest.test.mjs` 152/152
+    back a project planned just before it, and only then removes; `manifest.test.mjs` 152/152 (`373dd52`). The
+    Codex recheck of 3bb2dd5..373dd52 left it open: a project the purge had not seen could take its lock before
+    the move and make its folder again after it, finishing without its lock. A further recheck is refused, so it
+    is fixed in this branch and its read is T10. The fix, test first, is shared exclusion: the purge makes a
+    marker `memory-hygiene.purge` beside the folder (a file made only if absent) before it looks at the locks,
+    and `planPass` looks for it after taking its lock, refusing and removing what it made; a marker already there
+    keeps the folder (`purging`, exit 1). `memory-pass.test.mjs` 20/20, `manifest.test.mjs` 152/152,
+    `install.test.mjs` 75/75
   - [ ] T9b The board row; T9c the rule ids
+- [ ] T10 (kind: verify) Follow-up of the Codex recheck of 3bb2dd5..373dd52, which left "Serialize snapshot
+  purging with new memory plans" open: the marker fix is committed after 373dd52 with its tests, and a second
+  recheck is refused by design; a Codex review of the next slice that touches `bin/lib/manifest.mjs`
+  `memoryHygieneFolder` or `planPass` reads it, and that read also closes T8
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para
@@ -392,10 +403,15 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
 - L5 2026-10-15 evening, the lead (JH ORQ), after #188, #191, #202, #220 and #235 landed: mark T2-T7 done on
   main by a short branch. T2-T6 marked with where each landed; the pieces T3 and T5 left unbuilt became T9.
 
-## Next step (2026-10-15 evening)
+## Next step (2026-10-16)
+- T1-T7 are done and on main. T9a is built on `feat/memory-hygiene-uninstall`, its PR opened as a draft; gentle-ai
+  waits on question 8. Open: T8 and T10 (a Codex review of a later slice touching `bin/lib/memory-pass.mjs` and
+  `memoryHygieneFolder` reads both fixes), T9b and T9c (the board row is `js-harness sessions`' owner's; the rule
+  ids go through `rules change`, rule-hierarchy's). The sections below are the history of the build.
+
+## Next step, history (2026-10-15 evening)
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`) and T9 (install record, board row, rule ids; each waits on its owner).
-  The sections below are the history of the build.
 
 ## Next step, history (2026-10-15, context pause at 88%)
 - Commit `feat(memory): a hygiene sensor, a safe pass, a daily due line and the protocol` (T2, T3, T5, T6,

@@ -495,6 +495,8 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
       console.log(`kept ${memory.path}: the snapshots of ${n} memory hygiene pass${n === 1 ? '' : 'es'} (${memory.stamps.join(', ')}), the only copy of what each changed in the memory; js-harness memory undo <stamp> reads them, and js-harness uninstall --global ${PURGE_MEMORY} removes them`);
     } else if (memory.reason === 'in-use') {
       console.error(`kept ${memory.path}: a memory hygiene pass holds its lock, planned and not verified (${memory.passes.join(', ')}); js-harness memory verify <stamp> or js-harness memory undo <stamp> ends it, then run js-harness uninstall --global ${PURGE_MEMORY} again`);
+    } else if (memory.reason === 'purging') {
+      console.error(`kept ${memory.path}: another js-harness uninstall --global ${PURGE_MEMORY} is purging it (${memory.marker}); if none runs, remove that file and run this again`);
     } else {
       console.error(`could not remove ${memory.path} (${memory.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global ${PURGE_MEMORY} again`);
     }

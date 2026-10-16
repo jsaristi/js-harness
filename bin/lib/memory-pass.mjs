@@ -45,6 +45,9 @@ function appendJournal(stateDir, entry) {
 
 const lockFile = (stateDir) => path.join(stateDir, 'lock');
 const snapshotDir = (stateDir, stamp) => path.join(stateDir, 'snapshots', stamp);
+/** The marker `uninstall --global --purge-memory-snapshots` makes while it purges: beside the folder of every
+ * project's state, so a purge that moves that folder aside does not move it. */
+const purgeMarker = (stateDir) => `${path.dirname(stateDir)}.purge`;
 
 function readManifest(stateDir, stamp) {
   const text = readOrNull(path.join(snapshotDir(stateDir, stamp), 'manifest.json'));
@@ -94,6 +97,20 @@ export function planPass({ folder, stateDir, writeSet, now }) {
     if (err.code !== 'EEXIST') throw err;
     const held = JSON.parse(fs.readFileSync(lockFile(stateDir), 'utf8'));
     throw new PassError(`a pass holds the lock: ${held.stamp} (memory verify or memory undo releases it)`);
+  }
+  // An uninstall purge makes its marker before it looks at the locks, and a plan looks for it after taking its lock,
+  // so one of the two always sees the other. A refused plan lets its lock go and removes the folders it left empty.
+  const marker = purgeMarker(stateDir);
+  if (fs.existsSync(marker)) {
+    releaseLock(stateDir, stamp);
+    for (const empty of [stateDir, path.dirname(stateDir)]) {
+      try {
+        fs.rmdirSync(empty);
+      } catch {
+        break;
+      }
+    }
+    throw new PassError(`an uninstall is purging the memory hygiene snapshots (${marker}); plan again once it ends, or remove that file if no uninstall runs`);
   }
   const dir = snapshotDir(stateDir, stamp);
   fs.mkdirSync(path.join(dir, 'files'), { recursive: true });

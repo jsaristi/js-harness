@@ -393,6 +393,23 @@ test('uninstallMain --global --purge-memory-snapshots keeps the folder of a pass
   }
 });
 
+test('uninstallMain --global --purge-memory-snapshots keeps the folder while another purge holds its marker, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    const { dir } = leftByMemoryPass(home);
+    fs.writeFileSync(`${dir}.purge`, '{}');
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--purge-memory-snapshots', '--home', home]));
+    assert.equal(code, 1);
+    assert.deepEqual(outLines, []);
+    assert.deepEqual(errLines, [
+      `kept ${dir}: another js-harness uninstall --global --purge-memory-snapshots is purging it (${dir}.purge); if none runs, remove that file and run this again`,
+    ]);
+    assert.deepEqual([fs.existsSync(dir), fs.existsSync(`${dir}.purge`)], [true, true]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstallMain reports an optional file with the removed files, and an edited one with the kept ones', async () => {
   const home = makeTmpHome();
   try {

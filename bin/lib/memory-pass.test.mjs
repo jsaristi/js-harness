@@ -131,6 +131,20 @@ test('a second plan is refused while a pass holds the lock, and allowed after ve
   });
 });
 
+test('a plan is refused while an uninstall purges the snapshots, and leaves no lock and no folder of its own', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+    // The layout of the machine: <state>/memory-hygiene/<slug>, the purge's marker beside memory-hygiene.
+    const projectDir = path.join(stateDir, 'memory-hygiene', 'C--proj');
+    const marker = path.join(stateDir, 'memory-hygiene.purge');
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid }));
+    assert.throws(() => planPass({ folder, stateDir: projectDir, writeSet: ['a.md'], now: NOW }), (err) => err instanceof PassError && err.message === `an uninstall is purging the memory hygiene snapshots (${marker}); plan again once it ends, or remove that file if no uninstall runs`);
+    assert.deepEqual(fs.readdirSync(stateDir), ['memory-hygiene.purge'], 'the refused plan leaves nothing behind');
+    fs.rmSync(marker);
+    assert.ok(planPass({ folder, stateDir: projectDir, writeSet: ['a.md'], now: NOW + 1 }).stamp);
+  });
+});
+
 test('plan refuses a write-set name that leaves the memory folder', () => {
   withPass({ 'MEMORY.md': '' }, ({ folder, stateDir }) => {
     for (const name of ['../x.md', 'sub/x.md', 'x.txt']) {

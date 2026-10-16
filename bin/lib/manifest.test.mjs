@@ -657,21 +657,21 @@ test('uninstall with purgeMemory never takes the snapshot of a pass planned whil
     const { stateDir } = leftByMemoryPass(home);
     const dir = path.dirname(stateDir);
     const folder = path.join(home, '.claude', 'projects', 'C--proj', 'memory');
-    let planned = null;
-    // The moment between the look at the locks and the removal, where a session runs `memory plan` (Codex, P2).
+    const now = Date.parse('2026-10-16T09:00:00.000Z');
+    const refused = /: an uninstall is purging the memory hygiene snapshots \(/;
+    // Plans in the moments between the look at the locks and the removal (Codex, P2, twice): on a project the purge
+    // saw and on one it did not, before the folder moves aside; and on a new one after, which makes its folder again.
     const renameFile = (from, to) => {
-      if (planned !== null) return fs.renameSync(from, to);
-      assert.throws(() => planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: Date.parse('2026-10-16T09:00:00.000Z') }), /a pass holds the lock/);
-      planned = planPass({ folder, stateDir: path.join(dir, 'C--new'), writeSet: ['MEMORY.md'], now: Date.parse('2026-10-16T09:00:00.000Z') });
-      return fs.renameSync(from, to);
+      assert.throws(() => planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now }), refused);
+      assert.throws(() => planPass({ folder, stateDir: path.join(dir, 'C--new'), writeSet: ['MEMORY.md'], now }), refused);
+      fs.renameSync(from, to);
+      assert.throws(() => planPass({ folder, stateDir: path.join(dir, 'C--late'), writeSet: ['MEMORY.md'], now }), refused);
     };
     const result = uninstall(home, { purgeMemory: true, renameFile });
-    assert.ok(result.removed.includes(dir), result.removed.join('\n'));
     assert.deepEqual(result.memoryKept, []);
-    assert.equal(fs.existsSync(path.join(dir, 'C--new', 'snapshots', planned.stamp, 'manifest.json')), true, 'the new pass keeps its snapshot');
-    assert.equal(fs.existsSync(path.join(dir, 'C--new', 'lock')), true, 'and its lock');
-    assert.equal(fs.existsSync(stateDir), false, 'the purged project is gone');
-    assert.deepEqual(fs.readdirSync(path.dirname(dir)).filter((name) => name.startsWith('memory-hygiene.')), [], 'no folder is left half purged');
+    assert.ok(result.removed.includes(dir), result.removed.join('\n'));
+    assert.equal(fs.existsSync(dir), false, 'no plan made the folder again');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nor left the purge anything');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -686,7 +686,13 @@ test('uninstall with purgeMemory keeps the folder while a pass holds its lock, o
     const held = uninstall(home, { purgeMemory: true });
     assert.deepEqual(held.memoryKept, [{ path: dir, reason: 'in-use', passes: [`C--proj/${stamp}`] }]);
     assert.equal(fs.existsSync(path.join(stateDir, 'lock')), true, 'a pass that is not verified keeps its lock and snapshot');
-    assert.equal(fs.existsSync(path.join(dir, 'C--other', 'lock')), false, 'the lock the purge took on the other project is let go');
+    assert.equal(fs.existsSync(`${dir}.purge`), false, 'the purge lets its marker go');
+
+    // A marker already there is another purge, or one that stopped: the folder is kept and the marker named.
+    fs.writeFileSync(`${dir}.purge`, '{}');
+    assert.deepEqual(uninstall(home, { purgeMemory: true }).memoryKept, [{ path: dir, reason: 'purging', marker: `${dir}.purge` }]);
+    assert.equal(fs.existsSync(`${dir}.purge`), true, 'a marker it did not make is not its to remove');
+    fs.rmSync(`${dir}.purge`);
 
     fs.rmSync(path.join(stateDir, 'lock'));
     const refuse = (target) => {
