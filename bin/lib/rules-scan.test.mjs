@@ -95,13 +95,20 @@ test('on the real list, every rule with patterns finds its own planted line, and
 
 // The lines each narrowed rule once caught and must not catch again: the false positives it was narrowed for.
 const NEAR_MISS = {
+  'codex-review-floor': ['const mid = Math.floor(sorted.length / 2);', 'The floor is the cheapest part ever measured (24,206).'],
   'codex-review-margin': 'The gate keeps a margin of 30 seconds on its bound.',
   'codex-review-rate': 'That part cost 325 input tokens a changed line.',
+  'context-pause': [
+    'The parent was at 70% of its window.',
+    'The busiest 24 hours of the window hold 47 events.',
+    'The context limit defaults to 73%.',
+  ],
   'gate-log-command': 'The Codex command line is cut to 100 characters.',
   'gate-log-size': 'Search the git log over 3 days.',
   'gate-max': 'The gate is stopped when 90 percent are done.',
   'gate-wait': 'A commit waits for its turn of the lock, as S1 says.',
   'person-present': 'The flag is here for 3 releases.',
+  'review-effort': ['| lean | `gpt-6.1-sol` `medium` | 7 |', 'Explore, review and verify stay on Opus 5.5 at high effort.'],
   'review-part-files': 'Each part is read as { of: 1, files }.',
   'review-parts-unflagged': 'A run of 28 parts started without the numbers.',
   'review-timeout': 'The Codex login is stopped past codex-review-prompt.mjs:51.',

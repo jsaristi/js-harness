@@ -3379,7 +3379,41 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   "reviews", and `codex-review-margin`'s lookbehind on `%` leans on `AMOUNT` taking the unit,
   which the `AMOUNT` fix must keep or replace.
 
+- 2026-10-16, his batch A landed as pull request 272 (`main` 8c74001), after Codex (0.88, no
+  finding). The register's entry the lead asked for, `pnpm-cleanup-deleted-link-targets`, is pull
+  request 267.
+- 2026-10-16, the `AMOUNT` fix, built test first on `feat/amount-boundary`, is draft pull request
+  279. A number now counts only when it stands on its own, with no word character, dot, colon or
+  hyphen before it and no word character after it or its unit. Left out on purpose: "-5", ".5 h",
+  the second half of "30-60" and "1h30m". No rule's value is written that way, and taking back a
+  digit after a letter would take the hashes back. Over the texts in force, the findings are the
+  same before and after, with `main`'s rules, with batch A's patterns and with batch B's drafts.
+  Five lines of history sections and of `docs/RULES.md` that match no longer do, which is what
+  the fix is for. The patterns' own guards stay. gentle-ai approved it
+  (`review-6f412cfda9dac68c`, acknowledged); its findings are folded in: one named boundary
+  `OWN`, the exclusions written down, more test cases. The verifier (Opus) passed it with no
+  blocker; Codex, 0.9, found nothing.
+- 2026-10-16, his batch B, last and alone, built on `rule/his-last-patterns`: `context-pause`
+  (1 finding, `AGENTS.md:74`, "near 88% of its window"), `review-effort` and
+  `codex-review-floor` (2 each), every finding a restatement. Each was narrowed after the probe
+  of the drafts on `main` (13, 21 and 22 findings):
+  - `context-pause` wants a percent beside a pause, a compaction or the state written. "The
+    parent was at 70% of its window" is a measurement, "24 hours of the window" is a span, and
+    `--context-limit` (73%) is the board's own setting.
+  - `review-effort` names Codex, or wants a setting verb before the model. The roadmap's tables of
+    measured runs name a model and an effort with no setting, and "review" alone caught Claude's
+    reviewers ("explore, review and verify stay on Opus 5.5 at high effort").
+  - `codex-review-floor` wants input tokens after the amount, and no `Math.floor(`. The plan's
+    cheapest part ever measured is another floor.
+  `NEAR_MISS` pins those lines; a probe found each one with the draft and missed it after the
+  narrowing.
+
 ## Next step
+**State for a resume, 2026-10-16, his batch B built on `rule/his-last-patterns`.** Three commits,
+one per rule, and one of `NEAR_MISS` and this document. Next: gentle-ai (item 3), an independent
+verifier, Codex, `merge-tree`, and a draft pull request to the lead's queue. With it, step 2's
+batches are done. Later: a second pass of patterns, from the advisories above.
+
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
 approved and acknowledged, the verifier passed, `subagent-effort` narrowed and the near-miss fixed
 in one more commit. Next: gentle-ai's assessment of that commit, Codex, `merge-tree`, and a draft
