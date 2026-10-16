@@ -143,11 +143,115 @@ test('a plugin already switched off is not in the home', (t) => {
   assert.throws(() => checkWithout(root, ['plugin-engram'], 'claude'), ArmError);
 });
 
-test('Codex\'s plugins and MCP servers, tables of config.toml, are refused until they are built', (t) => {
-  const root = claudeHome(tmp(t));
-  for (const [id, agent] of [['mcp-engram', 'codex'], ['plugin-gentle-ai', 'codex']]) {
-    assert.throws(() => checkWithout(root, [id], agent), (err) => err instanceof ArmError && /not built yet/.test(err.message), `${agent} ${id}`);
+// ---- C3c: Codex's config.toml ---------------------------------------------------------------------------
+
+const CONFIG = String.raw`model = "gpt"
+model_instructions_file = 'C:\h\.codex\engram-instructions.md'
+experimental_compact_prompt_file = 'C:\h\.codex\engram-compact-prompt.md'
+
+[plugins."engram@engram"]
+enabled = true
+
+[plugins."docs@openai-primary-runtime"]
+enabled = true
+
+[mcp_servers.engram]
+command = "engram"
+
+[mcp_servers.engram.env]
+ENGRAM_PORT = "45678"
+
+[mcp_servers.context7]
+url = "https://example.invalid/mcp"
+
+[hooks.state.'C:\h\.codex\hooks.json:session_start:0:0']
+trusted_hash = "hash-of-gentle-ai"
+
+[hooks.state.'C:\h\.codex\hooks.json:session_start:1:0']
+trusted_hash = "hash-of-js-harness"
+
+[hooks.state.'C:\h\.codex\hooks.json:stop:0:0']
+trusted_hash = "hash-of-stop"
+`.replaceAll('\n', '\r\n');
+
+/** A Codex home with a config.toml of plugins, MCP servers and hook trust, and hooks.json to match. */
+function codexConfigHome(root) {
+  codexHome(root);
+  put(root, '.codex/config.toml', CONFIG);
+  put(root, '.codex/engram-compact-prompt.md', 'compact\n');
+  put(root, '.codex/hooks.json', { hooks: { SessionStart: [OTHER_START, JSH_DOCTOR], Stop: [OTHER_PROMPT] } });
+  return root;
+}
+
+const config = (root) => fs.readFileSync(path.join(root, '.codex', 'config.toml'), 'utf8');
+/** CONFIG without the table whose header line is `header` (to the blank line after it). */
+const withoutTable = (text, header) => text.replace(new RegExp(`${header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\r\\n(?:[^\\[\\r][^\\r]*\\r\\n)*\\r\\n`), '');
+
+test('Codex mcp-<name> takes its server\'s tables out of config.toml, sub-tables too', (t) => {
+  const { root, gone, changed } = cut(t, ['mcp-context7'], 'codex', codexConfigHome);
+  assert.deepEqual([gone, changed], [[], ['.codex/config.toml']]);
+  assert.equal(config(root), withoutTable(CONFIG, '[mcp_servers.context7]'));
+});
+
+test('Codex mcp-engram takes its two instruction files and the keys that name them with its server', (t) => {
+  const { root, gone, changed } = cut(t, ['mcp-engram'], 'codex', codexConfigHome);
+  assert.deepEqual([gone, changed], [['.codex/engram-compact-prompt.md', '.codex/engram-instructions.md'], ['.codex/config.toml']]);
+  const text = config(root);
+  assert.equal(/engram-instructions|engram-compact-prompt|mcp_servers\.engram/.test(text), false);
+  assert.ok(text.includes('[plugins."engram@engram"]'), 'the plugin is a component of its own');
+  assert.ok(text.includes('[mcp_servers.context7]'));
+});
+
+test('Codex plugin-<name> switches the plugin off in its table and keeps the rest', (t) => {
+  const { root, gone, changed } = cut(t, ['plugin-engram'], 'codex', codexConfigHome);
+  assert.deepEqual([gone, changed], [[], ['.codex/config.toml']]);
+  assert.equal(config(root), CONFIG.replace('[plugins."engram@engram"]\r\nenabled = true', '[plugins."engram@engram"]\r\nenabled = false'));
+  assert.throws(() => checkWithout(root, ['plugin-engram'], 'codex'), (err) => err instanceof ArmError && /plugin-engram is not in/.test(err.message));
+});
+
+test('a Codex hook taken out takes its trust with it, and the hooks after it keep theirs at their new places', (t) => {
+  const hooks = cut(t, ['hooks'], 'codex', codexConfigHome);
+  assert.deepEqual(hooks.changed, ['.codex/config.toml', '.codex/hooks.json']);
+  const text = config(hooks.root);
+  assert.equal(/hash-of-gentle-ai|hash-of-stop|:stop:/.test(text), false);
+  assert.ok(text.includes(String.raw`[hooks.state.'C:\h\.codex\hooks.json:session_start:0:0']` + '\r\ntrusted_hash = "hash-of-js-harness"'));
+  assert.equal(text.includes(':session_start:1:0'), false);
+  const jsh = cut(t, ['js-harness'], 'codex', codexConfigHome);
+  assert.equal(config(jsh.root), withoutTable(CONFIG, String.raw`[hooks.state.'C:\h\.codex\hooks.json:session_start:1:0']`));
+});
+
+test('a Codex server or plugin config.toml does not hold is refused', (t) => {
+  const root = codexConfigHome(tmp(t));
+  for (const id of ['mcp-nothing', 'plugin-nothing']) {
+    assert.throws(() => checkWithout(root, [id], 'codex'), (err) => err instanceof ArmError && err.message.includes(`${id} is not in`), id);
   }
+});
+
+test('a Codex piece config.toml spells so that a cut could miss it, or a line the scan cannot read, is refused', (t) => {
+  for (const [id, toml] of [
+    ['mcp-context7', '[mcp_servers]\ncontext7 = { url = "x" }\n'],
+    ['mcp-context7', 'mcp_servers.context7.url = "x"\n'],
+    ['mcp-context7', 'mcp_servers = { context7 = { url = "x" } }\n'],
+    ['plugin-engram', '[plugins]\n"engram@engram" = { enabled = true }\n'],
+    ['plugin-engram', 'plugins."engram@engram".enabled = true\n'],
+    ['hooks', `[hooks.state]\n"C:\\\\h\\\\.codex\\\\hooks.json:stop:0:0" = { trusted_hash = "h" }\n`],
+    ['hooks', 'x = """\nmulti\n"""\n'],
+  ]) {
+    const root = codexConfigHome(tmp(t));
+    put(root, '.codex/config.toml', toml);
+    const before = snapshot(root);
+    assert.throws(() => applyWithout(root, [id], 'codex'), ArmError, `${id}: ${toml}`);
+    assert.deepEqual(snapshot(root), before, `${id}: ${toml}`);
+  }
+});
+
+test('trust of a plugin\'s own hooks.json, or of a place hooks.json does not hold, is left as it is', (t) => {
+  const root = codexConfigHome(tmp(t));
+  const extra = String.raw`[hooks.state.'C:\h\.codex\plugins\cache\x\hooks\hooks.json:session_start:0:0']` + '\r\ntrusted_hash = "plugin"\r\n\r\n'
+    + String.raw`[hooks.state.'C:\h\.codex\hooks.json:session_start:7:0']` + '\r\ntrusted_hash = "stale"\r\n';
+  put(root, '.codex/config.toml', CONFIG + extra);
+  applyWithout(root, ['hooks'], 'codex');
+  assert.ok(config(root).endsWith(extra));
 });
 
 function codexHome(root) {

@@ -14,6 +14,7 @@ import path from 'node:path';
 import {
   PAYLOAD, buildInto, copyEntry, countRealHome, initWorkspace, inventory, isDirectory, readTemplate, removeTemplate, requireAbsolute, sealTemplate,
 } from './home.mjs';
+import { scanToml, startsWith, withoutTables } from './codex-toml.mjs';
 import { exists } from './paths.mjs';
 import { assertTrialPort } from './ports.mjs';
 import { applyWithout, checkWithout } from './without.mjs';
@@ -215,91 +216,6 @@ const ENGRAM_ENV = [...ENGRAM_SERVER, 'env'];
 // What decides which engram a process reaches. The first two are set to the trial's own; the last two
 // would send it to a server or socket of someone else's, so a real entry's are dropped.
 const ENGRAM_KEYS = ['ENGRAM_DATA_DIR', 'ENGRAM_PORT', 'ENGRAM_URL', 'ENGRAM_SOCKET'];
-const KEY_PART = /\s*(?:([A-Za-z0-9_-]+)|"((?:[^"\\]|\\.)*)"|'([^']*)')\s*/y;
-const ESCAPES = { '"': '"', '\\': '\\', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' };
-
-/** The text a TOML basic string spells with `raw` between its quotes, or `null` when it holds an escape TOML
- * does not define. A key is compared as TOML reads it, because `"eng\u0072am"` is `engram` to Codex. */
-function unescapeBasic(raw) {
-  let known = true;
-  const text = raw.replace(/\\(?:(["\\bfnrt])|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8})|([\s\S]))/g, (match, simple, short, long) => {
-    if (simple) return ESCAPES[simple];
-    const code = short || long ? Number.parseInt(short ?? long, 16) : -1;
-    if (code >= 0 && code <= 0x10ffff) return String.fromCodePoint(code);
-    known = false;
-    return '';
-  });
-  return known ? text : null;
-}
-
-/** The dotted TOML key of `line` that starts at `from` (`a.b`, `a."b c"`, `a . 'b'`), as `{ parts, end }`
- * with `end` the index after it, or `null` when no key that can be read starts there. */
-function dottedKey(line, from) {
-  const parts = [];
-  let index = from;
-  for (;;) {
-    KEY_PART.lastIndex = index;
-    const part = KEY_PART.exec(line);
-    const name = part && (part[1] ?? (part[2] === undefined ? part[3] : unescapeBasic(part[2])));
-    if (name === null || name === undefined) return null;
-    parts.push(name);
-    index = KEY_PART.lastIndex;
-    if (line[index] !== '.') return { parts, end: index };
-    index += 1;
-  }
-}
-
-const startsWith = (list, prefix) => prefix.every((part, index) => list[index] === part);
-const NOTHING_MORE = /^\s*(#.*)?\s*$/;
-
-/** Whether a TOML value that starts on this line also ends on it, for certain: every string closed, every
- * bracket and brace paired, no multi-line string, and something there. Strings go first, then the comment,
- * so a bracket or a quote inside either is not counted. */
-function endsOnItsLine(value) {
-  if (/"""|'''/.test(value)) return false;
-  const bare = value.trim().replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, 's').replace(/#.*$/, '').trim();
-  if (bare === '' || /["']/.test(bare)) return false;
-  return bare.split('[').length === bare.split(']').length && bare.split('{').length === bare.split('}').length;
-}
-
-/** Classifies `lines`, the lines of a `config.toml` (with or without their line endings), for the edits
- * below. For each: `header`, the dotted key of the `[table]` or `[[array of tables]]` header it is, else
- * `null`; `array`; `table`, the table the line is in, a header's own included (`[null]` inside an array of
- * tables: some other table, of no interest here); and `key`, `{ parts, rest }` for a `key = rest` line.
- *
- * This scan is a safety filter, not a TOML parser: it keeps the desktop app and the real engram store out
- * of a trial, so it FAILS CLOSED. A line is a blank, a comment, a header alone on its line, or a key whose
- * value ends on the same line; anything else throws, naming the line. A value that runs over several lines
- * is the case that matters: inside it nothing says what is a header and what is data, so a table could end
- * early and the rest of it be written back, or a key be missed. It is refused wherever it is, because a
- * scan that could tell which tables it may ignore would be the parser this is not. */
-function* scanToml(lines) {
-  const unreadable = (number, why) => new Error(`config.toml line ${number} ${why}. This harness edits the file as text, to keep the desktop app and the real engram store out of a trial, so it refuses what it cannot read for certain: write every table header alone on its line and every value on one line`);
-  let table = [];
-  let number = 0;
-  for (const text of lines) {
-    number += 1;
-    if (NOTHING_MORE.test(text)) {
-      yield { text, table, header: null, array: false, key: null };
-      continue;
-    }
-    const lead = text.length - text.trimStart().length;
-    if (text[lead] === '[') {
-      const array = text[lead + 1] === '[';
-      const close = array ? ']]' : ']';
-      const parsed = dottedKey(text, lead + close.length);
-      if (!parsed || !text.startsWith(close, parsed.end) || !NOTHING_MORE.test(text.slice(parsed.end + close.length))) throw unreadable(number, 'starts with a bracket and is not a table header this scan can read');
-      table = array ? [null] : parsed.parts;
-      yield { text, table, header: parsed.parts, array, key: null };
-      continue;
-    }
-    const parsed = dottedKey(text, lead);
-    if (!parsed || text[parsed.end] !== '=') throw unreadable(number, 'is neither a table header, a key with its value, a comment nor a blank line');
-    const rest = text.slice(parsed.end + 1);
-    if (!endsOnItsLine(rest)) throw unreadable(number, 'holds a value that does not end on that line');
-    yield { text, table, header: null, array: false, key: { parts: parsed.parts, rest } };
-  }
-}
 
 const unsupported =(how) => new Error(`config.toml declares the engram MCP server ${how}, a form this harness cannot point at a trial's own store and port: write it as a [mcp_servers.engram] table with its env, if any, in a [mcp_servers.engram.env] table`);
 
@@ -366,7 +282,6 @@ export const DESKTOP_APP = {
   plugins: ['unified-computer-use@openai-bundled', 'computer-use@openai-bundled', 'browser@openai-bundled', 'chrome@openai-bundled', 'codex-app-tools@openai-bundled'],
 };
 const DESKTOP_TABLES = [...DESKTOP_APP.servers.map((name) => ['mcp_servers', name]), ...DESKTOP_APP.plugins.map((id) => ['plugins', id])];
-const underDesktop = (parts) => DESKTOP_TABLES.some((prefix) => startsWith(parts, prefix));
 const cannotTakeOut = (how) => new Error(`config.toml ${how}, which this harness cannot take out of the copy whole, and a piece of the desktop app left in would reach the real one from a trial: write it as its own [table]`);
 
 /** The `config.toml` text `toml` without the pieces of `DESKTOP_APP`: each top-level key's line (its value
@@ -377,23 +292,7 @@ const cannotTakeOut = (how) => new Error(`config.toml ${how}, which this harness
  * a server or plugin that survives the removal, a comment included, because a name still in the file is a
  * piece this scan did not understand. */
 export function withoutDesktopApp(toml) {
-  const out = [];
-  for (const { text, table, header, array, key } of scanToml(toml.split(/(?<=\n)/))) {
-    if (header) {
-      if (!underDesktop(header)) out.push(text);
-      else if (array) throw cannotTakeOut(`declares ${header.join('.')} as an array of tables`);
-      continue;
-    }
-    if (underDesktop(table)) continue;
-    if (key) {
-      const full = [...table, ...key.parts];
-      if (full.length === 1 && DESKTOP_APP.keys.includes(full[0])) continue;
-      if (underDesktop(full)) throw cannotTakeOut(`declares ${full.slice(0, 2).join('.')} through an inline table or dotted keys`);
-      if (full.length === 1 && DESKTOP_TABLES.some(([first]) => first === full[0])) throw cannotTakeOut(`declares ${full[0]} as an inline table, where a piece could be`);
-    }
-    out.push(text);
-  }
-  const result = out.join('');
+  const result = withoutTables(toml, { keys: (name) => DESKTOP_APP.keys.includes(name), tables: DESKTOP_TABLES, refuse: cannotTakeOut });
   const left = [...DESKTOP_APP.servers, ...DESKTOP_APP.plugins].find((name) => result.includes(name));
   if (left) throw cannotTakeOut(`still names ${left} outside a table of its own`);
   return result;

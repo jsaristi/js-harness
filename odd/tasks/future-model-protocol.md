@@ -233,7 +233,8 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
 - [x] T6 G3, a cost statement before a run (S3; route: inline): `--plan` on `evals/suite.mjs`, with `evals/plan.mjs`
 - [ ] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
   C1 `fa39244` and C2 `21a06bf` merged in #141; C3a `776b03a`, the filters of paths and JSON keys,
-  see L17; C3b, the marker blocks, see L18; C3c, Codex's TOML tables and hook trust, next)
+  see L17; C3b `9d82100`, the marker blocks, see L18; C3c, Codex's TOML tables and hook trust, see
+  L19; C4, the suite's wiring and pins, next)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
@@ -425,3 +426,17 @@ Found while planning C3c: Codex keys a hook's trust by its place
 move the places of the hooks they keep; C3c remaps those tables (dropped with their hooks, renamed
 to the new places), assuming the trusted hash is of the hook, not its place: the probe of C6
 checks. And the real `SessionStart` has four groups but trust for three (`docs/todo.md`).
+
+L19 (2026-10-16, 11:40 by `date`) JH 14 stopped answering; JH 23 took the feature over from the lead
+(JH ORQ), with no eval run and nothing that spends his model allowance. Found in the worktree: C3c
+begun and not committed (the scanner moved to `evals/codex-toml.mjs`, the tests written). Set aside
+in the session's scratchpad, `origin/main` merged as `924d29e` (gate green), then put back. C3c
+built: Codex `mcp-<name>` takes its `[mcp_servers.<name>]` tables out, sub-tables too; `mcp-engram`
+also takes its two instruction files and the two top-level keys naming them; `plugin-<name>` turns
+`enabled = true` to `false` in its `[plugins."<name>@…"]` table; `hooks` and `js-harness` drop the
+trust table of each hook they take out and rename the trust of each hook that moves to its new group
+(`[hooks.state.'<.codex>/hooks.json:<event>:<group>:<hook>']`, read on the real file: five tables,
+snake-case events, literal strings), leaving a plugin's own hooks.json and stale places alone. Every
+spelling a cut could miss (dotted keys, inline tables, arrays of tables) and every line the scan
+cannot read is an `ArmError` before anything is touched. `withoutDesktopApp` now calls the shared
+`withoutTables`, its 40 tests unchanged and green. RED observed (6 failing), then 22 GREEN.
