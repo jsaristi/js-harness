@@ -287,7 +287,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": "claude-haiku-5-5",
-    "alias": "haiku"
+    "alias": "haiku",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "wait-every",
