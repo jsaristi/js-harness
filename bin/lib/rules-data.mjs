@@ -157,7 +157,10 @@ export const RULES = [
     "owner": "project",
     "since": "2026-10-09",
     "value": 40,
-    "unit": "files"
+    "unit": "files",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}(?<!:\\s?){amount}\\s*files\\b"
+    ]
   },
   {
     "id": "review-part-lines",
