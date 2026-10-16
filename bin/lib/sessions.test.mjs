@@ -2046,6 +2046,23 @@ test('renderBoard says so when there is nothing: no session, no gate, no pull re
   ]);
 });
 
+test('renderBoard: Memory hygiene says whether a pass is due for the project and why, after the pull requests', () => {
+  const base = { root: '/home/me/proj', hours: 1, sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] } };
+  const section = (memory) => {
+    const lines = lib.renderBoard({ ...base, memory }, { now: NOW });
+    return lines.slice(lines.indexOf('Pull requests') + 3, lines.indexOf(lib.NOT_VISIBLE));
+  };
+  assert.deepEqual(section({ available: true, folder: '/m', due: true, reasons: ['no-pass', 'index-bytes'] }), [
+    'Memory hygiene',
+    '  a pass is due (no-pass, index-bytes): js-harness memory status says why; the orchestrator runs it at a task boundary',
+    '',
+  ]);
+  assert.deepEqual(section({ available: true, folder: '/m', due: false, reasons: [] }), ['Memory hygiene', '  nothing due', '']);
+  assert.deepEqual(section({ available: true, folder: '/m', na: true }), ['Memory hygiene', '  n/a: no memory folder at /m', '']);
+  assert.deepEqual(section({ available: false, reason: 'EACCES: permission denied' }), ['Memory hygiene', '  unavailable: EACCES: permission denied', '']);
+  assert.deepEqual(section(undefined), [], 'a board read without it has no such section');
+});
+
 test('renderBoard: Gates says which gate runs and which wait, from the lock, and any other gate as the listing has it', () => {
   const section = (parts) => {
     const lines = lib.renderBoard({ ...BOARD, ...parts }, { now: NOW });

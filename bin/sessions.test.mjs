@@ -704,6 +704,25 @@ test('the machine facts are on the board: worktrees with their counts, running g
   assert.deepEqual(board.pullRequests, { available: true, items: [{ number: 41, title: 'feat: session board', branch: 'feat/board' }] });
 }));
 
+test('the board says whether a memory hygiene pass is due for the project, read from its memory folder and its journal', withMachine(async (machine) => {
+  writeSessions(machine);
+  const folder = path.join(machine.projectDir, 'memory');
+  const none = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(none.memory, { available: true, folder, na: true });
+
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'MEMORY.md'), '- [A note](a.md) — what it holds\n');
+  fs.writeFileSync(path.join(folder, 'a.md'), '---\nname: a\ndescription: a note\nmetadata:\n  type: user\n---\n\nA fact.\n');
+  const due = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(due.memory, { available: true, folder, due: true, reasons: ['no-pass'] });
+  const { stdout } = await runSessions(machine, []);
+  const lines = stdout.split('\n');
+  assert.deepEqual(lines.slice(lines.indexOf('Memory hygiene'), lines.indexOf('Memory hygiene') + 2), [
+    'Memory hygiene',
+    '  a pass is due (no-pass): js-harness memory status says why; the orchestrator runs it at a task boundary',
+  ]);
+}));
+
 test('a machine fact that cannot be read is unavailable with its reason, and the exit code is still 0', withMachine(async (machine) => {
   writeSessions(machine);
   const { run } = fakeRun(machine, { pr: () => ({ status: null, stdout: '', stderr: '', error: Object.assign(new Error('spawnSync gh ENOENT'), { code: 'ENOENT' }) }) });

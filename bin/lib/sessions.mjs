@@ -2878,6 +2878,17 @@ export function reliefTail(text, count = RELIEF_LINES) {
 
 /** The `Relief` section: the file's path with its last lines, or that there is none yet (and where the
  * first line would create it), or why it could not be read. */
+/** The section that says whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5),
+ * with the ids of its reasons; `memory status` says why, and the pass is the orchestrator's, at a task boundary. */
+function memoryLines(memory) {
+  let line;
+  if (!memory.available) line = `  unavailable: ${memory.reason}`;
+  else if (memory.na) line = `  n/a: no memory folder at ${memory.folder}`;
+  else if (!memory.due) line = '  nothing due';
+  else line = `  a pass is due (${memory.reasons.join(', ')}): js-harness memory status says why; the orchestrator runs it at a task boundary`;
+  return ['Memory hygiene', line, ''];
+}
+
 function reliefLines(relief) {
   if (relief.unavailable) return ['Relief', `  ${relief.path}  unavailable: ${relief.unavailable}`, ''];
   if (!relief.exists) return ['Relief', `  no relief file yet: the first line an orchestrator appends creates ${relief.path}`, ''];
@@ -3183,6 +3194,7 @@ export function renderBoard(board, { now }) {
     }),
     ...gateLines(board, now),
     ...sectionLines('Pull requests', board.pullRequests, 'none open', (pr) => `  #${pr.number}  ${pr.title}  (${pr.branch})`),
+    ...(board.memory ? memoryLines(board.memory) : []),
     ...(board.relief ? reliefLines(board.relief) : []),
     NOT_VISIBLE,
   );
