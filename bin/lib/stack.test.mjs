@@ -1551,6 +1551,10 @@ test('hookCommandPlan tries a js-harness resume command with its guard taken off
   ]);
 });
 
+test('hookCommandPlan tries the turn-start hook of the rules too, which with empty input writes nothing and ends at once', () => {
+  assert.deepEqual(hookCommandPlan(['js-harness rules --hook || exit 0']), [{ command: 'js-harness rules --hook', tried: true }]);
+});
+
 test('hookCommandPlan lists any other command as not tried, the session-start report among them', () => {
   assert.deepEqual(hookCommandPlan(['js-harness doctor --hook']), [{ command: 'js-harness doctor --hook', tried: false }]);
 });

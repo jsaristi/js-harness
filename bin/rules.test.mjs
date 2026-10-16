@@ -24,7 +24,7 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source]]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests. */
@@ -269,7 +269,7 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
 test('the usage names the applied form, and a word after applied is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
-    assert.match(USAGE, /\| applied \| change <id> \[--dry-run \| --check-source\]\]$/);
+    assert.match(USAGE, /\| applied \| change <id> \[--dry-run \| --check-source\] \| --hook\]$/);
   });
 });
 
@@ -526,4 +526,25 @@ test('the dispatcher runs rules: js-harness rules exits 0 and its last line is t
   const result = spawnSync(process.execPath, [path.join(PACKAGE, 'bin', 'js-harness.mjs'), 'rules'], { cwd: PACKAGE, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trimEnd().split(/\r?\n/).at(-1), COUNT_LINE);
+});
+
+// Letter F's turn-start hook (odd/tasks/rule-hierarchy.md, "Reach: the turn-start hook (T16f, first part)"): the
+// dispatcher sends `rules --hook` to bin/lib/rules-reach.mjs, and so does the command run on its own.
+test('rules --hook is answered by the turn-start hook, through the dispatcher and on its own, and exits 0 on empty input', () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-hook-'));
+  try {
+    for (const entry of ['bin/js-harness.mjs', 'bin/rules.mjs']) {
+      const args = entry === 'bin/js-harness.mjs' ? [path.join(PACKAGE, entry), 'rules', '--hook'] : [path.join(PACKAGE, entry), '--hook'];
+      const empty = spawnSync(process.execPath, args, { cwd: outside, input: '', encoding: 'utf8' });
+      assert.deepEqual([empty.status, empty.stdout, empty.stderr], [0, '', ''], entry);
+      const event = JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: 'abcdef12-3456', cwd: outside });
+      const quiet = spawnSync(process.execPath, args, { cwd: outside, input: event, encoding: 'utf8', env: { ...process.env, HOME: outside, USERPROFILE: outside } });
+      assert.deepEqual([quiet.status, quiet.stdout], [0, ''], `${entry}: a folder with no list is told nothing`);
+      const unknown = spawnSync(process.execPath, [...args, '--other'], { cwd: outside, input: '', encoding: 'utf8' });
+      assert.equal(unknown.status, 2, entry);
+      assert.match(unknown.stderr, /^js-harness rules --hook: unknown argument --other/, entry);
+    }
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
 });

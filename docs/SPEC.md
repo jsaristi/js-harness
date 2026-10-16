@@ -427,7 +427,7 @@ proofs and by those tasks.
 **Reason:** If a rule lives in one place and nothing restates it, an old copy cannot stand beside the new one.
 **Proof:** `node bin/js-harness.mjs rules check`, `node --test bin/rules.test.mjs`, `node --test bin/lib/rules.test.mjs`
 **Discarded:** An index plus a list of retired phrases: two sample phrases caught 2 of 11 wordings, derived values escaped, and nothing forced the list to be written. "Declared beside its home", which is still two places. Storing the engine and date a rule was checked on: a mark written by hand can be false.
-**Today:** `bin/lib/rules-data.mjs`, `bin/lib/rules.mjs`, `bin/lib/rules-check.mjs`, `bin/rules.mjs`, `docs/rule-sources.json`, `docs/RULES.md`, `js-harness rules`
+**Today:** `bin/lib/rules-data.mjs`, `bin/lib/rules.mjs`, `bin/lib/rules-check.mjs`, `bin/rules.mjs`, `docs/rule-sources.json`, `docs/RULES.md`, `js-harness rules`, `bin/lib/rules-reach.mjs`, `claude-rules-turn-hook`, `claude-rules-start-hook`, `claude-rules-subagent-hook`
 
 ### A project's own rules
 
