@@ -478,6 +478,9 @@ A test run or a count started while a gate, or a batch that measures durations, 
 - Seen: 2026-10-15 — docs/FAILURES.md, gate-mark-hides-failures — JH 9 and its bisecting sub-agent each
   ran the whole of evals/review/compare.test.mjs (65 to 132 s) outside the lock, beside gates in line
   (their own reports)
+- Seen: 2026-10-16 — odd/tasks/rule-hierarchy.md, Progress of 2026-10-16 — JH 7's verifier ran
+  bin/lib/rules-change-run.test.mjs (about 200 s) outside the lock beside JH 7's own gate, which
+  failed on a sensor test that passed alone three times
 - Control: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — since
   2026-10-11
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it

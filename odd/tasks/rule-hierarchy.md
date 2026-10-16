@@ -3277,8 +3277,38 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   which closes the first gap only; or a change of form (patterns or failure alone) that keeps the
   rule's source and needs none, its design named in the relief line, which closes both and says
   that his protection covers values and not patterns. Recommended: the second, with his yes.
+- 2026-10-16, his answer to the first gap, asked by the lead ("¿Cómo seguimos con esas 13?"):
+  "Solo forma, sin mí (Recomendada)". A change of form alone (patterns or failure) on a rule of
+  his needs no words of his and keeps his words as its source; a value still needs them. Built
+  test first on `feat/rules-form-his` (892c006), its own pull request; his 13 rules join the
+  batches once it lands, and until then this branch holds only the 15 project rules.
+- 2026-10-16, batch 1 built and reviewed: seven `rules change` runs, one commit each, after
+  f007601, which derives the expected `patterns:` line of `bin/rules.test.mjs` from the list
+  instead of pinning "none". gentle-ai (item 3, risk and reliability) approved and acknowledged
+  (`review-2824619c451e8364`); the independent verifier found no blocker, and the three findings
+  on `main` real restatements (`odd/tasks/gate-log.md:239`, the help of `wait` in
+  `bin/js-harness.mjs:36`). Both said `person-present` (`here ... for`) and `gate-log-size` (a
+  bare `log`) take ordinary prose; each is narrowed in a commit of its own, `person-present`
+  first. The first try of
+  that correction failed its gate on `checkSensor stops a command that never exits`
+  (`bin/check.test.mjs:494`), which passed alone three times: this session's verifier ran
+  `bin/lib/rules-change-run.test.mjs` (about 200 s) outside the lock beside its own gate, a
+  sighting of `heavy-run-beside-gate`.
 
 ## Next step
+**State for a resume, 2026-10-16, paused for an app restart (gentle-ai 4.2.0).** Progress has
+his answer and batch 1's review. `rule/first-patterns` holds batch 1 and `person-present`
+narrowed (0187b1f); gentle-ai approved the batch before the narrowing. `gate-log-size`'s
+narrowing (in the scratchpad's `finish-b1.mjs`) is not run: `main` moved to f1a057a (pull
+request 250) and `rules change` refuses a branch not based on it, so the branch is rebased
+first. `feat/rules-form-his`
+(892c006) holds the change of form for his rules: gentle-ai approved it with no finding
+(`review-df2f2cb7d6feebb8`); its independent verifier was stopped by the pause and runs again.
+Neither branch is pushed: the pre-push hook wants Codex's record for their code commits, and
+Codex has run on neither. Next, after the restart: the verifier of `feat/rules-form-his`, then
+Codex, `merge-tree`, push and a draft pull request for each, to the lead's queue; batch 2 after.
+Never run a gate while a verifier's tests run. The state below is otherwise current.
+
 **State for a resume, 2026-10-16 at 03:45 by `date`, step 2 of T16d, batch 1 being built.** Pull
 request 249 landed (`main` 87914bf): a change of patterns or failure alone keeps the rule's stored
 source. The lead split the decision: the 13 rules of his wait for his answer on whether his
