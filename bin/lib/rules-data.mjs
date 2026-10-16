@@ -178,7 +178,11 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 6,
     "unit": "parts",
-    "flag": "--max-parts"
+    "flag": "--max-parts",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*{amount}\\s*parts\\b.{0,40}(?:--max-parts|\\bunflagged\\b|\\bits flag\\b)",
+      "^(?!.*\\bruleValue\\().*\\bwithout\\b.{0,30}--max-parts.{0,30}{amount}\\s*parts"
+    ]
   },
   {
     "id": "review-timeout",
