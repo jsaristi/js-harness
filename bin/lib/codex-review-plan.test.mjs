@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ruleValue } from './rules.mjs';
-import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, methodRecord, methodRecordLine, needsFlagLine, planLines, reviewPlan, RECENT_PARTS, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
+import { inputEstimator, MAX_PARTS_WITHOUT_FLAG, measuredParts, methodRecord, methodRecordLine, needsFlagLine, partPlanned, PLAN_METHOD, planLines, reviewPlan, RECENT_PARTS, RUNS_TO_STAND_ALONE } from './codex-review-plan.mjs';
 
 const PAIR = { model: 'gpt-fixture', effort: 'high' };
 
@@ -184,8 +184,8 @@ test('the plan names the range, the model, the effort, the parts with their file
     parts: [
       // 10,000 + 380 x 100 is 48,000, and 10,000 + 914 x 100 is 101,400: printed to two figures, so neither
       // reads as a measurement.
-      { index: 1, of: 2, files: 2, changedLines: 380, inputTokens: 48000 },
-      { index: 2, of: 2, files: 1, changedLines: 914, inputTokens: 100000 },
+      { index: 1, of: 2, files: 2, changedLines: 380, inputTokens: 48000, inputTokensHigh: 48000 },
+      { index: 2, of: 2, files: 1, changedLines: 914, inputTokens: 100000, inputTokensHigh: 100000 },
     ],
     files: 3,
     changedLines: 1294,
@@ -212,10 +212,12 @@ const RANGE =
 
 test('the estimate of the whole is a range when the measured parts did not cost what the fit says: from the fit to its 90th percentile', () => {
   const plan = planOf([part(2, 380), part(1, 914)], SPREAD);
-  // Each part keeps one figure, the one from the fit; the range is of the whole.
-  assert.deepEqual(plan.parts.map((one) => Object.keys(one)), [['index', 'of', 'files', 'changedLines', 'inputTokens'], ['index', 'of', 'files', 'changedLines', 'inputTokens']]);
+  // Each part holds both figures, which its run line records (`partPlanned`); the lines print the range of the whole.
+  const keys = ['index', 'of', 'files', 'changedLines', 'inputTokens', 'inputTokensHigh'];
+  assert.deepEqual(plan.parts.map((one) => Object.keys(one)), [keys, keys]);
   assert.deepEqual(plan.parts.map((one) => one.inputTokens), [48000, 100000]);
   // 48,000 x 1.5 is 72,000 and 101,400 x 1.5 is 152,100: each to two figures, as the figures of the parts are, and added up.
+  assert.deepEqual(plan.parts.map((one) => one.inputTokensHigh), [72000, 150000]);
   assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [148000, 222000]);
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-fixture at high effort, 2 parts, 1,294 changed lines in 3 files.',
@@ -242,6 +244,19 @@ test('one figure is said as one: with a single measured part, or parts that all 
   assert.equal(planOf([], SPREAD).inputTokensHigh, null);
 });
 
+test('what a run line records of its part\'s plan: both figures and the version of the method, nothing where there was no estimate', () => {
+  const plan = planOf([part(2, 380), part(1, 914)], SPREAD);
+  assert.equal(PLAN_METHOD, 2);
+  assert.deepEqual(partPlanned(plan, 1), { estimate: 48000, high: 72000, method: 2 });
+  assert.deepEqual(partPlanned(plan, 2), { estimate: 100000, high: 150000, method: 2 });
+  // A range reviewed whole is the one part of its plan.
+  assert.deepEqual(partPlanned(planOf([part(1, 200)], MEASURED)), { estimate: 30000, high: 30000, method: 2 });
+  // No estimate, no part of that index, or no plan: nothing to record.
+  assert.equal(partPlanned(planOf([part(1, 200)]), 1), null);
+  assert.equal(partPlanned(plan, 3), null);
+  assert.equal(partPlanned(null), null);
+});
+
 test('an estimate is printed to two figures, whatever its size, and a small part costs at least the fixed cost', () => {
   const plan = planOf([part(1, 1), part(1, 3228), part(3, 399)], MEASURED);
   // 10,100; 332,800; 49,900.
@@ -252,6 +267,7 @@ test('an estimate is printed to two figures, whatever its size, and a small part
 test('with no measured part the plan says there is no estimate and why, and puts no number on a part', () => {
   const plan = planOf([part(2, 6), part(1, 2)]);
   assert.deepEqual(plan.parts.map((one) => one.inputTokens), [null, null]);
+  assert.deepEqual(plan.parts.map((one) => one.inputTokensHigh), [null, null]);
   assert.equal(plan.inputTokens, null);
   assert.deepEqual(plan.basis, { runs: 0, samePair: false, atPair: 0, fixed: null, perChangedLine: null, highRatio: null });
   assert.deepEqual(planLines(plan), [
@@ -444,6 +460,28 @@ test('how the method did reads the last ten reviews it can measure, and leaves o
   runs.push(whole);
   const more = [{ outcome: 'unavailable', reason: 'x' }, { outcome: 'reviewed' }, recordOf('missing'), recordOf(null), recordOf('whole'), null, 'not a record'];
   assert.deepEqual(methodRecord({ records: [...records, ...more], runs }), { ...record, recorded: record.recorded + 4 });
+});
+
+test('how the method did reads the figure a part\'s run line recorded when it is of this method, and replays any other', () => {
+  // One part of 100 lines that took 10,000, after a basis whose fit says 20,000 for it.
+  const ratio = (plan) => {
+    const runs = [...exactBasis('high', 10000, 100), lineOf('one', 'high', 100, 10000, plan === undefined ? {} : { plan })];
+    return methodRecord({ records: [recordOf('one')], runs }).median;
+  };
+  // No plan recorded: replayed, 2. Recorded at 30,000 by this method: 3, whatever the fit says. Recorded by
+  // another version of the method, or not as a number: replayed, 2.
+  assert.deepEqual(
+    [
+      ratio(),
+      ratio({ estimate: 30000, high: 45000, method: PLAN_METHOD }),
+      ratio({ estimate: 90000, high: 90000, method: PLAN_METHOD - 1 }),
+      ratio({ estimate: 'many', high: null, method: PLAN_METHOD }),
+    ],
+    [2, 3, 2, 2],
+  );
+  // A recorded figure needs no run line before it: the part was planned when it ran.
+  const alone = [lineOf('first', 'high', 100, 20000, { plan: { estimate: 30000, high: 30000, method: PLAN_METHOD } })];
+  assert.deepEqual(methodRecord({ records: [recordOf('first')], runs: alone }), { recorded: 1, reviews: 1, low: 1.5, median: 1.5, high: 1.5 });
 });
 
 test('with no review recorded, or none it can measure, how the method did says so', () => {
