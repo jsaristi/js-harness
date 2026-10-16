@@ -583,3 +583,78 @@ test('the main worktree is made beside the candidate, and removed with it: on su
   assert.equal(git(red.root, 'worktree', 'list').split('\n').length, 1, 'no worktree is left after the red CircleCI');
   assert.deepEqual(fs.readdirSync(path.join(red.root, '.git', 'js-harness')), []);
 });
+
+// A land of documents alone (the throughput plan's item 7, 2026-10-16): the suite is not run on this machine for a
+// candidate whose every changed path is a document that main's harness.json declares, as a commit of documents alone runs
+// no suite; CircleCI still runs the whole gate on it.
+
+/** makeQueueRepo, with main declaring documents in harness.json and two branches of documents alone: feat/doc adds
+ * docs/a.md and feat/doc2 adds odd/tasks/b.md. `{ root, origin, main, heads }`, with both in `heads`. */
+function makeDocumentsRepo(declared = { documents: ['docs/', 'odd/tasks/'] }) {
+  const made = makeQueueRepo();
+  const { root } = made;
+  fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify(declared)}\n`, 'utf8');
+  git(root, 'add', 'harness.json');
+  git(root, 'commit', '--quiet', '-m', 'main declares its documents');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  const main = git(root, 'rev-parse', 'HEAD');
+  const heads = { ...made.heads };
+  for (const [branch, file] of [['feat/doc', 'docs/a.md'], ['feat/doc2', 'odd/tasks/b.md']]) {
+    git(root, 'checkout', '--quiet', '-b', branch, main);
+    fs.mkdirSync(path.join(root, path.dirname(file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), `${branch}\n`, 'utf8');
+    git(root, 'add', file);
+    git(root, 'commit', '--quiet', '-m', branch);
+    git(root, 'push', '--quiet', 'origin', branch);
+    heads[branch] = git(root, 'rev-parse', 'HEAD');
+  }
+  git(root, 'checkout', '--quiet', '--detach', main);
+  return { ...made, main, heads };
+}
+
+const DOCUMENTS_LINE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; CircleCI runs the whole gate on it.';
+
+test('--land: a candidate of documents alone runs no suite on this machine, says so, and lands on CircleCI\'s green', async () => {
+  const { root, origin, main, heads } = makeDocumentsRepo();
+  const suites = [];
+  const { code, out } = await land(root, [pr(1, 'feat/doc', heads['feat/doc']), pr(2, 'feat/doc2', heads['feat/doc2'])], { suite: (dir) => suites.push(dir) && { ok: true } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(suites, [], 'no suite ran on this machine');
+  assert.ok(out.includes(DOCUMENTS_LINE), out.join('\n'));
+  assert.ok(!out.some((line) => line.includes('is green on this machine')), out.join('\n'));
+  const landed = git(origin, 'rev-parse', 'main');
+  assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1, PR 2.`);
+});
+
+test('--land: a candidate of documents alone that CircleCI turns red is not landed', async () => {
+  const { root, origin, main, heads } = makeDocumentsRepo();
+  const { code, out } = await land(root, [pr(1, 'feat/doc', heads['feat/doc'])], { checks: [[circle('completed', 'failure')]] });
+  assert.equal(code, 4, out.join('\n'));
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+});
+
+test('--land: one pull request that changes more than documents runs the suite on the whole candidate, as before', async () => {
+  const { root, heads } = makeDocumentsRepo();
+  const suites = [];
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/doc', heads['feat/doc'])], { suite: (dir) => suites.push(dir) && { ok: true } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(suites.length, 1, out.join('\n'));
+  assert.ok(!out.includes(DOCUMENTS_LINE), out.join('\n'));
+});
+
+test('--land: documents are the ones main declares, so a main with no "documents" in harness.json runs the suite on a candidate of docs/ alone', async () => {
+  const { root, heads } = makeDocumentsRepo({});
+  const suites = [];
+  const { code, out } = await land(root, [pr(1, 'feat/doc', heads['feat/doc'])], { suite: (dir) => suites.push(dir) && { ok: true } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(suites.length, 1, out.join('\n'));
+});
+
+test('--dry-run: a candidate of documents alone says the suite would not run on this machine', async () => {
+  const { root, heads } = makeDocumentsRepo();
+  const { run } = runner([pr(1, 'feat/doc', heads['feat/doc'])]);
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(out.includes(DOCUMENTS_LINE), out.join('\n'));
+});
