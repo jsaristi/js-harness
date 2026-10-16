@@ -28,8 +28,10 @@ import {
 import { cachePath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log.mjs';
+import { gateFirstDir, issueTicket } from './gate-first.mjs';
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
+import { hygieneDir, journalPath } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
 
 function makeTmpHome() {
@@ -76,7 +78,7 @@ test('install writes the Claude and Codex skill files at the documented paths', 
   try {
     install(home, '0.1.0');
     for (const host of ['.claude', '.codex']) {
-      for (const skill of ['js-harness', 'js-harness-orchestrator']) {
+      for (const skill of ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols']) {
         assert.ok(fs.existsSync(path.join(home, host, 'skills', skill, 'SKILL.md')), `${host} ${skill}`);
       }
     }
@@ -86,8 +88,15 @@ test('install writes the Claude and Codex skill files at the documented paths', 
 });
 
 // Other tests index the first two, so a new component goes after them.
-test('the components are the two skills, each for Claude Code and for Codex, the first skill first', () => {
-  assert.deepEqual(components.map((component) => component.id), ['claude-skill', 'codex-skill', 'claude-orchestrator-skill', 'codex-orchestrator-skill']);
+test('the components are the three skills, each for Claude Code and for Codex, the first skill first', () => {
+  assert.deepEqual(components.map((component) => component.id), [
+    'claude-skill',
+    'codex-skill',
+    'claude-orchestrator-skill',
+    'codex-orchestrator-skill',
+    'claude-protocols-skill',
+    'codex-protocols-skill',
+  ]);
   assert.equal(new Set(components.map((component) => component.target('home'))).size, components.length, 'no two components share a file');
 });
 
@@ -161,6 +170,8 @@ test('uninstall removes now-empty directories it created', () => {
     assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness')), false);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness-orchestrator')), false);
     assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness-orchestrator')), false);
+    assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness-protocols')), false);
+    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness-protocols')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -702,6 +713,32 @@ test('uninstall leaves the orchestrator\'s relief file where it is: it is a log,
   }
 });
 
+test('uninstall removes the folder of gate tickets with a manifest and without, and keeps one it cannot remove among the gates\' folders', () => {
+  const home = makeTmpHome();
+  try {
+    const ticket = () => issueTicket({ home, session: 's1', reason: 'a fix that unblocks the others' });
+    install(home, '0.1.0');
+    ticket();
+    const installed = uninstall(home);
+    assert.ok(installed.removed.includes(gateFirstDir(home)), installed.removed.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    // `gate first` runs in a project with no machine install, so a home with no manifest can hold the folder.
+    ticket();
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [gateFirstDir(home)] });
+
+    const removeFile = (target, options) => {
+      if (target === gateFirstDir(home)) throw Object.assign(new Error('EPERM: operation not permitted, rmdir'), { code: 'EPERM' });
+      return fs.rmSync(target, options);
+    };
+    ticket();
+    assert.deepEqual(uninstall(home, { removeFile }), { ...NOTHING_ELSE, removed: [], gateKept: [{ path: gateFirstDir(home), reason: 'unremovable', code: 'EPERM' }] });
+    assert.deepEqual(uninstall(home).removed, [gateFirstDir(home)]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall keeps a folder of the session channel it cannot look at or remove, reports it with the error code, and still finishes', () => {
   const home = makeTmpHome();
   try {
@@ -728,6 +765,102 @@ test('uninstall keeps a folder of the session channel it cannot look at or remov
       assert.deepEqual([result.removed, result.channelKept], [[], []], code);
     }
     assert.deepEqual(uninstall(home).removed, [channelDir(home)]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The folder of memory hygiene (odd/tasks/memory-hygiene.md, D4 and T9): `memory` writes a project's journal, its
+// daily stamp and, for each pass, a snapshot of the memory folder under it. Nothing records it, like the channel's,
+// and `uninstall` is how it goes; but a snapshot is the only copy of what a pass changed, so a project's folder
+// that holds one is kept, with its stamps.
+
+/** What `memory` leaves under `home` for the project `slug`: a journal and the daily stamp, and a snapshot of
+ * the pass `stamp` when one is given. Returns the project's folder. */
+function leftByMemory(home, slug, stamp) {
+  const project = path.dirname(journalPath(home, slug));
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(journalPath(home, slug), '{"kind":"verify","at":"2026-10-15T12:06:06.108Z","stamp":"20261015T120606108Z"}\n');
+  fs.writeFileSync(path.join(project, 'told'), '2026-10-16T08:00:00.000Z');
+  if (stamp) {
+    fs.mkdirSync(path.join(project, 'snapshots', stamp, 'files'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'snapshots', stamp, 'manifest.json'), '{"writeSet":["MEMORY.md"],"before":{}}');
+  }
+  return project;
+}
+
+test('uninstall removes the folder of memory hygiene when no project holds a snapshot, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    leftByMemory(home, 'C--proj');
+    leftByMemory(home, 'C--other');
+    const installed = uninstall(home);
+    assert.ok(installed.removed.includes(hygieneDir(home)), installed.removed.join('\n'));
+    assert.equal(Object.hasOwn(installed, 'memoryKept'), false, 'said only when a folder is kept');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    leftByMemory(home, 'C--proj');
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [hygieneDir(home)] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    install(home, '0.1.0');
+    assert.equal(uninstall(home).removed.includes(hygieneDir(home)), false, 'nothing is said of a folder that is not there');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps the folder of a project whose memory passes left snapshots, names their stamps, and removes the rest', () => {
+  const home = makeTmpHome();
+  try {
+    for (const withManifest of [true, false]) {
+      if (withManifest) install(home, '0.1.0');
+      const kept = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+      fs.mkdirSync(path.join(kept, 'snapshots', '20261016T090000000Z'), { recursive: true });
+      const gone = leftByMemory(home, 'C--other');
+      const result = uninstall(home);
+      assert.deepEqual(result.memoryKept, [{ path: kept, stamps: ['20261015T120606108Z', '20261016T090000000Z'], journal: true }], String(withManifest));
+      assert.ok(result.removed.includes(gone), result.removed.join('\n'));
+      assert.equal(result.removed.includes(hygieneDir(home)), false);
+      assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true, 'a snapshot is never removed');
+      assert.equal(fs.existsSync(journalPath(home, 'C--proj')), true, 'nor the journal beside it');
+      assert.equal(fs.existsSync(gone), false);
+    }
+
+    // An empty snapshots folder holds no copy of anything: that project's folder goes.
+    fs.rmSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'), { recursive: true });
+    fs.mkdirSync(path.join(path.dirname(journalPath(home, 'C--proj')), 'snapshots'));
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [hygieneDir(home)] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall goes on past a project folder of memory hygiene it cannot remove, and still names the stamps it keeps', () => {
+  const home = makeTmpHome();
+  try {
+    const first = leftByMemory(home, 'C--a');
+    const busy = leftByMemory(home, 'C--b');
+    const last = leftByMemory(home, 'C--c');
+    const kept = leftByMemory(home, 'C--k', '20261015T120606108Z');
+    fs.rmSync(journalPath(home, 'C--k'));
+    const removeFile = (target, options) => {
+      if (target === busy) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    };
+    const result = uninstall(home, { removeFile });
+    assert.deepEqual(result.removed, [first, last]);
+    assert.deepEqual(result.memoryKept, [
+      { path: busy, reason: 'unremovable', code: 'EBUSY' },
+      { path: kept, stamps: ['20261015T120606108Z'], journal: false },
+    ]);
+    assert.equal(fs.existsSync(path.join(kept, 'snapshots', '20261015T120606108Z', 'manifest.json')), true);
+
+    // With no snapshot anywhere, a folder that cannot be removed is the whole folder's, said once.
+    fs.rmSync(kept, { recursive: true });
+    const whole = uninstall(home, { removeFile: (target) => { throw Object.assign(new Error('EPERM'), { code: 'EPERM', target }); } });
+    assert.deepEqual(whole.memoryKept, [{ path: hygieneDir(home), reason: 'unremovable', code: 'EPERM' }]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -814,9 +947,23 @@ test('entryComponents declare the SessionStart hook for Claude and Codex', () =>
 const [, , claudeResume, codexResume] = entryComponents;
 // What a host file holds of ours after an install: the doctor's entry, then the resume hook's.
 const ourEntries = () => [claudeHook.entry(), claudeResume.entry()];
+// The turn-start hook of the rules (letter F, T16f): three Claude entries after the others, one of them a third
+// SessionStart entry in the Claude file, for the matchers after which a session is told again.
+const [claudeRulesTurn, claudeRulesStart, claudeRulesSubagent] = entryComponents.slice(8);
+const ourClaudeStart = () => [...ourEntries(), claudeRulesStart.entry()];
+const isRulesEntry = (entry) => entry?.hooks?.[0]?.command === 'js-harness rules --hook || exit 0';
+
+test('entryComponents declare the turn-start hook of the rules for Claude alone: a turn, a fresh context and a sub-agent', () => {
+  assert.deepEqual([claudeRulesTurn.id, claudeRulesStart.id, claudeRulesSubagent.id], ['claude-rules-turn-hook', 'claude-rules-start-hook', 'claude-rules-subagent-hook']);
+  assert.deepEqual([claudeRulesTurn.pointer, claudeRulesStart.pointer, claudeRulesSubagent.pointer], [['hooks', 'UserPromptSubmit'], ['hooks', 'SessionStart'], ['hooks', 'SubagentStart']]);
+  for (const component of [claudeRulesTurn, claudeRulesStart, claudeRulesSubagent]) assert.equal(component.target('/h'), claudeHook.target('/h'));
+  assert.deepEqual(claudeRulesTurn.entry(), { hooks: [{ type: 'command', command: 'js-harness rules --hook || exit 0', timeout: 5 }] });
+  assert.deepEqual(claudeRulesStart.entry(), { matcher: 'compact|clear|resume', hooks: [{ type: 'command', command: 'js-harness rules --hook || exit 0', timeout: 5 }] });
+  assert.deepEqual(claudeRulesSubagent.entry(), claudeRulesTurn.entry());
+});
 
 test('entryComponents declare the resume hook for Claude and Codex: a SessionStart entry for the matcher compact', () => {
-  assert.equal(entryComponents.length, 8);
+  assert.equal(entryComponents.length, 11);
   assert.deepEqual([claudeResume.id, codexResume.id], ['claude-resume-hook', 'codex-resume-hook']);
   assert.deepEqual([claudeResume.pointer, codexResume.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
   assert.deepEqual([claudeResume.target('/h'), codexResume.target('/h')], [claudeHook.target('/h'), codexHook.target('/h')], 'the files the first entry is in');
@@ -922,7 +1069,8 @@ const ourPostToolUse = () => [pauseHook.entry()];
 const ourPostToolUseFailure = () => [webFailureHook.entry()];
 const ourPreToolUse = () => [guardHook.entry()];
 const ourStop = () => [shareHook.entry()];
-const ourSettings = () => ({ hooks: { SessionStart: ourEntries(), PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop() } });
+const ourRules = () => [claudeRulesTurn.entry(), claudeRulesStart.entry(), claudeRulesSubagent.entry()];
+const ourSettings = () => ({ hooks: { SessionStart: ourClaudeStart(), PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop(), UserPromptSubmit: [claudeRulesTurn.entry()], SubagentStart: [claudeRulesSubagent.entry()] } });
 
 test('install writes the resume entry beside the doctor\'s in each host file and records both; uninstall removes both and the file it created', () => {
   const home = makeTmpHome();
@@ -933,7 +1081,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
       const isClaude = target === claudeFile;
       assert.deepEqual(readJson(target), isClaude ? ourSettings() : { hooks: { SessionStart: ourEntries() } }, target);
       const records = manifest.entries.filter((e) => e.path === target);
-      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse(), ...ourPostToolUseFailure(), ...ourPreToolUse(), ...ourStop()] : ourEntries());
+      assert.deepEqual(records.map((record) => record.entry), isClaude ? [...ourEntries(), ...ourPostToolUse(), ...ourPostToolUseFailure(), ...ourPreToolUse(), ...ourStop(), ...ourRules()] : ourEntries());
       // The file is the install's whichever entry made it: the last one removed is the one that deletes it.
       assert.deepEqual(records.map((record) => [record.createdFile, record.skipped]), records.map(() => [true, false]), target);
       assert.equal(records[1].sha256, sha256(JSON.stringify(claudeResume.entry())));
@@ -942,7 +1090,7 @@ test('install writes the resume entry beside the doctor\'s in each host file and
 
     const result = uninstall(home);
     assert.deepEqual(result.entriesKept, []);
-    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
+    assert.deepEqual([...result.entriesRemoved].sort(), [claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, claudeFile, codexHook.target(home), codexHook.target(home)].sort());
     assert.deepEqual([fs.existsSync(claudeHook.target(home)), fs.existsSync(codexHook.target(home))], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1046,15 +1194,17 @@ test('an update from an install made before the resume hook adds its entry, and 
       const older = install(home, '0.1.0');
       for (const file of [claudeHook.target(home), codexHook.target(home)]) {
         const data = readJson(file);
-        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact');
+        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact' && !isRulesEntry(entry));
+        delete data.hooks.UserPromptSubmit;
+        delete data.hooks.SubagentStart;
         fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
       }
-      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact') }, null, 2), 'utf8');
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact' && !isRulesEntry(record.entry)) }, null, 2), 'utf8');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? [claudeHook.entry()] : [unrelated, claudeHook.entry()]);
 
       const manifest = sync(home, '0.2.0');
-      assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourEntries() : [unrelated, ...ourEntries()]);
-      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['WebFetch', created], ['^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', created], [undefined, created]]);
+      assert.deepEqual(readJson(target).hooks.SessionStart, created ? ourClaudeStart() : [unrelated, ...ourClaudeStart()]);
+      assert.deepEqual(manifest.entries.filter((e) => e.path === target).map((record) => [record.entry.matcher, record.createdFile]), [['startup|resume', created], ['compact', created], [undefined, created], ['WebFetch', created], ['^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$', created], [undefined, created], [undefined, created], ['compact|clear|resume', created], [undefined, created]]);
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
@@ -1072,9 +1222,9 @@ test('uninstall removes the entry that is still there when the user removed the 
     const target = claudeHook.target(home);
     // The user took the resume hook out by hand and put a hook of their own in the file; the pause, web failure, guard and share hooks are still there.
     const theirs = { matcher: 'compact', hooks: [{ type: 'command', command: 'user command', timeout: 1 }] };
-    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs], PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop() } }, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry(), theirs, claudeRulesStart.entry()], PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop(), UserPromptSubmit: [claudeRulesTurn.entry()], SubagentStart: [claudeRulesSubagent.entry()] } }, null, 2)}\n`, 'utf8');
     const result = uninstall(home);
-    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [5, 1]);
+    assert.deepEqual([result.entriesRemoved.filter((p) => p === target).length, result.entriesKept.filter((p) => p === target).length], [8, 1]);
     assert.deepEqual(readJson(target), { hooks: { SessionStart: [theirs] } }, 'the entries that were still ours are gone, and theirs stays');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1193,9 +1343,9 @@ test('install appends the hook entry to an existing file without disturbing othe
     const manifest = install(home, '0.1.0');
 
     const data = readJson(target);
-    assert.equal(data.hooks.SessionStart.length, 3);
+    assert.equal(data.hooks.SessionStart.length, 4);
     assert.deepEqual(data.hooks.SessionStart[0], seeded.hooks.SessionStart[0]);
-    assert.deepEqual(data.hooks.SessionStart.slice(1), ourEntries());
+    assert.deepEqual(data.hooks.SessionStart.slice(1), ourClaudeStart());
     assert.deepEqual(data.hooks.Stop, [...seeded.hooks.Stop, ...ourStop()], 'the user\'s Stop entry stays first, ours after it');
 
     const record = manifest.entries.find((e) => e.path === target);
@@ -1254,7 +1404,7 @@ test('install is idempotent: a second install adds no duplicate hook entry', () 
     const after = fs.readFileSync(target, 'utf8');
     assert.equal(after, before, 'a repeat install must not rewrite an already-correct file');
     const data = readJson(target);
-    assert.equal(data.hooks.SessionStart.length, 2, 'the doctor\'s entry and the resume hook\'s, once each');
+    assert.equal(data.hooks.SessionStart.length, 3, 'the doctor\'s entry, the resume hook\'s and the rules hook\'s, once each');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.createdFile, true, 'createdFile must still be true on the second install');
   } finally {
@@ -1430,7 +1580,7 @@ test('R3-001: install never clobbers a value of an unexpected shape, and reports
     const manifest = install(home, '0.1.0');
 
     // The pause, web failure, guard and share hooks are separate entries under their own keys, so they are written; the SessionStart value is not touched.
-    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop() } }, 'the unexpected value is left as it is');
+    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', PostToolUse: ourPostToolUse(), PostToolUseFailure: ourPostToolUseFailure(), PreToolUse: ourPreToolUse(), Stop: ourStop(), UserPromptSubmit: [claudeRulesTurn.entry()], SubagentStart: [claudeRulesSubagent.entry()] } }, 'the unexpected value is left as it is');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
   } finally {
@@ -1752,12 +1902,12 @@ test('install records how many containers it made for each entry: 2 for a file w
     fs.writeFileSync(target, `${JSON.stringify({ theme: 'dark' }, null, 2)}\n`, 'utf8');
     const first = install(home, '0.1.0');
     const claude = (manifest) => manifest.entries.filter((e) => e.path === target).map((e) => [e.pointer.join('.'), e.createdContainers]);
-    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2]]);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2]], 'a repeat install keeps what the first one made');
+    assert.deepEqual(claude(first), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2], ['hooks.UserPromptSubmit', 2], ['hooks.SessionStart', 2], ['hooks.SubagentStart', 2]]);
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 2], ['hooks.SessionStart', 2], ['hooks.PostToolUse', 2], ['hooks.PostToolUseFailure', 2], ['hooks.PreToolUse', 2], ['hooks.Stop', 2], ['hooks.UserPromptSubmit', 2], ['hooks.SessionStart', 2], ['hooks.SubagentStart', 2]], 'a repeat install keeps what the first one made');
 
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [userStart] } }, null, 2)}\n`, 'utf8');
     uninstall(home);
-    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1], ['hooks.PostToolUseFailure', 1], ['hooks.PreToolUse', 1], ['hooks.Stop', 1]], 'only the PostToolUse, PostToolUseFailure, PreToolUse and Stop lists were missing');
+    assert.deepEqual(claude(install(home, '0.1.0')), [['hooks.SessionStart', 0], ['hooks.SessionStart', 0], ['hooks.PostToolUse', 1], ['hooks.PostToolUseFailure', 1], ['hooks.PreToolUse', 1], ['hooks.Stop', 1], ['hooks.UserPromptSubmit', 1], ['hooks.SessionStart', 0], ['hooks.SubagentStart', 1]], 'only the PostToolUse, PostToolUseFailure, PreToolUse, Stop, UserPromptSubmit and SubagentStart lists were missing');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1842,7 +1992,7 @@ test('a manifest written before createdContainers existed is uninstalled as befo
     fs.writeFileSync(manifestPath(home), JSON.stringify(older, null, 2), 'utf8');
 
     uninstall(home);
-    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [], PostToolUseFailure: [], PreToolUse: [], Stop: [] } });
+    assert.deepEqual(readJson(target), { theme: 'dark', hooks: { SessionStart: [], PostToolUse: [], PostToolUseFailure: [], PreToolUse: [], Stop: [], UserPromptSubmit: [], SubagentStart: [] } });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -2045,6 +2195,31 @@ test('the orchestrator skill is installed for Claude Code and for Codex with the
   }
 });
 
+// T7 of odd/tasks/rule-hierarchy.md: the protocols are one skill, loaded on demand; its text is tested in
+// bin/lib/protocols-skill.test.mjs.
+test('the protocols skill is installed for Claude Code and for Codex with the same text, re-written by sync and removed by uninstall', () => {
+  const home = makeTmpHome();
+  try {
+    const claudeProtocols = components.find((component) => component.id === 'claude-protocols-skill');
+    const codexProtocols = components.find((component) => component.id === 'codex-protocols-skill');
+    assert.equal(claudeProtocols.target(home), path.join(home, '.claude', 'skills', 'js-harness-protocols', 'SKILL.md'));
+    assert.equal(codexProtocols.target(home), path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'));
+    assert.equal(codexProtocols.content('0.1.0'), claudeProtocols.content('0.1.0'), 'Claude and Codex read the same text');
+
+    install(home, '0.1.0');
+    assert.equal(fs.readFileSync(claudeProtocols.target(home), 'utf8'), claudeProtocols.content('0.1.0'));
+    fs.writeFileSync(codexProtocols.target(home), 'an older text', 'utf8');
+    sync(home, '0.2.0');
+    assert.equal(fs.readFileSync(codexProtocols.target(home), 'utf8'), codexProtocols.content('0.2.0'));
+
+    const result = uninstall(home);
+    assert.ok(result.removed.includes(claudeProtocols.target(home)) && result.removed.includes(codexProtocols.target(home)));
+    assert.deepEqual(result.kept, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('the orchestrator skill has a one-line description a host can read, and names the commands an orchestrator runs', () => {
   const text = components[2].content('0.1.0');
   const frontmatter = /^---\nname: js-harness-orchestrator\ndescription: (.+)\n---\n/.exec(text);
@@ -2078,6 +2253,16 @@ test('the orchestrator skill no longer asks a session to keep by hand the rule t
   assert.ok(text.includes('\n- Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, `js-harness gate` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (`--cwd <worktree>`).\n'));
   assert.doesNotMatch(text, /Start no whole test run/);
   assert.ok(text.includes('\n3. two gates run at once (a gate that waits for its turn is not one of them);\n'));
+});
+
+// T8 of odd/tasks/gate-wait.md: M2 held by the records (Progress, 2026-10-16), so the two reviews run beside a
+// gate; what runs tests still waits, a sub-agent's tests included (`heavy-run-beside-gate`, 2026-10-16).
+test('the orchestrator skill lets both reviews run beside a gate, and keeps a sub-agent that runs tests waiting', () => {
+  const text = components[2].content('0.1.0');
+  assert.doesNotMatch(text, /a reviewer wait for the gate to end/);
+  assert.ok(text.includes(
+    '\n- While a gate runs on the machine, run nothing heavy beside it: a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: `js-harness codex-review` runs beside a gate, since out of a turn Codex\'s `node --test` is refused, and so does a gentle-ai review, whose reviewer has no tools.\n',
+  ));
 });
 
 // The relief of an orchestrator is one prompt, always the same: it is in the skill as the block the user

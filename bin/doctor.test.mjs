@@ -145,13 +145,13 @@ test('doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead.
-      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -451,7 +451,7 @@ test('doctorMain reports the rule notes of the project memory as the memory-rule
     const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
     assert.equal(text.code, 0);
     assert.ok(text.output.includes(`\n${'memory-rules'.padEnd(16)}${'n/a'.padEnd(10)}${'stale'.padEnd(10)}${'n/a'.padEnd(10)}${'n/a'.padEnd(10)}n/a\n`), text.output);
-    assert.match(text.output, /\nFix:\n {2}memory-rules \(claude\):\n {4}place each note with the protocol "recording a new rule" .*then delete the note:\n {4}rule\.md \(feedback\)\n/);
+    assert.match(text.output, /\nFix:\n {2}memory-rules \(claude\):\n {4}place each note with the protocol "Changing a rule, a new one included" of the js-harness-protocols skill .*then delete the note:\n {4}rule\.md \(feedback\)\n/);
 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
     const row = JSON.parse(json.output).find((r) => r.id === 'memory-rules');
@@ -496,10 +496,11 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
 
     assert.equal(code, 0);
     const lines = output.split('\n').filter(Boolean);
-    assert.equal(lines.at(-3), accountLine('ok'), output);
-    assert.equal(lines.at(-2), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
-    assert.equal(lines.at(-1), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
-    assert.equal(lines.length, 12, 'the header, the six tools and the five checks');
+    assert.equal(lines.at(-4), accountLine('ok'), output);
+    assert.equal(lines.at(-3), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.equal(lines.at(-2), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
+    assert.match(lines.at(-1), /^pnpm-lock\s+n\/a\s+n\/a/, 'then the pnpm lock check, with no PNPM_HOME in the env given');
+    assert.equal(lines.length, 13, 'the header, the six tools and the six checks');
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -708,7 +709,7 @@ test('doctorMain shows the remote server check ok while the recorded supervisor 
     assert.ok(unlisted.output.split('\n').includes(remoteLine('unknown')), unlisted.output);
     assert.doesNotMatch(unlisted.output, /\nFix:/, 'unknown is not a gap');
     const json = await runDoctor([...argv, '--json'], {}, deps);
-    assert.deepEqual(JSON.parse(json.output).at(-1).gaps, []);
+    assert.deepEqual(JSON.parse(json.output).find((row) => row.id === 'remote-server').gaps, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1641,6 +1642,60 @@ test('R3-003: resolveLatestVersions keeps the cache stale for a mixed row set (h
     assert.equal(cache.latest.checkedAt, staleCheckedAt, 'a genuinely failed lookup must keep the cache stale');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The pnpm-lock row reads `PNPM_HOME` from the env doctor is given, never from the process: a pnpm install running
+// on the machine while the tests run cannot turn their rows into gaps.
+test('doctorMain shows the pnpm-lock row stale for a global bin lock left over in the given PNPM_HOME, its rmdir under Fix, and the hook notices it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  const pnpmHome = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const lockPath = path.join(pnpmHome, 'bin', '.pnpm-global-bin.lock');
+    fs.mkdirSync(lockPath, { recursive: true });
+    const leftAt = new Date(Date.now() - 60 * 60 * 1000);
+    fs.utimesSync(lockPath, leftAt, leftAt);
+    // The time doctor reads back is the one the file system kept: ext4 under WSL loses a millisecond of leftAt
+    // about one time in three, so the expected line is built from the stored time, not from leftAt.
+    const stored = new Date(fs.statSync(lockPath).mtimeMs);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /^pnpm-lock\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(output.includes(`  pnpm-lock (claude):\n    pnpm left its global bin lock behind`), output);
+    assert.ok(output.includes(`\n    rmdir "${lockPath}"\n    the folder was left there at ${stored.toISOString()}\n`), output);
+
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
+    assert.equal(hook.code, 0);
+    // The healthy fixture has no other gap, so the one the hook counts is the lock.
+    assert.equal(hook.output.trim(), JSON.stringify({ systemMessage: 'js-harness: 1 stack gap — run js-harness doctor' }));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(pnpmHome, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows the pnpm-lock row n/a, with no gap, when the env it is given names no PNPM_HOME', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.match(output, /^pnpm-lock\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.doesNotMatch(output, /pnpm-lock \(/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
   }
 });
 

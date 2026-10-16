@@ -80,10 +80,11 @@ answer, and F7's protocol needs both hosts measured the same way.
   because F5's cost is list cost too, which keeps one unit across hosts and the verdict rule
   unchanged.
 - Zero dependencies — because every command in this repo runs with no install step.
-- Never two gates at once, and no gate or test suite while trials run; a commit runs in the
-  background, since its gate takes about ten minutes; after a failed gate `git config --local
+- Never two gates at once: the gate takes the machine's lock by itself, and a trial batch or a
+  test run by hand takes it with `js-harness gate -- <command>`; a commit runs in the
+  background; after a failed gate `git config --local
   core.bare` is checked in the main checkout before anything else — because parallel spawns on
-  this host fail with `0xC0000142` and push the suite past its 600 s cap
+  this host fail with `0xC0000142` and push the suite past its bound
   (`odd/tasks/evals.md`, follow-ups), and a gate from a linked worktree turned the repository
   bare twice on 2026-10-04 (Progress). This feature lives in the linked worktree
   `D:\js-harness-worktrees\codex-parity`, which is safe to commit from only with the gate fix
@@ -94,7 +95,7 @@ high
 
 ## Ask me before
 Running past the 15-trial checkpoint; anything that would write into the real `~/.codex`,
-engram or gentle-ai state; changing the verdict rule or the matrix; push, pull request, merge.
+engram or gentle-ai state; changing the verdict rule or the matrix.
 
 ## TDD
 Mode: strict (source: user global config). Runner: `node --test`. Exception: T3, T6 and T7 are
@@ -116,8 +117,7 @@ about 950 for the slice (2,378 tests, 555 documents, 2,289 code, of which 1,019 
 the probe needed its own arm driver and report, and three review rounds added their corrections
 here. Sebastián accepted the `size:exception` and had #33 merged on 2026-10-05 (`b12d3cd`). The
 branch was then restarted from `main` at that merge, keeping its name, so slice B's commits
-start there and its review boundary is `b12d3cd`. The remote `feat/codex-parity` still points
-at the merged history until slice B is pushed, which needs `--force-with-lease`.
+start there and its review boundary is `b12d3cd`.
 
 Slice B is `e880546` (T4), `4376908` (T4r), `2ac64bb` (T5), `159810c` and the commit that
 records this. With `159810c` it is 1,740 changed lines against a forecast of about 550 for the

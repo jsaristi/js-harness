@@ -22,8 +22,8 @@ js-harness init
 1. `npm i -g` puts the `js-harness` command on the path.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md` and the
-   pre-commit gate of that project.
+3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md`, an empty failures
+   register (`docs/FAILURES.md`) and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
@@ -87,11 +87,11 @@ over 100,000 tokens.
 
 ```console
 $ js-harness check
-PASS  budget  122 estimated tokens (budget 1500)
+PASS  budget  564 estimated tokens (budget 1500)
 PASS  contracts  no contracts under odd/tasks
-INFO  payload claude  122 estimated tokens per turn from files (tools and hook output not counted)
+INFO  payload claude  564 estimated tokens per turn from files (tools and hook output not counted)
       global CLAUDE.md   not found  ~\.claude\CLAUDE.md
-      project AGENTS.md        122  my-project\AGENTS.md
+      project AGENTS.md        564  my-project\AGENTS.md
 …
 INFO  fixed load  95570 tokens at the first turn, median of the latest 5 sessions (budget 100000)
 …
@@ -106,7 +106,9 @@ Runs a heavy command under the machine's gate lock, one at a time with the gates
 project, and records the run in the machine's gate log. `gate log` prints the last runs. A
 command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
 in has an open pull request and commits a push would take now, any command but that push or a merge
-is refused, with the push command printed.
+is refused, with the push command printed. `--ready <command>` declares a quick check, such as
+`git diff --quiet`, run before the wait and again as the turn comes after one: when it fails, nothing
+runs (exit 75), so a command that would refuse at once does not wait for a turn first.
 
 ```console
 $ js-harness gate --no-wait -- node -e "console.log('a heavy run, one at a time')"
@@ -117,6 +119,11 @@ $ js-harness gate log --last 2
 10-14 04:24:38  0 s  exit 0  load 8.0 of 8 (vmmem, MsMpEng, claude)  my-project
 ```
 
+A ticket puts one session's next whole check before every gate that waits: the orchestrator issues it
+with `gate first --session <id> --reason <why>`, or its own batch run carries one with `check --first
+<reason>`. Two are open at most, for an hour at most; `js-harness sessions` prints them with their
+issuer and flags one the orchestrator did not issue, and the gate log keeps each issue and claim.
+
 ### js-harness init
 
 Enables js-harness in a git repository and records what it wrote in a manifest of the clone.
@@ -125,6 +132,7 @@ Enables js-harness in a git repository and records what it wrote in a manifest o
 $ js-harness init
 wrote harness.json
 wrote AGENTS.md
+wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
 ran codegraph init
 manifest: my-project\.git\js-harness\manifest.json
@@ -137,13 +145,16 @@ manifest of them.
 
 ```console
 $ js-harness install
-installed js-harness 0.1.0 (4 files) into ~
+installed js-harness 0.1.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
 registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (UserPromptSubmit)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SubagentStart)
 ```
 
 ### js-harness loop
@@ -184,7 +195,9 @@ Inside a project, removes what `init` wrote; with `--global`, removes what `inst
 $ js-harness uninstall
 removed harness.json
 removed AGENTS.md
+removed docs/FAILURES.md
 removed .git/hooks/pre-commit
+removed docs
 removed .codegraph/
 removed manifest my-project\.git\js-harness\manifest.json
 $ js-harness uninstall --global
@@ -290,6 +303,21 @@ Roadmap  docs/ROADMAP.md  61/62  98%
 Features  295/349  85%
 ```
 
+`--pace [--days <n>]` reads the first-parent history of the default branch (origin/HEAD, else
+`main`, else `HEAD`) and prints the tasks closed, reopened, added and removed on each of the last
+14 days, or `n`, by committer day, with the totals and the mean a day; `--json` gives the same as
+data. A task is matched by its ID (`T3`); one reworded without an ID, or in a moved file, counts
+as removed and added. Without `--pace`, `progress` runs no git.
+
+```console
+$ js-harness progress --pace --days 2
+Pace of origin/main, its first-parent line, by committer day over the last 2 days:
+  2026-10-15  closed 81  reopened 0  added 67  removed 1
+  2026-10-16  closed 30  reopened 0  added 22  removed 1  (today, so far)
+Total       closed 111  reopened 0  added 89  removed 2
+A day       closed 55.5  reopened 0  added 44.5  removed 1
+```
+
 ### js-harness contract
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
@@ -358,10 +386,26 @@ $ js-harness rules check
 PASS  rules  18 rules, hash 7963ae6d5597
 ```
 
+`rules --hook` is the turn-start hook of the rules (letter F of `odd/tasks/rule-hierarchy.md`). `install`
+registers it for Claude Code three times: on `UserPromptSubmit`, on `SessionStart` for the
+matcher `compact|clear|resume`, and on `SubagentStart`. Where the project declares rules
+(`bin/lib/rules-data.mjs` in the harness's checkout, `docs/rules.json` in a project), it
+compares the list at the session's merge base with the list on the default branch
+(`origin/HEAD`, else `origin/main`, else `main`, never fetched). It tells the session, once,
+each rule that was added, removed, retired or changed, with the new declaration itself. After a
+compaction, a clear or a resume it tells it again, and a sub-agent is told at its start. Anywhere
+else it prints nothing. A turn with no change prints nothing and costs no token. It never blocks:
+a fault goes to standard error and it exits 0. What a session was last told is kept in
+`~/.js-harness/channel/rules-seen/`, one file a session, pruned after 30 days. `uninstall` removes
+that folder with the channel's; a session still running afterwards may write it again, and the
+next `uninstall` removes it. Codex sessions get nothing until a logging hook confirms its events.
+
 ### js-harness codex-review
 
 Runs the Codex review of `<base>..HEAD` and records it. `--plan` prints what the review would
-read and cost, and starts nothing; `--unavailable <reason>` records a skip.
+read and cost, with how close that estimate came on the last reviews this machine recorded, and
+starts nothing; a run records in each part's run line the figures it was planned at, which that
+line reads; `--unavailable <reason>` records a skip.
 
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again
@@ -439,8 +483,8 @@ watchdog task: off
 ### js-harness sessions
 
 The board of the project's recent Claude Code sessions: each one's state, context size and
-last reply, the worktrees and their feature plans, the running gates and the open pull
-requests. It only reads. `--watch` waits until the board changes in a way that needs a
+last reply, the worktrees and their feature plans, the running gates, the open pull
+requests and whether a memory hygiene pass is due. It only reads. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
 the host made, whether the session was told the pause and committed its feature document (the
@@ -481,7 +525,9 @@ It reads the main checkout's memory folder, so a worktree sees the same notes, a
 pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
 of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
 user is lost and no file another session wrote is overwritten, and an undo that puts back only what
-nobody wrote since and refuses while another pass holds the lock. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+nobody wrote since and refuses while another pass holds the lock. `uninstall --global` removes that
+folder, except a project's folder that holds snapshots: they are the only copy of what a pass changed,
+so it is kept, with its journal, and its stamps are named. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
 
 ```console
 $ js-harness memory status

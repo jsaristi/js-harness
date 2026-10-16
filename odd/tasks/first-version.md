@@ -161,14 +161,22 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 
 ## Tasks
 
-- [ ] T1 (kind: build) S1: the three open table rows, closed in their own documents
+- [x] T1 (kind: build) S1: the three open table rows, closed in their own documents (L11)
 - [x] T2 (kind: build) S2: `progress` counts table rows; inline, test first (PR 262, `71fa4fc`, L4)
-- [ ] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks
+- [x] T3 (kind: verify) S3: the 2026-10-13 list checked in the code; a reader, then the confirmed items as tasks (L12)
+- [x] T3a (kind: build) S3: the pause and resume hooks' "orchestrator" and "relief file" are explained where a project without the orchestrator skill reads them (L12, item 12)
+- [x] T3b (kind: build) S3: the pause falls back to the session model's window, or says none is configured, before 500,000 (L12, item 13)
+- [x] T3c (kind: build) S3: two open points of `odd/tasks/session-channel.md`: the pause refusal names only flags given, the openings hint quotes as the hook's rule accepts; the stale "before T9" row (L12, item 4; L13)
 - [x] T4 (kind: design) S4: the release source, designed; its build follows as T4b (above, L6)
 - [x] T4b (kind: build) S4: the release source, built as designed; inline, test first (L7)
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
+- [ ] T6a (kind: build) S6: a heavy run beside a gate is refused whatever its size: one test file the gate log times over a minute counts as several, and an eval batch shows itself to the guard as a gate holder does; one file stays free by the skill's rule (`odd/tasks/test-run-warning.md`, "One file stays free, as the skill says") and the refusal is his decision, so narrowing it goes to him through the lead first (`docs/FAILURES.md`, heavy-run-beside-gate: two single files of 65 to 200 s beside gates since the protocol line, one of which made a gate fail)
+- [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
+- [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
+- [ ] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4)
+- [ ] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -233,3 +241,85 @@ repository stays private, either a card on GitHub at about $157 a month (about $
   the remote's URL as written; a remote not on GitHub is no answer); a run that ends `timed_out` is no answer, not
   a red; the workflow test finds a secret named by index (`secrets['X']`). RED 4 of 8 in `ci-gate.test.mjs`, then
   8/8, also with no git identity.
+- L11 (2026-10-16 12:40, the lead): "Next: first-version T1 (3 table rows) if JH 16 has no branch for it
+  (js-harness sessions); tell JH 16 you took it." No branch touched those rows; JH 16 was told. All three were
+  already done in code, and only their rows said otherwise: exact-tests T4 was closed by PR 266; exact-tests T3's
+  T3b and switch are `1532bc2` on main; test-run-warning T2 is JH 15's guard, `63fec3c`, which calls
+  `testRunWarning` for a Bash command (`bin/guard.mjs:83`, `bin/guard.test.mjs` 21/21). Each row now says so;
+  `js-harness progress` read 7/8 and 1/2 for those two documents before.
+- L12 (2026-10-16, JH 25): T3, on the lead's notice of 17:00 ("first-version T3 ... JH 19 owned it but has been
+  silent 6h; I move it to you"). A reader (Opus, high, 135k tokens, read-only on `5cccfc4`) checked each item of
+  relief lines 543 to 546 in the code; one claim spot-checked by the parent (item 12, `bin/lib/pause.mjs:300`).
+  Already fixed: (1) `pointersIn`, `dc7d34a` and `c5d3ecb` (`bin/lib/manifest.mjs:542-549`); (2) uninstall's
+  `~/.js-harness/remote/`, `724e14f` (`removeRemoteFolder`, `bin/lib/manifest.mjs:1440`); (3) orphans after a
+  timed-out contract run, `501e67d` (`runSensor`, `bin/contract.mjs:213-243`); (6) `status` on a hand-written
+  `harness.json`, `243794e` (`bin/lib/project.mjs:1742`, `bin/update.mjs:206-210`); (8) on demand,
+  `odd/tasks/on-demand-functions.md` all done; (9) the Codex switch, `bin/lib/functions.mjs:17`, `README.md:442`;
+  (10) the gate on GitHub, `odd/tasks/gate-on-github.md` all done and `35a0423`; (11) a project's own rules,
+  `odd/tasks/project-rules.md` all done; (14) `update` reads git tags, `a252fc7` (`bin/update.mjs:44-54`); (15)
+  `README.md`, `2d42c86`; (16) `package.json` ships `bin/` only, `5502d54`; and line 546's npm name, `a252fc7`.
+  Not a defect: (5) the stale installed orchestrator skill was his machine's copy, which `sync` rewrites
+  (`bin/lib/manifest.mjs:194-199`); his copy holds `e8e14fd`'s line today. No command compares the installed
+  skills with the shipped ones, which matters only while every build says 0.1.0.
+  Confirmed, as tasks: (12) the hook texts name an orchestrator and a relief file (`bin/lib/pause.mjs:300`,
+  `bin/lib/sessions.mjs:2755`, `bin/resume.mjs:47`, `:91`) that the `init` template never defines
+  (`agentsTemplate`, `bin/lib/project.mjs:345`; the cut's two blocks went with `d1a5aa4`): T3a. (13) the pause reads
+  a configured window since `17266f3`, but with none configured and none measured it still assumes 500,000
+  (`bin/lib/pause.mjs:23`, `bin/lib/sessions.mjs:21`): T3b. (4) of the session channel's open points
+  (`odd/tasks/session-channel.md:1843-1852`), the pause refusal names `--context-pause` and
+  `--context-compaction` when neither was given (`bin/sessions.mjs:232-235`), the openings hint quotes the title
+  in double quotes (`bin/resume.mjs:384`), and the row on "the last task" still says "before T9" though T9 is done;
+  the yardstick itself waits on his decision: T3c. (7) no `vX.Y.Z` tag on origin and `package.json` says 0.1.0:
+  the tag is his and outside this document (Not in scope), so no task. Each of T3a to T3c is small and inline.
+- L13 (2026-10-16, JH 25): T3c built inline, test first, on `feat/first-version-t3abc`: the pause refusal names
+  each figure by its flag or its default (`bin/sessions.mjs`), the openings hint asks in words with single quotes
+  (`bin/resume.mjs`), and the yardstick row no longer waits on T9; detail in `odd/tasks/session-channel.md`,
+  Progress, 2026-10-16.
+- L14 (2026-10-16, JH 25, state for a resume): branch `feat/first-version-t3abc` (worktree
+  `D:/js-harness-worktrees/first-version-t3abc`, on top of PR 294's `docs/first-version-t3`). T3c committed `37f30d7`.
+  T3a in progress, uncommitted: a RED test in `bin/lib/pause.test.mjs` (`ORCHESTRATOR_SAID`); next, the gloss in
+  `bin/lib/pause.mjs:300` (`where`) and in `bin/resume.mjs:91` (`NOTIFY`, and its test constant), test first; then T3b
+  (the pause's fallback window, `bin/lib/pause.mjs:23`); then Codex on the code commits, push, a PR, notify the lead.
+- L15 (2026-10-16, JH 25): T3a built inline, test first: the pause's notices and the resume hook say, the first
+  time they name it, what the orchestrator is and that the js-harness-orchestrator skill teaches it
+  (`ORCHESTRATOR_IS`, `bin/lib/sessions.mjs`; RED 1 in `bin/lib/pause.test.mjs`, 25 in `bin/resume.test.mjs`, then 56 and
+  92 green). The `init` template stays short. Next: T3b, then Codex, push, a PR, the lead told.
+- L16 (2026-10-16, JH 25): T3b built inline, test first: with no window configured and no compaction measured,
+  the pause's notice says its figures assume the default window of 500,000 tokens and names
+  CLAUDE_CODE_AUTO_COMPACT_WINDOW and autoCompactWindow to set it (`bin/lib/pause.mjs`, noticeOf; RED 1 in
+  `bin/lib/pause.test.mjs`, then 57 green). Of the task's two ways this is the second: the notice says the figure is assumed,
+  and the model's own window is not read. Next: Codex on the code commits, push, a PR, the lead told.
+- L17 (2026-10-16, JH 25): Codex on baec266..3d958ca found one P2, confirmed: the T3b notice named
+  CLAUDE_AUTO_COMPACT_WINDOW, which `configuredWindow` does not read; it now names `WINDOW_VARIABLE`
+  (CLAUDE_CODE_AUTO_COMPACT_WINDOW), test first (RED 1, then 57 green).
+- L18 (2026-10-16, JH 25): T6's first pass, on `main` `c1bf1b5`, from JH 22's list of S6's six checks (shared
+  notes, jh22-first-version-t6-prep.md). (1) `check` on Windows (`JS_HARNESS_GATE_WSL=0`, `TEMP`/`TMP` on
+  `D:js-harness-tmp`, `JS_HARNESS_GATE_CI=0`, under `js-harness gate --max 60`): every row passed but `tests`,
+  "npm run test timed out after 1200 s on Windows ... skipped 0 of 166 test files", with the machine 97% busy before
+  the sensors. Then `node --test` whole on Windows, same settings: 5,687 tests, 5,666 pass, 2 fail, 19 skipped,
+  `duration_ms 1397833`, so the whole suite does not fit the `sensor-timeout` rule's 20 minutes there (T6e; the rule
+  is `rules.json`, changed only through `js-harness rules change`). (2) The first failure,
+  `scripts/package-contents.test.mjs:20`, "object is not iterable": this machine's npm is 12.2.0
+  (`C:
+vm4w
+odejs
+ode_modules
+pm`), whose `pack --dry-run --json` prints an object keyed by the package's
+  name; no command of `bin/` reads that output (grep `pack.*--json|'pack'` over `bin` and `scripts`), so it breaks
+  the test, not what ships (T6b). (3) The second, `bin/lib/launcher.test.mjs:129`, "the child never read its
+  launchers": it passed twice alone right after, so it is the whole run's load against its 20 s bound (T6c).
+  (4) `docs/FAILURES.md`: `failures check --settled` exits 1 with 7 of 92 not settled; a reader classed them and
+  one is a defect of what ships, `merge-review-covers-main`, still open for a merge below HEAD (`mergeStart`,
+  `bin/lib/codex-review-coverage.mjs:427`, narrows only a merge at the tip; the `--base <merge>^` hint is wrong once
+  HEAD moved), which costs input tokens and leaves nothing unreviewed (T6d); the other six are agents' practice,
+  third-party tools or process. (5) CircleCI: `ci/circleci: check success` on `c1bf1b5` (2026-10-16T17:35:40Z,
+  `gh api`). (6) Not run in this pass: the whole suite and `check` in WSL2, which no command triggers on `main`
+  (every gate runs the selected files there); the rerun at the end, once the rest lands, owes them.
+- L19 (2026-10-16, JH 25): T6b, inline: `packedPaths` takes the first pack of either shape, the array of npm 11
+  or the values of npm 12's object; RED was the failure of L18 on this machine's npm 12.2.0, and the file passes
+  now (1 of 1).
+- L20 (2026-10-16, JH 25): T6c, inline: the first read of the launcher test may take 60 s, not 20, and the test
+  120 s, not 60; no load can be made on demand, so the proof is L18's run that starved it and the file passing
+  alone (7 of 7); the rerun at the end of T6 shows whether the room is enough. Seen on the way: the gate of T6b's
+  commit (`a478e4a`) ran the whole suite in WSL2 and it passed, since selection could not be asked there; one data
+  point for S6's WSL2 check, not yet a run on `main`.

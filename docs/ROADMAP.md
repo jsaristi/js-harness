@@ -191,7 +191,7 @@ te tienen bloqueado al ser una ia ese es el problema"); measured on nine pages, 
 - [x] `js-harness fetch <url>`: rung 2, read or blocked with the next rung
 - [x] The `resume --pause` hook names the next rung after a blocked WebFetch
 - [x] And after a WebFetch that failed as a tool error, through a `PostToolUseFailure` entry `install` writes (Sebastián, 2026-10-16: "Sí, agregala (Recomendada)")
-- [ ] Reviewed (gentle-ai and Codex) and merged
+- [x] Reviewed (gentle-ai and Codex) and merged (`jsaristi/js-harness#204`, its `PostToolUseFailure` entry `#260`)
 
 ## F5 result
 
@@ -858,6 +858,44 @@ podamos implementar todo"), each a feature of its own with its own document and 
      bin/check.mjs`, written where merges are made: the README's `js-harness merge-queue`. An
      installed project gets nothing unless its machine has the file.
      Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
+   - The ticket that goes first (2026-10-16, `odd/tasks/gate-first.md`, his "agrega la prioridad
+     del gate"): `js-harness gate first --session <id> --reason <why>` puts that session's next
+     whole check before every gate that waits; the turn that runs is never cut. Two are open at
+     most, for an hour at most; a gate claims its session's ticket as it arrives and spends it
+     whatever comes next. The orchestrator's batch run carries one by itself with `check --first
+     <reason>`. It cannot be made impossible, so it is made seen: `js-harness sessions` prints
+     each open ticket with its issuer and flags one the orchestrator did not issue, a gate that
+     went first says by which ticket, and the gate log keeps each issue, claim, expiry and
+     cancellation. Undo: `gate first --cancel <id>`, or delete `~/.js-harness/gate-first`.
+   - A faster whole check of the same quality (2026-10-14 to 2026-10-16, closed,
+     `odd/tasks/faster-check.md`): the design that ranked how to free the lock without proving
+     less, read by two readers and handed to the orchestrator as version 2. Its first three parts
+     are built, each in its own document: the sensors in WSL2 and the ticket that goes first
+     (both above), and Codex's review out of the lock (the Review row of "Decided"); with them,
+     two guards on a turn of `js-harness gate` (`odd/tasks/gate-turn-guards.md`). The parts it
+     ranked after those were not built there, and it claims nothing of their state.
+   - The wait for the gate, measured and cut (2026-10-12 to 16, `odd/tasks/gate-wait.md`, closed).
+     *What the measurement found*: one whole run under the lock, 77 files, started 1,005 Node
+     processes and 12,041 git processes and ended at 780 s, its longest file at 686 s. After
+     the command's tests ran as two processes, no file was the wall any more (533 s, the
+     machine 94% busy), so only less work shortens a run: fewer process starts, or less of
+     what the antivirus spends on each (1,077 processor-seconds of 5,524 in that run, his).
+     Two cuts of git were taken, each judged by a second count: the questions a
+     `codex-review` run asks (its test file, 7,840 to 6,628 git processes), and test
+     repositories built once per process and copied (`bin/lib/git-fixture.testkit.mjs`,
+     1,545 fewer in 15 files, 6.8% of the suite's git). *What may run beside a gate*: both
+     reviews. Codex ran beside a commit gate 67 times and every run ended reviewed; a
+     gentle-ai review adds at most 12 s to a gate, against 30 s written before it was
+     measured. A test run still may not: the guard refuses `node --test` of several files
+     while another gate holds the lock, outside a turn. A review in parts keeps the parts
+     that passed, a review runs at medium effort, and a queued command can be refused before
+     it waits (`js-harness gate --ready`). *What the trial on GitHub answered* (run
+     38296748258): on machines of one size the suite took 1,258 s on Windows (124 failing)
+     and 184 s on Linux (7 failing), 6.8 times longer on Windows, so it is Windows that is
+     slow for this suite, not his machine. The figure of a month of gates there (about 21 to
+     26 dollars while the repository was private) went to him, and nothing was paid; once it
+     was public, the gates that would wait for the lock go to GitHub's Linux machines instead
+     (`odd/tasks/first-version.md`, T7).
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait

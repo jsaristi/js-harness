@@ -2,7 +2,9 @@
 // seconds, each by its program, its script and its pid. A gate that starts on a loaded machine names them
 // under the figure of its load (`./machine-load.mjs`), so that no session needs a script of its own to
 // find the video in a browser or the language server that makes its gate slow.
-// See odd/tasks/gate-log.md ("S1 · The load a gate starts under").
+// See odd/tasks/gate-log.md ("S1 · The load a gate starts under"). The same readings, taken once at a
+// gate's start and once at its end, keep who spent the processor over its whole run (`watchBusiest`, and
+// odd/tasks/gate-wait.md, T19).
 //
 // Every process's processor time is read twice and the difference taken. On Linux from `/proc`, by Node
 // alone. On Windows by one PowerShell process, which prints both readings, is then told on its standard
@@ -183,21 +185,27 @@ export async function scriptOf(args, name, { windows = false, isFile = isFileOnD
   }
 }
 
-/** The processes that spent most processor time between two readings, the busiest first, three at most:
- * `[{ pid, name, cpuSeconds }]`, where `cpuSeconds` is what the process spent between them. A reading is
- * a list of `{ pid, name, cpuSeconds }` with the time spent so far.
+/** How many processes a gate keeps of its whole run (`busiestOverRun`): more than the look names, since a
+ * run of minutes has room for a service and an antivirus beside the browser and the language server, and
+ * the log of a run is read later, when nobody can look again. */
+export const BUSIEST_OVER_RUN = 5;
+
+/** The processes that spent most processor time between two readings, the busiest first, `count` at most
+ * (three, as many as the look names, where none is given): `[{ pid, name, cpuSeconds }]`, where
+ * `cpuSeconds` is what the process spent between them. A reading is a list of `{ pid, name, cpuSeconds }`
+ * with the time spent so far.
  *
  * Only a process that both readings hold under one name is counted: one that started between them spent
  * an unknown part of its time before the look, and a pid under another name is another process. Pid 0 is
  * never one, being on Windows the time nobody used, nor are the pids of `skip`. */
-export function busiestBetween(before, after, { skip = [] } = {}) {
+export function busiestBetween(before, after, { skip = [], count = NAMED } = {}) {
   const earlier = new Map(before.map((process) => [process.pid, process]));
   return after
     .filter(({ pid, name }) => pid !== 0 && !skip.includes(pid) && earlier.get(pid)?.name === name)
     .map(({ pid, name, cpuSeconds }) => ({ pid, name, cpuSeconds: Math.round((cpuSeconds - earlier.get(pid).cpuSeconds) * 1000) / 1000 }))
     .filter(({ cpuSeconds }) => cpuSeconds >= SAID_FROM_SECONDS)
     .sort((one, other) => other.cpuSeconds - one.cpuSeconds)
-    .slice(0, NAMED);
+    .slice(0, count);
 }
 
 // A name is printed in a report and written to a log: what would move a terminal's cursor is taken out.
@@ -254,26 +262,32 @@ const wait = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
 
+// A process that ended since the folder was listed, or whose file may not be read, is in no reading.
+const readProc = (proc, file) => {
+  try {
+    return proc.read(file);
+  } catch {
+    return null;
+  }
+};
+
+/** One reading of every process `/proc` shows, taken now. A folder that cannot be listed throws. */
+const procReading = (proc) => proc.list().filter((entry) => /^\d+$/.test(entry)).flatMap((pid) => {
+  const text = readProc(proc, `/proc/${pid}/stat`);
+  return (text === null ? null : parseProcStat(text)) ?? [];
+});
+
+/** `found` with the arguments of each, as `/proc` shows them now. They end in a zero byte each. A program
+ * that rewrote its title has one, and so no script. */
+const withProcArgs = (proc, found) => found.map((process) => {
+  const commandLine = readProc(proc, `/proc/${process.pid}/cmdline`);
+  return { ...process, args: commandLine === null ? null : commandLine.split('\0') };
+});
+
 async function lookLinux({ ms, ownPid, proc, sleep }) {
-  // A process that ended since the folder was listed, or whose file may not be read, is in no reading.
-  const read = (file) => {
-    try {
-      return proc.read(file);
-    } catch {
-      return null;
-    }
-  };
-  const reading = () => proc.list().filter((entry) => /^\d+$/.test(entry)).flatMap((pid) => {
-    const text = read(`/proc/${pid}/stat`);
-    return (text === null ? null : parseProcStat(text)) ?? [];
-  });
-  const before = reading();
+  const before = procReading(proc);
   await sleep(ms);
-  return busiestBetween(before, reading(), { skip: [ownPid] }).map((process) => {
-    // The arguments end in a zero byte each. A program that rewrote its title has one, and so no script.
-    const commandLine = read(`/proc/${process.pid}/cmdline`);
-    return { ...process, args: commandLine === null ? null : commandLine.split('\0') };
-  });
+  return withProcArgs(proc, busiestBetween(before, procReading(proc), { skip: [ownPid] }));
 }
 
 // --- Windows: one PowerShell process ---
@@ -305,53 +319,67 @@ export function parseProcessReadings(text) {
   return read;
 }
 
-/** The script the helper runs, with the two readings `ms` apart. In single quotes throughout: it is one
- * argument of a command line, in which a double quote would end it. `Win32_Process` counts the times in
- * tenths of a microsecond. What fails in it fails silently, and its lines are then missing. */
-const lookScript = (ms) => [
+// The pieces of the scripts the helper runs. In single quotes throughout: a script is one argument of a
+// command line, in which a double quote would end it. `Win32_Process` counts the times in tenths of a
+// microsecond. What fails in a script fails silently, and its lines are then missing.
+const PRELUDE = [
   "$ErrorActionPreference = 'SilentlyContinue'",
   '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
   "function Reading($mark) { foreach ($p in Get-CimInstance -Query 'SELECT ProcessId, Name, KernelModeTime, UserModeTime FROM Win32_Process') { "
     + "$ms = ''; if ($null -ne $p.UserModeTime) { $ms = [long](($p.KernelModeTime + $p.UserModeTime) / 10000) }; "
     + '[Console]::Out.WriteLine($mark + [char]9 + $p.ProcessId + [char]9 + $ms + [char]9 + $p.Name) } }',
-  "Reading '1'",
-  `Start-Sleep -Milliseconds ${ms}`,
-  "Reading '2'",
+];
+// After the last reading: the mark that it is whole, then the command lines of the pids it is told.
+const ASKED_COMMAND_LINES = [
   "[Console]::Out.WriteLine('=')",
   // The pids it is told, and nothing else of that line, go into the filter.
   "$ids = @([Console]::In.ReadLine() -split ',' | Where-Object { $_ -match '^[0-9]+$' })",
   "if ($ids.Count -gt 0) { $filter = ($ids | ForEach-Object { 'ProcessId=' + $_ }) -join ' OR '; "
     + 'foreach ($c in Get-CimInstance Win32_Process -Filter $filter) { '
     + "[Console]::Out.WriteLine('c' + [char]9 + $c.ProcessId + [char]9 + $c.CommandLine) } }",
-].join('; ');
+];
+
+/** The script of the look, with the two readings `ms` apart. */
+const lookScript = (ms) => [...PRELUDE, "Reading '1'", `Start-Sleep -Milliseconds ${ms}`, "Reading '2'", ...ASKED_COMMAND_LINES].join('; ');
+
+/** The script of one reading, taken now. It is marked `2`, the mark of the second reading of the look, so
+ * that what it prints is read as the look's is and lands in `after`, the reading that comes once `=` says
+ * it is whole. */
+const READING_SCRIPT = [...PRELUDE, "Reading '2'", ...ASKED_COMMAND_LINES].join('; ');
 
 /** The PowerShell every Windows has, by its whole path: a bare name would be looked for in the folder the
  * gate runs in first, which is a project's. */
 const powershell = (env) => path.win32.join(env.SystemRoot ?? env.SYSTEMROOT ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 
-function lookWindows({ ms, boundMs, ownPid, spawn, env }) {
+/** Runs `script` in one PowerShell process: resolves to `{ read, found }`, or `null` wherever it fails
+ * (see the head of this file). `read` is what it printed (`parseProcessReadings`), and `found` what `pick`
+ * chose of it once its last reading was whole, each with `args`, its command line in arguments, or `null`
+ * where the system did not show it. `pick(read, helperPid)` is handed the pid of the helper, which is in
+ * its own readings: it is busy with them, and never what a gate is told about. The helper is told the pids
+ * of `found` alone, and prints their command lines; none other is ever asked for. */
+function askHelper({ script, boundMs, spawn, env, pick }) {
   return new Promise((resolve) => {
     let child;
     let timer;
     let text = '';
-    // The busiest of the two readings, once the second one is whole.
+    // What `pick` chose, once the last reading is whole.
     let found = null;
-    const finish = (busiest) => {
+    const finish = (answer) => {
       clearTimeout(timer);
-      resolve(busiest);
+      resolve(answer);
     };
     try {
       // `-NonInteractive` and no profile: nothing of the user's runs, and nothing is ever asked.
-      child = spawn(powershell(env), ['-NoProfile', '-NonInteractive', '-Command', lookScript(ms)], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+      child = spawn(powershell(env), ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
     } catch {
-      resolve([]);
+      resolve(null);
       return;
     }
     timer = setTimeout(() => {
       child.kill();
-      finish([]);
+      finish(null);
     }, boundMs);
-    child.on('error', () => finish([]));
+    child.on('error', () => finish(null));
     // A helper that ended early has closed its end of the pipe: what is written to it then is lost, not thrown.
     child.stdin.on('error', () => {});
     child.stdout.setEncoding('utf8');
@@ -360,19 +388,24 @@ function lookWindows({ ms, boundMs, ownPid, spawn, env }) {
       if (found !== null) return;
       const read = parseProcessReadings(text);
       if (!read.done) return;
-      // The helper itself is busy with the look, and this gate is not what the gate is told about.
-      found = busiestBetween(read.before, read.after, { skip: [ownPid, child.pid] });
+      found = pick(read, child.pid);
       child.stdin.end(`${found.map(({ pid }) => pid).join(',')}\n`);
     });
     child.on('close', (code) => {
       if (code !== 0 || found === null) {
-        finish([]);
+        finish(null);
         return;
       }
-      const { commandLines } = parseProcessReadings(text);
-      finish(found.map((process) => ({ ...process, args: commandLines.has(process.pid) ? splitCommandLine(commandLines.get(process.pid)) : null })));
+      const read = parseProcessReadings(text);
+      finish({ read, found: found.map((process) => ({ ...process, args: read.commandLines.has(process.pid) ? splitCommandLine(read.commandLines.get(process.pid)) : null })) });
     });
   });
+}
+
+async function lookWindows({ ms, boundMs, ownPid, spawn, env }) {
+  // The helper itself is busy with the look, and this gate is not what the gate is told about.
+  const answer = await askHelper({ script: lookScript(ms), boundMs, spawn, env, pick: (read, helperPid) => busiestBetween(read.before, read.after, { skip: [ownPid, helperPid] }) });
+  return answer?.found ?? [];
 }
 
 // The look of each system resolves to the busiest as `busiestBetween` gives them, each with `args`: its
@@ -403,6 +436,86 @@ export async function busiestProcesses({ platform = process.platform, ms = BUSIE
   } catch {
     return [];
   }
+}
+
+// --- Over a gate's whole run: one reading at its start, one at its end ---
+//
+// The look above sees two seconds before a gate. What slows a run of minutes can start after them: on
+// 2026-10-13 the check went from some 520 s to 700-1100 s, the gate log's figure of the load said the
+// machine was busy and not who made it so, and what told was who spent the processor over the run (a
+// Windows service, `PcaSvc`, at a whole core, and the antivirus, `MsMpEng`). So a gate reads every
+// process's processor time when it starts (`processTimes`), again when it ends, and keeps the heaviest that
+// lived through the run (`busiestOverRun`); `watchBusiest` is the two together, as a gate uses them. Each
+// reading is the look's, taken once, by the same helper and with the same rules: nothing of a command line
+// is said but the base name of a script the disk holds, and wherever a reading fails nobody is named.
+//
+// The same limit as the look's, at the scale of a run: a process that started during the run is not
+// counted, so a load of short processes (a suite's tests, a compiler run per file) is not seen, and what is
+// kept is what stayed busy all along. That is what a gate cannot tell from its own figures, which is why it
+// is kept.
+
+/** One reading of every process's processor time, taken now: resolves to `[{ pid, name, cpuSeconds }]`,
+ * `cpuSeconds` being what each process spent since it started. On Linux from `/proc`, at once and with no
+ * process started. On Windows by one PowerShell process, which takes the reading, is told to ask for no
+ * command line, and ends: some seconds on a loaded machine, `boundMs` at the most. Resolves to an empty
+ * list on any other system and wherever the reading fails; it never rejects.
+ *
+ * `platform`, `spawn`, `proc` and `env` stand in for the system in a test, as for `busiestProcesses`. */
+export async function processTimes({ platform = process.platform, boundMs = BUSIEST_BOUND_MS, spawn = spawnChild, proc = PROC, env = process.env } = {}) {
+  try {
+    if (platform === 'linux') return procReading(proc);
+    if (platform === 'win32') return (await askHelper({ script: READING_SCRIPT, boundMs, spawn, env, pick: () => [] }))?.read.after ?? [];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+// The end of a run on each system: the reading taken now, the heaviest since `start` as `busiestBetween`
+// gives them, each with `args` as the look's are. On Windows the one helper takes the reading and prints
+// the command lines of those it kept, and of no other process.
+const ENDS = {
+  linux: ({ start, count, ownPid, proc }) => withProcArgs(proc, busiestBetween(start, procReading(proc), { skip: [ownPid], count })),
+  win32: async ({ start, count, boundMs, ownPid, spawn, env }) => (await askHelper({ script: READING_SCRIPT, boundMs, spawn, env, pick: (read, helperPid) => busiestBetween(start, read.after, { skip: [ownPid, helperPid], count }) }))?.found ?? [],
+};
+
+/** The processes that spent most processor time since `start`, a reading (`processTimes`) taken when a
+ * run began, the heaviest first, `count` at most: resolves to `[{ name, script, pid, cpuSeconds }]` as
+ * `busiestProcesses` names them, `cpuSeconds` being what each spent over the run. The end reading is taken
+ * now. Only a process that both readings hold under one name is kept (`busiestBetween`): one that started
+ * during the run, one that ended during it and a pid that another process took meanwhile are not. This
+ * process (`ownPid`) is never one: it is the gate, which is told who ran beside it.
+ *
+ * The scripts are asked of the disk as the look asks them (`named`), for the kept alone, within
+ * `askBoundMs` and what is left of `boundMs`. A start that holds nothing is a reading that failed, and
+ * then nothing is read at the end. Resolves to an empty list wherever a reading fails; it never rejects.
+ * The options stand in for the system in a test, as for `busiestProcesses`. */
+export async function busiestOverRun(start, { count = BUSIEST_OVER_RUN, platform = process.platform, boundMs = BUSIEST_BOUND_MS, askBoundMs = BUSIEST_ASK_BOUND_MS, ownPid = process.pid, spawn = spawnChild, proc = PROC, env = process.env, isFile = isFileOnDisk } = {}) {
+  const startedAt = Date.now();
+  try {
+    if (!Array.isArray(start) || start.length === 0) return [];
+    const found = (await ENDS[platform]?.({ start, count, boundMs, ownPid, spawn, proc, env })) ?? [];
+    const left = startedAt + boundMs - Date.now();
+    return await named(found, { windows: platform === 'win32', isFile, boundMs: Math.max(0, Math.min(askBoundMs, left)) });
+  } catch {
+    return [];
+  }
+}
+
+/** The watch of one run, as a gate keeps it: the first reading is taken as this is called, without being
+ * waited for, so that a gate's sensors start when they would have; `end()` resolves, once the run is over,
+ * to `{ seconds, busiest }`: the seconds since this was called, by `now`, and the heaviest that lived
+ * through the run (`busiestOverRun`), five at most. `end` waits for a first reading still under way, and
+ * never rejects. The options are those of `processTimes` and `busiestOverRun`, with `now` for the clock. */
+export function watchBusiest({ now = Date.now, ...options } = {}) {
+  const begun = now();
+  const start = processTimes(options);
+  return {
+    async end() {
+      const seconds = Math.round((now() - begun) / 100) / 10;
+      return { seconds, busiest: await busiestOverRun(await start, options) };
+    },
+  };
 }
 
 /** Each of `busiest` in one line, for a report: `3.2 s of CPU in 2 s  node tsserver.js (pid 12044)`.

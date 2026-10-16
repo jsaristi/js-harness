@@ -19,6 +19,7 @@ import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, rem
 import { INSTALL_NEWEST } from './version.mjs';
 import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
+import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -508,15 +509,17 @@ function remoteServerFix(down = []) {
   return { claude: commands.length === 1 ? commands[0] : commands };
 }
 
-// The hook commands the check tries start with this. `js-harness resume` with empty standard input finds no hook input,
-// so it writes nothing and ends at once, which is what makes it safe to run from a check.
+// The hook commands the check tries: those that start with `js-harness resume `, and the turn-start hook of the rules.
+// With empty standard input each finds no hook input, so it writes nothing and ends at once, which is what makes it safe
+// to run from a check.
 const TRIED_PREFIX = 'js-harness resume ';
+const TRIED_COMMANDS = new Set(['js-harness rules --hook']);
 // The guard `pauseHookEntry` adds: it turns any exit into 0 for the host, so the check takes it off, or a copy that
 // answers 2 would pass for answered.
 const HOOK_GUARD = ' || exit 0';
 
 /** The recorded hook commands the check runs, each once and in the order first recorded, with the guard taken off and
- * whether the check tries it. Only a `js-harness resume ` command is tried. Any other is listed as not tried:
+ * whether the check tries it. Only a `js-harness resume ` command and `js-harness rules --hook` are tried. Any other is listed as not tried:
  * `js-harness doctor --hook` is the session-start report itself, and running it would count as a report made. */
 export function hookCommandPlan(commands) {
   const seen = new Set();
@@ -525,7 +528,7 @@ export function hookCommandPlan(commands) {
     const command = recorded.endsWith(HOOK_GUARD) ? recorded.slice(0, -HOOK_GUARD.length) : recorded;
     if (seen.has(command)) continue;
     seen.add(command);
-    plan.push({ command, tried: command.startsWith(TRIED_PREFIX) });
+    plan.push({ command, tried: command.startsWith(TRIED_PREFIX) || TRIED_COMMANDS.has(command) });
   }
   return plan;
 }
@@ -608,7 +611,9 @@ function hookCommandsState(deps) {
  * there (`memory-rules.mjs`); it runs in the session-start report as well, so a new one is told at the next session.
  * The session classes check's gap is `mismatch` in the `claude` cell: the project's recent sessions are of both
  * permission classes and the user setting that lets a message cross between them is not `accept`
- * (`session-classes.mjs`); its fix is `install --accept-session-messages`. */
+ * (`session-classes.mjs`); its fix is `install --accept-session-messages`. The pnpm lock check's gap is `stale` in the
+ * `claude` cell: the global bin lock a failed `pnpm add -g` left, which makes the next one wait five minutes and fail
+ * (`pnpm-lock.mjs`); it reads `PNPM_HOME` from `deps.env`, the env doctor was given, and its fix is the `rmdir`. */
 export const checks = [
   {
     id: 'memory-rules',
@@ -645,6 +650,13 @@ export const checks = [
     project: () => 'n/a',
     fix: (_deps, configured) => (configured?.claude === 'stale' ? { claude: [HOOK_FIX, ...configured.lines] } : {}),
     interactiveOnly: true,
+  },
+  {
+    id: 'pnpm-lock',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: (deps) => pnpmLockState({ env: deps.env }),
+    project: () => 'n/a',
+    fix: (_deps, configured) => (configured?.claude === 'stale' ? { claude: [PNPM_LOCK_FIX, ...configured.lines] } : {}),
   },
 ];
 
