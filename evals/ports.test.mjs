@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
 import {
-  ENGRAM_PROCESS_NAME, REAL_ENGRAM_PORT, allocatePort, assertTrialPort, findListeners, findProcesses, isListening, killByPort, releasePort,
+  ENGRAM_PROCESS_NAME, REAL_ENGRAM_PORT, RECENT_PORTS, allocatePort, assertTrialPort, findListeners, findProcesses, isListening, killByPort, releasePort,
 } from './ports.mjs';
 
 /** A `spawnSync` that answers from `script`, one `[matcher, result]` per expected call in order, and keeps the
@@ -49,6 +49,28 @@ test('a free port comes back, never the real engram port and never one still res
   assert.deepEqual([...reserved].sort(), [41000, 41001]);
   releasePort(41000, { reserved });
   assert.deepEqual([...reserved], [41001]);
+});
+
+test('a port just released is not handed to the next trial, since Linux may offer it again at once', async () => {
+  // CircleCI job 74: both arms of the isolation probe got one port, as Linux gave back 2 of 20,000 binds in WSL2.
+  const reserved = new Set();
+  const recent = [];
+  const offered = [41000, 41000, 41002];
+  const listen = async () => offered.shift();
+  assert.equal(await allocatePort({ listen, reserved, recent }), 41000);
+  releasePort(41000, { reserved, recent });
+  assert.equal(await allocatePort({ listen, reserved, recent }), 41002, 'the port the last trial gave back is skipped');
+});
+
+test('only the last ports released are kept from reuse, so a long run never runs out of ports', async () => {
+  const reserved = new Set();
+  const recent = [];
+  for (let port = 42000; port < 42000 + RECENT_PORTS + 1; port += 1) {
+    assert.equal(await allocatePort({ listen: async () => port, reserved, recent }), port);
+    releasePort(port, { reserved, recent });
+  }
+  assert.equal(recent.length, RECENT_PORTS);
+  assert.equal(await allocatePort({ listen: async () => 42000, reserved, recent }), 42000, 'the oldest release is free again');
 });
 
 test('an allocation that cannot find a usable port in its attempts fails instead of settling for the real one', async () => {
