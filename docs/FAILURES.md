@@ -944,6 +944,11 @@ without that review, and the choice went to him.
 - Seen: 2026-10-15 — odd/tasks/host-update-check.md, L4 — the preflight status of `c307e33` timed
   out twice (`operation_timeout`, `retry_safe` false, next action stop); the candidate had no
   gentle-ai review, Codex reviewed it
+- Seen: 2026-10-16 — odd/tasks/first-version.md, L10 — the preflight of T7b timed out three times
+  with `--base-ref=origin/main` while the machine was at 100% CPU, and answered in 9 s with the
+  merge-base commit; that candidate was reviewed
+- Control: owed — odd/tasks/gate-wait.md — "three of its four sightings ran beside
+  a gate or a full machine"
 
 ### rule-only-in-memory
 A rule lived only in an agent's memory note, so he repeated it and sessions already open did not get
