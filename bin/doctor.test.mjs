@@ -1658,6 +1658,9 @@ test('doctorMain shows the pnpm-lock row stale for a global bin lock left over i
     fs.mkdirSync(lockPath, { recursive: true });
     const leftAt = new Date(Date.now() - 60 * 60 * 1000);
     fs.utimesSync(lockPath, leftAt, leftAt);
+    // The time doctor reads back is the one the file system kept: ext4 under WSL loses a millisecond of leftAt
+    // about one time in three, so the expected line is built from the stored time, not from leftAt.
+    const stored = new Date(fs.statSync(lockPath).mtimeMs);
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
@@ -1665,7 +1668,7 @@ test('doctorMain shows the pnpm-lock row stale for a global bin lock left over i
     assert.equal(code, 0);
     assert.match(output, /^pnpm-lock\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
     assert.ok(output.includes(`  pnpm-lock (claude):\n    pnpm left its global bin lock behind`), output);
-    assert.ok(output.includes(`\n    rmdir "${lockPath}"\n    the folder was left there at ${leftAt.toISOString()}\n`), output);
+    assert.ok(output.includes(`\n    rmdir "${lockPath}"\n    the folder was left there at ${stored.toISOString()}\n`), output);
 
     const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
     assert.equal(hook.code, 0);
