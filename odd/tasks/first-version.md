@@ -174,7 +174,7 @@ repository stays private, either a card on GitHub at about $157 a month (about $
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
 - [ ] T6a (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1)
 - [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
-- [ ] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
+- [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
 - [ ] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
@@ -317,3 +317,8 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
 - L19 (2026-10-16, JH 25): T6b, inline: `packedPaths` takes the first pack of either shape, the array of npm 11
   or the values of npm 12's object; RED was the failure of L18 on this machine's npm 12.2.0, and the file passes
   now (1 of 1).
+- L20 (2026-10-16, JH 25): T6c, inline: the first read of the launcher test may take 60 s, not 20, and the test
+  120 s, not 60; no load can be made on demand, so the proof is L18's run that starved it and the file passing
+  alone (7 of 7); the rerun at the end of T6 shows whether the room is enough. Seen on the way: the gate of T6b's
+  commit (`a478e4a`) ran the whole suite in WSL2 and it passed, since selection could not be asked there; one data
+  point for S6's WSL2 check, not yet a run on `main`.
