@@ -67,6 +67,7 @@ const PLANTED = {
   'review-part-lines': { line: 'A part holds up to 400 changed lines.', marked: 'A part holds up to `rule:review-part-lines`.' },
   'review-parts-unflagged': { line: 'A run of more than 6 parts needs its flag.', marked: 'A run of more parts than `rule:review-parts-unflagged` needs its flag.' },
   'review-timeout': { line: 'A Codex review is stopped after 30 minutes.', marked: 'A Codex review is stopped at `rule:review-timeout`.' },
+  'reviewed-commit-lines': { line: 'A reviewed commit holds up to 1,200 changed lines.', marked: 'A reviewed commit holds up to `rule:reviewed-commit-lines`.' },
   'sensor-timeout': { line: 'A sensor is stopped after 20 minutes.', marked: 'A sensor is stopped at `rule:sensor-timeout`.' },
   'session-effort': { line: 'A work session runs at `high` effort.', marked: 'A work session runs at the effort of `rule:session-effort`.' },
   'session-model': { line: 'A work session runs on claude-opus-5-5.', marked: 'A work session runs on the model of `rule:session-model`.' },

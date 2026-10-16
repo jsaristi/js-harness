@@ -216,7 +216,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "changed lines"
+    "unit": "changed lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcommits?\\b.{0,50}\\b(?:up to|at most|under|no more than|holds?)\\s+(?:about\\s+)?(?<![\\w:.-]){amount}\\s*changed lines"
+    ]
   },
   {
     "id": "sensor-timeout",
