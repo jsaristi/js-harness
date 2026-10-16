@@ -169,7 +169,11 @@ export const RULES = [
     "since": "2026-10-09",
     "value": 400,
     "unit": "changed lines",
-    "flag": "--part-lines"
+    "flag": "--part-lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bparts?\\b.{0,40}\\b(?:up to|at most|holds?)\\s+{amount}\\s*(?:changed )?lines",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*(?:changed )?lines\\b.{0,20}\\b(?:a|per|each) part\\b"
+    ]
   },
   {
     "id": "review-parts-unflagged",
