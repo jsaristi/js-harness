@@ -2230,6 +2230,60 @@ test('renderBoard says a room at, just short of and just past where the host com
   ]);
 });
 
+// odd/tasks/stalled-sessions.md S3: the work sessions that hold handed work and went quiet, in a section of their own.
+const STALL_LIMIT = 60;
+const stalledItem = (number, quietSeconds, more = {}) => ({
+  number,
+  title: `JH ${number} · work`,
+  ids: [`${number}0000000-0000-0000-0000-000000000000`],
+  quietSince: before(quietSeconds),
+  quietMs: quietSeconds * 1000,
+  holding: { what: 'notice', at: before(quietSeconds + 600), from: 'JH ORQ · lead', kind: 'note', text: 'T3 is yours' },
+  worktree: null,
+  branch: null,
+  ...more,
+});
+
+test('renderBoard lists the stalled work sessions with how long they have been quiet and what they hold', () => {
+  const section = (stalled) => {
+    const lines = lib.renderBoard({ ...BOARD, stalled }, { now: NOW });
+    const start = lines.findIndex((line) => line.startsWith('Stalled  '));
+    return start === -1 ? null : lines.slice(start, lines.indexOf('', start) + 1);
+  };
+  const heading = 'Stalled  work sessions that hold handed work and made no commit, notice or gate for 60m or more (rule session-stall)';
+  const opening = stalledItem(23, 5400, { title: null, holding: { what: 'opening', at: before(5400), from: 'JH ORQ · lead', kind: null, text: 'Read odd/tasks/x.md' } });
+  assert.deepEqual(section({ limitMinutes: STALL_LIMIT, items: [stalledItem(19, 4 * 3600), opening], unavailable: [] }), [
+    heading,
+    '  JH 19 · work  quiet 4h 00m  holding a note from JH ORQ · lead of 4h 10m ago: T3 is yours',
+    '  work session 23  quiet 1h 30m  holding its opening of 1h 30m ago: Read odd/tasks/x.md',
+    '',
+  ]);
+  // Nobody stalled is said, and a record it could not read is named: "could not look" is not "nobody".
+  assert.deepEqual(section({ limitMinutes: STALL_LIMIT, items: [], unavailable: [] }), [heading, '  none', '']);
+  assert.deepEqual(section({ limitMinutes: STALL_LIMIT, items: [], unavailable: ["the channel's record (x): EISDIR"] }), [heading, '  none', "  not read: the channel's record (x): EISDIR", '']);
+  // A board from before the key (one a watch keeps) prints no section; the section comes before the roster and the worktrees.
+  assert.equal(section(undefined), null);
+  const lines = lib.renderBoard({ ...BOARD, stalled: { limitMinutes: STALL_LIMIT, items: [], unavailable: [] } }, { now: NOW });
+  assert.ok(lines.indexOf(heading) < lines.indexOf('Worktrees'));
+});
+
+test('boardChanges says a stalled session once when it crosses the limit, and again each time its quiet doubles', () => {
+  // One stall, read at several looks: its quiet grows while where it started and what it holds stay.
+  const held = { quietSince: before(99999), holding: { what: 'notice', at: before(99999), from: 'JH ORQ · lead', kind: 'note', text: 'T3 is yours' } };
+  const look = (quietSeconds, more) => ({ stalled: { limitMinutes: STALL_LIMIT, items: quietSeconds === null ? [] : [stalledItem(19, quietSeconds, { ...held, ...more })], unavailable: [] } });
+  const said = (age) => `JH 19 · work has made no commit, notice or gate for ${age} while it holds a note from JH ORQ · lead: T3 is yours`;
+  assert.deepEqual(changes(look(null), look(3600)), [said('1h 00m')], 'said when it first appears stalled');
+  assert.deepEqual(changes(look(3600), look(3700)), [], 'not again at the next look');
+  assert.deepEqual(changes(look(7000), look(7300)), [said('2h 01m')], 'again when the quiet doubles');
+  assert.deepEqual(changes(look(5 * 3600), look(6 * 3600)), [], 'not between two doublings');
+  // A new quiet (it did something, then went quiet again) is a new stall, said from its first crossing.
+  assert.deepEqual(changes(look(3 * 3600, { quietSince: before(4 * 3600) }), look(3600)), [said('1h 00m')]);
+  // A board with no key on either side, or one that leaves the list, says nothing of it.
+  assert.deepEqual(changes({}, look(3600)), [said('1h 00m')]);
+  assert.deepEqual(changes(look(3600), look(null)), []);
+  assert.deepEqual(changes(look(3600), {}), []);
+});
+
 // T5 B: a worktree's feature plans are printed under it.
 test('renderBoard prints under a worktree the plans of its branch: steps, what is pending and the start of the next step', () => {
   const tree = (path, plans) => ({ path, head: '1111111111111111111111111111111111111111', branch: 'feat/x', bare: false, aheadOfMain: 1, aheadOfUpstream: 'no upstream', changed: 0, plans });

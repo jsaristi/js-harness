@@ -32,14 +32,14 @@ while other sessions work, so one silent session among busy ones is never seen.
 ## Specs
 - S1: Lead's notice, 2026-10-16 20:19Z, verbatim: "Build stalled-session detection: js-harness sessions flags a session with no commit, notice or gate for 60 minutes while it holds open work, and the lead's heartbeat surfaces it. Today 3 sessions sat 5-6 h before anyone noticed. Open it as a task in the roadmap first, test first, normal gate/review/Codex, then notify me the PR."
 - S2 (decided here, read from the protocol): a work session holds open work when the newest notice the orchestrator addressed to it (`--to <number>`) or its newest opening is newer than its newest `waiting`, `closed` or `relieved` notice. Its quiet starts at the latest of: that handed notice, its own newest notice of any kind, its newest gate (by the session id the gate log now records), the newest commit of its worktree that the default branch does not hold. It is stalled when that quiet reaches the declared rule `session-stall` (60 minutes); a session quiet for longer than the board's window (`--hours`, 12) is not listed.
-- S3: the board prints, under the session's block, how long it has been quiet and what it holds (the handed notice, its kind, sender and time); `--json` carries it.
+- S3: the board prints a `Stalled` section, before the roster: each stalled session with how long it has been quiet and what it holds (the handed notice, its kind, sender and time), `none`, and each record it could not read; `--json` carries it as `stalled`. A section and not a line under the session's block, since a stalled session's transcript can be outside the board's list and several transcripts share one number.
 - S4: `sessions --watch` says it once when a session crosses the limit, and again each time its quiet doubles, like a call with no result.
 - S5: `loop heartbeat` ends with `STALLED: <title> — no commit, notice or gate since HH:MM, holding <what>` (exit 0) when a work session of the project is stalled, beside its machine-wide `STALL`.
 - S6: the work-session skill says to send `--kind waiting "<on what>"` when free with nothing handed, since that is what gives the work back.
 
 ## Tasks
 - [x] T1 (kind: build) (S2) `stalledSessions` in bin/lib/stall.mjs: pure, from notices, openings, gates and a commit reader; the gate log records the session id; the rule `session-stall`. Route: inline.
-- [ ] T2 (kind: build) (S3, S4) the board line and the watch line. Route: inline.
+- [x] T2 (kind: build) (S3, S4) the board line and the watch line. Route: inline.
 - [ ] T3 (kind: build) (S5) the heartbeat ends on a stalled session. Route: inline.
 - [ ] T4 (kind: docs) (S6) the skill text and README. Route: inline.
 

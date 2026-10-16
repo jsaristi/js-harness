@@ -2497,6 +2497,34 @@ function channelChanges(before, after, self) {
   return lines;
 }
 
+/** What a stalled session holds, in a few words: the handed notice with its kind and sender, or its opening. */
+const holdingWords = (holding) => (holding.what === 'opening' ? 'its opening' : `${article(holding.kind ?? 'notice')} ${holding.kind ?? 'notice'} from ${holding.from ?? 'an unknown sender'}`);
+
+/** The name a stalled session goes by: its title, or its number when it never wrote one. */
+const stalledName = (item) => item.title ?? `work session ${item.number}`;
+
+/** The text a stalled session was handed, on one line and cut to the board's width. */
+const handedText = (holding) => clipped(String(holding.text ?? '').replace(/\s+/g, ' ').trim());
+
+/** The stalled work sessions (odd/tasks/stalled-sessions.md, S4): one line when a session first reads stalled, and again
+ * each time its quiet doubles, as a call with no result is said (`crossingOf`). A stall is the same while its quiet
+ * starts at the same time and it holds the same handed work; a board on either side with no such list says nothing. */
+function stallChanges(before, after) {
+  if (!after.stalled) return [];
+  const limit = after.stalled.limitMinutes * 60 * 1000;
+  const crossing = (item) => (item.quietMs < limit ? -1 : Math.floor(Math.log2(item.quietMs / limit)));
+  const earlier = new Map((before.stalled?.items ?? []).map((item) => [item.number, item]));
+  const lines = [];
+  for (const item of after.stalled.items) {
+    const was = earlier.get(item.number);
+    const same = was && was.quietSince === item.quietSince && was.holding?.at === item.holding.at;
+    if (crossing(item) > (same ? crossing(was) : -1)) {
+      lines.push(`${stalledName(item)} has made no commit, notice or gate for ${durationOf(Math.round(item.quietMs / 1000))} while it holds ${holdingWords(item.holding)}: ${handedText(item.holding)}`);
+    }
+  }
+  return lines;
+}
+
 /** The sessions of the board `newer`, each one it could not read as the board `older` last read it, when it
  * did: what is known of a session across a look that failed on its transcript. A session kept so has `readAt`,
  * the time its facts were read: the `generatedAt` of the board that read them, or the one it was kept from. */
@@ -2667,6 +2695,7 @@ function planChanges(before, after) {
 export function boardChanges(before, after, { self } = {}) {
   return [
     ...sessionChanges(before, after, self),
+    ...stallChanges(before, after),
     ...gateChanges(before, after),
     ...pullRequestChanges(before, after),
     ...planChanges(before, after),
@@ -3228,6 +3257,18 @@ function contextColumnLines(board) {
   ];
 }
 
+/** The work sessions that hold handed work and went quiet (`readStalled` of ./stall.mjs), the longest quiet first: each
+ * with how long, and what it was handed and when; `none` when nobody is, and each record that could not be read. */
+function stalledLines(stalled, now) {
+  const quiet = (item) => durationOf(Math.max(0, Math.round((now - Date.parse(item.quietSince)) / 1000)));
+  return [
+    `Stalled  work sessions that hold handed work and made no commit, notice or gate for ${stalled.limitMinutes}m or more (rule session-stall)`,
+    ...(stalled.items.length === 0 ? ['  none'] : stalled.items.map((item) => `  ${stalledName(item)}  quiet ${quiet(item)}  holding ${holdingWords(item.holding)} of ${ago(item.holding.at, now)}: ${handedText(item.holding)}`)),
+    ...stalled.unavailable.map((why) => `  not read: ${why}`),
+    '',
+  ];
+}
+
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, '', ...contextColumnLines(board)];
   const sizes = contextSizes(board);
@@ -3235,6 +3276,7 @@ export function renderBoard(board, { now }) {
   for (const session of board.sessions) lines.push(...sessionLines(session, now, sizes, ended.get(session.id)), '');
 
   lines.push(
+    ...(board.stalled ? stalledLines(board.stalled, now) : []),
     ...(board.roster ? rosterLines(board.roster, now) : []),
     ...channelLines(board.channel, now),
     ...openQuestionLines(board.questions, now, board.sessions.find((session) => session.self === true) ?? null),
