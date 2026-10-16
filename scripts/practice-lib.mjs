@@ -329,13 +329,15 @@ const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_mess
 /** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
  * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
- * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from. The test holds
+ * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
+ * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool. The test holds
  * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
  * an install that changed. */
 export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
@@ -428,7 +430,7 @@ export function uninstalledHostProblem(text, seededText) {
   return `expected the file as setup seeded it, byte for byte; found:\n${text}`;
 }
 
-/** The name of an empty `hooks` list of the harness (`SessionStart` or `PostToolUse`) that `text` holds and the seeded file
+/** The name of an empty `hooks` list of the harness (`SessionStart`, `PostToolUse` or `PostToolUseFailure`) that `text` holds and the seeded file
  * does not, or `null`. A text that is not JSON has none. */
 function leftoverList(text, seededText) {
   let data;
@@ -439,7 +441,7 @@ function leftoverList(text, seededText) {
   } catch {
     return null;
   }
-  return ['SessionStart', 'PostToolUse'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
+  return ['SessionStart', 'PostToolUse', 'PostToolUseFailure'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
 }
 
 // ---- the gate log of the practice home -------------------------------------------------------------------------------

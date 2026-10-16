@@ -23,9 +23,10 @@ session that reads its status alone takes a block for a page.
 ## In scope / Out of scope
 - In: `bin/fetch.mjs` and its test, the dispatcher's entry, the web notice in `resume --pause`
   (`bin/lib/web-block.mjs`), this document, the roadmap item.
-- Out: a new hook entry in the host's settings (`install`): the `PostToolUse` entry that runs
-  `resume --pause` after every tool call is already installed, so the notice rides on it. Agent-Reach and
-  any tool that needs Python, an npm package, cookies or a key.
+- In, for T4 only: one new hook entry in the host's settings, the `PostToolUseFailure` entry on WebFetch
+  that `install` writes and `uninstall` takes back (`bin/lib/manifest.mjs`), with its tests and the lists
+  that name the harness's entries (`scripts/practice-lib.mjs`, README). He said yes to it on 2026-10-16 (L14).
+- Out: Agent-Reach and any tool that needs Python, an npm package, cookies or a key.
 
 ## Constraints
 - No cookies, no credentials, no keys — because the URL goes to a third party (r.jina.ai), and a session
@@ -60,7 +61,14 @@ Nothing planned.
     The rule costs nothing on a turn without a block.
 - **S4**: a WebFetch that fails as a tool error ("Claude Code is unable to fetch from <domain>", measured on
   reddit.com and stackoverflow.com) does not reach a `PostToolUse` hook; covering it needs a
-  `PostToolUseFailure` entry in `install`, which is a change to the host's settings. Not in this slice.
+  `PostToolUseFailure` entry in `install`, which is a change to the host's settings. The question, through
+  the lead, 2026-10-16: "¿La agregamos?" (a PostToolUseFailure entry for WebFetch's tool error, written by
+  install and removed by uninstall). His answer, verbatim: "Sí, agregala (Recomendada)". So: `install`
+  writes a `PostToolUseFailure` entry with the matcher `WebFetch` that runs the same command as the
+  `PostToolUse` one, `js-harness resume --pause || exit 0`, and `uninstall` takes it back exactly. After a
+  WebFetch that failed, the session (or the sub-agent) is told the URL, the first line of the error (at
+  most 200 characters) and the next rung; an interrupted call, one with no URL or no error, and another
+  tool's failure are told nothing.
 
 ## Measurement (2026-10-15, this machine)
 
@@ -88,7 +96,7 @@ shape the hook reads).
 - [x] T1 (kind: build) `js-harness fetch <url>`: refuses what is not a public page, asks r.jina.ai, says read or blocked with the next rung (S1, S3). Inline. RED: `node --test bin/fetch.test.mjs` failed, no module; GREEN: 8/8
 - [x] T2 (kind: build) the web notice in `resume --pause` after a blocked WebFetch (S3). Inline. RED: 3 of the 4 new tests failed; GREEN: `node --test bin/resume.test.mjs` 84/84
 - [x] T3 (kind: verify) `npm run check`, gentle-ai and Codex reviews recorded, a draft pull request. Gate green, Codex recorded on every code commit, gentle-ai approved on its second lineage (L12), PR ready
-- [ ] T4 (kind: build) a `PostToolUseFailure` entry for WebFetch's tool error, if Sebastián wants it (S4): not started
+- [x] T4 (kind: build) a `PostToolUseFailure` entry for WebFetch's tool error (S4), branch `feat/web-fetch-failure-hook`. Inline. RED: manifest 11 failing (the component did not exist), resume 2 of 89, practice-lib 1 of 100, install 1 of 71; GREEN: manifest 150/150, resume 89/89, practice-lib 100/100, install 71/71
 
 ## Log
 
@@ -167,3 +175,12 @@ shape the hook reads).
   `guard --stop`, the README's guard paragraph closes its section and the fetch section follows. Gate
   green (gentle-ai: under budget, not due). Codex read the resolution only (`e7df499..44c064c`): "the
   patch is correct", 44,346 input tokens, recorded.
+- **L14** (2026-10-16): the lead relayed his answer to "¿La agregamos?" (a PostToolUseFailure entry for
+  WebFetch's tool error, written by install and removed by uninstall), verbatim: "Sí, agregala
+  (Recomendada)", and gave T4 to "JH 21 · reserva de la noche", since this feature's own session is gone.
+  Claude Code's hooks reference (https://code.claude.com/docs/en/hooks, read 2026-10-16): a
+  `PostToolUseFailure` input carries `tool_name`, `tool_input`, `error` and `is_interrupt`; its matcher is
+  the tool name; `hookSpecificOutput.additionalContext` reaches the model; `PostToolUse` runs only after a
+  call that succeeds. The entry reuses the pause command, which already answers in its input's event, so
+  `doctor`'s hook check still tries one command. It changes the host's settings, so the gentle-ai
+  assessment is raised with `--escalate-item 5`.

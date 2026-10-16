@@ -1381,6 +1381,53 @@ test('a sub-agent\'s refused WebFetch is told the next rung too, and a call with
   assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, { cwd: outside, ...webFetchOf(403, 'Forbidden') }))).lines, []);
 }));
 
+// T4 of odd/tasks/web-fetch-fallback.md: a WebFetch that fails as a tool error reaches no PostToolUse hook, only the
+// `PostToolUseFailure` entry `install` writes on WebFetch, which runs the same command. Its input carries `error`
+// and `is_interrupt` in place of `tool_response` (Claude Code's hooks reference, read on 2026-10-16); the error is
+// the one measured on reddit.com and stackoverflow.com.
+const REDDIT = 'https://www.reddit.com/r/ClaudeAI/';
+const webFailureOf = (url = REDDIT, error = 'Claude Code is unable to fetch from www.reddit.com', more = {}) => ({
+  hook_event_name: 'PostToolUseFailure',
+  tool_name: 'WebFetch',
+  tool_input: { url, prompt: 'Summarize the posts.' },
+  tool_use_id: 'toolu_made_up',
+  error,
+  is_interrupt: false,
+  ...more,
+});
+const FAILURE_NOTICE = (url = REDDIT, error = 'Claude Code is unable to fetch from www.reddit.com') =>
+  `js-harness: WebFetch failed on ${url} (${error}). Next rung: js-harness fetch '${url}' reads it through r.jina.ai (a public page only: it sends no cookie and no key); if that says blocked, open it in the built-in browser and read it with get_page_text.`;
+
+test('a WebFetch that failed as a tool error gets the notice of the next rung, answered under PostToolUseFailure', withMachine(async (machine) => {
+  const failed = await runPause(machine, pauseInput(machine, UNDER, webFailureOf()));
+  assert.deepEqual([failed.code, failed.stderr, failed.calls, failed.lines.length], [0, '', [], 1]);
+  assert.equal(JSON.parse(failed.lines[0]).hookSpecificOutput.hookEventName, 'PostToolUseFailure');
+  assert.equal(webContext(failed.lines), FAILURE_NOTICE());
+  // A sub-agent's failed call is told too, as a refused one is.
+  const sub = await runPause(machine, pauseInput(machine, PAUSED, { agent_id: 'made-up-agent', ...webFailureOf() }));
+  assert.equal(webContext(sub.lines), FAILURE_NOTICE());
+}));
+
+test('the failure notice takes the first line of the error, cut at 200 characters, and quotes the URL for a shell', withMachine(async (machine) => {
+  const url = "https://example.com/a?b=1&c=o'brien";
+  const long = `${'x'.repeat(250)}\nsecond line`;
+  const said = webContext((await runPause(machine, pauseInput(machine, UNDER, webFailureOf(url, long)))).lines);
+  assert.ok(said.startsWith(`js-harness: WebFetch failed on ${url} (${'x'.repeat(199)}…). Next rung: js-harness fetch 'https://example.com/a?b=1&c=o%27brien' reads it`), said);
+}));
+
+test('an interrupted WebFetch, another tool\'s failure and a failure with no URL or no error get no web notice', withMachine(async (machine) => {
+  const cases = [
+    webFailureOf(REDDIT, 'Claude Code is unable to fetch from www.reddit.com', { is_interrupt: true }),
+    { ...webFailureOf(), tool_name: 'Bash', tool_input: { command: 'curl https://www.reddit.com/' } },
+    { ...webFailureOf(), tool_input: { prompt: 'no url' } },
+    { ...webFailureOf(), error: '' },
+    { ...webFailureOf(), error: 7 },
+  ];
+  for (const input of cases) {
+    assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER, input))).lines, [], JSON.stringify(input));
+  }
+}));
+
 test('past the pause a refused WebFetch gets both notices in one line, the web notice first', withMachine(async (machine) => {
   const both = webContext((await runPause(machine, pauseInput(machine, PAUSED, webFetchOf(402, 'Payment Required', 'https://x.com/AnthropicAI')))).lines);
   assert.ok(both.startsWith(`${WEB_NOTICE(402, 'Payment Required', 'https://x.com/AnthropicAI')}\n\njs-harness: this session holds `), both);

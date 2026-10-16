@@ -133,6 +133,7 @@ registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionS
 registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
 registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
+registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
 ```
 
 ### js-harness loop
@@ -565,7 +566,7 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
 document it works on and what to read there, so nobody pastes a resume prompt. It writes
-nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too.
+nothing and always exits 0. `resume --pause` is the hook of the context pause, and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too; so it does after a WebFetch that failed as a tool error ("Claude Code is unable to fetch from <domain>"), which reaches no `PostToolUse` hook: `install` registers the same command as a `PostToolUseFailure` entry on WebFetch for that.
 
 ```console
 $ js-harness resume --hook < hook-input.json
@@ -633,7 +634,8 @@ page). It asks `r.jina.ai` for the page, which needs no install and no key, and 
 for a block: `r.jina.ai` answers HTTP 200 with the site's challenge page inside, so its status
 alone would take a block for a page. A page is printed whole with exit 0. A block at this rung
 exits 3 and says why and what the next rung is: the built-in browser's `get_page_text`. The
-`resume --pause` hook names this command after a WebFetch answered 402, 403, 429 or 503.
+`resume --pause` hook names this command after a WebFetch answered 402, 403, 429 or 503, and after one
+that failed as a tool error.
 
 It sends no cookie and no key. The URL goes to a third party, so a host that is not public (no
 dot, loopback, a private address), a URL with a user or a password, or a query parameter named
