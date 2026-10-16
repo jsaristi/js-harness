@@ -247,3 +247,47 @@ test('verify of a pass that no longer holds the lock is refused and leaves its a
     assert.equal(fs.readFileSync(afterFile, 'utf8'), recorded);
   });
 });
+
+// T8 of odd/tasks/memory-hygiene.md: the lock fix of 2e082ca (verify only the pass that holds the lock) left two
+// edges of the same rule. Undo wrote into the folder while another pass held the lock, and a lock that does not
+// parse threw a SyntaxError that the command does not turn into its own refusal.
+
+test('undo of an earlier pass while another pass holds the lock is refused, and the folder and the lock stay as they were', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
+    const first = planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW }).stamp;
+    write('a.md', note('user', 'a written by the first pass'));
+    assert.equal(verifyPass({ folder, stateDir, stamp: first, homes: '', now: NOW }).ok, true);
+    const second = planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW + 60_000 }).stamp;
+    const lock = fs.readFileSync(path.join(stateDir, 'lock'), 'utf8');
+    assert.throws(() => undoPass({ folder, stateDir, stamp: first, now: NOW + 60_000 }), (err) => err instanceof PassError && err.message.includes(second));
+    assert.equal(read('a.md'), note('user', 'a written by the first pass'));
+    assert.equal(fs.readFileSync(path.join(stateDir, 'lock'), 'utf8'), lock);
+    assert.equal(readJournal(path.join(stateDir, 'journal.jsonl')).filter((entry) => entry.kind === 'undo').length, 0);
+  });
+});
+
+test('undo of the pass that holds the lock still restores it and releases the lock', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW });
+    write('a.md', note('user', 'a outside the rules'));
+    write('MEMORY.md', '- [A](a.md) — a\n- extra\n');
+    assert.equal(verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }).ok, false);
+    undoPass({ folder, stateDir, stamp, now: NOW });
+    assert.equal(read('a.md'), note('user', 'a'));
+    assert.equal(fs.existsSync(path.join(stateDir, 'lock')), false);
+  });
+});
+
+test('a lock that does not parse is a PassError naming the lock file, from plan, verify and undo alike', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW });
+    const lock = path.join(stateDir, 'lock');
+    fs.writeFileSync(lock, '{ half a lock');
+    const named = (err) => err instanceof PassError && err.message.includes(lock);
+    assert.throws(() => planPass({ folder, stateDir, writeSet: ['a.md'], now: NOW + 60_000 }), named);
+    assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }), named);
+    assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), named);
+    fs.writeFileSync(lock, '{"pid":1}');
+    assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }), named);
+  });
+});
