@@ -943,6 +943,43 @@ rows, `progress` counting table rows, the 2026-10-13 list checked in the code, t
 version), a clean-home run of install, update and uninstall, and a stability pass at the end.
 Creating the 1.0.0 tag stays his.
 
+**Throughput, by his word of 2026-10-16, inside the frozen scope.** Shown the day's yield, he asked
+to optimize until going further costs more than it returns, without trading quality or
+reliability ("Ojala podamos optimizar a un nivel sin sacrificar calidad que me tengas que decir que
+optimizar mas es mas el costo que el beneficio esa es la idea pero manteniendo la calidad y
+fiabilidad", typed in the lead's chat during a turn, a queued message the transcript keeps without
+its text), and then to apply it at once ("apliquemos todo eso de una vez para que cuando trabajes
+autonomamente avancemos de una manera excepcional y a la maxima eficiencia", the lead's transcript
+`e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 14742, 2026-10-16T20:48Z). The second sentence puts
+these items inside the first version despite the freeze; that reading is the lead's.
+
+The stop rule, the lead's reading: each item carries its baseline, its target and its cost, and
+items stop being added when the next one is estimated to return less than it costs, which the lead
+tells him. Nothing that lowers quality or reliability is an item: no dropping the Windows run from
+a land, no skipped review, no weaker test. Version 1 of this list was the lead's and reached him
+unreviewed; two readers on Opus 5.5 at high then found most of it built or mismeasured (the
+docs-only skip, the same-tree skip, exact tests, the rerun of a failed test file and the pnpm lock
+fix already ship; suite gates are about 2.9 per merged PR, not 5.5; the lock was idle about 30% of
+the day; the 82 conflict lines were 17 distinct PRs, mostly code; the merge door of T16e is a rules
+door, not a gate moved off this machine). This is version 2. Baselines are of 2026-10-16 UTC.
+
+| # | Item | Baseline | Owner |
+|---|---|---|---|
+| 1 | Fix the doctor `pnpm-lock` test (ext4 under WSL keeps the mtime 1 ms off) | 3 red land candidates | JH 27, `#315` |
+| 2 | Ready pull requests land without waiting for a lead turn, with the same checks and reviews | ready to merged: median 48 min, worst 391 | JH 24, design and two readers first |
+| 3 | Stale conflicting pull requests merged with `main` or closed | 8 of 15 open conflicting | the lead |
+| 4 | Shared hot files generated, not hand-edited: the README command list from `--help`, manifest rows derived | README in 26 of 61 merged PRs, ROADMAP 17, manifest 11 | JH 25, after `#282` |
+| 5 | Resume reads the open task, and closed Log sections move to a sibling file | `session-channel.md` 345 KB, `rule-hierarchy.md` 306 KB | JH 26, after `#311` |
+| 6 | Codex coverage survives a rebase (commits matched by patch-id) | about 157k tokens per review redone | JH 27, design and two readers first |
+| 7 | A land of only documentation skips the suite (`bin/merge-queue.mjs:95` always runs `check.mjs`) | 14 of 61 merged PRs were documentation | JH 24, before item 2 |
+| 8 | A session silent for 60 minutes with open work is flagged | 3 sessions stalled 5 to 6 h | JH 22, `feat/stalled-sessions` |
+| 9 | Windows Defender's real-time protection off on this machine (his change); gates measured against the day's check median of about 150 s | `MsMpEng` 552 CPU-seconds in gate-start samples | the lead measures |
+| 10 | Finished sessions archived, since each open one keeps a `claude` process and its MCP servers | `claude` 5.9 GB, `node` 2.1 GB, 4.5 of 19.7 GB free | the lead, with his yes per session |
+
+Each item that needs a design passes two readers that did not write it before it is built, and
+its version says what they changed; each build is test first, through the gate, gentle-ai and
+Codex.
+
 **Later (found after the freeze; not in the first version).**
 
 - (none yet)
