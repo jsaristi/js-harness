@@ -3266,12 +3266,27 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     as the section says (for example "A command is stopped after 30 minutes" in `README.md`, of
     `gate-max`), and a number written as a word ("three") is no amount.
 
+- 2026-10-15, step 2 blocked before its first write, by two gaps of the design, sent to the lead:
+  - 13 of the 28 rules that get patterns are his, and `rules change` refuses a design for them:
+    "a rule of his changes only with his words, not a design" (`bin/lib/rules-change.mjs:261`),
+    5 of the first batch's ten;
+  - a change stores its source in place of the rule's, so a change of patterns alone from this
+    design would overwrite where the value came from (`contract-run-timeout`'s
+    `odd/tasks/task-contract.md` would become this document).
+  The two ways put to him: his words in one line for patterns on his rules, quoted by each batch,
+  which closes the first gap only; or a change of form (patterns or failure alone) that keeps the
+  rule's source and needs none, its design named in the relief line, which closes both and says
+  that his protection covers values and not patterns. Recommended: the second, with his yes.
+
 ## Next step
-**State for a resume, 2026-10-15, step 2 of T16d, its first batch.** T16d is on `main`
-(a1e8fb3) and checked off. The first batch of patterns is built on `rule/first-patterns` from
-`main`: the ten rules with the fewest findings, each through `rules change` with its planted line
-in `PLANTED` (`bin/lib/rules-scan.test.mjs`). Next: its pull request to the lead's queue, then the
-next batches by count, the highest group last and alone.
+**State for a resume, 2026-10-15, step 2 of T16d, blocked on a decision.** T16d is on `main`
+(a1e8fb3) and checked off. `rule/first-patterns`, from `main`, holds only the documents' commit.
+Step 2 waits on the decision in Progress (his rules, and a change of form that keeps a rule's
+source). The drafts of the patterns and of the planted lines are probed: the ten lowest counts
+are `contract-run-timeout`, `control-phrase-min`, `person-present`, `session-effort`,
+`session-model`, `subagent-reader-model`, `work-sessions` (0 each), `subagent-writer-model`,
+`wait-every` and `wait-for` (1 each). Next, once decided: that batch through `rules change`, each
+with its planted line in `PLANTED` (`bin/lib/rules-scan.test.mjs`), to the lead's queue.
 
 **State for a resume, 2026-10-15, T16d built and checked.** The code is draft pull request 247
 (`feat/rules-row`, b0093b8..c55164e, pushed); its design is draft pull request 241, this branch.
