@@ -509,15 +509,17 @@ function remoteServerFix(down = []) {
   return { claude: commands.length === 1 ? commands[0] : commands };
 }
 
-// The hook commands the check tries start with this. `js-harness resume` with empty standard input finds no hook input,
-// so it writes nothing and ends at once, which is what makes it safe to run from a check.
+// The hook commands the check tries: those that start with `js-harness resume `, and the turn-start hook of the rules.
+// With empty standard input each finds no hook input, so it writes nothing and ends at once, which is what makes it safe
+// to run from a check.
 const TRIED_PREFIX = 'js-harness resume ';
+const TRIED_COMMANDS = new Set(['js-harness rules --hook']);
 // The guard `pauseHookEntry` adds: it turns any exit into 0 for the host, so the check takes it off, or a copy that
 // answers 2 would pass for answered.
 const HOOK_GUARD = ' || exit 0';
 
 /** The recorded hook commands the check runs, each once and in the order first recorded, with the guard taken off and
- * whether the check tries it. Only a `js-harness resume ` command is tried. Any other is listed as not tried:
+ * whether the check tries it. Only a `js-harness resume ` command and `js-harness rules --hook` are tried. Any other is listed as not tried:
  * `js-harness doctor --hook` is the session-start report itself, and running it would count as a report made. */
 export function hookCommandPlan(commands) {
   const seen = new Set();
@@ -526,7 +528,7 @@ export function hookCommandPlan(commands) {
     const command = recorded.endsWith(HOOK_GUARD) ? recorded.slice(0, -HOOK_GUARD.length) : recorded;
     if (seen.has(command)) continue;
     seen.add(command);
-    plan.push({ command, tried: command.startsWith(TRIED_PREFIX) });
+    plan.push({ command, tried: command.startsWith(TRIED_PREFIX) || TRIED_COMMANDS.has(command) });
   }
   return plan;
 }
