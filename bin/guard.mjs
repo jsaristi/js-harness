@@ -82,7 +82,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   const backticks = backtickRefusal(input.command);
   if (backticks !== null) return backticks;
   const run = testRun ?? (await import('./lib/test-run-warning.mjs')).testRunWarning;
-  return run(String(input.command ?? ''));
+  // The folder the command runs in names its test file as the gate log does (first-version T6a).
+  return run(String(input.command ?? ''), { ...(typeof payload.cwd === 'string' && payload.cwd !== '' && { cwd: payload.cwd }) });
 }
 
 /** Why the reply that ends the turn of the `Stop` payload is to be corrected, or null. The text is the host's
