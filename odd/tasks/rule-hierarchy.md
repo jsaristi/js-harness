@@ -2449,9 +2449,6 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     review is written in a document on the pull request's own branch
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
-    - [x] The turn-start hook, its first part: designed, read by two readers, built by JH 27 on
-      2026-10-16 on `feat/rules-reach` ("Reach: the turn-start hook (T16f, first part)")
-    - [ ] The hash in the installed command; the template's marked block; the rest the design lists
   - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
     of the relief file's line 245, carries its cost and a review date, and its done is one
     command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it
@@ -3665,22 +3662,6 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   took the register outside, where `uninstall` does not follow; its folder is now judged as the
   hooks path is (`resolveHookContainment`), and such a register is kept as outside, never
   written, pinned by a test with a junction.
-- 2026-10-16, T17e, by `JH 28 · reserva B` on `docs/sweep-close`, from the lead's notice to 28
-  (a claim of the lead's, read in the channel record). Three read-only readers took the 104
-  unchecked items of `docs/sweep-2026-10-11.md` against `main` at `5cccfc4`, one group each: A
-  and B, the places of documents and code; C, the places that are his (AGENTS.md, his memory
-  notes) or the lead's (the machine's install, the relief file). One claim of each reader was
-  checked by hand before it was used. Corrected in this commit, by each item's own Fix: eight
-  places of `odd/tasks/gate-lock.md`, nine of `odd/tasks/gate-log.md`, four of
-  `odd/tasks/codex-parity.md`, the dated criterion of `odd/tasks/stack-v4.md`, and the comment
-  over `SENSOR_TIMEOUT_MS` in `bin/check.mjs`, which now names no duration and points to the
-  gate log. Checked off with a `Closed:` line: 12 of A and B found already corrected or gone,
-  and 22 of C (18 corrected, 4 gone), with the evidence the reader gave. Left open, 47: 33 of
-  his and 11 of the lead's (the table, with evidence, is in the lead's notes folder as
-  `jh28-sweep-group-c.md`), and three that are not this task's: line 320 (T15), 780 (his
-  answer) and 926 (`contract.mjs`, decided with finding 12). Reader C's finding: the memory
-  merge of 2026-10-15 copied stale sentences verbatim into the notes it merged them into, so
-  they moved instead of going away. T17 stays open until its owners close the rest.
 - 2026-10-16, T16f first part, by JH 27 on `feat/rules-reach`: `rules --hook` built as designed
   (`bin/lib/rules-reach.mjs`, three `entryComponents`, `doctor` tries it, the practice journey
   holds its entries). Its time, 20 runs of `js-harness rules --hook` on a `UserPromptSubmit`
@@ -3717,9 +3698,25 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   fault on every turn and never told its rules removed. Fixed with its test: a list not in
   `main`'s tree is an empty list, which also settles gentle-ai's advisory of a branch that adds
   a list before `main` has one.
+- 2026-10-16, T17e, by `JH 28 · reserva B` on `docs/sweep-close`, from the lead's notice to 28
+  (a claim of the lead's, read in the channel record). Three read-only readers took the 104
+  unchecked items of `docs/sweep-2026-10-11.md` against `main` at `5cccfc4`, one group each: A
+  and B, the places of documents and code; C, the places that are his (AGENTS.md, his memory
+  notes) or the lead's (the machine's install, the relief file). One claim of each reader was
+  checked by hand before it was used. Corrected in this commit, by each item's own Fix: eight
+  places of `odd/tasks/gate-lock.md`, nine of `odd/tasks/gate-log.md`, four of
+  `odd/tasks/codex-parity.md`, the dated criterion of `odd/tasks/stack-v4.md`, and the comment
+  over `SENSOR_TIMEOUT_MS` in `bin/check.mjs`, which now names no duration and points to the
+  gate log. Checked off with a `Closed:` line: 12 of A and B found already corrected or gone,
+  and 22 of C (18 corrected, 4 gone), with the evidence the reader gave. Left open, 47: 33 of
+  his and 11 of the lead's (the table, with evidence, is in the lead's notes folder as
+  `jh28-sweep-group-c.md`), and three that are not this task's: line 320 (T15), 780 (his
+  answer) and 926 (`contract.mjs`, decided with finding 12). Reader C's finding: the memory
+  merge of 2026-10-15 copied stale sentences verbatim into the notes it merged them into, so
+  they moved instead of going away. T17 stays open until its owners close the rest.
 
 ## Next step
-**State for a resume, 2026-10-16, T16f first part being built by JH 27** on `feat/rules-reach` in `D:/js-harness-worktrees/rules-reach`. The design ("Reach: the turn-start hook") is committed (fdc62a9). Built so far, not committed: `bin/lib/rules-reach.mjs` and its test (11 green); three `entryComponents` in `bin/lib/manifest.mjs` with `manifest.test.mjs` (160 green); `rules --hook` routed in `bin/js-harness.mjs` and `bin/rules.mjs` (`rules.test.mjs` 34 green); `doctor` tries the command (`stack.mjs`, `stack.test.mjs` 120 green); `HASH_KEYS` exported. In progress: `scripts/practice-lib.mjs` (`HARNESS_HOOKS` gains the three entries; `hostHooksProblem` checks `UserPromptSubmit` and `SubagentStart` like `postToolUseProblem`), its tests written RED. Next: `docs/SPEC.md` claims the three ids; README (install output, a `rules --hook` section); `rules` usage, the dispatcher help and the skill command list; T16f sub-item and a Progress entry; commit; the time measured (20 turns, p95 under 1,000 ms); a verifier (item 5); gentle-ai escalated item 5; Codex; PR; notify the lead.
+**State, 2026-10-16, T16f first part built by JH 27** on `feat/rules-reach`: designed, built, checked by the gate, an independent verifier, gentle-ai (acknowledged) and Codex (recorded), each finding fixed with its test (see "Progress"); its pull request waits for the lead to land it. T16f stays open: its next part is the hash in the installed command, with the rest "Left to the other parts of T16f" lists.
 
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai
 approved and acknowledged, the verifier passed, `subagent-effort` narrowed and the near-miss fixed
