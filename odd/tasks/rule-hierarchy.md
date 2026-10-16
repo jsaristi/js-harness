@@ -2269,6 +2269,8 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     `bin/lib/manifest.mjs`, `bin/lib/project.mjs`), the code through the gate and both reviews
   - [x] T17d One entry of the register for the failure itself, with the sweep as a sighting
     (`old-rule-beside-new`; its control is owed by T16)
+  - [x] T17e The 104 items still open on 2026-10-16, read again and closed where they could be:
+    57 checked off, 47 left to their owners (Progress, 2026-10-16)
 
 ## Progress
 - 2026-10-10, T0. The session opened by Sebastián's paste and waited for a line of his (failure
@@ -3465,6 +3467,22 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   took the register outside, where `uninstall` does not follow; its folder is now judged as the
   hooks path is (`resolveHookContainment`), and such a register is kept as outside, never
   written, pinned by a test with a junction.
+- 2026-10-16, T17e, by `JH 28 · reserva B` on `docs/sweep-close`, from the lead's notice to 28
+  (a claim of the lead's, read in the channel record). Three read-only readers took the 104
+  unchecked items of `docs/sweep-2026-10-11.md` against `main` at `5cccfc4`, one group each: A
+  and B, the places of documents and code; C, the places that are his (AGENTS.md, his memory
+  notes) or the lead's (the machine's install, the relief file). One claim of each reader was
+  checked by hand before it was used. Corrected in this commit, by each item's own Fix: eight
+  places of `odd/tasks/gate-lock.md`, nine of `odd/tasks/gate-log.md`, four of
+  `odd/tasks/codex-parity.md`, the dated criterion of `odd/tasks/stack-v4.md`, and the comment
+  over `SENSOR_TIMEOUT_MS` in `bin/check.mjs`, which now names no duration and points to the
+  gate log. Checked off with a `Closed:` line: 12 of A and B found already corrected or gone,
+  and 22 of C (18 corrected, 4 gone), with the evidence the reader gave. Left open, 47: 33 of
+  his and 11 of the lead's (the table, with evidence, is in the lead's notes folder as
+  `jh28-sweep-group-c.md`), and three that are not this task's: line 320 (T15), 780 (his
+  answer) and 926 (`contract.mjs`, decided with finding 12). Reader C's finding: the memory
+  merge of 2026-10-15 copied stale sentences verbatim into the notes it merged them into, so
+  they moved instead of going away. T17 stays open until its owners close the rest.
 
 ## Next step
 **State for a resume, 2026-10-16, his batch A reviewed on `rule/his-patterns`.** gentle-ai

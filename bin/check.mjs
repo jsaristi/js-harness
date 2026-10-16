@@ -99,9 +99,9 @@ export function checkPayload(cwd, home) {
 }
 
 // A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
-// gate forever, so the wait is bounded. Twenty minutes, not ten: this repository's own suite takes about
-// eight on a quiet machine and passed ten once other programs held two of eight cores, which refused
-// commits whose tests were green. The figure is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
+// gate forever, so the wait is bounded. The bound must stay above a whole run of this repository's own
+// suite on a loaded machine; the times measured are in the gate log (`js-harness gate log`). The figure
+// is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
 export const SENSOR_TIMEOUT_MS = ruleValue('sensor-timeout', 'minutes') * 60 * 1000;
 const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
