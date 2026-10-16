@@ -62,7 +62,7 @@ Nothing open: the lead relayed the task (2026-10-15, 20:11) and his words are re
   bin/lib/sessions.mjs and bin/sessions.mjs, tests first.
 - [x] T2 (S3; docs; inline) the orchestrator skill's bullet: a stopped work session gets its next prompt by
   SendMessage from the lead, never from him; docs/ROADMAP.md's cut text.
-- [ ] T3 (S4; verify) gate, gentle-ai assess, Codex; the PR for the queue.
+- [x] T3 (S4; verify) gate, gentle-ai assess, Codex; the PR for the queue (Log, 20:32).
 
 ## Log
 - L1 2026-10-15, 20:11, the lead (JH ORQ), relayed: "New feature for you, from his words today in the lead's chat
@@ -96,3 +96,7 @@ Nothing open: the lead relayed the task (2026-10-15, 20:11) and his words are re
   `--measures` paragraph. Read here once each: pause 47/47, sessions library 295/295, sessions command 231/231,
   measures 28/28, manifest 148/148. `rg -n "/compact"` over bin/lib/sessions.mjs, bin/sessions.mjs,
   bin/lib/pause.mjs, bin/resume.mjs, bin/lib/manifest.mjs, docs/ROADMAP.md and README.md finds nothing.
+- 2026-10-15, 20:32: T3. `d1a5aa4` passed the gate (gentle-ai: medium, not due, `under_budget`). Codex on
+  e019785..d1a5aa4: correct (0.93), no findings, 155k input tokens, recorded. `git merge-tree` against main
+  `e019785` is clean. The board's miss line can no longer name `announced` (bin/sessions.test.mjs asserts it). Next
+  step: push, open the PR, tell the lead it is ready for the queue.
