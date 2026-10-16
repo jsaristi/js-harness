@@ -1865,6 +1865,95 @@ test('a host update since the reviewed versions is stale, with the versions and 
   }
 });
 
+// docs/FAILURES.md, cli-updated-itself: a tool of the stack that updated itself is seen at the next start of a
+// session, not when a measurement is about to run on it.
+test('a stack tool updated since the reviewed versions is stale, named by the hook, until --stack-reviewed records it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawnWith = (claude) => fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', claude: `${claude} (Claude Code)\n` }, gitToplevel: project, codexLogin: 'in' });
+    const deps = (claude) => ({ spawn: spawnWith(claude), fetch: noopFetch, stackUpdate: true });
+
+    const first = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.296'));
+    assert.match(first.output, /^stack-update\s+\d+ tools?\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    const baseline = readCache(home).stack.reviewed.versions;
+    assert.equal(baseline.claude, '2.1.296', 'the first reading is the reviewed one');
+    assert.equal(baseline.codex, '0.130.0');
+    assert.equal(baseline['gentle-ai'], undefined, 'gentle-ai has the gentle-ai-sync row');
+
+    const table = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.299'));
+    assert.match(table.output, /^stack-update\s+stale\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    const steps = [
+      '  stack-update (installed):',
+      '    claude 2.1.296 → 2.1.299 since the last review; review the update:',
+      '    read the changelog of each tool between those versions',
+      '    check that the hooks and commands of the harness that run them still work',
+      '    say it to the user, and to whoever plans a measurement on the versions before',
+      '    then record the review: js-harness doctor --stack-reviewed',
+    ].join('\n');
+    assert.ok(table.output.includes(`\n${steps}\n`), table.output);
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.296', 'a report records nothing while the update is unreviewed');
+
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, deps('2.1.299'));
+    assert.match(JSON.parse(hook.output).systemMessage, /claude 2\.1\.296 → 2\.1\.299 since the last review/);
+
+    const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, deps('2.1.299'));
+    assert.equal(reviewed.code, 0);
+    assert.match(reviewed.output, /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.\n$/);
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
+    const after = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.299'));
+    assert.match(after.output, /^stack-update\s+\d+ tools?\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--stack-reviewed keeps the reviewed version of a tool whose probe failed this time', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeCache(home, { ...readCache(home), stack: { reviewed: { versions: { claude: '2.1.290', codex: '0.120.0' }, at: '2026-10-09T00:00:00.000Z' } } });
+    // The Claude CLI does not answer: only the codex update is reviewed, and claude's baseline stays for its own review.
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, { spawn, fetch: noopFetch, stackUpdate: true });
+    assert.equal(reviewed.code, 0);
+    const { versions } = readCache(home).stack.reviewed;
+    assert.equal(versions.codex, '0.130.0');
+    assert.equal(versions.claude, '2.1.290');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--stack-reviewed with no tool version read records nothing and exits 1; without the switch doctor shows no stack-update row', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const spawn = fakeSpawn({ gitToplevel: project });
+    const errors = [];
+    const original = console.error;
+    console.error = (line) => errors.push(line);
+    let refused;
+    try {
+      refused = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, { spawn, fetch: noopFetch, stackUpdate: true });
+    } finally {
+      console.error = original;
+    }
+    assert.equal(refused.code, 1);
+    assert.deepEqual(errors, ['js-harness doctor: could not read the version of any tool of the stack: nothing was recorded.']);
+    assert.equal(readCache(home).stack, undefined);
+    const plain = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.doesNotMatch(plain.output, /stack-update/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The host check is handed doctor's own home, so `--home` decides which app folder is read (gentle-ai review of
 // PR 242), and `--host-reviewed --json` prints the record it wrote, for a caller that parses it.
 test('the host check reads the home doctor was given, and --host-reviewed --json prints the recorded versions as JSON', async () => {

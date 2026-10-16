@@ -38,6 +38,7 @@ js-harness commands:
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
 - \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
 - \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
+- \`js-harness reply --hook\` — the Stop hook install registers for Claude Code and Codex, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -283,6 +284,18 @@ export const entryComponents = [
     pointer: ['hooks', 'SubagentStart'],
     entry: () => rulesHookEntry(),
   },
+  {
+    id: 'claude-reply-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'Stop'],
+    entry: () => replyHookEntry(),
+  },
+  {
+    id: 'codex-reply-hook',
+    target: (home) => path.join(home, '.codex', 'hooks.json'),
+    pointer: ['hooks', 'Stop'],
+    entry: () => replyHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -373,6 +386,23 @@ export const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 function shareHookEntry() {
   return {
     hooks: [{ type: 'command', command: SHARE_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the reply check, guarded to exit 0 like the share check's: an older js-harness answers 2 to `reply`,
+ * and a `Stop` hook that exits 2 turns the stop back. */
+export const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
+
+/** `reply --hook` (bin/reply.mjs) registered as a `Stop` hook in both hosts: a reply that does not close with exactly one
+ * state, and what that state needs, is turned back to be closed again (odd/tasks/rule-hierarchy.md, C1 and T2). It acts
+ * only in a project whose nearest `harness.json` holds a `reply` key and prints `{}` everywhere else, so the entry runs
+ * in every session of the machine and changes nothing where the project did not turn it on. Both hosts: it reads only
+ * the reply's text, which both send as `last_assistant_message` (Claude Code's payload logged on 2026-10-16; Codex's
+ * hooks documentation read the same day). Five seconds, as the share check's: it reads one small file a folder, up to
+ * the project's `harness.json`. */
+function replyHookEntry() {
+  return {
+    hooks: [{ type: 'command', command: REPLY_HOOK_COMMAND, timeout: 5 }],
   };
 }
 
