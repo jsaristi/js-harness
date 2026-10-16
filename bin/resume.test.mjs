@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseStatus, resumeMain, transcriptTitle } from './resume.mjs';
 import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, recordPath, reliefPath, writeOpening } from './lib/channel.mjs';
-import { pauseNotice, statePath } from './lib/pause.mjs';
+import { HOST_COMPACTION_RESERVE, pauseNotice, statePath } from './lib/pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every test below has a machine of its own under a temp folder: a project with one linked worktree
@@ -1255,6 +1255,37 @@ test('past the pause the command prints one JSON line with the notice, and nothi
   assert.ok(fs.existsSync(statePath(machine.home, SESSION)), 'the state remembers that the session was told');
   assert.deepEqual(await runPause(machine, input), { code: 0, lines: [], stderr: '', calls: [] }, 'the second call of the stretch says nothing');
   assert.deepEqual(first.calls, [], 'no git is asked: the project is found by its harness.json alone');
+}));
+
+// The window the host is configured with moves the pause (odd/tasks/session-channel.md, T6b): read from the
+// environment, the project's settings or the user's, under the home the hook writes to.
+const CONFIGURED = 350000;
+const CONFIGURED_POINT = CONFIGURED - HOST_COMPACTION_RESERVE;
+const CONFIGURED_PAUSED = Math.round((CONFIGURED_POINT * DEFAULT_CONTEXT_PAUSE_PERCENT) / DEFAULT_CONTEXT_COMPACTION_PERCENT) + 1000;
+
+/** Writes `settings` as JSON into `file`, making its folder. */
+function writeSettings(file, settings) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(settings));
+}
+
+test('a window the user settings configure tells the session at that window\'s pause, under the default one', withMachine(async (machine) => {
+  assert.ok(CONFIGURED_PAUSED < PAUSED, 'the context is under the pause of the default window');
+  const input = pauseInput(machine, CONFIGURED_PAUSED);
+  assert.deepEqual((await runPause(machine, input)).lines, [], 'with nothing configured the default pause holds');
+  writeSettings(path.join(machine.home, '.claude', 'settings.json'), { autoCompactWindow: CONFIGURED });
+  const told = await runPause(machine, input);
+  assert.equal(told.lines.length, 1);
+  assert.match(JSON.parse(told.lines[0]).hookSpecificOutput.additionalContext, new RegExp(`^js-harness: this session holds ${percentOf(CONFIGURED_PAUSED, CONFIGURED)}% of its context window, and the host compacts it at about ${percentOf(CONFIGURED_POINT, CONFIGURED)}%: `));
+}));
+
+test('a window the project\'s local settings or the environment configure moves the pause too', withMachine(async (machine) => {
+  writeSettings(path.join(machine.root, '.claude', 'settings.local.json'), { autoCompactWindow: CONFIGURED });
+  assert.equal((await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED))).lines.length, 1);
+  const other = await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED, { id: SECOND }), { env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(CONFIGURED) } });
+  assert.equal(other.lines.length, 1);
+  fs.rmSync(path.join(machine.root, '.claude'), { recursive: true });
+  assert.equal((await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED, { id: THIRD }), { env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(CONFIGURED) } })).lines.length, 1, 'the environment alone');
 }));
 
 // The channel's inbox rides on the same hook: a note to this session reaches it after its next tool call, once.

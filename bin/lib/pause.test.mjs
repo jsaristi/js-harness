@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pauseNotice, readEnd, statePath, toldBetween } from './pause.mjs';
+import { HOST_COMPACTION_RESERVE, configuredWindow, pauseNotice, readEnd, statePath, toldBetween } from './pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, shareOf } from './sessions.mjs';
 
 // Every test writes under a home of its own in the temp folder and reads synthetic transcripts: nothing
@@ -522,4 +522,88 @@ test('toldBetween: it reads the newer place, so a stamped state in the temp fold
   putState(statePath(home, SESSION), { compaction: null, armed: false, told: [told(1, PAUSE + 1000)], written: at(1) });
   putState(path.join(tmpdir, `js-harness-pause-${SESSION}.json`), { compaction: null, armed: false, told: [told(2, PAUSE + 2000)], written: at(2) });
   assert.deepEqual(toldBetween({ home, sessionId: SESSION, tmpdir }), { known: true, at: at(2), tokens: PAUSE + 2000 });
+}));
+
+// --- the window the host is configured with (odd/tasks/session-channel.md, T6b) ---
+// On 2026-10-15 the user's settings gave `autoCompactWindow: 350000`, and the host compacted every session about
+// HOST_COMPACTION_RESERVE tokens under that window; the pause still read the 500,000 default or a point measured on
+// the old window, so the first compaction of each session on the new window came with no notice.
+
+const SMALL = 350000;
+const SMALL_POINT = SMALL - HOST_COMPACTION_RESERVE;
+
+/** A Claude home and a project, each with the settings files given (`null` for a file left out). */
+function settingsIn(home, { user = null, project = null, local = null } = {}) {
+  const claudeHome = path.join(home, '.claude');
+  const projectDir = path.join(home, 'project');
+  const put = (file, value) => {
+    if (value === null) return;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value));
+  };
+  put(path.join(claudeHome, 'settings.json'), user);
+  put(path.join(projectDir, '.claude', 'settings.json'), project);
+  put(path.join(projectDir, '.claude', 'settings.local.json'), local);
+  return { claudeHome, projectDir };
+}
+
+test('configuredWindow: nothing set is null', inHome((home) => {
+  assert.equal(configuredWindow({ env: {}, ...settingsIn(home) }), null);
+}));
+
+test('configuredWindow: the user settings give the window, a project overrides them, its local file overrides both, and the environment wins', inHome((home) => {
+  const places = settingsIn(home, { user: { autoCompactWindow: 350000 } });
+  assert.deepEqual(configuredWindow({ env: {}, ...places }), { window: 350000, source: path.join(places.claudeHome, 'settings.json') });
+  settingsIn(home, { project: { autoCompactWindow: 300000 } });
+  assert.equal(configuredWindow({ env: {}, ...places }).window, 300000);
+  settingsIn(home, { local: { autoCompactWindow: 250000 } });
+  assert.equal(configuredWindow({ env: {}, ...places }).window, 250000);
+  assert.deepEqual(configuredWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '200000' }, ...places }), { window: 200000, source: 'CLAUDE_CODE_AUTO_COMPACT_WINDOW' });
+}));
+
+test('configuredWindow: a value that is not a whole positive number, or a file that does not parse, is passed over for the next place', inHome((home) => {
+  const places = settingsIn(home, { user: { autoCompactWindow: 350000 }, project: '{ not json', local: { autoCompactWindow: 'big' } });
+  assert.equal(configuredWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '-5' }, ...places }).window, 350000);
+  settingsIn(home, { user: { autoCompactWindow: 0 }, project: { autoCompactWindow: 1.5 }, local: { other: true } });
+  assert.equal(configuredWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '' }, ...places }), null);
+}));
+
+test('configuredWindow: no project folder reads the environment and the user settings only, and nothing throws', inHome((home) => {
+  const { claudeHome } = settingsIn(home, { user: { autoCompactWindow: 350000 } });
+  assert.equal(configuredWindow({ env: {}, claudeHome, projectDir: null }).window, 350000);
+  assert.equal(configuredWindow({ env: undefined, claudeHome: null, projectDir: null }), null);
+}));
+
+test('a configured window tells the session at its own pause, over a point measured on a larger window before', inHome((home) => {
+  const tokens = pauseAt(SMALL_POINT) + 1000;
+  assert.ok(tokens < PAUSE, 'the context is under the pause of the default window');
+  const transcript = write(home, 't.jsonl', [reply(tokens)]);
+  putState(statePath(home, SESSION), { compaction: COMPACTION, armed: true, lastArmed: true, told: [] });
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, window: SMALL, now: () => NOW, tmpdir: path.join(home, 'tmp') });
+  assert.ok(notice, 'the session is told at the pause of the configured window');
+  assert.equal(notice.room, SMALL_POINT - tokens);
+  assert.equal(notice.share, percentOf(tokens, SMALL));
+  assert.equal(notice.compactionShare, percentOf(SMALL_POINT, SMALL));
+  assert.ok(notice.text.includes(`holds ${percentOf(tokens, SMALL)}% of its context window, and the host compacts it at about ${percentOf(SMALL_POINT, SMALL)}%`), notice.text);
+}));
+
+test('a configured window keeps the session\'s own measured point when it lies near the configured one', inHome((home) => {
+  const measured = SMALL_POINT + 2000;
+  const tokens = pauseAt(measured) + 500;
+  const transcript = write(home, 't.jsonl', [boundary(measured), reply(tokens)]);
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, window: SMALL, now: () => NOW, tmpdir: path.join(home, 'tmp') });
+  assert.equal(notice.room, measured - tokens);
+}));
+
+test('a configured window passes over a measured point far from it, and the point stays in the state as measured', inHome((home) => {
+  const tokens = pauseAt(SMALL_POINT) + 1000;
+  const transcript = write(home, 't.jsonl', [boundary(SMALL_POINT - 60000), reply(tokens)]);
+  const notice = pauseNotice({ transcript, sessionId: SESSION, home, window: SMALL, now: () => NOW, tmpdir: path.join(home, 'tmp') });
+  assert.equal(notice.room, SMALL_POINT - tokens);
+  assert.equal(stateOf(home).compaction, SMALL_POINT - 60000);
+}));
+
+test('no configured window: a session that measured no point is told at the default pause, as before', inHome((home) => {
+  const transcript = write(home, 't.jsonl', [reply(pauseAt(SMALL_POINT) + 1000)]);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, window: null, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
 }));
