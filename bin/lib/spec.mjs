@@ -26,14 +26,19 @@ const TODAY_SHAPE = 'an item there is a file of the repository, `js-harness <com
 
 /** The capabilities of a specification: each `### ` heading under `## Capabilities`, with the text of
  * each `**Field:**` that follows it, up to the next field or heading. `errors` holds a field that
- * repeats or is not one of the six. */
+ * repeats or is not one of the six; neither is stored, so the first value written is the one read.
+ * Lines inside a fenced block are text, never a heading or a field. */
 export function parseSpec(markdown) {
   const capabilities = [];
   const errors = [];
   let inside = false;
   let current = null;
   let field = null;
+  let fenced = false;
   markdown.split(/\r?\n/).forEach((text, index) => {
+    const fence = /^\s*(```|~~~)/.test(text);
+    if (fence) fenced = !fenced;
+    if (fence || fenced) return;
     if (/^## /.test(text)) {
       inside = text.trim() === '## Capabilities';
       current = null;
@@ -51,10 +56,13 @@ export function parseSpec(markdown) {
     const start = FIELD_START.exec(text);
     if (start) {
       const [, name, rest] = start;
+      field = null;
       if (!FIELDS.includes(name)) errors.push(`"${current.title}" (line ${current.line}) has a **${name}:** field, which is not one of ${FIELDS.join(', ')}`);
       else if (Object.hasOwn(current.fields, name)) errors.push(`"${current.title}" (line ${current.line}) has its **${name}:** field twice`);
-      field = name;
-      current.fields[name] = rest;
+      else {
+        field = name;
+        current.fields[name] = rest;
+      }
       return;
     }
     if (field && text.trim() !== '') current.fields[field] = `${current.fields[field]}\n${text.trim()}`.trim();
@@ -78,8 +86,9 @@ function readItem(item, entries) {
 
 /** The findings of a specification, and its capabilities. `exists(file)` says whether a path from the
  * top of the repository exists. `commands`, `entries` and `homeFiles`, given only for the harness's own
- * specification, are what must be claimed: a project's specification describes no dispatcher. */
-export function specFindings(markdown, { exists, commands = null, entries = null, homeFiles = null }) {
+ * specification, are what must be claimed: a project's specification describes no dispatcher. `ids`
+ * are the manifest's ids a today item may name without being a file, claimed or not. */
+export function specFindings(markdown, { exists, commands = null, entries = null, homeFiles = null, ids = [] }) {
   const { capabilities, errors } = parseSpec(markdown);
   const findings = [...errors];
   if (capabilities.length === 0) return { capabilities, findings: [...findings, `${SPEC_PATH} holds no capability: each is a "### " heading under "## Capabilities"`] };
@@ -89,7 +98,7 @@ export function specFindings(markdown, { exists, commands = null, entries = null
     for (const name of FIELDS) if (!Object.hasOwn(fields, name) || fields[name].trim() === '') findings.push(`${where} has no **${name}:** field`);
     if (Object.hasOwn(fields, 'Proof') && fields.Proof.trim() !== '' && ticked(fields.Proof).length === 0) findings.push(`${where} has no command in backticks in its **Proof:** field`);
     for (const item of ticked(fields.Today)) {
-      const read = readItem(item, entries ?? []);
+      const read = readItem(item, entries ?? ids);
       if (read.kind === 'unknown') findings.push(`${where} names "${item}" in **Today:**: ${TODAY_SHAPE}`);
       else if (read.kind === 'file' && !exists(read.name)) findings.push(`${where} names ${read.name} in **Today:**, which does not exist`);
       else if (read.kind === 'command' && commands && !commands.includes(read.name)) findings.push(`${where} claims \`js-harness ${read.name}\`, which the dispatcher does not have`);
@@ -102,20 +111,30 @@ export function specFindings(markdown, { exists, commands = null, entries = null
   return { capabilities, findings };
 }
 
-const samePath = (one, other) => (process.platform === 'win32' ? one.toLowerCase() === other.toLowerCase() : one === other);
+/** The name in a tree's `package.json`, or null where it has none that parses. */
+function packageName(dir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const HARNESS_NAME = packageName(HARNESS_ROOT);
 
 /** The `spec` row, as a list: empty where the project keeps no `docs/SPEC.md`. `own` says whether `cwd`
  * is the harness's own repository, whose specification must claim the dispatcher's commands, the
- * manifest's entries and `HOME_FILES`; by default, whether `cwd` is the tree this module runs from. */
+ * manifest's entries and `HOME_FILES`; by default, whether its package bears the harness's name, so a
+ * checkout is held to it whichever copy of the harness checks it (the installed one, a junction). */
 export function checkSpec(cwd, deps = {}) {
   const {
     readFile = (file) => fs.readFileSync(file, 'utf8'),
     exists = (file) => fs.existsSync(path.join(cwd, file)),
-    own = samePath(path.resolve(cwd), HARNESS_ROOT),
     commands = Object.keys(COMMANDS),
     entries = [...components, ...entryComponents].map((component) => component.id),
     homeFiles = HOME_FILES,
   } = deps;
+  const own = deps.own ?? (HARNESS_NAME !== null && packageName(cwd) === HARNESS_NAME);
   let markdown;
   try {
     markdown = readFile(path.join(cwd, SPEC_PATH));
@@ -123,7 +142,7 @@ export function checkSpec(cwd, deps = {}) {
     if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return [];
     return [{ name: 'spec', pass: false, detail: `${SPEC_PATH} cannot be read: ${err.message}` }];
   }
-  const { capabilities, findings } = specFindings(markdown, own ? { exists, commands, entries, homeFiles } : { exists });
+  const { capabilities, findings } = specFindings(markdown, own ? { exists, commands, entries, homeFiles } : { exists, ids: entries });
   if (findings.length === 0) {
     const counted = `${capabilities.length} ${capabilities.length === 1 ? 'capability' : 'capabilities'}`;
     return [{ name: 'spec', pass: true, detail: `${counted}, each with its proof and its files` }];

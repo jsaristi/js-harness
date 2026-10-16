@@ -91,6 +91,27 @@ test('in the harness, a specification that claims everything once has no finding
   assert.deepEqual(spread.findings, []);
 });
 
+test('a field outside the six, or written twice, is a finding, and the first value written is the one kept', () => {
+  const lines = capability('The reply check');
+  const twice = specFindings(spec([...lines.slice(0, -1), '**Proof:** `node --test bin/reply.test.mjs`', '**Owner:** JH 25', 'more of the owner', '']), plain);
+  assert.deepEqual(twice.findings, [
+    '"The reply check" (line 7) has its **Proof:** field twice',
+    '"The reply check" (line 7) has a **Owner:** field, which is not one of Problem, Requirement, Reason, Proof, Discarded, Today',
+  ]);
+  const [read] = twice.capabilities;
+  assert.equal(read.fields.Proof, '`node --test bin/lib/reply.test.mjs`');
+  assert.equal(Object.hasOwn(read.fields, 'Owner'), false);
+  assert.equal(read.fields.Today, '`bin/lib/reply.mjs`, `js-harness reply`');
+});
+
+test('a heading or a field inside a fenced block is neither a capability nor a field', () => {
+  const lines = capability('The reply check');
+  const fenced = [...lines.slice(0, 3), '```', '### Not a capability', '**Owner:** nobody', '```', ...lines.slice(3)];
+  const { capabilities, findings } = specFindings(spec(fenced), plain);
+  assert.deepEqual(findings, []);
+  assert.deepEqual(capabilities.map((one) => one.title), ['The reply check']);
+});
+
 test('a specification with no capability is a finding', () => {
   const { findings } = specFindings('# The specification\n\nThe problem.\n', plain);
   assert.deepEqual(findings, [`${SPEC_PATH} holds no capability: each is a "### " heading under "## Capabilities"`]);
@@ -131,5 +152,24 @@ test('checkSpec holds the harness\'s own specification to its commands, entries 
     const [row] = checkSpec(dir, { own: true, commands: ['reply'], entries: [], homeFiles: [] });
     assert.equal(row.pass, false);
     assert.deepEqual(row.lines, ['the command `js-harness reply` is claimed by no capability']);
+  });
+});
+
+test("checkSpec reads a manifest id in a project's specification as an id, never as a missing file", () => {
+  withSpec(spec(capability('The reply check', { Today: '`docs/SPEC.md`, `claude-reply-hook`' })), (dir) => {
+    assert.equal(checkSpec(dir, { own: false, entries: ['claude-reply-hook'] })[0].pass, true);
+  });
+});
+
+test("by default, checkSpec holds a tree whose package is named js-harness to the harness's lists, wherever it is checked from", () => {
+  const text = spec(capability('The reply check', { Today: '`docs/SPEC.md`' }));
+  const lists = { commands: ['reply'], entries: [], homeFiles: [] };
+  withSpec(text, (dir) => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'js-harness' }));
+    assert.deepEqual(checkSpec(dir, lists)[0].lines, ['the command `js-harness reply` is claimed by no capability']);
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'a-project' }));
+    assert.equal(checkSpec(dir, lists)[0].pass, true);
+    fs.writeFileSync(path.join(dir, 'package.json'), '{ not json');
+    assert.equal(checkSpec(dir, lists)[0].pass, true);
   });
 });
