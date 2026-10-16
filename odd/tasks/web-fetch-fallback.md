@@ -190,3 +190,7 @@ shape the hook reads).
   Risk found nothing; reliability left one suggestion, R3-001: the 200-character cut counted UTF-16 units,
   so an emoji at the cut lost half of itself. Fixed test first in the next commit (RED: the new test failed,
   89 of 90): the cut counts characters.
+- **L16** (2026-10-16): `052f62d` (the R3-001 fix), gate green. Codex over `a4d432c..052f62d`, recorded:
+  "the patch is correct" (confidence 0.91), no findings; 88,033 input tokens (49,024 cached), inside its
+  315,000 allowance. Next step: the pull request; once it lands and the installed copy syncs, `js-harness
+  install` (or `sync`) writes the new entry on this machine.
