@@ -184,6 +184,24 @@ test('readGateLog reads the line of a gate that stopped before its sensors, and 
   assert.equal(formatGates(gatesOf(read.events)).length, 4);
 }));
 
+// A ticket that puts a session's next check first (./gate-first.mjs) leaves lines of four kinds of its own,
+// whose id is the ticket's: they are read as events, and are no gate.
+test('readGateLog reads the lines of a ticket, which are no gate, and a gate that went first by one is marked so among the gates another waited for', withHome(async (home) => {
+  const ticket = { session: 's', reason: 'unblocks the others', until: AT };
+  const lines = [
+    { v: 1, event: 'first-issued', id: '0a0a0a0a', at: AT, ...ticket, by: 'orq' },
+    { v: 1, event: 'first-claimed', id: '0a0a0a0a', at: AT, ...ticket, cwd: 'C:\\work\\one', pid: 100, passed: [{ cwd: 'C:\\work\\two', pid: 7 }] },
+    { v: 1, event: 'first-expired', id: '0b0b0b0b', at: AT, ...ticket },
+    { v: 1, event: 'first-cancelled', id: '0c0c0c0c', at: AT, ...ticket },
+  ];
+  for (const line of [start('a'), ...lines, end('a'), { ...lines[0], id: '0d0d0d0d', by: null }]) appendGateEvent(home, line);
+  const read = readGateLog(home);
+  assert.deepEqual([read.events, read.skipped], [[start('a'), ...lines, end('a')], 1]);
+  assert.deepEqual(gatesOf(read.events), [{ start: start('a'), end: end('a') }]);
+  const passer = { cwd: 'D:\\js-harness', pid: 4321, command: 'check', first: true };
+  assert.deepEqual(formatGates([{ start: start('b', { waitedSeconds: 12, waitedFor: [passer] }) }]), [`${when(AT)}  no end (killed, or still running)  waited 12 s for D:\\js-harness (first by a ticket)  C:\\work\\one`]);
+}));
+
 // Found in review (Codex), 2026-10-11: a write that was cut short leaves a tail with no line break, and the
 // next event was appended to that tail. The reader then left both out as one bad line, and where the event
 // that was lost was a start, its end went with it: a gate that ran well was not in the log, and nothing said so.

@@ -210,12 +210,14 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
 ## Tasks
 - [x] T1 · S1-S4 · this design attacked by two Opus readers (effort high); the version after them to
       the orchestrator with what each changed · version 2, "What the readers changed"
-- [ ] T2 · S3 · the priority of the gate, test first (after T1)
+- [ ] T2 · S3 · the priority of the gate, test first (after T1), in `feat/gate-first`
+      (`odd/tasks/gate-first.md`): slice A (the ticket, the claim, the order, the wait line) built; slice B
+      (the board, `check --first`, the docs) next
 - [x] T3 · two guards on a turn of `js-harness gate`, `odd/tasks/gate-turn-guards.md`: a turn is refused
       while a push waits on a branch with an open pull request, and a command is stopped at 30 minutes
       (`--max`). Checked in the branch that builds it, so it is done when that pull request merges.
-- [ ] T4 · S1, S2 · part 2, Codex's review out of the lock, test first, in `feat/codex-out-of-lock`
-      ("Codex's review out of the lock (part 2), as built"; L5)
+- [x] T4 · S1, S2 · part 2, Codex's review out of the lock, test first, in `feat/codex-out-of-lock`
+      ("Codex's review out of the lock (part 2), as built"; L5) · merged as pull request 154 (`4edfa0e`; L8)
 
 ## Log
 - L1 · S1, verbatim above.
@@ -248,3 +250,6 @@ excused unless every failed command was a refusal and it found nothing of P0 to 
   preload's own test quotes the path as a review does (no RED here: this checkout's path has no space).
 - L7 · 2026-10-14, T3 merged: pull request 124, `f819d0b`, at 11:05:42Z by `gh pr view 124`. Its
   follow-ups F1 to F3 are in `odd/tasks/gate-turn-guards.md`.
+- L8 · 2026-10-16 07:05 by `date`, JH 24: T4 found merged, pull request 154 (`4edfa0e` on main, by
+  `git log origin/main --grep`); only checked off here. T2 slice A built in `feat/gate-first`, its state in
+  `odd/tasks/gate-first.md` L5.

@@ -28,6 +28,7 @@ import {
 import { cachePath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log.mjs';
+import { gateFirstDir, issueTicket } from './gate-first.mjs';
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
@@ -706,6 +707,32 @@ test('uninstall leaves the orchestrator\'s relief file where it is: it is a log,
       assert.equal(result.removed.includes(relief), false);
       assert.equal(fs.existsSync(relief), true, `with a manifest: ${withManifest}`);
     }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall removes the folder of gate tickets with a manifest and without, and keeps one it cannot remove among the gates\' folders', () => {
+  const home = makeTmpHome();
+  try {
+    const ticket = () => issueTicket({ home, session: 's1', reason: 'a fix that unblocks the others' });
+    install(home, '0.1.0');
+    ticket();
+    const installed = uninstall(home);
+    assert.ok(installed.removed.includes(gateFirstDir(home)), installed.removed.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    // `gate first` runs in a project with no machine install, so a home with no manifest can hold the folder.
+    ticket();
+    assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [gateFirstDir(home)] });
+
+    const removeFile = (target, options) => {
+      if (target === gateFirstDir(home)) throw Object.assign(new Error('EPERM: operation not permitted, rmdir'), { code: 'EPERM' });
+      return fs.rmSync(target, options);
+    };
+    ticket();
+    assert.deepEqual(uninstall(home, { removeFile }), { ...NOTHING_ELSE, removed: [], gateKept: [{ path: gateFirstDir(home), reason: 'unremovable', code: 'EPERM' }] });
+    assert.deepEqual(uninstall(home).removed, [gateFirstDir(home)]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

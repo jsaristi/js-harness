@@ -201,8 +201,9 @@ export function isTreeKey(value) {
 
 /** The kinds of event this version writes and reads. `stopped` came after the other three: a version that
  * does not know it leaves its line out in silence (`readGateLog`), which is why a gate that stopped writes
- * no start for that version to show alone. */
-const KINDS = ['start', 'end', 'refused', 'stopped', 'same'];
+ * no start for that version to show alone. The four `first-` kinds are a ticket's (./gate-first.mjs):
+ * issued, claimed, expired, cancelled, each under the ticket's id; they are no gate (`gatesOf`). */
+const KINDS = ['start', 'end', 'refused', 'stopped', 'same', 'first-issued', 'first-claimed', 'first-expired', 'first-cancelled'];
 
 /** Whether `value` has the head of a line of this log, enough to be paired: the version, an event that is
  * a text, the id and when. The kind of the event is not asked here (`readGateLog`). */
@@ -354,9 +355,10 @@ function loadSaid(load) {
   return `load ${load.busy.toFixed(1)} of ${load.processors}${names.length ? ` (${names.join(', ')})` : ''}`;
 }
 
-/** Whom a gate waited for and for how long, or `null` for a gate that had its turn at once. */
+/** Whom a gate waited for and for how long, or `null` for a gate that had its turn at once. A gate it waited
+ * for that went first by a ticket (`first: true`) says so. */
 function waitSaid({ waitedSeconds, waitedFor }, always = false) {
-  const gates = (Array.isArray(waitedFor) ? waitedFor : []).map(({ cwd, pid }) => cwd ?? `another gate${pid ? ` (pid ${pid})` : ''}`);
+  const gates = (Array.isArray(waitedFor) ? waitedFor : []).map(({ cwd, pid, first }) => `${cwd ?? `another gate${pid ? ` (pid ${pid})` : ''}`}${first === true ? ' (first by a ticket)' : ''}`);
   if (!always && gates.length === 0 && !(waitedSeconds >= 1)) return null;
   return `waited ${wholeSeconds(waitedSeconds)}${gates.length ? ` for ${gates.join(', ')}` : ''}`;
 }
