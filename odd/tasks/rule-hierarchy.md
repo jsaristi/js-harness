@@ -2446,7 +2446,20 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     review is written in a document on the pull request's own branch. Designed on 2026-10-16
     by "JH 24" and read by two readers, "The merge door (T16e)"; route inline, the parent
     writes it (no writer trigger: three slices in order, each one unit); branch
-    `feat/merge-command`. Slice (b) waits until the orchestrator has put the design to him
+    `feat/merge-command`. Slice (b) waits until the orchestrator has put the design to him.
+    State (2026-10-16, JH 24): design as pull request 302 (`dc03f8b`, branch
+    `docs/merge-door-design`). Slice (a) on `feat/merge-door` (worktree
+    `D:/js-harness-worktrees/merge-command`): `6b58f85` (`check --door` and the queue's door,
+    written by two Haiku writers, tests seen red), the verifier's three blockers fixed in
+    `689621f` (empty merge, `--home`, help column), gate passed on both. gentle-ai on
+    `dc03f8b..689621f`: high (item 2 escalated), lenses risk, resilience, reliability, approved
+    and acknowledged, lineage `review-702ae2f77ce86f47`, no blocker; its seven advisories, for
+    later: the `--branch` name is the caller's word (`bin/check.mjs:334-337`); main's door is
+    found by a string in its source (`bin/merge-queue.mjs:109`); the door runs the `failures`
+    row too (`bin/check.mjs:2437`); a door that crashes with exit 1 reads as a refusal
+    (`bin/merge-queue.mjs:147-151`); the broken reset and a refusal after a bisection have no
+    test (:145-146). Next: Codex `--base dc03f8b`, push, pull request on `main` after 302,
+    notify the orchestrator
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [ ] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
