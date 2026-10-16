@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `74811fa90454`. In force: 29 (14 of Sebastián, 15 of the project). Retired: 0.
+Hash `6ceefeb4a3f8`. In force: 30 (15 of Sebastián, 15 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -62,6 +62,12 @@ The model a session runs on: claude-opus-5-5.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
+
+### sessions-open-in-sidebar
+The one way a session opens another in this repository, so that it is a row in his sidebar: the tools that open one in the app's Routines or in the cloud are refused: start_session.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/guard.mjs`.
+- Since 2026-10-15. Row: reports. Source: his words of 2026-10-15, 2026-10-15, checked by a session on 2026-10-15.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.

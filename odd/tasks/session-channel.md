@@ -2831,6 +2831,20 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   (Recomendada)": a scheduled task he asks for himself is refused too, and the refusal names
   `start_session`. T11 (line 3680): "Con teléfono, cuando salga (Recomendada)": T11 stays open
   until his next time away, and "Done when" keeps its phone clause. Layer 3 is unblocked.
+- 2026-10-15, after 18:30 local, T16 layer 3 (JH 5), branch `feat/t16-layer3`, built by a
+  bounded writer (two units ran in parallel: this and T9's measures), tests first. The rule
+  `sessions-open-in-sidebar` (scope repository, value `start_session`, failure
+  `session-opened-unseen`, his two answers as its source) is read by the guard with
+  `ruleHere`: where it is declared, `create`, `update` and `run_scheduled_task` and
+  `RemoteTrigger` are refused, naming `start_session`; `delete`, `list` and `CronCreate` pass;
+  in a project that does not declare it nothing is refused (Q1). The guard's matcher is
+  anchored, `^(…)$`, and a test holds that `TodoWrite`, `NotebookEdit` and `MultiEdit` do not
+  match: the hooks reference (read 2026-10-15) says a `-` keeps a `PreToolUse` matcher an
+  exact list, so the anchors only hold that true for a host that reads it otherwise. The
+  practice step `opening-tools` runs the installed guard in the practice project (passes) and
+  in a folder that holds the harness's own rules file (refused); its judge is unit-tested, the
+  journey itself is not run in this slice. Owed before T16 is ticked: the lead's one real,
+  harmless try after the next install update (section 17, layer 3).
   The same day, T9's relief slice is draft pull request 229 and T9b is ticked.
 
 ## State for a resume

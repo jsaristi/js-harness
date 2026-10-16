@@ -200,6 +200,15 @@ export const RULES = [
     "value": "claude-opus-5-5"
   },
   {
+    "id": "sessions-open-in-sidebar",
+    "subject": "the one way a session opens another in this repository, so that it is a row in his sidebar: the tools that open one in the app's Routines or in the cloud are refused",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-15",
+    "value": "start_session",
+    "failure": "session-opened-unseen"
+  },
+  {
     "id": "subagent-effort",
     "subject": "the effort every sub-agent is launched with",
     "owner": "sebastian",

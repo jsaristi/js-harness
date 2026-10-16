@@ -292,14 +292,21 @@ function pauseHookEntry() {
  * JSON on standard output, so an older js-harness that answers 2 to `guard` never blocks a tool call. */
 export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 
-/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the three tools it checks: a sub-agent's
- * launch, whose model it holds to the project's rules, and the two ways of sending a message to another session,
- * whose stamped hour it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14), a Bash command, and a Write or
- * an Edit, whose line in a memory index it holds to 150 characters (odd/tasks/memory-hygiene.md, T4). Claude Code
- * only: the tool names are Claude Code's. Five seconds: it may ask git for the project's root once. */
+/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the tools it checks: a sub-agent's launch, whose
+ * model it holds to the project's rules, and the two ways of sending a message to another session, whose stamped hour
+ * it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14), a Bash command, a Write or an Edit, whose line in a
+ * memory index it holds to 150 characters (odd/tasks/memory-hygiene.md, T4), and the four tools that open a session in
+ * the app's Routines or in the cloud, refused where the rule `sessions-open-in-sidebar` is declared (layer 3 of
+ * odd/tasks/session-channel.md). Claude Code only: the tool names are Claude Code's. Five seconds: it may ask git for
+ * the project's root once.
+ * The matcher is anchored, `^(…)$`, because Claude Code's hooks reference (checked 2026-10-15) reads a matcher with a
+ * character outside letters, digits, `_`, `-`, spaces, `,` and `|` as a JavaScript regular expression, unanchored: the
+ * `^` and `$` make it a whole-name match, so `Write` does not match `TodoWrite` and `Edit` does not match
+ * `NotebookEdit`. A hyphen alone does not make it a regex. The same text is held by the tests of
+ * bin/lib/manifest.test.mjs and by scripts/practice-lib.mjs (`HARNESS_HOOKS`). */
 function guardHookEntry() {
   return {
-    matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit',
+    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$',
     hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
   };
 }

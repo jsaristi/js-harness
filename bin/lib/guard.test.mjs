@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
-import { allowedModels, denial, hourRefusal, stampedHour } from './guard.mjs';
+import { allowedModels, denial, hourRefusal, openingRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, modelRefusal } from './guard.mjs';
 
 // 14:44 local on the day of the test: the clock a message is checked against.
@@ -78,6 +78,43 @@ test('where the rules are not in force, as in a project that installs the harnes
   // A copy of the harness whose list is not the project's: the rules are not read as this project's.
   assert.equal(allowedModels(`${HERE}\n// another list\n`), null);
   assert.equal(modelRefusal({ model: 'sonnet' }, null), null);
+});
+
+// odd/tasks/session-channel.md, layer 3: a session these tools open lands in the app's Routines or in the cloud, where he
+// does not see it. The four tools are refused where the rule `sessions-open-in-sidebar` is declared, and the others pass.
+const OPENING = [
+  'mcp__scheduled-tasks__create_scheduled_task',
+  'mcp__scheduled-tasks__update_scheduled_task',
+  'mcp__scheduled-tasks__run_scheduled_task',
+  'RemoteTrigger',
+];
+const PASSING = [
+  'mcp__scheduled-tasks__delete_scheduled_task',
+  'mcp__scheduled-tasks__list_scheduled_tasks',
+  'mcp__scheduled-tasks__list_task_runs',
+  'CronCreate',
+  'TodoWrite',
+];
+
+test('in this repository a tool that opens a session in the Routines or the cloud is refused, and the reason names the tool, the rule and start_session', () => {
+  for (const tool of OPENING) {
+    const reason = openingRefusal(tool, HERE);
+    assert.equal(reason, `js-harness guard: ${tool} opens a session in the app's Routines or in the cloud, where he does not see it (rule sessions-open-in-sidebar). Open it with start_session, a row in his sidebar, or tell the lead; it is refused even when he asked for it.`, tool);
+  }
+});
+
+test('where the rule is not declared, as in an installed project or a copy whose list is not the project\'s, the four tools pass', () => {
+  for (const tool of OPENING) {
+    assert.equal(openingRefusal(tool, null), null, `no list: ${tool}`);
+    assert.equal(openingRefusal(tool, `${HERE}\n// another list\n`), null, `another list: ${tool}`);
+  }
+});
+
+test('the tools that do not open a session pass in this repository, whatever the list', () => {
+  for (const tool of PASSING) {
+    assert.equal(openingRefusal(tool, HERE), null, tool);
+    assert.equal(openingRefusal(tool, null), null, tool);
+  }
 });
 
 test('a refusal is the PreToolUse deny of the hooks contract, with its reason', () => {
