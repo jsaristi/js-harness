@@ -368,6 +368,9 @@ gate log has no times and says so. `gentle-ai reviews` counts the reviews gentle
 records it keeps in the git common folder, so it reaches back before the row existed; when each started is
 kept by the pause hook while the review runs, from the first tool call that sees it, so a day before this
 machine began recording them says `started not recorded`. `uninstall` keeps those starts with the snapshots.
+`questions` reads the channel's question notices to the answer or withdrawal that closed each, numbered as the
+board numbers them: how long an answer took to be relayed, and, from answer notices that keep them, when the
+question was shown and answered.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17

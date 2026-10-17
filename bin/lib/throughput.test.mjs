@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, reviewFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows, withReadyAt } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, questionFacts, reviewFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows, withReadyAt } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -465,4 +465,41 @@ test('an id used again after a burn is two reviews, each its start with the firs
   // The second life still running: its first life ended, it is open.
   const running = reviewFacts({ ...record, ends: [record.ends[0]], live: ['again'] }, dayBounds('2026-10-17'));
   assert.deepEqual([running.ended.map((one) => one.minutes), running.open, running.gone], [[20], ['again'], []]);
+});
+
+test('a day\'s questions: those recorded in it, and those an answer or a withdrawal closed in it, with the answer\'s own times once B4 keeps them', () => {
+  const question = (at) => ({ kind: 'question', at, text: 'Pregunta', options: [], waits: true });
+  const answer = (number, at, fields = {}) => ({ kind: 'answer', at, question: number, verified: true, copy: { tool: 'AskUserQuestion', answers: [] }, ...fields });
+  const notices = [
+    question('2026-10-15T22:00:00.000Z'), // 1: answered the next morning, by a notice written before B4
+    question('2026-10-16T09:00:00.000Z'), // 2: tapped, with B4's times
+    question('2026-10-16T10:00:00.000Z'), // 3: typed in the chat, which has no shown time
+    question('2026-10-16T11:00:00.000Z'), // 4: withdrawn
+    question('2026-10-16T12:00:00.000Z'), // 5: still open
+    answer(1, '2026-10-16T07:00:00.000Z', { verified: false, copy: null }), // not verified, then verified: the verified one closes it
+    answer(1, '2026-10-16T08:00:00.000Z'),
+    answer(2, '2026-10-16T09:30:00.000Z', { shownAt: '2026-10-16T09:05:00.000Z', answeredAt: '2026-10-16T09:20:00.000Z' }),
+    answer(3, '2026-10-16T10:40:00.000Z', { copy: { tool: null, answers: [] }, answeredAt: '2026-10-16T10:30:00.000Z' }),
+    { kind: 'withdrawn', at: '2026-10-16T11:15:00.000Z', question: 4 },
+    answer(9, '2026-10-16T13:00:00.000Z'), // names no question of the record
+  ];
+  const record = { notices, questions: notices.filter((one) => one.kind === 'question').map((notice, index) => ({ number: index + 1, notice })) };
+  const facts = questionFacts(record, { from, to });
+  assert.deepEqual(facts.recorded.map((one) => one.number), [2, 3, 4, 5]);
+  assert.deepEqual(facts.closed, [
+    { number: 1, by: 'answer', via: 'question tool', recordedAt: '2026-10-15T22:00:00.000Z', at: '2026-10-16T08:00:00.000Z', shownAt: null, answeredAt: null },
+    { number: 2, by: 'answer', via: 'question tool', recordedAt: '2026-10-16T09:00:00.000Z', at: '2026-10-16T09:30:00.000Z', shownAt: '2026-10-16T09:05:00.000Z', answeredAt: '2026-10-16T09:20:00.000Z' },
+    { number: 3, by: 'answer', via: 'typed in the chat', recordedAt: '2026-10-16T10:00:00.000Z', at: '2026-10-16T10:40:00.000Z', shownAt: null, answeredAt: '2026-10-16T10:30:00.000Z' },
+    { number: 4, by: 'withdrawn', via: null, recordedAt: '2026-10-16T11:00:00.000Z', at: '2026-10-16T11:15:00.000Z', shownAt: null, answeredAt: null },
+  ]);
+
+  const rows = throughputRows([dayOf({ questions: facts })]);
+  assert.equal(rowOf(rows, 'questions').value, '4 recorded; 3 answered (2 by the question tool, 1 typed in the chat), 1 withdrawn; recorded to answer relayed: median 40 min (3); recorded to shown: median 5 min (1); shown to answered: median 15 min (1); typed, recorded to answered: median 30 min (1); no shown or answered time: 1 of 3 answers');
+  assert.match(rowOf(rows, 'questions').source, /recordedQuestions/);
+  // Before B4 no answer keeps its times: the row says what it waits for, never a zero.
+  const before = { recorded: [], closed: [facts.closed[0]] };
+  assert.equal(rowOf(throughputRows([dayOf({ questions: before })]), 'questions').value, '0 recorded; 1 answered (1 by the question tool), 0 withdrawn; recorded to answer relayed: median 600 min (1); shown and answered times: not recorded (B4)');
+  // A day kept before this row, and a day whose channel could not be read.
+  assert.equal(rowOf(throughputRows([dayOf()]), 'questions').value, 'not recorded: 2026-10-16 (no questions kept)');
+  assert.equal(rowOf(throughputRows([dayOf({ unavailable: { channel: 'EBUSY' } })]), 'questions').value, 'not read: 2026-10-16 EBUSY');
 });

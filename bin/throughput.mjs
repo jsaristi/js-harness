@@ -11,7 +11,7 @@ import path from 'node:path';
 import { readGateLog, readGateTestTimes } from './lib/gate-log.mjs';
 import { paceLogArgs, parsePaceLog } from './lib/progress-pace.mjs';
 import { ruleValue } from './lib/rules.mjs';
-import { recordPath } from './lib/channel.mjs';
+import { readNotices, recordPath } from './lib/channel.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { jsonLinesPath } from './lib/codex-reviews.mjs';
 import { gitDirs } from './lib/project.mjs';
@@ -26,6 +26,7 @@ import {
   daysBetween,
   gateFacts,
   landFacts,
+  questionFacts,
   reviewFacts,
   parseCommitTimes,
   parseMergeFiles,
@@ -250,6 +251,9 @@ function appendOnlyFacts(day, ctx) {
   else {
     facts.idle = channelIdle(notices, bounds);
     facts.prs = withReadyAt(facts.prs, notices);
+    const record = channelRecord(ctx);
+    if (record.unavailable) facts.unavailable.channel = record.unavailable;
+    else facts.questions = questionFacts(record, bounds);
   }
   try {
     facts.lands = landFacts(ctx.readLands(ctx.root), bounds);
@@ -336,6 +340,13 @@ function channelNotices(ctx) {
   }
   ctx.channel = notices;
   return notices;
+}
+
+/** The channel's record as its board reads it (`readNotices`), read once a run: its questions are numbered there,
+ * by every line that is a question notice, so the questions row names each by the number the board gave it. */
+function channelRecord(ctx) {
+  ctx.channelRecord ??= readNotices(ctx.home, ctx.slug, { readFile: (file) => ctx.fileSystem.readFileSync(file, 'utf8') });
+  return ctx.channelRecord;
 }
 
 /** The live facts of `day`, both halves. */
