@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { SNAPSHOT_SCHEMA, throughputMain } from './throughput.mjs';
+import { newNotice } from './lib/channel.mjs';
 
 const NOW = Date.parse('2026-10-17T03:00:00Z');
 const ROOT = path.resolve('/project/js-harness');
@@ -106,10 +107,27 @@ test('the idle upper bound is read from the channel record of the project', asyn
   assert.match(stdout, /idle upper bound +1 waits, median 45 min, 0\.8 session-h in all; longest: JH 28 45 min/);
 });
 
+test('the questions are read from the channel record of the project, numbered as its board numbers them', async () => {
+  const home = makeHome(GATES);
+  const channel = path.join(home, '.js-harness', 'channel');
+  fs.mkdirSync(channel, { recursive: true });
+  const from = { host: 'h', id: 's1', source: 'test', title: 'JH 28' };
+  const notices = [
+    newNotice({ at: '2026-10-16T10:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿a?', id: 'q1', options: [], waits: 'T4' }),
+    newNotice({ at: '2026-10-16T11:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿b?', id: 'q2', options: [], waits: 'T4' }),
+    newNotice({ at: '2026-10-16T10:20:00.000Z', from, to: 'orchestrator', kind: 'answer', text: 'a', transcript: 't', line: 3, question: 1, verified: false, copy: null }),
+    newNotice({ at: '2026-10-16T11:30:00.000Z', from, to: 'orchestrator', kind: 'withdrawn', text: 'no longer', question: 2 }),
+  ];
+  fs.writeFileSync(path.join(channel, `${ROOT.replace(/[^A-Za-z0-9]/g, '-')}.jsonl`), notices.map((notice) => JSON.stringify(notice)).join(String.fromCharCode(10)) + String.fromCharCode(10));
+  const { stdout } = await run([], { home });
+  assert.match(stdout, /questions +2 recorded; 1 answered \(1 not verified\), 1 withdrawn; recorded to answer relayed: median 20 min \(1\); shown and answered times: not recorded \(B4\)/);
+});
+
 test('a channel record that is not there is said on its row, never read as no wait', async () => {
   const home = makeHome(GATES);
   const { stdout } = await run([], { home });
   assert.match(stdout, /idle upper bound +not read: 2026-10-16 no channel record/);
+  assert.match(stdout, /questions +not read: 2026-10-16 no channel record/);
 });
 
 test('a main that is not there is said on the rows git gives, never read as no pull request', async () => {
