@@ -385,6 +385,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "throughput-backfill-days",
+    "subject": "how many closed days back the heartbeat writes a missing throughput snapshot for",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 14,
+    "unit": "days"
+  },
+  {
     "id": "wait-every",
     "subject": "how often js-harness wait checks its condition, unless --every says otherwise",
     "owner": "project",
