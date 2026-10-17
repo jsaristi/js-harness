@@ -1191,7 +1191,7 @@ sample read by this session):
    - The hash stamped in an installed command (letter F, T16f) is taken over the rules with no
      scope, so that a change of his Codex rate does not call every installed copy behind in
      every project; in this repository the comparison above is what says it: named here, built
-     there.
+     in T16f's second part (`bin/lib/rules-installed.mjs`).
    - When the skills' texts and the template are among the texts scanned (T16d, T16f), a
      `rule:<id>` of scope `repository` in them is a finding: named here, built there.
    The values of those rules still travel inside `rules-data.mjs`; no words of his do. Whether an
@@ -1730,7 +1730,7 @@ independent verifier after its own checks.
 - **T16d:** the switch of a wrong red row, "by the same command, with a reason, and counted", as
   `set.row`, with where the count is kept; `patterns` and `failure`.
 - **T16e:** the line that confirms a landing.
-- **T16f:** the hash in the installed command.
+- **T16f:** the hash in the installed command, built in its second part.
 - **Letter H**, its own home, has no task yet: it is added as T16g.
 
 ### The row `rules` (T16d)
@@ -2379,7 +2379,7 @@ the command; the dispatcher reaches the command, and so does a run on its own.
 - Codex sessions get nothing until its events are confirmed.
 
 **Left to the other parts of T16f**, not built here:
-- the hash in the installed command and `doctor` saying it is behind;
+- the hash in the installed command and `doctor` saying it is behind: built in the second part, below;
 - the template's marked block, rendered by `sync`;
 - a memory note pointing to an id;
 - which of the shipped rules reach an installed project, a field T16b names, whose list is his ninth
@@ -2401,6 +2401,169 @@ the command; the dispatcher reaches the command, and so does a run on its own.
 
 Risk: item 5. It writes three entries into the host's settings through `install`. So it takes an
 independent verifier, and a gentle-ai review escalated at its own commit.
+
+### Reach: the hash of the installed command (T16f, second part), version 2 (after two readers)
+
+Letter F: "A hash of the rules is stamped in the installed command, so that `doctor` can say it is
+behind." The decision at "Scope" above: the hash is taken over the rules with no scope, so that a
+change of his Codex rate does not call every installed copy behind in every project. Letter F says
+nothing more; this part decides where the stamp is, what it is compared with and what `doctor`
+prints. Mapped on `origin/main` a77288c by a read-only reader on 2026-10-16 (local date). His own
+words on it: searched in his typed lines of every transcript of this project (`rg` over
+`~/.claude/projects/D--js-harness/*.jsonl` for user lines with "hash", "instalad" or "doctor" beside
+"atrás", "viej" or "desactual"); none speaks of the installed copy's rules, so letter F is the text
+this part answers to. The ninth difference (which shipped rules reach a project) is still his
+(`:992`, `:2385`); until it is answered the hash covers every rule with no scope.
+
+**What is there today.**
+- `rulesHash(list)` (`bin/lib/rules.mjs:474`): 12 hex characters of a SHA-256 over the id-sorted
+  list reduced to `HASH_KEYS`, with no variant over a part of the list. `rules check` and the head
+  of `docs/RULES.md` print it over the whole list (`bin/rules.mjs:165`, `bin/lib/rules.mjs:594`).
+- The installed copy is a copy of the default branch in the global packages (`INSTALL_NEWEST`,
+  `bin/lib/version.mjs`); `package.json`'s `files` ships `bin/`, so the copy holds its own
+  `bin/lib/rules-data.mjs`. Its manifest names no commit, and its version is `0.1.0` for every copy.
+- `doctor` has no row about js-harness itself. Its rows are read by `gapList`/`gapDigest` (the
+  session-start notice, `bin/lib/digest.mjs:17-35`), the TUI (`bin/tui.mjs:145`) and
+  `stackVersions` (`bin/lib/stack-update.mjs:17-22`). Its up-to-date column compares versions with
+  `compareSemver`, which gives -1 for any two hex strings, equal ones too (`bin/lib/version.mjs:10-17`);
+  its cache keeps a text or `null` per row and drops keys it does not know (`bin/lib/cache.mjs:21-48`),
+  and keeps the old value when a refetch fails (`bin/doctor.mjs:139-146`).
+
+**The stamp is the copy's own list, computed, never written.** This is the design's reading of
+"stamped", not his: the hash is a pure function of the `rules-data.mjs` that the copy ships, and
+`rulesHash`'s own comment meant it for this ("So an installed copy and a session can tell",
+`rules.mjs:470-473`). A constant written at install would be a second home of the same fact that
+can drift from the list beside it (protocol 4, "One home"). `shippedRulesHash(list)` in
+`bin/lib/rules.mjs` is `rulesHash` over the rules with no `scope`; the inline filter at
+`bin/rules.mjs:261` becomes `unscoped(list)` beside it (the one at `:326` is a branch of
+`rulesInForce` and stays).
+
+**What it is compared with: the same hash of `main`'s list, read fresh, never cached.**
+- In the harness's own checkout (a `bin/lib/rules-data.mjs` at the git top: `listOf` and
+  `MAIN_REFS` of `bin/lib/rules-reach.mjs`, both made public): `git show <ref>:bin/lib/rules-data.mjs`.
+  No network; the ref is as fresh as the last fetch.
+- Anywhere else, only in an interactive online `doctor`: one request to the default branch of the
+  default repository, `https://raw.githubusercontent.com/jsaristi/js-harness/HEAD/bin/lib/rules-data.mjs`,
+  built from `DEFAULT_REPO` in `version.mjs` (the one home of the address; the repository is public,
+  `gh repo view` says PUBLIC, and the address answered 200 on 2026-10-16), with the 5-second timeout
+  of `latest.mjs`. Not with `--offline`, not in `--hook` and not in the TUI's stack block
+  (`bin/tui.mjs:147`), so a session start costs no request and a cut connection is not a gap; the
+  TUI's Doctor item runs the whole `doctor` and does make it. `buildReport` tells these apart by
+  its own arguments: `interactive && !offline` is the interactive online `doctor`. This changes
+  `doctor`'s stated contract of one round of lookups behind a 6-hour cache (`bin/doctor.mjs:5-7`):
+  that comment names the one request this row adds. `JS_HARNESS_REPO` set to another repository,
+  or a project whose `harness.json` pins another version than the copy's own, gives `n/a`: the pin,
+  not `main`, says what the copy should be. A pin of the copy's own version is compared: `init`
+  writes one in every project (`bin/lib/project.mjs:848`), and before 1.0.0 every copy is 0.1.0,
+  taken from `main` (a correction after the verifier, below).
+- The text is read by `readListText` as JSON, never imported, and the list must pass `readRules`
+  (`bin/lib/rules.mjs:305`) with no fault; a 404, a 429, an HTML page, a cut body or a list of
+  something else is `unknown`, never `outdated`. Nothing about `main` is cached, so no failure can
+  leave an old hash in force, and right after the fix the next run reads the new `main`.
+
+**What `doctor` prints.** One row, `js-harness`, appended for every caller after the `rows` map of
+`buildReport` (`bin/doctor.mjs:178-184`) and before its early return when there are no gentle-ai
+snapshots (`:188`), so it never passes through `computeUpToDate` and reaches `--json`, the table,
+the gaps, the hook's digest and the TUI alike:
+- `installed: 'ok'`; `version` is the copy's unscoped hash cut to 8 characters (the column is 10);
+  `--json` adds `rulesHash` and `mainRulesHash` (12 each) and `differs`, the ids that `diffRules(copy,
+  main)` names, by kind (added, removed, retired, changed);
+- the host cells and `project` are `n/a`: the copy serves both hosts;
+- `up to date` is `ok` when the two hashes are equal, `outdated` when they differ, `unknown` when
+  `main`'s list could not be read, `n/a` where it is not read (outside the checkout with
+  `--offline`, in `--hook` and in the TUI's stack block) or there is nothing to compare with (a pin
+  of another version, another repository);
+- the fix of `outdated` is `INSTALL_NEWEST`, then one line naming the differing ids by kind, so the
+  rules that differ are named in a project too, where the hook reads only `docs/rules.json`;
+- in the checkout the session-start digest (built in `hookMain`, `bin/doctor.mjs:376-383`) gets
+  `js-harness:<mainRulesHash>`, kept apart from the text the notice prints (`:391`), so a `main`
+  that moves again is told again without the hash in the notice; elsewhere the hook gives `n/a` and
+  no notice.
+- `stackVersions` never sees the row: it reads the rows before it is appended (`:187`, `:345`).
+
+**Two hashes, named apart.** `rules check` keeps its hash of the whole list; `doctor` labels its own
+"unscoped" (the Fix line and the `--json` names), and `docs/RULES.md` gains no second hash.
+
+**What else changes.**
+- `README.md`'s doctor section (`:258-300`): the row. Its example keeps no line for it: the hash
+  moves with every rule change, so a printed one would go stale.
+- `bin/js-harness.mjs:20`: the doctor line names the harness's own rules beside the stack's tools.
+- `docs/SPEC.md`, "The stack doctor" (`:180-187`): the row in Requirement, Proof and Today.
+- `docs/ROADMAP.md`, the Stack doctor checklist (`:110-119`): one line; the "Release source" row
+  (`:48`) and the comment on `DEFAULT_REPO` (`version.mjs:30`) stop calling the repository private.
+- The feature document: the first bullet of "Left to the other parts of T16f" struck, the "named
+  here, built there" lines at `:1191` and `:1733` closed, the T16f task line left open for the
+  template block and the memory note, the State paragraph. The signals of done table needs no row:
+  none of the seven is about reach.
+- No skill changes: a session reads what to do from the row's Fix, as for every other row.
+- Writes outside the repository: none. The row writes nothing to `doctor.json`.
+
+**What it does not do.**
+- It does not decide which shipped rules reach an installed project (the ninth difference).
+- It does not update the copy (`upgrade` installs release tags only, and none exists before 1.0.0),
+  nor make the hook read `main`'s list in a project. Once release tags exist, what a copy is
+  compared with is decided again: then `main` is not what a copy at the latest tag should match.
+- It does not stamp a commit: two copies with the same unscoped rules are equal to this row even
+  when their code differs, which is what letter F asks.
+
+**Not guaranteed.**
+- "Differs" is printed as `outdated`: a copy installed from a branch ahead of `main` is also called
+  behind. `node bin/js-harness.mjs doctor` run from this checkout hashes the working tree's list, so
+  a branch that changed a rule reads as `outdated` with a fix that cannot fix it.
+- In this checkout the main ref is as old as the last fetch; GitHub may serve the raw file up to 5
+  minutes old (`Cache-Control: max-age=300`).
+- A copy installed from a local tarball (`--source`) cannot be told apart from one from GitHub: the
+  manifest names no source.
+- A folder outside git that holds `bin/lib/rules-data.mjs` (the installed package's own) is read as
+  the harness's checkout, finds no main ref, and is `unknown`.
+- Three messages speak of a copy behind: this row, `rules applied` for scoped rules
+  (`bin/lib/rules-applied.mjs:360`) and `HOOK_FIX` for a hook command (`bin/lib/stack.mjs:538`).
+  Each names a different fact; none is merged here.
+
+**Tests, written first.**
+- `shippedRulesHash` leaves a scoped rule out (a scoped value changed keeps the hash; an unscoped one
+  moves it), and `unscoped` returns the rules with no `scope`.
+- `doctor`'s row: equal hashes print `ok`, hex hashes included; different ones `outdated`, with
+  `INSTALL_NEWEST` and the ids under Fix and in `--json`; a 404, a 429, an HTML body, a cut body and
+  a list that fails `readRules` print `unknown` and no gap; `--offline`, `--hook` and the TUI make no
+  request; in a checkout the comparison reads the ref through `git show` (the test's `fakeSpawn`
+  answers it) and fetches nothing; a pinned version and `JS_HARNESS_REPO` give `n/a`; in the
+  checkout the digest moves when `main`'s hash moves.
+- The pins that move by one row: `bin/doctor.test.mjs:148` and `:499-503` (13 lines), the request
+  counts at `:580-594` and `:1384-1405` (an online interactive `doctor` with a fresh cache now makes
+  the one request of this row), `bin/js-harness.test.mjs:277`, `bin/tui.test.mjs:435`;
+  `bin/clean-home.test.mjs:18` gets the row in `OWN_ROWS`. `bin/lib/stack.test.mjs` does not move:
+  the row is not one of `probeStack`'s.
+
+Risk: item 3. The rows are shared code read by `digest.mjs`, the TUI and every `doctor` output, and
+the row adds a network read to an interactive `doctor`. It takes an independent verifier, and a
+gentle-ai review escalated at its own commit.
+
+**Where the readers' findings went.**
+- The attacker's blockers: B1 (`compareSemver`) into the row appended after `computeUpToDate`; B2
+  (the cache cannot hold the list) and B3 (a failed refetch keeps the old value) into "read fresh,
+  never cached".
+- Its serious findings: the Risk line; the version cell, the `--json` names and `OWN_ROW`; the two
+  hashes; where the row goes and the pins. Its minor ones: the hook's reach in a project, the run
+  from a checkout, "stamped" marked as a reading, the one filter `unscoped` replaces, the date, the
+  timeout and the `diffRules` direction.
+- The gaps reader's blockers: the same two. Its serious ones: the hook and both hosts (no request in
+  `--hook`, the digest in the checkout), the address from `DEFAULT_REPO` and the two texts that say
+  private, the reply that is not the list (`readRules`), pins and tags, "What else changes", the
+  pins, and the ids named in a project. Its minor ones: the same places, plus `status --global`
+  (unchanged: it reports versions, and points to nothing new) and the writes outside the repository.
+- The second round, which read only those blockers: all three resolved. Its findings on the fixes:
+  the request-count test at `:1384-1405` (into the pins and the contract comment), the row placed
+  before the early return at `:188`, `OWN_ROW` dropped as a no-op, the digest's place and its
+  text kept apart, the state outside the checkout when nothing is read (`n/a`), and the TUI's
+  Doctor item.
+- The independent verifier of `cd6a8e1`: no blocker; every probe passed (offline, in the checkout,
+  online against the real `main`, the hook making no request, the other rows byte-identical to the
+  baseline's, the hook's digest unchanged when the row is not `outdated`). Its advisory that `init`
+  pins `{ version }` in every project, so the row would be `n/a` in every initialized one, is fixed:
+  only a pin of another version gives `n/a`. Its other advisories went into "Not guaranteed" and
+  the pins; the README's other two "private" (lines 13 and 235) were already there at the baseline
+  and stay a follow-up.
 
 ### Signals of done
 The seven of the roadmap, each as something read and not judged.
@@ -2838,7 +3001,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     beside hashed ones (A3). Codex's second recheck of the P2 was refused by the one-recheck cap, and
     the range `ac6cf2c..9c3f41a` is recorded as a skip naming this task. Route: inline.
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
-    rules in the installed command; the template's marked block
+    rules in the installed command; the template's marked block. Its second part, the hash in
+    the installed command and `doctor`'s `js-harness` row, built by JH 28 on 2026-10-16 on
+    `feat/rules-installed-hash`, see "Progress"; the rest "Left to the other parts of T16f" stays
+    open. Route: inline.
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
     of the relief file's line 245, carries its cost and a review date, and its done is one
     command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it.
@@ -4314,14 +4480,41 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     with the host.
   - Not touched: the step `project-uninstall`, where JH 22 holds a pending fix.
 
+- 2026-10-16, T16f second part, by `JH 28 · reserva B` on `feat/rules-installed-hash`, from `main` 53f79c4, on the
+  lead's notice (after T18b, "take rule-hierarchy T16f ... the hash of the rules with no scope (:1191) stamped in the
+  installed command, with doctor saying it is behind. Design first with two readers"; a claim of the lead's).
+  - The map: one read-only reader of `origin/main`. The design, version 1, went to two read-only readers (one
+    attacking its claims, one looking for what is missing); their three blockers (`compareSemver` on a hash, the
+    cache that cannot hold a list, a failed refetch keeping the old value) and their serious findings are in version 2,
+    "Reach: the hash of the installed command (T16f, second part)", with where each went. A second round read only
+    those blockers: all three resolved; its findings on the fixes went in too.
+  - Built, test first: `unscoped` and `shippedRulesHash` in `bin/lib/rules.mjs`; the row in
+    `bin/lib/rules-installed.mjs`, appended by `buildReport` for every caller; the hook's digest takes main's hash
+    when the copy is behind. RED: `bin/lib/rules-installed.test.mjs` failed to load on the missing module, then 7 of
+    `bin/doctor.test.mjs` failed on the missing row. GREEN: 9 of 9 and 79 of 79; the pins that moved in
+    `bin/js-harness.test.mjs`, `bin/tui.test.mjs` and `bin/clean-home.test.mjs` pass one file at a time.
+  - Also: the README's doctor section, the dispatcher's doctor line, "The stack doctor" in `docs/SPEC.md`, the
+    roadmap's Stack doctor list, and the three texts that still called the repository private (the comment on
+    `DEFAULT_REPO`, the roadmap's "Release source", the help line of `update`). The README's example keeps no
+    line for the row: its hash moves with every rule change, so a printed one would go stale.
+  - The independent verifier of `cd6a8e1` (Risk item 3): no blocker, every probe passed; its advisory that
+    `init` pins the copy's version in every project, which made the row `n/a` in each, fixed test first in
+    `34931d8` (a pin of the copy's own version is compared).
+  - gentle-ai approved `53f79c4..34931d8` (`cd6a8e1`, `34931d8`), escalated to high by item 3, lenses resilience,
+    reliability and readability; lineage `review-39e8773f218a735e`, acknowledged, authority burned. Its eleven
+    findings are advisory: R4-checkout-parse-unguarded does not hold (`readListText` catches its parse and
+    `readRules` never throws, `bin/lib/rules.mjs:300-304`); R4-serial-uncached-latency (the request runs after the
+    lookups, so a dead network adds up to 5 s) and R3-pin-null-version (an unreadable `package.json` gives `n/a`,
+    not `unknown`) are follow-ups; R2-update-help-text: the help line of `update` stopped saying "private" because
+    the repository is public, named in "What else changes".
+  - Codex reviewed `53f79c4..34931d8` in 2 parts: correct (0.88 and 0.96), recorded.
+
 ## Next step
-**State for a resume, 2026-10-16, T18b built by JH 28 on `rule/double-review-rule`** (worktree
-`D:/js-harness-worktrees/double-review-rule`): the rule double-review declared by `rules change`
-(his answer to question 12, "Sí, así (Recomendada)", e152c9d8 line 15242), its home in protocol 1,
-protocol 6's pointer, the orchestrator line, their tests (RED, then GREEN) and the failure's control.
-Next: commit through the gate, gentle-ai, Codex, pull request, notify the lead; then T16f's next
-part (the hash of the rules with no scope stamped in the installed command, doctor saying it is
-behind): design first with two readers.
+**State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
+(worktree `D:/js-harness-worktrees/rules-installed-hash`): designed with two readers and a second round,
+built test first, verified, approved by gentle-ai and Codex (see "Progress"). Next: the pull request and the
+lead's notice; the follow-ups above. T18b is on `main` (pull request
+345).
 
 **State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai
 approved and acknowledged, the verifier passed. Next: Codex, `merge-tree`, and a draft pull

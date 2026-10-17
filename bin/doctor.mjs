@@ -4,7 +4,9 @@
 // and whether the remote server of every recorded login launcher is running
 // (`checks` in bin/lib/stack.mjs). Local probes are read-only and synchronous; `upToDate` adds
 // one round of latest-version lookups (bin/lib/latest.mjs) behind a 6h cache (bin/lib/cache.mjs) —
-// see odd/tasks/stack-doctor.md. Exit code is always 0 for a normal report: this is a report, not
+// see odd/tasks/stack-doctor.md. The `js-harness` row adds one request of its own outside the
+// harness's checkout, on an interactive online run only, never cached: main's list of rules
+// (bin/lib/rules-installed.mjs). Exit code is always 0 for a normal report: this is a report, not
 // a gate, and every probe underneath fails open into `unknown` rather than throwing. `--hook` (T3)
 // is the one exception with its own, stricter contract — see `hookMain` below.
 import crypto from 'node:crypto';
@@ -17,6 +19,7 @@ import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
+import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
 import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
@@ -171,7 +174,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const now = deps.now;
   const project = resolveProjectRoot(cwd, spawn);
   // The project's switches, resolved once for every row: the Codex row is shown only while codexReview is not off.
-  const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn)));
+  const harness = harnessOfTree(project);
+  const { resolved: functions } = functionsOf(harness, workingTree(gitIn(project, spawn)));
 
   const localRows = probeStack({ home, project, spawn, platform, interactive, functions, env });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
@@ -182,7 +186,17 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
-  const withUnseen = deps.unseen ? [...rows, await unseenRow(deps.unseen, project)] : rows;
+  // The harness's own rules against main's, for every caller and never through `computeUpToDate`: its version is a
+  // hash, not a semver one. It reads main's list fresh, so only an interactive online run may make its request.
+  const rules = await harnessRulesRow({
+    project,
+    declared: harness.declared,
+    env: env ?? process.env,
+    online: Boolean(interactive) && !offline,
+    spawn,
+    fetch: fetchImpl,
+  });
+  const withUnseen = deps.unseen ? [...rows, rules, await unseenRow(deps.unseen, project)] : [...rows, rules];
   const withHost = deps.host ? [...withUnseen, hostRow(deps.host, home, now)] : withUnseen;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   if (!deps.gentleAiSnapshots) return withStack;
@@ -380,7 +394,12 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     ]
       .filter(Boolean)
       .join('; ');
-    const digest = host ? crypto.createHash('sha256').update(`${gapDigest(rows)}\n${host}`).digest('hex') : gapDigest(rows);
+    // A copy behind main enters the digest with main's hash, so a main that moves again is a new notice; the hash
+    // stays out of the notice's text.
+    const rules = rows.find((row) => row.id === 'js-harness');
+    const behind = rules?.upToDate === 'outdated' ? `js-harness:${rules.mainRulesHash}` : '';
+    const salt = [host, behind].filter(Boolean).join('\n');
+    const digest = salt ? crypto.createHash('sha256').update(`${gapDigest(rows)}\n${salt}`).digest('hex') : gapDigest(rows);
     const cache = readCache(home);
     const shouldNotify = gaps.length > 0 && digest !== cache.notified;
     writeCache(home, { ...cache, notified: digest });
