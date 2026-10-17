@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { installMain, syncMain, uninstallMain, currentVersion, shellWord } from './install.mjs';
+import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord } from './install.mjs';
 import { entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
@@ -741,7 +741,11 @@ test('a home holding a dollar sign is printed in single quotes, so the kept line
     const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(code, 1);
     const line = errLines.find((one) => one.includes('a memory pass is planned'));
-    assert.ok(line.includes(`memory verify 20261015T120606108Z --home '${home}' or js-harness memory undo 20261015T120606108Z --home '${home}',`), line);
+    // On Windows no one form serves both shells: cmd.exe splits single quotes at a space, PowerShell expands `$`
+    // in double quotes. The line says which shell its commands are for, and gives cmd.exe its own --home.
+    const forCmd = process.platform === 'win32' ? ` (in cmd.exe, --home "${home}")` : '';
+    const run = process.platform === 'win32' ? 'run, in PowerShell,' : 'run';
+    assert.ok(line.includes(`${run} js-harness memory verify 20261015T120606108Z --home '${home}' or js-harness memory undo 20261015T120606108Z --home '${home}'${forCmd}, then`), line);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -757,6 +761,13 @@ test('shellWord puts a home in single quotes, which keep a double quote and a do
   assert.equal(shellWord("C:\\Users\\o'neil", 'win32'), `"C:\\Users\\o'neil"`);
   // PowerShell takes the curly quotes for a single quote too: doubled inside single quotes.
   assert.equal(shellWord('C:\\Users\\x\u2019y $z', 'win32'), `'C:\\Users\\x\u2019\u2019y $z'`);
+});
+
+test('cmdExeWord gives cmd.exe its own double-quoted home only where shellWord had to leave double quotes for PowerShell', () => {
+  assert.equal(cmdExeWord('C:\\Users\\First Last $cash', 'win32'), `"C:\\Users\\First Last $cash"`);
+  assert.equal(cmdExeWord('C:\\Users\\a`b', 'win32'), '"C:\\Users\\a`b"');
+  assert.equal(cmdExeWord('C:\\Users\\First Last', 'win32'), null);
+  assert.equal(cmdExeWord('/home/a $b', 'linux'), null);
 });
 
 test('uninstallMain keeps a project under a memory pass with the line that can release its lock, exit 1, in either mode', async () => {

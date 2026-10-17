@@ -86,11 +86,17 @@ export function shellWord(value, platform = process.platform) {
   return `'${value.replace(/['‘’‚‛]/g, (quote) => quote + quote)}'`;
 }
 
+/** `value` in double quotes for cmd.exe where `shellWord` gave it single quotes on Windows, which cmd.exe splits
+ * at a space: no one form serves cmd.exe and PowerShell there. `null` where `shellWord` serves every shell. */
+export function cmdExeWord(value, platform = process.platform) {
+  return platform === 'win32' && /[$`]/.test(value) ? `"${value}"` : null;
+}
+
 function memoryKeptLine(folder, home) {
   switch (folder.reason) {
     case 'locked':
       return folder.stamp !== null && folder.manifest
-        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run js-harness memory verify ${folder.stamp} --home ${shellWord(home)} or js-harness memory undo ${folder.stamp} --home ${shellWord(home)}, then uninstall again`
+        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run${cmdExeWord(home) === null ? '' : ', in PowerShell,'} js-harness memory verify ${folder.stamp} --home ${shellWord(home)} or js-harness memory undo ${folder.stamp} --home ${shellWord(home)}${cmdExeWord(home) === null ? '' : ` (in cmd.exe, --home ${cmdExeWord(home)})`}, then uninstall again`
         : `kept ${folder.path}: ${folder.lock} holds no finished plan (pid ${folder.pid ?? 'unknown'}); if that process is not running, remove the file and uninstall again`;
     case 'locked-whole':
       return `kept ${folder.path}: --full removes it in one piece, and a project in it is under a memory pass; nothing of it was removed`;
