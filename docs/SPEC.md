@@ -99,7 +99,7 @@ proofs and by those tasks.
 ### Contracts and citations
 
 **Problem:** F3 asked that a task contract with no executable done-when never reach the autonomy loop (`odd/tasks/task-contract.md`). False citations lived in prose: the first full read found 1,857 citations, 190 unresolved (`odd/tasks/commands-and-doctor.md`).
-**Requirement:** Every gate validates every contract under `odd/tasks/` statically, never running a done-when command (one may be the gate itself). It resolves the `path:line` citations the pending change adds against the commit's index and reports how many do not resolve.
+**Requirement:** Every gate validates every contract under `odd/tasks/` statically, never running a done-when command (one may be the gate itself). It resolves the `path:line` citations the pending change adds against the commit's index and reports how many do not resolve, and each task the change checks off that names no commit HEAD reaches, unless the change stages the work beside it.
 **Reason:** A feature's end stays a set of commands, and a citation is evidence only if it points at something.
 **Proof:** `node --test bin/lib/contract.test.mjs`, `node --test bin/lib/citations.test.mjs`, `node --test bin/check-citations.test.mjs`
 **Discarded:** Running the done-when commands in the gate: it recurses through the gate. Citations as a failing row: documents cite other branches and repositories on purpose, so the row informs.
@@ -132,14 +132,23 @@ proofs and by those tasks.
 **Discarded:** A lock per project. A lock by message between sessions: no one is listening. Making the lock folder and then writing it: an empty lock folder let two gates hold it.
 **Today:** `bin/lib/gate-lock.mjs`, `bin/gate.mjs`, `bin/check.mjs`, `bin/lib/launcher.mjs`, `bin/lib/push-waits.mjs`, `js-harness gate`
 
-### A gate that would wait runs its tests on CI
+### A commit's gate runs its tests on CI first
 
 **Problem:** Measured on 2026-10-16: two suites at once on this machine take 303 and 305 s against 158 s alone, so the limit is the CPU and a second local line gains nothing; the gate was the limit on how many sessions fit (`odd/tasks/first-version.md`, S7).
-**Requirement:** A commit's gate runs here when the machine's lock is free. When its turn would wait, the tests run on a CI machine instead, on the exact tree being committed (written as a commit object and pushed to a branch of its own, deleted after), and the commit is made only on green, with the same tree; red prints the failing tests and refuses. Anything that is not a green or red run (no network, no signed-in client, no run, a run cancelled or past its bound) falls back to the local gate and says why, so CI only ever shortens a wait. The workflow runs only for a push to those branches, never for a pull request or the default branch, reads and writes nothing else, names no secret and pins its actions; a test holds every one of those bounds. Each gate on CI leaves its record in the gate log.
-**Reason:** A commit never lands without its own proof, wherever it ran; the local machine stays the fast path for one session; and a bound written in a workflow a pull request could change must be held by a test, not by care.
+**Requirement:** A commit's gate (the gate a commit's or a merge's hook runs, not a check by hand, which tests the working tree) runs its tests on a CI machine first, whether or not the machine's lock is free, on the exact tree being committed (written as a commit object and pushed to a branch of its own, deleted after), and the commit is made only on green, with the same tree; red prints the failing tests and refuses. The client is asked before anything is pushed, and a push never prompts for credentials. Anything that is not a green or red run (no network, no signed-in client, no run, a run cancelled or past its bound) falls back to the local gate and says why, so CI never makes a gate impossible. The workflow runs only for a push to those branches, never for a pull request or the default branch, reads and writes nothing else, names no secret and pins its actions; a test holds every one of those bounds. Each gate on CI leaves its record in the gate log.
+**Reason:** A commit never lands without its own proof, wherever it ran; a gate on GitHub took a median of 144 s from the push against 218 s here with a free lock, ran the whole suite and cost nothing on a public repository, while the machine's lock was busy 14-17 hours a day (`odd/tasks/commit-gates-first.md`); and a bound written in a workflow a pull request could change must be held by a test, not by care.
 **Proof:** `node --test bin/lib/ci-gate.test.mjs`, `node --test bin/check-ci-gate.test.mjs`, `node --test scripts/github-workflows.test.mjs`
-**Discarded:** A second local line: the CPU is shared. A run on every pull request: each merge made every other run stale, and minutes were scarce while the repository was private. Windows runners: 22 billed minutes a run. What CI cannot prove (it is Linux) is caught by the merge queue's local run before the default branch moves.
+**Discarded:** CI only when the lock would wait (2026-10-16 to 10-17): a free lock kept a gate here, slower than CI. A second local line: the CPU is shared. A run on every pull request: each merge made every other run stale, and minutes were scarce while the repository was private. Windows runners for each gate: 22 billed minutes a run while the repository was private, and a gate would wait on a suite of 14 minutes. What CI cannot prove (it is Linux) is run once a day on Windows (the next section).
 **Today:** `bin/lib/ci-gate.mjs`, `bin/check.mjs`, `.github/workflows/gate.yml`, `scripts/github-workflows.test.mjs`
+
+### The daily Windows suite
+
+**Problem:** The gates run on Linux (CI) and in WSL2 (the merge queue's run), so no gate ran the Windows code paths; the README promised a Windows run after each landed batch, and none of 84 land suites ran on Windows (`odd/tasks/commit-gates-first.md`, S5). One after each batch would hold the gate lock 15 to 19 hours a day.
+**Requirement:** The whole suite runs once a day on GitHub's Windows machines, on a schedule and by hand only, never for a push or a pull request, so it holds up no gate and no land; its token reads, it names no secret and its actions are pinned, held by a test. A red run (failure, timed out or cancelled) not told before is told to the orchestrator once, with its failing test names and how many failed, unless every file it failed in is quarantined; a red run whose names cannot be read is told all the same, and so is a schedule with no run in 26 hours. The lead's heartbeat reads it every hour and ends on a red one.
+**Reason:** A regression that only Windows shows is found within a day instead of never, at no cost on a public repository and without the gate lock. He chose the cadence: "Una vez por día (Recomendada)".
+**Proof:** `node --test bin/lib/windows-daily.test.mjs`, `node --test bin/windows-daily.test.mjs`, `node --test bin/loop-bodies.test.mjs`, `node --test scripts/github-workflows.test.mjs`
+**Discarded:** A Windows run after each landed batch: 15 to 19 lock-hours a day. Telling only through the channel: the heartbeat runs in the lead's session, and the lead's channel watch passes over its own notices, so the heartbeat's end line wakes the lead. Silence on a red run whose files cannot be found: it would read as all of them quarantined.
+**Today:** `.github/workflows/windows-daily.yml`, `bin/lib/windows-daily.mjs`, `bin/windows-daily.mjs`, `bin/loop.mjs`, `js-harness windows-daily`
 
 ### The gate log
 
@@ -180,11 +189,11 @@ proofs and by those tasks.
 ### The stack doctor
 
 **Problem:** A gap was found only by accident: codegraph was registered in Claude Code but not in Codex (`odd/tasks/stack-doctor.md`).
-**Requirement:** The doctor reports each tool of the stack as installed, configured per host and project, and up to date, or unknown, with that tool's own fix command; it caches the latest versions, fails open offline and never installs or configures another tool. A session-start hook speaks only when the list of gaps changed, as a message to the person and never as text for the model, and always exits 0. A tool of the stack, or the Claude CLI on PATH, whose version moved since the versions last reviewed is a gap until its review is recorded (`docs/FAILURES.md`, cli-updated-itself).
+**Requirement:** The doctor reports each tool of the stack as installed, configured per host and project, and up to date, or unknown, with that tool's own fix command; it caches the latest versions, fails open offline and never installs or configures another tool. A session-start hook speaks only when the list of gaps changed, as a message to the person and never as text for the model, and always exits 0. A tool of the stack, or the Claude CLI on PATH, whose version moved since the versions last reviewed is a gap until its review is recorded (`docs/FAILURES.md`, cli-updated-itself). The installed copy's rules with no scope are compared, by their hash, with the default branch's, read fresh and never cached, so that a copy behind main is `outdated` with its fix and a list that cannot be read is `unknown`.
 **Reason:** A notice costs no model tokens when it comes only on start or resume, and only when something changed. A tool that updates itself was seen only when a measurement was about to run on it.
-**Proof:** `node --test bin/doctor.test.mjs`, `node --test bin/doctor-hook.test.mjs`, `node --test bin/lib/stack.test.mjs`, `node --test bin/lib/stack-update.test.mjs`
+**Proof:** `node --test bin/doctor.test.mjs`, `node --test bin/doctor-hook.test.mjs`, `node --test bin/lib/stack.test.mjs`, `node --test bin/lib/stack-update.test.mjs`, `node --test bin/lib/rules-installed.test.mjs`
 **Discarded:** Plain-text hook output: it enters the model's context. Recommending another tool's own upgrade command where that tool says not to.
-**Today:** `bin/doctor.mjs`, `bin/lib/stack.mjs`, `bin/lib/stack-update.mjs`, `bin/lib/cache.mjs`, `bin/lib/latest.mjs`, `js-harness doctor`, `claude-hook`, `codex-hook`
+**Today:** `bin/doctor.mjs`, `bin/lib/stack.mjs`, `bin/lib/stack-update.mjs`, `bin/lib/cache.mjs`, `bin/lib/latest.mjs`, `bin/lib/rules-installed.mjs`, `js-harness doctor`, `claude-hook`, `codex-hook`
 
 ### Progress
 
@@ -194,6 +203,15 @@ proofs and by those tasks.
 **Proof:** `node --test bin/progress.test.mjs`, `node --test bin/lib/progress.test.mjs`
 **Discarded:** A published page. Editing checkboxes from the command.
 **Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `js-harness progress`
+
+### The throughput review
+
+**Problem:** The 2026-10-17 measure of where a task's wall-clock goes took hand-written scripts in the lead's notes, and its gate figures could not be taken again a few days later: the gate log rotates in about 2.3 days, so a before/after comparison had nothing to read (`odd/tasks/throughput-review.md`).
+**Requirement:** A read-only command prints a fixed table of a window of UTC days in which every figure names its source, and a fact no record holds yet says which recorder it waits for, never a zero. A settled day's gates are kept in a dated snapshot under the home, which the table reads in place of the rotated log; append-only records are read live.
+**Reason:** A measure taken again the same way is what tells a change that helped from noise, and it cannot depend on someone keeping scripts.
+**Proof:** `node --test bin/throughput.test.mjs`, `node --test bin/lib/throughput.test.mjs`
+**Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
+**Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput`
 
 ### The task contract
 
@@ -207,11 +225,11 @@ proofs and by those tasks.
 ### The Codex review
 
 **Problem:** The Codex review of each approved slice depended on the agent remembering, and nothing noticed a skip (`odd/tasks/project-init.md`). On 2026-09-29 every shell command of a review failed after a Codex update, and in 6 of 41 reviews the model never read the diff yet answered (`odd/tasks/codex-exec-review.md`).
-**Requirement:** A command runs Codex's review of a range and records it only on evidence that the reviewer read the diff (a completed turn, and every changed line of the patch in the output of its successful commands), never on its wording; an explicit skip is recorded with its reason; the pre-push hook refuses a push whose code commits no record covers.
+**Requirement:** A command runs Codex's review of a range and records it only on evidence that the reviewer read the diff (a completed turn, and every changed line of the patch in the output of its successful commands), never on its wording; an explicit skip is recorded with its reason; the pre-push hook refuses a push whose code commits no record covers. A merge of the default branch, or of a stacked base whose own code commits each have a record (`odd/tasks/gate-first.md`, T7), is reviewed by what was written in it: at HEAD as the range, and below HEAD, after code commits that each have a record, in a turn of its own before the commits after it, where two turns cost less than one review (`odd/tasks/merge-below-head.md`).
 **Reason:** A second reviewer after gentle-ai, and a skip must be explicit, never silent.
 **Proof:** `node --test bin/codex-review.test.mjs`, `node --test bin/check-codex-reviews.test.mjs`, `node --test bin/pre-push-hook.test.mjs`, `node --test bin/lib/codex-reviews.test.mjs`
 **Discarded:** The Codex plugin's review: it passes no per-thread setting and returns only text. Reading gentle-ai's or the plugin's own state as the record: pruned, opaque and free to change.
-**Today:** `bin/codex-review.mjs`, `bin/lib/codex-reviews.mjs`, `bin/lib/codex-review-coverage.mjs`, `.githooks/pre-push`, `js-harness codex-review`
+**Today:** `bin/codex-review.mjs`, `bin/lib/codex-reviews.mjs`, `bin/lib/codex-review-coverage.mjs`, `bin/lib/codex-review-turns.mjs`, `.githooks/pre-push`, `js-harness codex-review`
 
 ### The merge queue
 
@@ -219,7 +237,7 @@ proofs and by those tasks.
 **Requirement:** The queue builds the default branch plus each ready pull request merged in number order, naming each one left out and why; it tests the candidate on this machine under the lock and on one CI system, and when both are green moves the default branch to it by fast-forward, leased on the branch it was built from; a red batch is bisected to the pull request that broke it; the pre-push hook refuses a push of the default branch from anywhere but the queue. No CI runs for a pull request.
 **Reason:** A second pusher makes the tested candidate a tree the default branch never was, and minutes are the scarce resource.
 **Proof:** `node --test bin/merge-queue.test.mjs`, `node --test scripts/circleci-config.test.mjs`, `node --test scripts/github-workflows.test.mjs`
-**Discarded:** A GitHub Actions run on every pull request, with its bounds held by a test (`odd/tasks/drop-github-gate.md`). Windows on GitHub: 22 billed minutes a run. A self-hosted runner on the same machine: the same eight threads and the same lock. Merging on GitHub's side: it bypasses the hook.
+**Discarded:** A GitHub Actions run on every pull request, with its bounds held by a test (`odd/tasks/drop-github-gate.md`). Windows on GitHub for each pull request: 22 billed minutes a run while the repository was private (it now runs once a day, "The daily Windows suite"). A self-hosted runner on the same machine: the same eight threads and the same lock. Merging on GitHub's side: it bypasses the hook.
 **Today:** `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `.circleci/config.yml`, `js-harness merge-queue`
 
 ### Evals that discriminate
@@ -269,8 +287,8 @@ proofs and by those tasks.
 
 ### Waiting and waking
 
-**Problem:** On 2026-10-14 nothing ran for seven hours while sessions waited; twice a session near compaction ended its turn waiting with nothing to wake it, because the host compacts only inside a turn (`odd/tasks/pause-no-idle.md`); after a restart the lead woke seven sessions by hand and each re-armed its waits from memory (`odd/tasks/boot-wake.md`).
-**Requirement:** A wait ends with one line when its one condition holds (a pull request merged, the default branch holding a commit or a text, a notice for a role), says what it waits for and when it ends, and gives up with exit 1 after a bound. After a boot, a command lists the sessions open in the hours before it with the command for each stored opening and the waits the boot killed, leaves each a note and the orchestrator the list to wake, once per boot; an opt-in runs it at each login through a recorded startup file that uninstall removes.
+**Problem:** On 2026-10-14 nothing ran for seven hours while sessions waited; twice a session near compaction ended its turn waiting with nothing to wake it, because the host compacts only inside a turn (`odd/tasks/pause-no-idle.md`); after a restart the lead woke seven sessions by hand and each re-armed its waits from memory (`odd/tasks/boot-wake.md`); on 2026-10-16 a session waiting on a pull request read five of the lead's notices hours late (`wait-blind-to-notices`, `docs/FAILURES.md`).
+**Requirement:** A wait ends with one line when its one condition holds (a pull request merged, the default branch holding a commit or a text, a notice for a role), says what it waits for and when it ends, and gives up with exit 1 after a bound. A work session's wait also ends, with exit 3, on a notice to that session's own number, and names the same wait to run again. After a boot, a command lists the sessions open in the hours before it with the command for each stored opening and the waits the boot killed, leaves each a note and the orchestrator the list to wake, once per boot; an opt-in runs it at each login through a recorded startup file that uninstall removes.
 **Reason:** A background task that ends is the only thing that wakes an idle session, and nothing can push a prompt into one; so the harness leaves notes and the orchestrator wakes sessions.
 **Proof:** `node --test bin/wait.test.mjs`, `node --test bin/wake.test.mjs`, `node --test bin/lib/wake.test.mjs`, `node --test bin/lib/startup-file.test.mjs`
 **Discarded:** Ending a turn idle while waiting for a message, an event or the compaction. Pushing a prompt into an idle session from a command: no path exists. Recording each wait as it is armed: waits are read from the transcripts.
@@ -306,7 +324,7 @@ proofs and by those tasks.
 ### The guard
 
 **Problem:** Sub-agents ran on models the owner's rule of 2026-10-10 did not allow; hours were wrong in 33 of 153 messages; backticks inside double quotes ate a command's name; two whole test runs beside a gate both missed their bounds; memory index lines reached 844 characters; 93 of 267 stated context shares were wrong (`odd/tasks/honesty-audit.md`, `odd/tasks/test-run-warning.md`).
-**Requirement:** A hook before each tool call refuses, with the host's deny and a reason: a sub-agent on a model the project's rules do not give (only where those rules are in force), a message to another session whose stated hour is more than a minute off the clock, a document hour ahead of the clock, a shell command with backticks inside double quotes, a test run of several files outside a gate's turn while another gate holds the lock, a line over the limit in a memory index, and the tools that open sessions out of sight where the project says so. A stop hook turns the stop back when a reply states its own context share more than 2 points from the recorded one, and never loops. Both write nothing and always exit 0, so an older copy can never block.
+**Requirement:** A hook before each tool call refuses, with the host's deny and a reason: a sub-agent on a model the project's rules do not give (only where those rules are in force), a message to another session whose stated hour is more than a minute off the clock (after its label, or first, before it), a document hour ahead of the clock, a shell command with backticks inside double quotes, a test run of several files outside a gate's turn while another gate holds the lock, a line over the limit in a memory index, and the tools that open sessions out of sight where the project says so. A stop hook turns the stop back when a reply states its own context share more than 2 points from the recorded one, and never loops. Both write nothing and always exit 0, so an older copy can never block.
 **Reason:** Each rule had a measured failure and the owner's order to refuse it; a refusal at the call is the one reader every call meets.
 **Proof:** `node --test bin/guard.test.mjs`, `node --test bin/lib/guard.test.mjs`, `node --test bin/lib/test-run-warning.test.mjs`
 **Discarded:** Reading effort: a hook before a tool call cannot. Taking back a reply with a wrong share: impossible; turning the stop back is the nearest. A warning instead of a refusal for test runs. The first backtick detector: 20 hits for 1 real.
@@ -333,7 +351,7 @@ proofs and by those tasks.
 ### The installed skills
 
 **Problem:** No incident for the harness's own skill: it is the first component of install's design (`odd/tasks/install-update.md`). For the orchestrator's: on 2026-10-06 three failures in one afternoon came from no session seeing the others, and a session that led and built at once compacted twice in a day (`odd/tasks/session-board.md`). For the protocols: what to do when asking the owner for a decision, closing a reply, running something that costs, changing a rule, reporting a mistake and handing off lived only in memory notes and the lead's relief file, and two failures of the register owed their control to a place that did not exist (`odd/tasks/rule-hierarchy.md`, T7).
-**Requirement:** Install writes, for each host, a skill that teaches the commands and the memory hygiene protocol, and a skill that teaches how several sessions share one project: the lead and the work sessions, where each thing lives, how questions reach the owner, the lead's commands and charter, a work session's notices and close, and a third that holds the six protocols, each section opening with the incident it came for and its date and naming the rules it relies on by id, never restating them. They load on demand, and each is recorded and removed exactly.
+**Requirement:** Install writes, for each host, a skill that teaches the commands and the memory hygiene protocol, and a skill that teaches how several sessions share one project: the lead and the work sessions, where each thing lives, how questions reach the owner, the lead's commands and charter, a work session's notices and close, and a third that holds the seven protocols, each section opening with the incident it came for and its date and naming the rules it relies on by id, never restating them. They load on demand, and each is recorded and removed exactly.
 **Reason:** A protocol that applies only in some situations loads on demand, while a rule for every reply needs a line in `AGENTS.md` and a check; the lead does not implement because reading code fills a context that has to last.
 **Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/install.test.mjs`, `node --test bin/lib/protocols-skill.test.mjs`
 **Discarded:** A watchman skill: replaced by a lead with a charter the owner decided. Six protocol skills: every installed skill's description is read on every turn. Teaching in a skill what a check now enforces. Asking the owner to compact a session.
@@ -342,11 +360,20 @@ proofs and by those tasks.
 ### The record of notices between sessions
 
 **Problem:** On 2026-10-10 a finished feature sat undelivered for six hours: a session opened from the phone runs in another permission mode, and the app held its messages (the orchestrator's relief file, lines 58-61 and 143, as `odd/tasks/session-channel.md` cites them).
-**Requirement:** Every notice between sessions is written by a command to one record per project, outside any repository, with the time read from the clock, the sender, the role it is for, its kind and one line of text. A usage error writes nothing. The orchestrator learns of a notice by watching the record, never by depending on a message arriving.
+**Requirement:** Every notice between sessions is written by a command to one record per project, outside any repository, with the time read from the clock, the sender, the role it is for, its kind and one line of text. A notice that a pull request is ready carries its number, so the land reads whose pull request it is from the record and not from a branch. A text that stamps its own sending with an hour more than a minute off the clock is refused and nothing is written; an answer, which quotes the owner, is not held to it. A usage error writes nothing. The orchestrator learns of a notice by watching the record, never by depending on a message arriving.
 **Reason:** Messages between sessions can be held, can expire, or do not exist at all (Codex has none); a file every host can append to is the one channel all of them share.
 **Proof:** `node --test bin/lib/channel.test.mjs`, `node --test bin/notify.test.mjs`
 **Discarded:** The repository's git folder as the record's home: there is none outside a repository. Messages as the channel.
 **Today:** `bin/lib/channel.mjs`, `bin/notify.mjs`, `js-harness notify`
+
+### A finished session leaves a summary
+
+**Problem:** On 2026-10-17 the owner asked that every session hand the lead a summary when it finishes, so the work can be reverse-engineered later, and that the lead always archive finished sessions (lead transcript e152c9d8, line 21112); the archiving had lived only in a memory note, and was not kept.
+**Requirement:** A command prints the template of a session's summary, headed by its title and naming its file, `docs/sessions/<date>-<title-slug>.md`, where the slug is the one an opening's file name takes from the title. Its sections are one list that every check of a summary reads: the goal, the user's words that started the work, what was delivered, the decisions and whose, the failures and lessons, what is left and who holds it, and the cost. A session gives its work back with a closed notice that names that file, and the record keeps it; the command refuses a closed notice without one, and writes nothing while a section is missing or empty or while no branch on origin among its default branch, main and the session's own branch holds the file as it is. The board lists a session closed with its summary and not yet archived as `to archive`, naming the file, and the orchestrator skill tells the lead to read it and archive the session without asking, and tells a work session to write it before it closes.
+**Reason:** A session's record is otherwise spread over its transcript, feature documents and notices, and a transcript is lost on a new session or a compaction; one committed file per session is what survives for the lead and for later study.
+**Proof:** `node --test bin/summary.test.mjs`, `node --test bin/notify.test.mjs`, `node --test bin/lib/sessions.test.mjs`, `node --test bin/lib/manifest.test.mjs`
+**Discarded:** A summary in the closed notice's text: a notice is one line, outside any repository. Requiring the summary of every closed notice the library builds: the record already holds closed notices without one.
+**Today:** `bin/summary.mjs`, `bin/lib/summary.mjs`, `js-harness summary`, `bin/notify.mjs`, `bin/lib/sessions.mjs`, `bin/lib/manifest.mjs`
 
 ### A role is the address, and there is one orchestrator
 
@@ -396,11 +423,11 @@ proofs and by those tasks.
 ### A compaction resumes from files
 
 **Problem:** A compaction arrived with nothing saved (the owner's words of 2026-10-11, `odd/tasks/session-channel.md`, Progress 22:03).
-**Requirement:** After a compaction, a session-start hook prints, read from files: the title, the stored opening, the feature document and whether it was written after the pause, the worktree's state, the work in flight, what the owner wrote, the messages of other sessions and the open questions; it tells the session to notify the orchestrator. It speaks only in a project with a `harness.json`, writes nothing and always exits 0. Installed for both hosts.
+**Requirement:** After a compaction, a session-start hook prints, read from files: the title, the stored opening, the feature document and whether it was written after the pause, and for one document the lines to read in it (its resume sections, the open task its first resume section names first, that task's specs and its last five log entries, each range with its size) and the mode of that task, the worktree's state, the work in flight, what the owner wrote, the messages of other sessions and the open questions; it tells the session to notify the orchestrator. It speaks only in a project with a `harness.json`, writes nothing and always exits 0. Installed for both hosts.
 **Reason:** The compaction's summary is not the record.
-**Proof:** `node --test bin/resume.test.mjs`
-**Discarded:** Trusting the summary.
-**Today:** `bin/resume.mjs`, `js-harness resume`, `claude-resume-hook`, `codex-resume-hook`
+**Proof:** `node --test bin/resume.test.mjs`, `node --test bin/lib/feature-parts.test.mjs`
+**Discarded:** Trusting the summary. Naming the first unchecked task: in the two largest open documents it was stale (`odd/tasks/resume-open-task.md`).
+**Today:** `bin/resume.mjs`, `bin/lib/feature-parts.mjs`, `js-harness resume`, `claude-resume-hook`, `codex-resume-hook`
 
 ### A project declares which functions it runs
 
@@ -486,20 +513,20 @@ proofs and by those tasks.
 ### A host loads what was installed
 
 **Problem:** The practice journey installed the harness into a stand-in home and a small project, committed and uninstalled, but started no host session, so nothing proved that Claude Code loads the skills, `AGENTS.md` and the hook entries it was given (defect f of 2026-10-13). A broken hook entry or an unread skill would pass every other check.
-**Requirement:** Before a release, one run of the journey starts a real host session in the practice project, under a home of its own, and shows from the host's own stream that it lists both installed skills, answers a word only `AGENTS.md` holds with no file tools, runs every session-start and after-tool hook entry with the practice copy of the command, and leaves no trace in the real home. A host that cannot answer (a cap, a login, a timeout) is told apart from a fault of the harness, and the spend of every call is recorded.
-**Reason:** Every other check reads files; only a host session proves the host reads them. It spends a model, so it is small (three calls on the cheapest model) and can be turned off.
+**Requirement:** Before a release, one run of the journey starts a real host session in the practice project, under a home of its own, and shows from the host's own stream that it lists both installed skills, answers a word only `AGENTS.md` holds with no file tools, runs every session-start and after-tool hook entry with the practice copy of the command, runs the rules hook at a turn, a compaction and a sub-agent's start, and leaves no trace in the real home. A host that cannot answer (a cap, a login, a timeout) is told apart from a fault of the harness, and the spend of every call is recorded.
+**Reason:** Every other check reads files; only a host session proves the host reads them. It spends a model, so it is small (four calls on the cheapest model) and can be turned off.
 **Proof:** `node --test scripts/practice-host.test.mjs`
 **Discarded:** Telling the hooks apart by their command: the stream carries none. Proving the sandbox by a new projects folder: an earlier session leaves one. The model alias: it may resolve to an older model, so the model is named. Not proven: that Codex loads its hooks and skills.
 **Today:** `scripts/practice.mjs`, `scripts/practice-lib.mjs`
 
 ### The reply check
 
-**Problem:** `AGENTS.md` asks every reply to end with one of four states (working, decision, cut, finished), because the owner often answers from his phone by tapping the suggested prompt and reads only the last lines; the rule acted only through each session's memory, and replies closed with no state, with two, with a decision asked while work ran, or with a block to send outside a cut (`odd/tasks/rule-hierarchy.md`, C1).
-**Requirement:** Where the nearest `harness.json` asks for it, a stop hook reads the reply that ends a turn and turns it back, with the shape to follow, when it does not close with exactly one state in the labels the project names, or when that state lacks what it needs: working says what wakes the session, a decision is never asked while background work runs, a cut carries exactly one block of only what the owner sends under its three labels, finished names the session to return to. Anywhere else it answers that the session may stop; a `harness.json` that is not JSON is said on standard error, never taken for a project that did not ask. It writes nothing and always exits 0, on both hosts.
+**Problem:** `AGENTS.md` asks every reply to end with one of four states (working, decision, cut, finished), because the owner often answers from his phone by tapping the suggested prompt and reads only the last lines; the rule acted only through each session's memory, and replies closed with no state, with two, with a decision asked while work ran, or with a block to send outside a cut (`odd/tasks/rule-hierarchy.md`, C1). Work sessions also ended their turns holding handed work with nothing armed to wake them: 31 turn ends followed by more than 30 minutes of silence in two days (`odd/tasks/wake-and-flag.md`, S2).
+**Requirement:** Where the nearest `harness.json` asks for it, a stop hook reads the reply that ends a turn and turns it back, with the shape to follow, when it does not close with exactly one state in the labels the project names, or when that state lacks what it needs: working says what wakes the session, a decision is never asked while background work runs, a cut carries exactly one block of only what the owner sends under its three labels, finished names the session to return to. Anywhere else it answers that the session may stop; a `harness.json` that is not JSON is said on standard error, never taken for a project that did not ask. It writes nothing and always exits 0, on both hosts. On Claude Code it also turns back, once a handing, a work session that ends its turn holding work the orchestrator handed it (a notice to its number or its opening, not given back by its own closed or relieved) with nothing running in its background and no cron of its own, naming the wait to arm; a later background task that has ended allows it again.
 **Reason:** A rule that only memory holds is the failure the rule hierarchy exists to end; a stop hook is the one reader every reply meets. It acts only where a project asks, so installing it changes nothing elsewhere.
 **Proof:** `node --test bin/lib/reply.test.mjs`, `node --test bin/reply.test.mjs`
 **Discarded:** A check of the cut's resume prompt and `/compact` shapes: the owner never compacts by hand any more. Naming the owner's open items in the reply: the board already computes them.
-**Today:** `bin/lib/reply.mjs`, `bin/reply.mjs`, `js-harness reply`, `claude-reply-hook`, `codex-reply-hook`
+**Today:** `bin/lib/reply.mjs`, `bin/lib/stop-wake.mjs`, `bin/reply.mjs`, `js-harness reply`, `claude-reply-hook`, `codex-reply-hook`
 
 ### The specification stays alive
 

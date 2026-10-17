@@ -74,6 +74,16 @@ test('--version prints the version of this copy, alone on one line, and exits 0;
   assert.match(run(['--help']).stdout, /^js-harness --version /m);
 });
 
+test('the merge-queue help says each code commit needs its gentle-ai line on its branch, and the coverage is printed commit by commit (T16e, slice b)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*Each code commit made after the cut-over is named, by its hash or a range a\.\.b that holds it, on a gentle-ai line its pull request adds to a feature document \(odd\/tasks\), and the queue prints each code commit's Codex record and that line\./);
+});
+
+test('the merge-queue help says a landed rule/ branch confirms its proposal in the relief file, and the check help says a push reports the row rules (T16e, slice c)', () => {
+  const help = run(['--help']).stdout;
+  assert.match(help, /merge-queue .*A landed rule\/ branch appends to the relief file one line that confirms the newest proposal of each rule it changed that its landed head holds./);
+  assert.match(help, /check .*js-harness check --push adds the row rules of the lines the push brings past the remote's default branch, as INFO: the commit refuses, the push reports, the merge refuses\./);
+});
+
 test('the merge-queue help says each pull request merged into the candidate passes main\'s rule rows first (odd/tasks/rule-hierarchy.md, T16e)', () => {
   assert.match(run(['--help']).stdout, /merge-queue .*passes main's rule rows first \(check --door\), and one that fails leaves the batch/);
 });
@@ -263,14 +273,19 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
-      // is `stack-update`, whatever tools it reads.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'unseen', 'host-update', 'stack-update', 'gentle-ai-sync'],
+      // is `stack-update`, whatever tools it reads. `js-harness`, the harness's own rules against main's, comes right
+      // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'host-update', 'stack-update', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.
     const host = rows.find((r) => r.id === 'host-update');
     assert.deepEqual([host.version, host.installed, host.claude, host.upToDate], [null, 'n/a', 'n/a', 'n/a']);
     assert.equal('host' in readCache(home), false);
+    // Offline, outside the harness's checkout, the rules row reads no main list.
+    assert.equal(rows.find((r) => r.id === 'js-harness').upToDate, 'n/a');
+    // A folder outside git has no origin/main to hold a branch: the worktrees row cannot tell.
+    assert.equal(rows.find((r) => r.id === 'worktrees').project, 'unknown');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(cwd, { recursive: true, force: true });
@@ -627,4 +642,8 @@ test('resume --pause loads the loader of resume and runs it with its arguments, 
   assert.equal(code, 0);
   assert.deepEqual(loaded, ['resume']);
   assert.deepEqual(ran, [['resume', ['--pause']]]);
+});
+
+test('the merge-queue help says a land asks gate first for its gate and exits 5 when its gate ran nothing (odd/tasks/land-unattended.md)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*A land asks js-harness gate first to put its gate first in the line, and a gate that ran nothing exits 5 with main not pushed and nothing bisected\./);
 });

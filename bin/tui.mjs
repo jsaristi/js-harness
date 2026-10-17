@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // Zero-dependency TUI: rendering and key handling are pure (state + key -> state), so they are
 // unit-tested without a terminal. Only `runTui`/`tuiMain` below touch real stdin/stdout.
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
+import { hygieneDir } from './lib/memory-hygiene.mjs';
 import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
@@ -40,7 +43,26 @@ const CONFIRM_PROMPTS = {
   uninstall: 'Uninstall js-harness from this home? (y/N)',
   'project-uninstall': 'Undo js-harness in this project? (y/N)',
   'project-remote-stop': 'Stop the remote server of this project? The sessions opened through it end. (y/N)',
+  // Asked after the yes to Uninstall, only while the home holds memory snapshots (D7.8 of odd/tasks/memory-hygiene.md).
+  'uninstall-full': 'Remove the memory snapshots too, the only copy of what a pass changed? (y/N)',
 };
+
+/** Whether the home holds a snapshot of a memory pass, the copy only `uninstall --full` removes. False when the
+ * folder cannot be read: the menu then asks one question, and the uninstall still keeps the snapshots. */
+export function hasMemorySnapshots(home) {
+  try {
+    const dir = hygieneDir(home);
+    return fs.readdirSync(dir).some((slug) => {
+      try {
+        return fs.readdirSync(path.join(dir, slug, 'snapshots')).length > 0;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
 
 // --- T5: the menu by location. Data built by a pure function, so it is tested without a terminal ---
 
@@ -155,7 +177,7 @@ export async function computeStackState({ home, cwd, spawn, platform, fetch: fet
  * result of `computeStackState` (an array of compact rows, or `'unknown'`); omitted entirely, the
  * stack block simply does not render (see `render` below), so older callers keep working. `location` is
  * a `projectLocation` result; omitted, the TUI is outside any repository and shows the machine menu. */
-export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' } }) {
+export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, memorySnapshots = false }) {
   const menu = buildMenu(location);
   return {
     mode: 'menu',
@@ -165,6 +187,7 @@ export function initialState({ installedVersion, updateAvailable, stack, locatio
     stack,
     location,
     menu,
+    memorySnapshots,
   };
 }
 
@@ -190,6 +213,13 @@ export function normalizeKey(chunk) {
 export function handleKey(state, key) {
   if (state.mode === 'confirm') {
     const next = { ...state, mode: 'menu', pending: undefined };
+    if (state.pending === 'uninstall' && key === 'y' && state.memorySnapshots) return { state: { ...state, pending: 'uninstall-full' }, effect: null };
+    // The second question is asked after a yes: its no (or Enter, the default) still uninstalls, keeping them.
+    if (state.pending === 'uninstall-full') {
+      if (key === 'y') return { state: next, effect: { type: 'run', command: 'uninstall-full' } };
+      if (key === 'n' || key === 'enter') return { state: next, effect: { type: 'run', command: 'uninstall' } };
+      return { state: next, effect: null };
+    }
     if (key === 'y') return { state: next, effect: { type: 'run', command: state.pending } };
     return { state: next, effect: null };
   }
@@ -252,19 +282,22 @@ function screenText(state) {
  * `projectLocation` the menu opens on; `readLocation` (sync or async) reads it again after every command,
  * since a command can change it (`init` initializes the project, `uninstall` undoes it). `readStack`
  * (sync or async) does the same for the stack block above the menu: `init` creating `.codegraph/` changes
- * codegraph's project state, and `uninstall` the reverse. */
+ * codegraph's project state, and `uninstall` the reverse. `readSnapshots` reads again whether the home holds memory
+ * snapshots (`memorySnapshots` at the start), which decides whether Uninstall asks its second question. */
 export function runTui({
   installedVersion,
   updateAvailable,
   stack,
   location,
+  memorySnapshots = false,
   readLocation,
   readStack,
+  readSnapshots,
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
 }) {
-  let state = initialState({ installedVersion, updateAvailable, stack, location });
+  let state = initialState({ installedVersion, updateAvailable, stack, location, memorySnapshots });
   // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
   // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
   let drawn = 0;
@@ -306,6 +339,13 @@ export function runTui({
             state = { ...state, stack: await readStack() };
           } catch (err) {
             console.error(`refreshing the stack failed: ${oneLine(err)}`);
+          }
+        }
+        if (readSnapshots) {
+          try {
+            state = { ...state, memorySnapshots: await readSnapshots() };
+          } catch (err) {
+            console.error(`reading the memory snapshots failed: ${oneLine(err)}`);
           }
         }
         stdin.resume();
@@ -368,6 +408,7 @@ export function buildCommands({
     upgrade: () => upgradeMain(['--home', home, ...fromSource], env, spawn),
     sync: () => syncMain(['--global', '--home', home]),
     uninstall: () => uninstallMain(['--global', '--home', home]),
+    'uninstall-full': () => uninstallMain(['--global', '--full', '--home', home]),
   };
 }
 
@@ -410,6 +451,8 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     // The same offline probes as at start, never the network: `computeStackState` always calls
     // `buildReport` with `offline: true`, which reads the cache instead of calling `fetch`.
     readStack: () => computeStackState({ home, cwd, spawn, fetch: fetchImpl, now }),
+    memorySnapshots: hasMemorySnapshots(home),
+    readSnapshots: () => hasMemorySnapshots(home),
     commands,
     ...io,
   });

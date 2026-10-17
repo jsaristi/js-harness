@@ -19,6 +19,7 @@ import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { mergeTurn, turnsCheaper } from './lib/codex-review-turns.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
@@ -31,7 +32,7 @@ import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-
 import { watchBusiest } from './lib/machine-busiest.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
-import { addedLines, resolveCitations } from './lib/citations.mjs';
+import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { checkLedger, failedTestFiles, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
@@ -101,10 +102,12 @@ export function checkPayload(cwd, home) {
 }
 
 // A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
-// gate forever, so the wait is bounded. The bound must stay above a whole run of this repository's own
-// suite on a loaded machine; the times measured are in the gate log (`js-harness gate log`). The figure
-// is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
+// gate forever, so the wait is bounded twice. A sensor that hangs writes nothing, so it is stopped once it
+// has been silent for `sensor-silence`; a slow suite keeps writing and finishes, where a bound on length
+// refused the whole suite on Windows (first-version L18, L28). The ceiling, `sensor-timeout`, stays for a
+// sensor that hangs while it writes. Both are declared rules (bin/lib/rules-data.mjs).
 export const SENSOR_TIMEOUT_MS = ruleValue('sensor-timeout', 'minutes') * 60 * 1000;
+export const SENSOR_SILENCE_MS = ruleValue('sensor-silence', 'minutes') * 60 * 1000;
 const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
 // The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists
@@ -130,6 +133,10 @@ const GIT_LOCAL_ENV = [
 // Those of them that say which repository a git command acts on and which index it reads. A pre-commit
 // hook is always given `GIT_INDEX_FILE`, and in a linked worktree `GIT_DIR`; see `stagedDocuments`.
 const GIT_BINDING_ENV = ['GIT_DIR', 'GIT_INDEX_FILE', 'GIT_WORK_TREE'];
+
+// What `.githooks/pre-merge-commit` exports to say that the commit is a merge's: git runs that hook before it
+// writes MERGE_HEAD (`checkCommitSize`). It is this gate's word alone, and no sensor inherits it (`checkSensor`).
+const MERGE_HOOK_ENV = 'JS_HARNESS_HOOK';
 
 const NPM_PLACEHOLDER_TEST ='echo "Error: no test specified" && exit 1';
 
@@ -287,6 +294,27 @@ const doorSide = (base) => ({
   text: (git, file) => git(['show', `HEAD:${file}`]),
   mergeFilter: false,
 });
+
+/** The two sides of a push's row: the lines `head` brings past `base`, the remote's default branch, and a file's text
+ * as `head` holds it. */
+const pushSide = (base, head) => ({
+  strict: false,
+  revs: () => [`${base}...${head}`],
+  text: (git, file) => git(['show', `${head}:${file}`]),
+  mergeFilter: false,
+});
+
+/** The row `rules` of `check --push` (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 8): the lines `head`
+ * brings past the default branch of `remote`, read as the door reads them, said as INFO whatever a rule's row says:
+ * the commit refuses, the push reports, the merge refuses. No row when the remote has no default branch to read. */
+function checkPushRules(cwd, { rules = RULES, spawn = spawnSync, head = 'HEAD', remote = 'origin' } = {}) {
+  const branch = defaultBranch(spawn, cwd, remote);
+  if (branch === null) return [];
+  // The harness's own list judges the harness's own repository alone, as `checkOwnRules` has it at a commit.
+  if (!gitOut(spawn, cwd, ['ls-tree', head, '--', RULES_DATA_FILE])?.trim()) return [];
+  return checkListRow(cwd, rules, spawn, pushSide(branch.ref, head))
+    .map((row) => (row.pass ? row : { ...row, pass: true, info: true, detail: `${row.detail}; a push reports it, the merge door refuses it` }));
+}
 
 /** The list `bin/lib/rules-data.mjs` holds at HEAD, read as text and checked as the list the rules accept: `{ list }`,
  * `list` being `null` when the file is absent, or `{ row }` with the failure of the row `rules` that says why it is
@@ -503,19 +531,50 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
  * documents (`odd/tasks/`), each code span that cites a `path:line` or a commit resolved against the folder and the
  * repository (`bin/lib/citations.mjs`), with one line for each that does not. It is INFO and stops nothing: documents
  * cite other branches and removed files on purpose, so it becomes a failure only once its false alarms have been
- * none over twenty commits. No row when no feature document is staged, or git does not answer. */
+ * none over twenty commits. It also reads each task the change checks off (T6, docs/FAILURES.md,
+ * record-states-wrong-fact: tasks were checked off while their files were in no commit), which names a commit HEAD
+ * reaches or rides with the work it checks off (`resolveTicks`). No row when no feature document is staged, or git
+ * does not answer. */
 export function checkCitations(cwd, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   const diff = git?.(['diff', '--cached', '-U0', '--no-renames', '--no-relative', '--no-color', '--', 'odd/tasks/']);
   if (!diff) return [];
   // The cited file as this commit will hold it, from the index: the working tree may differ from it.
   // A file that ends in a newline has no line after it.
-  const lineCount = (file) => git(['show', `:${file}`])?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
+  const staged = (file) => git(['show', `:${file}`]);
+  const lineCount = (file) => staged(file)?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
   const commitExists = (id) => git(['cat-file', '-e', `${id}^{commit}`]) !== null;
-  const { checked, unresolved } = resolveCitations(addedLines(diff), { lineCount, commitExists });
+  const added = addedLines(diff);
+  const { checked, unresolved } = resolveCitations(added, { lineCount, commitExists });
   const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;
-  const row = { name: 'citations', pass: true, info: true, detail: `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}` };
-  return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
+  let detail = `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}`;
+  const lines = unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`);
+  // A file HEAD does not hold had no task checked off before.
+  const ticks = checkedOff(added, (file) => checkedTasks(git(['show', `HEAD:${file}`]) ?? ''));
+  if (ticks.length > 0) {
+    const head = git(['rev-parse', '-q', '--verify', 'HEAD^{commit}'])?.trim();
+    // `merge-base --is-ancestor` answers no with exit 1, an unrelated history included (Codex, 2026-10-17); any
+    // other exit, or no git, is no claim. `git` has already answered here, so the repository is the one guarded.
+    const reaches = (id) => {
+      const full = git(['rev-parse', '-q', '--verify', `${id}^{commit}`])?.trim();
+      if (!full || !head) return null;
+      try {
+        const asked = spawn('git', ['merge-base', '--is-ancestor', full, head], { cwd, encoding: 'utf8' });
+        if (!asked || asked.error) return null;
+        return asked.status === 0 ? true : asked.status === 1 ? false : null;
+      } catch {
+        return null;
+      }
+    };
+    const names = git(['diff', '--cached', '--name-only', '-z', '--no-relative']) ?? '';
+    const rides = names.split('\0').some((name) => name !== '' && !name.startsWith('odd/tasks/'));
+    const text = (file, line) => taskText(staged(file) ?? '', line);
+    const off = resolveTicks(ticks, { text, commitExists, reaches, rides });
+    detail += `; ${ticks.length} task${ticks.length === 1 ? '' : 's'} checked off, ${off.length === 0 ? 'each in a commit HEAD reaches or in this one' : `${off.length} of them in no commit HEAD reaches`}`;
+    lines.push(...off.map((u) => `${u.file}:${u.line} ${u.id}${u.citation === null ? '' : ` \`${u.citation}\``}: ${u.why}`));
+  }
+  const row = { name: 'citations', pass: true, info: true, detail };
+  return [lines.length === 0 ? row : { ...row, lines }];
 }
 
 /** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
@@ -524,8 +583,10 @@ export function checkCitations(cwd, spawn = spawnSync) {
  * reviewer refused had already cost its gate, and remaking it cost two more. The rule is of this repository only,
  * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
  * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
- * own branch), or when git cannot say. */
-export function checkCommitSize(cwd, spawn = spawnSync) {
+ * own branch), or when git cannot say. A merge git commits by itself runs `pre-merge-commit` before MERGE_HEAD is
+ * written, so that hook says it in `MERGE_HOOK_ENV`. */
+export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
+  if (env[MERGE_HOOK_ENV] === 'pre-merge-commit') return [];
   const git = hookGit(cwd, spawn);
   if (!git || git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) return [];
   const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
@@ -866,14 +927,18 @@ const SENSOR_OUTPUT_LIMIT = 64 * 1024 * 1024;
  * With `inherit` the command is given this process's own input and output instead of pipes, so what it
  * prints reaches the caller as it prints it and `stdout` and `stderr` come back empty: that is for
  * `js-harness gate`, which runs a command for whoever started it and reports nothing itself. A `timeout`
- * of 0 is no time bound. */
-export function runSensor(command, { cwd, env, timeout, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors }) {
+ * of 0 is no time bound.
+ *
+ * `silence` (ms) bounds the stretch with no output instead: each chunk the command writes restarts it, and
+ * past it the tree is killed as at `timeout`, the error then saying `silent: true`. It needs the pipes, so
+ * with `inherit` it does nothing; 0 or none is no such bound. */
+export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors, spawn: start = spawnChild }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
     const startedAt = Date.now(); // before the spawn: the shell cannot have been created earlier
     try {
-      child = spawnChild(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+      child = start(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       resolve({ status: null, signal: null, ...out, error });
       return;
@@ -897,33 +962,69 @@ export function runSensor(command, { cwd, env, timeout, inherit = false, killTre
     };
     for (const name of signals) process.once(name, forward);
     let timedOut = false;
+    let silent = false;
     let exit = { status: null, signal: null };
     let done = false;
     let timer;
+    let quiet;
     let grace;
     const finish = (extra) => {
       if (done) return;
       done = true;
       for (const name of signals) process.removeListener(name, forward);
       clearTimeout(timer);
+      clearTimeout(quiet);
       clearTimeout(grace);
       child.stdout?.destroy();
       child.stderr?.destroy();
-      const error = extra ?? (timedOut ? Object.assign(new Error(`timed out after ${timeout} ms`), { code: 'ETIMEDOUT' }) : undefined);
+      const timedOutError = () => (silent
+        ? Object.assign(new Error(`wrote nothing for ${silence} ms`), { code: 'ETIMEDOUT', silent: true })
+        : Object.assign(new Error(`timed out after ${timeout} ms`), { code: 'ETIMEDOUT' }));
+      const error = extra ?? (timedOut ? timedOutError() : undefined);
       resolve({ ...exit, ...out, ...(error && { error }), ...(sweepError && { sweepError: sweepError.message }) });
     };
+    // Kills the tree for a time that ran out, the silence's or the whole run's, whichever came first. The decision
+    // waits one turn of the loop: an exit the system already holds is delivered after the timers, so a command that
+    // ended as its time ran out is reported by its exit, not as a timeout (first-version T6h, JH 25's verifier).
+    let chunks = 0;
+    const outOfTime = (bySilence) => {
+      if (timedOut || exitedAt !== undefined) return;
+      const seen = chunks;
+      setImmediate(() => {
+        if (done || timedOut || exitedAt !== undefined || (bySilence && chunks !== seen)) return;
+        kill(bySilence);
+      });
+    };
+    const kill = (bySilence) => {
+      timedOut = true;
+      silent = bySilence;
+      clearTimeout(timer);
+      clearTimeout(quiet);
+      stop(tree);
+      // The shell may already be gone with a survivor holding the pipes; do not wait on them for long.
+      grace = setTimeout(() => finish(), PIPE_GRACE_MS);
+    };
+    // The silence starts with the command and again at each chunk it writes; never with `inherit`.
+    const listen = silence > 0 && !inherit ? () => {
+      clearTimeout(quiet);
+      quiet = setTimeout(() => outOfTime(true), silence);
+    } : () => {};
     // No pipe to read when the command writes to this process's own output.
     for (const stream of inherit ? [] : ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
       child[stream].on('data', (chunk) => {
+        chunks += 1;
         if (out[stream].length < SENSOR_OUTPUT_LIMIT) out[stream] += chunk;
+        if (!timedOut && exitedAt === undefined) listen();
       });
     }
+    listen();
     child.on('error', (error) => finish(error));
     child.on('exit', (status, signal) => {
       exit = { status, signal };
       exitedAt = Date.now();
       clearTimeout(timer);
+      clearTimeout(quiet);
       clearTimeout(grace);
       // Pipes still open this long after the shell exited: a descendant holds them. Kill it, or a test
       // server the script started would run on after every commit.
@@ -933,14 +1034,7 @@ export function runSensor(command, { cwd, env, timeout, inherit = false, killTre
       }, PIPE_GRACE_MS);
     });
     child.on('close', () => finish());
-    if (timeout > 0) {
-      timer = setTimeout(() => {
-        timedOut = true;
-        stop(tree);
-        // The shell may already be gone with a survivor holding the pipes; do not wait on them for long.
-        grace = setTimeout(() => finish(), PIPE_GRACE_MS);
-      }, timeout);
-    }
+    if (timeout > 0) timer = setTimeout(() => outOfTime(false), timeout);
   });
 }
 
@@ -998,7 +1092,7 @@ export function failingTests(output) {
   return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
 }
 
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion, concurrency = null, ci = onCi(process.env) } = {}) {
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, sensorSilence = SENSOR_SILENCE_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion, concurrency = null, ci = onCi(process.env) } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -1025,8 +1119,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // in a temp directory acts on the repository being committed to, and once left it bare.
   // The mark of a held lock goes whenever it is not given above: the one this process carries is its
   // parent's word, and a gate that runs its sensors without the lock must not pass it on.
-  // The variable of the tests' concurrency is check's, read above: a test of check in the suite must not see it.
-  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
+  // The variable of the tests' concurrency is check's, read above: a test of check in the suite must not see it, nor
+  // the merge hook's mark, with which the suite's tests of the commit-size row would read every commit as a merge's.
+  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, MERGE_HOOK_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
   // The tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): the whole suite runs under the tracer, and
@@ -1061,12 +1156,13 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
     if (plan?.none) {
       result = { status: 0, signal: null, stdout: '', stderr: '' };
     } else if (route?.command) {
-      result = await spawn(route.command, { cwd, env, timeout: sensorTimeout });
+      result = await spawn(route.command, { cwd, env, timeout: sensorTimeout, silence: sensorSilence });
       const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
       const synced = syncedMs(output);
       if (synced !== null) ranIn = { distro: wsl.distro, synced };
       // A bound that ran out before the mark is a mirror never reached, like any other: the suite never ran.
-      else fellBack = result.error?.code === 'ETIMEDOUT' ? 'its time ran out before the mirror was synced' : notReached(output, result);
+      else if (result.error?.code === 'ETIMEDOUT') fellBack = result.error.silent ? `it wrote nothing for ${sensorSilence / 1000} s before the mirror was synced` : 'its time ran out before the mirror was synced';
+      else fellBack = notReached(output, result);
       // The bound inside the distribution is a little short of this one, and stops the command first:
       // what the runner says of it is a time that ran out, as this one is (Codex, 2026-10-14).
       // Beside `timeout`'s own exit status and alone on its line: a test may print the mark, and a sensor
@@ -1079,7 +1175,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
     }
     // A suite of the mirror that falls back runs whole on Windows, untraced: its selection was asked of the
     // traces of WSL2, which say nothing of this place.
-    if (!ranIn && !plan?.none) result = await spawn(route ? written : asked, { cwd, env, timeout: sensorTimeout });
+    if (!ranIn && !plan?.none) result = await spawn(route ? written : asked, { cwd, env, timeout: sensorTimeout, silence: sensorSilence });
   } finally {
     // Best effort: on Windows a survivor can still hold the home as its cwd, and that must not fail check.
     try {
@@ -1094,7 +1190,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   const pass = !result.error && result.status === 0;
   const timedOut = result.error?.code === 'ETIMEDOUT';
   let detail = `${command} passed`;
-  if (timedOut) detail = `${command} timed out after ${sensorTimeout / 1000} s`;
+  if (timedOut) detail = result.error.silent ? `${command} wrote nothing for ${sensorSilence / 1000} s and was stopped` : `${command} timed out after ${sensorTimeout / 1000} s`;
   else if (result.error) detail = `${command} could not run: ${result.error.message}`;
   else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
   else if (!pass) detail = `${command} exited ${result.status}`;
@@ -1106,6 +1202,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
   const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
+  // Each test file's seconds, for the throughput review (odd/tasks/throughput-review.md, B5), read before the
+  // results go, in shadow and in skip mode alike. A suite of the mirror that fell back ran untraced: it has none.
+  const times = started && !(started.mounted && !ranIn) ? testTimesOf(started.results) : [];
   // A suite of the mirror that fell back to Windows ran untraced: it says nothing of what was skipped.
   const shadowed = shadow && !(shadow.mounted && !ranIn) ? endShadow(shadow) : null;
   if (started && !shadowed) fs.rmSync(started.results, { recursive: true, force: true });
@@ -1122,7 +1221,26 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (plan) detail += `; exact tests: skipped ${skip.skipped} of ${skip.files} test files`;
   // A run of none in WSL2 is proven by the traces of the mirror, the place its tree key names (`checkSensors`).
   const provenIn = ranIn || (plan?.none && inWsl);
-  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }), ...(times.length > 0 && { times }) };
+}
+
+/** The seconds of each test file a traced suite ran, from the tracer's results (`trace-reads.cjs`): `[{ test,
+ * seconds }]`, none where the folder cannot be read, a result cut short or with no time left out. */
+function testTimesOf(results) {
+  const times = [];
+  try {
+    for (const name of fs.readdirSync(results)) {
+      try {
+        const { test, seconds } = JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'));
+        if (typeof test === 'string' && Number.isFinite(seconds)) times.push({ test, seconds });
+      } catch {
+        // a result cut short
+      }
+    }
+  } catch {
+    // no file ended, or the folder cannot be read
+  }
+  return times.sort((a, b) => a.test.localeCompare(b.test));
 }
 
 /** Characters a test file's path may hold to be named on the command line of a skip gate: node takes each
@@ -1487,14 +1605,18 @@ function ownTicketRows(reason, cwd, lock, env, deps) {
 }
 
 /** Claims the ticket of the session of `lock` for the gate that checks `cwd` (`claimTicket`), and writes in
- * the gate log what the claim did: the tickets its sweep found expired, and the claim, with the gates that
+ * the gate log what the claim did: the tickets its sweep found expired, those it left because their file was
+ * held, and the claim, with the gates that
  * waited then, which this one passes. Nothing is written with the log switched off (`lock.log` false).
- * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines. */
-function claimOf(lock, cwd, deps) {
-  const { ticket, expired } = claimTicket({ home: lock.home, session: lock.session, cwd: path.resolve(cwd) });
+ * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines, and
+ * `deps.claimTicket` for the claim. The code of a hold goes in `error`: the log's `code` is the key of a tree. */
+export function claimOf(lock, cwd, deps, { named = false } = {}) {
+  const claim = deps.claimTicket ?? claimTicket;
+  const { ticket, expired, unclaimed = [] } = claim({ home: lock.home, session: lock.session, cwd: path.resolve(cwd), named });
   if (lock.log === false) return ticket;
   const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
   for (const gone of expired) logTicket(lock.home, 'first-expired', gone, {}, written);
+  for (const { ticket: held, code } of unclaimed) logTicket(lock.home, 'first-unclaimed', held, { error: code, cwd: path.resolve(cwd), pid: process.pid }, written);
   if (ticket) {
     let waiting = [];
     try {
@@ -1792,6 +1914,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
       record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code });
+      // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
+      record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
@@ -1804,22 +1928,24 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return (await testsOnCi(cwd, lock, deps)) ?? underGateLock(cwd, lock, deps, run, record);
+  return (await testsOnCi(cwd, lock, deps, record)) ?? underGateLock(cwd, lock, deps, run, record);
 }
 
-/** The rows of a gate whose tests ran on GitHub's machines because its turn at the lock would wait
- * (./lib/ci-gate.mjs), or null for a gate that runs here: its turn is free, the project has no gate workflow, or
- * CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its tests
- * marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate` stand
- * in for the two halves. */
-async function testsOnCi(cwd, lock, deps) {
-  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, home: lock.home, env: lock.env ?? process.env });
+/** The rows of a gate whose tests ran on GitHub's machines, where every commit's gate goes first
+ * (./lib/ci-gate.mjs), or null for a gate that runs here: the project has no gate workflow, the switch keeps it
+ * here, or CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its
+ * tests marked as run on CI and the names of those that failed there, so the measures of the lines count both. A
+ * gate CI gave no answer leaves a `ci-fallback` line under `local`'s id, the record of the gate that then runs
+ * here, with what the wait cost. `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. */
+async function testsOnCi(cwd, lock, deps, local = null) {
+  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
   if (!why) return null;
-  console.error(`check: ${why}; the tests go to GitHub's machines (${CI_WORKFLOW}) instead of waiting`);
+  console.error(`check: ${why}; the push of the tree being committed starts their run`);
   const startedAt = Date.now();
   const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
   if (!ci.ran) {
     console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
+    local?.ciFallback({ seconds: Math.round((Date.now() - startedAt) / 1000), reason: ci.why });
     return null;
   }
   const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
@@ -1829,8 +1955,9 @@ async function testsOnCi(cwd, lock, deps) {
     : null;
   record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
   at = Date.now();
-  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci' }] });
-  return [gateRow(`${why}, so the tests ran on CI`), tests, ...gateLogRows(record)];
+  const failing = ci.pass ? [] : failingTests(ci.output);
+  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci', ...(failing.length > 0 && { failing }) }] });
+  return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
@@ -2097,6 +2224,15 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   return { ...row, lines: [...atTip.errors.map((error) => `read as on: ${error}`), ...(row.lines ?? [])] };
 }
 
+/** Whether the Codex review is off at the commit `head` of the repository `cwd` is in, read as `checkCodexReviews`
+ * reads it (one that cannot be read is on). For the merge queue, whose code commits are then those that change a file
+ * that is not Markdown (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 5). */
+export function codexReviewOffAt(cwd, head, { spawn = spawnSync } = {}) {
+  const git = gitIn(cwd, spawn);
+  const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])?.trim();
+  return tip ? codexSwitchAt(git, tip).value === 'off' : false;
+}
+
 /** The Codex review's switch at the commit `rev`, read from that commit's own files: `{ value, because, errors }`. */
 function codexSwitchAt(git, rev) {
   const { errors, resolved } = functionsOf(harnessOfCommit(git, rev), commitTree(git, rev));
@@ -2293,14 +2429,24 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   const atMerge = merge === null ? null : uncovered.find((commit) => commit.id === tip);
   const { start, before } = atMerge ? { start: merge.from, before: atMerge } : range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
   const baseArg = before === null ? base : `${before.shortId}^`;
-  const size = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
+  const one = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
+  // A merge of main below HEAD, after code commits that each have a record, is reviewed in two turns where they
+  // cost less than the one review (`mergeTurn`, `turnsCheaper`): the command decides it so, and so does this.
+  const turn = atMerge || one === null || range.unknown || range.from === null ? null : mergeTurn(cwd, { given: range.from, tip, uncovered, spawn, remote });
+  // A merge that has the review off cannot be a turn of its own, as the command says of it (`cutInTurns`).
+  const turnable = turn !== null && codexSwitchAt(gitIn(cwd, spawn), turn.merge).value !== 'off';
+  const turnSizes = turnable ? [reviewSize(spawn, cwd, turn.from, turn.merge, turn), reviewSize(spawn, cwd, turn.merge, tip)] : null;
+  const inTurns = turnSizes !== null && turnSizes.every((each) => each !== null) && turnsCheaper(one, turnSizes);
+  const both = (key) => turnSizes[0][key] + turnSizes[1][key];
+  const size = inTurns ? { parts: both('parts'), changedLines: both('changedLines'), files: both('files'), leftOut: both('leftOut') } : one;
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
   const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
   let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;
   if (size?.parts === 0) sized = `the review of ${baseArg}..HEAD has no part today, since the range changes no file ${size.leftOut > 0 ? 'a review reads ' : ''}as a whole`;
   else if (size) {
+    const what = inTurns ? `2 turns today, the merge ${turn.merge.slice(0, 7)} by what was written in it and then the commits after it: ${counted(size.parts, 'part')}` : `${counted(size.parts, 'part')} today`;
     sized =
-      `the review of ${baseArg}..HEAD is ${counted(size.parts, 'part')} today, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +
+      `the review of ${baseArg}..HEAD is ${what}, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +
       (over ? `, already more parts than ${partsBound({ maxParts: MAX_PARTS_WITHOUT_FLAG, maxPartsGiven: false })}` : '');
   }
   return row(`no Codex review record for ${uncovered.length} of ${counted(codeCommits.length, 'code commit')} since ${base}: ${sized}${note}`, [
@@ -2484,7 +2630,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     for (const row of rows) console.log(formatRow(row));
     return rows.every((row) => row.pass) ? 0 : 1;
   }
-  // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
+  // A push runs the Codex review row and the row `rules` of the lines it brings, as INFO. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   //
   // The other list is the static rows: all a gate knows of the working tree before its sensors, each in a
@@ -2494,7 +2640,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
-    ? [checkCodexReviews(cwd, head, { ...deps, remote })]
+    ? [checkCodexReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote })]
     : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.

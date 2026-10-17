@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { CI_GATE_ENV, ciGateWanted, runCiGate } from './ci-gate.mjs';
+import { ruleValue } from './rules.mjs';
 
 // A gate runs inside a git hook, which sets GIT_DIR and GIT_INDEX_FILE for the repository being committed.
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
@@ -45,8 +46,9 @@ function clock() {
   return { now: () => at, sleep: async (ms) => { at += ms; } };
 }
 
-/** A stand-in for `gh`: `runs` is what each `run list` answers, in turn (the last one again once spent), and
- * `views` what each `run view` answers. Every call is kept. */
+/** A stand-in for `gh`: `runs` is what each `run list` of a commit answers, in turn (the last one again once
+ * spent), `views` what each `run view` answers (`null` for a view that fails), and a `run list` of no commit, the
+ * probe before the push, answers `[]`. Every call is kept. */
 function fakeGh({ runs = [[]], views = [], log = '' } = {}) {
   const calls = [];
   let listed = 0;
@@ -55,9 +57,13 @@ function fakeGh({ runs = [[]], views = [], log = '' } = {}) {
   const gh = (args, { cwd } = {}) => {
     calls.push(args);
     cwds.push(cwd);
+    if (args[0] === 'run' && args[1] === 'list' && !args.includes('--commit')) return { status: 0, stdout: '[]', stderr: '' };
     if (args[0] === 'run' && args[1] === 'list') return { status: 0, stdout: JSON.stringify(runs[Math.min(listed++, runs.length - 1)]), stderr: '' };
     if (args[0] === 'run' && args[1] === 'view' && args.includes('--log-failed')) return { status: 0, stdout: log, stderr: '' };
-    if (args[0] === 'run' && args[1] === 'view') return { status: 0, stdout: JSON.stringify(views[Math.min(viewed++, views.length - 1)]), stderr: '' };
+    if (args[0] === 'run' && args[1] === 'view') {
+      const view = views[Math.min(viewed++, views.length - 1)];
+      return view === null ? { status: 1, stdout: '', stderr: 'HTTP 502: Bad Gateway' } : { status: 0, stdout: JSON.stringify(view), stderr: '' };
+    }
     if (args[0] === 'run' && args[1] === 'cancel') return { status: 0, stdout: '', stderr: '' };
     return { status: 1, stdout: '', stderr: `unexpected gh ${args.join(' ')}` };
   };
@@ -72,19 +78,20 @@ const remoteBranches = (remote) => git(remote, 'for-each-ref', '--format=%(refna
 const identity = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
 const options = (p, gh, c, more = {}) => ({ cwd: p.cwd, env: { ...cleanEnv, ...identity }, gh, ...c, ...more });
 
-test('a gate is wanted on CI only when its turn would wait, the project has the workflow, and nothing switches it off', () => {
+test('a commit\'s gate goes to CI first whenever the project has the workflow and nothing switches it off, whatever the lock says', () => {
   const p = project();
   try {
-    const held = { readHolder: () => ({ pid: 7, cwd: 'C:\\other' }), readWaiters: () => [] };
-    const free = { readHolder: () => null, readWaiters: () => [] };
-    assert.match(ciGateWanted({ cwd: p.cwd, home: p.root, env: {}, ...held }), /held/);
-    assert.match(ciGateWanted({ cwd: p.cwd, home: p.root, env: {}, readHolder: () => null, readWaiters: () => [{}, {}] }), /2 gates wait/);
-    assert.equal(ciGateWanted({ cwd: p.cwd, home: p.root, env: {}, ...free }), null, 'a free lock is taken here');
-    assert.equal(ciGateWanted({ cwd: p.cwd, home: p.root, env: { [CI_GATE_ENV]: '0' }, ...held }), null, 'switched off');
-    assert.equal(ciGateWanted({ cwd: p.cwd, home: p.root, env: { CI: 'true' }, ...held }), null, 'already on a CI machine');
-    assert.match(ciGateWanted({ cwd: p.cwd, home: p.root, env: { CI: 'false' }, ...held }), /held/, 'CI=false is no CI machine');
+    const first = /^the project holds \.github\/workflows\/gate\.yml, so a commit's tests go to GitHub's machines first$/;
+    // git hands every hook that commits the index it commits; a check by hand is given none.
+    const hook = { GIT_INDEX_FILE: '.git/index' };
+    assert.match(ciGateWanted({ cwd: p.cwd, env: hook }), first, 'a free lock no longer keeps the gate here');
+    assert.match(ciGateWanted({ cwd: p.cwd, env: { git_index_file: 'x' } }), first, 'Windows names variables in any case');
+    assert.equal(ciGateWanted({ cwd: p.cwd, env: {} }), null, 'a check by hand tests the working tree here, not the index there');
+    assert.equal(ciGateWanted({ cwd: p.cwd, env: { ...hook, [CI_GATE_ENV]: '0' } }), null, 'switched off');
+    assert.equal(ciGateWanted({ cwd: p.cwd, env: { ...hook, CI: 'true' } }), null, 'already on a CI machine');
+    assert.match(ciGateWanted({ cwd: p.cwd, env: { ...hook, CI: 'false' } }), first, 'CI=false is no CI machine');
     fs.rmSync(path.join(p.cwd, '.github'), { recursive: true });
-    assert.equal(ciGateWanted({ cwd: p.cwd, home: p.root, env: {}, ...held }), null, 'a project with no gate workflow');
+    assert.equal(ciGateWanted({ cwd: p.cwd, env: hook }), null, 'a project with no gate workflow');
   } finally {
     p.done();
   }
@@ -103,7 +110,8 @@ test('a green run passes the gate: the staged tree went to gate/<sha>, and the b
     const sha = pushed.split(':')[0];
     assert.equal(git(p.remote, 'show', `${sha}:a.txt`), 'staged', 'the commit being made, not the working tree');
     assert.equal(git(p.remote, 'rev-parse', `${sha}^`), git(p.cwd, 'rev-parse', 'HEAD'), 'its parent is HEAD');
-    assert.deepEqual(gh.calls[0], ['run', 'list', '--repo', 'o/r', '--commit', sha, '--workflow', 'gate.yml', '--json', 'databaseId,status,conclusion,url', '--limit', '1']);
+    assert.deepEqual(gh.calls[0], ['run', 'list', '--repo', 'o/r', '--workflow', 'gate.yml', '--json', 'databaseId', '--limit', '1'], 'gh is asked before the push');
+    assert.deepEqual(gh.calls[1], ['run', 'list', '--repo', 'o/r', '--commit', sha, '--workflow', 'gate.yml', '--json', 'databaseId,status,conclusion,url', '--limit', '1']);
     assert.ok(gh.calls.every((args) => args[2] === '--repo' && args[3] === 'o/r'), 'every gh call names the repository of the remote');
     assert.ok(gh.cwds.every((cwd) => cwd === p.cwd), 'gh runs in the project');
     assert.equal(remoteBranches(p.remote), '', 'the gate branch is deleted');
@@ -129,6 +137,22 @@ test('a red run fails the gate with the end of its failed log', async () => {
   }
 });
 
+test('a red run\'s log loses gh\'s job, step and time before each line, and keeps the failing tests\' list the end would cut', async () => {
+  const p = project();
+  try {
+    const prefix = 'gate\tRun the gate\t2026-10-17T05:00:00.0000000Z ';
+    const lines = ['✖ failing tests:', '', '✖ the table reads a day (12.5ms)', ...Array.from({ length: 120 }, (_, i) => `detail ${i}`)];
+    const gh = fakeGh({ runs: [[RUN]], views: [{ ...RUN, status: 'completed', conclusion: 'failure' }], log: lines.map((line) => prefix + line).join('\n') });
+    const result = await runCiGate(options(p, gh, clock()));
+    assert.match(result.output, /^✖ failing tests:\n\n✖ the table reads a day \(12\.5ms\)\ndetail 0\n/);
+    assert.doesNotMatch(result.output, /Run the gate/);
+    // The lines the window leaves out at the end are said, with where to read them.
+    assert.match(result.output, /\ndetail 76\n… 43 more lines: gh run view \d+ --log-failed$/);
+  } finally {
+    p.done();
+  }
+});
+
 test('a run that never starts, or ends neither green nor red, is no answer: the gate runs here', async () => {
   const p = project();
   try {
@@ -147,13 +171,17 @@ test('a run that never starts, or ends neither green nor red, is no answer: the 
   }
 });
 
-test('a run past its bound is cancelled and is no answer', async () => {
+test('a run past its bound, the rule ci-gate-bound counted from the push, is cancelled and is no answer', async () => {
   const p = project();
   try {
     const gh = fakeGh({ runs: [[RUN]], views: [{ ...RUN, status: 'in_progress' }] });
-    const result = await runCiGate(options(p, gh, clock()));
+    const c = clock();
+    const pushedAt = c.now();
+    const result = await runCiGate(options(p, gh, c));
+    const bound = ruleValue('ci-gate-bound', 'minutes');
     assert.equal(result.ran, false);
-    assert.match(result.why, /not done after 20 minutes/);
+    assert.equal(result.why, `its run (${RUN.url}) was not done after ${bound} minutes, and was cancelled`);
+    assert.equal(c.now() - pushedAt, bound * 60_000, 'cancelled at the bound, not a poll later or sooner');
     assert.deepEqual(gh.calls.at(-1), ['run', 'cancel', '--repo', 'o/r', '42']);
     assert.equal(remoteBranches(p.remote), '');
   } finally {
@@ -197,11 +225,32 @@ test('a push that fails, or a gh that cannot list runs, is no answer', async () 
     git(p.cwd, 'config', '--unset', `url.${path.join(p.root, 'nowhere.git')}.insteadOf`);
     git(p.cwd, 'config', `url.${p.remote}.insteadOf`, 'https://github.com/o/r.git');
     const noGh = () => ({ status: 1, stdout: '', stderr: 'gh: To get started with GitHub CLI, please run: gh auth login' });
-    const unlisted = await runCiGate(options(p, noGh, clock()));
+    const gitCalls = [];
+    const unlisted = await runCiGate(options(p, noGh, clock(), { onGit: (args) => gitCalls.push(args[0]) }));
     assert.equal(unlisted.ran, false);
-    assert.match(unlisted.why, /gh run list failed: gh: To get started/);
+    assert.equal(unlisted.why, 'gh cannot read the runs of o/r, so nothing was pushed: gh: To get started with GitHub CLI, please run: gh auth login');
+    assert.deepEqual(gitCalls.filter((verb) => verb !== 'config'), [], 'a gh that cannot answer is found before any tree is written or pushed');
     assert.equal(remoteBranches(p.remote), '');
   } finally {
     p.done();
   }
+});
+
+test('a gh that fails after the run started cancels that run, which is then no answer', async () => {
+  const p = project();
+  try {
+    const gh = fakeGh({ runs: [[RUN]], views: [null] });
+    const result = await runCiGate(options(p, gh, clock()));
+    assert.equal(result.ran, false);
+    assert.match(result.why, /^gh run view failed: HTTP 502: Bad Gateway$/);
+    assert.deepEqual(gh.calls.at(-1), ['run', 'cancel', '--repo', 'o/r', '42'], 'the run started is not left running');
+    assert.equal(remoteBranches(p.remote), '');
+  } finally {
+    p.done();
+  }
+});
+
+test('git asks no one for credentials during a gate: a push that would prompt fails at once', async () => {
+  const { pushEnv } = await import('./ci-gate.mjs');
+  assert.deepEqual(pushEnv({ PATH: 'p', GIT_TERMINAL_PROMPT: '1' }), { PATH: 'p', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' });
 });

@@ -1191,7 +1191,7 @@ sample read by this session):
    - The hash stamped in an installed command (letter F, T16f) is taken over the rules with no
      scope, so that a change of his Codex rate does not call every installed copy behind in
      every project; in this repository the comparison above is what says it: named here, built
-     there.
+     in T16f's second part (`bin/lib/rules-installed.mjs`).
    - When the skills' texts and the template are among the texts scanned (T16d, T16f), a
      `rule:<id>` of scope `repository` in them is a finding: named here, built there.
    The values of those rules still travel inside `rules-data.mjs`; no words of his do. Whether an
@@ -1605,7 +1605,9 @@ until the last check passes.
      changes only by the approved draft of letter G, which is not built.
 5. **The relief line.** It is built before any write and checked with `reliefLineOf`.
    - The line reads: `` rule:<id> proposed on rule/<name>, not landed: <what>; source <kind>;
-     supersedes relief line <n> ``.
+     supersedes relief line <n>; declaration <hash> ``, the hash the twelve hex characters of
+     `declarationOf` (the rule's declaration as written), which the merge queue matches against
+     the landed head's (T16e, item 7, amended 2026-10-16).
    - `<what>` is `<old> to <new>` for a value, `text of <path>` for a text, `retired,
      successors <ids or none>` for a retirement, `new` for a new rule, `form` for a
      form-only change, and `source checked` for `--check-source`.
@@ -1728,7 +1730,7 @@ independent verifier after its own checks.
 - **T16d:** the switch of a wrong red row, "by the same command, with a reason, and counted", as
   `set.row`, with where the count is kept; `patterns` and `failure`.
 - **T16e:** the line that confirms a landing.
-- **T16f:** the hash in the installed command.
+- **T16f:** the hash in the installed command, built in its second part.
 - **Letter H**, its own home, has no task yet: it is added as T16g.
 
 ### The row `rules` (T16d)
@@ -1785,8 +1787,9 @@ nothing.
   - **`{ reports: <reason>, since: <day> }`:** a finding is INFO and the line names the reason.
 - A FAIL line names the rule, the file, the line and the text, and gives the cure: the mark
   instead of the value, or `rules change`.
-- It does not run on `check --push`, nor when nothing is staged. `--no-verify` passes it; the
-  merge door (letter E, T16e) is what closes that.
+- It does not run when nothing is staged. On `check --push` it reports, as INFO whatever the
+  rule's row says (T16e, item 8, amended 2026-10-16). `--no-verify` passes it; the merge door
+  (letter E, T16e) is what closes that.
 - It scans only the added lines, so it costs little at every commit. A probe found the whole
   scan takes about 8 seconds with 90 subject-anchored patterns, so the whole-text count is kept
   out of the gate.
@@ -2376,15 +2379,16 @@ the command; the dispatcher reaches the command, and so does a run on its own.
 - Codex sessions get nothing until its events are confirmed.
 
 **Left to the other parts of T16f**, not built here:
-- the hash in the installed command and `doctor` saying it is behind;
-- the template's marked block, rendered by `sync`;
+- the hash in the installed command and `doctor` saying it is behind: built in the second part, below;
+- the template's marked block, rendered by `sync`: built on 2026-10-17 by JH 21, see "Progress";
 - a memory note pointing to an id;
 - which of the shipped rules reach an installed project, a field T16b names, whose list is his ninth
   difference: until then the hook reads only a project's own `docs/rules.json` there;
-- the orchestrator skill's "read the relief file" becoming "read the list";
+- the orchestrator skill's "read the relief file" becoming "read the list": built on 2026-10-17 by JH 21;
 - keeping the installed copy current enough to read the list on `main`;
 - the practice journey's real-session check that each of the three events ran (the verifier of
-  2026-10-16 found it unbuilt: `practice-lib.mjs` still checks only `SessionStart:startup`).
+  2026-10-16 found it unbuilt: `practice-lib.mjs` still checks only `SessionStart:startup`): built on
+  2026-10-17 by JH 21, and passed by a real host run.
 
 **Where the readers' findings went.**
 - The attacker's blockers: B1 into "What it prints", B2 into "What is compared", B3 into "When it
@@ -2398,6 +2402,169 @@ the command; the dispatcher reaches the command, and so does a run on its own.
 
 Risk: item 5. It writes three entries into the host's settings through `install`. So it takes an
 independent verifier, and a gentle-ai review escalated at its own commit.
+
+### Reach: the hash of the installed command (T16f, second part), version 2 (after two readers)
+
+Letter F: "A hash of the rules is stamped in the installed command, so that `doctor` can say it is
+behind." The decision at "Scope" above: the hash is taken over the rules with no scope, so that a
+change of his Codex rate does not call every installed copy behind in every project. Letter F says
+nothing more; this part decides where the stamp is, what it is compared with and what `doctor`
+prints. Mapped on `origin/main` a77288c by a read-only reader on 2026-10-16 (local date). His own
+words on it: searched in his typed lines of every transcript of this project (`rg` over
+`~/.claude/projects/D--js-harness/*.jsonl` for user lines with "hash", "instalad" or "doctor" beside
+"atrás", "viej" or "desactual"); none speaks of the installed copy's rules, so letter F is the text
+this part answers to. The ninth difference (which shipped rules reach a project) is still his
+(`:992`, `:2385`); until it is answered the hash covers every rule with no scope.
+
+**What is there today.**
+- `rulesHash(list)` (`bin/lib/rules.mjs:474`): 12 hex characters of a SHA-256 over the id-sorted
+  list reduced to `HASH_KEYS`, with no variant over a part of the list. `rules check` and the head
+  of `docs/RULES.md` print it over the whole list (`bin/rules.mjs:165`, `bin/lib/rules.mjs:594`).
+- The installed copy is a copy of the default branch in the global packages (`INSTALL_NEWEST`,
+  `bin/lib/version.mjs`); `package.json`'s `files` ships `bin/`, so the copy holds its own
+  `bin/lib/rules-data.mjs`. Its manifest names no commit, and its version is `0.1.0` for every copy.
+- `doctor` has no row about js-harness itself. Its rows are read by `gapList`/`gapDigest` (the
+  session-start notice, `bin/lib/digest.mjs:17-35`), the TUI (`bin/tui.mjs:145`) and
+  `stackVersions` (`bin/lib/stack-update.mjs:17-22`). Its up-to-date column compares versions with
+  `compareSemver`, which gives -1 for any two hex strings, equal ones too (`bin/lib/version.mjs:10-17`);
+  its cache keeps a text or `null` per row and drops keys it does not know (`bin/lib/cache.mjs:21-48`),
+  and keeps the old value when a refetch fails (`bin/doctor.mjs:139-146`).
+
+**The stamp is the copy's own list, computed, never written.** This is the design's reading of
+"stamped", not his: the hash is a pure function of the `rules-data.mjs` that the copy ships, and
+`rulesHash`'s own comment meant it for this ("So an installed copy and a session can tell",
+`rules.mjs:470-473`). A constant written at install would be a second home of the same fact that
+can drift from the list beside it (protocol 4, "One home"). `shippedRulesHash(list)` in
+`bin/lib/rules.mjs` is `rulesHash` over the rules with no `scope`; the inline filter at
+`bin/rules.mjs:261` becomes `unscoped(list)` beside it (the one at `:326` is a branch of
+`rulesInForce` and stays).
+
+**What it is compared with: the same hash of `main`'s list, read fresh, never cached.**
+- In the harness's own checkout (a `bin/lib/rules-data.mjs` at the git top: `listOf` and
+  `MAIN_REFS` of `bin/lib/rules-reach.mjs`, both made public): `git show <ref>:bin/lib/rules-data.mjs`.
+  No network; the ref is as fresh as the last fetch.
+- Anywhere else, only in an interactive online `doctor`: one request to the default branch of the
+  default repository, `https://raw.githubusercontent.com/jsaristi/js-harness/HEAD/bin/lib/rules-data.mjs`,
+  built from `DEFAULT_REPO` in `version.mjs` (the one home of the address; the repository is public,
+  `gh repo view` says PUBLIC, and the address answered 200 on 2026-10-16), with the 5-second timeout
+  of `latest.mjs`. Not with `--offline`, not in `--hook` and not in the TUI's stack block
+  (`bin/tui.mjs:147`), so a session start costs no request and a cut connection is not a gap; the
+  TUI's Doctor item runs the whole `doctor` and does make it. `buildReport` tells these apart by
+  its own arguments: `interactive && !offline` is the interactive online `doctor`. This changes
+  `doctor`'s stated contract of one round of lookups behind a 6-hour cache (`bin/doctor.mjs:5-7`):
+  that comment names the one request this row adds. `JS_HARNESS_REPO` set to another repository,
+  or a project whose `harness.json` pins another version than the copy's own, gives `n/a`: the pin,
+  not `main`, says what the copy should be. A pin of the copy's own version is compared: `init`
+  writes one in every project (`bin/lib/project.mjs:848`), and before 1.0.0 every copy is 0.1.0,
+  taken from `main` (a correction after the verifier, below).
+- The text is read by `readListText` as JSON, never imported, and the list must pass `readRules`
+  (`bin/lib/rules.mjs:305`) with no fault; a 404, a 429, an HTML page, a cut body or a list of
+  something else is `unknown`, never `outdated`. Nothing about `main` is cached, so no failure can
+  leave an old hash in force, and right after the fix the next run reads the new `main`.
+
+**What `doctor` prints.** One row, `js-harness`, appended for every caller after the `rows` map of
+`buildReport` (`bin/doctor.mjs:178-184`) and before its early return when there are no gentle-ai
+snapshots (`:188`), so it never passes through `computeUpToDate` and reaches `--json`, the table,
+the gaps, the hook's digest and the TUI alike:
+- `installed: 'ok'`; `version` is the copy's unscoped hash cut to 8 characters (the column is 10);
+  `--json` adds `rulesHash` and `mainRulesHash` (12 each) and `differs`, the ids that `diffRules(copy,
+  main)` names, by kind (added, removed, retired, changed);
+- the host cells and `project` are `n/a`: the copy serves both hosts;
+- `up to date` is `ok` when the two hashes are equal, `outdated` when they differ, `unknown` when
+  `main`'s list could not be read, `n/a` where it is not read (outside the checkout with
+  `--offline`, in `--hook` and in the TUI's stack block) or there is nothing to compare with (a pin
+  of another version, another repository);
+- the fix of `outdated` is `INSTALL_NEWEST`, then one line naming the differing ids by kind, so the
+  rules that differ are named in a project too, where the hook reads only `docs/rules.json`;
+- in the checkout the session-start digest (built in `hookMain`, `bin/doctor.mjs:376-383`) gets
+  `js-harness:<mainRulesHash>`, kept apart from the text the notice prints (`:391`), so a `main`
+  that moves again is told again without the hash in the notice; elsewhere the hook gives `n/a` and
+  no notice.
+- `stackVersions` never sees the row: it reads the rows before it is appended (`:187`, `:345`).
+
+**Two hashes, named apart.** `rules check` keeps its hash of the whole list; `doctor` labels its own
+"unscoped" (the Fix line and the `--json` names), and `docs/RULES.md` gains no second hash.
+
+**What else changes.**
+- `README.md`'s doctor section (`:258-300`): the row. Its example keeps no line for it: the hash
+  moves with every rule change, so a printed one would go stale.
+- `bin/js-harness.mjs:20`: the doctor line names the harness's own rules beside the stack's tools.
+- `docs/SPEC.md`, "The stack doctor" (`:180-187`): the row in Requirement, Proof and Today.
+- `docs/ROADMAP.md`, the Stack doctor checklist (`:110-119`): one line; the "Release source" row
+  (`:48`) and the comment on `DEFAULT_REPO` (`version.mjs:30`) stop calling the repository private.
+- The feature document: the first bullet of "Left to the other parts of T16f" struck, the "named
+  here, built there" lines at `:1191` and `:1733` closed, the T16f task line left open for the
+  template block and the memory note, the State paragraph. The signals of done table needs no row:
+  none of the seven is about reach.
+- No skill changes: a session reads what to do from the row's Fix, as for every other row.
+- Writes outside the repository: none. The row writes nothing to `doctor.json`.
+
+**What it does not do.**
+- It does not decide which shipped rules reach an installed project (the ninth difference).
+- It does not update the copy (`upgrade` installs release tags only, and none exists before 1.0.0),
+  nor make the hook read `main`'s list in a project. Once release tags exist, what a copy is
+  compared with is decided again: then `main` is not what a copy at the latest tag should match.
+- It does not stamp a commit: two copies with the same unscoped rules are equal to this row even
+  when their code differs, which is what letter F asks.
+
+**Not guaranteed.**
+- "Differs" is printed as `outdated`: a copy installed from a branch ahead of `main` is also called
+  behind. `node bin/js-harness.mjs doctor` run from this checkout hashes the working tree's list, so
+  a branch that changed a rule reads as `outdated` with a fix that cannot fix it.
+- In this checkout the main ref is as old as the last fetch; GitHub may serve the raw file up to 5
+  minutes old (`Cache-Control: max-age=300`).
+- A copy installed from a local tarball (`--source`) cannot be told apart from one from GitHub: the
+  manifest names no source.
+- A folder outside git that holds `bin/lib/rules-data.mjs` (the installed package's own) is read as
+  the harness's checkout, finds no main ref, and is `unknown`.
+- Three messages speak of a copy behind: this row, `rules applied` for scoped rules
+  (`bin/lib/rules-applied.mjs:360`) and `HOOK_FIX` for a hook command (`bin/lib/stack.mjs:538`).
+  Each names a different fact; none is merged here.
+
+**Tests, written first.**
+- `shippedRulesHash` leaves a scoped rule out (a scoped value changed keeps the hash; an unscoped one
+  moves it), and `unscoped` returns the rules with no `scope`.
+- `doctor`'s row: equal hashes print `ok`, hex hashes included; different ones `outdated`, with
+  `INSTALL_NEWEST` and the ids under Fix and in `--json`; a 404, a 429, an HTML body, a cut body and
+  a list that fails `readRules` print `unknown` and no gap; `--offline`, `--hook` and the TUI make no
+  request; in a checkout the comparison reads the ref through `git show` (the test's `fakeSpawn`
+  answers it) and fetches nothing; a pinned version and `JS_HARNESS_REPO` give `n/a`; in the
+  checkout the digest moves when `main`'s hash moves.
+- The pins that move by one row: `bin/doctor.test.mjs:148` and `:499-503` (13 lines), the request
+  counts at `:580-594` and `:1384-1405` (an online interactive `doctor` with a fresh cache now makes
+  the one request of this row), `bin/js-harness.test.mjs:277`, `bin/tui.test.mjs:435`;
+  `bin/clean-home.test.mjs:18` gets the row in `OWN_ROWS`. `bin/lib/stack.test.mjs` does not move:
+  the row is not one of `probeStack`'s.
+
+Risk: item 3. The rows are shared code read by `digest.mjs`, the TUI and every `doctor` output, and
+the row adds a network read to an interactive `doctor`. It takes an independent verifier, and a
+gentle-ai review escalated at its own commit.
+
+**Where the readers' findings went.**
+- The attacker's blockers: B1 (`compareSemver`) into the row appended after `computeUpToDate`; B2
+  (the cache cannot hold the list) and B3 (a failed refetch keeps the old value) into "read fresh,
+  never cached".
+- Its serious findings: the Risk line; the version cell, the `--json` names and `OWN_ROW`; the two
+  hashes; where the row goes and the pins. Its minor ones: the hook's reach in a project, the run
+  from a checkout, "stamped" marked as a reading, the one filter `unscoped` replaces, the date, the
+  timeout and the `diffRules` direction.
+- The gaps reader's blockers: the same two. Its serious ones: the hook and both hosts (no request in
+  `--hook`, the digest in the checkout), the address from `DEFAULT_REPO` and the two texts that say
+  private, the reply that is not the list (`readRules`), pins and tags, "What else changes", the
+  pins, and the ids named in a project. Its minor ones: the same places, plus `status --global`
+  (unchanged: it reports versions, and points to nothing new) and the writes outside the repository.
+- The second round, which read only those blockers: all three resolved. Its findings on the fixes:
+  the request-count test at `:1384-1405` (into the pins and the contract comment), the row placed
+  before the early return at `:188`, `OWN_ROW` dropped as a no-op, the digest's place and its
+  text kept apart, the state outside the checkout when nothing is read (`n/a`), and the TUI's
+  Doctor item.
+- The independent verifier of `cd6a8e1`: no blocker; every probe passed (offline, in the checkout,
+  online against the real `main`, the hook making no request, the other rows byte-identical to the
+  baseline's, the hook's digest unchanged when the row is not `outdated`). Its advisory that `init`
+  pins `{ version }` in every project, so the row would be `n/a` in every initialized one, is fixed:
+  only a pin of another version gives `n/a`. Its other advisories went into "Not guaranteed" and
+  the pins; the README's other two "private" (lines 13 and 235) were already there at the baseline
+  and stay a follow-up.
 
 ### Signals of done
 The seven of the roadmap, each as something read and not judged.
@@ -2589,10 +2756,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `docs/model-effort.md` (documentation by model, graded by a test that rebuilds a capability
   from the documents alone, not built): one of the two measurements that spend, his to allow before it
   runs, asked once when he is back
-- [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
+- [x] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json` (route: inline, JH 25; built on
   `feat/jh25-spec-reply`, the key waits for his answer to question 9; Progress, 2026-10-16)
-- [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
+- [x] T3 The failures register, as "The failures register" designs it (route: delegated, one
   writer; the trigger is three files that are not mechanical)
   - [x] T3a The design read by a reader that did not write it, and what it found taken or
     answered
@@ -2636,11 +2803,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `AGENTS.md` and deletes the draft, so there is never a second source. The reason the lead
   added: a session that edits `AGENTS.md` in its own worktree reads that file on every turn, so
   a half-written version would govern the session that writes it
-- [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
+- [x] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
   reply check on is asked of him. The lines are built and their wording is his yes
   (`feat/template-lines`, Progress, 2026-10-16); the empty register is built
-  (`feat/empty-register`); open: `init` turning the reply check on by default, his answer,
-  built once C1 is (T2)
+  (`feat/empty-register`); `init` turns the reply check on by default, his answer, on
+  `feat/init-reply-on` (Progress, 2026-10-17)
 - Moved on 2026-10-14 to "JH 15 · auditoría de honestidad", by the lead's message to this
   session; their state is kept in `odd/tasks/honesty-audit.md`, and only there: T10 (the honesty
   eval: the task and its proof; then, before any spend is asked of him, the number of trials,
@@ -2649,7 +2816,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   honesty audit, C9). No checkbox here, so that `js-harness progress` counts them once
 - [ ] T11 Every rule moved: the memory notes placed and, on his word, deleted; the remaining
   contradictions of the roadmap corrected
-- [ ] T12 Practice journey: a step for the template's lines and one for the reply hook
+- [x] T12 Practice journey: a step for the template's lines and one for the reply hook (the
+  reply step by JH 25 in pull request 282; the template step `template-lines` on
+  `feat/practice-journey-t12`, Progress, 2026-10-16)
 - Moved on 2026-10-14 to "JH 14 · protocolo para modelos futuros", by the lead's message to
   this session; its state is kept in `odd/tasks/future-model-protocol.md`, and only there: T15
   (the seven signals read and recorded; the roadmap's section replaced by a pointer only after
@@ -2750,7 +2919,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline; built
     b0093b8..5a57a17, pull request 247, landed on 2026-10-15 (`main` a1e8fb3), its design as
     pull request 241 (d4ec52d). Its step 2, the first patterns, is in progress in `rule/` batches
-  - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
+  - [x] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
     inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
     loop over what the reviews cover looks at each record itself, and the evidence of a
     review is written in a document on the pull request's own branch. Designed on 2026-10-16
@@ -2774,14 +2943,76 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     door's indented lines were dropped, now printed under the notes and in the refusal
     (`3d0cc94`, gate passed, gentle-ai medium not due); Codex recheck `bbf7dc2..3d0cc94`
     correct (0.97), both fixed. Pull request 314 on `main` (302 landed), the orchestrator told.
-    Next: slice (b) once the orchestrator says Sebastián saw the design, then slice (c)
+    Slice (a) landed as pull request 314. Slice (b), his yes of 2026-10-16 (Progress), on
+    `feat/merge-door-evidence` (worktree `D:/js-harness-worktrees/merge-evidence`), branched at
+    `64933f6`, committed as `b2efbd2` through the gate (the protocol line is in it; verifier and
+    gentle-ai on `64933f6..b2efbd2` high (item 5 escalated), risk and reliability, approved and
+    acknowledged; the independent verifier passed it with no blocker, 38/38 and 2/2, probes of CRLF,
+    a non-ASCII path, an edited line and merges of a sibling branch). One correction batch, test
+    first (both seen red): the rebase hint named `a` of a range whose `b` is no commit of the
+    branch, now `b`; an added line starting "++ " read as a file header, and a header git ends with
+    a tab (a path with a space) missed its document, now a `+++ ` line is a header only before a
+    file's first hunk and loses its tab. Recorded only: a committer date set before the cut-over,
+    or an old branch rebased after it; a seven-digit number on the line read as the stray id; an
+    ambiguous short hash reads as stray; with the review off a merge of another branch asks
+    nothing; no test of a commit named only in the body (the body is never read). Files:
+    `bin/lib/gentle-ai-evidence.mjs` (+ test), `reviewEvidence` in `bin/merge-queue.mjs` (9 tests
+    seen red, then green), `codexReviewOffAt` exported from `bin/check.mjs`, help and USAGE and
+    README, the protocol line in `bin/lib/protocols-skill.mjs`, a `checked-not-read` sighting.
+    Cut-over `2026-10-17T05:00:00Z`. The correction is `647389f` (gate passed, gentle-ai medium,
+    under budget). Codex on `64933f6..647389f`, incorrect (0.98), two P2s fixed test first (both
+    seen red): the feature documents' pathspec was relative to the folder the queue ran in, now
+    `:(top)odd/tasks/` with `--no-relative`; with the Codex review off `--no-merges` let a merge of
+    another branch with an edit in it pass, now merges are read by `--diff-merges=combined` and
+    `gentleAiEvidence` exempts only a merge of main (`c35e195`, gate passed, gentle-ai medium, under
+    budget); Codex recheck `647389f..c35e195` correct (0.97), both fixed. Pull request 328 on
+    `main`, the orchestrator told; then `main` `a0bc8a0` merged in (`78a5853`), Codex's review of
+    the branch after it found two P2s in the Codex-off reader, fixed in `9ff94fe` (recheck correct).
+    Slice (c), items 7 and 8, on `feat/merge-door-landing` (worktree
+    `D:/js-harness-worktrees/merge-landing`), stacked on slice (b) at `9ff94fe`: `landingLines`,
+    `changedRuleIds` and `recordLandings` in `bin/merge-queue.mjs` (the ids a `rule/` branch changed
+    are those whose declaration differs from the merge base; the relief file is found as `notify`
+    finds it, `env` and `now` injectable), 6 tests seen red then green (the newest proposal on that
+    branch alone, once; a land appends, `--dry-run`, red and exit 3 append none, no proposal says so,
+    a push that reported a failure appends); `checkPushRules` in `bin/check.mjs` (the row over
+    `<remote>/<default>...<head>`, INFO whatever the row), 2 tests, the first seen red; help, USAGE,
+    README, and T16d's "does not run on `check --push`" amended. Committed as `e6c9c44` (gate passed,
+    tests on CI). State at the context pause (2026-10-16): verifier (opus, high) running on
+    `9ff94fe..e6c9c44`; gentle-ai high (item 5 escalated), lineage `review-2ccf3665c662d927`, lenses
+    risk and reliability, granted, approved and acknowledged. Its findings, informational, for the
+    correction batch: the `landed` callback runs after main moved with the slug's `mainCheckout` and
+    `projectSlug` outside any try (`bin/merge-queue.mjs` the `landed` lambda): guard it so a land
+    that moved main still exits 0 and prints the moved-heads notice; no test of `checkPushRules` with
+    no default branch (it must leave `check --push` at the Codex row alone); `base...head` in
+    `pushSide` is a `git diff`, so a merge-base range, but no test puts the remote ahead of the
+    head. The verifier: item 7 met; one blocker, B1: in a project that installs the harness,
+    `checkPushRules` scans with the harness's own list (the commit gate's `checkOwnRules` uses it
+    only where `bin/lib/rules-data.mjs` exists): return no row when `head` has no
+    `bin/lib/rules-data.mjs`, with a test (a project with no rules-data, README lines restating a
+    value: no row). Advisories kept: A2 a `--check-source` proposal is never confirmed (said);
+    A3 the row costs 20-30 s more on a 37k-line push; A6 a relative `JS_HARNESS_HOME` is not
+    resolved as `notify` does. Correction batch: B1 fixed (`checkPushRules` returns no row when `head` has no `bin/lib/rules-data.mjs`, test seen red), the `landed` call guarded (test seen red: a lost checkout after main moved), and a no-default-branch push test (a pin, green at once). Pull request 328 landed on main meanwhile, so this slice goes to main directly: committed as `1f31afd`, main merged as `12773f4`. Codex on `9ff94fe..12773f4`, 4 parts: one P2, a proposal `rules change` writes on the same branch while a land runs would be confirmed though the landed head does not hold it; fixed by counting only proposal lines stamped no later than the landed head's commit (`rules change` stamps its line before that commit), two tests seen red, committed as `ac6cf2c`. Codex on `12773f4..ac6cf2c`: the same P2 not fixed, since a time bound leaves the same second and an amend open. Fixed by content instead: `rules change` ends its proposal line with `; declaration <hash>`, a hash of the declaration it wrote (`declarationOf` in `bin/lib/rules-change-run.mjs`), and the queue confirms only a proposal whose hash is the landed head's; a line with no hash, written before this change, keeps the time bound, now strict. Two tests seen red against `ac6cf2c`. Codex refused a second recheck (one recheck a finding); a verifier (Opus 5.5, high) read `9c3f41a`: resolved, no blocker; advisories A1 (the source is outside the hash) and A3 (no CRLF test) are task T16e-f, A2 (the line's spec) is fixed here.
+    gentle-ai evidence of slice (c): high (item 5), approved, lineage review-2ccf3665c662d927 on 9ff94fe..e6c9c44; medium, not due (under_budget) on e6c9c44..1f31afd, 12773f4..ac6cf2c and ac6cf2c..9c3f41a.
+    Next: push, pull request against main, notify; then T2 of `odd/tasks/land-unattended.md` (exit 5 and the gate-first ticket, the lead's yes). Then the throughput plan's item 2
+    design (two readers). Throughput item 7 is pull request 323
+  - [x] T16e-f (kind: build) The landing's match covers the source too: hash the rule with its
+    entry of `docs/rule-sources.json` at the head, since a second `rules change` of the same
+    declaration with another source would be confirmed though the head holds the first source
+    (verifier A1 on `9c3f41a`, 2026-10-16); tests of a CRLF relief file and of lines without a hash
+    beside hashed ones (A3). Codex's second recheck of the P2 was refused by the one-recheck cap, and
+    the range `ac6cf2c..9c3f41a` is recorded as a skip naming this task. Route: inline. Commits
+    `fcae3dd` and the next, by JH 21 on `feat/landing-rule-hash`.
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
-    rules in the installed command; the template's marked block
+    rules in the installed command; the template's marked block. Its second part, the hash in
+    the installed command and `doctor`'s `js-harness` row, built by JH 28 on 2026-10-16 on
+    `feat/rules-installed-hash`, see "Progress"; three more parts (the practice's check of the three
+    events, "read the list", the marked block) built by JH 21 on 2026-10-17 on `feat/rules-reach-rest`;
+    the rest "Left to the other parts of T16f" stays open. Route: inline.
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
     of the relief file's line 245, carries its cost and a review date, and its done is one
     command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it.
     Built by JH 27 on 2026-10-16, see "Progress"
-- [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
+- [x] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
   then one writer for documents)
   - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
   - [x] T17b This session's places corrected in documents: the roadmap and eleven closed
@@ -2795,11 +3026,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (`old-rule-beside-new`; its control is owed by T16)
   - [x] T17e The 104 items still open on 2026-10-16, read again and closed where they could be:
     57 checked off, 47 left to their owners (Progress, 2026-10-16)
-- [ ] T18 The double review, by his words of 2026-10-11 and 2026-10-16 ("The double review
+- [x] T18 The double review, by his words of 2026-10-11 and 2026-10-16 ("The double review
   (T18)"; route: inline, design passed by two read-only readers first)
   - [x] T18a The design (version 2, after two readers), the failure entry and the template's
     sentence with its test
-  - [ ] T18b After pull request 284 lands and he has answered: the rule declared with its home,
+  - [x] T18b After pull request 284 lands and he has answered: the rule declared with its home,
     protocol 6's pointer, the orchestrator line, their tests and the shared-phrase test
 
 ## Progress
@@ -4171,6 +4402,13 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `docs/FAILURES.md` gains `proposal-unreviewed`, its control owed by T18b. Left for T18b: the
   rule with its home in the protocols skill, protocol 6's pointer, the orchestrator line, their
   tests and the shared-phrase test.
+- 2026-10-16, T16e, his answer to the design, relayed by the lead's notice to 24 at 16:04 and read
+  in the lead's transcript (`e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 15142) with
+  `js-harness sessions --quote`, a user entry tapped in answer to the lead's question tool. The
+  question: "¿JH 24 construye la parte (b) de T16e así como está diseñada?", options "Sí, así
+  como está (Recomendada) | Solo la cobertura, sin rechazar"; his answer: "Sí, así como está
+  (Recomendada)". So slice (b) is built as designed, items 5 and 6, refusing included. Slice (a)
+  landed as pull request 314 (`225da7d`).
 
 - 2026-10-16, his batch A landed as pull request 272 (`main` 8c74001), after Codex (0.88, no
   finding). The register's entry the lead asked for, `pnpm-cleanup-deleted-link-targets`, is pull
@@ -4221,8 +4459,160 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     only by the verifiers' probes.
   The second pass comes before any rule gets a `row` that refuses (step 4), because a refusing
   row turns a false positive into a failed gate.
+- 2026-10-16, T12, by `JH 26 · canal y compactación` on `feat/practice-journey-t12`, from `main` 64933f6, on the
+  lead's notice ("rule-hierarchy T12 ..., the practice journey steps for the template's lines and for the reply hook,
+  test first"; a claim of the lead's). Inline, test first.
+  - The reply step was already built (`reply-hook`, JH 25, pull request 282), so the template step is what T12 owed.
+  - The step `template-lines` follows `project-uninstall`, whose second `init` has just written `AGENTS.md` into a
+    project that `uninstall` emptied, so the file is the installed copy's.
+  - It holds that file to three things, through `templateLinesProblem` of `scripts/practice-lib.mjs`:
+    - it is `agentsTemplate` of the candidate's source, so the copy installed is the candidate;
+    - it has the two sections T9 gave it (`TEMPLATE_SECTIONS`) and the line of the four states;
+    - its estimated tokens are at most half of `agents-budget`.
+  - RED: the test file failed to load on the missing export `TEMPLATE_SECTIONS`. GREEN:
+    `node --test scripts/practice-lib.test.mjs` passes 120 of 120.
+  - The journey, with uncommitted changes and no host step, ran
+    `node scripts/practice.mjs run --root D:\js-harness-practice --no-host`: exit 0, every step that ran PASS.
+    `template-lines` printed "in 639 estimated tokens of the 750 it may take". Its record line is
+    `{"date":"2026-10-17T00:20:03.772Z","ok":false,"candidate":{"branch":"feat/practice-journey-t12","commit":"43358a48","dirty":true}, …}`.
+    It is not ok because it left out `host-loads` and its tree was dirty.
+  - The same run shows the case `secondInitProblem` was written for. The project had committed an earlier
+    candidate's template (`budget 144 estimated tokens` at `commit-passes`). The second `init` rewrote it to this one's,
+    which the run committed as 7f79279.
+  - Not run: `host-loads`, which spends a model. The "Done when" line on the practice journey stays open for a run
+    with the host.
+  - Not touched: the step `project-uninstall`, where JH 22 holds a pending fix.
+
+- 2026-10-16, T16f second part, by `JH 28 · reserva B` on `feat/rules-installed-hash`, from `main` 53f79c4, on the
+  lead's notice (after T18b, "take rule-hierarchy T16f ... the hash of the rules with no scope (:1191) stamped in the
+  installed command, with doctor saying it is behind. Design first with two readers"; a claim of the lead's).
+  - The map: one read-only reader of `origin/main`. The design, version 1, went to two read-only readers (one
+    attacking its claims, one looking for what is missing); their three blockers (`compareSemver` on a hash, the
+    cache that cannot hold a list, a failed refetch keeping the old value) and their serious findings are in version 2,
+    "Reach: the hash of the installed command (T16f, second part)", with where each went. A second round read only
+    those blockers: all three resolved; its findings on the fixes went in too.
+  - Built, test first: `unscoped` and `shippedRulesHash` in `bin/lib/rules.mjs`; the row in
+    `bin/lib/rules-installed.mjs`, appended by `buildReport` for every caller; the hook's digest takes main's hash
+    when the copy is behind. RED: `bin/lib/rules-installed.test.mjs` failed to load on the missing module, then 7 of
+    `bin/doctor.test.mjs` failed on the missing row. GREEN: 9 of 9 and 79 of 79; the pins that moved in
+    `bin/js-harness.test.mjs`, `bin/tui.test.mjs` and `bin/clean-home.test.mjs` pass one file at a time.
+  - Also: the README's doctor section, the dispatcher's doctor line, "The stack doctor" in `docs/SPEC.md`, the
+    roadmap's Stack doctor list, and the three texts that still called the repository private (the comment on
+    `DEFAULT_REPO`, the roadmap's "Release source", the help line of `update`). The README's example keeps no
+    line for the row: its hash moves with every rule change, so a printed one would go stale.
+  - The independent verifier of `cd6a8e1` (Risk item 3): no blocker, every probe passed; its advisory that
+    `init` pins the copy's version in every project, which made the row `n/a` in each, fixed test first in
+    `34931d8` (a pin of the copy's own version is compared).
+  - gentle-ai approved `53f79c4..34931d8` (`cd6a8e1`, `34931d8`), escalated to high by item 3, lenses resilience,
+    reliability and readability; lineage `review-39e8773f218a735e`, acknowledged, authority burned. Its eleven
+    findings are advisory: R4-checkout-parse-unguarded does not hold (`readListText` catches its parse and
+    `readRules` never throws, `bin/lib/rules.mjs:300-304`); R4-serial-uncached-latency (the request runs after the
+    lookups, so a dead network adds up to 5 s) and R3-pin-null-version (an unreadable `package.json` gives `n/a`,
+    not `unknown`) are follow-ups; R2-update-help-text: the help line of `update` stopped saying "private" because
+    the repository is public, named in "What else changes".
+  - Codex reviewed `53f79c4..34931d8` in 2 parts: correct (0.88 and 0.96), recorded.
+
+- 2026-10-17, by `JH 21 · reserva de la noche` on `docs/open-work-text`, on the lead's triage of open work: four
+  task lines checked off whose work was done, each with its evidence (`gh pr view <n>` reads MERGED).
+  - T2, the reply check: pull request 282, merged as 23a3f25e. The `reply` key's default in `init` is T9, still
+    open. `asked-yes-not-his` in `docs/FAILURES.md` named T2 as its owed control; the reply check does not turn
+    back a yes asked on a step that is not his, so its control is now section 1 of the protocols skill.
+  - T3, the failures register: T3a to T3f are all checked.
+  - T16e, the merge command: its three slices are pull requests 314 (225da7d3), 328 (d0b25553) and 339
+    (685a4518).
+  - T17, the sweep of 2026-10-11: T17a to T17e are all checked.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `fix/doctor-rules-row`, item 2 of the lead's triage of open work:
+  the two follow-ups of gentle-ai's review of `53f79c4..34931d8` on the harness's rules row, built test first.
+  - R4-serial-uncached-latency: `buildReport` (bin/doctor.mjs) now asks for main's list beside the lookups of
+    the latest versions (`Promise.all`), so a slow network is waited on once. RED: "an online doctor asks for
+    main's list while the latest versions are still being looked up, not after them" saw every lookup give up
+    first.
+  - R3-pin-null-version: a pinned project and a copy whose own version cannot be read is `unknown`, not `n/a`;
+    offline it stays `n/a`, since nothing is compared (RED both, `bin/lib/rules-installed.test.mjs`).
+  - The `maintenance.auto` line of `bin/check-rules-row.test.mjs` is dropped: `repoTemplate` turns automatic
+    maintenance off in every repository it builds (`bin/lib/git-fixture.testkit.mjs:43-50,72-73`).
+  - Commits `7bdaa2e` and `d9f52c4`, the gate passed on both. gentle-ai: `1630123..7bdaa2e` high (item 4
+    escalated: two requests now run together), lenses resilience and reliability, approved and acknowledged,
+    lineage review-6fd0cbffb794ab8d; its WARNING that the unknown answer ran before the offline guard is fixed in
+    `d9f52c4` (medium, not due, under_budget); its WARNING that the `maintenance.auto` line was needed does not
+    hold (above). Codex on `1630123..d9f52c4`: correct (0.95), recorded.
+
+- 2026-10-17, T16e-f, by `JH 21 · reserva de la noche` on `feat/landing-rule-hash`, item 9 of the lead's triage of
+  open work, built test first. `rules change` ends its proposal line with `; declaration and source <hash>`, the
+  hash of the rule's declaration together with its entry of `docs/rule-sources.json` (`declarationOf` given the
+  sources, `bin/lib/rules-change-run.mjs`). `recordLandings` (`bin/merge-queue.mjs`) reads both files at the landed
+  head, and `landingLines` matches such a line only by that hash, so a second proposal of the same declaration with
+  another source is no longer confirmed (verifier A1 on `9c3f41a`). A line written before, ending `; declaration
+  <hash>`, keeps its match by the declaration alone; a line with neither keeps the time bound. RED: the sourced
+  match, a line with no hash beside hashed ones, and the land of two proposals that differ only in source (three of
+  `bin/merge-queue.test.mjs`), and the four relief-line tests of `bin/lib/rules-change-run.test.mjs`. The CRLF relief
+  file test passed at once and stays as a pin (A3): `\s*$` already took the `\r`. Committed as `fcae3dd` after
+  main's red `review-starts` test was fixed (PR 400). gentle-ai on `db31c96..fcae3dd`: high by escalation (item 3,
+  the relief line's format), lenses risk and reliability, approved and acknowledged (lineage
+  `review-82c5317205449ba6`), two advisories. R3: a sources file that does not parse also blocked the match by the
+  declaration alone; fixed in the next commit with its test seen red (the head's declarations are read apart from its
+  sources, and a sources file that does not parse is said and matches no sourced line). R3: the hash's shape when no
+  sources are given; left, since it is the old line's hash on purpose. Codex on `db31c96..b9fd628` (1 part, 88,847
+  input tokens): the patch is correct (0.91), no finding. The lead asked that Codex also read `ac6cf2c..9c3f41a`;
+  `codex-review --base ac6cf2c --again` from a detached worktree at `9c3f41a` refused it as a second recheck of the
+  review that ended at `12773f4`, so that range keeps its skip record, and the matching code it held is the code the
+  review of `db31c96..b9fd628` read and found correct. gentle-ai on `b9fd628`, the advisory's fix, assessed by its
+  gate: medium, 40 lines, review not due (`under_budget`).
+
+- 2026-10-17, T9, the reply check on by default, built by `JH 5 · canal entre sesiones` on
+  `feat/init-reply-on` from origin/main, on the lead's order of 11:22Z (item 5 of its triage
+  note). His answer 11, "Prendido por defecto (Recomendada)", read above (the lead's transcript
+  `e152c9d8`, line 13566). `writeProject` (`bin/lib/project.mjs`) writes `{ version, reply: true }`
+  in a new project's `harness.json`, so the reply check runs there with the English labels; a
+  clone's committed pin is kept as it is, and `false` turns the check off. Test first:
+  `bin/lib/project.test.mjs` "initProject on a fresh repo writes harness.json…" failed before the
+  change (actual `{ version: '0.1.0' }`); after it, the project, init, install, update, reply,
+  doctor and journey tests: 612 tests, 607 pass, 0 fail. README says it at `init` and under
+  `js-harness reply`. Committed as 0d3535aa (gate passed); gentle-ai 16301239..0d3535aa medium, not
+  due (under_budget), not escalated; Codex 1630123..0d3535a correct (0.98), no findings.
+
+- 2026-10-17, T16f, three of the parts left, by `JH 21 · reserva de la noche` on `feat/rules-reach-rest`, item 10 of
+  the lead's triage of open work, each built test first. The part "which shipped rules reach an installed project"
+  is his ninth difference and stays.
+  - The practice journey checks all three events of the rules hook (`hostCallProblems`, `scripts/practice-lib.mjs`):
+    a `UserPromptSubmit` hook at the first call, a `SessionStart:compact` hook beside resume's and the seeded entry's
+    at the compaction, and a `SubagentStart` hook at a new fourth call, `subagent`, which starts one sub-agent. RED:
+    the recorded 2.1.296 calls, made before the hook existed, now name each missing event. The real run
+    `node scripts/practice.mjs run --root D:\js-harness-practice --only host-loads`, on Claude Code 2.1.301, passed
+    the four calls: 0.0159 dollars, 35 s. `docs/SPEC.md` says four calls.
+  - The orchestrator skill names the rules in force among the places where each thing lives ("read the list, not
+    the relief file"), and its start from the handover prompt reads the list first (`bin/lib/manifest.test.mjs`,
+    RED then 174 of 174).
+  - The harness's lines of the `AGENTS.md` template (`templateBlock`, `bin/lib/project.mjs`) sit between two marks;
+    the first carries the hash of the lines. `sync` writes them as the running version has them while that hash
+    still matches, says `rendered`, and keeps an edited block with a `kept` line on every sync. The file is a
+    committed one, so git undoes the write. RED: `bin/lib/template-block.test.mjs` and the new
+    `bin/lib/project.test.mjs` test could not load the functions. A CRLF checkout keeps its line ends and reads as
+    unedited. README, under `js-harness sync`.
+  - The first two parts are commit `968f0fc`; gentle-ai on `968f0fc` (`--base-ref db31c96`, untracked excluded):
+    medium, 81 lines, review not due (`under_budget`). The third is the next commit, reviewed alone (item 3).
+  - gentle-ai on `968f0fc..cf820d2`, the third part: high by escalation (item 3, sync writes a project's committed
+    `AGENTS.md`), lenses risk, resilience and reliability, approved and acknowledged (lineage
+    `review-442164ed6054f39b`). Four advisories. R3 and R4: a block sync could not write again left the sync up to
+    date with exit 0; fixed in the next commit, test seen red (code 1, not up to date, the problem said). Left: a read
+    error of `AGENTS.md` is taken as no block (R3, the same as before this change for a missing file), and the
+    install log lines of `rendered` have no test of their own (R3, a suggestion).
+  - gentle-ai on `1bf827e`, that fix, assessed by its gate: medium, 21 lines, review not due (`under_budget`). Codex
+    on `db31c96..1bf827e` (121,867 input tokens): incorrect (0.94), one P2: an `AGENTS.md` that is a link was read
+    and written through, so a shared target outside the project was overwritten where git, holding only the link,
+    could not give it back. Fixed in the next commit: sync reads `AGENTS.md` with `lstat` and keeps a link with a
+    `kept` line; RED seen with an injected `lstat`, and a test with a real link that runs where links can be made
+    (the gate's Ubuntu; skipped on this Windows machine). That fix is `37037bb`; gentle-ai on `37037bb`, assessed
+    by its gate: medium, 64 lines, review not due (`under_budget`). Codex's recheck on `1bf827e..37037bb` (32,356
+    input tokens): correct (0.98), the finding fixed.
 
 ## Next step
+**State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
+(worktree `D:/js-harness-worktrees/rules-installed-hash`): designed with two readers and a second round,
+built test first, verified, approved by gentle-ai and Codex (see "Progress"). Next: the pull request and the
+lead's notice; the follow-ups above. T18b is on `main` (pull request
+345).
+
 **State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai
 approved and acknowledged, the verifier passed. Next: Codex, `merge-tree`, and a draft pull
 request to the lead's queue. With it, step 2's batches are done; the `AMOUNT` fix is pull request

@@ -1,10 +1,10 @@
-// The third skill, `js-harness-protocols`: what to do in six situations, loaded only when a session is in one of
-// them. One skill and not six, because the description of every installed skill is read on every turn. The design
+// The third skill, `js-harness-protocols`: what to do in seven situations, loaded only when a session is in one of
+// them. One skill and not seven, because the description of every installed skill is read on every turn. The design
 // is in odd/tasks/rule-hierarchy.md ("Protocols", T7). Each section opens with the incident it came for and its
 // date, so that it can be withdrawn when the incident has not come back; a rule it relies on is named by its id
 // (`rule:<id>`), never restated, so `js-harness rules change` reaches it with nothing to carry by hand.
 
-/** The six situations, in the order of the index and of the sections. */
+/** The seven situations, in the order of the index and of the sections. */
 export const PROTOCOLS = [
   'Asking the user for a decision',
   'Closing a reply',
@@ -12,12 +12,13 @@ export const PROTOCOLS = [
   'Changing a rule, a new one included',
   'Reporting a mistake',
   'Handing off, to the user, to a session or to a sub-agent',
+  'Reviewing throughput',
 ];
 
 export function protocolsSkillContent(version) {
   return `---
 name: js-harness-protocols
-description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake or handing work off (js-harness v${version}).
+description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off or reviewing throughput (js-harness v${version}).
 ---
 
 # Protocols
@@ -36,6 +37,7 @@ Incident (2026-10-09): a session stopped and waited 17 hours for the user's yes 
 - One decision a question, one question at a time, never while work runs. Where an orchestrator holds its role, the question goes through it (\`js-harness-orchestrator\`, "Questions to the user").
 - A question asked again says first that the earlier answer still holds, and what changed since.
 - A short answer that fits two readings is asked about, not guessed.
+- A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing. The writer searches the user's earlier words on the subject and names the search. Each reader gets the whole text, the user's words and the paths it cites; the findings go in the feature document, or the orchestrator's notes when there is none. The version the user gets says what each reader changed and what stays unguaranteed; where readers disagree the writer decides on evidence, and what is not settled is unguaranteed. A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round. Readers run on the reader model the rules give, or where none is declared on the session's own model; a host with no sub-agents asks another session. Code is not this: it has its reviews (section 3). Not for a question of fact (a figure or an outcome looked up, nothing proposed), nor for a step or a choice whose reviewed text the question names by path.
 
 ## 2. ${PROTOCOLS[1]}
 
@@ -54,9 +56,10 @@ Incident (2026-10-10): a check and the step it should allow were joined by a sem
 - Say its count first: how many runs, and what each costs.
 - One try. When it fails, read why before anything runs again; never retry in a loop.
 - The proof is read before the command it allows. Two steps share one command only when the second is conditional on the first (\`&&\`, never \`;\`).
-- An assessment is read before the next command. After the default branch is merged into a branch, the base of the range to review or assess is that merge commit.
+- An assessment is read before the next command. Give a gentle-ai review, by its hash, a base on the head's first-parent line: the last reviewed boundary, the commit that merged the default branch in, or \`git merge-base <default branch> HEAD\` when it never was; never the name of a branch that moves. gentle-ai diffs the base's tree against the head's and walks the head's first parents for it: off that line its preflight runs about 216 git commands instead of 31 and can time out, and a base the head is behind puts the newer work of that branch in the candidate, reversed. \`js-harness guard\` refuses such a base. After the default branch is merged into a branch, the base of the range to review or assess is that merge commit, even where an older boundary was reviewed. An assess that finds nothing pending (\`unassessable\`, "no pending changes") is no candidate: run no review for it.
 - A stacked pull request is merged after its base, or its base is changed before the one under it is merged.
-- A review candidate is a work-unit commit or a slice, never the whole branch. Where the project's \`AGENTS.md\` pre-grants review consent, run the \`granted\` invocation unasked; otherwise the consent is the user's. Where the project's \`codexReview\` switch is on, Codex reviews each approved slice of code (\`js-harness codex-review --base <boundary>\`) before the push.
+- Run the installed \`js-harness\`, not your branch's \`node bin/js-harness.mjs\`, except to test your own change: a branch's copy lacks what main gained since it was cut, and five ready notices were never sent because their branch's notify had no \`--pr\` (2026-10-17).
+- A review candidate is a work-unit commit or a slice, never the whole branch. Where the project's \`AGENTS.md\` pre-grants review consent, run the \`granted\` invocation unasked; otherwise the consent is the user's. Where the project's \`codexReview\` switch is on, Codex reviews each approved slice of code (\`js-harness codex-review --base <boundary>\`) before the push. Name each code commit the review approved, by its hash or a range \`a..b\` that holds it, on a line of the feature document that says gentle-ai, on the same branch: the merge queue refuses a code commit with no such line. When a gentle-ai command ends with \`operation_timeout\`, run that same command once more, as it was given (never a new lineage); when it times out again, the slice goes on without that review: name its range on a gentle-ai line of the feature document with both times and the words "not reviewed", and Codex reviews the range as it does every slice of code.
 
 ## 4. ${PROTOCOLS[3]}
 
@@ -93,5 +96,19 @@ Incident (2026-10-10): a figure that was arithmetic and never measured, that thr
 - What another session, a sub-agent or the user reports as done outside the session is a claim: check one thing of it before building on it.
 - A claim that something is absent names the search that proves it, and why that search could have found it.
 - A sub-agent runs on the model and effort that the rules in force give its kind of work (\`rule:subagent-reader-model\`, \`rule:subagent-writer-model\`, \`rule:subagent-effort\`; \`js-harness rules <id>\` prints one); the guard refuses another model where those rules are in force.
+- A plan or a design handed on has passed its double review first (\`rule:double-review\`, section 1).
+
+## 7. ${PROTOCOLS[6]}
+
+Incident (2026-10-16): JH 28 sat 239 minutes idle, 194 of them after its pull request landed, and a red land from a flaky test was relayed as a guess while the gate log held the failing test names; neither was seen until the user asked where the time went.
+
+The measure, the trigger and the re-measure are commands: the heartbeat's \`DUE:\` line names the review and what to run, and \`js-harness throughput\` prints the table. This section is the judgment no command makes.
+- Candidates: each with its baseline, target, cost, owner, risk item, and why quality is unchanged: no check, review or test is removed or weakened, and the land's proof never shrinks. Each figure is marked measured (with the row of the table it comes from), derived, or estimate.
+- Readers: only when a candidate list goes to the user, never on the daily review: it first passes the two readers of section 1 (\`rule:double-review\`), one rerunning the figures and attacking the reasoning, one looking for what is missing; the version the user gets lists what they changed.
+- Stop rule: a candidate whose gain is less than its cost is dropped, and why is written down. Record each review with \`js-harness throughput reviewed --day <day> --found nothing|candidates\`, and what ships with \`js-harness throughput shipped <item>\`. After \`rule:throughput-quiet-runs\` reviews in a row that found nothing, the review comes every \`rule:throughput-quiet-days\` instead of daily; one that finds candidates makes it daily again.
+- His decisions: spend, a protocol change, a security or system setting, anything irreversible, one question at a time (section 1). The lead assigns everything else.
+- Five questions: it happened (the incident); twice in a day, at a cost of up to 64.4 session-hours of turns that ended in silence over two days; a check does the measuring, the trigger, the snapshots and the re-measure, so only this judgment is prose; no section held a recurring review, and sections 1 and 4 are named, not copied; its cost and what leaves follow.
+- What leaves: the hand-written measure scripts in the lead's notes.
+- Cost: one command a day, weekly once quiet, and two readers only with a candidate list. Reviewed by 2026-11-16.
 `;
 }

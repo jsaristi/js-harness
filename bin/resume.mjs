@@ -32,9 +32,11 @@ import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { modeLines } from './contract.mjs';
+import { featureParts } from './lib/feature-parts.mjs';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
+import { recordReviewStarts } from './lib/review-starts.mjs';
 import { dueNotice } from './lib/memory-hygiene.mjs';
 import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
@@ -88,7 +90,10 @@ const DEADLINE_PASSED = 'this hook\'s own deadline passed';
 
 const NO_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST_COMPACTED = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = `Then tell the orchestrator (${ORCHESTRATOR_IS}) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
+// The hour of the compaction is the hook's own clock, since the hook runs at it: 7 of 60 such notices typed it in UTC
+// when the line left it to the session (odd/tasks/wake-and-flag.md, T4).
+const twoDigits = (n) => String(n).padStart(2, '0');
+const notifyLine = (ms) => `Then tell the orchestrator (${ORCHESTRATOR_IS}) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at ${twoDigits(new Date(ms).getHours())}:${twoDigits(new Date(ms).getMinutes())}, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
@@ -388,6 +393,47 @@ function openingLines(found, title) {
 
 const TRUST = 'and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.';
 const WRITTEN_FROM = 'in the worktree this session\'s last notice was written from';
+// After the parts of one feature document (odd/tasks/resume-open-task.md, S6): the rest of `TRUST`, as a sentence.
+const PARTS_TRUST = 'Trust them over the summary. Then repeat to the user any question that is still open.';
+
+/** The text of a feature document, or `null` when it cannot be read: the hook reads it once, for its parts and
+ * for the mode line. */
+function documentText(file, readFile) {
+  try {
+    return readFile(file);
+  } catch {
+    return null;
+  }
+}
+
+/** The lines that tell a session which parts of the one feature document `text` to read (odd/tasks/resume-open-task.md,
+ * S6), or today's line when the document cannot be read or gives no part. `parts` is `featureParts(text)`. */
+function readLinesOf(text, parts) {
+  const named = parts === null ? [] : partLines(parts);
+  if (named.length === 0) return [`Read "Next step" in that document, ${TRUST}`];
+  return [`Read these parts of it (${countSaid(parts.lines)} lines in all), not the whole file:`, ...named.map((line) => `  ${line}`), PARTS_TRUST];
+}
+
+/** One line for each part `featureParts` found, in the order S6 gives. */
+function partLines({ sections, task, specs, entries }) {
+  const lines = sections.map((section) => `"${section.title}": ${rangesSaid([section])}`);
+  if (task !== null) lines.push(`the task ${task.id}: ${rangesSaid([task])}`);
+  if (specs.length > 0) lines.push(`its spec${specs.length === 1 ? '' : 's'} ${specs.map((spec) => spec.id).join(', ')}: ${rangesSaid(specs)}`);
+  if (entries.length > 0) lines.push(`its last log entr${entries.length === 1 ? 'y' : 'ies'}: ${rangesSaid(entries)}`);
+  return lines;
+}
+
+/** A count of lines as people write it: `4,070`. */
+const countSaid = (count) => count.toLocaleString('en-US');
+
+/** `lines a-b, c (n lines)`: the ranges, 1-based and inclusive as the Read tool's `offset` takes them, and how many
+ * lines they hold together. */
+function rangesSaid(ranges) {
+  const count = ranges.reduce((sum, { start, end }) => sum + end - start + 1, 0);
+  const said = ranges.map(({ start, end }) => (start === end ? `${start}` : `${start}-${end}`)).join(', ');
+  const word = ranges.length === 1 && ranges[0].start === ranges[0].end ? 'line' : 'lines';
+  return `${word} ${said} (${countSaid(count)} line${count === 1 ? '' : 's'})`;
+}
 const RELIEF_READ = 'Read its last lines before anything else: it is the orchestrator\'s state, and no feature document is. Trust it over the summary. Then repeat to the user any question that is still open.';
 
 /** The temp folder the pause's state falls back to: under the harness home when `JS_HARNESS_HOME` is set, so a made-up
@@ -849,8 +895,8 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
     const wrote = writtenOf(stretch?.facts?.wrote ?? null, { run, isFile });
     const feature = wrote === null ? featureOf(record, sessionId, title, { run, readFile }) : null;
     if (wrote !== null) {
-      subject = { file: wrote.path, worktree: wrote.worktree };
-      lines.push(`Feature document: ${wrote.path}  (${wrote.branch === null ? 'branch not known' : `branch ${wrote.branch}`}, the last feature document this session wrote, by its transcript)`, `Read "Next step" in that document, ${TRUST}`);
+      subject = documentSubject(wrote.path, wrote.worktree, readFile);
+      lines.push(`Feature document: ${wrote.path}  (${wrote.branch === null ? 'branch not known' : `branch ${wrote.branch}`}, the last feature document this session wrote, by its transcript)`, ...readLinesOf(subject.text, subject.parts));
     } else if (feature.unknown !== undefined && guard.refused) {
       // The deadline passed between two of the search's calls: what git "did not say" is that it was not asked.
       left.push(STEP.feature, STEP.folders);
@@ -866,14 +912,14 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
         }
       }
     } else if (feature.documents.length === 1) {
-      subject = { file: feature.documents[0], worktree: feature.worktree };
-      lines.push(`Feature document: ${feature.documents[0]}  (branch ${feature.branch}, ${placeOfFeature(feature)})`, `Read "Next step" in that document, ${TRUST}`);
+      subject = documentSubject(feature.documents[0], feature.worktree, readFile);
+      lines.push(`Feature document: ${feature.documents[0]}  (branch ${feature.branch}, ${placeOfFeature(feature)})`, ...readLinesOf(subject.text, subject.parts));
     } else {
       lines.push(`Feature documents: the branch ${feature.branch} changed ${feature.documents.length}, ${placeOfFeature(feature)}; this session works on one of them`);
       lines.push(...feature.documents.map((document) => `  ${document}`), `Read "Next step" in the one this session was working on, ${TRUST}`);
     }
   }
-  if (subject !== null && !orchestrator) lines.push(...nextModeLines(subject.file, input, readFile));
+  if (subject !== null && !orchestrator) lines.push(...nextModeLines(subject, input));
 
   // The stretch's own steps after the folders: a stretch the deadline passed names the pause and the reply with it.
   if (transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
@@ -887,22 +933,26 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   else lines.push(...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now(), quoted })));
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
-  if (!orchestrator) lines.push(NOTIFY);
+  if (!orchestrator) lines.push(notifyLine(now()));
   return lines;
 }
 
-/** The line on the mode the next open task of the feature document `file` calls for (odd/tasks/effort-by-task.md,
- * S2), or none when the document cannot be read or its next open task names no kind. A session cannot set its own effort, so the line
- * is for it to tell the person. The rules are those of the document's tree (`<tree>/odd/tasks/<name>.md`). On Codex,
- * whose transcripts are under a `.codex` folder, the table's models are Claude's: the line names the kind only. */
-function nextModeLines(file, input, readFile) {
-  let markdown;
-  try {
-    markdown = readFile(file);
-  } catch {
-    return [];
-  }
-  const next = modeLines(markdown, path.resolve(file, '..', '..', '..')).find((task) => !task.done);
+/** The feature document `file` the hook names, read once: `{ file, worktree, text, parts }`, with `text` and `parts`
+ * `null` when it cannot be read. */
+function documentSubject(file, worktree, readFile) {
+  const text = documentText(file, readFile);
+  return { file, worktree, text, parts: text === null ? null : featureParts(text) };
+}
+
+/** The line on the mode the next open task of the feature document `subject` calls for (odd/tasks/effort-by-task.md,
+ * S2), or none when the document cannot be read or that task names no kind. The task is the one its parts name
+ * (odd/tasks/resume-open-task.md, S5): the open task its first resume section names first, else the first open one.
+ * A session cannot set its own effort, so the line is for it to tell the person. The rules are those of the
+ * document's tree (`<tree>/odd/tasks/<name>.md`). On Codex, whose transcripts are under a `.codex` folder, the
+ * table's models are Claude's: the line names the kind only. */
+function nextModeLines({ file, text, parts }, input) {
+  if (text === null || parts.task === null) return [];
+  const next = modeLines(text, path.resolve(file, '..', '..', '..')).find((task) => !task.done && task.id === parts.task.id);
   // A task with no kind says nothing new (it takes the session's effort): only a document that names kinds gets the line.
   if (next === undefined || next.kind === null) return [];
   if (/[\\/]\.codex[\\/]/.test(input?.transcript_path ?? '')) {
@@ -927,17 +977,27 @@ function harnessRootOf(folder, isFile) {
  * call's folder, or a call that does not pass the pause. `pauseNotice` throws for a session id it cannot name a
  * state file by; the caller's catch turns that into silence. The state goes to the harness home, and its temp folder
  * is under the same home when `JS_HARNESS_HOME` is set, so a made-up home never reaches the real temp folder. */
-function pauseLine(input, { defaultCwd, env, homedir, isFile, run }) {
+function pauseLine(input, { defaultCwd, env, homedir, isFile, run, fileSystem = fs, now = Date.now }) {
   if (!isObject(input)) return null;
+  const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
+  const root = harnessRootOf(cwd, isFile);
+  if (root === null) return null;
+  const home = env.JS_HARNESS_HOME || homedir();
+  // The start of each gentle-ai review live in the project's store, kept before gentle-ai deletes it at the burn (B6
+  // of odd/tasks/throughput-review.md). Any session's call serves, a sub-agent's too, since the store is the
+  // project's. The common folder is found by files, and a layout they do not tell is skipped, so no call asks git;
+  // whatever fails here leaves the notices below as they are.
+  try {
+    const main = mainCheckoutByFiles(cwd, fileSystem);
+    if (main !== null) recordReviewStarts({ commonDir: path.join(main, '.git'), home, slug: projectSlug(main), now: now(), fileSystem });
+  } catch {
+    // The review's start is lost; the session's notices are not.
+  }
   // The web notice is said to a sub-agent too, since research is mostly theirs; the pause and the inbox are the
   // session's own, and need its transcript.
   const own = !(typeof input.agent_id === 'string' && input.agent_id !== '') && typeof input.transcript_path === 'string' && input.transcript_path !== '';
   const web = webBlockNotice(input);
   if (!own && web === null) return null;
-  const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
-  const root = harnessRootOf(cwd, isFile);
-  if (root === null) return null;
-  const home = env.JS_HARNESS_HOME || homedir();
   // The window the host compacts on, when a setting gives it: the pause is measured against it, since a session
   // measured on another window, or on none, would be told too late (odd/tasks/session-channel.md, T6b). The Claude
   // home is under the same home as the state, so a made-up home never reads the real settings.
@@ -977,6 +1037,8 @@ export async function resumeMain(
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
     readdir = (absolute) => fs.readdirSync(absolute),
     stat = (absolute) => fs.statSync(absolute),
+    // The file system the record of review starts is written through (B6), whole, since it lists, stats and appends.
+    fileSystem = fs,
     now = Date.now,
     readStdin = () => fs.readFileSync(0, 'utf8'),
     stdinIsTTY = tty.isatty(0),
@@ -1020,7 +1082,7 @@ export async function resumeMain(
       }
     };
     if (pause) {
-      const line = pauseLine(input, { defaultCwd, env, homedir, isFile, run });
+      const line = pauseLine(input, { defaultCwd, env, homedir, isFile, run, fileSystem, now });
       if (line !== null) stdout(line);
       return 0;
     }

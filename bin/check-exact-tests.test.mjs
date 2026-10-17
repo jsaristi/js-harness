@@ -28,8 +28,9 @@ function project({ script = 'node --test', harness = { exactTests: 'shadow' } } 
   assert.equal(spawnSync('git', ['init', '-q'], { cwd: root }).status, 0);
   const gate = async (at = root) => {
     const events = [];
-    const rows = await checkSensors(at, { gateLog: { append: (_, event) => (events.push(event), { ok: true }) } }, { home, held: true, load: false });
-    return { rows, end: events.find((event) => event.event === 'end') };
+    const times = [];
+    const rows = await checkSensors(at, { gateLog: { append: (_, event) => (events.push(event), { ok: true }), appendTestTimes: (_, line) => (times.push(line), { ok: true }) } }, { home, held: true, load: false });
+    return { rows, end: events.find((event) => event.event === 'end'), times };
   };
   const traces = path.join(root, '.git', 'js-harness', 'traces');
   const done = () => [root, home].forEach((one) => fs.rmSync(one, { recursive: true, force: true }));
@@ -126,6 +127,34 @@ test('in skip mode a second gate runs only the changed file, and its end line ha
     assert.equal(second.end.sensors[0].shadow, undefined);
   } finally {
     done();
+  }
+});
+
+// B5 (odd/tasks/throughput-review.md): a gate that traces keeps each test file's seconds beside the log, under its
+// id, never on its end line, in shadow and in skip mode alike; in skip mode, of the files that ran.
+test('a gate that traces keeps the seconds of each test file it ran in a line of its own, keyed by the gate', async () => {
+  for (const mode of ['shadow', 'skip']) {
+    const { root, gate, done } = project({ harness: { exactTests: mode } });
+    try {
+      const first = await gate();
+      assert.equal(first.times.length, 1, mode);
+      assert.equal(first.times[0].id, first.end.id);
+      assert.deepEqual(first.times[0].files.map((file) => file.test).sort(), ['a.test.mjs', 'b.test.mjs']);
+      for (const file of first.times[0].files) assert.ok(file.seconds > 0 && file.seconds < 60, `${mode}: ${JSON.stringify(file)}`);
+      assert.equal(JSON.stringify(first.end).includes('a.test.mjs'), false, 'the end line holds no list of files');
+      fs.writeFileSync(path.join(root, 'b.test.mjs'), "import { test } from 'node:test';\ntest('y', () => {});\n");
+      const second = await gate();
+      assert.deepEqual(second.times[0].files.map((file) => file.test).sort(), mode === 'skip' ? ['b.test.mjs'] : ['a.test.mjs', 'b.test.mjs']);
+    } finally {
+      done();
+    }
+  }
+  // A gate that does not trace keeps none.
+  const quiet = project({ harness: {} });
+  try {
+    assert.deepEqual((await quiet.gate()).times, []);
+  } finally {
+    quiet.done();
   }
 });
 

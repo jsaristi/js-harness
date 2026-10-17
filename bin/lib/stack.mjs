@@ -364,7 +364,11 @@ export const tools = [
     }),
   },
   {
+    // Shown only while the project's languageServer switch is not off, as the codex row follows codexReview: off is
+    // the control of language-server-load (docs/FAILURES.md), so an enable fix there would bring that load back. A
+    // switch that did not resolve shows it.
     id: 'typescript-lsp',
+    when: (deps) => deps.functions?.languageServer?.value !== 'off',
     installed: ({ home }) => pluginInstalledVersion(home, 'typescript-lsp@claude-plugins-official'),
     configured: ({ home }) => ({
       claude: claudeEnabledPlugin(home, 'typescript-lsp@claude-plugins-official'),

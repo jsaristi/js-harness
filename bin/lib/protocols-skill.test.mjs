@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { protocolsSkillContent, PROTOCOLS } from './protocols-skill.mjs';
 import { RULES } from './rules-data.mjs';
+import { agentsTemplate } from './project.mjs';
 
 const TEXT = protocolsSkillContent('0.1.0');
 
@@ -15,6 +16,14 @@ function sections(text) {
   return found;
 }
 
+test('section 3 gives a gentle-ai review a base on the first-parent line, and says what a timeout leaves', () => {
+  const text = protocolsSkillContent();
+  assert.ok(text.includes('a base on the head\'s first-parent line'));
+  assert.ok(text.includes('`js-harness guard` refuses such a base'));
+  assert.ok(text.includes('When a gentle-ai command ends with `operation_timeout`, run that same command once more'));
+  assert.ok(text.includes('the words "not reviewed", and Codex reviews the range'));
+});
+
 test('the protocols skill has a one-line description a host can read, with the version', () => {
   const frontmatter = /^---\nname: js-harness-protocols\ndescription: (.+)\n---\n/.exec(TEXT);
   assert.ok(frontmatter, TEXT.slice(0, 200));
@@ -23,12 +32,12 @@ test('the protocols skill has a one-line description a host can read, with the v
   assert.match(frontmatter[1], /\(js-harness v0\.1\.0\)/);
 });
 
-test('the protocols skill opens with an index of its six situations, in the order of its sections', () => {
-  assert.equal(PROTOCOLS.length, 6);
+test('the protocols skill opens with an index of its seven situations, in the order of its sections', () => {
+  assert.equal(PROTOCOLS.length, 7);
   const body = TEXT.split('\n---\n')[1];
-  const index = body.split('\n').filter((line) => /^\d\. /.test(line)).slice(0, 6);
+  const index = body.split('\n').filter((line) => /^\d\. /.test(line)).slice(0, PROTOCOLS.length);
   assert.deepEqual(index, PROTOCOLS.map((title, i) => `${i + 1}. ${title}.`));
-  assert.ok(body.indexOf(index[5]) < body.indexOf('\n## '), 'the index is above the first section');
+  assert.ok(body.indexOf(index.at(-1)) < body.indexOf('\n## '), 'the index is above the first section');
   assert.deepEqual(sections(TEXT).map((section) => section.heading), PROTOCOLS.map((title, i) => `${i + 1}. ${title}`));
 });
 
@@ -75,8 +84,39 @@ test('every rule id the protocols skill names is declared, and none of their val
   for (const id of named) {
     const rule = RULES.find((declared) => declared.id === id);
     assert.ok(rule, `${id} is declared`);
-    if (rule.value !== undefined) assert.ok(!TEXT.includes(String(rule.value)), `${id}'s value is not written in the skill`);
+    // A value is restated with its unit ("7 days"); a bare digit would match every date of the text.
+    if (rule.value !== undefined) assert.doesNotMatch(TEXT, new RegExp(`\\b${rule.value} ?${String(rule.unit ?? '').replace(/s$/, '')}`), `${id}'s value is not written in the skill`);
   }
+});
+
+// Section 7 (odd/tasks/throughput-review.md, S5): steps 4-7 of the throughput review only, since the measure, the
+// trigger and the re-measure are commands, with the items section 4 asks of a new protocol.
+test('the throughput review section holds its judgment steps, its five questions, its cost and the rules it reads by id', () => {
+  const review = sections(TEXT)[6];
+  const text = review.lines.join('\n').replace(/\s+/g, ' ');
+  assert.match(review.lines.find((line) => line.trim() !== ''), /^Incident \(2026-10-16\): .*239 minutes.*flaky test/);
+  for (const step of ['- Candidates: ', '- Readers: ', '- Stop rule: ', '- His decisions: ', '- Five questions: ', '- What leaves: ']) assert.ok(text.includes(step), step);
+  assert.ok(review.lines.some((line) => /^- Cost: .+ Reviewed by 2026-11-16\.$/.test(line)), text);
+  for (const id of ['throughput-quiet-runs', 'throughput-quiet-days', 'double-review']) assert.ok(text.includes(`\`rule:${id}\``), id);
+  assert.ok(text.includes('js-harness throughput reviewed'), 'it says how a review is recorded');
+  assert.ok(text.includes('no check, review or test is removed or weakened'), 'the hard limit is a candidate\'s condition');
+});
+
+// The double review (odd/tasks/rule-hierarchy.md, T18): its home is section 1, section 6 names it for what is handed
+// on, and the template init writes keeps a copy that may not drift from it.
+test('a session runs the installed js-harness, and its branch\'s copy only to test its own change', () => {
+  const [, , costs] = sections(TEXT).map((section) => section.lines.join('\n').replace(/\s+/g, ' '));
+  assert.ok(costs.includes('- Run the installed `js-harness`, not your branch\'s `node bin/js-harness.mjs`, except to test your own change: a branch\'s copy lacks what main gained since it was cut, and five ready notices were never sent because their branch\'s notify had no `--pr` (2026-10-17).'), costs);
+});
+
+test('a proposal reaches the user only after two readers, and a handoff names the rule', () => {
+  const squash = (text) => text.replace(/\s+/g, ' ');
+  const [asking, , , , , handoff] = sections(TEXT).map((section) => squash(section.lines.join('\n')));
+  assert.match(asking, /A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing\./);
+  assert.match(asking, /A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round\./);
+  assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
+  assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
+  assert.ok(squash(agentsTemplate('project')).includes('one attacks its claims, one looks only for what is missing'));
 });
 
 test('the protocols skill ships to every user of the harness, so it speaks of the user', () => {

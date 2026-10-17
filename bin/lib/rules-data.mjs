@@ -17,6 +17,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "ci-gate-bound",
+    "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 8,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|jobs?)\\b.{0,60}\\b(?:not done|cancelled|stopped)\\b.{0,15}\\b(?:after|within|past)\\s+{amount}"
+    ]
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
@@ -91,6 +102,19 @@ export const RULES = [
     ]
   },
   {
+    "id": "double-review",
+    "subject": "a design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it",
+    "owner": "sebastian",
+    "since": "2026-10-16",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "first passes two read-only readers that did not write it",
+      "one attacks its claims, one looks only for what is missing"
+    ],
+    "failure": "proposal-unreviewed",
+    "review": "2026-11-16"
+  },
+  {
     "id": "gate-log-command",
     "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
     "owner": "project",
@@ -136,6 +160,22 @@ export const RULES = [
       "^(?!.*\\bruleValue\\().*\\bwaits?\\b.{0,40}\\b(?:turn|lock)\\b.{0,40}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))",
       "^(?!.*\\bruleValue\\().*\\b(?:turn|lock)\\b.{0,40}\\bwaits?\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=\\b(?:minutes?|min|hours?|h))"
     ]
+  },
+  {
+    "id": "memory-index-bytes",
+    "subject": "the bytes the memory index may hold before a memory hygiene pass is due",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 4000,
+    "unit": "bytes"
+  },
+  {
+    "id": "memory-pass-days",
+    "subject": "the days after a verified memory hygiene pass when the next is due, if a note was written since",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
   },
   {
     "id": "person-present",
@@ -241,12 +281,29 @@ export const RULES = [
     ]
   },
   {
+    "id": "sensor-silence",
+    "subject": "how long one sensor of the gate may write nothing before it is stopped and the commit refused",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 20,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:silent|silence|writes nothing|wrote nothing)\\b.{0,30}{amount}"
+    ]
+  },
+  {
     "id": "sensor-timeout",
     "subject": "how long one sensor of the gate may run before it is stopped and the commit refused",
     "owner": "project",
-    "since": "2026-10-15",
-    "value": 20,
+    "since": "2026-10-16",
+    "value": 60,
     "unit": "minutes",
+    "was": [
+      {
+        "value": 20,
+        "until": "2026-10-16"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
     ]
@@ -326,6 +383,38 @@ export const RULES = [
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}"
     ]
+  },
+  {
+    "id": "throughput-backfill-days",
+    "subject": "how many closed days back the heartbeat writes a missing throughput snapshot for",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 14,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-compare-days",
+    "subject": "how many days a side a throughput comparison needs before it judges a change",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-quiet-days",
+    "subject": "how many days after the last recorded throughput review the next is due once the review has gone quiet",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-quiet-runs",
+    "subject": "how many recorded throughput reviews in a row that found nothing make the review weekly instead of daily",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 2,
+    "unit": "reviews"
   },
   {
     "id": "wait-every",

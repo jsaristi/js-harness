@@ -31,7 +31,7 @@ export const READING_SCHEMA = 'js-harness.channel-reading/v1';
  * (who has the role now), `question` (a question put to him, written before it is asked: its options, what
  * waits on it, and the number it is known by, which is its line's place in the record) and `withdrawn` (a
  * question closed without his answer, said as not his). */
-export const NOTICE_KINDS = ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn'];
+export const NOTICE_KINDS = ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn', 'ready'];
 
 /** The longest text of a notice, in characters: two or three sentences. A notice says that something
  * happened; what happened is in the feature document, the commit or the transcript it points at. */
@@ -103,11 +103,13 @@ function oneLine(text, max, what) {
  * `null` when it could not be read. An `answer` also has the `transcript` (a file or a session id) and the
  * `line` the user's words are read at; nothing here checks the quote. A `question` has no text of a note's
  * length: its `text` is the question, and it has an `id`, its `options` (`checkedQuestion`) and its `waits`.
- * A `withdrawn` closes the question numbered `question` without his answer, and its text is the reason. An
+ * A `withdrawn` closes the question numbered `question` without his answer, and its text is the reason. A `ready`
+ * says the pull request numbered `pr` is ready to land, so the land can tell whose it is without a branch. An
  * `answer` may name the question it answers with `question`, with `verified` (whether its line was read) and
- * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). Throws a
+ * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). A verified answer may keep
+ * `answeredAt`, the time of his line, and, when the question tool asked, `shownAt`, the time of that call. Throws a
  * `ChannelInputError` for anything that is not a notice. */
-export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy }) {
+export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy, shownAt, answeredAt, pr, summary }) {
   const role = typeof to === 'string' ? roleNamed(to) : null;
   if (role === null) throw new ChannelInputError('--to takes a role: orchestrator (or ORQ), or the number of a work session');
   if (!NOTICE_KINDS.includes(kind)) throw new ChannelInputError(`--kind takes one of ${NOTICE_KINDS.join(', ')}`);
@@ -115,14 +117,24 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (kind !== 'question' && (id !== undefined || options !== undefined || waits !== undefined)) throw new ChannelInputError('only a question takes id, options and waits');
   if (kind !== 'answer' && kind !== 'withdrawn' && question !== undefined) throw new ChannelInputError('only an answer or a withdrawal takes --question');
   if (kind !== 'answer' && (verified !== undefined || copy !== undefined)) throw new ChannelInputError('only an answer with a question takes verified and copy');
+  const timed = shownAt !== undefined || answeredAt !== undefined;
+  if (timed && !(kind === 'answer' && verified === true)) throw new ChannelInputError('only a verified answer takes shownAt and answeredAt');
+  if (kind !== 'ready' && pr !== undefined) throw new ChannelInputError('only a ready notice takes --pr');
+  if (kind !== 'closed' && summary !== undefined) throw new ChannelInputError('only a closed notice takes --summary');
   if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks the user: --to orchestrator');
   const asked = kind === 'question' ? checkedQuestion({ text, options, waits }) : null;
   const notice = { schema: NOTICE_SCHEMA, at, from, to: role, kind, text: asked === null ? oneLine(text, NOTICE_TEXT_MAX, 'the text of a notice') : asked.text, cwd, worktree, branch };
   if (kind === 'question') return { ...notice, id: oneLine(id, QUESTION_ID_MAX, 'the id of a question'), options: asked.options, waits: asked.waits };
+  if (kind === 'ready') {
+    if (pr === undefined) throw new ChannelInputError('a ready notice names its pull request: --pr <n>');
+    if (!isPullRequestNumber(pr)) throw new ChannelInputError('--pr takes the number of a pull request, from 1');
+    return { ...notice, pr };
+  }
   if (kind === 'withdrawn') {
     if (question === undefined) throw new ChannelInputError('a withdrawal names its question: --question <n>');
     return { ...notice, question: questionNumberOf(question) };
   }
+  if (kind === 'closed' && summary !== undefined) return { ...notice, summary: summaryFileOf(summary) };
   if (kind !== 'answer') return notice;
   if (transcript === undefined || line === undefined) throw new ChannelInputError('an answer says where the user\'s words are read: --transcript <file or session id> and --line <n>');
   if (!Number.isSafeInteger(line) || line < 1) throw new ChannelInputError('--line takes the number of a line of the transcript, from 1');
@@ -135,10 +147,28 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (typeof verified !== 'boolean') throw new ChannelInputError('verified takes true or false: whether the line of the user\'s words was read');
   if (verified) {
     if (!isObject(copy)) throw new ChannelInputError('a verified answer takes copy, what its line holds (answerCopyOf)');
-    return { ...answer, question: number, verified, copy: answerCopyOf(copy) };
+    const kept = { ...answer, question: number, verified, copy: answerCopyOf(copy) };
+    if (shownAt !== undefined && kept.copy.tool === null) throw new ChannelInputError('shownAt is when the question tool showed the question, and no tool showed an answer typed in the chat');
+    return { ...kept, ...timeOf('shownAt', shownAt), ...timeOf('answeredAt', answeredAt) };
   }
   if (copy !== null) throw new ChannelInputError('an answer that was not verified takes copy null: no transcript could be read');
   return { ...answer, question: number, verified, copy: null };
+}
+
+/** `{ [name]: value }` when `value` is a time (an ISO string the clock reads), `{}` when it is undefined. Throws a
+ * `ChannelInputError` for anything else. */
+function timeOf(name, value) {
+  if (value === undefined) return {};
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) throw new ChannelInputError(`${name} takes a time, as ISO text`);
+  return { [name]: value };
+}
+
+/** The file of the summary a closed notice names (odd/tasks/session-close.md, T2): a Markdown file directly under
+ * `docs/sessions/`, relative to the repository, with forward slashes. Throws a `ChannelInputError` for anything else. */
+function summaryFileOf(summary) {
+  const file = typeof summary === 'string' ? summary.replace(/\\/g, '/') : '';
+  if (!/^docs\/sessions\/[^/.][^/]*\.md$/.test(file)) throw new ChannelInputError('--summary takes a file of docs/sessions/, as js-harness summary path names it');
+  return file;
 }
 
 /** The number of a question, as the command and the record take it: a whole number from 1. Throws a
@@ -146,6 +176,11 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
 function questionNumberOf(question) {
   if (!isQuestionNumber(question)) throw new ChannelInputError('--question takes the number of a question, from 1');
   return question;
+}
+
+/** Whether `value` is the number of a pull request: a whole number from 1. */
+function isPullRequestNumber(value) {
+  return Number.isSafeInteger(value) && value >= 1;
 }
 
 /** Whether `value` is the number of a question: a whole number from 1. */
@@ -319,6 +354,7 @@ function isNotice(value) {
     (value.to.role === 'orchestrator' || (value.to.role === 'work' && Number.isSafeInteger(value.to.number))) &&
     (value.kind !== 'question' || (typeof value.id === 'string' && value.id !== '' && Array.isArray(value.options) && typeof value.waits === 'string')) &&
     (value.kind !== 'withdrawn' || isQuestionNumber(value.question)) &&
+    (value.kind !== 'ready' || isPullRequestNumber(value.pr)) &&
     (value.kind !== 'answer' || value.question === undefined || isQuestionNumber(value.question))
   );
 }
@@ -415,6 +451,19 @@ export function reliefLineOf(line) {
  * title typed on two devices is one. */
 const titleOf = (text) => text.trim().normalize('NFC');
 
+/** What the title `title` has of letters and digits, in lower case and without accents, joined by dashes and
+ * cut at 60 characters: the readable part of an opening's file name and of a session's summary file, so one
+ * title gives one name in both. Empty for a title with no letter or digit. */
+export function titleSlug(title) {
+  return titleOf(title)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, '');
+}
+
 /** The name of the file that holds the opening of the session titled `title`: what the title has of
  * letters and digits, in lower case and without accents, so a person who lists the folder can tell the
  * files apart, then the start of the title's hash, which is what makes the name the title's own. Nothing
@@ -423,13 +472,7 @@ const titleOf = (text) => text.trim().normalize('NFC');
  * differ by case or by an accent get two names on a disk that ignores case. */
 export function openingFileName(title) {
   const wanted = titleOf(title);
-  const readable = wanted
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .slice(0, 60)
-    .replace(/^-+|-+$/g, '');
+  const readable = titleSlug(title);
   const hash = crypto.createHash('sha256').update(wanted, 'utf8').digest('hex').slice(0, 12);
   return `${readable === '' ? '' : `${readable}-`}${hash}.json`;
 }

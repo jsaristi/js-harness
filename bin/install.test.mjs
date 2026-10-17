@@ -4,14 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
-import { manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
+import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord } from './install.mjs';
+import { entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
 import { remoteDir, remoteFiles } from './lib/remote.mjs';
-import { hygieneDir, journalPath } from './lib/memory-hygiene.mjs';
+import { hygieneDir, journalPath, memoryLocation, purgeMarker } from './lib/memory-hygiene.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
@@ -312,24 +312,20 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
     assert.equal(installed.code, 0);
     const settings = path.join(home, '.claude', 'settings.json');
     const hooks = path.join(home, '.codex', 'hooks.json');
-    assert.deepEqual(installed.outLines.filter((line) => line.startsWith('registered hook entry')), [
-      `registered hook entry in ${settings}: js-harness doctor --hook (SessionStart, matcher startup|resume)`,
-      `registered hook entry in ${hooks}: js-harness doctor --hook (SessionStart, matcher startup|resume)`,
-      `registered hook entry in ${settings}: js-harness resume --hook (SessionStart, matcher compact)`,
-      `registered hook entry in ${hooks}: js-harness resume --hook (SessionStart, matcher compact)`,
-      `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUse)`,
-      `registered hook entry in ${settings}: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)`,
-      `registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$)`,
-      `registered hook entry in ${settings}: js-harness guard --stop || exit 0 (Stop)`,
-      `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (UserPromptSubmit)`,
-      `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)`,
-      `registered hook entry in ${settings}: js-harness rules --hook || exit 0 (SubagentStart)`,
-      `registered hook entry in ${settings}: js-harness reply --hook || exit 0 (Stop)`,
-      `registered hook entry in ${hooks}: js-harness reply --hook || exit 0 (Stop)`,
-    ]);
+    // One line per declared entry, in declaration order, written from this file's own wording (not install's formatter).
+    const registeredLines = entryComponents.map((component) => {
+      const entry = component.entry();
+      const command = entry.hooks[0].command;
+      const matcher = typeof entry.matcher === 'string' ? `, matcher ${entry.matcher}` : '';
+      return `registered hook entry in ${component.target(home)}: ${command} (${component.pointer.at(-1)}${matcher})`;
+    });
+    const actual = installed.outLines.filter((line) => line.startsWith('registered hook entry'));
+    assert.deepEqual(actual, registeredLines);
+    // The guard's line in full, its matcher included, as one literal.
+    assert.ok(actual.includes(`registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$)`));
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
-    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, settings, settings, settings, settings, settings, settings, settings, settings, hooks, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
+    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), entryComponents.map((component) => `removed hook entry from ${component.target(home)}`).sort());
     assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -671,12 +667,12 @@ test('uninstallMain names the memory snapshots it keeps and what removes them, a
     fs.writeFileSync(journalPath(home, 'C--proj'), '');
     const kept = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.deepEqual([kept.code, kept.outLines, kept.errLines], [0, [
-      `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed, with the project's journal; remove the folder by hand to drop them`,
+      `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed, with the project's journal; js-harness uninstall --global --full removes them`,
     ], []]);
     fs.rmSync(journalPath(home, 'C--proj'));
     const alone = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.deepEqual(alone.outLines, [
-      `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed; remove the folder by hand to drop them`,
+      `kept ${project}: 1 snapshot of a memory pass (20261015T120606108Z), the only copy of what that pass changed; js-harness uninstall --global --full removes them`,
     ], 'no journal is named where there is none');
 
     fs.rmSync(path.join(project, 'snapshots'), { recursive: true });
@@ -689,6 +685,170 @@ test('uninstallMain names the memory snapshots it keeps and what removes them, a
       `could not remove ${hygieneDir(home)} (EBUSY): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`,
     ]]);
   } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// T10, the full uninstall (odd/tasks/memory-hygiene.md, D7).
+
+/** A project folder of memory hygiene under `home` with one snapshot `stamp`, as `memory plan` leaves it. */
+function snapshotOf(home, slug, stamp, manifest = { folder: 'C:/memory', writeSet: [], before: {} }) {
+  const project = path.dirname(journalPath(home, slug));
+  fs.mkdirSync(path.join(project, 'snapshots', stamp), { recursive: true });
+  fs.writeFileSync(path.join(project, 'snapshots', stamp, 'manifest.json'), JSON.stringify(manifest));
+  return project;
+}
+
+test('uninstallMain --global --full removes the memory snapshots and names each project with its stamps', async () => {
+  const home = makeTmpHome();
+  try {
+    const project = snapshotOf(home, 'C--proj', '20261015T120606108Z');
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--full', '--home', home]));
+    assert.deepEqual([code, outLines, errLines], [0, [
+      `removed ${hygieneDir(home)}`,
+      `removed ${project}: 1 snapshot of a memory pass (20261015T120606108Z)`,
+    ], []]);
+    assert.equal(fs.existsSync(hygieneDir(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('--full goes with --global only, exit 2, and stays an unknown flag of sync', async () => {
+  const words = '--full removes the memory snapshots of the machine: it goes with --global';
+  for (const argv of [['--full'], ['--full', '--cwd', os.tmpdir()]]) {
+    const { code, errLines } = await captureConsole(() => uninstallMain(argv));
+    assert.equal(code, 2, argv.join(' '));
+    assert.ok(errLines[0].startsWith(`${words}\n\nUsage: js-harness uninstall`), errLines.join('\n'));
+  }
+  const value = await captureConsole(() => uninstallMain(['--global', '--home', '--full']));
+  assert.deepEqual([value.code, value.errLines[0].split('\n')[0]], [2, '--home requires a value'], 'as before: a value is never a flag');
+  for (const flag of ['--home', '--cwd']) {
+    const inside = await captureConsole(() => uninstallMain(['--global', flag, '--full', path.join(os.tmpdir(), 'other')]));
+    assert.deepEqual([inside.code, inside.errLines[0].split('\n')[0]], [2, `${flag} requires a value`], `${flag} --full is a missing value, not a full uninstall`);
+  }
+  const synced = await captureConsole(() => syncMain(['--global', '--full']));
+  assert.equal(synced.code, 2);
+  assert.ok(synced.errLines[0].startsWith('unknown flag: --full'), synced.errLines.join('\n'));
+});
+
+test('a home holding a dollar sign is printed in single quotes, so the kept line\'s commands run as they are copied', async () => {
+  // In double quotes sh and PowerShell both expand `$name`: the command would name another home.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness $HOME '));
+  try {
+    const planned = snapshotOf(home, 'C--planned', '20261015T120606108Z');
+    fs.writeFileSync(path.join(planned, 'lock'), JSON.stringify({ stamp: '20261015T120606108Z', pid: 4242 }));
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(code, 1);
+    const line = errLines.find((one) => one.includes('a memory pass is planned'));
+    // On Windows no one form serves both shells: cmd.exe splits single quotes at a space, PowerShell expands `$`
+    // in double quotes. The line says which shell its commands are for, and gives cmd.exe its own --home.
+    const forCmd = process.platform === 'win32' ? ` (in cmd.exe, --home "${home}")` : '';
+    const run = process.platform === 'win32' ? 'run, in PowerShell,' : 'run';
+    assert.ok(line.includes(`${run} js-harness memory verify 20261015T120606108Z --home '${home}' or js-harness memory undo 20261015T120606108Z --home '${home}'${forCmd}, then`), line);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('shellWord puts a home in single quotes, which keep a double quote and a dollar sign, and writes a single quote as each shell reads it', () => {
+  assert.equal(shellWord('/home/a "b" $USER', 'linux'), `'/home/a "b" $USER'`);
+  // sh ends the quotes, writes an escaped quote and opens them again; PowerShell doubles it inside them.
+  assert.equal(shellWord("/home/o'neil", 'linux'), `'/home/o'\\''neil'`);
+  assert.equal(shellWord("C:\\Users\\o'neil $x", 'win32'), `'C:\\Users\\o''neil $x'`);
+  // cmd.exe reads no single quotes, so a Windows home with nothing to expand keeps double quotes: one argument there.
+  assert.equal(shellWord("C:\\Users\\First Last", 'win32'), `"C:\\Users\\First Last"`);
+  assert.equal(shellWord("C:\\Users\\o'neil", 'win32'), `"C:\\Users\\o'neil"`);
+  // PowerShell takes the curly quotes for a single quote too: doubled inside single quotes.
+  assert.equal(shellWord('C:\\Users\\x\u2019y $z', 'win32'), `'C:\\Users\\x\u2019\u2019y $z'`);
+});
+
+test('cmdExeWord gives cmd.exe its own double-quoted home only where shellWord had to leave double quotes for PowerShell', () => {
+  assert.equal(cmdExeWord('C:\\Users\\First Last $cash', 'win32'), `"C:\\Users\\First Last $cash"`);
+  assert.equal(cmdExeWord('C:\\Users\\a`b', 'win32'), '"C:\\Users\\a`b"');
+  assert.equal(cmdExeWord('C:\\Users\\First Last', 'win32'), null);
+  assert.equal(cmdExeWord('/home/a $b', 'linux'), null);
+});
+
+test('a Windows home with a curly double quote goes in single quotes for PowerShell, which ends double quotes at one, and cmd.exe gets its own (memory-hygiene T12)', () => {
+  for (const quote of ['\u201c', '\u201d', '\u201e']) {
+    const home = `C:\\Users\\Ana ${quote}Ani${quote}`;
+    assert.equal(shellWord(home, 'win32'), `'${home}'`, quote);
+    assert.equal(cmdExeWord(home, 'win32'), `"${home}"`, quote);
+  }
+  // Inside single quotes PowerShell reads a curly double quote as it is; sh never took one for a quote.
+  assert.equal(shellWord('/home/Ana \u201cAni\u201d', 'linux'), `'/home/Ana \u201cAni\u201d'`);
+  assert.equal(cmdExeWord('/home/Ana \u201cAni\u201d', 'linux'), null);
+});
+
+test('uninstallMain keeps a project under a memory pass with the line that can release its lock, exit 1, in either mode', async () => {
+  // A space in the home, as in C:\Users\First Last: the line's commands still run as they are copied.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness cli home '));
+  // Double quotes on Windows, which cmd.exe reads too; single quotes elsewhere.
+  const quotedHome = process.platform === 'win32' ? `"${home}"` : `'${home}'`;
+  try {
+    const planned = snapshotOf(home, 'C--planned', '20261015T120606108Z');
+    fs.writeFileSync(path.join(planned, 'lock'), JSON.stringify({ stamp: '20261015T120606108Z', pid: 4242 }));
+    const killed = path.dirname(journalPath(home, 'C--killed'));
+    fs.mkdirSync(killed, { recursive: true });
+    fs.writeFileSync(path.join(killed, 'lock'), JSON.stringify({ stamp: '20261016T090000000Z', pid: 4343 }));
+    const lines = [
+      `kept ${killed}: ${path.join(killed, 'lock')} holds no finished plan (pid 4343); if that process is not running, remove the file and uninstall again`,
+      `kept ${planned}: a memory pass is planned (20261015T120606108Z) for the memory folder C:/memory; from that project's checkout run js-harness memory verify 20261015T120606108Z --home ${quotedHome} or js-harness memory undo 20261015T120606108Z --home ${quotedHome}, then uninstall again`,
+    ];
+    const normal = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([normal.code, normal.outLines, normal.errLines], [1, [], lines]);
+    const full = await captureConsole(() => uninstallMain(['--global', '--full', '--home', home]));
+    assert.deepEqual([full.code, full.outLines, full.errLines], [1, [], [
+      `kept ${hygieneDir(home)}: --full removes it in one piece, and a project in it is under a memory pass; nothing of it was removed`,
+      ...lines,
+    ]]);
+    assert.equal(fs.existsSync(path.join(planned, 'snapshots', '20261015T120606108Z')), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain refuses while another uninstall holds the marker, names one a killed run left, and names a folder left aside', async () => {
+  const home = makeTmpHome();
+  try {
+    snapshotOf(home, 'C--proj', '20261015T120606108Z');
+    const marker = purgeMarker(hygieneDir(home));
+    fs.writeFileSync(marker, JSON.stringify({ pid: 4242, startedAt: '2026-10-16T08:00:00.000Z' }));
+    const live = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { alive: () => true }));
+    assert.deepEqual([live.code, live.errLines], [1, [`kept ${hygieneDir(home)}: another uninstall is removing it (pid 4242, ${marker}); run js-harness uninstall --global again once it ends`]]);
+    const stale = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { alive: () => false }));
+    assert.deepEqual([stale.code, stale.errLines], [1, [`kept ${hygieneDir(home)}: ${marker} was left by an uninstall that ended before removing it (pid 4242); remove that file and run js-harness uninstall --global again`]]);
+    fs.rmSync(marker);
+
+    const failing = (target, options) => {
+      if (path.basename(target).startsWith('memory-hygiene.purging-')) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    };
+    const partial = await captureConsole(() => uninstallMain(['--global', '--full', '--home', home], {}, { removeFile: failing }));
+    assert.deepEqual([partial.code, partial.errLines], [1, [`could not remove ${hygieneDir(home)} (EBUSY): it was put back under its name and may be partly removed; run js-harness uninstall --global --full again`]]);
+
+    const aside = `${hygieneDir(home)}.purging-1-2`;
+    fs.renameSync(hygieneDir(home), aside);
+    const found = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([found.code, found.errLines], [1, [`found ${aside}, left by an uninstall that stopped: rename it back to ${hygieneDir(home)} when there is none, else remove it`]]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the project uninstall names the memory snapshots its project keeps under the home, and what removes them', async () => {
+  const root = withProgram(makeTmpProjectRepo());
+  const home = makeTmpHome();
+  try {
+    assert.equal(initProject(root, '0.1.0', { spawn: fakeCodegraphSpawn(), platform: 'linux' }).code, 0);
+    const { slug } = memoryLocation({ home, project: root, run: (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }) });
+    const project = snapshotOf(home, slug, '20261015T120606108Z');
+    const { code, outLines } = await captureConsole(() => uninstallMain(['--cwd', root, '--home', home]));
+    assert.equal(code, 0);
+    assert.equal(outLines.at(-1), `kept ${project}: 1 snapshot of a memory pass of this project (20261015T120606108Z), under the machine's home; js-harness uninstall --global --full removes them`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
@@ -1524,6 +1684,26 @@ test('uninstallMain says a task the user edited stays recorded while the remote 
     ]);
     assert.deepEqual(readManifest(home).tasks, [TASK]);
     assert.deepEqual(tasks.deleted, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai review starts beside them when there are any', async () => {
+  const home = makeTmpHome();
+  try {
+    const folder = path.join(home, '.js-harness', 'throughput');
+    fs.mkdirSync(path.join(folder, 'C--proj'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-16.json'), '{}');
+    const snapshots = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual(snapshots.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away; remove the folder by hand to drop them`]);
+    fs.writeFileSync(path.join(folder, 'C--proj', 'review-starts.jsonl'), '');
+    const starts = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the gentle-ai review starts of 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
+    // A folder that could not be listed is named with what it may hold.
+    const listDir = (dir, ...rest) => (path.resolve(dir).startsWith(path.resolve(folder)) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readdirSync(dir, ...rest));
+    const unlisted = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { listDir }));
+    assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any gentle-ai review starts recorded there; remove the folder by hand to drop them`]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

@@ -58,11 +58,48 @@ test('a notice is a schema, the time, the sender, the role it is for, the kind, 
   assert.deepEqual([note().cwd, note().worktree, note().branch], [null, null, null]);
 });
 
-test('the kinds are eight, question and withdrawn last and in that order, and no other is one', () => {
-  assert.deepEqual(channel.NOTICE_KINDS, ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn']);
-  for (const kind of channel.NOTICE_KINDS.filter((one) => !['answer', 'question', 'withdrawn'].includes(one))) assert.equal(note({ kind }).kind, kind);
-  for (const kind of ['done', 'Note', '', undefined, 'constructor']) refused({ kind }, /--kind takes one of opened, waiting, closed, note, answer, relieved, question, withdrawn/);
+test('the kinds are nine, question, withdrawn and ready last and in that order, and no other is one', () => {
+  assert.deepEqual(channel.NOTICE_KINDS, ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn', 'ready']);
+  for (const kind of channel.NOTICE_KINDS.filter((one) => !['answer', 'question', 'withdrawn', 'ready'].includes(one))) assert.equal(note({ kind }).kind, kind);
+  for (const kind of ['done', 'Note', '', undefined, 'constructor']) refused({ kind }, /--kind takes one of opened, waiting, closed, note, answer, relieved, question, withdrawn, ready/);
 });
+
+// odd/tasks/wake-and-flag.md, T1 (B1 of the throughput plan): a pull request is announced ready with its number, so
+// the land can tell which session it belongs to without reading a branch (most ready notices are sent from main).
+test('a ready notice carries the number of its pull request, and only a ready notice takes one', () => {
+  const ready = note({ kind: 'ready', pr: 344, text: 'T20b: every wait ends on a notice to its own number' });
+  assert.deepEqual(ready, { schema: 'js-harness.channel-notice/v1', at: AT, from: FROM, to: { role: 'orchestrator', number: null }, kind: 'ready', text: 'T20b: every wait ends on a notice to its own number', cwd: null, worktree: null, branch: null, pr: 344 });
+  refused({ kind: 'ready', text: 'ready' }, /a ready notice names its pull request: --pr <n>/);
+  for (const pr of [0, -1, 1.5, '344', Number.MAX_SAFE_INTEGER + 1]) refused({ kind: 'ready', pr, text: 'ready' }, /--pr takes the number of a pull request, from 1/);
+  for (const kind of ['opened', 'waiting', 'closed', 'note', 'relieved', 'withdrawn']) refused({ kind, pr: 344, question: kind === 'withdrawn' ? 1 : undefined, text: 'x' }, /only a ready notice takes --pr/);
+  refused({ kind: 'answer', pr: 344, text: 'A', transcript: '1d16beeb', line: 4 }, /only a ready notice takes --pr/);
+  refused({ kind: 'ready', pr: 344, text: 'ready', question: 1 }, /only an answer or a withdrawal takes --question/);
+});
+
+// The summary a finished session leaves (odd/tasks/session-close.md, T2): the record keeps its file.
+test('a closed notice keeps the file of its summary, under docs/sessions, and no other kind takes one', () => {
+  assert.equal(note({ kind: 'closed', text: 'delivered', summary: 'docs/sessions/2026-10-17-jh-24.md' }).summary, 'docs/sessions/2026-10-17-jh-24.md');
+  assert.equal(note({ kind: 'closed', text: 'delivered', summary: 'docs\\sessions\\2026-10-17-jh-24.md' }).summary, 'docs/sessions/2026-10-17-jh-24.md');
+  // A closed notice built by a library caller, or read from the record, may have none: the command requires it.
+  assert.equal('summary' in note({ kind: 'closed', text: 'delivered' }), false);
+  for (const summary of ['README.md', 'docs/sessions/a.txt', '../docs/sessions/a.md', 'docs/sessions/sub/a.md', '/docs/sessions/a.md', 'C:/r/docs/sessions/a.md', 'docs/sessions/.md', '']) {
+    refused({ kind: 'closed', text: 'delivered', summary }, /--summary takes a file of docs\/sessions\/, as js-harness summary path names it/);
+  }
+  for (const kind of ['opened', 'waiting', 'note', 'relieved']) refused({ kind, summary: 'docs/sessions/a.md' }, /only a closed notice takes --summary/);
+  refused({ kind: 'ready', pr: 344, summary: 'docs/sessions/a.md' }, /only a closed notice takes --summary/);
+});
+
+test('readNotices keeps a ready notice with its pull request, and skips one without a number', withHome((home) => {
+  const file = channel.recordPath(home, SLUG);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const ready = note({ kind: 'ready', pr: 344, text: 'ready to land' });
+  const { pr, ...unnumbered } = ready;
+  const lines = [ready, unnumbered, { ...ready, pr: '344' }, { ...ready, pr: 0 }].map((one) => JSON.stringify(one));
+  fs.writeFileSync(file, lines.join('\n'), 'utf8');
+  const read = channel.readNotices(home, SLUG);
+  assert.deepEqual(read.notices, [ready]);
+  assert.equal(read.skipped, 3);
+}));
 
 test('a notice is for a role: the orchestrator or the number of a work session', () => {
   for (const to of ['boss', 'JH 5', '', '5.5', undefined]) refused({ to }, /--to takes a role/);
@@ -256,6 +293,30 @@ test('an answer names its question, and is verified only where its line was read
     [{ question: 3, verified: false, copy: copyOfAnswered }, /an answer that was not verified takes copy null/],
   ];
   for (const [fields, pattern] of cases) refused({ kind: 'answer', transcript: '1d16beeb', line: 406, ...fields }, pattern);
+});
+
+test('a verified answer keeps when its question was shown and when he answered it, and a typed one only when he answered', () => {
+  const SHOWN = '2026-10-17T09:05:00.000Z';
+  const ANSWERED = '2026-10-17T09:20:00.000Z';
+  const base = { kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406, question: 3, verified: true };
+  const tapped = note({ ...base, copy: copyOfAnswered, shownAt: SHOWN, answeredAt: ANSWERED });
+  assert.deepEqual(Object.keys(tapped).slice(-4), ['verified', 'copy', 'shownAt', 'answeredAt']);
+  assert.deepEqual([tapped.shownAt, tapped.answeredAt], [SHOWN, ANSWERED]);
+  const typedCopy = { tool: null, answers: [{ question: 'Pregunta 3: ¿cuál?', options: [], answer: 'Low', how: 'typed in the chat' }] };
+  const typed = note({ ...base, copy: typedCopy, answeredAt: ANSWERED });
+  assert.equal(typed.answeredAt, ANSWERED);
+  assert.equal('shownAt' in typed, false);
+  // Written without them, as every answer before B4b was: the same keys as before.
+  assert.deepEqual(Object.keys(note({ ...base, copy: copyOfAnswered })).slice(-2), ['verified', 'copy']);
+  const cases = [
+    [{ ...base, copy: copyOfAnswered, answeredAt: 'yesterday' }, /answeredAt takes a time/],
+    [{ ...base, copy: copyOfAnswered, shownAt: 42, answeredAt: ANSWERED }, /shownAt takes a time/],
+    [{ ...base, copy: typedCopy, shownAt: SHOWN, answeredAt: ANSWERED }, /no tool showed an answer typed in the chat/],
+    [{ ...base, verified: false, copy: null, answeredAt: ANSWERED }, /only a verified answer takes shownAt and answeredAt/],
+    [{ kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406, answeredAt: ANSWERED }, /only a verified answer takes shownAt and answeredAt/],
+    [{ kind: 'note', text: 'hi', answeredAt: ANSWERED }, /only a verified answer takes shownAt and answeredAt/],
+  ];
+  for (const [fields, pattern] of cases) refused(fields, pattern);
 });
 
 test('the copy of an answer keeps the question, the options and the answer, cut to its limits, and drops the keys it does not know', () => {

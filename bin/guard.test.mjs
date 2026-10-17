@@ -11,12 +11,13 @@ import { guardMain } from './guard.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { writeRules } from './lib/rules.mjs';
 import { testRunWarning } from './lib/test-run-warning.mjs';
+import { wrappedCommitHint } from './lib/wrapped-commit.mjs';
 
 const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, index = null, configDir } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -30,8 +31,12 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
-    testRun: (command) => testRunWarning(command, { env: {}, holder: () => held }),
+    // `timed` stands in for the gate log: the seconds a gate ran each file alone, by its name.
+    testRun: (command, options) => testRunWarning(command, { env: {}, holder: () => held, fileSeconds: (file) => timed[file], ...options }),
     claudeConfigDir: configDir,
+    baseContains,
+    env: {},
+    exists,
     readIndex: () => {
       if (index === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
       return index;
@@ -168,6 +173,26 @@ test('a Bash command with backticks inside double quotes is denied; in single qu
   }
 });
 
+test('a Bash rm -rf of a folder at the top of a drive is denied with where to put it; one below the worktrees folder passes', async () => {
+  const refused = await hook({ tool_name: 'Bash', tool_input: { command: 'rm -rf D:/practice-jh22 && node scripts/practice.mjs setup' } });
+  assert.equal(refused.code, 0);
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: D:\/practice-jh22 is the top of a drive/);
+  const command = 'rm -rf D:/js-harness-worktrees/practice/jh22';
+  assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command } }), { code: 0, out: '', err: '' });
+});
+
+test('a gentle-ai review given a base its head does not contain is denied, looked up in the folder of the call; one it contains passes', async () => {
+  const asked = [];
+  const command = 'gentle-ai review assess --agent claude-code --base-ref origin/main --committed-only --json';
+  const refused = await hook({ tool_name: 'Bash', cwd: 'D:/w/behind', tool_input: { command } }, { baseContains: (base, cwd) => { asked.push([base, cwd]); return false; } });
+  assert.equal(refused.code, 0);
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: --base-ref origin\/main is not on this head's first-parent line/);
+  assert.deepEqual(asked, [['origin/main', 'D:/w/behind']]);
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/w/fresh', tool_input: { command } }, { baseContains: () => true }), { code: 0, out: '', err: '' });
+});
+
 test('a node --test of several files outside a turn is denied while another gate holds the lock, with its warning unchanged', async () => {
   const held = { pid: 4242, cwd: 'D:/js-harness-worktrees/other' };
   const command = 'node --test bin/a.test.mjs bin/b.test.mjs';
@@ -179,6 +204,32 @@ test('a node --test of several files outside a turn is denied while another gate
   assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command } }), quiet, 'the lock is free');
   assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: 'node --test bin/a.test.mjs' } }, { held }), quiet, 'one file');
   assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: `js-harness gate -- ${command}` } }, { held }), quiet, 'in a turn');
+});
+
+test('one file the gate log timed over a minute is denied beside a gate, named from the folder of the payload (first-version T6a)', async () => {
+  const held = { pid: 4242, cwd: 'D:/js-harness-worktrees/other' };
+  const timed = { 'bin/slow.test.mjs': 95 };
+  const refused = await hook({ tool_name: 'Bash', cwd: 'D:/w', tool_input: { command: 'node --test D:/w/bin/slow.test.mjs' } }, { held, timed });
+  assert.equal(denied(refused).permissionDecisionReason, "node --test of bin/slow.test.mjs, which the gate log timed at 95 s, starts outside a turn while the gate of D:/js-harness-worktrees/other holds the machine's gate lock: both share the cores and miss their bounds; run it with js-harness gate -- <command>, which waits its turn");
+  const quiet = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/w', tool_input: { command: 'node --test bin/quick.test.mjs' } }, { held, timed }), quiet, 'a file never timed');
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/w', tool_input: { command: 'node --test bin/slow.test.mjs' } }, { timed }), quiet, 'the lock is free');
+});
+
+test('a commit wrapped in js-harness gate -- runs, with the hint beside its result; a denial on the same call wins (S4)', async () => {
+  const workflow = (file) => file.replace(/\\/g, '/') === 'D:/project/.github/workflows/gate.yml';
+  const command = 'js-harness gate -- git commit -m x';
+  const hinted = await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command } }, { exists: workflow });
+  assert.equal(hinted.code, 0);
+  assert.deepEqual(JSON.parse(hinted.out), { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: wrappedCommitHint(command, { cwd: 'D:/project', env: {}, projectRoot: () => 'D:/project', exists: workflow }) } });
+  assert.match(denied(hinted).additionalContext, /could not go to GitHub's machines/);
+  assert.equal(denied(hinted).permissionDecision, undefined);
+  const refused = await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command: 'js-harness gate -- git commit -m "fix the `check` row"' } }, { exists: workflow });
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.equal(denied(refused).additionalContext, undefined);
+  const quiet = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command: 'js-harness gate -- node --test bin/a.test.mjs bin/b.test.mjs' } }, { exists: workflow }), quiet, 'a wrapped test run');
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command: 'git commit -m x' } }, { exists: workflow }), quiet, 'a plain commit');
 });
 
 test('any other tool, an unreadable payload, or a failure inside passes silently with exit 0', async () => {

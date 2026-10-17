@@ -1487,9 +1487,12 @@ test('gate first takes its flags as gate log takes its own: what is no ticket is
  *
  * The switch of the gate log is dropped and not set: a gate that runs this file with its log switched off
  * (`JS_HARNESS_GATE_LOG=off`) would hand that on, and the gates below would not write the log these tests
- * read in a home of their own. */
+ * read in a home of their own.
+ *
+ * The host's session is dropped too: a gate records it in its log, so a run of this file inside a Claude
+ * Code session would see a field that CI never sets (first-version T6, L25). */
 function outsideAGate(more = []) {
-  const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'js_harness_gate_load', 'js_harness_gate_log', ...more];
+  const dropped = ['claude_code_session_id', 'js_harness_check_inner', 'js_harness_gate_held', 'js_harness_gate_load', 'js_harness_gate_log', ...more];
   return { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_GATE_LOAD: 'off' };
 }
 
@@ -1556,7 +1559,7 @@ test('a real gate streams what the command prints while it runs, holds the lock 
 // process of its own as well. The home is temporary, as for every gate of this file.
 test('a real gate leaves its two lines in the log of its home, and a real gate log prints them as one', withHome(async (home, dir) => {
   fs.writeFileSync(path.join(dir, 'three.cjs'), 'process.exit(3);\n');
-  const ran = await startGate(['--home', home, '--', 'node', 'three.cjs'], { cwd: dir }).done;
+  const ran = await startGate(['--home', home, '--', 'node', 'three.cjs'], { cwd: dir, env: { ...outsideAGate(), CLAUDE_CODE_SESSION_ID: 'a-session' } }).done;
   assert.deepEqual([ran.status, ran.stdout, ran.stderr], [3, '', '']);
   assert.deepEqual(fs.readdirSync(gateLogDir(home)), ['log.jsonl']);
   const text = fs.readFileSync(path.join(gateLogDir(home), 'log.jsonl'), 'utf8');
@@ -1564,7 +1567,7 @@ test('a real gate leaves its two lines in the log of its home, and a real gate l
   assert.deepEqual(rest, ['']);
   const began = JSON.parse(start);
   // No load: these gates are started with the sample switched off.
-  assert.deepEqual({ ...began, id: '', at: '', pid: 0, waitedSeconds: Math.floor(began.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: dir, command: 'gate -- node three.cjs', pid: 0, lock: 'own', waitedSeconds: 0, waitedFor: [] });
+  assert.deepEqual({ ...began, id: '', at: '', pid: 0, waitedSeconds: Math.floor(began.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: dir, command: 'gate -- node three.cjs', pid: 0, session: 'a-session', lock: 'own', waitedSeconds: 0, waitedFor: [] });
   assert.ok(Number.isInteger(began.pid) && began.pid !== process.pid, String(began.pid));
   const ended = JSON.parse(end);
   assert.deepEqual({ ...ended, at: '', seconds: 0 }, { v: 1, event: 'end', id: began.id, at: '', seconds: 0, result: 'exit 3' });
@@ -1864,4 +1867,14 @@ test('gate stops a command that outlives its bound, with every process it starte
   assert.deepEqual([code, said], [1, [`gate: ${command} ran past its bound of 0.02 minutes and was stopped with every process it started; --max <minutes> sets another bound`]]);
   const [gate] = gatesOf(readGateLog(home).events);
   assert.equal(gate.end?.result, 'timed out', JSON.stringify(gate));
+}));
+
+test('a gate claims the ticket its session issued for its folder, and leaves one that names no folder (odd/tasks/land-unattended.md)', withHome(async (home, dir) => {
+  const env = { JS_HARNESS_HOME: home, CLAUDE_CODE_SESSION_ID: 'sess-a' };
+  assert.equal((await runGateLog(['first', '--session', 'sess-a', '--reason', 'the next check'], env)).code, 0);
+  assert.equal((await runGateLog(['first', '--session', 'sess-a', '--tree', dir, '--reason', 'the merge queue lands a candidate'], env)).code, 0);
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'x'], env, { spawn: ranWith(0) });
+  assert.equal(code, 0, said.join('\n'));
+  assert.deepEqual(readTickets(home).open.map((ticket) => ticket.tree), [null]);
+  assert.equal(ticketEvents(home).filter(({ event }) => event === 'first-claimed').length, 1);
 }));

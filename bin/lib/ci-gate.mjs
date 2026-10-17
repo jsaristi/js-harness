@@ -1,9 +1,10 @@
 // The gate of one commit on GitHub's machines (odd/tasks/first-version.md, "Gates on CI machines").
 //
 // This machine runs one gate at a time: two suites at once take twice as long each, so a second line here gains
-// nothing (S7). The repository is public, and GitHub runs its workflows for free, 20 jobs at once. So a gate
-// whose turn at the machine's lock would wait sends its tests there instead (`ciGateWanted`), and a gate whose
-// turn is free runs here, which is faster for one session alone.
+// nothing (S7). The repository is public, and GitHub runs its workflows for free, 20 jobs at once. A gate there
+// took a median of 144 s from the push, against 218 s here with a free lock, and runs the whole suite, so every
+// commit's gate sends its tests there first (`ciGateWanted`; odd/tasks/commit-gates-first.md, item C), and the
+// machine's lock is left to what only runs here.
 //
 // The proof stays the commit's own (AGENTS.md): `runCiGate` writes the tree being committed, the index and not
 // the working tree, as a commit object on HEAD, pushes it to `gate/<sha>`, waits for the run of
@@ -14,7 +15,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { readGateHolder, readGateWaiters } from './gate-lock.mjs';
+import { ruleValue } from './rules.mjs';
 
 /** Set to `0`, the gate never goes to CI. */
 export const CI_GATE_ENV = 'JS_HARNESS_GATE_CI';
@@ -22,45 +23,63 @@ export const CI_GATE_ENV = 'JS_HARNESS_GATE_CI';
 /** The workflow a project holds when its gates may run on GitHub's machines. */
 export const CI_WORKFLOW = '.github/workflows/gate.yml';
 
-/** How long a pushed gate waits for its run to appear, and for the run to end, from the push. */
+/** How long a pushed gate waits for its run to appear, and for the run to end (the rule ci-gate-bound), from the
+ * push. */
 export const CI_START_MS = 3 * 60_000;
-export const CI_RUN_MS = 20 * 60_000;
+export const CI_RUN_MS = ruleValue('ci-gate-bound', 'minutes') * 60_000;
 const CI_POLL_MS = 10_000;
 
 /** How many lines of a red run's failed log the gate prints. */
 const LOG_LINES = 80;
 
-/** Why this gate's tests go to CI, or null when they run here: the project holds the workflow, nothing switches it
- * off, this is not already a CI machine, and the machine's gate lock is held or has gates waiting for it. Reads
- * the lock and never takes it, so a gate that takes it a moment later is waited for as before. */
-export function ciGateWanted({ cwd, home, env = process.env, readHolder = readGateHolder, readWaiters = readGateWaiters }) {
+// The job, the step and the time gh's `--log-failed` puts before each line of a run's log.
+export const GH_LOG_PREFIX = /^[^\t\r\n]*\t[^\t\r\n]*\t\S+ ?/;
+
+/** The `LOG_LINES` of a red run's log the gate prints, each without gh's prefix: from the test runner's list of
+ * the failing tests when it has one, which the gate log reads their names from and the end alone can cut, and
+ * otherwise the end. Lines a window from the list leaves out at the end are said, with where to read them. */
+function failedLog(stdout, id) {
+  const lines = String(stdout ?? '').trimEnd().split(/\r?\n/).map((line) => line.replace(GH_LOG_PREFIX, ''));
+  const list = lines.findIndex((line) => line.trim() === '✖ failing tests:');
+  const from = list === -1 ? Math.max(0, lines.length - LOG_LINES) : Math.min(list, Math.max(0, lines.length - LOG_LINES));
+  const left = lines.length - (from + LOG_LINES);
+  return [...lines.slice(from, from + LOG_LINES), ...(left > 0 ? [`… ${left} more lines: gh run view ${id} --log-failed`] : [])].join('\n');
+}
+
+/** Why this gate's tests go to CI, or null when they run here: it is the gate of a commit (or a merge) being made,
+ * the project holds the workflow, nothing switches it off, and this is not already a CI machine. The machine's
+ * lock is not read: a free one no longer keeps a gate here. A check by hand stays here: CI tests the index
+ * (`git write-tree`), and a check by hand tests the working tree, unstaged edits included. A commit's hook is told
+ * by `GIT_INDEX_FILE`, which git hands every hook that commits and a check by hand is not given, as
+ * ../check.mjs tells it. */
+export function ciGateWanted({ cwd, env = process.env }) {
   if (env[CI_GATE_ENV] === '0' || onCiMachine(env)) return null;
+  if (!Object.keys(env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE')) return null;
   if (!fs.existsSync(path.join(cwd, CI_WORKFLOW))) return null;
-  let holder;
-  let waiters;
-  try {
-    holder = readHolder(home);
-    waiters = readWaiters(home);
-  } catch {
-    return null;
-  }
-  if (holder) return `the machine's gate lock is held by another gate (pid ${holder.pid ?? 'unknown'})`;
-  if (waiters.length > 0) return `${waiters.length} ${waiters.length === 1 ? 'gate waits' : 'gates wait'} for the machine's gate lock`;
-  return null;
+  return `the project holds ${CI_WORKFLOW}, so a commit's tests go to GitHub's machines first`;
 }
 
 /** Whether `env` is a CI machine's, read as `onCi` of ../check.mjs reads it: a `CI` of `false` or `0` says it is not. */
-function onCiMachine(env) {
+export function onCiMachine(env) {
   const value = env.CI?.trim().toLowerCase();
   return Boolean(value) && value !== 'false' && value !== '0';
 }
 
-const spawner = (command, env) => (args, { cwd } = {}) => {
+/** A runner of `command` as the gate runs git and gh: 60 s at most and a 64 MB buffer, so a run's whole failed log
+ * is read. The daily Windows reader (./windows-daily.mjs) runs its gh with it too. */
+export const spawner = (command, env) => (args, { cwd } = {}) => {
   const run = spawnSync(command, args, { cwd, encoding: 'utf8', env, windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
   return { status: run.error ? null : run.status, stdout: String(run.stdout ?? ''), stderr: String(run.stderr ?? run.error?.message ?? '').trim() };
 };
 
 const firstLine = (text) => String(text).trim().split(/\r?\n/)[0] ?? '';
+
+/** The environment git runs in during a gate: `env` with every credential prompt off, so a push that would ask for a
+ * password, in the terminal or in Git Credential Manager's window, fails at once and the gate runs here. Now that
+ * every commit's gate pushes, a prompt would hold every commit. */
+export function pushEnv(env) {
+  return { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' };
+}
 
 /** The `owner/name` of a GitHub repository from a remote's URL, in the forms git takes (https, ssh, scp-style), or
  * null for a URL that is not GitHub's. */
@@ -73,7 +92,7 @@ export function githubRepository(url) {
  * seconds, output }`, `output` the end of a red run's failed log, or `{ ran: false, why }`. `gh`, `now`, `sleep`
  * and `onGit` (told the arguments of each git call) are injectable. */
 export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), onGit = () => {} }) {
-  const runGit = spawner('git', env);
+  const runGit = spawner('git', pushEnv(env));
   const git = (...args) => {
     onGit(args);
     return runGit(['-C', cwd, ...args]);
@@ -85,6 +104,10 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url || 'no URL'})` };
   const runGh = gh ?? spawner('gh', env);
   const ghIn = ([verb, sub, ...rest]) => runGh([verb, sub, '--repo', repository, ...rest], { cwd });
+  // Asked before anything is written or pushed: a `gh` missing, signed out or barred from the repository would
+  // otherwise leave a run going that no one reads, after a push every commit pays.
+  const probe = ghIn(['run', 'list', '--workflow', path.basename(CI_WORKFLOW), '--json', 'databaseId', '--limit', '1']);
+  if (probe.status !== 0) return { ran: false, why: `gh cannot read the runs of ${repository}, so nothing was pushed: ${firstLine(probe.stderr)}` };
   const tree = git('write-tree');
   if (tree.status !== 0) return { ran: false, why: `git write-tree failed: ${firstLine(tree.stderr)}` };
   const head = git('rev-parse', '--verify', '--quiet', 'HEAD');
@@ -112,6 +135,8 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
     if (answer.status !== 0) throw new Error(`gh ${args.slice(0, 2).join(' ')} failed: ${firstLine(answer.stderr)}`);
     return JSON.parse(answer.stdout);
   };
+  // The id of the run once it is found: a run left going when `gh` fails after it is cancelled.
+  let id = null;
   try {
     let run;
     for (;;) {
@@ -120,7 +145,7 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
       if (now() - startedAt >= CI_START_MS) return { ran: false, why: `no run of ${CI_WORKFLOW} started within ${CI_START_MS / 60_000} minutes` };
       await sleep(CI_POLL_MS);
     }
-    const id = String(run.databaseId);
+    id = String(run.databaseId);
     for (;;) {
       if (run.status === 'completed') break;
       if (now() - startedAt >= CI_RUN_MS) {
@@ -136,10 +161,11 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
     // gate's bound is.
     if (run.conclusion === 'failure') {
       const log = gh(['run', 'view', id, '--log-failed']);
-      return { ran: true, pass: false, url: run.url, seconds, output: log.stdout.trimEnd().split(/\r?\n/).slice(-LOG_LINES).join('\n') };
+      return { ran: true, pass: false, url: run.url, seconds, output: failedLog(log.stdout, id) };
     }
     return { ran: false, why: `its run (${run.url}) ended ${run.conclusion || 'with no conclusion'}` };
   } catch (err) {
+    if (id !== null) gh(['run', 'cancel', id]);
     return { ran: false, why: err instanceof Error ? err.message : String(err) };
   }
 }

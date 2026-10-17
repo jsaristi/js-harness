@@ -9,6 +9,9 @@ import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { unseenToClear } from './unseen.mjs';
+import { MAIN_LIST_URL } from './lib/rules-installed.mjs';
+import { RULES } from './lib/rules-data.mjs';
+import { shippedRulesHash, writeRules } from './lib/rules.mjs';
 
 // T2 introduces a real default `fetch` for latest-version lookups. Every test below that does not
 // specifically exercise the network path injects this instead, so the suite never depends on
@@ -132,7 +135,7 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
   }
 });
 
-test('doctorMain --json prints a parseable array with the six tool ids, then the two checks, and upToDate unknown (or n/a where there is no version to compare)', async () => {
+test("doctorMain --json prints a parseable array with the six tool ids, then the checks, then the harness's own row, and upToDate unknown (or n/a where there is no version to compare)", async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
@@ -145,12 +148,12 @@ test('doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
-      // and are `n/a` instead.
+      // and are `n/a` instead. The harness's own row could not read main's list either: `unknown`.
       assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
@@ -496,11 +499,12 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
 
     assert.equal(code, 0);
     const lines = output.split('\n').filter(Boolean);
-    assert.equal(lines.at(-4), accountLine('ok'), output);
-    assert.equal(lines.at(-3), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
-    assert.equal(lines.at(-2), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
-    assert.match(lines.at(-1), /^pnpm-lock\s+n\/a\s+n\/a/, 'then the pnpm lock check, with no PNPM_HOME in the env given');
-    assert.equal(lines.length, 13, 'the header, the six tools and the six checks');
+    assert.equal(lines.at(-5), accountLine('ok'), output);
+    assert.equal(lines.at(-4), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.equal(lines.at(-3), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
+    assert.match(lines.at(-2), /^pnpm-lock\s+n\/a\s+n\/a/, 'then the pnpm lock check, with no PNPM_HOME in the env given');
+    assert.match(lines.at(-1), /^js-harness\s+[0-9a-f]{8}\s+n\/a\s+n\/a\s+n\/a\s+unknown$/, "then the harness's own rules, main unread");
+    assert.equal(lines.length, 14, "the header, the six tools, the six checks and the harness's own row");
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -591,7 +595,8 @@ test('the account check has no latest version: it is never looked up, and never 
 
     const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { ...deps, fetch: fetchImpl });
 
-    assert.deepEqual(urls, []);
+    // The one request is the harness's own row, which reads main's list fresh and never from the cache.
+    assert.deepEqual(urls, [MAIN_LIST_URL]);
     assert.equal(readCache(home).latest.checkedAt, checkedAt);
     assert.equal(JSON.parse(output).find((r) => r.id === 'claude-account').upToDate, 'n/a');
     assert.equal(JSON.parse(output).find((r) => r.id === 'remote-server').upToDate, 'n/a', 'nor has the remote server check');
@@ -885,6 +890,48 @@ test('doctorMain on auto shows the codex row only for a project with a program f
       const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
 
       assert.equal(JSON.parse(output).some((r) => r.id === 'codex'), shown, JSON.stringify(lsFiles));
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  }
+});
+
+// --- the typescript-lsp row follows the project's languageServer switch: off is the control of language-server-load ---
+
+test('doctorMain leaves the typescript-lsp row out, and offers no enable, when the project declares languageServer off', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeJson(path.join(project, 'harness.json'), { functions: { languageServer: 'off' } });
+    const spawn = fakeSpawn({ codexLogin: 'in', lsFiles: 'src/app.ts\0' });
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(JSON.parse(json.output).some((r) => r.id === 'typescript-lsp'), false);
+    assert.doesNotMatch(text.output, /typescript-lsp/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain on auto shows the typescript-lsp row only for a project with a TypeScript file', async () => {
+  for (const [lsFiles, shown] of [
+    ['README.md\0bin/app.mjs\0', false],
+    ['README.md\0src/app.ts\0', true],
+  ]) {
+    const home = makeTmpHome();
+    const project = makeTmpHome();
+    try {
+      seedHealthyHome(home);
+      const spawn = fakeSpawn({ codexLogin: 'in', lsFiles });
+
+      const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+      assert.equal(JSON.parse(output).some((r) => r.id === 'typescript-lsp'), shown, JSON.stringify(lsFiles));
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
       fs.rmSync(project, { recursive: true, force: true });
@@ -1390,16 +1437,17 @@ test('doctorMain skips fetching when the cache was checked within the last 6 hou
       notified: null,
     });
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
-    let fetchCalled = false;
-    const fetchImpl = async () => {
-      fetchCalled = true;
+    const urls = [];
+    const fetchImpl = async (url) => {
+      urls.push(url);
       return { ok: true, json: async () => ({ tag_name: 'v3.7.0' }) };
     };
 
     const { code } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
 
     assert.equal(code, 0);
-    assert.equal(fetchCalled, false);
+    // No version is looked up: the one request is the harness's own row, which reads main's list fresh.
+    assert.deepEqual(urls, [MAIN_LIST_URL]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -2081,6 +2129,176 @@ test('--host-reviewed with no readable desktop version records nothing and exits
     assert.equal('host' in readCache(home), false);
   } finally {
     console.error = original;
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The harness's own row (odd/tasks/rule-hierarchy.md, "Reach: the hash of the installed command (T16f, second part)").
+
+/** A copy of `RULES` with the first unscoped rule that has a number one more, so its unscoped hash differs. */
+function mainAhead(step = 1) {
+  const target = RULES.find((rule) => rule.scope === undefined && typeof rule.value === 'number' && rule.retired === undefined);
+  return { id: target.id, list: RULES.map((rule) => (rule.id === target.id ? { ...rule, value: rule.value + step } : rule)) };
+}
+
+test("doctorMain names an installed copy whose unscoped rules differ from main's, in the table, under Fix and in --json", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const { id, list } = mainAhead();
+    const fetchImpl = async (url) => {
+      if (url === MAIN_LIST_URL) return { ok: true, status: 200, text: async () => writeRules(list) };
+      throw new Error('network disabled in tests');
+    };
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
+    assert.match(text.output, new RegExp(`\\njs-harness\\s+${shippedRulesHash(RULES).slice(0, 8)}\\s+n/a\\s+n/a\\s+n/a\\s+outdated\\n`));
+    assert.match(text.output, /\n {2}js-harness \(upToDate\):\n {4}the installed copy's unscoped rules differ from main's: install the newest copy \(npm i -g github:jsaristi\/js-harness/);
+    assert.match(text.output, new RegExp(`\\n {4}unscoped rules on main that differ: changed ${id}\\n`));
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
+    const row = JSON.parse(json.output).find((r) => r.id === 'js-harness');
+    assert.equal(row.rulesHash, shippedRulesHash(RULES));
+    assert.equal(row.mainRulesHash, shippedRulesHash(list));
+    assert.deepEqual(row.differs.changed, [id]);
+    assert.deepEqual(row.gaps.map((gap) => [gap.dimension, gap.state]), [['upToDate', 'outdated']]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("an online doctor asks for main's list while the latest versions are still being looked up, not after them", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    // Each lookup of a latest version waits for main's list to be asked, or gives up after a second: run one after
+    // the other, every lookup gives up before main's list is asked.
+    let mainAsked;
+    const asked = new Promise((resolve) => { mainAsked = resolve; });
+    const lookups = [];
+    const fetchImpl = async (url) => {
+      if (url === MAIN_LIST_URL) {
+        mainAsked();
+        return { ok: true, status: 200, text: async () => writeRules(RULES) };
+      }
+      let timer;
+      const gaveUp = new Promise((resolve) => { timer = setTimeout(resolve, 1000, 'gave up'); });
+      lookups.push(await Promise.race([asked.then(() => 'asked'), gaveUp]));
+      clearTimeout(timer);
+      throw new Error('network disabled in tests');
+    };
+    await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
+    assert.ok(lookups.length > 0, 'the run looked up no latest version, so it proves nothing');
+    assert.deepEqual([...new Set(lookups)], ['asked']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("doctor --offline and the hook read no main list outside the harness's checkout: the row is n/a and no request is made", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const urls = [];
+    const fetchImpl = async (url) => {
+      urls.push(url);
+      throw new Error('network disabled in tests');
+    };
+    const offline = await runDoctor(['--home', home, '--cwd', project, '--offline', '--json'], {}, { spawn, fetch: fetchImpl });
+    assert.equal(JSON.parse(offline.output).find((r) => r.id === 'js-harness').upToDate, 'n/a');
+    await runDoctor(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
+    assert.ok(!urls.includes(MAIN_LIST_URL), urls.join(', '));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("in the harness's checkout the hook tells a copy behind main once, and again when main moves", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    fs.mkdirSync(path.join(project, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'bin', 'lib', 'rules-data.mjs'), writeRules(RULES));
+    let onMain = mainAhead(1).list;
+    const base = fakeSpawn({
+      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+      gitToplevel: project,
+      codexLogin: 'in',
+    });
+    const spawn = (cmd, args, opts) => {
+      if (cmd === 'git' && args[0] === 'for-each-ref') return { status: 0, stdout: 'refs/remotes/origin/main abc\n', stderr: '' };
+      if (cmd === 'git' && args[0] === 'show' && args[1] === 'origin/main:bin/lib/rules-data.mjs') return { status: 0, stdout: writeRules(onMain), stderr: '' };
+      return base(cmd, args, opts);
+    };
+    const hook = () => runDoctor(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    const first = await hook();
+    assert.match(first.output, /"systemMessage":"js-harness: 1 stack gap — run js-harness doctor"/);
+    assert.doesNotMatch(first.output, new RegExp(shippedRulesHash(onMain)), 'the hash is in the digest, not in the notice');
+    assert.equal((await hook()).output, '', 'the same main is told once');
+    onMain = mainAhead(2).list;
+    assert.match((await hook()).output, /1 stack gap/, 'a main that moved again is told again');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main already holds, clean
+// and idle, which no land removed, counted with the command that removes them. Counting asks a `git status` of each,
+// so the hook, run at every session start, does not ask.
+test('doctorMain shows the worktrees row stale, naming the command that removes them, when some are in main', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const worktrees = () => [{ path: 'D:/w/one', branch: 'feat/one' }, { path: 'D:/w/two', branch: 'feat/two' }];
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees });
+
+    assert.equal(code, 0);
+    assert.match(output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(output.includes('  worktrees (project):\n    2 worktrees on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them\n    D:/w/one (feat/one)\n    D:/w/two (feat/two)\n'), output);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows the worktrees row ok with none, unknown when it cannot tell, and its hook never counts them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+
+    const none = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => [] });
+    assert.match(none.output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.doesNotMatch(none.output, /^ {2}worktrees \(/m, 'no fix line for the worktrees row');
+
+    const unread = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => null });
+    assert.match(unread.output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => { asked = true; return [{ path: 'D:/w/one', branch: 'feat/one' }]; } });
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook counted the worktrees');
+  } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
   }

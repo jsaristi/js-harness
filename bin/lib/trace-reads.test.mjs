@@ -230,6 +230,8 @@ test('with a results folder, every test file writes how it ended, failed or pass
     assert.equal(files.length, 2, files.join(', '));
     const ended = files.map((name) => JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'))).sort((a, b) => a.test.localeCompare(b.test));
     assert.deepEqual(ended.map(({ test: file, code }) => [file, code === 0]), [['test/ok.test.mjs', true], ['test/red.test.mjs', false]]);
+    // And how long its process ran, for the throughput review's per-file times (B5).
+    for (const one of ended) assert.ok(Number.isFinite(one.seconds) && one.seconds > 0 && one.seconds < 60, JSON.stringify(one));
   } finally {
     done();
   }

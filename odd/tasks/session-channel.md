@@ -566,6 +566,8 @@ Each is run once by the build, with its result recorded in Progress.
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
 5. After a rename, does the old title stop resolving as an address?
+   Run 2026-10-16 at 18:43 local: it does, at once, and the restored title resolves again
+   (Progress, "T2 test 5").
 6. The clean start against the compaction: may a session clear itself while he has it open, and
    does it lose less than a summary?
 
@@ -1655,7 +1657,8 @@ and 3.
   append test proves its writers overlapped, or starts them on a barrier
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
   2 is retired by his answer of 2026-10-15 (section 13); test 1 is run (2026-10-16, typed
-  text); test 3 is run (2026-10-16, not in his sidebar); tests 4, 5 and 6 remain
+  text); test 3 is run (2026-10-16, not in his sidebar); test 5 is run (2026-10-16, the old
+  title stops resolving at once); tests 4 and 6 remain
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
@@ -1684,7 +1687,7 @@ and 3.
 - [x] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on this machine by the lead once the fourth slice is on `main`: his answer of
   2026-10-11 (Progress, 22:03)
-- [ ] T6b The compaction protocol, so that a compaction never again arrives with nothing
+- [x] T6b The compaction protocol, so that a compaction never again arrives with nothing
   saved (his words of 2026-10-11, Progress 22:03). Design first, read twice by independent
   readers before it reaches him. Three parts: (1) at the pause a session writes its state to
   the feature document and its very next reply to him carries the percentage and the two
@@ -1841,9 +1844,12 @@ and 3.
   JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
   wording). After T18
 - [x] T20 `js-harness wait`: one command a session runs in the background that ends when its condition holds (a pull request merged, by gh; origin/main holding a commit or a file content; a notice addressed to this session in the channel record), printing its purpose and its end at start (T18); and the skill and the hooks say that while he is not present a work session never ends a turn waiting for a message, his /compact or an event: it writes its state, arms `js-harness wait` and keeps working. His order of 2026-10-14, typed, read with `sessions --quote`, exit 0 (the lead's transcript `ffe99ebf`, line 5141): nothing ran from 06:40 to 13:34. The rule's wording is the lead's message of 13:58. Done: merged as PR 156, 3b9e681.
-- [ ] T20b `wait-blind-to-notices` (docs/FAILURES.md): every `js-harness wait` also ends on a notice to the waiting session's own number, with an exit code of its own, so a session that waits on a pull request or on `main` still wakes for the lead (JH 7, 2026-10-16: five of the lead's notices reached it hours late). Its number is read as `notify` reads its sender (`senderOf`, bin/lib/channel.mjs, from `CLAUDE_CODE_SESSION_ID`); a session with no number (the lead, Codex, a phone session whose transcript has no title) keeps today's wait, and a project with no channel sees no error. The notice watch is no second condition (bin/wait.mjs refuses two); a wait ended by a notice names the wait to arm again, and `js-harness wake` re-arms waits from their command lines (bin/lib/wake.mjs). Test first; wait's help, README.md and the manifest's wait lines say the new exit. When done, the entry's Control becomes that test (`check — bin/wait.test.mjs — "<its name>" — since <date>`). The lead's order of 2026-10-16 22:10Z: "fix the cause test first if it breaks shipped behavior, else open its task in the owning feature doc and settle the entry"; this one breaks nothing shipped (each mode does what its help says), so it is a task.
+- [x] T20b `wait-blind-to-notices` (docs/FAILURES.md): every `js-harness wait` also ends on a notice to the waiting session's own number, with an exit code of its own, so a session that waits on a pull request or on `main` still wakes for the lead (JH 7, 2026-10-16: five of the lead's notices reached it hours late). Its number is read as `notify` reads its sender (`senderOf`, bin/lib/channel.mjs, from `CLAUDE_CODE_SESSION_ID`); a session with no number (the lead, Codex, a phone session whose transcript has no title) keeps today's wait, and a project with no channel sees no error. The notice watch is no second condition (bin/wait.mjs refuses two); a wait ended by a notice names the wait to arm again, and `js-harness wake` re-arms waits from their command lines (bin/lib/wake.mjs). Test first; wait's help, README.md and the manifest's wait lines say the new exit. When done, the entry's Control becomes that test (`check — bin/wait.test.mjs — "<its name>" — since <date>`). The lead's order of 2026-10-16 22:10Z: "fix the cause test first if it breaks shipped behavior, else open its task in the owning feature doc and settle the entry"; this one breaks nothing shipped (each mode does what its help says), so it is a task.
 - [x] T21 The merge checks and the pre-leave list in the orchestrator skill: a code pull request merges on a green CI run whose checkout says `Merge <head> into <base>` with that base origin's default branch now (a stale run: close and reopen; the merge's message names the run, the base and the head); a documents-only one merges when `git merge-tree` is clean; the gate rule stays for a project with no CI; before the user leaves, every waiting session has a declared wait running, none ended its turn to wait for them, and the orchestrator's watch runs. His words: "Sí, tomemos el intercambio con verde de GitHub" (`ffe99ebf` line 5394) and "pausemos todo e implementemos las soluciones" (line 5906, 14:43, quoted by this session with `sessions --quote`); the wording is the lead's orders of 14:21 and 14:45. Branch `feat/orchestrator-merge-checks`, worktree `D:\js-harness-worktrees\merge-checks`, inline. Done: merged as PR 149, eb6abf7.
 - [x] T22 The cut only while the user is here: the pause notice reads when the user last wrote (`personAtOf`, the end of the transcript it reads) and says by `cutRule` (15 minutes, as `askingRule`) to give the two blocks only then, and otherwise never to stop, since the host compacts inside a turn; AGENTS.md says the same in place of its old cut sentence, inside 1500 tokens. Same orders as T21. Widened by the lead's correction of 15:52 and 15:58, on his words "pero si se autocompacta en la mitad de una tarea creo que es malo" (`b878a67f` line 3189, 15:37) and "despues de la autocompactacion se le puede inyectar el siguiente prompt automaticamente?" (line 3535, 15:49), both quoted by this session: from the pause on, the notice says to write the state after every step (committed with the next commit) and to store the session's own resume prompt with `notify --opening` (what a compaction by the host or a new session under that title reads); a last notice, once a stretch, at `DEFAULT_CONTEXT_LAST_PERCENT` (three points under the compaction, the lead's 15:58 correction) says to write both now, before anything else, and then to go on with the task (never to wait for the compaction: Codex's P2 on cab5d69, since the host compacts with the next requests). Caveats sent to the lead: the last notice had about 10k tokens of room at two points, so it moved to three (about 15k), and a self-written opening replaces the lead's. Branch `feat/cut-while-present`, worktree `D:\js-harness-worktrees\cut-rule`, inline. Done: merged as PR 151, 34be88d.
+- [x] T23 `sessions --quote` and `notify --kind answer` read a message he queued while the session worked when host 2.1.299 writes its `prompt` as a list of blocks: `[{type:'text', text:'<system-reminder>…</system-reminder>\n\n'}, {type:'text', text:'<his words>'}]`. Before, `quoteOf` read only a string prompt and said the line held no text to quote; JH 21 met it on his message of 2026-10-17 08:11:16Z (`e152c9d8` line 20374). Now `queuedWords` (bin/lib/sessions.mjs) joins the text blocks one a line, drops only the run of reminders that opens the first text block, where the host puts them (a tag he types in his own words stays his, even at the start of a later block), and counts the list's image blocks. The lead's order of 09:04Z: "Fix so --quote reads a queued_command's text, and notify --kind answer verifies an answer there too." Test first: sessions.test.mjs "quoteOf takes his words from a queued list of text blocks…" and notify.test.mjs "an answer he sent while the session worked is verified from his words alone…"; with the fix, `sessions --quote` on line 20374 prints his words. Branch `fix/quote-queued-command`, worktree `D:\js-harness-worktrees\quote-queued-command`, inline. Commits `8a50cd6` (the list), `73428d3` (Codex's two P2 on it: the anchored strip and the image count) and `0139d8d` (Codex's recheck: the strip ran on every block, so it runs on the first only).
+  gentle-ai: `297c407..8a50cd6` high (item 2 escalated: it decides which transcript text counts as his words), reviewed and approved, lineage review-b1e9abe1c7d3de6e; `8a50cd6..73428d3` high, same escalation, risk and reliability lenses, approved and acknowledged, lineage review-8ca44ae7bf3aaf32; `73428d3..0139d8d` high, same escalation and lenses, approved and acknowledged, lineage review-590e7f52c48d9770. Informational, left as they are: reliability's WARNINGs that a reminder the host put after his words, or in a second reminder-only block, would now stay in the quote (that quote then fails to match, so the answer check fails closed; the host's shape seen has one reminder block), and its SUGGESTIONs to pin that a string prompt reports 0 images and an image block before the first text block.
+  Codex: `297c407..8a50cd6` incorrect (0.94), two P2; `8a50cd6..73428d3` fixed one, not the other, and wrote no record because this document was edited while it ran; `8a50cd6..0985899` correct (0.97), both fixed, recorded.
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -3060,6 +3066,48 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   test of `bin/guard.test.mjs`; then guard 22, audit 15, resume 92, pause 55 pass): `hostWindow` in the pause
   library resolves the configured window once for both hooks, and the stop check takes it ahead of a get_usage
   read and of the default; its refusal names the order.
+- 2026-10-16, JH 26, T2 test 5, run on its own session only, by the lead's answer ("run it on your own session
+  only ... Touch no other session's title").
+  - Before: `js-harness sessions --address 26 --self 00000000-0000-4000-8000-000000000000` printed
+    `JH 26 · canal y compactación`, exit 0. The `--self` is a made-up id, so that the asking session is counted.
+  - `set_session_title` on this session to `JH 29 · prueba de renombre`; then `--address 26` printed "no session
+    carries the title of work session 26", exit 1, and `--address 29` printed the new title, exit 0.
+  - The title put back exactly; 31 s after the rename, `--address 26` printed `JH 26 · canal y compactación`,
+    exit 0, and `--address 29` exited 1.
+  - So a rename moves the address at once: the board reads the title the session carries now.
+- 2026-10-16, JH 26, T20b, on `feat/wait-own-notice` from `main` 685a451, by the lead's notice ("the open task
+  T20b ... build it test first, gate, gentle-ai, Codex, PR"; a claim of the lead's). Inline, test first.
+  - Built: every `js-harness wait` of a work session also looks, before its condition at each tick, for a notice to
+    its own number written after it started. The number is the title's, from the transcript `CLAUDE_CODE_SESSION_ID`
+    names, read with `senderOf` and `roleOfTitle`, as `notify` reads its sender.
+  - On such a notice the wait exits 3 and prints three things: that the notice came first, the notice, and the same
+    wait to run again, as one line a POSIX shell reads back (a Windows path goes in single quotes, since bash would
+    eat its backslashes).
+  - Kept as it was:
+    - no second condition, since the parser still refuses two;
+    - the wait of a session with no number: no id, a transcript with no title, the orchestrator, a title of no
+      agreed shape;
+    - a wait already for a notice to that number;
+    - a project with no channel record, which sees no error;
+    - `wake`, which re-arms from the command line, which is unchanged.
+  - A record that exists and cannot be read is said once on stderr, and the condition is still checked.
+  - RED: 5 of the 8 new tests of `bin/wait.test.mjs` failed on `main`'s `wait`. GREEN: 22 of 22.
+    `bin/lib/manifest.test.mjs` passes 166.
+  - A real run on this session: `js-harness wait --pr 340 --for 2 --every 5` in a scratch home ended with exit 3, 7 s
+    after `notify --to 26` there, printing the notice and the wait to run again.
+  - Help, the README's section, the skill's line in `bin/lib/manifest.mjs` and SPEC's "Waiting and waking" say the new
+    exit. `wait-blind-to-notices`'s Control is now that test; `failures` reads it as controlled.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `docs/open-work-text`, on the lead's triage of open work: T6b
+  checked off. Its owed proof was that `js-harness sessions --measures` counts no `told` miss for a compaction
+  on a configured window. Read on 2026-10-17 before 11:22Z (by `date`): after pull request 275 merged (2026-10-16T13:32:49Z), 37 of 37
+  automatic compactions in the record were told, and every `told no` is older. The triage note said 41 of 41;
+  the count read here is 37.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `fix/peer-text-blocks`, item 4 of the lead's triage: `peerTextOf`
+  (bin/lib/sessions.mjs) reads a queued prompt through `queuedWords`, as T23 reads his, so a message the app
+  delivered for a session and queued as a list of blocks names its sender (RED: "a queued message the app put in").
+  Commit `175e15f`. gentle-ai on `67e04cb..175e15f`: high (item 2 escalated), lenses risk and reliability, approved
+  and acknowledged, lineage review-afeb3126c951c989; its SUGGESTION, a negative case, left. Codex on
+  `67e04cb..175e15f`: correct (0.97), recorded.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a

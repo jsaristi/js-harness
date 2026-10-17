@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { baseLeftOut, COMMITS_UNREAD, MARKS_UNREAD, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
+import { baseLeftOut, COMMITS_UNREAD, MARKS_UNREAD, mergeStart, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
 
@@ -472,6 +472,26 @@ test('the base of a review that is a merge of the default branch says so, `merge
   const left = baseLeftOut(root, { from: ofOther });
   assert.equal(left?.id, ofOther);
   assert.equal('merged' in left, false);
+  // Once every commit of its own has a record, the other branch is a stacked base, and its merge says so (gate-first T7).
+  record(root, first, git(root, 'rev-parse', 'other'));
+  assert.equal(baseLeftOut(root, { from: ofOther })?.merged, 'a stacked base off origin/main');
+});
+
+test('a merge of a stacked base is not read by its own lines when a commit of the base is code by the marks at the merge and has no record (verifier B1, gate-first T7)', () => {
+  const { root } = makeRepo();
+  const marked = commit(root, '.gitattributes', 'f.js -codex-review\n', 'chore: mark f.js');
+  remoteMainAt(root, marked);
+  git(root, 'checkout', '--quiet', '-b', 'stack');
+  const own = commit(root, 'm.js', 'theirs\n', 'feat: the stacked base');
+  // Marked at the stacked base, so no code commit there; the branch unmarks f.js, so at the merge it is code.
+  commit(root, 'f.js', 'edited, read by nobody\n', 'feat: edit f.js');
+  git(root, 'checkout', '--quiet', '-b', 'feat', marked);
+  const unmark = commit(root, '.gitattributes', '', 'chore: unmark f.js');
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', '--quiet', 'stack'], { cwd: root });
+  const merge = commit(root, 'm.js', 'both\n', 'merge the stacked base, with an edit of its own');
+  record(root, marked, unmark);
+  record(root, marked, own);
+  assert.equal(mergeStart(root, { given: marked, tip: merge }), null);
 });
 
 test('the base of a review that is the tip of the default branch is no base left out, though it is a code commit with no record', () => {

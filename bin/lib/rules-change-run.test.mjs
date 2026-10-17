@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { rulesMain } from '../rules.mjs';
 import { checkRules } from './rules-check.mjs';
 import { renderList, writeRules } from './rules.mjs';
-import { rulesOfText } from './rules-change-run.mjs';
+import { declarationOf, rulesOfText } from './rules-change-run.mjs';
 import { projectSlug } from './sessions.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
 
@@ -112,7 +112,9 @@ test('a new value writes the declaration, the source and the list, and appends t
   const list = rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs'));
   assert.deepEqual(list.find((rule) => rule.id === 'gate-wait').was, [{ value: 60, until: TODAY }]);
   assert.equal(read(repo.dir, 'docs/RULES.md'), listTextOf(repo.dir, list, SOURCES));
-  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /local \(rules change\)\. rule:gate-wait proposed on rule\/gate-wait, not landed: 60 minutes to 30 minutes; source design; supersedes no relief line\n$/);
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /local \(rules change\)\. rule:gate-wait proposed on rule\/gate-wait, not landed: 60 minutes to 30 minutes; source design; supersedes no relief line; declaration and source [0-9a-f]{12}\n$/);
+  const held = declarationOf(read(repo.dir, 'bin/lib/rules-data.mjs'), 'gate-wait', JSON.parse(read(repo.dir, 'docs/rule-sources.json')));
+  assert.ok(fs.readFileSync(reliefFile(repo), 'utf8').endsWith(`; declaration and source ${held}\n`));
   assert.match(result.out, /memory: .*60 minutes.*rule:gate-wait/);
   assert.match(result.out, /cost: one gate, gentle-ai's assessment and a small Codex review/);
 });
@@ -195,7 +197,7 @@ test('the relief line names the last line the command wrote for the id, blank li
   ].join('\n'));
   const result = await change(repo, ['gate-wait'], { value: 30, source: DESIGN });
   assert.equal(result.code, 0, result.err);
-  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /supersedes relief line 3\n$/);
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /supersedes relief line 3; declaration and source [0-9a-f]{12}\n$/);
 });
 
 test('it refuses a root that is not the code that runs', async () => {
@@ -461,7 +463,7 @@ test('a change of form alone keeps the source of the rule, and its relief line n
   const list = rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs'));
   assert.deepEqual(list.find((rule) => rule.id === 'gate-wait').patterns, ['wait.{0,40}{amount}']);
   assert.equal(read(repo.dir, 'docs/RULES.md'), listTextOf(repo.dir, list, SOURCES));
-  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /rule:gate-wait proposed on rule\/gate-wait, not landed: form; source design docs\/PROTO\.md, the rule's own source kept; supersedes no relief line\n$/);
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /rule:gate-wait proposed on rule\/gate-wait, not landed: form; source design docs\/PROTO\.md, the rule's own source kept; supersedes no relief line; declaration and source [0-9a-f]{12}\n$/);
 });
 
 /** A repository on `rule/gate-wait` where gate-wait is his, its value sourced from his words of an earlier day. */
@@ -490,7 +492,7 @@ test('a change of form on a rule of his needs no words of his: a design is taken
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs')).find((rule) => rule.id === 'gate-wait').patterns, ['wait.{0,40}{amount}']);
   assert.deepEqual(sourcesOf(repo)['gate-wait'], valueWords);
-  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /rule:gate-wait proposed on rule\/gate-wait, not landed: form; source design docs\/PROTO\.md, the rule's own source kept; supersedes no relief line\n$/);
+  assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /rule:gate-wait proposed on rule\/gate-wait, not landed: form; source design docs\/PROTO\.md, the rule's own source kept; supersedes no relief line; declaration and source [0-9a-f]{12}\n$/);
 });
 
 test('a value of a rule of his still needs his words: a design is refused for it, alone or beside patterns', async () => {

@@ -3000,6 +3000,17 @@ test('renderBoard prints the channel after the roster: the last notices of the r
   ]);
 });
 
+// odd/tasks/wake-and-flag.md, T1: the board names the pull request a ready notice is for.
+test('renderBoard names the pull request of a ready notice', () => {
+  const ready = { ...noticeOf(60, FROM_TWO, 'orchestrator', 'ready', 'T3 is ready'), pr: 344 };
+  assert.deepEqual(channelSection({ channel: lib.channelOf(recordOf([ready]), []) }), [
+    'Channel',
+    '  H:\\.js-harness\\channel\\D--proj.jsonl  1 notice:',
+    '  | 1m ago  JH 2 · the board to orchestrator  ready for pull request 344  T3 is ready',
+    `  ${lib.CHANNEL_NOT_KNOWN}`,
+  ]);
+});
+
 test('renderBoard prints no channel when there is nothing to show, and says so when the record could not be read', () => {
   assert.equal(channelSection({}), null, 'a board that was given none');
   assert.equal(channelSection({ channel: lib.channelOf(recordOf(), []) }), null, 'no record yet, and no message');
@@ -3046,6 +3057,24 @@ test('renderBoard: a row of the roster says what the record says of its session,
   ]);
   assert.match(lib.ROSTER_NOT_KNOWN, /one session the app restarted or several sessions under one title/);
   assert.match(lib.ROSTER_NOT_KNOWN, /unless a notice of the session says it/);
+});
+
+// odd/tasks/session-close.md, T3: a session that closed with its summary waits for the lead to read it and archive it.
+test('renderBoard lists to archive each session that closed with its summary and that the app does not say is archived', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120), member(C, 'JH 3 · the lock', 180), member(D, 'JH 4 · the roster', 240), member('eeeeeeee-5555', 'JH 5 · the wait', 30)];
+  const notices = [
+    noticeOf(600, { id: B }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-2-the-board.md' }),
+    noticeOf(700, { id: C }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-3-the-lock.md' }),
+    // Closed before summaries existed: the board has nothing to point the lead at.
+    noticeOf(3600, { id: D }, 'orchestrator', 'closed', 'delivered; nothing more goes to this session'),
+    // Closed with a summary, then opened again: its last word is no close.
+    noticeOf(900, { id: 'eeeeeeee-5555' }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-5-the-wait.md' }),
+    noticeOf(300, { id: 'eeeeeeee-5555' }, 'orchestrator', 'opened', 'the next feature'),
+  ];
+  const app = new Map([[B, inSessions()], [C, inSessions({ where: 'archived', archived: true })]]);
+  const section = rosterSection(sessions, { record: recordOf(notices), app });
+  assert.deepEqual(section.filter((line) => line.includes('to archive')), ['  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it']);
+  assert.ok(section.indexOf('  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it') < section.indexOf(`  ${lib.ROSTER_NOT_KNOWN}`));
 });
 
 // Failure 8 of 2026-10-10 (odd/tasks/rule-hierarchy.md): stopped tasks and archived sessions printed as
@@ -4254,6 +4283,24 @@ test('quoteOf takes a message the person sent while the session worked: a queued
   assert.equal(lib.quoteOf(transcript({ ...queued(5, { timestamp: undefined }), timestamp: undefined }), 1).at, null);
 });
 
+// Host 2.1.299 (2026-10-17) queues his message as a list of text blocks: the first holds the host's own
+// reminders, each a `<system-reminder>` block, and the last his words (e152c9d8, line 20374, keys and lengths read).
+test('quoteOf takes his words from a queued list of text blocks, and leaves out the reminders the host queued with them', () => {
+  const reminders = '<system-reminder>\nThe session "made up" finished a turn.\n</system-reminder>\n<system-reminder>\nLinked sessions now: made up.\n</system-reminder>\n\n';
+  const text = transcript(
+    queued(1, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: 'made up while it worked, from a phone' }] }),
+    queued(2, { prompt: [{ type: 'text', text: `${reminders}Dale` }, { type: 'image', source: {} }, { type: 'text', text: 'la A' }] }),
+    queued(3, { prompt: [{ type: 'text', text: pasted('Sos JH 5.') }] }),
+  );
+  assert.deepEqual(lib.quoteOf(text, 1), { person: true, at: at(1), text: 'made up while it worked, from a phone', images: 0, pastedOnly: false, queued: true });
+  assert.deepEqual([lib.quoteOf(text, 2).text, lib.quoteOf(text, 2).images], ['Dale\nla A', 1]);
+  assert.equal(lib.quoteOf(text, 3).pastedOnly, true);
+  // Only the reminders that open the first block are the host's: a tag he typed in his own words stays his, even at
+  // the start of his block.
+  const his = '<system-reminder>esto</system-reminder> lo escribí yo';
+  assert.equal(lib.quoteOf(transcript(queued(4, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: his }] })), 1).text, his);
+});
+
 test('quoteOf refuses every other attachment and says what it is: another origin, no turn of his, no text, another type', () => {
   const lines = [
     queued(1, { origin: { kind: 'peer', name: 'JH 1 · made up', from: 'local_1', body: 'made up' }, isMeta: true, humanTurn: undefined }),
@@ -4265,7 +4312,7 @@ test('quoteOf refuses every other attachment and says what it is: another origin
     queued(7, { humanTurn: 'true' }),
     queued(8, { origin: 'human' }),
     queued(9, { origin: { kind: 'something-new' } }),
-    queued(10, { prompt: [{ type: 'text', text: 'made up' }] }),
+    queued(10, { prompt: [{ type: 'text', text: '<system-reminder>\nmade up\n</system-reminder>\n\n' }, { type: 'image', source: {} }] }),
     queued(11, { prompt: undefined }),
     { type: 'attachment', ...base(12), attachment: { type: 'hook_success', stdout: 'made up', origin: { kind: 'human' }, humanTurn: true, prompt: 'made up' } },
     { type: 'attachment', ...base(13), attachment: null },
@@ -4538,6 +4585,14 @@ test('a message the app put in, with text no session wrote, starts no task and i
 test('quoteOf names the sender of a message the app delivered for a session, as it names any other session', () => {
   const text = transcript(reply('working', 1), injected(2, delivered('JH ORQ · js-harness')), queuedInjected(3, delivered('JH ORQ · js-harness')));
   assert.deepEqual([lib.quoteOf(text, 2).what, lib.quoteOf(text, 3).what], ['a message from another session ("JH ORQ · js-harness")', 'a queued message from another session ("JH ORQ · js-harness")']);
+});
+
+test('a message the app delivered for a session and queued as a list of blocks is read as his queued words are: the session is named', () => {
+  // Host 2.1.299 (2026-10-17) writes a queued prompt as a list, its own reminders opening the first block.
+  const blocks = [{ type: 'text', text: '<system-reminder>\nmade up while it worked\n</system-reminder>\n\n' }, { type: 'text', text: delivered('JH ORQ · js-harness') }];
+  const text = transcript(reply('working', 1), queuedInjected(2, blocks));
+  assert.equal(lib.quoteOf(text, 2).what, 'a queued message from another session ("JH ORQ · js-harness")');
+  assert.deepEqual(lib.compactionStretch(text).sessions, [{ line: 2, at: at(2), name: 'JH ORQ · js-harness' }]);
 });
 
 test('compactionStretch lists the messages the app delivered for a session among its sessions, with their titles', () => {

@@ -5,8 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
-import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
+import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
@@ -386,7 +388,9 @@ after(() => {
 function gitEnv() {
   if (!gitConfigDir) {
     gitConfigDir = makeTmpDir();
-    fs.writeFileSync(path.join(gitConfigDir, 'empty.gitconfig'), '');
+    // Automatic maintenance off: a commit would start a detached `git maintenance run` that outlives it, and a
+    // repository copied then can find its lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+    fs.writeFileSync(path.join(gitConfigDir, 'empty.gitconfig'), '[maintenance]\n\tauto = false\n');
   }
   const inherited = Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key));
   return { ...Object.fromEntries(inherited), GIT_CONFIG_GLOBAL: path.join(gitConfigDir, 'empty.gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
@@ -445,16 +449,18 @@ test('checkSensor keeps a sensor that runs git init from touching the repository
   }
 });
 
-// Ten minutes refused three commits in a row on 2026-10-04: this repository's own suite needs about
-// eight on a quiet machine and went past ten with two of eight cores taken by other programs.
-test('checkSensor gives every sensor a 20 minute timeout by default', async () => {
+// Ten minutes refused three commits in a row on 2026-10-04, and twenty refused the whole suite on Windows
+// in 2026-10 (first-version L18): a bound on length fails a slow suite that is working. So the bound is on
+// silence, with a ceiling for a sensor that hangs while it writes (first-version L28, his answer).
+test('checkSensor gives every sensor the silence bound and the ceiling of the rules by default', async () => {
   let options;
   const spawn = (_command, opts) => {
     options = opts;
     return { status: 0, stdout: '', stderr: '' };
   };
   await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
-  assert.equal(options.timeout, SENSOR_TIMEOUT_MS);
+  assert.deepEqual([options.timeout, options.silence], [SENSOR_TIMEOUT_MS, SENSOR_SILENCE_MS]);
+  assert.ok(SENSOR_SILENCE_MS < SENSOR_TIMEOUT_MS, `${SENSOR_SILENCE_MS} ms of silence against a ceiling of ${SENSOR_TIMEOUT_MS} ms`);
 });
 
 /** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
@@ -590,6 +596,126 @@ test('checkSensor keeps what the command printed before it timed out', async () 
   }
 });
 
+test('runSensor lets a command that keeps writing run past its silence bound', async () => {
+  const dir = makeTmpDir();
+  try {
+    // A line at once, then twelve 600 ms apart: over 7 s in all, never 4 s silent, the start of node on a
+    // loaded machine included (the silence starts with the spawn).
+    fs.writeFileSync(path.join(dir, 'steady.js'), "console.log('start'); let n = 0; const t = setInterval(() => { console.log('line', ++n); if (n === 12) clearInterval(t); }, 600);");
+    const started = Date.now();
+    const result = await runSensor('node steady.js', { cwd: dir, timeout: 60000, silence: 4000 });
+    assert.deepEqual([result.error, result.status], [undefined, 0]);
+    assert.match(result.stdout, /line 12/);
+    assert.ok(Date.now() - started > 4000, `ran ${Date.now() - started} ms, not past its silence bound`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runSensor stops a command silent for its silence bound, and says it was silent', async () => {
+  const dir = makeTmpDir();
+  try {
+    // 4 s of silence, as above: a shorter bound could run out while node starts, before the first line.
+    fs.writeFileSync(path.join(dir, 'quiet.js'), "console.log('then-quiet'); setTimeout(() => {}, 120000);");
+    const started = Date.now();
+    const result = await runSensor('node quiet.js', { cwd: dir, timeout: 60000, silence: 4000 });
+    assert.ok(Date.now() - started < 30000, `took ${Date.now() - started} ms`);
+    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', true, 'wrote nothing for 4000 ms']);
+    assert.match(result.stdout, /then-quiet/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runSensor still stops at its ceiling a command that keeps writing', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'loop.js'), "setInterval(() => console.log('again'), 100);");
+    // The silence bound is the 4 s that node's start fits in above, and the ceiling comes after it.
+    const result = await runSensor('node loop.js', { cwd: dir, timeout: 6000, silence: 4000 });
+    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', undefined, 'timed out after 6000 ms']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runSensor reports the exit of a command that ended as its bound ran out, not a timeout (first-version T6h)', async () => {
+  for (const bound of [{ timeout: 50 }, { timeout: 0, silence: 50 }]) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    const kills = [];
+    // The exit is emitted inside the sensor's own timer, right after it runs: the way an exit the system already
+    // holds is delivered after a timer that ran out at that moment. Two timers set apart can land a clock tick
+    // apart and let the deferred decision run first (Codex on 3586f40..9a62f82), so the order is not left to them.
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = (fn, ms, ...args) => realSetTimeout(ms === 50 ? () => {
+      fn();
+      child.emit('exit', 0, null);
+      child.emit('close');
+    } : fn, ms, ...args);
+    let running;
+    try {
+      running = runSensor('fake', { ...bound, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    const result = await running;
+    assert.deepEqual([result.status, result.error, kills], [0, undefined, []], JSON.stringify(bound));
+  }
+});
+
+test('a chunk written in the turn after the silence ran out breaks the silence: nothing is killed (first-version T6j)', async () => {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  const kills = [];
+  // The chunk is written inside the silence's own timer, right after it runs, so it lands before the deferred
+  // decision; the command then ends while its silence, armed again by that chunk, still has time left.
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...args) => realSetTimeout(ms === 50 ? () => {
+    fn();
+    child.stdout.write('still here\n');
+    realSetTimeout(() => {
+      child.emit('exit', 0, null);
+      child.emit('close');
+    }, 10);
+  } : fn, ms, ...args);
+  let running;
+  try {
+    running = runSensor('fake', { timeout: 0, silence: 50, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  const result = await running;
+  assert.deepEqual([result.status, result.error, kills, result.stdout], [0, undefined, [], 'still here\n']);
+});
+
+test('a gate stops a real silent hang at its silence bound: the row says so and the tree it started is gone (first-version T6i)', async () => {
+  const dir = makeTmpDir();
+  try {
+    // The sensor writes once, starts a child that holds on, writes its pid, then says nothing more.
+    fs.writeFileSync(path.join(dir, 'hang.js'), "const { spawn } = require('node:child_process'); const held = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); require('node:fs').writeFileSync('held.pid', String(held.pid)); console.log('started'); setInterval(() => {}, 1000);");
+    const row = await checkSensor(dir, { name: 'tests', command: 'node hang.js' }, { sensorTimeout: 120000, sensorSilence: 4000 });
+    assert.deepEqual([row.pass, row.timedOut, row.detail], [false, true, 'node hang.js wrote nothing for 4 s and was stopped']);
+    assert.match(row.output, /started/);
+    const held = Number(fs.readFileSync(path.join(dir, 'held.pid'), 'utf8'));
+    // A killed process can answer a moment longer while it is reaped (gentle-ai R3 on 22455a7): wait up to 5 s.
+    const gone = () => { try { process.kill(held, 0); return false; } catch (err) { return err.code === 'ESRCH'; } };
+    for (const until = Date.now() + 5000; !gone() && Date.now() < until;) await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.ok(gone(), `pid ${held} still runs`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensor says a sensor stopped for its silence wrote nothing for that long', async () => {
+  const spawn = () => ({ status: null, signal: null, stdout: 'started', stderr: '', error: Object.assign(new Error('wrote nothing for 600000 ms'), { code: 'ETIMEDOUT', silent: true }) });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'npm run test' }, { spawn, sensorSilence: 600000 });
+  assert.deepEqual([row.pass, row.timedOut, row.detail], [false, true, 'npm run test wrote nothing for 600 s and was stopped']);
+  assert.match(row.output, /started/);
+});
+
 test('checkSensor names the signal when the command is killed by one', async () => {
   const spawn = () => ({ status: null, signal: 'SIGTERM', stdout: 'out', stderr: '' });
   const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });
@@ -617,6 +743,25 @@ test('checkSensor runs the command with the home directory pointed at a throwawa
     assert.equal(inner, '1');
     assert.equal(context, 'undefined');
   } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The merge hook's word is for the gate of that merge (odd/tasks/land-unattended.md, T8): a sensor that inherited it
+// would run the suite's own tests of the commit-size row as if each were a merge's hook (Codex, 2026-10-17).
+test('checkSensor does not pass on the mark of the merge hook', async () => {
+  const dir = makeTmpDir();
+  const before = process.env.JS_HARNESS_HOOK;
+  process.env.JS_HARNESS_HOOK = 'pre-merge-commit';
+  try {
+    const seen = path.join(dir, 'seen-hook.txt').replace(/\\/g, '/');
+    const command = `node -e "require('fs').writeFileSync('${seen}', String(process.env.JS_HARNESS_HOOK))"`;
+    const row = await checkSensor(dir, { name: 'tests', command });
+    assert.equal(row.pass, true, row.output);
+    assert.equal(fs.readFileSync(seen, 'utf8'), 'undefined');
+  } finally {
+    if (before === undefined) delete process.env.JS_HARNESS_HOOK;
+    else process.env.JS_HARNESS_HOOK = before;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -3269,6 +3414,26 @@ test('main --no-wait is refused for a gate that waits ahead of it when the lock 
 // stand-in for the writer of the log. Nothing showed that the line the real writer makes of it is one the
 // real reader takes: a reader that knew only `held` and `timeout` would count every such refusal among the
 // lines it could not read.
+// Found in review, 2026-10-17 (Codex and the verifier of gate-first T6): the line of a ticket left unclaimed
+// carried the code of the hold in `code`, which the reader takes only as the key of a tree, so it dropped
+// every such line and counted it unreadable.
+test('a ticket left unclaimed because its file was held is in the real gate log as one first-unclaimed line with the code of the hold, which its reader takes', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-unclaimed-'));
+  try {
+    const held = { id: '0a0a0a0a', session: 'sess-a', reason: 'first', until: new Date(Date.now() + 60_000).toISOString() };
+    const deps = { claimTicket: () => ({ ticket: null, expired: [], unclaimed: [{ ticket: held, code: 'EBUSY' }] }) };
+    assert.equal(claimOf({ home, session: 'sess-a' }, home, deps), null);
+    const { events, skipped } = readGateLog(home);
+    assert.deepEqual([events.length, skipped], [1, 0]);
+    assert.deepEqual(
+      events.map(({ event, id, error, cwd, pid }) => ({ event, id, error, cwd, pid })),
+      [{ event: 'first-unclaimed', id: '0a0a0a0a', error: 'EBUSY', cwd: path.resolve(home), pid: process.pid }],
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a gate refused with --no-wait behind a gate that waits ahead is in the real gate log of its home as one refusal whose reason is ahead: its reader takes the line and counts none unreadable', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const since = new Date(Date.now() - 5000).toISOString();
   const folder = path.join(gateDir(home), 'wait-22-aaaaaaaaaaaa');
@@ -4162,6 +4327,23 @@ const commitAs = ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit
 let documentsBase;
 after(() => {
   if (documentsBase) fs.rmSync(documentsBase, { recursive: true, force: true });
+});
+
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which outlives it holding a lock in
+// `.git/objects`; a copy made then can find the lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+test('a commit in a copy of the documents repository starts no detached git maintenance', () => {
+  const repo = documentsRepo();
+  try {
+    const run = spawnSync('git', [...commitAs, '--allow-empty', '-m', 'traced'], {
+      cwd: repo,
+      encoding: 'utf8',
+      env: { ...gitEnv(), GIT_TRACE: '1' },
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.doesNotMatch(run.stderr, /maintenance run/);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
 });
 
 /** A repository of one commit whose `docs/` and `notes.md` are declared documents and whose one sensor
@@ -5073,7 +5255,7 @@ const reachedMirror = (status, ms = 1200) => ({ status, signal: null, stdout: 's
 function spawnsInTurn(...answers) {
   const spawn = (command, options) => {
     const runner = /--exec bash "(.*)"$/.exec(command);
-    spawn.calls.push({ command, cwd: options.cwd, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
+    spawn.calls.push({ command, cwd: options.cwd, silence: options.silence, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
     return answers[spawn.calls.length - 1] ?? sensorRan();
   };
   spawn.calls = [];
@@ -5266,6 +5448,16 @@ test('a sensor whose time ran out before WSL2 synced its mirror runs on Windows,
   assert.equal(end.sensors[0].ranIn, undefined);
 }));
 
+test('a sensor silent past its bound before WSL2 synced its mirror runs on Windows, and its row says it was silent', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const silent = Object.assign(new Error(`wrote nothing for ${SENSOR_SILENCE_MS} ms`), { code: 'ETIMEDOUT', silent: true });
+  const spawn = spawnsInTurn({ status: null, signal: null, stdout: '', stderr: '', error: silent }, sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command, silence }) => [command.startsWith('wsl.exe'), silence]), [[true, SENSOR_SILENCE_MS], [false, SENSOR_SILENCE_MS]]);
+  assert.match(output, new RegExp(`^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \\(it wrote nothing for ${SENSOR_SILENCE_MS / 1000} s before the mirror was synced\\)$`, 'm'));
+}));
+
 // Codex, 2026-10-14, on adae7c8..f5cbaf4: the mark alone turned a sensor that passed into a timeout.
 test('the mark of a time that ran out counts only beside the exit status of timeout, alone on its line', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
   switchOn(dir, home);
@@ -5439,3 +5631,68 @@ test('check --subagents says what it cannot tell when reading the records throws
   }
 });
 
+
+// The push reports (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 8): the row `rules` over
+// `<remote>/<default>...<head>`, said as INFO whatever the rule's row: the commit refuses, the push reports, the merge
+// refuses.
+
+/** doorRepo with a bare remote `remote` whose main is the base commit. */
+function pushRepo(remote, options) {
+  const made = doorRepo(options);
+  const bare = path.join(made.dir, '.git', `${remote}.git`);
+  git(made.dir, 'init', '-q', '--bare', '-b', 'main', bare);
+  git(made.dir, 'remote', 'add', remote, bare);
+  git(made.dir, 'push', '-q', remote, `${made.base}:refs/heads/main`);
+  git(made.dir, 'fetch', '-q', remote);
+  return made;
+}
+
+test('check --push prints the row rules as INFO and exits 0 with a refusing finding, over --remote and --head', async () => {
+  const { dir } = pushRepo('up', { change: restateRoadmap });
+  try {
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const { code, output } = await runCheck(['--push', '--remote', 'up', '--head', head, '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it; a push reports it, the merge door refuses it$/m);
+    assert.match(output, /^ {6}docs\/ROADMAP\.md:2 restates rule "gate-wait", which refuses it since 2026-10-16: The gate may wait 60 minutes\./m);
+    assert.doesNotMatch(output, DOOR_ROW_FAILS);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push gives no row rules in a project whose head has no bin/lib/rules-data.mjs, as the commit gate', async () => {
+  const { dir } = pushRepo('origin', { base: null, change: restateRoadmap });
+  try {
+    const { code, output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /^(INFO|PASS|FAIL) {2}rules /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push reads only the lines the head brings past the remote\'s default branch', async () => {
+  const { dir } = pushRepo('origin', { change: restateRoadmap });
+  try {
+    // The remote's main already holds the restated line, so the push brings none.
+    git(dir, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+    git(dir, 'fetch', '-q', 'origin');
+    const { code, output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /restates rule/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push gives no row rules where the remote has no default branch to read the push against', async () => {
+  const { dir } = doorRepo({ change: restateRoadmap });
+  try {
+    const { output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.doesNotMatch(output, /^(INFO|PASS|FAIL) {2}rules /m);
+    assert.doesNotMatch(output, /restates rule/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
