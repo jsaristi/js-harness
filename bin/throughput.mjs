@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readGateLog } from './lib/gate-log.mjs';
+import { ruleValue } from './lib/rules.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import {
@@ -47,7 +48,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const VERBS = new Set(['snapshot', 'status']);
 const FLAGS_OF = {
   table: ['--since', '--until', '--json', '--cwd', '--home'],
-  snapshot: ['--day', '--cwd', '--home'],
+  snapshot: ['--day', '--gate-log', '--cwd', '--home'],
   status: ['--cwd', '--home'],
 };
 
@@ -66,7 +67,10 @@ function parseArgs(argv) {
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) throw new ThroughputArgError(`${arg} requires a value`);
     if (['--since', '--until', '--day'].includes(arg) && !(DAY.test(value) && utcDay(Date.parse(`${value}T00:00:00Z`)) === value)) throw new ThroughputArgError(`${arg} takes a day as YYYY-MM-DD: ${value}`);
-    flags[arg.slice(2)] = value;
+    if (arg === '--gate-log') {
+      flags['gate-log'] = [...(flags['gate-log'] ?? []), value];
+      if (flags['gate-log'].length > 2) throw new ThroughputArgError('--gate-log takes two copies at most: the newer, then the older');
+    } else flags[arg.slice(2)] = value;
     i += 1;
   }
   return { verb, flags };
@@ -204,24 +208,36 @@ function table(ctx, flags) {
   return 0;
 }
 
+/** Whether `next` covers more of its day than `kept`: no start lost to the rotation, or an earlier one. */
+const fuller = (next, kept) => kept.partialFrom !== null && (next.partialFrom === null || Date.parse(next.partialFrom) < Date.parse(kept.partialFrom));
+
 function snapshot(ctx, flags) {
   const day = flags.day ?? yesterday(ctx.now());
-  if (dayBounds(day).to > ctx.now()) {
-    ctx.err(`js-harness throughput: ${day} is not over yet (UTC): only a closed day is kept`);
+  // A gate's start line is written after its wait and its run is bounded by gate-max, so two gate-max after
+  // midnight every gate of the day has its end.
+  const settles = dayBounds(day).to + 2 * ruleValue('gate-max', 'minutes') * 60000;
+  if (settles > ctx.now()) {
+    ctx.err(`js-harness throughput: ${day} settles at ${new Date(settles).toISOString()}: only a day whose gates have ended is kept`);
     return 2;
   }
   const file = path.join(ctx.folder, `${day}.json`);
-  if (ctx.fileSystem.existsSync(file)) {
-    ctx.err(`js-harness throughput: ${day} is already kept (${file}); a kept day is never written again`);
+  const kept = readSnapshot(file, ctx.fileSystem);
+  const facts = rotatingFacts(day, ctx, flags['gate-log'] ?? null);
+  if (kept && !(kept.unreadable === undefined && fuller(facts, kept))) {
+    ctx.err(`js-harness throughput: ${day} is already kept (${file}); a kept day is written again only by one that covers more of it`);
     return 1;
   }
-  const { source, ...facts } = liveFacts(day, ctx);
+  const record = {
+    schema: SNAPSHOT_SCHEMA, day, writtenAt: new Date(ctx.now()).toISOString(), from: flags['gate-log'] ?? ['the live gate log'], ...facts,
+    ...(kept && { replaced: { at: kept.writtenAt ?? null, partialFrom: kept.partialFrom } }),
+  };
   ctx.fileSystem.mkdirSync(ctx.folder, { recursive: true });
   // Written whole beside it first and moved, so a reader never meets half a snapshot.
   const aside = `${file}.${process.pid}.tmp`;
-  ctx.fileSystem.writeFileSync(aside, `${JSON.stringify({ schema: SNAPSHOT_SCHEMA, writtenAt: new Date(ctx.now()).toISOString(), ...facts }, null, 2)}\n`);
+  ctx.fileSystem.writeFileSync(aside, `${JSON.stringify(record, null, 2)}
+`);
   ctx.fileSystem.renameSync(aside, file);
-  const notes = [facts.partialFrom && `partial: the gate log begins at ${facts.partialFrom}`, ...Object.entries(facts.unavailable).map(([what, why]) => `${what} not read: ${why}`)].filter(Boolean);
+  const notes = [kept && 'replaced a partial snapshot', facts.partialFrom && `partial: the gate log begins at ${facts.partialFrom}`, ...Object.entries(facts.unavailable).map(([what, why]) => `${what} not read: ${why}`)].filter(Boolean);
   ctx.out(`js-harness throughput: kept ${day} in ${file}${notes.length ? ` (${notes.join('; ')})` : ''}`);
   return 0;
 }

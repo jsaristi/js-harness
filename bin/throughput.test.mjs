@@ -108,7 +108,7 @@ test('snapshot refuses a day that is not over yet', async () => {
   const home = makeHome(GATES);
   const { code, stderr } = await run(['snapshot', '--day', '2026-10-17'], { home });
   assert.equal(code, 2);
-  assert.match(stderr, /not over yet/);
+  assert.match(stderr, /settles at 2026-10-18T01:00:00.000Z/);
 });
 
 test('status names each day since the first one kept that has none, and exits 1', async () => {
@@ -133,9 +133,7 @@ test('a day is kept only once its last gates can have ended: two gate-max after 
 test('snapshot --gate-log keeps a day from archived copies of the log and says where it came from', async () => {
   const home = makeHome();
   const copy = path.join(home, 'gate-log.jsonl');
-  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join('
-') + '
-');
+  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join(String.fromCharCode(10)) + String.fromCharCode(10));
   const { code, stderr } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
   assert.equal(code, 0, stderr);
   const kept = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'throughput', ROOT.replace(/[^A-Za-z0-9]/g, '-'), '2026-10-16.json'), 'utf8'));
@@ -147,9 +145,7 @@ test('a partial day is replaced by a fuller one, and the replacement is recorded
   const home = makeHome(GATES.slice(1));
   assert.equal((await run(['snapshot', '--day', '2026-10-16'], { home })).code, 0);
   const copy = path.join(home, 'gate-log.jsonl');
-  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join('
-') + '
-');
+  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join(String.fromCharCode(10)) + String.fromCharCode(10));
   const { code, stdout } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
   assert.equal(code, 0);
   assert.match(stdout, /replaced a partial snapshot/);
