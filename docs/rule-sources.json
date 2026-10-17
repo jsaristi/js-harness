@@ -370,6 +370,10 @@
     "kind": "design",
     "path": "odd/tasks/throughput-review.md"
   },
+  "throughput-quiet-days": {
+    "kind": "design",
+    "path": "odd/tasks/throughput-review.md"
+  },
   "wait-every": {
     "kind": "design",
     "path": "odd/tasks/session-channel.md"

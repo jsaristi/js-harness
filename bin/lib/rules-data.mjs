@@ -401,6 +401,14 @@ export const RULES = [
     "unit": "days"
   },
   {
+    "id": "throughput-quiet-days",
+    "subject": "how many days after the last recorded throughput review the next is due once the review has gone quiet",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
     "id": "wait-every",
     "subject": "how often js-harness wait checks its condition, unless --every says otherwise",
     "owner": "project",
