@@ -530,6 +530,12 @@ the pull requests it looked at, each one left out with its reason (`not-ready`, 
 of CircleCI (from the push of the `queue/*` branch, so it spans the local suite) and of the push,
 the CircleCI build, what landed and the exit. A `--dry-run` writes none,
 and a record that cannot be written is said and changes no exit.
+A land also tells the work session of each pull request it left out why, with the failing tests of a red
+as the gate log names them, by a note to that session's number in the channel, which ends its
+`js-harness wait`. The session is the one whose newest `ready` notice names the pull request
+(`js-harness notify --kind ready --pr <n>`); one that sent none is not told, and the lead relays it. The
+same reason is told once for one ready notice. Each left-out entry of the record keeps the failing
+tests of a red (`failing`) and the number of the session told (`told`, or `null`).
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and

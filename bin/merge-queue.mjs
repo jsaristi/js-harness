@@ -11,12 +11,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
-import { appendRelief, reliefPath } from './lib/channel.mjs';
+import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
+import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
-import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
 
@@ -53,7 +54,11 @@ A landed pull request whose branch moved during the land is named after the land
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
 one left out with its reason, the time of each suite run, of CircleCI (from the push of its queue branch, so it spans the local
-suite, to its answer or the branch's removal) and of the push, what landed, and its exit.`;
+suite, to its answer or the branch's removal) and of the push, what landed, and its exit.
+A land tells the work session of each pull request it left out why, the failing tests of a red included, by a
+note to that session's number in the channel; the session is the one whose newest ready notice names the pull
+request (js-harness notify --kind ready --pr <n>), and none is told twice the same reason for one ready notice.
+The record keeps, in each left-out entry, the failing tests of a red and the number of the session told.`;
 
 const TIMEOUT_MS = 60_000;
 
@@ -83,6 +88,9 @@ function landLog({ now, session }) {
     },
   };
 }
+
+/** The failing tests of a red suite run (`localSuite`), as a left-out entry keeps them: none where it named none. */
+const redTests = (result) => (result.failing?.length ? { failing: result.failing } : {});
 
 /** Says that `pr` is left out, and why (`line`), and records it in the land's record with its `reason` and
  * `said`, the line itself unless the cause has words of its own (a red's are the suite's). */
@@ -173,6 +181,59 @@ export function failedRows(output) {
  * and the tree `place`), so it does not wait behind the line, and `say`s whether it got one; with no session or
  * a refused ticket it waits its turn. A gate that exits `GATE_NOT_RUN` (no turn, or a waiting push took it) or
  * that is stopped before it ends ran nothing: `notRun`, which is no red (odd/tasks/land-unattended.md). */
+/** The harness home a land reads and writes beside its gates: the relief file, the channel and the gate log. */
+const harnessHomeOf = (env) => env.JS_HARNESS_HOME || os.homedir();
+
+/** The names of the tests the last gate that ended at `place` found failing, from the gate log under `home`
+ * (each sensor's `failing`); none where no gate there recorded any. Only gates that began at `since` (ms) or
+ * later count: a bisection runs several suites in one folder, and an older red is not the run asked about
+ * (Codex, 2026-10-17). */
+export function failingTests(home, place, since = 0) {
+  const at = (dir) => typeof dir === 'string' && path.resolve(dir).toLowerCase() === path.resolve(place).toLowerCase();
+  const ran = gatesOf(readGateLog(home).events).filter((gate) => gate.start && gate.end && at(gate.start.cwd) && Date.parse(gate.start.at) >= since);
+  for (const gate of ran.reverse()) {
+    const names = (gate.end.sensors ?? []).flatMap((sensor) => (Array.isArray(sensor.failing) ? sensor.failing : []));
+    if (names.length > 0) return names;
+  }
+  return [];
+}
+
+/** What a land tells the session of a pull request it left out (`out`, an entry of its record's `leftOut`): the
+ * reason, what was said, and the failing tests of a red, cut to one notice. */
+function leftOutText(out) {
+  const failing = out.failing?.length ? ` Failing tests: ${out.failing.join('; ')}.` : '';
+  const text = `PR ${out.pr} was left out of a land (${out.reason}): ${out.said.replace(/\.$/, '')}.${failing}`.replace(/\s*\n\s*/g, ' ');
+  return text.length > NOTICE_TEXT_MAX ? `${text.slice(0, NOTICE_TEXT_MAX - 1)}…` : text;
+}
+
+/** A(b) (odd/tasks/land-unattended.md, Design 6): each pull request the land left out (`record.leftOut`) is
+ * told to the work session whose newest `ready` notice names it, as a note to that session's number, so its
+ * wait ends on it. Once a ready notice: the same text already told since that notice is not told again, and a
+ * newer ready notice is told anew. Each entry gets `told`, the number told, or `null` where no work session's
+ * ready notice names the pull request (the lead relays those). The channel is the project's (`home`, `slug`). */
+export function tellLeftOut({ record, home, slug, now, stdout, readFile }) {
+  for (const out of record.leftOut) out.told = null;
+  const channel = readNotices(home, slug, readFile ? { readFile } : {});
+  if (channel.unavailable !== undefined) {
+    stdout(`Could not read the channel's record ${channel.path} (${channel.unavailable}): no session was told why its pull request was left out.`);
+    return;
+  }
+  const from = { host: os.hostname(), id: null, source: 'merge-queue', title: 'js-harness merge-queue' };
+  for (const out of record.leftOut) {
+    const ready = channel.notices.findLast((notice) => notice.kind === 'ready' && notice.pr === out.pr);
+    const owner = ready ? roleOfTitle(ready.from?.title) : null;
+    if (owner?.role !== 'work') continue;
+    const text = leftOutText(out);
+    const since = Date.parse(ready.at);
+    const told = channel.notices.some((notice) => notice.from?.source === 'merge-queue' && notice.to.number === owner.number && notice.text === text && Date.parse(notice.at) >= since);
+    if (!told) {
+      appendNotice(home, slug, newNotice({ at: new Date(now()).toISOString(), from, to: String(owner.number), kind: 'note', text }));
+      stdout(`Told ${ready.from.title} why PR ${out.pr} was left out.`);
+    }
+    out.told = owner.number;
+  }
+}
+
 export function localSuite(run, place, { env = process.env, say = () => {} } = {}) {
   const bin = path.join(place, 'bin', 'js-harness.mjs');
   const session = env.CLAUDE_CODE_SESSION_ID;
@@ -186,6 +247,7 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
       : `No gate-first ticket for the land (${ticket.err.split('\n')[0] || `gate first exited ${ticket.status}`}): it waits its turn in the gate line.`);
     if (ticket.ok) issued = /^ticket ([0-9a-f]{8}):/.exec(ticket.out.trim())?.[1] ?? null;
   }
+  const began = Date.now();
   const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
   // A ticket the gate did not claim (it ran nothing, or an older candidate's gate claims none) would hold one
   // of the two open slots for an hour: cancelled. One the gate claimed is gone, and its cancel exits 1 unsaid.
@@ -193,7 +255,10 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
   if (done.status === GATE_NOT_RUN) return { ok: false, notRun: true, said: done.err.split('\n')[0] || 'the gate ran nothing' };
   if (done.status === null) return { ok: false, notRun: true, said: `the gate was stopped before it ended${done.err ? ` (${done.err.split('\n')[0]})` : ''}` };
   const last = failedRows(done.out);
-  return { ok: done.ok, notRun: false, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
+  const said = last.length ? last.join('; ') : 'the gate exited non-zero';
+  // A red names its failing tests, as the gate log has them, for the session that is told (A(b)).
+  const failing = done.ok ? [] : failingTests(harnessHomeOf(env), place, began);
+  return { ok: done.ok, notRun: false, said, ...(failing.length > 0 && { failing }) };
 }
 
 /** The commits of `main..head` read in `cwd` that change a file that is not Markdown, newest first
@@ -461,7 +526,8 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
         const reset = gitIn(place, 'reset', '--quiet', '--hard', commit);
         return reset.ok ? null : fail(`could not reset the candidate to ${what} (${reset.err.split('\n')[0] || 'git gave no reason'}): main was not pushed.`);
       };
-      let [low, high] = [1, merged.length];
+      // `red` is the run of the shortest red candidate found so far: its words and failing tests are the culprit's.
+      let [low, high, red] = [1, merged.length, local];
       while (low < high) {
         const mid = Math.floor((low + high) / 2);
         const failed = resetTo(merged[mid - 1].merge, `the merge of PR ${merged[mid - 1].number}`);
@@ -469,10 +535,10 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
         const half = suite(place);
         if (half.notRun) return notRun(half);
         if (half.ok) low = mid + 1;
-        else high = mid;
+        else [high, red] = [mid, half];
       }
       const culprit = merged[low - 1];
-      leaveOut(log, stdout, culprit, 'red', `the candidate turns red on this machine when it is merged (${local.said}).`, { said: local.said });
+      leaveOut(log, stdout, culprit, 'red', `the candidate turns red on this machine when it is merged (${red.said}).`, { said: red.said, ...redTests(red) });
       const failed = low > 1 ? resetTo(merged[low - 2].merge, `the merge of PR ${merged[low - 2].number}`) : resetTo(main, 'main');
       if (failed !== null) return failed;
       const kept = merged.slice(0, low - 1);
@@ -492,7 +558,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     }
     if (!local.ok) {
       // One pull request (alone, or the last a bisection kept) is the one that turned it red (Codex, 2026-10-17).
-      log.leave(merged[0], 'red', local.said);
+      log.leave(merged[0], 'red', local.said, redTests(local));
       stdout(`The candidate is red on this machine (${local.said}): main was not pushed.`);
       return 4;
     }
@@ -587,6 +653,17 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     printErr(line);
   };
   const code = await queueRun(args, { ...deps, stdout, stderr, log });
+  if (log.file && log.record.leftOut.length > 0) {
+    // After the land's own last line, and not as its `said`: telling is no part of what the land did. A notice
+    // that cannot be written changes no exit either.
+    try {
+      const run = deps.run ?? spawnSync;
+      const slug = projectSlug(mainCheckout((command, gitArgs, options) => run(command, gitArgs, { ...options, encoding: 'utf8' }), args.cwd));
+      tellLeftOut({ record: log.record, home: harnessHomeOf(env), slug, now, stdout: printOut });
+    } catch (err) {
+      printOut(`Could not tell the sessions of the pull requests left out (${err.message}): the land's exit stands.`);
+    }
+  }
   if (log.file) {
     // Written after the land ended, whatever its end: a record that cannot be written changes no exit.
     try {
@@ -701,7 +778,7 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
     // The relief file is found as `notify` finds it: the harness home, and the slug of the main checkout.
     const landed = (candidate, landedPrs) => recordLandings({
       gitIn, place, main, candidate, merged: landedPrs, now, stdout,
-      home: env.JS_HARNESS_HOME || os.homedir(),
+      home: harnessHomeOf(env),
       slug: projectSlug(mainCheckout((command, gitArgs, options) => run(command, gitArgs, { ...options, encoding: 'utf8' }), cwd)),
     });
     return await landCandidate({ run, gitIn, place, main, door, merged, suite: local, sleep, stdout, fail, landed, log });
