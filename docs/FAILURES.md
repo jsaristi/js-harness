@@ -523,13 +523,14 @@ A test run or a count started while a gate, or a batch that measures durations, 
 - Seen: 2026-10-16 — odd/tasks/rule-hierarchy.md, Progress of 2026-10-16 — JH 7's verifier ran
   bin/lib/rules-change-run.test.mjs (about 200 s) outside the lock beside JH 7's own gate, which
   failed on a sensor test that passed alone three times
-- Control: owed — odd/tasks/first-version.md — "a heavy run beside a gate is refused whatever its
-  size"
+- Control: check — bin/lib/test-run-warning.test.mjs — "one test file the gate log times over a
+  minute counts as several: refused while the lock is held" — since 2026-10-16
 - Proof: the gate log shows no overlap; owed with 9 (`gate-ran-unseen`) (owed: nothing prints it
   yet)
 - Was: protocol — bin/lib/manifest.mjs — "A whole test run of your own goes through" — replaced on
   2026-10-16, after two single test files ran beside gates past it (2026-10-15 and 2026-10-16), by
-  the guard's refusal T6a of odd/tasks/first-version.md owes
+  the guard's refusal of odd/tasks/first-version.md, T6a: a file the gate log timed alone over a
+  minute counts as several, and an eval batch's mark counts as a gate's holder
 
 ### hold-read-after-build
 A session was told to hold before building, and built: the message waited behind its own turn
