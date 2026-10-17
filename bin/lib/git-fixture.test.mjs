@@ -100,6 +100,63 @@ test('a build that throws leaves no template, and the next copy builds again', (
   assert.equal(fs.existsSync(path.join(root, '.git')), true);
 });
 
+/** `git commit` in `root` with git's trace on: its exit and what it traced. */
+function tracedCommit(root, message) {
+  const run = spawnSync('git', ['commit', '-q', '--allow-empty', '-m', message], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_TRACE: '1' },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  return run.stderr;
+}
+
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which holds
+// `.git/objects/maintenance.lock` after the commit returns; a copy made then can list the lock and find it gone
+// (rules-row-template-copy-enoent in docs/FAILURES.md).
+test('neither the build\'s commit nor a commit in a copy starts a detached git maintenance', () => {
+  let traced;
+  const copyTo = repoTemplate((root) => {
+    oneCommit({ builds: 0 })(root);
+    traced = tracedCommit(root, 'traced in the build');
+  });
+  const root = tmp();
+  copyTo(root);
+  assert.doesNotMatch(traced, /maintenance run/);
+  assert.doesNotMatch(tracedCommit(root, 'traced in a copy'), /maintenance run/);
+});
+
+test('every repository the build makes, a bare one too, has automatic maintenance off in its copies', () => {
+  const copyTo = repoTemplate((top) => {
+    git(top, 'init', '-q', '--bare', path.join(top, 'origin.git'));
+    fs.mkdirSync(path.join(top, 'clone'));
+    oneCommit({ builds: 0 })(path.join(top, 'clone'));
+  });
+  const root = tmp();
+  copyTo(root);
+  assert.equal(git(path.join(root, 'clone'), 'config', '--local', 'maintenance.auto'), 'false');
+  assert.equal(git(root, '--git-dir', path.join(root, 'origin.git'), 'config', '--local', 'maintenance.auto'), 'false');
+});
+
+test('the build sees the caller\'s own git config variables, and the environment is as it was after it', () => {
+  process.env.GIT_CONFIG_COUNT = '1';
+  process.env.GIT_CONFIG_KEY_0 = 'user.name';
+  process.env.GIT_CONFIG_VALUE_0 = 'from the caller';
+  const before = { ...process.env };
+  try {
+    let seen;
+    const copyTo = repoTemplate((root) => {
+      git(root, 'init', '-q');
+      seen = [git(root, 'config', 'user.name'), git(root, 'config', 'maintenance.auto')];
+    });
+    copyTo(tmp());
+    assert.deepEqual(seen, ['from the caller', 'false']);
+    assert.deepEqual({ ...process.env }, before);
+  } finally {
+    for (const key of ['GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0']) delete process.env[key];
+  }
+});
+
 test('the template is removed when the process exits', () => {
   const testkit = pathToFileURL(fileURLToPath(new URL('./git-fixture.testkit.mjs', import.meta.url))).href;
   const script = [

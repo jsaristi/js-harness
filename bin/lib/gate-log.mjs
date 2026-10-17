@@ -59,6 +59,8 @@ const CURRENT = 'log.jsonl';
 const OLDER = 'log.1.jsonl';
 const BUSIEST_CURRENT = 'busiest.jsonl';
 const BUSIEST_OLDER = 'busiest.1.jsonl';
+const TIMES_CURRENT = 'test-times.jsonl';
+const TIMES_OLDER = 'test-times.1.jsonl';
 
 /** Whether `file` is there, is not empty and does not end with a line break: what a write that was cut
  * short leaves. `false` for a file that cannot be looked at, since the line is appended all the same.
@@ -133,6 +135,14 @@ export function appendGateBusiest(home, line, { maxBytes = GATE_LOG_MAX_BYTES, f
   return appendLine(home, [BUSIEST_CURRENT, BUSIEST_OLDER], line, { maxBytes, io });
 }
 
+/** Appends the test times of one gate to `test-times.jsonl`, beside the log, as `appendGateBusiest` appends its
+ * line: rotated past `maxBytes` into `test-times.1.jsonl`, `{ ok: true }` or `{ error }`, never a throw. The line is
+ * `{ v, id, at, files: [{ test, seconds }] }`, the id the gate's lines in the log have: a list of every test file
+ * on each end line would rotate the log far sooner (odd/tasks/throughput-review.md, B5). */
+export function appendGateTestTimes(home, line, { maxBytes = GATE_LOG_MAX_BYTES, fileSystem: io = fs } = {}) {
+  return appendLine(home, [TIMES_CURRENT, TIMES_OLDER], line, { maxBytes, io });
+}
+
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const isText = (value) => typeof value === 'string';
@@ -202,8 +212,9 @@ export function isTreeKey(value) {
 /** The kinds of event this version writes and reads. `stopped` came after the other three: a version that
  * does not know it leaves its line out in silence (`readGateLog`), which is why a gate that stopped writes
  * no start for that version to show alone. The four `first-` kinds are a ticket's (./gate-first.mjs):
- * issued, claimed, expired, cancelled, each under the ticket's id; they are no gate (`gatesOf`). */
-const KINDS = ['start', 'end', 'refused', 'stopped', 'same', 'first-issued', 'first-claimed', 'first-expired', 'first-cancelled'];
+ * issued, claimed, expired, cancelled, each under the ticket's id; they are no gate (`gatesOf`). `ci-fallback` is a
+ * gate's that asked GitHub's machines first and got no answer, under the id of the gate it then runs here. */
+const KINDS = ['start', 'end', 'refused', 'stopped', 'same', 'first-issued', 'first-claimed', 'first-expired', 'first-cancelled', 'ci-fallback'];
 
 /** Whether `value` has the head of a line of this log, enough to be paired: the version, an event that is
  * a text, the id and when. The kind of the event is not asked here (`readGateLog`). */
@@ -309,6 +320,38 @@ export function readGateBusiest(home, { fileSystem: io = fs } = {}) {
         continue;
       }
       if (isBusiestLine(parsed) && !byId.has(parsed.id)) byId.set(parsed.id, parsed);
+    }
+  }
+  return byId;
+}
+
+/** One test file's time as a line of `test-times.jsonl` holds it. */
+const isTestTime = (value) => isObject(value) && isText(value.test) && Number.isFinite(value.seconds);
+
+/** The lines of `test-times.jsonl` and `test-times.1.jsonl` (`appendGateTestTimes`), as a Map from the gate's id to
+ * its line: none for a file that is not there, a line that is torn or of another shape left out, a gate's line in
+ * the newer file the one kept. A file that is there and cannot be read throws its code, so the throughput row says
+ * it was not read rather than that no gate kept times. */
+export function readGateTestTimes(home, { fileSystem: io = fs } = {}) {
+  const dir = gateLogDir(home);
+  const byId = new Map();
+  for (const name of [TIMES_CURRENT, TIMES_OLDER]) {
+    let text;
+    try {
+      text = io.readFileSync(path.join(dir, name), 'utf8');
+    } catch (err) {
+      if (err?.code === 'ENOENT') continue;
+      throw new Error(err?.code ?? err?.message ?? String(err));
+    }
+    for (const line of text.split('\n')) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const whole = hasHead({ ...parsed, event: 'times' }) && Array.isArray(parsed.files) && parsed.files.every(isTestTime);
+      if (whole && !byId.has(parsed.id)) byId.set(parsed.id, parsed);
     }
   }
   return byId;
@@ -459,6 +502,8 @@ function loadWritten(load) {
  *   to take: `reason` is the word the lock refused it with, such as `held` (told not to wait) or `timeout`
  *   (its wait ran out). It is written as the lock says it and read as any text, so a reason the lock
  *   comes to give later needs no change here.
+ * - `ciFallback({ seconds, reason })`, for a gate whose tests went to GitHub's machines first and got no answer, so
+ *   they run here: `seconds` is what the wait cost, `reason` why there was no answer. It comes before the start.
  * - `stopped({ rows })`, for a gate that ran nothing because a row it knew before its sensors had already
  *   failed: `rows` are the names of the rows that stopped it. It is the one line of that gate, which wrote
  *   no start and writes no end.
@@ -467,6 +512,8 @@ function loadWritten(load) {
  *   (`appendGateBusiest`). Each process is written as its reader takes it (`isSpent`) and the rest is left
  *   out; nothing is written for a gate whose start is not in the log, which nothing could key it by, nor
  *   where nobody was found.
+ * - `testTimes(files)`, after the end of a gate that started and traced its tests: each test file's seconds,
+ *   `[{ test, seconds }]`, written in `test-times.jsonl` under the gate's `id` (`appendGateTestTimes`).
  * - `id`, the id of the gate's lines, and `started()`, whether its start is in the log: a gate takes the
  *   readings `busiest` writes only where it can be written.
  * - `failure()`: `undefined`, or why the log could not be written and what is missing from it, to be said
@@ -474,7 +521,7 @@ function loadWritten(load) {
  *
  * None of them throws. `append`, `appendBusiest`, `now` and `id` stand in for the writer of the log, the
  * writer of `busiest.jsonl`, the clock and the random id. */
-export function gateRecord({ home, cwd, command, pid = process.pid, session, append = appendGateEvent, appendBusiest = appendGateBusiest, now = Date.now, id = randomUUID, onFailure }) {
+export function gateRecord({ home, cwd, command, pid = process.pid, session, append = appendGateEvent, appendBusiest = appendGateBusiest, appendTestTimes = appendGateTestTimes, now = Date.now, id = randomUUID, onFailure }) {
   const gate = id();
   // The session that ran it, where the host gives one: what lets `sessions` tell whose gate it was (./stall.mjs).
   const said = { cwd, command: String(command).slice(0, GATE_COMMAND_MAX), pid, ...(isText(session) && session !== '' && { session }) };
@@ -516,6 +563,13 @@ export function gateRecord({ home, cwd, command, pid = process.pid, session, app
       if (spent.length === 0) return;
       handed('who spent the processor over this gate', appendBusiest, { v: GATE_LOG_VERSION, id: gate, at: new Date(now()).toISOString(), seconds: Number.isFinite(runSeconds) ? runSeconds : 0, busiest: spent });
     },
+    testTimes(files) {
+      if (startedAt === undefined || !Array.isArray(files)) return;
+      // Written as the reader takes them (`isTestTime`): a file it would refuse would cost the line.
+      const kept = files.filter(isTestTime).map(({ test, seconds: fileSeconds }) => ({ test, seconds: fileSeconds }));
+      if (kept.length === 0) return;
+      handed('the test times of this gate', appendTestTimes, { v: GATE_LOG_VERSION, id: gate, at: new Date(now()).toISOString(), files: kept });
+    },
     start({ lock, waitedMs, waitedFor, load }) {
       const at = now();
       const sampled = loadWritten(load);
@@ -533,6 +587,10 @@ export function gateRecord({ home, cwd, command, pid = process.pid, session, app
     },
     refused({ reason, waitedMs, waitedFor }) {
       write('this refusal', now(), { event: 'refused', ...said, reason, ...waited({ waitedMs, waitedFor }) });
+    },
+    ciFallback({ seconds: waited, reason } = {}) {
+      // Before the start of the gate it falls back to, whose id it shares: what the throughput review joins it by.
+      write('this fallback from CI', now(), { event: 'ci-fallback', ...said, seconds: Number.isFinite(waited) ? waited : 0, ...(isText(reason) && { reason }) });
     },
     stopped({ rows } = {}) {
       // A name that is no text is left out, as a gate that is none is among the gates waited for: the

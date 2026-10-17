@@ -32,6 +32,20 @@ const CI_POLL_MS = 10_000;
 /** How many lines of a red run's failed log the gate prints. */
 const LOG_LINES = 80;
 
+// The job, the step and the time gh's `--log-failed` puts before each line of a run's log.
+export const GH_LOG_PREFIX = /^[^\t\r\n]*\t[^\t\r\n]*\t\S+ ?/;
+
+/** The `LOG_LINES` of a red run's log the gate prints, each without gh's prefix: from the test runner's list of
+ * the failing tests when it has one, which the gate log reads their names from and the end alone can cut, and
+ * otherwise the end. Lines a window from the list leaves out at the end are said, with where to read them. */
+function failedLog(stdout, id) {
+  const lines = String(stdout ?? '').trimEnd().split(/\r?\n/).map((line) => line.replace(GH_LOG_PREFIX, ''));
+  const list = lines.findIndex((line) => line.trim() === '✖ failing tests:');
+  const from = list === -1 ? Math.max(0, lines.length - LOG_LINES) : Math.min(list, Math.max(0, lines.length - LOG_LINES));
+  const left = lines.length - (from + LOG_LINES);
+  return [...lines.slice(from, from + LOG_LINES), ...(left > 0 ? [`… ${left} more lines: gh run view ${id} --log-failed`] : [])].join('\n');
+}
+
 /** Why this gate's tests go to CI, or null when they run here: it is the gate of a commit (or a merge) being made,
  * the project holds the workflow, nothing switches it off, and this is not already a CI machine. The machine's
  * lock is not read: a free one no longer keeps a gate here. A check by hand stays here: CI tests the index
@@ -51,7 +65,9 @@ export function onCiMachine(env) {
   return Boolean(value) && value !== 'false' && value !== '0';
 }
 
-const spawner = (command, env) => (args, { cwd } = {}) => {
+/** A runner of `command` as the gate runs git and gh: 60 s at most and a 64 MB buffer, so a run's whole failed log
+ * is read. The daily Windows reader (./windows-daily.mjs) runs its gh with it too. */
+export const spawner = (command, env) => (args, { cwd } = {}) => {
   const run = spawnSync(command, args, { cwd, encoding: 'utf8', env, windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
   return { status: run.error ? null : run.status, stdout: String(run.stdout ?? ''), stderr: String(run.stderr ?? run.error?.message ?? '').trim() };
 };
@@ -145,7 +161,7 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
     // gate's bound is.
     if (run.conclusion === 'failure') {
       const log = gh(['run', 'view', id, '--log-failed']);
-      return { ran: true, pass: false, url: run.url, seconds, output: log.stdout.trimEnd().split(/\r?\n/).slice(-LOG_LINES).join('\n') };
+      return { ran: true, pass: false, url: run.url, seconds, output: failedLog(log.stdout, id) };
     }
     return { ran: false, why: `its run (${run.url}) ended ${run.conclusion || 'with no conclusion'}` };
   } catch (err) {

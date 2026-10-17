@@ -102,10 +102,12 @@ export function checkPayload(cwd, home) {
 }
 
 // A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
-// gate forever, so the wait is bounded. The bound must stay above a whole run of this repository's own
-// suite on a loaded machine; the times measured are in the gate log (`js-harness gate log`). The figure
-// is the declared rule `sensor-timeout` (bin/lib/rules-data.mjs).
+// gate forever, so the wait is bounded twice. A sensor that hangs writes nothing, so it is stopped once it
+// has been silent for `sensor-silence`; a slow suite keeps writing and finishes, where a bound on length
+// refused the whole suite on Windows (first-version L18, L28). The ceiling, `sensor-timeout`, stays for a
+// sensor that hangs while it writes. Both are declared rules (bin/lib/rules-data.mjs).
 export const SENSOR_TIMEOUT_MS = ruleValue('sensor-timeout', 'minutes') * 60 * 1000;
+export const SENSOR_SILENCE_MS = ruleValue('sensor-silence', 'minutes') * 60 * 1000;
 const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
 // The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists
@@ -894,8 +896,12 @@ const SENSOR_OUTPUT_LIMIT = 64 * 1024 * 1024;
  * With `inherit` the command is given this process's own input and output instead of pipes, so what it
  * prints reaches the caller as it prints it and `stdout` and `stderr` come back empty: that is for
  * `js-harness gate`, which runs a command for whoever started it and reports nothing itself. A `timeout`
- * of 0 is no time bound. */
-export function runSensor(command, { cwd, env, timeout, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors }) {
+ * of 0 is no time bound.
+ *
+ * `silence` (ms) bounds the stretch with no output instead: each chunk the command writes restarts it, and
+ * past it the tree is killed as at `timeout`, the error then saying `silent: true`. It needs the pipes, so
+ * with `inherit` it does nothing; 0 or none is no such bound. */
+export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
@@ -925,33 +931,58 @@ export function runSensor(command, { cwd, env, timeout, inherit = false, killTre
     };
     for (const name of signals) process.once(name, forward);
     let timedOut = false;
+    let silent = false;
     let exit = { status: null, signal: null };
     let done = false;
     let timer;
+    let quiet;
     let grace;
     const finish = (extra) => {
       if (done) return;
       done = true;
       for (const name of signals) process.removeListener(name, forward);
       clearTimeout(timer);
+      clearTimeout(quiet);
       clearTimeout(grace);
       child.stdout?.destroy();
       child.stderr?.destroy();
-      const error = extra ?? (timedOut ? Object.assign(new Error(`timed out after ${timeout} ms`), { code: 'ETIMEDOUT' }) : undefined);
+      const timedOutError = () => (silent
+        ? Object.assign(new Error(`wrote nothing for ${silence} ms`), { code: 'ETIMEDOUT', silent: true })
+        : Object.assign(new Error(`timed out after ${timeout} ms`), { code: 'ETIMEDOUT' }));
+      const error = extra ?? (timedOut ? timedOutError() : undefined);
       resolve({ ...exit, ...out, ...(error && { error }), ...(sweepError && { sweepError: sweepError.message }) });
     };
+    // Kills the tree for a time that ran out, the silence's or the whole run's, whichever came first.
+    const outOfTime = (bySilence) => {
+      if (timedOut || exitedAt !== undefined) return;
+      timedOut = true;
+      silent = bySilence;
+      clearTimeout(timer);
+      clearTimeout(quiet);
+      stop(tree);
+      // The shell may already be gone with a survivor holding the pipes; do not wait on them for long.
+      grace = setTimeout(() => finish(), PIPE_GRACE_MS);
+    };
+    // The silence starts with the command and again at each chunk it writes; never with `inherit`.
+    const listen = silence > 0 && !inherit ? () => {
+      clearTimeout(quiet);
+      quiet = setTimeout(() => outOfTime(true), silence);
+    } : () => {};
     // No pipe to read when the command writes to this process's own output.
     for (const stream of inherit ? [] : ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
       child[stream].on('data', (chunk) => {
         if (out[stream].length < SENSOR_OUTPUT_LIMIT) out[stream] += chunk;
+        if (!timedOut && exitedAt === undefined) listen();
       });
     }
+    listen();
     child.on('error', (error) => finish(error));
     child.on('exit', (status, signal) => {
       exit = { status, signal };
       exitedAt = Date.now();
       clearTimeout(timer);
+      clearTimeout(quiet);
       clearTimeout(grace);
       // Pipes still open this long after the shell exited: a descendant holds them. Kill it, or a test
       // server the script started would run on after every commit.
@@ -961,14 +992,7 @@ export function runSensor(command, { cwd, env, timeout, inherit = false, killTre
       }, PIPE_GRACE_MS);
     });
     child.on('close', () => finish());
-    if (timeout > 0) {
-      timer = setTimeout(() => {
-        timedOut = true;
-        stop(tree);
-        // The shell may already be gone with a survivor holding the pipes; do not wait on them for long.
-        grace = setTimeout(() => finish(), PIPE_GRACE_MS);
-      }, timeout);
-    }
+    if (timeout > 0) timer = setTimeout(() => outOfTime(false), timeout);
   });
 }
 
@@ -1026,7 +1050,7 @@ export function failingTests(output) {
   return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
 }
 
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion, concurrency = null, ci = onCi(process.env) } = {}) {
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, sensorSilence = SENSOR_SILENCE_MS, gateHeld = false, platform = process.platform, wsl = null, wslPath = toWslPath, traces = null, wslNode = wslNodeVersion, concurrency = null, ci = onCi(process.env) } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -1090,12 +1114,13 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
     if (plan?.none) {
       result = { status: 0, signal: null, stdout: '', stderr: '' };
     } else if (route?.command) {
-      result = await spawn(route.command, { cwd, env, timeout: sensorTimeout });
+      result = await spawn(route.command, { cwd, env, timeout: sensorTimeout, silence: sensorSilence });
       const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
       const synced = syncedMs(output);
       if (synced !== null) ranIn = { distro: wsl.distro, synced };
       // A bound that ran out before the mark is a mirror never reached, like any other: the suite never ran.
-      else fellBack = result.error?.code === 'ETIMEDOUT' ? 'its time ran out before the mirror was synced' : notReached(output, result);
+      else if (result.error?.code === 'ETIMEDOUT') fellBack = result.error.silent ? `it wrote nothing for ${sensorSilence / 1000} s before the mirror was synced` : 'its time ran out before the mirror was synced';
+      else fellBack = notReached(output, result);
       // The bound inside the distribution is a little short of this one, and stops the command first:
       // what the runner says of it is a time that ran out, as this one is (Codex, 2026-10-14).
       // Beside `timeout`'s own exit status and alone on its line: a test may print the mark, and a sensor
@@ -1108,7 +1133,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
     }
     // A suite of the mirror that falls back runs whole on Windows, untraced: its selection was asked of the
     // traces of WSL2, which say nothing of this place.
-    if (!ranIn && !plan?.none) result = await spawn(route ? written : asked, { cwd, env, timeout: sensorTimeout });
+    if (!ranIn && !plan?.none) result = await spawn(route ? written : asked, { cwd, env, timeout: sensorTimeout, silence: sensorSilence });
   } finally {
     // Best effort: on Windows a survivor can still hold the home as its cwd, and that must not fail check.
     try {
@@ -1123,7 +1148,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   const pass = !result.error && result.status === 0;
   const timedOut = result.error?.code === 'ETIMEDOUT';
   let detail = `${command} passed`;
-  if (timedOut) detail = `${command} timed out after ${sensorTimeout / 1000} s`;
+  if (timedOut) detail = result.error.silent ? `${command} wrote nothing for ${sensorSilence / 1000} s and was stopped` : `${command} timed out after ${sensorTimeout / 1000} s`;
   else if (result.error) detail = `${command} could not run: ${result.error.message}`;
   else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
   else if (!pass) detail = `${command} exited ${result.status}`;
@@ -1135,6 +1160,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
   const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
+  // Each test file's seconds, for the throughput review (odd/tasks/throughput-review.md, B5), read before the
+  // results go, in shadow and in skip mode alike. A suite of the mirror that fell back ran untraced: it has none.
+  const times = started && !(started.mounted && !ranIn) ? testTimesOf(started.results) : [];
   // A suite of the mirror that fell back to Windows ran untraced: it says nothing of what was skipped.
   const shadowed = shadow && !(shadow.mounted && !ranIn) ? endShadow(shadow) : null;
   if (started && !shadowed) fs.rmSync(started.results, { recursive: true, force: true });
@@ -1151,7 +1179,26 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (plan) detail += `; exact tests: skipped ${skip.skipped} of ${skip.files} test files`;
   // A run of none in WSL2 is proven by the traces of the mirror, the place its tree key names (`checkSensors`).
   const provenIn = ranIn || (plan?.none && inWsl);
-  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }), ...(times.length > 0 && { times }) };
+}
+
+/** The seconds of each test file a traced suite ran, from the tracer's results (`trace-reads.cjs`): `[{ test,
+ * seconds }]`, none where the folder cannot be read, a result cut short or with no time left out. */
+function testTimesOf(results) {
+  const times = [];
+  try {
+    for (const name of fs.readdirSync(results)) {
+      try {
+        const { test, seconds } = JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'));
+        if (typeof test === 'string' && Number.isFinite(seconds)) times.push({ test, seconds });
+      } catch {
+        // a result cut short
+      }
+    }
+  } catch {
+    // no file ended, or the folder cannot be read
+  }
+  return times.sort((a, b) => a.test.localeCompare(b.test));
 }
 
 /** Characters a test file's path may hold to be named on the command line of a skip gate: node takes each
@@ -1821,6 +1868,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
       record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code });
+      // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
+      record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);
@@ -1833,15 +1882,16 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return (await testsOnCi(cwd, lock, deps)) ?? underGateLock(cwd, lock, deps, run, record);
+  return (await testsOnCi(cwd, lock, deps, record)) ?? underGateLock(cwd, lock, deps, run, record);
 }
 
 /** The rows of a gate whose tests ran on GitHub's machines, where every commit's gate goes first
  * (./lib/ci-gate.mjs), or null for a gate that runs here: the project has no gate workflow, the switch keeps it
  * here, or CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its
- * tests marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate`
- * stand in for the two halves. */
-async function testsOnCi(cwd, lock, deps) {
+ * tests marked as run on CI and the names of those that failed there, so the measures of the lines count both. A
+ * gate CI gave no answer leaves a `ci-fallback` line under `local`'s id, the record of the gate that then runs
+ * here, with what the wait cost. `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. */
+async function testsOnCi(cwd, lock, deps, local = null) {
   const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
   if (!why) return null;
   console.error(`check: ${why}; the push of the tree being committed starts their run`);
@@ -1849,6 +1899,7 @@ async function testsOnCi(cwd, lock, deps) {
   const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
   if (!ci.ran) {
     console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
+    local?.ciFallback({ seconds: Math.round((Date.now() - startedAt) / 1000), reason: ci.why });
     return null;
   }
   const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
@@ -1858,7 +1909,8 @@ async function testsOnCi(cwd, lock, deps) {
     : null;
   record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
   at = Date.now();
-  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci' }] });
+  const failing = ci.pass ? [] : failingTests(ci.output);
+  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci', ...(failing.length > 0 && { failing }) }] });
   return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
 }
 

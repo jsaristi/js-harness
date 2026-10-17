@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `0e6c19b21d63`. In force: 33 (16 of Sebastián, 17 of the project). Retired: 0.
+Hash `d0ed9be06be6`. In force: 34 (16 of Sebastián, 18 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -168,10 +168,16 @@ How long a Codex review may run before it is stopped as stalled: 30 minutes.
 - Read by: `bin/codex-review.mjs`.
 - Since 2026-10-14. Row: reports. Source: design, `odd/tasks/codex-exec-review.md`.
 
-### sensor-timeout
-How long one sensor of the gate may run before it is stopped and the commit refused: 20 minutes.
+### sensor-silence
+How long one sensor of the gate may write nothing before it is stopped and the commit refused: 20 minutes.
 - Read by: `bin/check.mjs`.
-- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/remote-control.md`.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/first-version.md`.
+
+### sensor-timeout
+How long one sensor of the gate may run before it is stopped and the commit refused: 60 minutes.
+- Was: 20 minutes until 2026-10-16.
+- Read by: `bin/check.mjs`.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/first-version.md`.
 
 ### session-stall
 How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.

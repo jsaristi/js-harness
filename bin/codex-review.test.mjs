@@ -22,6 +22,7 @@ import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { isValidCodexReview } from './lib/codex-reviews.mjs';
 import { gitDirs } from './lib/project.mjs';
+import { autoMaintenanceOff, withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
 // What a review that ran past its declared timeout says, in the words the command uses.
 const RAN_PAST = `ran past ${REVIEW_TIMEOUT_MS / 60000} minutes`;
@@ -154,7 +155,8 @@ const built = new Map();
  * is once, of the one that was built, and never of a copy (`whereOf`). */
 function copyOf(key, build) {
   if (!built.has(key)) {
-    const template = build();
+    const template = withoutAutoMaintenance(build);
+    autoMaintenanceOff(template.root);
     // The sample hooks `git init` leaves are a third of what there is to copy, and nothing reads them.
     fs.rmSync(path.join(template.root, '.git', 'hooks'), { recursive: true, force: true });
     built.set(key, template);
@@ -175,6 +177,19 @@ function copyOf(key, build) {
 function declareReviewOn(root) {
   fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify({ functions: { codexReview: 'on' } })}\n`, 'utf8');
 }
+
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which outlives it holding a lock in
+// `.git/objects`; a copy made then can find the lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+test('a commit in a copy of the repository the tests copy starts no detached git maintenance', () => {
+  const { root } = makeRepoWith({ 'a.txt': 'one\n' }, { 'a.txt': 'two\n' });
+  const run = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'traced'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_TRACE: '1' },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.doesNotMatch(run.stderr, /maintenance run/);
+});
 
 /** A repo whose first commit (`base`) holds `before` and second (`head`) holds `after`, both maps
  * of file name to content. */

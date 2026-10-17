@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
-import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
+import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
@@ -386,7 +386,9 @@ after(() => {
 function gitEnv() {
   if (!gitConfigDir) {
     gitConfigDir = makeTmpDir();
-    fs.writeFileSync(path.join(gitConfigDir, 'empty.gitconfig'), '');
+    // Automatic maintenance off: a commit would start a detached `git maintenance run` that outlives it, and a
+    // repository copied then can find its lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+    fs.writeFileSync(path.join(gitConfigDir, 'empty.gitconfig'), '[maintenance]\n\tauto = false\n');
   }
   const inherited = Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key));
   return { ...Object.fromEntries(inherited), GIT_CONFIG_GLOBAL: path.join(gitConfigDir, 'empty.gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
@@ -445,16 +447,18 @@ test('checkSensor keeps a sensor that runs git init from touching the repository
   }
 });
 
-// Ten minutes refused three commits in a row on 2026-10-04: this repository's own suite needs about
-// eight on a quiet machine and went past ten with two of eight cores taken by other programs.
-test('checkSensor gives every sensor a 20 minute timeout by default', async () => {
+// Ten minutes refused three commits in a row on 2026-10-04, and twenty refused the whole suite on Windows
+// in 2026-10 (first-version L18): a bound on length fails a slow suite that is working. So the bound is on
+// silence, with a ceiling for a sensor that hangs while it writes (first-version L28, his answer).
+test('checkSensor gives every sensor the silence bound and the ceiling of the rules by default', async () => {
   let options;
   const spawn = (_command, opts) => {
     options = opts;
     return { status: 0, stdout: '', stderr: '' };
   };
   await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
-  assert.equal(options.timeout, SENSOR_TIMEOUT_MS);
+  assert.deepEqual([options.timeout, options.silence], [SENSOR_TIMEOUT_MS, SENSOR_SILENCE_MS]);
+  assert.ok(SENSOR_SILENCE_MS < SENSOR_TIMEOUT_MS, `${SENSOR_SILENCE_MS} ms of silence against a ceiling of ${SENSOR_TIMEOUT_MS} ms`);
 });
 
 /** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
@@ -588,6 +592,56 @@ test('checkSensor keeps what the command printed before it timed out', async () 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('runSensor lets a command that keeps writing run past its silence bound', async () => {
+  const dir = makeTmpDir();
+  try {
+    // A line at once, then twelve 600 ms apart: over 7 s in all, never 4 s silent, the start of node on a
+    // loaded machine included (the silence starts with the spawn).
+    fs.writeFileSync(path.join(dir, 'steady.js'), "console.log('start'); let n = 0; const t = setInterval(() => { console.log('line', ++n); if (n === 12) clearInterval(t); }, 600);");
+    const started = Date.now();
+    const result = await runSensor('node steady.js', { cwd: dir, timeout: 60000, silence: 4000 });
+    assert.deepEqual([result.error, result.status], [undefined, 0]);
+    assert.match(result.stdout, /line 12/);
+    assert.ok(Date.now() - started > 4000, `ran ${Date.now() - started} ms, not past its silence bound`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runSensor stops a command silent for its silence bound, and says it was silent', async () => {
+  const dir = makeTmpDir();
+  try {
+    // 4 s of silence, as above: a shorter bound could run out while node starts, before the first line.
+    fs.writeFileSync(path.join(dir, 'quiet.js'), "console.log('then-quiet'); setTimeout(() => {}, 120000);");
+    const started = Date.now();
+    const result = await runSensor('node quiet.js', { cwd: dir, timeout: 60000, silence: 4000 });
+    assert.ok(Date.now() - started < 30000, `took ${Date.now() - started} ms`);
+    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', true, 'wrote nothing for 4000 ms']);
+    assert.match(result.stdout, /then-quiet/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runSensor still stops at its ceiling a command that keeps writing', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'loop.js'), "setInterval(() => console.log('again'), 100);");
+    // The silence bound is the 4 s that node's start fits in above, and the ceiling comes after it.
+    const result = await runSensor('node loop.js', { cwd: dir, timeout: 6000, silence: 4000 });
+    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', undefined, 'timed out after 6000 ms']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensor says a sensor stopped for its silence wrote nothing for that long', async () => {
+  const spawn = () => ({ status: null, signal: null, stdout: 'started', stderr: '', error: Object.assign(new Error('wrote nothing for 600000 ms'), { code: 'ETIMEDOUT', silent: true }) });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'npm run test' }, { spawn, sensorSilence: 600000 });
+  assert.deepEqual([row.pass, row.timedOut, row.detail], [false, true, 'npm run test wrote nothing for 600 s and was stopped']);
+  assert.match(row.output, /started/);
 });
 
 test('checkSensor names the signal when the command is killed by one', async () => {
@@ -4183,6 +4237,23 @@ after(() => {
   if (documentsBase) fs.rmSync(documentsBase, { recursive: true, force: true });
 });
 
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which outlives it holding a lock in
+// `.git/objects`; a copy made then can find the lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+test('a commit in a copy of the documents repository starts no detached git maintenance', () => {
+  const repo = documentsRepo();
+  try {
+    const run = spawnSync('git', [...commitAs, '--allow-empty', '-m', 'traced'], {
+      cwd: repo,
+      encoding: 'utf8',
+      env: { ...gitEnv(), GIT_TRACE: '1' },
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.doesNotMatch(run.stderr, /maintenance run/);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 /** A repository of one commit whose `docs/` and `notes.md` are declared documents and whose one sensor
  * fails. Built once and copied for each test, as the fixtures of codex-review.test.mjs are. */
 function documentsRepo() {
@@ -5092,7 +5163,7 @@ const reachedMirror = (status, ms = 1200) => ({ status, signal: null, stdout: 's
 function spawnsInTurn(...answers) {
   const spawn = (command, options) => {
     const runner = /--exec bash "(.*)"$/.exec(command);
-    spawn.calls.push({ command, cwd: options.cwd, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
+    spawn.calls.push({ command, cwd: options.cwd, silence: options.silence, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
     return answers[spawn.calls.length - 1] ?? sensorRan();
   };
   spawn.calls = [];
@@ -5283,6 +5354,16 @@ test('a sensor whose time ran out before WSL2 synced its mirror runs on Windows,
   assert.match(output, /^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \(its time ran out before the mirror was synced\)$/m);
   const [end] = readGateLog(home).events.filter((event) => event.event === 'end');
   assert.equal(end.sensors[0].ranIn, undefined);
+}));
+
+test('a sensor silent past its bound before WSL2 synced its mirror runs on Windows, and its row says it was silent', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const silent = Object.assign(new Error(`wrote nothing for ${SENSOR_SILENCE_MS} ms`), { code: 'ETIMEDOUT', silent: true });
+  const spawn = spawnsInTurn({ status: null, signal: null, stdout: '', stderr: '', error: silent }, sensorRan());
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  assert.deepEqual(spawn.calls.map(({ command, silence }) => [command.startsWith('wsl.exe'), silence]), [[true, SENSOR_SILENCE_MS], [false, SENSOR_SILENCE_MS]]);
+  assert.match(output, new RegExp(`^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \\(it wrote nothing for ${SENSOR_SILENCE_MS / 1000} s before the mirror was synced\\)$`, 'm'));
 }));
 
 // Codex, 2026-10-14, on adae7c8..f5cbaf4: the mark alone turned a sensor that passed into a timeout.

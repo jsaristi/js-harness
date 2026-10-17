@@ -265,12 +265,29 @@ export const RULES = [
     ]
   },
   {
+    "id": "sensor-silence",
+    "subject": "how long one sensor of the gate may write nothing before it is stopped and the commit refused",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 20,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:silent|silence|writes nothing|wrote nothing)\\b.{0,30}{amount}"
+    ]
+  },
+  {
     "id": "sensor-timeout",
     "subject": "how long one sensor of the gate may run before it is stopped and the commit refused",
     "owner": "project",
-    "since": "2026-10-15",
-    "value": 20,
+    "since": "2026-10-16",
+    "value": 60,
     "unit": "minutes",
+    "was": [
+      {
+        "value": 20,
+        "until": "2026-10-16"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
     ]

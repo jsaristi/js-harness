@@ -9,6 +9,7 @@ import {
   GATE_LOG_ENV,
   appendGateBusiest,
   appendGateEvent,
+  appendGateTestTimes,
   formatGates,
   gateLogDir,
   gateLogSwitchedOff,
@@ -18,6 +19,7 @@ import {
   provenBy,
   readGateBusiest,
   readGateLog,
+  readGateTestTimes,
 } from './gate-log.mjs';
 
 // The gate log: JSON lines, two per gate, in a folder of its own under the home. Every test here has a
@@ -874,3 +876,59 @@ test('formatGates ends the line of a gate that has who spent the processor with 
   assert.deepEqual(formatGates(gates), formatGates(gates, new Map()));
   assert.deepEqual(formatGates(gates).slice(0, 2), [`${at}  700 s  pass  C:\\work\\one`, `${at}  13 s  pass  C:\\work\\one`]);
 });
+
+test('a ci-fallback line under a gate\'s id is read, and pairs, prints and proves nothing of its own', withHome(async (home) => {
+  const code = 'a'.repeat(64);
+  const fallback = { v: 1, event: 'ci-fallback', id: 'g1', at: AT, seconds: 185, reason: 'no run started' };
+  for (const event of [fallback, start('g1'), end('g1', { code })]) appendGateEvent(home, event);
+  const { events, skipped } = readGateLog(home);
+  assert.equal(skipped, 0);
+  assert.deepEqual(events.map((event) => event.event), ['ci-fallback', 'start', 'end']);
+  // One gate, its start and its end: the fallback before them is neither.
+  const gates = gatesOf(events);
+  assert.equal(gates.length, 1);
+  assert.deepEqual(Object.keys(gates[0]).sort(), ['end', 'start']);
+  assert.equal(formatGates(gates).length, 1);
+  assert.equal(provenBy(events, code).id, 'g1');
+  // Alone, with its gate rotated away, it is no gate at all.
+  assert.deepEqual(gatesOf([fallback]), []);
+}));
+
+const timesLine = (id, more = {}) => ({ v: 1, id, at: AT, files: [{ test: 'bin/a.test.mjs', seconds: 2.5 }, { test: 'bin/b.test.mjs', seconds: 0.4 }], ...more });
+
+test('appendGateTestTimes writes one line per gate in test-times.jsonl beside the log, rotated as busiest.jsonl is, and readGateTestTimes reads them by id', withHome(async (home) => {
+  for (const id of ['a', 'b', 'c']) assert.deepEqual(appendGateTestTimes(home, timesLine(id), { maxBytes: 100 }), { ok: true });
+  assert.deepEqual(files(home), ['test-times.1.jsonl', 'test-times.jsonl']);
+  const read = readGateTestTimes(home);
+  assert.deepEqual([...read.keys()].sort(), ['b', 'c']);
+  assert.deepEqual(read.get('c'), timesLine('c'));
+  // Torn, foreign and misshapen lines are left out; a home with no file has none.
+  fs.appendFileSync(path.join(gateLogDir(home), 'test-times.jsonl'), `${['{"v":1,"id":"torn', 'not json', JSON.stringify(timesLine('d', { v: 2 })), JSON.stringify(timesLine('e', { files: [{ test: 'x', seconds: 'slow' }] })), JSON.stringify(timesLine('f', { files: 'x' }))].join('\n')}\n`);
+  assert.deepEqual([...readGateTestTimes(home).keys()].sort(), ['b', 'c']);
+  assert.equal(readGateTestTimes(path.join(home, 'none')).size, 0);
+  assert.deepEqual(readGateLog(home).events, []);
+}));
+
+test('gateRecord keeps the test times of a gate that started, under its id, and only the files it can read back', () => {
+  const { deps } = captured();
+  const kept = [];
+  const appendTestTimes = (home, line) => {
+    kept.push(line);
+    return { ok: true };
+  };
+  const record = gateRecord({ home: 'C:\\home', cwd: 'C:\\work\\one', command: 'check', pid: 100, ...deps, appendTestTimes });
+  record.testTimes([{ test: 'bin/a.test.mjs', seconds: 1 }]);
+  assert.deepEqual(kept, [], 'before its start a gate has no id in the log to key them by');
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  record.testTimes([{ test: 'bin/a.test.mjs', seconds: 1.25 }, { test: 7, seconds: 1 }, { test: 'bin/b.test.mjs', seconds: null }]);
+  record.testTimes([]);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].id, record.id);
+  assert.deepEqual(kept[0].files, [{ test: 'bin/a.test.mjs', seconds: 1.25 }]);
+});
+
+test('readGateTestTimes says why a times file that is there cannot be read, and reads none from one that is not there', withHome(async (home) => {
+  const failing = (code) => ({ ...fs, readFileSync: () => { throw Object.assign(new Error(code), { code }); } });
+  assert.throws(() => readGateTestTimes(home, { fileSystem: failing('EACCES') }), /EACCES/);
+  assert.equal(readGateTestTimes(home, { fileSystem: failing('ENOENT') }).size, 0);
+}));

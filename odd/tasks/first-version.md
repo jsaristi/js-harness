@@ -243,7 +243,7 @@ cuts) shortens the run but does not make any fixed figure true for a growing sui
 - [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
 - [x] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4); built by `feat/merge-below-head` on his answer of 2026-10-16, "Solo lo escrito" (`odd/tasks/merge-below-head.md`; L24)
 - [x] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1) (above, L21; the figure is his, asked through the lead)
-- [ ] T6f (kind: build) S6: the bound T6e's design gives, once he answers L21's question; inline, test first
+- [x] T6f (kind: build) S6: the bound T6e's design gives, once he answers L21's question; inline, test first; his answer in L28, built in L29
 - [x] T6g (kind: build) S6: `bin/gate.test.mjs`, "a real gate leaves its two lines in the log of its home", passes inside a Claude Code session as on CI: its helper drops the host's session and the test sets one itself (L25, the one red of T6's second pass); built inline
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
@@ -461,3 +461,36 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   check by hand stays here (it tests the working tree). The bound from the push is the rule `ci-gate-bound`, 8
   minutes, and `gate.yml` stops its job two minutes later. Design, readers and figures:
   `odd/tasks/commit-gates-first.md`.
+- L28 (2026-10-17, his answer to L21, through the lead's question tool; transcript
+  `e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl`, line 18380, 03:23:54Z, read with `js-harness sessions --quote`):
+  the question, "En Windows la suite entera ya tarda más que los 20 minutos que le diste a un sensor el 4 de
+  octubre (1.398 s una vez, 1.114 s la última). ¿Cómo queda ese límite?", with the options "Por silencio
+  (Recomendada) | Subirlo a 30 minutos"; he tapped "Por silencio (Recomendada)". That is the design's first way:
+  the bound measures silence, each chunk of a sensor's output restarts it, and a ceiling of 60 minutes stays for
+  a sensor that hangs while it writes; the silence figure is twice the longest silence one measuring run of the
+  whole suite on Windows shows. T6f builds it (JH 25, inline, test first).
+- L29 (2026-10-17, JH 25): T6f built. The measure first: the whole suite on Windows on `main` `5bb111a`, run as
+  `check` runs its tests sensor there (`npm run test` through the shell, output piped, `JS_HARNESS_GATE_WSL=0`,
+  under `js-harness gate --max 60`, the machine 100% busy before it), each chunk of output stamped: 5,933 of
+  5,952 tests passed in 1,093 s, in 386 chunks, and the longest silence was 572 s, from 9.5 s to 581 s, then
+  121 s, 76 s and 70 s. node's reporter prints the files in order, so a long file near the head holds back what
+  the files behind it wrote, and the output came in one burst at 581 s. Twice 572 s is 1,144 s, so the silence
+  bound came out at the old length bound, not the 10 minutes the design assumed: a hang is stopped no sooner
+  than before, and a slow suite that keeps writing gets the ceiling, three times the old room. Names: the design
+  had `sensor-timeout` become the silence bound beside a new `sensor-ceiling`; built the other way round, so the
+  constant every caller reads keeps its meaning: `sensor-timeout` stays the length bound, raised to the
+  ceiling (`7a19ed9`), and the new rule `sensor-silence` is the silence bound, both through `js-harness rules
+  change`. `runSensor` (`bin/check.mjs`) takes `silence`: each chunk of stdout or stderr restarts it, past it the
+  tree is killed as at the ceiling, and the error says `silent: true`; with `inherit` (`js-harness gate`) it does
+  nothing, and no other caller passes it. `checkSensor` gives both bounds to both of its runs, Windows and the
+  WSL2 runner; a silent sensor's row says "wrote nothing for N s and was stopped", and one silent before WSL2
+  synced its mirror falls back to Windows saying so. RED: the export `SENSOR_SILENCE_MS` missing. GREEN: the
+  seven tests of the silence and the ceiling in `bin/check.test.mjs`, twice, 7 of 7, and
+  `bin/lib/rules-bindings.test.mjs` 15 of 15. Not measured: a run in which the silence bound stops a real hang.
+- L30 (2026-10-17, JH 25): T6f reviewed. gentle-ai, lenses reliability and resilience, risk item 4 escalated:
+  approved and acknowledged (lineage `review-eecd8b566b6888dd`) with three advisories. Codex on
+  `760e8fe..9931659`: correct, no finding. Two advisories were races the steady test already showed under load:
+  the quiet test (1.5 s of silence) and the ceiling test (1 s) could stop while node starts, before the first
+  line; both now use the 4 s the steady test uses. The third: no test said the WSL2 run is given the silence
+  bound; the silent fallback test now asserts both runs get `SENSOR_SILENCE_MS`. 5 of 5 of those tests pass.
+- L31 (2026-10-17, JH 25): gentle-ai evidence, one line a land reads: 7a19ed98..99316599 approved and acknowledged (lineage `review-eecd8b566b6888dd`, high, item 4 escalated); 08214376 assessed medium, not due (under_budget), its three advisories fixed.

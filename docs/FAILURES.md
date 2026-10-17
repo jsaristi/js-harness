@@ -359,6 +359,21 @@ machine for nothing.
 - Seen: 2026-10-10 — relief file, line 83 — the third run, 03:21 to 03:41 (claimed); also
   odd/tasks/session-board.md:1350-1351
 
+### doctor-lock-mtime-ms
+A test of `bin/doctor.test.mjs`, "doctorMain shows the pnpm-lock row stale for a global bin lock left over
+in the given PNPM_HOME, its rmdir under Fix, and the hook notices it", set the lock folder's time an hour
+back and expected doctor to print that exact millisecond. ext4 under WSL2 loses a millisecond of it about
+one time in three, so the test failed at random in the gate's WSL leg, on branches and land candidates that
+touched nothing of doctor, and pull requests 305 and 313 were blamed for it. It was fixed in 18f2a598 (PR
+315, on main at 20:49Z): doctor prints the stored time, and the test now expects the stored time too.
+- Class: tool
+- Seen: 2026-10-16 — the gate log (~/.js-harness/gate-log), read by JH 28 on 2026-10-17 — it failed in 6
+  gates on 5 worktrees from 17:45Z to 21:13Z: plan-from-records, the land candidates merge-queue-155940
+  (19:20Z, 19:41Z) and merge-queue-167556 (20:24Z), jh25 and stalled-sessions, the last two on branches
+  not yet merged with the fix; JH 25's notice of 20:57Z named the cause
+- Control: check — bin/doctor.test.mjs — "doctorMain shows the pnpm-lock row stale for a global bin lock
+  left over in the given PNPM_HOME" — since 2026-10-16
+
 ### documents-commit-skips-suite
 A commit of declared documents alone runs no sensor, and the suite reads those documents: such a
 commit can break a test, pass its own gate, and fail the next gate with code in any session.
@@ -427,10 +442,11 @@ on it.
 ### eval-interrupt-process-alive
 A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a
 hanging fake agent leaves nothing of it", because the fake agent's process still answered (state R)
-when the test looked, in a change that touched nothing of the evals. Since 2026-10-15 the file is
-quarantined in docs/FLAKY.md: it still runs in every gate, a pass on its rerun does not block until
-the entry expires on 2026-10-22, and the fix of its cause that entry names is
-fix/sweep-waits-for-exit.
+when the test looked, in a change that touched nothing of the evals. The fix is PR 198
+(fix/sweep-waits-for-exit, on main 2026-10-15 at 11:15Z): a run ends only after the group it killed is
+gone. The file was quarantined in docs/FLAKY.md from 2026-10-15; the quarantine was lifted on 2026-10-17,
+since the test failed in none of the 408 gates with a tests sensor the gate log holds (from 2026-10-15
+17:02Z) and passed 10 of 10 alone in WSL2, so it blocks again when it fails.
 - Class: machine
 - Seen: 2026-10-14 — JH 15's gate in WSL2, about 15:45, by the lead's notice of 2026-10-15 — `alive:
   [false, true]`, the grandchild in state R at the assertion; the file passes alone
@@ -441,8 +457,8 @@ fix/sweep-waits-for-exit.
 - Seen: 2026-10-15 — JH 8's gate of fix/launcher-at-start, in WSL2 — the second entry of `alive` true
   where false was expected, pid 22900 "answers" at the exit; the only failing test of the run, in a
   change that touched nothing of the evals, and one of the files the shadow would have skipped
-- Control: check — bin/check-flaky.test.mjs — "a red suite whose failed file passes alone and is
-  quarantined does not block, and a rerun row says why" — since 2026-10-15
+- Control: check — evals/runner.test.mjs — "a run ends only after what it killed is gone, and one that
+  outlives the bound is reported as a sweep error" — since 2026-10-15
 
 ### eval-missing-login-workroot-kept
 A run on GitHub failed on one test of `evals/codex-configs.test.mjs`, "a missing login stops the trial
@@ -984,6 +1000,10 @@ without that review, and the choice went to him.
 - Seen: 2026-10-16 — odd/tasks/first-version.md, L10 — the preflight of T7b timed out three times
   with `--base-ref=origin/main` while the machine was at 100% CPU, and answered in 9 s with the
   merge-base commit; that candidate was reviewed
+- Seen: 2026-10-17 — PR 353's session (odd/tasks/commit-gates-first.md, its transcript 987cadde) — the
+  preflight status with `--base-ref origin/main --committed-only` ended `operation_timeout` (pre_native,
+  retry_safe false) after about 25 s, on at least 5 runs between 03:22Z and 04:09Z (8 by the lead's count
+  of 2026-10-17); reported as gentle-ai issue 5422, and the candidate's review was declined after it
 - Control: owed — odd/tasks/gate-wait.md — "three of its four sightings ran beside
   a gate or a full machine"
 
@@ -1002,6 +1022,45 @@ it or did not follow it.
 - Control: check — bin/doctor.test.mjs — "reports the rule notes of the project memory as the
   memory-rules gap" — since 2026-10-14
 - Proof: `doctor`: no `memory-rules` gap
+
+### rules-row-template-copy-enoent
+A gate on GitHub failed on the first test of `bin/check-rules-row.test.mjs`, "a restated value of a rule
+with no row is an INFO line", in a change that touched nothing of it: `fs.cpSync` stopped with ENOENT on
+the `.git/objects` of the copy it was making of the test's template repository
+(`bin/lib/git-fixture.testkit.mjs:41`, called from `bin/check-rules-row.test.mjs:40`). The template's
+last step is a `git commit`, and since git 2.47 a commit starts `git maintenance run --auto --detach`,
+which holds `.git/objects/maintenance.lock` after the commit returns; the first copy comes right after.
+Node's native copy (`CpSyncCopyDir` in `src/node_file.cc`, 24.21.0) lists a directory and then copies each
+regular file, and reports a file gone in between as ENOENT on the directory it copies into. That the lock
+was the file is inferred, not observed: it is the one regular file of `.git/objects` a fresh repository's
+commit leaves to a process still running, and 200 commits in WSL2 with nothing else running never left it
+for a copy to see. The template now sets `maintenance.auto` to false before its commit. Since 76179ca the
+shared helper does it for every fixture that copies a fresh repository: `repoTemplate` in
+`bin/lib/git-fixture.testkit.mjs` builds with it off and writes it into every repository it made, the two
+`copyOf` fixtures use the same exports, and `bin/check.test.mjs` puts it in its own global git config. The
+same cause in another fixture is eval-missing-login-workroot-kept.
+- Class: machine
+- Seen: 2026-10-17 — the gate of fix/merge-commit-size (d83be66^..39665eb) on GitHub, run
+  39007490864, Linux, git 2.55.0, node 24.21.0, by JH 24's odd/tasks/land-unattended.md L21 and the
+  lead's notice to JH 28 — `ENOENT, No such file or directory '/tmp/js-harness-rules-row-67kYzh/.git/objects'`,
+  syscall `cp`; the only failing test of the run, and the same tree passed on the next run
+- Control: check — bin/check-rules-row.test.mjs — "a commit in the repository the tests copy starts no
+  detached git maintenance" — since 2026-10-17
+
+### rules-tests-red-on-lands
+Four tests of `bin/rules.test.mjs` failed together in gates of changes that did not touch the rules list,
+two of them land candidates: "render writes docs/RULES.md, and check then passes with its PASS line", "a
+test file that reads an undeclared rule is not read", "a feature document that names an undeclared rule
+fails check above its Progress line, and not below it" and "the real package passes rules check with the
+default root". Their cause was not read: 2026-10-16 was the day the rules gained their patterns (more than
+twenty `feat(rules)` commits), and the file passes today (34 of 34, 2026-10-17). Nothing recorded it until
+this entry, so the lands it turned red have no cause.
+- Class: tool
+- Seen: 2026-10-16 — the gate log (~/.js-harness/gate-log), read by JH 28 on 2026-10-17 — each of the four
+  failed in 4 gates: the land candidate merge-queue-108380 at 01:36Z and 01:39Z, rules-row at 02:10Z, and
+  rule-first-patterns at 03:49Z or jh26-commit-size at 18:20Z; the first three also failed four more tests of
+  the same file
+- Control: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"
 
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken

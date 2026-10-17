@@ -31,14 +31,14 @@ function writeCopy(file, lines, madeAt = NOW) {
 }
 
 /** A git that answers as a repository whose main merged pull request 7 at 10:30Z on the 16th. */
-function fakeGit({ origin = true, branchMerge = null, mergeTree = null, pace = null } = {}) {
+function fakeGit({ origin = true, branchMerge = null, mergeTree = null, pace = null, mergedAt = '2026-10-16T10:30:00Z' } = {}) {
   return (command, args) => {
     const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
     if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') return ok(`${ROOT}/.git\n`);
     if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return ok(`${ROOT}\n`);
     if (args[0] === 'rev-parse') return origin ? ok('abc\n') : { status: 1, stdout: '', stderr: '' };
     if (args[0] === 'log' && args[1] === '-m') return ok('\u0001m7\n\nodd/tasks/x.md\n');
-    if (args[0] === 'log' && args[1] === '--first-parent') return ok('m7\t2026-10-16T10:30:00Z\tp7 h7\tMerge pull request #7 from feat/x\n');
+    if (args[0] === 'log' && args[1] === '--first-parent') return ok(`m7\t${mergedAt}\tp7 h7\tMerge pull request #7 from feat/x\n`);
     if (args[0] === 'show') return ok('h7\t2026-10-16T10:00:00Z\n');
     if (args[0] === 'rev-list') return ok('c1\n');
     // The history progress reads, one commit compared with the one before (progress-pace.mjs, `paceLogArgs`).
@@ -51,12 +51,12 @@ function fakeGit({ origin = true, branchMerge = null, mergeTree = null, pace = n
   };
 }
 
-async function run(argv, { home, git = fakeGit(), codex = [], now = NOW, timezoneOffset = 300 } = {}) {
+async function run(argv, { home, git = fakeGit(), codex = [], lands = [], now = NOW, timezoneOffset = 300 } = {}) {
   const out = [];
   const err = [];
   const code = await throughputMain(argv, {}, {
     cwd: ROOT, stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => now, run: git,
-    homedir: () => home, readCodexRuns: () => codex, timezoneOffset: () => timezoneOffset,
+    homedir: () => home, readCodexRuns: () => codex, readLands: () => lands, timezoneOffset: () => timezoneOffset,
   });
   return { code, stdout: out.join('\n'), stderr: err.join('\n') };
 }
@@ -84,7 +84,8 @@ test('the table of the day before today names, for each row, its source, and the
   assert.match(stdout, /pull requests merged +1 \(0\.04 an hour\) +\[git log of origin\/main/);
   assert.match(stdout, /gate waits +2 min in all; most: aaaaaaaa 2 min +\[the gate log/);
   assert.match(stdout, /Codex reviews +1 attempts \(0 parts\), median 49 s/);
-  assert.match(stdout, /ready to merged +not recorded \(B1, JH 26\)/);
+  // No channel record here, and still a day before B1 is said to be one: there was nothing to read.
+  assert.match(stdout, /ready to merged +not recorded: 2026-10-16 \(before B1, 2026-10-17\)/);
   // The window in the machine's own hours too, and the gates said to be the machine's, not this project's.
   assert.match(stdout, /local UTC-05:00: 2026-10-15 19:00 to 2026-10-16 19:00/);
   assert.match(stdout, /gates: every project of this machine/);
@@ -310,6 +311,29 @@ test('--copied-at says when a copy was made, for one that kept its source\'s mod
   assert.doesNotMatch(stdout, /partial: the copies end/);
   assert.equal((await run(['snapshot', '--day', '2026-10-16', '--copied-at', '2026-10-17T03:00:00Z'], { home })).code, 2);
   assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', preserved, '--copied-at', 'yesterday'], { home })).code, 2);
+  // A copy is not made later than now: a future time would settle a day no copy holds whole.
+  const future = await run(['snapshot', '--day', '2026-10-16', '--gate-log', preserved, '--copied-at', '2026-10-17T03:01:00Z'], { home });
+  assert.equal(future.code, 2);
+  assert.match(future.stderr, /--copied-at 2026-10-17T03:01:00.000Z is after now/);
+});
+
+test('the tasks row reads a commit of the history as progress parses it', async () => {
+  const home = makeHome(GATES);
+  const nl = String.fromCharCode(10);
+  const history = [
+    `${String.fromCharCode(1)}c2 2026-10-16T12:00:00Z c1`,
+    '',
+    'diff --git a/odd/tasks/a.md b/odd/tasks/a.md',
+    'index 1111111..2222222 100644',
+    '--- a/odd/tasks/a.md',
+    '+++ b/odd/tasks/a.md',
+    '@@ -1,2 +1,2 @@',
+    '-- [ ] T1 one',
+    '+- [x] T1 one',
+    ' - [ ] T2 two',
+  ].join(nl) + nl;
+  const { stdout } = await run([], { home, git: fakeGit({ pace: { status: 0, stdout: history, stderr: '' } }) });
+  assert.match(stdout, /tasks closed and added +closed 1, reopened 0, added 0, removed 0; open 1 to 1/);
 });
 
 test('--against takes a window before the one it compares', async () => {
@@ -325,4 +349,66 @@ test('status does not name as missing a day that has not settled yet', async () 
   const { code, stdout } = await run(['status'], { home, now: Date.parse('2026-10-17T00:30:00Z') });
   assert.equal(code, 0, stdout);
   assert.doesNotMatch(stdout, /2026-10-16 {2}MISSING/);
+});
+
+test('a day after B1 and B2 reads its ready notices from the channel and its lands from the land record', async () => {
+  const home = makeHome(GATES);
+  const channel = path.join(home, '.js-harness', 'channel');
+  fs.mkdirSync(channel, { recursive: true });
+  const ready = { schema: 'js-harness.channel-notice/v1', at: '2026-10-17T09:30:00Z', kind: 'ready', pr: 7, from: { id: 's1', title: 'JH 28' }, to: { role: 'orchestrator' }, text: '#7 ready' };
+  fs.writeFileSync(path.join(channel, `${ROOT.replace(/[^A-Za-z0-9]/g, '-')}.jsonl`), JSON.stringify(ready) + String.fromCharCode(10));
+  const lands = [{ v: 1, startedAt: '2026-10-17T10:20:00Z', endedAt: '2026-10-17T10:25:00Z', considered: [7], landed: [7], phases: [{ phase: 'suite', startedAt: '2026-10-17T10:20:10Z', seconds: 270.4, ok: true }], exit: 0 }];
+  const { code, stdout } = await run(['--since', '2026-10-17', '--until', '2026-10-18'], { home, git: fakeGit({ mergedAt: '2026-10-17T10:30:00Z' }), lands, now: Date.parse('2026-10-18T12:00:00Z') });
+  assert.equal(code, 0);
+  assert.match(stdout, /ready to merged +median 60 min, p75 60 min, worst 60 min \(1\) +\[the newest ready notice/);
+  assert.match(stdout, /land phases +1 lands, median 300 s, landed 1 of 1 looked at; exit 0 ×1; suite 1, median 270 s +\[<git common dir>\/js-harness\/lands\.jsonl/);
+});
+
+test('a test times file that is there and cannot be read is said on its row, never read as no times', async () => {
+  const home = makeHome(GATES);
+  const out = [];
+  const timesFile = (file) => String(file).replace(/[\\/]+/g, '/').endsWith('/gate-log/test-times.jsonl');
+  const readFileSync = (file, ...rest) => (timesFile(file) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readFileSync(file, ...rest));
+  await throughputMain(['--since', '2026-10-17', '--until', '2026-10-18'], {}, {
+    cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], fileSystem: { ...fs, readFileSync },
+  });
+  assert.match(out.join(String.fromCharCode(10)), /test files +not read: 2026-10-17 EACCES/);
+});
+
+test('a land record that is there and cannot be read is said on its row, never read as no land', async () => {
+  const home = makeHome(GATES);
+  const table = async (readFileSync) => {
+    const out = [];
+    await throughputMain(['--since', '2026-10-17', '--until', '2026-10-18'], {}, {
+      cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], fileSystem: { ...fs, readFileSync },
+    });
+    return out.join(String.fromCharCode(10));
+  };
+  const lands = (file) => String(file).replace(/[\\/]+/g, '/').endsWith('/.git/js-harness/lands.jsonl');
+  const denied = await table((file, ...rest) => (lands(file) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readFileSync(file, ...rest)));
+  assert.match(denied, /land phases +not read: 2026-10-17 EACCES/);
+  // No record at all is a machine where no land ran: nothing to read, and so none.
+  const absent = await table((file, ...rest) => (lands(file) ? (() => { throw Object.assign(new Error('absent'), { code: 'ENOENT' }); })() : fs.readFileSync(file, ...rest)));
+  assert.match(absent, /land phases +none/);
+  const kept = await table((file, ...rest) => (lands(file) ? `${JSON.stringify({ v: 1, startedAt: '2026-10-17T10:00:00Z', endedAt: '2026-10-17T10:01:00Z', considered: [7], landed: [7], phases: [], exit: 0 })}${String.fromCharCode(10)}torn` : fs.readFileSync(file, ...rest)));
+  assert.match(kept, /land phases +1 lands, median 60 s/);
+});
+
+test('the test files row reads the live folder\'s test times of the day\'s traced gates, and a day kept from copies has none', async () => {
+  const traced = [
+    { v: 1, event: 'start', id: 't1', at: '2026-10-16T09:00:00Z', cwd: ROOT, command: 'check', pid: 1, lock: 'own', waitedSeconds: 0, waitedFor: [] },
+    { v: 1, event: 'end', id: 't1', at: '2026-10-16T09:03:00Z', seconds: 180, result: 'pass', sensors: [{ name: 'tests', seconds: 170, pass: true, shadow: { files: 1, wouldSkip: 0, failedOfSkipped: [] } }] },
+  ];
+  const home = makeHome(traced);
+  const line = { v: 1, id: 't1', at: '2026-10-16T09:03:01Z', files: [{ test: 'a.test.mjs', seconds: 3.2 }] };
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-log', 'test-times.jsonl'), JSON.stringify(line) + String.fromCharCode(10));
+  const { stdout } = await run([], { home });
+  assert.match(stdout, /test files +1 of 1 local gates that traced; slowest by mean: a\.test\.mjs 3 s \(max 3 s, 1 run\); partial: 2026-10-16 from 09:00Z +\[test-times\.jsonl/);
+  assert.equal((await run(['snapshot', '--day', '2026-10-16'], { home })).code, 0);
+  assert.match((await run([], { home })).stdout, /test files +1 of 1 local gates that traced; slowest by mean: a\.test\.mjs 3 s/);
+  const fromCopies = makeHome([]);
+  const copy = path.join(fromCopies, 'copy.jsonl');
+  writeCopy(copy, traced);
+  assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home: fromCopies })).code, 0);
+  assert.match((await run([], { home: fromCopies })).stdout, /test files +not recorded: 2026-10-16 \(no test times kept\)/);
 });

@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { checkCodexReviewDebt, checkCodexReviews, main } from './check.mjs';
 import { PART_MAX_CHANGED_LINES } from './lib/codex-review-parts.mjs';
+import { autoMaintenanceOff, withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 import { MAX_PARTS_WITHOUT_FLAG } from './lib/codex-review-plan.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
@@ -89,7 +90,8 @@ const built = new Map();
  * is once, of the one that was built, and never of a copy (`whereOf`). */
 function copyOf(key, build) {
   if (!built.has(key)) {
-    const template = build();
+    const template = withoutAutoMaintenance(build);
+    autoMaintenanceOff(template.root);
     // The sample hooks `git init` leaves are a third of what there is to copy, and nothing reads them.
     fs.rmSync(path.join(template.root, '.git', 'hooks'), { recursive: true, force: true });
     built.set(key, template);
@@ -103,6 +105,19 @@ function copyOf(key, build) {
   if (gitFolder !== null && !gitFolder.startsWith('..') && !path.isAbsolute(gitFolder)) gitFolders.set(root, { commonGitDir: path.resolve(root, gitFolder) });
   return { root, ...ids };
 }
+
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which outlives it holding a lock in
+// `.git/objects`; a copy made then can find the lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+test('a commit in a copy of the repository the tests copy starts no detached git maintenance', () => {
+  const { root } = makeRepo();
+  const run = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'traced'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_TRACE: '1' },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.doesNotMatch(run.stderr, /maintenance run/);
+});
 
 /** A repo on `main` with one code commit, which `origin/<remoteBranch>` also points at: what the
  * check compares a push to is the remote's branch, never the local one. `remoteBranch = null`

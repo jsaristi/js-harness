@@ -1,8 +1,9 @@
 // The repository is public (2026-10-16), and a GitHub workflow of a public repository runs on GitHub's machines
-// for free, 20 jobs at once. It holds one workflow, `.github/workflows/gate.yml`: the gate of a commit whose
+// for free, 20 jobs at once. It holds two workflows: `.github/workflows/gate.yml`, the gate of a commit whose
 // tests go to GitHub's machines first (odd/tasks/first-version.md, "Gates on CI machines";
-// odd/tasks/commit-gates-first.md). What bounds it is
-// held here, because a public repository is read and forked by anyone:
+// odd/tasks/commit-gates-first.md), and `windows-daily.yml`, the whole suite on Windows once a day
+// (odd/tasks/commit-gates-first.md, R1). What bounds them is held here, because a public repository is read and
+// forked by anyone. The gate:
 // - it runs for a push to a `gate/` branch and for nothing else, so a pull request starts no run (the merge
 //   queue's CircleCI run tests main as it will be, odd/tasks/merge-queue.md S4), `pull_request_target` never
 //   hands a fork's code this repository's token, and a fork starts nothing here: a push needs write access;
@@ -19,6 +20,7 @@ import { ruleValue } from '../bin/lib/rules.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FOLDER = path.join(ROOT, '.github', 'workflows');
 const GATE = path.join(FOLDER, 'gate.yml');
+const DAILY = path.join(FOLDER, 'windows-daily.yml');
 
 /** The workflow without its comments and blank lines, as `[{ indent, text }]`. */
 function workflowLines(text = fs.readFileSync(GATE, 'utf8')) {
@@ -42,9 +44,9 @@ const SECRET = /\bsecrets\s*[.[]/;
 
 const level = (lines) => lines.filter((line) => line.indent === lines[0].indent).map((line) => line.text);
 
-test('the repository holds one GitHub workflow, the gate', () => {
+test('the repository holds two GitHub workflows, the gate and the daily Windows suite', () => {
   const files = fs.existsSync(FOLDER) ? fs.readdirSync(FOLDER, { recursive: true }) : [];
-  assert.deepEqual(files, ['gate.yml']);
+  assert.deepEqual(files.sort(), ['gate.yml', 'windows-daily.yml']);
   assert.equal(fs.existsSync(path.join(ROOT, '.github', 'actions')), false, 'no local action for a workflow to run');
 });
 
@@ -91,4 +93,33 @@ test('the shapes a workflow must not take are refused', () => {
   // The reader above is the guard: a trigger added beside `push`, or a pull request event, changes `on:`.
   const pullRequest = workflowLines("name: gate\non:\n  push:\n    branches:\n      - 'gate/**'\n  pull_request_target:\npermissions:\n  contents: read\njobs:\n");
   assert.notDeepEqual(below(pullRequest, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'"]);
+});
+
+// The daily Windows suite (odd/tasks/commit-gates-first.md, S5 and R1): it runs on its schedule and by hand, never
+// for a push or a pull request, so it holds up no gate and no land; it reads and names no secret; its actions are
+// pinned as the gate's are; one job on an exact Windows image, bounded, running the whole suite.
+test('the daily Windows suite runs on its schedule and by hand, and for nothing else', () => {
+  const lines = workflowLines(fs.readFileSync(DAILY, 'utf8'));
+  assert.deepEqual(level(lines), ['name: windows-daily', 'on:', 'permissions:', 'jobs:']);
+  assert.deepEqual(below(lines, 'on:').map((line) => line.text), ['schedule:', "- cron: '23 7 * * *'", 'workflow_dispatch:']);
+  assert.deepEqual(below(lines, 'permissions:').map((line) => line.text), ['contents: read']);
+});
+
+test('the daily Windows suite is one bounded job on an exact Windows image, with pinned actions and no secret', () => {
+  const text = fs.readFileSync(DAILY, 'utf8');
+  const lines = workflowLines(text);
+  const jobs = below(lines, 'jobs:');
+  assert.deepEqual(level(jobs), ['suite:']);
+  assert.deepEqual(level(below(jobs, 'suite:')), ['runs-on: windows-2025', 'timeout-minutes: 60', 'steps:']);
+  const runs = lines.filter((line) => /^(- )?run:/.test(line.text)).map((line) => line.text.replace(/^(- )?run:\s*/, ''));
+  assert.equal(runs.at(-1), 'node --test', 'the last step runs the whole suite');
+  // The runner's TEMP is an 8.3 short path that git answers in its long form; the suite runs under the runner's own.
+  const suite = below(lines, '- name: The whole suite');
+  assert.deepEqual(below(suite, 'env:').map((line) => line.text), ['TEMP: ${{ runner.temp }}', 'TMP: ${{ runner.temp }}']);
+  const uses = lines.filter((line) => /^(- )?uses:/.test(line.text)).map((line) => line.text.replace(/^(- )?uses:\s*/, ''));
+  const gateUses = workflowLines().filter((line) => /^(- )?uses:/.test(line.text)).map((line) => line.text.replace(/^(- )?uses:\s*/, ''));
+  assert.deepEqual(uses, gateUses, 'the same actions at the same commits as the gate');
+  assert.doesNotMatch(text, SECRET, 'a secret');
+  assert.doesNotMatch(text, /GITHUB_TOKEN|github\.token/, 'the token handed to a step');
+  assert.doesNotMatch(text, /persist-credentials:\s*true/);
 });

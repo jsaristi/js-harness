@@ -1,0 +1,48 @@
+# The whole suite on Windows, once a day, off the land's path (odd/tasks/commit-gates-first.md, S5 and R1): the
+# gates run on Linux (gate.yml, CircleCI), so nothing else tests what ships on the system it is mostly used on.
+# `js-harness windows-daily` reads the latest scheduled run and tells the lead the failing test names of a red one.
+#
+# It runs on its schedule and by hand (`gh workflow run windows-daily.yml`), never for a push or a pull request, so
+# it holds up no gate and no land. The token reads and nothing more, no secret is named, and every action is pinned
+# by commit. All of it is held by scripts/github-workflows.test.mjs. The repository is public, so its runs cost no
+# minutes.
+name: windows-daily
+
+on:
+  schedule:
+    # 07:23 UTC, 02:23 on this machine's clock (UTC-5): off the hour, when GitHub's scheduled runs crowd, and while
+    # nobody here is working.
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    # An exact image: a moving label would change the system under the same workflow.
+    runs-on: windows-2025
+    # The whole suite took 1,093 to 1,398 s on this machine's Windows (odd/tasks/first-version.md, L18, L26, L29);
+    # an hour leaves room for a slower runner and ends a run that hangs.
+    timeout-minutes: 60
+    steps:
+      # v4.2.2. The whole history, as gate.yml takes it: tests that read git's history find it.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # v4.4.0, with the node the gates run (cimg/node:24.21.0).
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - name: What the runner is
+        run: node -e "const os = require('node:os'); console.log(process.version, os.platform(), os.release(), os.availableParallelism() + ' logical processors', Math.round(os.totalmem() / 2 ** 30) + ' GB')"
+      - name: The whole suite
+        # The runner's TEMP is an 8.3 short path (C:\Users\RUNNER~1\...), which git and realpath answer in its long
+        # form, so a test that compares the two spellings fails for the runner and not for the code: 167 of the 168
+        # failures of the first run (odd/tasks/commit-gates-first.md, L8). The runner's own temporary folder has a
+        # long path, as the per-batch run on this machine points TEMP at a folder of its own (README).
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+        run: node --test

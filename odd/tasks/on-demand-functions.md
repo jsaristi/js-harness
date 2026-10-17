@@ -964,3 +964,8 @@ item of `docs/todo.md`: what `codegraph init` writes under the home (`.codegraph
   `eab3eff..28a6cad` in 2 parts. Its verdict on both: the patch is correct (0.86 and 0.85), no findings.
   It used 392,796 input tokens and recorded the review. Next: push `feat/on-demand-functions-3`, open the pull
   request, and tell the lead (now "JH ORQ 2 · js-harness").
+- **L27** (2026-10-17) doctor told to enable the TypeScript plugin where this feature turned it off (reader 2 of
+  the lead's list, item 2): the typescript-lsp row now has a `when` and is left out where languageServer resolves
+  to off, as the codex row follows codexReview. Commit `2c96936`, test first (RED: 2 of 2; GREEN 81 of 81 in
+  bin/doctor.test.mjs). gentle-ai assessed 1232942..2c96936 medium, 4 paths, 50 lines, review not due
+  (under_budget), not escalated; Codex reviewed 1232942..037bd02: correct (0.97), recorded.

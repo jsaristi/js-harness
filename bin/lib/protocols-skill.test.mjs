@@ -82,6 +82,11 @@ test('every rule id the protocols skill names is declared, and none of their val
 
 // The double review (odd/tasks/rule-hierarchy.md, T18): its home is section 1, section 6 names it for what is handed
 // on, and the template init writes keeps a copy that may not drift from it.
+test('a session runs the installed js-harness, and its branch\'s copy only to test its own change', () => {
+  const [, , costs] = sections(TEXT).map((section) => section.lines.join('\n').replace(/\s+/g, ' '));
+  assert.ok(costs.includes('- Run the installed `js-harness`, not your branch\'s `node bin/js-harness.mjs`, except to test your own change: a branch\'s copy lacks what main gained since it was cut, and five ready notices were never sent because their branch\'s notify had no `--pr` (2026-10-17).'), costs);
+});
+
 test('a proposal reaches the user only after two readers, and a handoff names the rule', () => {
   const squash = (text) => text.replace(/\s+/g, ' ');
   const [asking, , , , , handoff] = sections(TEXT).map((section) => squash(section.lines.join('\n')));
