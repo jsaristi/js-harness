@@ -472,7 +472,7 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   refusal naming the lock file from plan, verify and undo, where it was a `SyntaxError` the command does not
   catch. Codex on `6a6ce9e..13619cb` (commit `13619cb`, gate PASS; gentle-ai: medium, 86 lines, not due): "the
   patch is correct (confidence 0.94)", no finding, 92,937 input tokens, recorded
-- [ ] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
+- [x] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
   `~/.js-harness/memory-hygiene/` (so `uninstall` can remove it; `bin/lib/manifest.mjs`), the board row of a due
   pass (`js-harness sessions`), and the rule ids `memory-index-bytes` and `memory-pass-days` the sensor's budgets
   are to be read from
@@ -486,7 +486,13 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
     with the ids of its reasons, nothing due, n/a with no memory folder, or unavailable with its reason
     (`boardMemory`, `memoryLines`); `--json` carries it as `memory`. RED: both tests failed; GREEN:
     lib/sessions 296/296, sessions 232/232.
-  - [ ] The rule ids: a choice of his, asked in L6.
+  - [x] The rule ids (JH 21, 2026-10-17, inline, branch `rule/memory-hygiene-budgets`; L8): `memory-index-bytes`
+    and `memory-pass-days` are declared by `rules change`, each in its own commit (`adf4328`, `2019114`), and
+    `hygieneState` reads them from the declared list, which a test can replace. RED: the test that gives a list
+    with 10 bytes and 2 days failed; GREEN: memory-hygiene 15, memory 8, rules 34 pass, `rules check` PASS.
+    - gentle-ai: `2b814bf..e231c8a` (`adf4328`, `2019114`, `e231c8a`) assessed `medium`, review not due
+      (`under_budget`, 107 lines). Codex on the same range: "the patch is correct (confidence 0.97)", no finding,
+      recorded. PR 377.
   - Verified (item 1: uninstall now deletes the journal, stamp and lock of a project with no snapshot): an
     independent verifier on `498b418` found no blocker. Twelve uninstall cases never deleted a snapshot, and
     with no folder the output was identical to the baseline. Three of its advisories are fixed test first:
@@ -549,6 +555,15 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   13602, 19:30:08Z, read by JH 21 with `sessions --quote`): "Debe dar la opcion de guardar las copias osea
   desintalacion completa o la desintalacion normal que deja las copias". The lead (JH ORQ, 17:19 local) gave it
   to JH 21 with closed PR 263's branch, test first, two readers on its design: D7 and T10.
+- L8 2026-10-17, L6.1 answered with the recommended choice. His words (transcript
+  `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 20374, a message queued at 08:11:16Z, read by JH 21 from the file
+  because `sessions --quote` reads no text in a queued message): "recuerda que no estoy asi que procede siempre con
+  la respuesta recomendada por favor se autonomo, te voy a dejar unas 10 horas solo". The lead (JH ORQ, 08:20Z)
+  gave the recommendation: `memory-index-bytes` (4,000 bytes) and `memory-pass-days` (7 days) become the project's
+  rules, with this document as their source, and the sensor reads them, not constants. He can make them his later
+  by typing the two values once (`js-harness rules change`, a change of owner). The harness's own rules live in
+  `bin/lib/rules-data.mjs`, not `docs/rules.json`, which is a project's list, so the branch is
+  `rule/memory-hygiene-budgets`.
 
 ## Next step (2026-10-16)
 - T10 (JH 21, branch `feat/memory-full-uninstall`, worktree `D:\js-harness-worktrees\memory-full-uninstall`): built

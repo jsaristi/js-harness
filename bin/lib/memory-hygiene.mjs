@@ -6,13 +6,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveCitations } from './citations.mjs';
 import { memoryNoteType } from './memory-rules.mjs';
+import { RULES } from './rules-data.mjs';
+import { ruleValue } from './rules.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
 
-/** His index budget, 2026-10-15 (odd/tasks/memory-hygiene.md, L4); to be read from the rule
- * `memory-index-bytes` once rule-hierarchy's owner declares it. */
-export const INDEX_BYTES = 4000;
-/** His cadence, 2026-10-15 (L4); to be read from the rule `memory-pass-days` once declared. */
-export const PASS_DAYS = 7;
+/** The index budget and the cadence, each a declared rule (`js-harness rules memory-index-bytes`,
+ * `js-harness rules memory-pass-days`); read here for what prints them, and by `hygieneState` from its list. */
+export const INDEX_BYTES = ruleValue('memory-index-bytes', 'bytes');
+export const PASS_DAYS = ruleValue('memory-pass-days', 'days');
 /** The host's own figure for an index line (the `consolidate-memory` skill: "under ~150 chars"): a
  * constant with one home, not a rule, as rule-hierarchy settled for host figures. */
 export const LINE_CHARS = 150;
@@ -141,15 +142,18 @@ export function boardMemory({ home, slug, folder, now }) {
 
 /** Whether a pass is due, as `{ due, reasons, candidates, lastPass }`: each reason and candidate is
  * `{ id, detail }`, in a fixed order. `lineCount(path)` and `commitExists(id)` resolve a note's
- * citations against the project (the resolver of `citations.mjs`); without them none is checked. */
-export function hygieneState({ memory, journal, now, lineCount, commitExists }) {
+ * citations against the project (the resolver of `citations.mjs`); without them none is checked.
+ * The budgets are the rules `memory-index-bytes` and `memory-pass-days` of `rules`, the declared list unless given. */
+export function hygieneState({ memory, journal, now, lineCount, commitExists, rules = RULES }) {
+  const indexBytes = ruleValue('memory-index-bytes', 'bytes', rules);
+  const passDays = ruleValue('memory-pass-days', 'days', rules);
   const reasons = [];
   const lines = memory.index?.lines ?? [];
   const lastPass = journal.filter((entry) => entry.kind === 'verify' && !Number.isNaN(Date.parse(entry.at))).at(-1) ?? null;
 
   if (lastPass === null) reasons.push({ id: 'no-pass', detail: 'no verified pass recorded yet' });
-  if ((memory.index?.bytes ?? 0) > INDEX_BYTES) {
-    reasons.push({ id: 'index-bytes', detail: `the index is ${memory.index.bytes} B, over ${INDEX_BYTES}` });
+  if ((memory.index?.bytes ?? 0) > indexBytes) {
+    reasons.push({ id: 'index-bytes', detail: `the index is ${memory.index.bytes} B, over ${indexBytes}` });
   }
   const long = lines.filter((line) => line.chars > LINE_CHARS).map((line) => line.number);
   if (long.length > 0) reasons.push({ id: 'line-chars', detail: `${plural(long.length, 'line')} over ${LINE_CHARS} characters: ${long.join(', ')}` });
@@ -167,7 +171,7 @@ export function hygieneState({ memory, journal, now, lineCount, commitExists }) 
     if (waiting.length > 0) reasons.push({ id: 'new-rule-note', detail: waiting.map((note) => `${note.name} (${note.type})`).join(', ') });
     const at = Date.parse(lastPass.at);
     const written = [memory.index?.mtimeMs ?? 0, ...memory.notes.map((note) => note.mtimeMs)].some((mtime) => mtime > at);
-    if (now - at >= PASS_DAYS * DAY_MS && written) {
+    if (now - at >= passDays * DAY_MS && written) {
       reasons.push({ id: 'cadence', detail: `${Math.floor((now - at) / DAY_MS)} days since the last pass, with notes written since` });
     }
   }

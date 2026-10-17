@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `d0ed9be06be6`. In force: 34 (16 of Sebastián, 18 of the project). Retired: 0.
+Hash `0051b2f63ac8`. In force: 36 (16 of Sebastián, 20 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -142,6 +142,16 @@ How long a command run under the gate lock may run before it is stopped with eve
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
 - Read by: `bin/js-harness.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
+
+### memory-index-bytes
+The bytes the memory index may hold before a memory hygiene pass is due: 4,000 bytes.
+- Read by: `bin/lib/memory-hygiene.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
+
+### memory-pass-days
+The days after a verified memory hygiene pass when the next is due, if a note was written since: 7 days.
+- Read by: `bin/lib/memory-hygiene.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
 
 ### person-present
 How long after the user last wrote in a session a question is put to them at once with the question tool: 15 minutes.
