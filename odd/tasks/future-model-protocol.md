@@ -517,3 +517,17 @@ refused before anything is made. The engram controls do not apply to an arm with
 `CLAUDE.md` or a part of it, where the component check speaks instead. Tests RED (5, written first),
 then GREEN; 161 tests of the probe, `without` and `arms` pass. No probe was run against the real
 `claude`: that is a run on this machine, though with no spend, and it waits for the lead's word.
+
+L27 (2026-10-17, 23:35 UTC by `date`) Codex reviewed C6a (`3badd8b..cb9f1f3`, 221,074 input tokens,
+recorded): three P2 findings, all checked against the code and real, each test RED first, then fixed.
+(1) A plugin's evidence was a tool prefix it may not have: a plugin with no MCP server (the stack's
+`typescript-lsp`) failed the current arm. Now a plugin's evidence is read from its installed folder
+(`installed_plugins.json`, under the home placeholder): its tool prefix only when it declares a
+server (`.mcp.json` or `plugin.json`), and the descriptions of its skills, agents and commands, less
+those kept from the model (`disable-model-invocation: true`). (2) Descriptions and line markers were
+one pool needing two hits, so an arm that kept one skill of several passed: one description is now
+enough, two markers still are for the lines of one file. (3) Every installed output style gave lines;
+now only the style `settings.json` selects does. Found in passing, the same class: any other Markdown
+of a removed folder (a README in `hooks`) gave lines no request carries; now only `CLAUDE.md` and
+`AGENTS.md` do. `HOME_TOKEN` moved to `evals/without.mjs`, which reads it back, and `home.mjs`
+imports it. 205 tests of the probe, `without`, `home` and `arms` pass.

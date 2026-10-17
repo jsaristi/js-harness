@@ -353,34 +353,98 @@ function droppedLines(before, after) {
   });
 }
 
+/** The placeholder the template writes for the real home in a path (`evals/home.mjs` takes it from here). */
+export const HOME_TOKEN = '@@TRIAL_HOME@@';
+
+/** The folders, relative to the home in `root`, that the plugin `name` is installed in, by the `installPath` of its
+ * entries in `installed_plugins.json` under the home placeholder; an entry outside the home, or a folder the template
+ * does not hold, gives none. */
+function pluginFolders(root, name) {
+  let installed;
+  try {
+    installed = JSON.parse(fs.readFileSync(full(root, '.claude/plugins/installed_plugins.json'), 'utf8'));
+  } catch {
+    return [];
+  }
+  return Object.entries(isObject(installed?.plugins) ? installed.plugins : {})
+    .filter(([key, entries]) => key.split('@')[0] === name && Array.isArray(entries))
+    .flatMap(([, entries]) => entries.map((entry) => entry?.installPath))
+    .filter((install) => typeof install === 'string' && install.startsWith(HOME_TOKEN))
+    .map((install) => install.slice(HOME_TOKEN.length).split(/[\\/]+/).filter(Boolean).join('/'))
+    .filter((rel) => fs.statSync(full(root, rel), { throwIfNoEntry: false })?.isDirectory());
+}
+
+/** Whether the plugin folder `rel` declares an MCP server, in `.mcp.json` or in its `plugin.json`. */
+function declaresServer(root, rel) {
+  if (fs.existsSync(full(root, `${rel}/.mcp.json`))) return true;
+  try {
+    return isObject(JSON.parse(fs.readFileSync(full(root, `${rel}/.claude-plugin/plugin.json`), 'utf8')).mcpServers);
+  } catch {
+    return false;
+  }
+}
+
+/** The description the model is sent of the Markdown file `rel` with `text`: that of a skill's `SKILL.md`, an agent
+ * or a command, from its front matter, unless the front matter keeps it from the model
+ * (`disable-model-invocation: true`); `null` for any other file. */
+function sentDescription(rel, text) {
+  const parts = rel.split('/');
+  const listed = parts.includes('skills') ? parts.at(-1) === 'SKILL.md' : parts.includes('agents') || parts.includes('commands');
+  if (!listed) return null;
+  const { head } = frontMatter(text);
+  return head.some((line) => /^disable-model-invocation:\s*true\s*$/.test(line)) ? null : descriptionOf(head);
+}
+
+/** The body of the output style the home in `root` selects (`outputStyle` in its `settings.json`, matched to a style's
+ * `name` or its file's name, in any case) among the files `rels`; none selected or none matching gives no lines. */
+function selectedStyleBody(root, rels) {
+  let selected;
+  try {
+    selected = JSON.parse(fs.readFileSync(full(root, '.claude/settings.json'), 'utf8')).outputStyle;
+  } catch {
+    return [];
+  }
+  if (typeof selected !== 'string') return [];
+  for (const rel of rels) {
+    const { head, body } = frontMatter(fs.readFileSync(full(root, rel), 'utf8'));
+    const name = head.find((line) => /^name:/.test(line))?.slice('name:'.length).trim().replace(/^(["'])(.*)\1$/, '$2');
+    if ([name, path.basename(rel, '.md')].some((candidate) => candidate?.toLowerCase() === selected.toLowerCase())) return body;
+  }
+  return [];
+}
+
 /** What a request to the model carries of the component `id` when it is loaded, read from the home in `root`, for
  * the isolation probe (`evals/isolation-probe.mjs`) to tell an arm that holds it from one that does not:
  * `{ tools, lines, descriptions }`. `tools` are prefixes of the tool names Claude Code gives a server
- * (`mcp__<name>__`) or a plugin's servers (`mcp__plugin_<name>_`); `lines` are the lines of text the model is sent
- * whole, those the cut takes out of the instructions file and an output style's body; `descriptions` are what it is
- * sent of a skill or an agent, the `description` of its front matter, not its body. A component the model is sent
- * nothing of (hooks, the project) has all three empty, and the probe can only say so. Reads only. */
+ * (`mcp__<name>__`) or a plugin's servers (`mcp__plugin_<name>_`, only for a plugin that declares one); `lines` are the
+ * lines of text the model is sent whole, those the cut takes out of the instructions file and the selected output
+ * style's body; `descriptions` are what it is sent of a skill, an agent or a command, a plugin's included, the
+ * `description` of its front matter, not its body. Any other file (a README, a hook's notes) is sent nothing of. A
+ * component the model is sent nothing of (hooks, the project) has all three empty, and the probe can only say so.
+ * Reads only. */
 export function withoutEvidence(root, id, agent) {
   const name = id.slice(id.indexOf('-') + 1);
-  const tools = id.startsWith('mcp-') ? [`mcp__${name}__`] : id.startsWith('plugin-') ? [`mcp__plugin_${name}_`] : [];
+  const plugins = agent === 'claude' && id.startsWith('plugin-') ? pluginFolders(root, name) : [];
+  const tools = id.startsWith('mcp-') ? [`mcp__${name}__`] : plugins.some((rel) => declaresServer(root, rel)) ? [`mcp__plugin_${name}_`] : [];
   const lines = [];
   const descriptions = [];
+  const read = (rel) => fs.readFileSync(full(root, rel), 'utf8');
   for (const piece of piecesOf(root, id, agent)) {
     if (piece.text) {
-      lines.push(...droppedLines(fs.readFileSync(full(root, piece.text), 'utf8'), piece.content));
+      lines.push(...droppedLines(read(piece.text), piece.content));
       continue;
     }
-    for (const rel of piece.remove ? markdownFiles(root, piece.remove) : []) {
-      const text = fs.readFileSync(full(root, rel), 'utf8');
+    const files = piece.remove ? markdownFiles(root, piece.remove) : [];
+    for (const rel of files) {
       const parts = rel.split('/');
-      if (parts.includes('skills') || parts.includes('agents')) {
-        const description = (!parts.includes('skills') || parts.at(-1) === 'SKILL.md') ? descriptionOf(frontMatter(text).head) : null;
-        if (description) descriptions.push(description);
-      } else if (parts.includes('output-styles')) lines.push(...frontMatter(text).body);
-      else lines.push(...text.split(/\r?\n/));
+      if (parts.at(-1) === 'CLAUDE.md' || parts.at(-1) === 'AGENTS.md') lines.push(...read(rel).split(/\r?\n/));
+      else if (!parts.includes('output-styles')) descriptions.push(sentDescription(rel, read(rel)));
     }
+    lines.push(...selectedStyleBody(root, files.filter((rel) => rel.split('/').includes('output-styles'))));
   }
-  return { tools, lines, descriptions: descriptions.sort() };
+  // A plugin's own dependencies are no skill of it, whatever their folders are called.
+  for (const folder of plugins) descriptions.push(...markdownFiles(root, folder).filter((rel) => !rel.split('/').includes('node_modules')).map((rel) => sentDescription(rel, read(rel))));
+  return { tools, lines, descriptions: descriptions.filter(Boolean).sort() };
 }
 
 /** Takes `components` out of the home in `root`, one after the other, once `checkWithout` has passed for all of

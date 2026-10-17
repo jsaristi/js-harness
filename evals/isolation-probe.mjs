@@ -167,22 +167,23 @@ const DESCRIPTION_MIN_LENGTH = 30;
 const DESCRIPTION_PREFIX = 80;
 
 /** What the fake API looks for of a component an arm takes out (G2 of `odd/tasks/future-model-protocol.md`, C6a),
- * from what `withoutEvidence` (`evals/without.mjs`) says a request carries of it: the prefixes of its tool names, and
- * needles of its text, the markers of the lines it is sent whole (as `claudeMdMarkers` picks them) and the first
- * characters of each description. Both empty: a request carries nothing of it, and the probe cannot see it. */
+ * from what `withoutEvidence` (`evals/without.mjs`) says a request carries of it: the prefixes of its tool names, the
+ * markers of the lines it is sent whole (as `claudeMdMarkers` picks them) and the first characters of each description.
+ * All three empty: a request carries nothing of it, and the probe cannot see it. */
 export function needlesOf({ tools, lines, descriptions }) {
   const prefixes = descriptions.map(normalize).filter((text) => text.length >= DESCRIPTION_MIN_LENGTH).map((text) => text.slice(0, DESCRIPTION_PREFIX));
-  return { tools, needles: [...new Set([...claudeMdMarkers(lines.join('\n')), ...prefixes])] };
+  return { tools, markers: claudeMdMarkers(lines.join('\n')), prefixes: [...new Set(prefixes)] };
 }
 
-/** Whether a request body, which offers the tools `toolNames`, carries a component (`needlesOf`): a tool of it, or
- * two of its needles (one when it has one) anywhere in the system prompt, the messages or the tools' descriptions,
- * where a listing of skills or agents goes. A boolean, so the text is never kept. */
-function carriesComponent(body, toolNames, { tools, needles }) {
+/** Whether a request body, which offers the tools `toolNames`, carries a component (`needlesOf`), anywhere in the system
+ * prompt, the messages or the tools' descriptions, where a listing of skills or agents goes: a tool of it, one of its
+ * descriptions (each is a skill, an agent or a command of its own, so one left is the component not wholly gone), or
+ * two of its markers (one when it has one), which are lines of one text. A boolean, so the text is never kept. */
+function carriesComponent(body, toolNames, { tools, markers, prefixes }) {
   if (toolNames.some((name) => tools.some((prefix) => name.startsWith(prefix)))) return true;
-  if (needles.length === 0) return false;
+  if (markers.length === 0 && prefixes.length === 0) return false;
   const text = normalize(allText([body.system, body.messages, body.tools]).join('\n'));
-  return needles.filter((needle) => text.includes(needle)).length >= Math.min(2, needles.length);
+  return prefixes.some((prefix) => text.includes(prefix)) || (markers.length > 0 && markers.filter((marker) => text.includes(marker)).length >= Math.min(2, markers.length));
 }
 
 /** The text the first user message of a subagent the probe starts carries, which is how the fake API tells that
@@ -213,7 +214,7 @@ export const engramNeedles = (nonce) => ({ prompt: `nonce:${nonce}`, memory: `me
  *
  * `markers` (see `claudeMdMarkers`) are matched against every `/v1/messages` request: the log says whether the
  * request carried the real global CLAUDE.md, which is how the probe sees that a trial loaded it. `track` is the
- * components an arm is about, each `{ id, tools, needles }` (`needlesOf`): every `/v1/messages` entry gets
+ * components an arm is about, each `{ id, tools, markers, prefixes }` (`needlesOf`): every `/v1/messages` entry gets
  * `components`, the ids mapped to whether the request carried each (`carriesComponent`); `track(list)` replaces them,
  * for a caller that learns them only once the server runs.
  *
@@ -1037,8 +1038,8 @@ const ENGRAM_PARTS = /^(?:mcp-engram|plugin-engram|hooks)$/;
  * A component a request carries nothing of (no tool, no needle) is `unseen`, with `ok` null: the probe cannot tell. */
 function checkComponents(expected, log, track) {
   const messages = log.filter((request) => request.method === 'POST' && request.path === '/v1/messages' && (request.reply === 'text' || request.reply === 'subagent' || request.reply.startsWith('tool_use')));
-  return track.map(({ id, tools, needles }) => {
-    if (tools.length === 0 && needles.length === 0) return { id, expected, ok: null, unseen: true };
+  return track.map(({ id, tools, markers, prefixes }) => {
+    if (tools.length === 0 && markers.length === 0 && prefixes.length === 0) return { id, expected, ok: null, unseen: true };
     if (messages.length === 0) return { id, expected, ok: null, skipped: 'the agent sent no /v1/messages request' };
     const carried = messages.filter((request) => request.components?.[id] === true).length;
     const mainRequestHit = messages.some((request) => request.reply !== 'subagent' && request.toolsOffered && !/haiku/i.test(request.model ?? '') && request.components?.[id] === true);

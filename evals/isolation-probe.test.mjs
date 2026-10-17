@@ -12,7 +12,7 @@ import { killByPath, runProcess } from './runner.mjs';
 import { createReaper, sweptLater } from '../bin/lib/process-tree.testkit.mjs';
 import {
   DUMMY_API_KEY, PROBE_ENV_VARS, claudeMdMarkers, defaultTrees, diffSnapshots, formatSummary, leakHits, main, parseEnvLines, probeCommand, runIsolationProbe, scanFile,
-  keyLeaks, snapshotTrees, splitByControl, startFakeApi,
+  keyLeaks, needlesOf, snapshotTrees, splitByControl, startFakeApi,
 } from './isolation-probe.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -342,6 +342,22 @@ test('with no markers nothing is ever a hit, and with a single marker one is eno
   } finally {
     await lone.close();
     await none.close();
+  }
+});
+
+test('a tracked component is carried by one of its descriptions, each an item of its own, but by two of its lines, which are one file', async () => {
+  const descriptions = ['Reviews a pull request against the house rules of this repository.', 'Writes the release notes from the merged pull requests.'];
+  const component = { id: 'skills', ...needlesOf({ tools: [], lines: [LONG('alpha'), LONG('beta')], descriptions }) };
+  const api = await startFakeApi({ nonce: NONCE, workspace: scratch, track: [component] });
+  try {
+    const asked = (extra) => post(api, '/v1/messages', ask({ tools: TOOLS, ...extra }));
+    await asked({ system: 'a listing of skills', tools: [...TOOLS, { name: 'Skill', description: `- review: ${descriptions[0]}` }] });
+    await asked({ system: LONG('alpha') });
+    await asked({ system: `${LONG('alpha')}\n${LONG('beta')}` });
+    await asked({ system: 'nothing of it' });
+    assert.deepEqual(api.requests.map((request) => request.components.skills), [true, false, true, false]);
+  } finally {
+    await api.close();
   }
 });
 
