@@ -32,7 +32,7 @@ import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-
 import { watchBusiest } from './lib/machine-busiest.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
-import { addedLines, resolveCitations } from './lib/citations.mjs';
+import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { checkLedger, failedTestFiles, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
@@ -531,19 +531,50 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
  * documents (`odd/tasks/`), each code span that cites a `path:line` or a commit resolved against the folder and the
  * repository (`bin/lib/citations.mjs`), with one line for each that does not. It is INFO and stops nothing: documents
  * cite other branches and removed files on purpose, so it becomes a failure only once its false alarms have been
- * none over twenty commits. No row when no feature document is staged, or git does not answer. */
+ * none over twenty commits. It also reads each task the change checks off (T6, docs/FAILURES.md,
+ * record-states-wrong-fact: tasks were checked off while their files were in no commit), which names a commit HEAD
+ * reaches or rides with the work it checks off (`resolveTicks`). No row when no feature document is staged, or git
+ * does not answer. */
 export function checkCitations(cwd, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   const diff = git?.(['diff', '--cached', '-U0', '--no-renames', '--no-relative', '--no-color', '--', 'odd/tasks/']);
   if (!diff) return [];
   // The cited file as this commit will hold it, from the index: the working tree may differ from it.
   // A file that ends in a newline has no line after it.
-  const lineCount = (file) => git(['show', `:${file}`])?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
+  const staged = (file) => git(['show', `:${file}`]);
+  const lineCount = (file) => staged(file)?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
   const commitExists = (id) => git(['cat-file', '-e', `${id}^{commit}`]) !== null;
-  const { checked, unresolved } = resolveCitations(addedLines(diff), { lineCount, commitExists });
+  const added = addedLines(diff);
+  const { checked, unresolved } = resolveCitations(added, { lineCount, commitExists });
   const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;
-  const row = { name: 'citations', pass: true, info: true, detail: `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}` };
-  return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
+  let detail = `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}`;
+  const lines = unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`);
+  // A file HEAD does not hold had no task checked off before.
+  const ticks = checkedOff(added, (file) => checkedTasks(git(['show', `HEAD:${file}`]) ?? ''));
+  if (ticks.length > 0) {
+    const head = git(['rev-parse', '-q', '--verify', 'HEAD^{commit}'])?.trim();
+    // `merge-base --is-ancestor` answers no with exit 1, an unrelated history included (Codex, 2026-10-17); any
+    // other exit, or no git, is no claim. `git` has already answered here, so the repository is the one guarded.
+    const reaches = (id) => {
+      const full = git(['rev-parse', '-q', '--verify', `${id}^{commit}`])?.trim();
+      if (!full || !head) return null;
+      try {
+        const asked = spawn('git', ['merge-base', '--is-ancestor', full, head], { cwd, encoding: 'utf8' });
+        if (!asked || asked.error) return null;
+        return asked.status === 0 ? true : asked.status === 1 ? false : null;
+      } catch {
+        return null;
+      }
+    };
+    const names = git(['diff', '--cached', '--name-only', '-z', '--no-relative']) ?? '';
+    const rides = names.split('\0').some((name) => name !== '' && !name.startsWith('odd/tasks/'));
+    const text = (file, line) => taskText(staged(file) ?? '', line);
+    const off = resolveTicks(ticks, { text, commitExists, reaches, rides });
+    detail += `; ${ticks.length} task${ticks.length === 1 ? '' : 's'} checked off, ${off.length === 0 ? 'each in a commit HEAD reaches or in this one' : `${off.length} of them in no commit HEAD reaches`}`;
+    lines.push(...off.map((u) => `${u.file}:${u.line} ${u.id}${u.citation === null ? '' : ` \`${u.citation}\``}: ${u.why}`));
+  }
+  const row = { name: 'citations', pass: true, info: true, detail };
+  return [lines.length === 0 ? row : { ...row, lines }];
 }
 
 /** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
