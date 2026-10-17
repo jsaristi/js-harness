@@ -170,6 +170,14 @@ export const RULES = [
     "unit": "bytes"
   },
   {
+    "id": "memory-pass-days",
+    "subject": "the days after a verified memory hygiene pass when the next is due, if a note was written since",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
     "id": "person-present",
     "subject": "how long after the user last wrote in a session a question is put to them at once with the question tool",
     "owner": "project",
