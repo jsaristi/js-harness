@@ -132,6 +132,10 @@ const GIT_LOCAL_ENV = [
 // hook is always given `GIT_INDEX_FILE`, and in a linked worktree `GIT_DIR`; see `stagedDocuments`.
 const GIT_BINDING_ENV = ['GIT_DIR', 'GIT_INDEX_FILE', 'GIT_WORK_TREE'];
 
+// What `.githooks/pre-merge-commit` exports to say that the commit is a merge's: git runs that hook before it
+// writes MERGE_HEAD (`checkCommitSize`). It is this gate's word alone, and no sensor inherits it (`checkSensor`).
+const MERGE_HOOK_ENV = 'JS_HARNESS_HOOK';
+
 const NPM_PLACEHOLDER_TEST ='echo "Error: no test specified" && exit 1';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -547,9 +551,9 @@ export function checkCitations(cwd, spawn = spawnSync) {
  * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
  * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
  * own branch), or when git cannot say. A merge git commits by itself runs `pre-merge-commit` before MERGE_HEAD is
- * written, so that hook says it in `JS_HARNESS_HOOK` (`.githooks/pre-merge-commit`). */
+ * written, so that hook says it in `MERGE_HOOK_ENV`. */
 export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
-  if (env.JS_HARNESS_HOOK === 'pre-merge-commit') return [];
+  if (env[MERGE_HOOK_ENV] === 'pre-merge-commit') return [];
   const git = hookGit(cwd, spawn);
   if (!git || git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) return [];
   const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
@@ -1049,8 +1053,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // in a temp directory acts on the repository being committed to, and once left it bare.
   // The mark of a held lock goes whenever it is not given above: the one this process carries is its
   // parent's word, and a gate that runs its sensors without the lock must not pass it on.
-  // The variable of the tests' concurrency is check's, read above: a test of check in the suite must not see it.
-  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
+  // The variable of the tests' concurrency is check's, read above: a test of check in the suite must not see it, nor
+  // the merge hook's mark, with which the suite's tests of the commit-size row would read every commit as a merge's.
+  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, MERGE_HOOK_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
   // The tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): the whole suite runs under the tracer, and

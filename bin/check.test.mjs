@@ -621,6 +621,25 @@ test('checkSensor runs the command with the home directory pointed at a throwawa
   }
 });
 
+// The merge hook's word is for the gate of that merge (odd/tasks/land-unattended.md, T8): a sensor that inherited it
+// would run the suite's own tests of the commit-size row as if each were a merge's hook (Codex, 2026-10-17).
+test('checkSensor does not pass on the mark of the merge hook', async () => {
+  const dir = makeTmpDir();
+  const before = process.env.JS_HARNESS_HOOK;
+  process.env.JS_HARNESS_HOOK = 'pre-merge-commit';
+  try {
+    const seen = path.join(dir, 'seen-hook.txt').replace(/\\/g, '/');
+    const command = `node -e "require('fs').writeFileSync('${seen}', String(process.env.JS_HARNESS_HOOK))"`;
+    const row = await checkSensor(dir, { name: 'tests', command });
+    assert.equal(row.pass, true, row.output);
+    assert.equal(fs.readFileSync(seen, 'utf8'), 'undefined');
+  } finally {
+    if (before === undefined) delete process.env.JS_HARNESS_HOOK;
+    else process.env.JS_HARNESS_HOOK = before;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('checkSensors turns a discovery error into one FAIL row named sensors', async () => {
   const dir = makeTmpDir();
   try {
