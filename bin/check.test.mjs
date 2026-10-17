@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
 import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -3342,6 +3342,26 @@ test('main --no-wait is refused for a gate that waits ahead of it when the lock 
 // stand-in for the writer of the log. Nothing showed that the line the real writer makes of it is one the
 // real reader takes: a reader that knew only `held` and `timeout` would count every such refusal among the
 // lines it could not read.
+// Found in review, 2026-10-17 (Codex and the verifier of gate-first T6): the line of a ticket left unclaimed
+// carried the code of the hold in `code`, which the reader takes only as the key of a tree, so it dropped
+// every such line and counted it unreadable.
+test('a ticket left unclaimed because its file was held is in the real gate log as one first-unclaimed line with the code of the hold, which its reader takes', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-unclaimed-'));
+  try {
+    const held = { id: '0a0a0a0a', session: 'sess-a', reason: 'first', until: new Date(Date.now() + 60_000).toISOString() };
+    const deps = { claimTicket: () => ({ ticket: null, expired: [], unclaimed: [{ ticket: held, code: 'EBUSY' }] }) };
+    assert.equal(claimOf({ home, session: 'sess-a' }, home, deps), null);
+    const { events, skipped } = readGateLog(home);
+    assert.deepEqual([events.length, skipped], [1, 0]);
+    assert.deepEqual(
+      events.map(({ event, id, error, cwd, pid }) => ({ event, id, error, cwd, pid })),
+      [{ event: 'first-unclaimed', id: '0a0a0a0a', error: 'EBUSY', cwd: path.resolve(home), pid: process.pid }],
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a gate refused with --no-wait behind a gate that waits ahead is in the real gate log of its home as one refusal whose reason is ahead: its reader takes the line and counts none unreadable', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const since = new Date(Date.now() - 5000).toISOString();
   const folder = path.join(gateDir(home), 'wait-22-aaaaaaaaaaaa');
