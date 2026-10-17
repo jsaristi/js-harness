@@ -1687,7 +1687,7 @@ and 3.
 - [x] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on this machine by the lead once the fourth slice is on `main`: his answer of
   2026-10-11 (Progress, 22:03)
-- [ ] T6b The compaction protocol, so that a compaction never again arrives with nothing
+- [x] T6b The compaction protocol, so that a compaction never again arrives with nothing
   saved (his words of 2026-10-11, Progress 22:03). Design first, read twice by independent
   readers before it reaches him. Three parts: (1) at the pause a session writes its state to
   the feature document and its very next reply to him carries the percentage and the two
@@ -3097,6 +3097,11 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
     after `notify --to 26` there, printing the notice and the wait to run again.
   - Help, the README's section, the skill's line in `bin/lib/manifest.mjs` and SPEC's "Waiting and waking" say the new
     exit. `wait-blind-to-notices`'s Control is now that test; `failures` reads it as controlled.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `docs/open-work-text`, on the lead's triage of open work: T6b
+  checked off. Its owed proof was that `js-harness sessions --measures` counts no `told` miss for a compaction
+  on a configured window. Read on 2026-10-17 before 11:22Z (by `date`): after pull request 275 merged (2026-10-16T13:32:49Z), 37 of 37
+  automatic compactions in the record were told, and every `told no` is older. The triage note said 41 of 41;
+  the count read here is 37.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
