@@ -7,11 +7,15 @@
 // builds and prints the candidate; `--land` tests it and moves main to it (`landCandidate`).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
+import { appendRelief, reliefPath } from './lib/channel.mjs';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
+import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
+import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
 
@@ -32,8 +36,12 @@ candidate, by fast-forward from the main it was built from. A candidate whose ev
 document main's harness.json declares runs no suite on this machine, as a commit of documents alone
 runs none, and CircleCI's run is its test. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
-pre-push hook refuses every other push of main. Exit 0 landed or nothing to land, 4 red, 3 main
-moved meanwhile (nothing pushed), 1 anything else.
+pre-push hook refuses every other push of main. For each landed rule/ pull request and each rule it
+changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> landed on main <sha> from
+<branch>: confirms relief line <n>", for the newest "rule:<id> proposed on <branch>, not landed" line whose
+declaration hash is the landed head's that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
+write none. Exit 0 landed or nothing to land, 4 red, 3 main moved meanwhile (nothing pushed), 1 anything
+else.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.`;
 
@@ -235,11 +243,114 @@ function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
   return { kind: 'door', line: `the merge door did not answer (exit ${ran.status ?? 'none'})` };
 }
 
+/** The lines of the relief file `relief` that confirm the landing on main `sha` of the branch `branch` for the rules
+ * `ids` it changed (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 7): `{ lines, none }`. For each id, the
+ * newest line "rule:<id> proposed on <branch>, not landed" (`js-harness rules change` writes it; the comma after the
+ * branch keeps `rule/a` from matching `rule/ab`, the space after "proposed" `rule:a` from matching `rule:ab`) that no
+ * later "rule:<id> landed on main ... from <branch>: " line confirms gets one line naming its place, from 1, blank lines
+ * counted, as `rules change` names the line it supersedes; `none` are the ids no proposed line names. Only a proposal
+ * the landed head holds counts: a line that ends "; declaration <hash>" when `declarations[id]` is that hash (the head's
+ * declaration of the rule, `declarationOf`), and an older line that names none when it is stamped before `until` (ms),
+ * the start of the second of the head's commit, since `rules change` stamps its line before the commit that holds it. */
+export function landingLines(relief, { branch, ids, sha, declarations = {}, until = Infinity }) {
+  const lines = String(relief).split('\n');
+  const found = { lines: [], none: [] };
+  for (const id of ids) {
+    const proposal = `rule:${id} proposed on ${branch}, not landed`;
+    const held = (line) => {
+      const named = /; declaration ([0-9a-f]{12}|none)\s*$/.exec(line);
+      return named === null ? stampOf(line) < until : named[1] === declarations[id];
+    };
+    const newest = lines.findLastIndex((line) => line.includes(proposal) && held(line));
+    if (newest === -1) {
+      found.none.push(id);
+      continue;
+    }
+    const confirmed = lines.slice(newest + 1).some((line) => line.includes(`rule:${id} landed on main `) && line.includes(` from ${branch}: `));
+    if (!confirmed) found.lines.push(`rule:${id} landed on main ${sha} from ${branch}: confirms relief line ${newest + 1}`);
+  }
+  return found;
+}
+
+/** The local time an `appendRelief` line is stamped with, in ms; NaN for a line it did not stamp. */
+function stampOf(line) {
+  const stamp = /^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d) local /.exec(line);
+  return stamp === null ? NaN : new Date(+stamp[1], stamp[2] - 1, +stamp[3], +stamp[4], +stamp[5], +stamp[6]).getTime();
+}
+
+const RULES_DATA = 'bin/lib/rules-data.mjs';
+
+/** The ids of the rules the branch at `head` changed against `main`, read at `place`: those whose declaration in
+ * `bin/lib/rules-data.mjs` differs between `head` and its merge base with `main`, added and removed ones among them, so
+ * what main gained since is not the branch's. `null` when git or the file does not answer. */
+function changedRuleIds(gitIn, place, main, head) {
+  const base = gitIn(place, 'merge-base', main, head);
+  if (!base.ok) return null;
+  const read = (commit) => {
+    const shown = gitIn(place, 'show', `${commit}:${RULES_DATA}`);
+    if (!shown.ok) return new Map();
+    try {
+      return new Map(rulesOfText(shown.out).map((rule) => [rule.id, JSON.stringify(rule)]));
+    } catch {
+      return null;
+    }
+  };
+  const [before, after] = [read(base.out.trim()), read(head)];
+  if (before === null || after === null) return null;
+  return [...new Set([...before.keys(), ...after.keys()])].filter((id) => before.get(id) !== after.get(id));
+}
+
+/** After a land, one relief line for each rule a landed `rule/` pull request changed and `js-harness rules change`
+ * proposed on that branch (`landingLines`), appended by `appendRelief` as the queue's; a pull request that leaves none
+ * says why. The relief file is the project's (`home`, `slug`), as `notify` finds it. */
+function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now, stdout }) {
+  for (const pr of merged.filter((one) => one.headRefName.startsWith('rule/'))) {
+    const said = `PR ${pr.number} (${pr.headRefName}) landed`;
+    const ids = changedRuleIds(gitIn, place, main, pr.headRefOid);
+    if (ids === null) {
+      stdout(`${said}, and the rules it changed could not be read: no landing line is written for it.`);
+      continue;
+    }
+    if (ids.length === 0) {
+      stdout(`${said} changing no rule of ${RULES_DATA}: no landing line is written for it.`);
+      continue;
+    }
+    let relief = '';
+    try {
+      relief = fs.readFileSync(reliefPath(home, slug), 'utf8');
+    } catch {
+      // No relief file is no proposed line.
+    }
+    // What the landed head holds: each rule's declaration, and its commit time for a proposal line that names none.
+    const committed = Number(gitIn(place, 'show', '-s', '--format=%ct', pr.headRefOid).out.trim());
+    const shown = gitIn(place, 'show', `${pr.headRefOid}:${RULES_DATA}`);
+    let declarations = null;
+    try {
+      declarations = shown.ok ? Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)])) : null;
+    } catch {
+      // A declaration that does not parse is one the head cannot be matched by.
+    }
+    if (!Number.isFinite(committed) || committed <= 0 || declarations === null) {
+      stdout(`${said}, and what its head holds could not be read: no landing line is written for it.`);
+      continue;
+    }
+    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), declarations, until: committed * 1000 });
+    for (const id of none) stdout(`${said} with no relief line "rule:${id} proposed on ${pr.headRefName}, not landed": no landing line is written for it.`);
+    for (const line of lines) {
+      try {
+        stdout(`Relief: ${appendRelief(home, slug, line, now(), 'merge-queue').line}`);
+      } catch (err) {
+        stdout(`Could not append to the relief file (${err.message}): ${line}`);
+      }
+    }
+  }
+}
+
 /** `--land`: the candidate at `place`, built on `main`, tested on this machine and then on CircleCI, and main
  * moved to it when both are green (S6, S7). Its CircleCI run is that of a `queue/*` branch pushed for it and
  * removed afterwards, whatever the result. Main moves by fast-forward only, leased on the `main` the candidate
  * was built from: a main that moved in between is left as it is (exit 3). Red anywhere is exit 4. */
-async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail }) {
+async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail, landed }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
   const local = suite(place);
@@ -277,7 +388,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       stdout('No pull request is left to land: nothing was pushed.');
       return 4;
     }
-    return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail });
+    return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail, landed });
   }
   if (!local.ok) {
     stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
@@ -332,6 +443,12 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     }
   }
   stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
+  // Main has moved: the relief's lines never turn a land into a failure.
+  try {
+    landed(candidate, merged);
+  } catch (err) {
+    stdout(`Could not write the landing lines of the relief file (${err.message}): main moved all the same.`);
+  }
   // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
   // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
   const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
@@ -347,7 +464,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   return 0;
 }
 
-export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout = console.log, stderr = console.error } = {}) {
+export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout = console.log, stderr = console.error } = {}) {
   if (argv.includes('--help') || argv.includes('-h')) {
     stdout(USAGE);
     return 0;
@@ -443,7 +560,13 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
       return 0;
     }
     const local = documents ? () => ({ ok: true, skipped: true }) : (suite ?? ((dir) => localSuite(run, dir)));
-    return await landCandidate({ run, gitIn, place, main, door, merged, suite: local, sleep, stdout, fail });
+    // The relief file is found as `notify` finds it: the harness home, and the slug of the main checkout.
+    const landed = (candidate, landedPrs) => recordLandings({
+      gitIn, place, main, candidate, merged: landedPrs, now, stdout,
+      home: env.JS_HARNESS_HOME || os.homedir(),
+      slug: projectSlug(mainCheckout((command, gitArgs, options) => run(command, gitArgs, { ...options, encoding: 'utf8' }), cwd)),
+    });
+    return await landCandidate({ run, gitIn, place, main, door, merged, suite: local, sleep, stdout, fail, landed });
   } finally {
     gitIn(cwd, 'worktree', 'remove', '--force', mainPlace);
     gitIn(cwd, 'worktree', 'remove', '--force', place);

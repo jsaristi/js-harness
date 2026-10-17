@@ -4,9 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
-import { circleciState, failedRows, mergeQueueMain } from './merge-queue.mjs';
+import { circleciState, failedRows, landingLines, mergeQueueMain } from './merge-queue.mjs';
 import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
+import { declarationOf } from './lib/rules-change-run.mjs';
+import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
 // would change what they do, so it is left out of every git this file starts (Codex, 2026-10-14).
@@ -913,4 +915,159 @@ test('--dry-run: a candidate of documents alone says the suite would not run on 
   const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
   assert.ok(out.includes(DOCUMENTS_LINE), out.join('\n'));
+});
+
+// The landing line (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 7): a landed `rule/` branch confirms
+// the newest "rule:<id> proposed on <branch>, not landed" relief line of each rule it changed.
+
+const proposed = (id, branch, minute) => `2026-10-16 10:${minute} local (rules change). rule:${id} proposed on ${branch}, not landed: value; source design; supersedes no relief line`;
+
+test('landingLines confirms the newest proposed line of each id on that branch alone, once', () => {
+  const relief = ['# Relief', proposed('a', 'rule/a', '00:00'), proposed('a', 'rule/ab', '01:00'), proposed('ab', 'rule/a', '02:00'), proposed('a', 'rule/a', '03:00')].join('\n');
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a', 'b'], sha: 'abc1234' }), {
+    lines: ['rule:a landed on main abc1234 from rule/a: confirms relief line 5'],
+    none: ['b'],
+  });
+  const again = `${relief}\n2026-10-16 11:00:00 local (merge-queue). rule:a landed on main abc1234 from rule/a: confirms relief line 5\n`;
+  assert.deepEqual(landingLines(again, { branch: 'rule/a', ids: ['a'], sha: 'abc1234' }), { lines: [], none: [] });
+  const newer = `${again}${proposed('a', 'rule/a', '04:00')}\n`;
+  assert.deepEqual(landingLines(newer, { branch: 'rule/a', ids: ['a'], sha: 'def5678' }).lines, ['rule:a landed on main def5678 from rule/a: confirms relief line 7']);
+});
+
+const RULES_DATA = (a) => `export const RULES = ${JSON.stringify([{ id: 'a', value: a }, { id: 'b', value: 2 }], null, 2)};\n`;
+
+/** makeQueueRepo with bin/lib/rules-data.mjs on main and a branch rule/a that changes rule a; the home a temporary
+ * folder whose relief file holds `lines`. `{ root, origin, main, head, env, reliefFile }`. */
+function makeRuleRepo(lines) {
+  const made = makeQueueRepo();
+  const { root } = made;
+  fs.mkdirSync(path.join(root, 'bin', 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), RULES_DATA(1), 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '--quiet', '-m', 'rules on main');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  const main = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'rule/a', main);
+  fs.writeFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), RULES_DATA(5), 'utf8');
+  git(root, 'commit', '--quiet', '-am', 'rule a changes');
+  git(root, 'push', '--quiet', 'origin', 'rule/a');
+  const head = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', main);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-home-'));
+  const slug = projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root));
+  const reliefFile = path.join(home, '.js-harness', 'relief', `${slug}.md`);
+  fs.mkdirSync(path.dirname(reliefFile), { recursive: true });
+  fs.writeFileSync(reliefFile, `${lines.join('\n')}\n`, 'utf8');
+  return { ...made, main, head, env: { JS_HARNESS_HOME: home }, reliefFile };
+}
+
+async function landRule(made, { args = ['--land'], suite = () => ({ ok: true }), wrap = (run) => run, onChecks } = {}) {
+  const { run } = landRunner([pr(1, 'rule/a', made.head)], [[circle('completed', 'success')]], onChecks);
+  const out = [];
+  const code = await mergeQueueMain([...args, '--cwd', made.root], { run: wrap(run), env: made.env, covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  return { code, out };
+}
+
+test('--land of a rule/ branch appends one line that confirms the newest proposal of each rule it changed', async () => {
+  const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00'), proposed('a', 'rule/a', '01:00'), proposed('b', 'rule/a', '02:00')]);
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  const landed = git(made.origin, 'rev-parse', 'main').slice(0, 7);
+  const added = fs.readFileSync(made.reliefFile, 'utf8').split('\n').filter(Boolean).slice(4);
+  assert.equal(added.length, 1, added.join('\n'));
+  assert.match(added[0], new RegExp(`^\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d local \\(merge-queue\\)\\. rule:a landed on main ${landed} from rule/a: confirms relief line 3$`));
+  assert.ok(out.includes(`Relief: ${added[0]}`), out.join('\n'));
+});
+
+/** A push to origin's main from another clone, at the first read of CircleCI: the land then exits 3. */
+const moveMainOf = (origin) => (call) => {
+  if (call !== 0) return;
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-other-'));
+  git(other, 'clone', '--quiet', origin, 'clone');
+  const clone = path.join(other, 'clone');
+  git(clone, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(clone, 'config', 'user.name', 'js-harness test');
+  fs.writeFileSync(path.join(clone, 'z.txt'), 'z\n', 'utf8');
+  git(clone, 'add', '.');
+  git(clone, 'commit', '--quiet', '-m', 'main moved');
+  git(clone, 'push', '--quiet', 'origin', 'HEAD:main');
+};
+
+test('--dry-run, a red land and a land whose main moved (exit 3) of a rule/ branch append no line', async () => {
+  const cases = [[0, () => ({ args: ['--dry-run'] })], [4, () => ({ suite: () => ({ ok: false, said: 'npm run test exited 1' }) })], [3, (made) => ({ onChecks: moveMainOf(made.origin) })]];
+  for (const [exit, options] of cases) {
+    const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00')]);
+    const before = fs.readFileSync(made.reliefFile, 'utf8');
+    const { code, out } = await landRule(made, options(made));
+    assert.equal(code, exit, out.join('\n'));
+    assert.equal(fs.readFileSync(made.reliefFile, 'utf8'), before, out.join('\n'));
+  }
+});
+
+test('a landed rule/ branch with no proposed line appends none and says so', async () => {
+  const made = makeRuleRepo(['# Relief', proposed('a', 'rule/ab', '00:00')]);
+  const before = fs.readFileSync(made.reliefFile, 'utf8');
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.readFileSync(made.reliefFile, 'utf8'), before);
+  assert.ok(out.includes('PR 1 (rule/a) landed with no relief line "rule:a proposed on rule/a, not landed": no landing line is written for it.'), out.join('\n'));
+});
+
+test('a land whose push of main reported a failure, with main the candidate all the same, appends its line', async () => {
+  const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00')]);
+  const lost = failingGit((args) => args[0] === 'push' && args.some((arg) => arg.endsWith(':refs/heads/main')), (run, args, options) => {
+    run('git', args, options);
+    return { status: 1, stdout: '', stderr: 'error: the answer was lost' };
+  });
+  const { code, out } = await landRule(made, { wrap: lost });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('The push of main reported a failure')), out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});
+
+test('a land whose relief file cannot be found after main moved still exits 0 and says main moved', async () => {
+  const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00')]);
+  const before = fs.readFileSync(made.reliefFile, 'utf8');
+  let pushed = false;
+  const lost = (run) => (command, args, options) => {
+    if (command === 'git' && args[0] === 'push' && args.some((arg) => arg.endsWith(':refs/heads/main'))) pushed = true;
+    if (pushed && command === 'git' && args[0] === 'rev-parse' && args.includes('--git-common-dir')) throw new Error('the checkout went away');
+    return run(command, args, options);
+  };
+  const { code, out } = await landRule(made, { wrap: lost });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('Landed:')), out.join('\n'));
+  assert.ok(out.includes('Could not write the landing lines of the relief file (the checkout went away): main moved all the same.'), out.join('\n'));
+  assert.equal(fs.readFileSync(made.reliefFile, 'utf8'), before);
+});
+
+test('landingLines given until confirms only a proposal stamped by then, so a later one stays unconfirmed', () => {
+  const relief = ['# Relief', proposed('a', 'rule/a', '00:00'), proposed('a', 'rule/a', '05:00'), 'not a stamped line rule:a proposed on rule/a, not landed'].join('\n');
+  const until = new Date(2026, 9, 16, 10, 1, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until }), { lines: ['rule:a landed on main abc1234 from rule/a: confirms relief line 2'], none: [] });
+  const early = new Date(2026, 9, 16, 9, 0, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until: early }), { lines: [], none: ['a'] });
+});
+
+test('a land confirms the proposal its tested head holds, not one rules change wrote after that head', async () => {
+  const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00')]);
+  fs.appendFileSync(made.reliefFile, `2099-01-01 00:00:00 local (rules change). rule:a proposed on rule/a, not landed: value; source design; supersedes relief line 2\n`, 'utf8');
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});
+
+test('landingLines given declarations confirms the newest proposal whose declaration the landed head holds', () => {
+  const relief = ['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration aaaaaaaaaaaa`, `${proposed('a', 'rule/a', '01:00')}; declaration bbbbbbbbbbbb`].join('\n');
+  const until = new Date(2026, 9, 16, 11, 0, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'aaaaaaaaaaaa' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'cccccccccccc' } }), { lines: [], none: ['a'] });
+});
+
+test('a land confirms the proposal whose declaration its head holds, not a newer one rules change wrote for another', async () => {
+  const held = declarationOf(RULES_DATA(5), 'a');
+  const made = makeRuleRepo(['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration ${held}`, `${proposed('a', 'rule/a', '05:00')}; declaration 000000000000`]);
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
 });

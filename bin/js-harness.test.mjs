@@ -78,6 +78,12 @@ test('the merge-queue help says each code commit needs its gentle-ai line on its
   assert.match(run(['--help']).stdout, /merge-queue .*Each code commit made after the cut-over is named, by its hash or a range a\.\.b that holds it, on a gentle-ai line its pull request adds to a feature document \(odd\/tasks\), and the queue prints each code commit's Codex record and that line\./);
 });
 
+test('the merge-queue help says a landed rule/ branch confirms its proposal in the relief file, and the check help says a push reports the row rules (T16e, slice c)', () => {
+  const help = run(['--help']).stdout;
+  assert.match(help, /merge-queue .*A landed rule\/ branch appends to the relief file one line that confirms the newest proposal of each rule it changed that its landed head holds./);
+  assert.match(help, /check .*js-harness check --push adds the row rules of the lines the push brings past the remote's default branch, as INFO: the commit refuses, the push reports, the merge refuses\./);
+});
+
 test('the merge-queue help says each pull request merged into the candidate passes main\'s rule rows first (odd/tasks/rule-hierarchy.md, T16e)', () => {
   assert.match(run(['--help']).stdout, /merge-queue .*passes main's rule rows first \(check --door\), and one that fails leaves the batch/);
 });
