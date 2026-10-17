@@ -210,11 +210,16 @@ export function backtickRefusal(command) {
 
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
  * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
- * as it is: a Windows path is written with them. */
-function shellWords(command) {
+ * as it is: a Windows path is written with them. `words.operators` holds the indexes of the words that are operators,
+ * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
+ * a `$(...)` stays in its word. */
+function shellWords(command, { groups = false } = {}) {
   const words = [];
+  const operators = new Set();
+  const operator = (text) => { operators.add(words.length); words.push(text); };
   let word = null;
   let quote = null;
+  let substitutions = 0;
   const pending = [];
   const text = String(command ?? '');
   for (let i = 0; i < text.length; i += 1) {
@@ -222,6 +227,17 @@ function shellWords(command) {
     if (quote !== null) {
       if (c === quote) quote = null;
       else word += c;
+    } else if (groups && c === '$' && text[i + 1] === '(') {
+      word = `${word ?? ''}$(`;
+      substitutions += 1;
+      i += 1;
+    } else if (groups && c === ')' && substitutions > 0) {
+      word += c;
+      substitutions -= 1;
+    } else if (groups && (c === '(' || c === ')')) {
+      if (word !== null) words.push(word);
+      word = null;
+      operator(c);
     } else if (c === "'" || c === '"') {
       quote = c;
       word ??= '';
@@ -247,7 +263,7 @@ function shellWords(command) {
           if ((tabs ? line.replace(/^\t+/, '') : line) === end) break;
         }
       }
-      words.push(';');
+      operator(';');
     } else if (/\s/.test(c)) {
       if (word !== null) words.push(word);
       word = null;
@@ -255,13 +271,14 @@ function shellWords(command) {
       if (word !== null) words.push(word);
       word = null;
       const pair = text[i + 1] === c && c !== ';';
-      words.push(pair ? c + c : c);
+      operator(pair ? c + c : c);
       if (pair) i += 1;
     } else {
       word = (word ?? '') + c;
     }
   }
   if (word !== null) words.push(word);
+  words.operators = operators;
   return words;
 }
 
@@ -347,27 +364,35 @@ const DRIVE_TOP = /^(?:[A-Za-z]:|\/[A-Za-z])(?:[\\/]+[^\\/]+)?[\\/]*$/;
  * JH 22 waited 20 hours on `rm -rf D:/practice-jh22` (odd/tasks/held-sessions.md, S7 and L9). A denial comes back at
  * once. Text in quotes or in a heredoc's body is no command, and an `rm` that is no command's first word is not read. */
 export function driveRootRemovalRefusal(command) {
-  const words = shellWords(command);
+  const words = shellWords(command, { groups: true });
+  const { operators } = words;
   for (let i = 0; i < words.length; i += 1) {
-    const atStart = i === 0 || SEPARATORS.has(words[i - 1]);
-    if (!atStart || (words[i] !== 'rm' && words[i] !== 'rmdir')) continue;
+    const atStart = i === 0 || operators.has(i - 1) || (!operators.has(i - 1) && COMMAND_KEYWORDS.has(words[i - 1]) && (i === 1 || operators.has(i - 2)));
+    if (!atStart || operators.has(i) || (words[i] !== 'rm' && words[i] !== 'rmdir')) continue;
+    // rm takes its options after the paths too (`rm D:/x -rf`), so every option is read before any path.
     let recursive = words[i] === 'rmdir';
     let options = true;
-    for (let at = i + 1; at < words.length && !SEPARATORS.has(words[at]); at += 1) {
+    const paths = [];
+    for (let at = i + 1; at < words.length && !operators.has(at); at += 1) {
       const word = words[at];
       if (options && word === '--') options = false;
       else if (options && word === '--recursive') recursive = true;
       else if (options && /^-[A-Za-z]+$/.test(word)) recursive ||= /[rR]/.test(word);
-      else if (recursive && DRIVE_TOP.test(word)) {
-        return `js-harness guard: ${word} is the top of a drive or a folder at it, and the host asks the user before `
-          + 'removing such a path even in bypass mode: the session would wait on that card until the user answers. '
-          + 'Put practice and scratch folders below the project\'s worktrees folder (for example '
-          + '<repo-parent>/<repo-name>-worktrees/practice/<name>) or in the session\'s scratchpad, and remove them there.';
-      }
+      else paths.push(word);
+    }
+    const top = recursive ? paths.find((word) => DRIVE_TOP.test(word)) : undefined;
+    if (top !== undefined) {
+      return `js-harness guard: ${top} is the top of a drive or a folder at it, and the host asks the user before `
+        + 'removing such a path even in bypass mode: the session would wait on that card until the user answers. '
+        + 'Put practice and scratch folders below the project\'s worktrees folder (for example '
+        + '<repo-parent>/<repo-name>-worktrees/practice/<name>) or in the session\'s scratchpad, and remove them there.';
     }
   }
   return null;
 }
+
+// The words after which a command starts, as after an operator: a group's `{` and the bodies of if, for and while.
+const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
 
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
 export function denial(reason) {
