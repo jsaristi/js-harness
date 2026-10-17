@@ -337,7 +337,9 @@ A day       closed 55.5  reopened 0  added 44.5  removed 1
 
 The throughput review's measure: a fixed table of a window of UTC days, by default yesterday,
 where every row names the record it was read from and a fact no record holds yet says which
-recorder it waits for, never a zero. It is read-only and fetches nothing: main is `origin/main`
+recorder it waits for, never a zero; a record that could not be read, a git process that failed
+included, is named on its row with why. The tasks are each commit of main compared with the one
+before, as `progress` compares them. It is read-only and fetches nothing: main is `origin/main`
 as last fetched (`git merge-tree`, which names the files of a conflicted merge, writes objects
 into the object store). The gates are every project's on the machine, as the gate lock is.
 

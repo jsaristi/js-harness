@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readGateLog } from './lib/gate-log.mjs';
+import { paceLogArgs, parsePaceLog } from './lib/progress-pace.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { recordPath } from './lib/channel.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
@@ -25,6 +26,7 @@ import {
   parseMergeFiles,
   parseMerges,
   prFacts,
+  taskChanges,
   taskCounts,
   throughputRows,
   utcDay,
@@ -63,6 +65,13 @@ const FLAGS_OF = {
   status: ['--cwd', '--home'],
 };
 
+/** Whether `value` is a day of the calendar as `YYYY-MM-DD`: a month 13 does not parse, and a 31st of a month of 30
+ * rolls over to another day. */
+function isDay(value) {
+  const at = Date.parse(`${value}T00:00:00Z`);
+  return DAY.test(value ?? '') && Number.isFinite(at) && utcDay(at) === value;
+}
+
 function parseArgs(argv) {
   const verb = VERBS.has(argv[0]) ? argv[0] : 'table';
   const rest = verb === 'table' ? argv : argv.slice(1);
@@ -77,10 +86,9 @@ function parseArgs(argv) {
     }
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) throw new ThroughputArgError(`${arg} requires a value`);
-    if (['--since', '--until', '--day'].includes(arg) && !(DAY.test(value) && utcDay(Date.parse(`${value}T00:00:00Z`)) === value)) throw new ThroughputArgError(`${arg} takes a day as YYYY-MM-DD: ${value}`);
+    if (['--since', '--until', '--day'].includes(arg) && !isDay(value)) throw new ThroughputArgError(`${arg} takes a day as YYYY-MM-DD: ${value}`);
     if (arg === '--against') {
       const [since, until] = value.split('..');
-      const isDay = (day) => DAY.test(day ?? '') && utcDay(Date.parse(`${day}T00:00:00Z`)) === day;
       if (!isDay(since) || !isDay(until) || !(since < until)) throw new ThroughputArgError(`--against takes the window before as <since>..<until>, each YYYY-MM-DD: ${value}`);
       flags.against = { since, until };
     } else if (arg === '--gate-log') {
@@ -102,8 +110,10 @@ function git(run, root, args) {
 const firstLine = (text) => String(text ?? '').trim().split(/\r?\n/)[0];
 
 /** The facts git holds of `[from, to)`: the merged pull requests, the task counts at both bounds and the merges into
- * branches that conflicted. `{ prs, tasks, conflicts }`, or `{ unavailable }` with why. */
-function gitFacts(run, root, { from, to }) {
+ * branches that conflicted. `{ prs, tasks, conflicts, branchMerges, unread }`, `unread` naming the part of them git
+ * failed to give and why; or `{ unavailable }` with why. */
+function gitFacts(ctx, { from, to }) {
+  const { run, root } = ctx;
   const ref = git(run, root, ['rev-parse', '--verify', '--quiet', 'origin/main']);
   if (ref.error || ref.status !== 0) return { unavailable: ref.error ?? 'origin/main is not there' };
   const since = new Date(from - 24 * 3600 * 1000).toISOString();
@@ -127,19 +137,47 @@ function gitFacts(run, root, { from, to }) {
   };
   const start = countAt(from);
   const end = countAt(to);
+  // What each commit of the day did to the tasks, as progress reads it: the totals at both ends are not throughput.
+  const history = taskHistory(ctx, from);
+  const unread = {};
+  let tasks = null;
+  if (history.unavailable) unread.tasks = history.unavailable;
+  else if (start && end) tasks = { start, end, changes: taskChanges(history.commits, { from, to }) };
 
+  const read = branchConflicts(run, root, { from, to, until });
+  if (read.unavailable) unread.conflicts = read.unavailable;
+  return { prs, tasks, conflicts: read.conflicts ?? [], branchMerges: read.branchMerges ?? 0, unread };
+}
+
+/** The commits of main since `from` with each task document before and after them (`parsePaceLog`'s), or
+ * `{ unavailable }`: read once a run from the earliest day asked, since every day of a window reads the same history. */
+function taskHistory(ctx, from) {
+  if (ctx.history && ctx.history.from <= from) return ctx.history;
+  const read = git(ctx.run, ctx.root, paceLogArgs({ ref: 'origin/main', since: new Date(from).toISOString() }));
+  ctx.history = failed(read) ? { from, unavailable: `git log: ${failed(read)}` } : { from, commits: parsePaceLog(read.stdout) };
+  return ctx.history;
+}
+
+/** Why a git process failed, in one line, or `null` when it exited 0. */
+const failed = (result) => (result.error ? result.error : result.status === 0 ? null : firstLine(result.stderr) || `exit ${result.status}`);
+
+/** The merges into branches on main in `[from, to)` and those that conflicted, rebuilt with `git merge-tree`, which
+ * exits 1 for a conflict; `{ unavailable }` when a git process failed, so a failure is never read as no conflict. */
+function branchConflicts(run, root, { from, to, until }) {
   const all = git(run, root, ['log', '--merges', `--since=${new Date(from).toISOString()}`, `--until=${until}`, '--format=%H%x09%cI%x09%P%x09%s', 'origin/main']);
+  if (failed(all)) return { unavailable: `git log: ${failed(all)}` };
   const conflicts = [];
   let branchMerges = 0;
-  for (const line of String(all.stdout ?? '').split(/\r?\n/)) {
+  for (const line of all.stdout.split(/\r?\n/)) {
     const [commit, at, parents, subject] = line.split('\t');
     if (!commit || /^Merge pull request #/.test(subject ?? '') || !(Date.parse(at) >= from && Date.parse(at) < to)) continue;
     branchMerges += 1;
     const [ours, theirs] = String(parents).split(' ');
     const tree = git(run, root, ['merge-tree', '--write-tree', '--name-only', '--no-messages', ours, theirs]);
     if (tree.status === 1) conflicts.push({ merge: commit, files: conflictFiles(tree.stdout) });
+    else if (failed(tree)) return { unavailable: `git merge-tree: ${failed(tree)}` };
   }
-  return { prs, tasks: start && end ? { start, end } : null, conflicts, branchMerges };
+  return { conflicts, branchMerges };
 }
 
 /** The facts of `day` that a rotating record holds, the only ones a snapshot keeps: the gates. `gateLogs`, when
@@ -161,9 +199,13 @@ function rotatingFacts(day, ctx, gateLogs = null) {
 function appendOnlyFacts(day, ctx) {
   const bounds = dayBounds(day);
   const facts = { prs: [], codex: [], tasks: null, conflicts: [], branchMerges: 0, idle: [], unavailable: {} };
-  const fromGit = gitFacts(ctx.run, ctx.root, bounds);
+  const fromGit = gitFacts(ctx, bounds);
   if (fromGit.unavailable) facts.unavailable.git = fromGit.unavailable;
-  else Object.assign(facts, fromGit);
+  else {
+    const { unread, ...read } = fromGit;
+    Object.assign(facts, read);
+    Object.assign(facts.unavailable, unread);
+  }
   try {
     facts.codex = codexFacts(ctx.readCodexRuns(ctx.root), bounds);
   } catch (err) {

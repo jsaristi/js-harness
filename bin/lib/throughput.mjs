@@ -3,6 +3,8 @@
 // hands it records and the command (bin/throughput.mjs) hands it what it read. The facts and not the figures are
 // what a day keeps, so a median over several days is the median of their facts, never of their daily medians.
 
+import { compareSteps, stepsOf } from './progress-pace.mjs';
+
 const DAY_MS = 24 * 3600 * 1000;
 
 /** `[from, to)` of a UTC day `YYYY-MM-DD`, in ms. */
@@ -198,6 +200,22 @@ export function codexFacts(runs, { from, to }) {
     }));
 }
 
+/** The tasks closed, reopened, added and removed by the commits of `bounds` (`parsePaceLog`'s), each file compared
+ * before and after its commit as `progress` compares it: `{ closed, reopened, added, removed }`. Subtracting the
+ * totals at both ends instead would read a deleted document of done tasks as tasks reopened. */
+export function taskChanges(commits, { from, to }) {
+  const counts = { closed: 0, reopened: 0, added: 0, removed: 0 };
+  for (const commit of commits) {
+    const at = Date.parse(commit.date);
+    if (commit.parents.length === 0 || !(at >= from && at < to)) continue;
+    for (const file of commit.files) {
+      const changed = compareSteps(stepsOf(file.path, file.before), stepsOf(file.path, file.after));
+      for (const kind of Object.keys(counts)) counts[kind] += changed[kind];
+    }
+  }
+  return counts;
+}
+
 /** The checkboxes among `git grep -hE` lines of the task documents: `{ open, done }`, as the measure counted them. */
 export function taskCounts(text) {
   const counts = { open: 0, done: 0 };
@@ -220,13 +238,16 @@ const SOURCES = {
   merge: "git log of origin/main as last fetched; a merge commit is made when its land builds it, before the land's tests",
   gates: 'the gate log (~/.js-harness/gate-log)',
   codex: '<git common dir>/js-harness/codex-review-runs.jsonl',
-  tasks: 'git grep of the checkboxes of odd/tasks/*.md and docs/ROADMAP.md on origin/main',
+  tasks: 'each commit of origin/main compared with the one before, as progress compares them; open: git grep of the checkboxes of odd/tasks/*.md and docs/ROADMAP.md',
   conflicts: 'git merge-tree of each merge into a branch on origin/main',
   channel: "the channel (~/.js-harness/channel): a waiting notice to the same session's next one; a session may keep working meanwhile",
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: 'git', merge: 'git', gates: 'gate log', codex: 'codex', tasks: 'git', conflicts: 'git', channel: 'channel' };
+const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'] };
+
+/** Why `day` could not read `source`, or `undefined`. */
+const unreadOf = (day, source) => UNAVAILABLE_KEY[source].map((key) => day.unavailable?.[key]).find(Boolean);
 
 const minutes = (seconds) => `${Math.round(seconds / 60)} min`;
 const counted = (values) => `(${values.length})`;
@@ -249,7 +270,7 @@ export function throughputRows(days) {
   const all = (key) => days.flatMap((day) => day[key] ?? []);
   const hours = days.length * 24;
   const gates = all('gates');
-  const unread = (source) => days.filter((day) => day.unavailable?.[UNAVAILABLE_KEY[source]]).map((day) => `${day.day} ${day.unavailable[UNAVAILABLE_KEY[source]]}`);
+  const unread = (source) => days.filter((day) => unreadOf(day, source)).map((day) => `${day.day} ${unreadOf(day, source)}`);
   const partial = days.filter((day) => day.partialFrom).map((day) => (Date.parse(day.partialFrom) >= dayBounds(day.day).to ? `partial: ${day.day} not in the gate log` : `partial: ${day.day} from ${day.partialFrom.slice(11, 16)}Z`));
   const row = (label, source, value) => {
     const missing = unread(source);
@@ -288,12 +309,18 @@ export function throughputRows(days) {
   const loads = gates.filter((gate) => gate.lock === 'own' && Number.isFinite(gate.load)).map((gate) => gate.load);
   const codex = all('codex');
   const codexSeconds = codex.map((run) => run.seconds).filter(Number.isFinite);
-  const findings = codex.reduce((sum, run) => sum + (Number.isFinite(run.findings) ? run.findings : 0), 0);
+  // A run that recorded no count of findings, as one before the count was kept, is said apart: it is no zero.
+  const counts = codex.map((run) => run.findings).filter(Number.isFinite);
+  const uncounted = codex.length - counts.length;
+  const noCount = `${uncounted} attempt${uncounted === 1 ? '' : 's'} with no count`;
+  const findings = counts.length ? `${counts.reduce((sum, n) => sum + n, 0)} findings${uncounted ? `, ${noCount}` : ''}` : uncounted ? `findings: ${noCount}` : '0 findings';
   const idle = all('idle');
   const idleMinutes = idle.map((wait) => wait.minutes);
   const longest = [...idle].sort((a, b) => b.minutes - a.minutes)[0];
   const first = days[0]?.tasks?.start;
   const last = days.at(-1)?.tasks?.end;
+  const changes = { closed: 0, reopened: 0, added: 0, removed: 0 };
+  for (const day of days) for (const kind of Object.keys(changes)) changes[kind] += day.tasks?.changes?.[kind] ?? 0;
   const conflicts = all('conflicts');
   const branchMerges = days.reduce((sum, day) => sum + (day.branchMerges ?? 0), 0);
 
@@ -311,13 +338,13 @@ export function throughputRows(days) {
     notRecorded('land phases', 'B2, JH 24', 'one land record per land'),
     row('failing tests', 'gates', topNames(ended.map((gate) => gate.failing), 5).map(([name, n]) => `${name} ×${n}`).join(', ') || 'none'),
     row('load at gate starts', 'gates', loads.length ? `median share ${median(loads).toFixed(2)} (${loads.length}); full at ${loads.filter((share) => share >= 1).length} of ${loads.length}` : 'none'),
-    row('Codex reviews', 'codex', `${codex.length} attempts (${codex.filter((run) => run.part).length} parts), median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all; ${findings} findings`),
+    row('Codex reviews', 'codex', `${codex.length} attempts (${codex.filter((run) => run.part).length} parts), median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all; ${findings}`),
     row('idle upper bound', 'channel', idle.length
       ? `${idle.length} waits, median ${Math.round(median(idleMinutes))} min, ${(idleMinutes.reduce((sum, m) => sum + m, 0) / 60).toFixed(1)} session-h in all; longest: ${longest.title ?? short(longest.session)} ${Math.round(longest.minutes)} min`
       : 'none'),
     notRecorded('idle with nothing armed', 'B8', 'a presence record of each session'),
     notRecorded('tool calls open long', 'G, JH 26', 'a record of the calls the board flags'),
-    row('tasks closed and added', 'tasks', first && last ? `closed ${last.done - first.done}, added ${last.done - first.done + last.open - first.open}, open ${first.open} to ${last.open}` : 'not read'),
+    row('tasks closed and added', 'tasks', first && last ? `${Object.entries(changes).map(([kind, n]) => `${kind} ${n}`).join(', ')}; open ${first.open} to ${last.open}` : 'not read'),
     row('conflicts by file', 'conflicts', `${conflicts.length} of ${branchMerges} merges into branches conflicted${conflicts.length ? `: ${topNames(conflicts.map((merge) => merge.files), 5).map(([file, n]) => `${file} ×${n}`).join(', ')}` : ''}`),
   ];
 }
@@ -350,7 +377,7 @@ const ownEnded = (day) => day.gates.filter((gate) => gate.lock === 'own' && gate
 export function dailyValues(day) {
   const values = {};
   for (const [label, source, read] of DAILY) {
-    const missing = day.unavailable?.[UNAVAILABLE_KEY[source]] || (source === 'gates' && day.partialFrom);
+    const missing = unreadOf(day, source) || (source === 'gates' && day.partialFrom);
     values[label] = missing ? null : round1(read({ prs: [], gates: [], codex: [], ...day }));
   }
   return values;

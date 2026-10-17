@@ -24,7 +24,7 @@ function makeHome(gateLines = []) {
 }
 
 /** A git that answers as a repository whose main merged pull request 7 at 10:30Z on the 16th. */
-function fakeGit({ origin = true } = {}) {
+function fakeGit({ origin = true, branchMerge = null, mergeTree = null, pace = null } = {}) {
   return (command, args) => {
     const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
     if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') return ok(`${ROOT}/.git\n`);
@@ -34,6 +34,10 @@ function fakeGit({ origin = true } = {}) {
     if (args[0] === 'log' && args[1] === '--first-parent') return ok('m7\t2026-10-16T10:30:00Z\tp7 h7\tMerge pull request #7 from feat/x\n');
     if (args[0] === 'show') return ok('h7\t2026-10-16T10:00:00Z\n');
     if (args[0] === 'rev-list') return ok('c1\n');
+    // The history progress reads, one commit compared with the one before (progress-pace.mjs, `paceLogArgs`).
+    if (args[0] === '-c' && args.includes('-U100000')) return pace ?? ok('');
+    if (args[0] === 'merge-tree' && mergeTree) return mergeTree;
+    if (args[0] === 'log' && args[1] === '--merges' && branchMerge) return ok(branchMerge);
     if (args[0] === 'grep') return ok('odd/tasks/a.md:- [ ] T1\nodd/tasks/a.md:- [x] T2\n');
     if (args[0] === 'log') return ok('');
     return { status: 1, stdout: '', stderr: `unexpected git ${args.join(' ')}` };
@@ -244,4 +248,27 @@ test('an unreadable gate log keeps nothing', async () => {
   assert.equal(code, 1, out.join('\n'));
   assert.match(out.join('\n'), /gate log could not be read/);
   assert.equal(fs.existsSync(path.join(home, '.js-harness', 'throughput')), false);
+});
+
+test('a day that is no day of the calendar is a usage error on every option that takes one', async () => {
+  const home = makeHome();
+  for (const argv of [['--since', '2026-13-01'], ['--until', '2026-10-32'], ['snapshot', '--day', '2026-00-10'], ['--against', '2026-13-01..2026-13-02']]) {
+    const { code, stderr } = await run(argv, { home });
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(stderr, /takes (a day|the window before)/, argv.join(' '));
+  }
+});
+
+test('a merge-tree that fails leaves the conflicts row unread, never a count of none', async () => {
+  const home = makeHome(GATES);
+  const git = fakeGit({ branchMerge: "b1\t2026-10-16T12:00:00Z\to1 t1\tMerge branch 'main' into feat/x\n", mergeTree: { status: 129, stdout: '', stderr: 'error: unknown option `write-tree`\n' } });
+  const { stdout } = await run([], { home, git });
+  assert.match(stdout, /conflicts by file +not read: 2026-10-16 git merge-tree: error: unknown option `write-tree`/);
+  assert.match(stdout, /pull requests merged +1 /);
+});
+
+test('a history read that fails leaves the task row unread', async () => {
+  const home = makeHome(GATES);
+  const { stdout } = await run([], { home, git: fakeGit({ pace: { status: 128, stdout: '', stderr: 'fatal: bad object\n' } }) });
+  assert.match(stdout, /tasks closed and added +not read: 2026-10-16 git log: fatal: bad object/);
 });

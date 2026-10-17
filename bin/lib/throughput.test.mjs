@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, median, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskCounts, throughputRows } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, median, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -250,4 +250,43 @@ test('with 7 days a side, a row moved only when the after median lies outside th
   assert.equal(verdict([40, 50, 60, 45, 55, 70, 300]), 'moved down: after median 55, before 90 to 130; chance 25% if nothing changed');
   assert.equal(verdict([100, 95, 92, 140, 150, 160, 99]), 'within the before range 90 to 130');
   assert.throws(() => compareWindows(before, [day(1)]), /equal windows/);
+});
+
+test('the tasks closed and added are each commit of the day compared with the one before, never the totals subtracted', () => {
+  const doc = (lines) => `# F\n\n## Tasks\n\n${lines.join('\n')}\n`;
+  const ten = Array.from({ length: 10 }, (_, n) => `- [x] T${n + 1} done`);
+  const commits = [
+    // Deleting a document of ten done tasks removes ten and closes none.
+    { date: '2026-10-16T12:00:00Z', parents: ['p'], files: [{ path: 'odd/tasks/old.md', before: doc(ten), after: null }] },
+    // A task closed and then removed counts as closed, and then as removed.
+    { date: '2026-10-16T10:00:00Z', parents: ['p'], files: [{ path: 'odd/tasks/a.md', before: doc(['- [ ] T1 one']), after: doc(['- [x] T1 one', '- [ ] T2 two']) }] },
+    { date: '2026-10-16T11:00:00Z', parents: ['p'], files: [{ path: 'odd/tasks/a.md', before: doc(['- [x] T1 one', '- [ ] T2 two']), after: doc(['- [ ] T2 two']) }] },
+    // A commit outside the day counts nothing in it.
+    { date: '2026-10-15T23:00:00Z', parents: ['p'], files: [{ path: 'odd/tasks/a.md', before: null, after: doc(['- [x] T9 x']) }] },
+  ];
+  assert.deepEqual(taskChanges(commits, dayBounds(DAY)), { closed: 1, reopened: 0, added: 1, removed: 11 });
+});
+
+test('the task row sums each day\'s changes, and a task read that failed says so instead of a figure', () => {
+  const tasks = (open, changes) => ({ start: { open, done: 0 }, end: { open: open + 1, done: 0 }, changes });
+  const rows = throughputRows([
+    dayOf({ tasks: tasks(5, { closed: 2, reopened: 1, added: 3, removed: 10 }) }),
+    dayOf({ day: '2026-10-17', tasks: tasks(6, { closed: 1, reopened: 0, added: 0, removed: 0 }) }),
+  ]);
+  assert.equal(rowOf(rows, 'tasks closed and added').value, 'closed 3, reopened 1, added 3, removed 10; open 5 to 7');
+  const failed = throughputRows([dayOf({ unavailable: { tasks: 'git log: exit 128' } })]);
+  assert.equal(rowOf(failed, 'tasks closed and added').value, `not read: ${DAY} git log: exit 128`);
+});
+
+test('a merge-tree that failed leaves the conflicts unread, never a measured zero', () => {
+  const rows = throughputRows([dayOf({ branchMerges: 4, unavailable: { conflicts: 'git merge-tree: exit 128' } })]);
+  assert.equal(rowOf(rows, 'conflicts by file').value, `not read: ${DAY} git merge-tree: exit 128`);
+  assert.match(rowOf(rows, 'pull requests merged').value, /^0 /);
+});
+
+test('a Codex run that recorded no count of findings is not counted as none', () => {
+  const run = (findings) => ({ startedAt: '2026-10-16T08:00:00Z', seconds: 60, outcome: 'reviewed', findings, part: false });
+  assert.match(rowOf(throughputRows([dayOf({ codex: [run(2), run(null)] })]), 'Codex reviews').value, /; 2 findings, 1 attempt with no count$/);
+  assert.match(rowOf(throughputRows([dayOf({ codex: [run(null), run(null)] })]), 'Codex reviews').value, /; findings: 2 attempts with no count$/);
+  assert.match(rowOf(throughputRows([dayOf({ codex: [run(0)] })]), 'Codex reviews').value, /; 0 findings$/);
 });
