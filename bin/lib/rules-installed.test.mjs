@@ -123,6 +123,9 @@ test("a pinned project and a copy whose own version cannot be read give unknown,
   const row = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '0.1.0' }, version: null, online: true, fetch: refusing(urls) });
   assert.equal(row.upToDate, 'unknown');
   assert.deepEqual(urls, []);
+  // Offline nothing is compared, so the row stays n/a whatever the copy knows of its version.
+  const offline = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '0.1.0' }, version: null, online: false, fetch: refusing(urls) });
+  assert.equal(offline.upToDate, 'n/a');
   // With no pin there is nothing to compare the copy's version with, so the row still reads main's list.
   const unpinned = await harnessRulesRow({ project: os.tmpdir(), version: null, online: true, fetch: answering(200, writeRules(RULES), urls) });
   assert.equal(unpinned.upToDate, 'ok');

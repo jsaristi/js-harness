@@ -2187,8 +2187,10 @@ test("an online doctor asks for main's list while the latest versions are still 
         mainAsked();
         return { ok: true, status: 200, text: async () => writeRules(RULES) };
       }
-      const waited = await Promise.race([asked.then(() => 'asked'), new Promise((resolve) => setTimeout(resolve, 1000, 'gave up'))]);
-      lookups.push(waited);
+      let timer;
+      const gaveUp = new Promise((resolve) => { timer = setTimeout(resolve, 1000, 'gave up'); });
+      lookups.push(await Promise.race([asked.then(() => 'asked'), gaveUp]));
+      clearTimeout(timer);
       throw new Error('network disabled in tests');
     };
     await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });

@@ -106,11 +106,11 @@ export async function harnessRulesRow({ project, declared, env = {}, online, spa
   } else {
     const repo = env.JS_HARNESS_REPO;
     if (repo !== undefined && repo !== DEFAULT_REPO) return row('n/a');
+    if (!online) return row('n/a');
     const pinned = typeof declared?.version === 'string';
     // A copy whose own version cannot be read cannot tell a pin of its version from a pin of another one.
     if (pinned && version === null) return row('unknown');
     if (pinned && declared.version !== version) return row('n/a');
-    if (!online) return row('n/a');
     main = await listOnGithub(fetchImpl);
     if (main === null) return row('unknown');
   }
