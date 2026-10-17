@@ -137,6 +137,20 @@ test('a red run fails the gate with the end of its failed log', async () => {
   }
 });
 
+test('a red run\'s log loses gh\'s job, step and time before each line, and keeps the failing tests\' list the end would cut', async () => {
+  const p = project();
+  try {
+    const prefix = 'gate\tRun the gate\t2026-10-17T05:00:00.0000000Z ';
+    const lines = ['✖ failing tests:', '', '✖ the table reads a day (12.5ms)', ...Array.from({ length: 120 }, (_, i) => `detail ${i}`)];
+    const gh = fakeGh({ runs: [[RUN]], views: [{ ...RUN, status: 'completed', conclusion: 'failure' }], log: lines.map((line) => prefix + line).join('\n') });
+    const result = await runCiGate(options(p, gh, clock()));
+    assert.match(result.output, /^✖ failing tests:\n\n✖ the table reads a day \(12\.5ms\)\ndetail 0\n/);
+    assert.doesNotMatch(result.output, /Run the gate/);
+  } finally {
+    p.done();
+  }
+});
+
 test('a run that never starts, or ends neither green nor red, is no answer: the gate runs here', async () => {
   const p = project();
   try {
