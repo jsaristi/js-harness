@@ -727,6 +727,10 @@ test('--full goes with --global only, exit 2, and stays an unknown flag of sync'
   }
   const value = await captureConsole(() => uninstallMain(['--global', '--home', '--full']));
   assert.deepEqual([value.code, value.errLines[0].split('\n')[0]], [2, '--home requires a value'], 'as before: a value is never a flag');
+  for (const flag of ['--home', '--cwd']) {
+    const inside = await captureConsole(() => uninstallMain(['--global', flag, '--full', path.join(os.tmpdir(), 'other')]));
+    assert.deepEqual([inside.code, inside.errLines[0].split('\n')[0]], [2, `${flag} requires a value`], `${flag} --full is a missing value, not a full uninstall`);
+  }
   const synced = await captureConsole(() => syncMain(['--global', '--full']));
   assert.equal(synced.code, 2);
   assert.ok(synced.errLines[0].startsWith('unknown flag: --full'), synced.errLines.join('\n'));
@@ -742,7 +746,7 @@ test('uninstallMain keeps a project under a memory pass with the line that can r
     fs.writeFileSync(path.join(killed, 'lock'), JSON.stringify({ stamp: '20261016T090000000Z', pid: 4343 }));
     const lines = [
       `kept ${killed}: ${path.join(killed, 'lock')} holds no finished plan (pid 4343); if that process is not running, remove the file and uninstall again`,
-      `kept ${planned}: a memory pass is planned (20261015T120606108Z), in C:/memory; run js-harness memory verify or memory undo 20261015T120606108Z there, then uninstall again`,
+      `kept ${planned}: a memory pass is planned (20261015T120606108Z) for the memory folder C:/memory; run js-harness memory verify or memory undo 20261015T120606108Z in its project, then uninstall again`,
     ];
     const normal = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.deepEqual([normal.code, normal.outLines, normal.errLines], [1, [], lines]);

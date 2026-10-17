@@ -296,8 +296,9 @@ tells him to remove a kept folder by hand.
    is none, else `{ stamp, pid, manifest }` with `stamp` null for a lock that is empty or does not
    parse, and `manifest` whether that stamp's `manifest.json` exists. Its line follows what can release
    it:
-   - a stamp with a manifest: "a memory pass is planned (<stamp>), in <the memory folder the manifest
-     records>; run js-harness memory verify or memory undo <stamp> there, then uninstall again";
+   - a stamp with a manifest: "a memory pass is planned (<stamp>) for the memory folder <the memory
+     folder the manifest records>; run js-harness memory verify or memory undo <stamp> in its project,
+     then uninstall again" (verify and undo run from the project's checkout, not from that folder);
    - an empty or unreadable lock, or a stamp with no manifest (a plan killed between its lock and its
      snapshot, which verify and undo cannot release): "<lock path> holds no finished plan (pid <pid>);
      if that process is not running, remove the file and uninstall again".
@@ -553,10 +554,15 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   (`review-d7256531515c8365`, acknowledged). Their warnings are fixed in the commit after it: the full uninstall reads
   a project's lock before its snapshots, so one it cannot look at is still seen under a pass, and an undo whose
   folder was moved away names the uninstall's marker. Advisories left open, all needing a filesystem error or a race
-  of milliseconds: `dueNotice` checks the marker and then writes its stamp, with no lock between; the hash check of
-  an undo does not cover `after-index.txt`; a stale marker with no folder blocks and names the folder. State for a
+  of milliseconds: `dueNotice` checks the marker and then writes its stamp, with no lock between; a stale marker with no folder blocks and names the folder. State for a
   resume: next the gentle-ai assess of the last commit, Codex over `155af74^..HEAD` reading `2e082ca`, a PR, tell
   the lead. L6.2 is answered (L7).
+- T10 after Codex (e36005a..7fe1b24, recorded): four P2 findings open, to fix test first in one commit: the locked
+  line points at the memory folder instead of the project; `--home --full <path>` slips past the value check; `lockLine`
+  of a lock released meanwhile throws; the damage check of an undo skips `after-index.txt`. All four fixed, each
+  seen RED first: the line names the project, a `--full` right after `--cwd`/`--home` is that flag's missing value,
+  `lockLine` of a released lock says to run again, and an undo refuses a snapshot without `after-index.txt`.
+  Per file: memory-pass 30, install 77 pass. Then assess, Codex, PR.
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
   to L6.1; L6.2 adds a flag only if he wants one. The folder at uninstall and the board row are on

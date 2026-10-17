@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { extractQuotes, PassError, planPass, readLock, undoPass, verifyPass } from './memory-pass.mjs';
+import { extractQuotes, lockLine, PassError, planPass, readLock, undoPass, verifyPass } from './memory-pass.mjs';
 import { purgeMarker, readJournal } from './memory-hygiene.mjs';
 
 const NOW = Date.parse('2026-10-15T09:00:00Z');
@@ -380,6 +380,21 @@ test('an undo from a damaged snapshot is refused by name before it writes anythi
     verifyPass({ folder, stateDir, stamp, now: NOW });
     fs.rmSync(path.join(stateDir, 'snapshots', stamp, 'files', 'MEMORY.md'));
     assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError && /damaged/.test(err.message) && err.message.includes('MEMORY.md'));
+    assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n');
+  });
+});
+
+test('lockLine of a lock released between the refused write and its reading says to run again, never throws', () => {
+  assert.match(lockLine('/state', null), /released just now; run this again/);
+});
+
+test('an undo from a snapshot whose after-index is gone is refused as damaged, before it writes anything', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    write('MEMORY.md', '- [A](a.md) — a\n');
+    verifyPass({ folder, stateDir, stamp, now: NOW });
+    fs.rmSync(path.join(stateDir, 'snapshots', stamp, 'after-index.txt'));
+    assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError && /damaged/.test(err.message) && err.message.includes('after-index.txt'));
     assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n');
   });
 });

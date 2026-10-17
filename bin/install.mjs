@@ -78,7 +78,7 @@ function memoryKeptLine(folder) {
   switch (folder.reason) {
     case 'locked':
       return folder.stamp !== null && folder.manifest
-        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}), in ${folder.folder ?? 'the memory folder its plan names'}; run js-harness memory verify or memory undo ${folder.stamp} there, then uninstall again`
+        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; run js-harness memory verify or memory undo ${folder.stamp} in its project, then uninstall again`
         : `kept ${folder.path}: ${folder.lock} holds no finished plan (pid ${folder.pid ?? 'unknown'}); if that process is not running, remove the file and uninstall again`;
     case 'locked-whole':
       return `kept ${folder.path}: --full removes it in one piece, and a project in it is under a memory pass; nothing of it was removed`;
@@ -405,11 +405,12 @@ export async function syncMain(argv, env = process.env, deps = {}) {
  * for the machine one — each ignores what it does not use. */
 export async function uninstallMain(argv, env = process.env, deps = {}) {
   // `--full` is uninstall's alone (D7.3 of odd/tasks/memory-hygiene.md): taken out before the flags `sync` shares.
-  // It is never the value of `--cwd` or `--home`, which refuse a value that starts with `--`.
-  const full = argv.includes('--full');
+  // One right after `--cwd` or `--home` stays, so that flag still refuses it as a value that starts with `--`.
+  const isFull = (token, i) => token === '--full' && argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
+  const full = argv.some(isFull);
   let parsed;
   try {
-    parsed = parseScopeArgs(argv.filter((token) => token !== '--full'), env);
+    parsed = parseScopeArgs(argv.filter((token, i) => !isFull(token, i)), env);
   } catch (err) {
     console.error(`${err.message}\n\n${UNINSTALL_USAGE}`);
     return 2;
