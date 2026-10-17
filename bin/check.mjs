@@ -19,6 +19,7 @@ import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { mergeTurn, turnsCheaper } from './lib/codex-review-turns.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
@@ -2302,14 +2303,24 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   const atMerge = merge === null ? null : uncovered.find((commit) => commit.id === tip);
   const { start, before } = atMerge ? { start: merge.from, before: atMerge } : range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
   const baseArg = before === null ? base : `${before.shortId}^`;
-  const size = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
+  const one = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
+  // A merge of main below HEAD, after code commits that each have a record, is reviewed in two turns where they
+  // cost less than the one review (`mergeTurn`, `turnsCheaper`): the command decides it so, and so does this.
+  const turn = atMerge || one === null || range.unknown || range.from === null ? null : mergeTurn(cwd, { given: range.from, tip, uncovered, spawn, remote });
+  // A merge that has the review off cannot be a turn of its own, as the command says of it (`cutInTurns`).
+  const turnable = turn !== null && codexSwitchAt(gitIn(cwd, spawn), turn.merge).value !== 'off';
+  const turnSizes = turnable ? [reviewSize(spawn, cwd, turn.from, turn.merge, turn), reviewSize(spawn, cwd, turn.merge, tip)] : null;
+  const inTurns = turnSizes !== null && turnSizes.every((each) => each !== null) && turnsCheaper(one, turnSizes);
+  const both = (key) => turnSizes[0][key] + turnSizes[1][key];
+  const size = inTurns ? { parts: both('parts'), changedLines: both('changedLines'), files: both('files'), leftOut: both('leftOut') } : one;
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
   const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
   let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;
   if (size?.parts === 0) sized = `the review of ${baseArg}..HEAD has no part today, since the range changes no file ${size.leftOut > 0 ? 'a review reads ' : ''}as a whole`;
   else if (size) {
+    const what = inTurns ? `2 turns today, the merge ${turn.merge.slice(0, 7)} by what was written in it and then the commits after it: ${counted(size.parts, 'part')}` : `${counted(size.parts, 'part')} today`;
     sized =
-      `the review of ${baseArg}..HEAD is ${counted(size.parts, 'part')} today, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +
+      `the review of ${baseArg}..HEAD is ${what}, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +
       (over ? `, already more parts than ${partsBound({ maxParts: MAX_PARTS_WITHOUT_FLAG, maxPartsGiven: false })}` : '');
   }
   return row(`no Codex review record for ${uncovered.length} of ${counted(codeCommits.length, 'code commit')} since ${base}: ${sized}${note}`, [

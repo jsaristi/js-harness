@@ -696,8 +696,8 @@ review covers everything the merge brought, code that already had its review.
   parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
   in its first part. A merge is read by what was written in it only at HEAD, so a detached
   worktree at c4b7a37 reviewed it in 1 part of 18 lines
-- Control: check — bin/codex-review.test.mjs — "a run from a merge of the default branch below HEAD
-  names the worktree at the merge" — since 2026-10-16
+- Control: check — bin/codex-review.test.mjs — "is planned in two turns: the merge by what was
+  written in it" — since 2026-10-16
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he
