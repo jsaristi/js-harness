@@ -23,6 +23,7 @@ import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
 import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
+import { worktreesInMain } from './lib/worktrees.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -196,7 +197,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
     spawn,
     fetch: fetchImpl,
   });
-  const withUnseen = deps.unseen ? [...rows, rules, await unseenRow(deps.unseen, project)] : [...rows, rules];
+  const withUnseenOnly = deps.unseen ? [...rows, rules, await unseenRow(deps.unseen, project)] : [...rows, rules];
+  // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.
+  const withUnseen = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
   const withHost = deps.host ? [...withUnseen, hostRow(deps.host, home, now)] : withUnseen;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   if (!deps.gentleAiSnapshots) return withStack;
@@ -252,6 +255,22 @@ async function unseenRow(unseen, cwd) {
   return { ...row, claude: 'stale', fix: { claude: [`unseen: ${toClear.length} to clear: run js-harness unseen`, ...toClear] } };
 }
 
+/** The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main holds, clean and idle,
+ * that no land removed, a gap with the command that removes them and each one; `unknown` when git cannot say. */
+function worktreesRow(worktrees, project) {
+  const row = { id: 'worktrees', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let found;
+  try {
+    found = worktrees(project);
+  } catch {
+    found = null;
+  }
+  if (!Array.isArray(found)) return { ...row, project: 'unknown' };
+  if (found.length === 0) return row;
+  const count = `${found.length} worktree${found.length === 1 ? '' : 's'}`;
+  return { ...row, project: 'stale', fix: { project: [`${count} on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them`, ...found.map((tree) => `${tree.path} (${tree.branch})`)] } };
+}
+
 /** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update and gentle-ai-sync rows. Their checks are
  * given only here, so `doctorMain` alone keeps the rows its callers give it. */
 export function doctorCommand(argv) {
@@ -260,6 +279,7 @@ export function doctorCommand(argv) {
     host: (home) => readHostVersions({ home }),
     gentleAiSnapshots: (home) => claudeMdSnapshots(home),
     stackUpdate: true,
+    worktrees: (cwd) => worktreesInMain({ cwd }),
   });
 }
 

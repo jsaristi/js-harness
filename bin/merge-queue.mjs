@@ -21,7 +21,7 @@ import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 
-export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
+export const USAGE = `Usage: js-harness merge-queue --dry-run | --land | --prune [--cwd <path>]
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
 number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
@@ -65,7 +65,10 @@ After it lands, a land removes the worktree of each pull request it landed (git 
 when its head is in the main it pushed, git status shows nothing, ignored files included, its index has not
 changed for 10 minutes, and it is not under .claude/worktrees, the main one, locked, or the one the land runs
 from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
-no exit.`;
+no exit.
+--prune fetches origin and removes, by the same rule, every worktree on a branch origin/main holds, whatever
+landed it; it asks about no pull request, moves nothing, writes no record and exits 0 unless git cannot fetch or
+list the worktrees.`;
 
 const TIMEOUT_MS = 60_000;
 
@@ -117,15 +120,16 @@ function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
 }
 
 function parseArgs(argv) {
-  const args = { dryRun: false, land: false, cwd: process.cwd() };
+  const args = { dryRun: false, land: false, prune: false, cwd: process.cwd() };
   for (let at = 0; at < argv.length; at += 1) {
     if (argv[at] === '--dry-run') args.dryRun = true;
     else if (argv[at] === '--land') args.land = true;
+    else if (argv[at] === '--prune') args.prune = true;
     else if (argv[at] === '--cwd' && at + 1 < argv.length) args.cwd = argv[(at += 1)];
     else return null;
   }
   // One mode, named: a run that pushes main is never what a bare command does.
-  return args.dryRun === args.land ? null : args;
+  return [args.dryRun, args.land, args.prune].filter(Boolean).length === 1 ? args : null;
 }
 
 /** How long the queue waits for CircleCI's result on a candidate, and how often it asks. */
@@ -661,6 +665,34 @@ function removeLandedWorktrees({ cwd, run, now, log, stdout }) {
   }
 }
 
+/** `--prune`: removes every worktree `removableWorktrees` gives against origin/main once fetched, whatever landed its
+ * branch (odd/tasks/land-unattended.md, T10), as a land removes those of its own pull requests. No land record. */
+function pruneRun(args, { run = spawnSync, now = Date.now, stdout, stderr }) {
+  const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
+  if (!gitIn(args.cwd, 'fetch', '-q', 'origin').ok) {
+    stderr('merge-queue: could not fetch origin.');
+    return 1;
+  }
+  const base = gitIn(args.cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
+  const found = base ? removableWorktrees({ cwd: args.cwd, base, gitIn, now }) : null;
+  if (found === null) {
+    stderr(`merge-queue: could not ${base ? 'list the worktrees' : 'read origin/main'}: none was removed.`);
+    return 1;
+  }
+  let removed = 0;
+  for (const tree of found) {
+    const done = gitIn(args.cwd, 'worktree', 'remove', tree.path);
+    if (!done.ok) {
+      stdout(`Could not remove the worktree at ${tree.path} (${done.err.split('\n')[0] || 'git gave no reason'}): it stays.`);
+      continue;
+    }
+    removed += 1;
+    stdout(`Removed the worktree at ${tree.path}: its branch ${tree.branch} is in origin/main, and the worktree was clean and idle. The branch stays.`);
+  }
+  stdout(`${removed} worktree${removed === 1 ? '' : 's'} removed.`);
+  return 0;
+}
+
 export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   const { env = process.env, now = Date.now, stdout: printOut = console.log, stderr: printErr = console.error } = deps;
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -672,6 +704,7 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     printErr(USAGE);
     return 2;
   }
+  if (args.prune) return pruneRun(args, { ...deps, stdout: printOut, stderr: printErr });
   // Every line the run prints passes through the land's record, which keeps the last as its `said`.
   const log = landLog({ now, session: env.CLAUDE_CODE_SESSION_ID || null });
   const stdout = (line) => {
