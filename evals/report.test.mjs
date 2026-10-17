@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  CODEX_LIST_PRICES, ReportError, USAGE, buildCells, buildComparison, buildReport, compareCells, estimateCodexCost, incompleteCells, loadRuns, reportMain, trialTokens,
+  CODEX_LIST_PRICES, ReportError, USAGE, buildCells, buildComparison, buildReport, checkDiscriminating, checkRuns, compareCells, formatReport, estimateCodexCost, incompleteCells, loadRuns, reportMain, trialTokens,
 } from './report.mjs';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-report-test-'));
@@ -905,10 +905,111 @@ test('runs that both hold current trials and differ in setup are refused; a run 
   assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs(), { setup: setupA }), b: docOf('b', currentOf('gamma'), { setup: setupA }) })), 'the same setup');
 });
 
+test('an arm taken out of current runs on its template, so a run of its trials alone shares the setup of the current runs', () => {
+  // Read as runs directly: loading a file of arm trials waits for the report's arms section (C5).
+  const runs = [
+    { name: 'a', doc: docOf('a', [trial({ task: 'alpha', config: 'current' })], { setup: { sha256: 'a'.repeat(64), items: {} } }) },
+    { name: 'b', doc: docOf('b', [trial({ task: 'beta', config: 'current-without-skills' })], { setup: { sha256: 'b'.repeat(64), items: {} } }) },
+  ];
+  assert.throws(() => checkRuns(runs), /runs a and b differ in setup/);
+});
+
 test('the setups are compared against the first run that holds current trials, whatever the order of the runs', () => {
   const currentOf = (task, setup) => docOf(task, [trial({ task, config: 'current' })], { setup });
   const message = refusal(() => buildReport(loadRuns({ dir: resultsDir({
     a: docOf('a', [trial({ task: 'alpha' })]), b: currentOf('beta', { sha256: 'a'.repeat(64), items: {} }), c: currentOf('gamma', { sha256: 'b'.repeat(64), items: {} }),
   }) })));
   assert.match(message, /runs b and c differ in setup/);
+});
+
+// ---- the arms of one component (G2 of `odd/tasks/future-model-protocol.md`, C5) ---------------------------------
+
+/** `report` without its arms section: what the minimal-against-current report is. */
+const withoutArms = ({ arms, ...rest }) => rest;
+/** The report's text before its arms section, without the line that names the runs. */
+const mainText = (text) => text.split('\nArms of one component')[0].replace(/^runs: .*\n/, '');
+
+test('a report without arm trials has no arms section, and an arm beside its runs leaves their table, JSON and gate as they were', () => {
+  const sides = [
+    ['claude', (name, trials) => docOf(name, trials), abTrials(), 'current-without-skills'],
+    ['codex', (name, trials) => codexDocOf(name, trials), codexAb(), 'current-without-agents-md'],
+  ];
+  for (const [label, docFor, trials, arm] of sides) {
+    const plain = buildReport(loadRuns({ dir: resultsDir({ ab: docFor('ab', trials) }) }));
+    assert.equal('arms' in plain, false, label);
+    assert.doesNotMatch(formatReport(plain), /Arms of one component/, label);
+    const armRun = docFor('arm', trials.filter((entry) => entry.config === 'current').map((entry) => ({ ...entry, config: arm })));
+    const widened = buildReport(loadRuns({ dir: resultsDir({ ab: docFor('ab', trials), arm: armRun }) }));
+    assert.ok(Array.isArray(widened.arms), label);
+    assert.deepEqual(withoutArms(widened), { ...plain, runs: ['ab', 'arm'] }, label);
+    assert.deepEqual(checkDiscriminating(widened, 3), checkDiscriminating(plain, 3), label);
+    assert.equal(mainText(formatReport(widened, { minDiscriminating: 3 })), mainText(formatReport(plain, { minDiscriminating: 3 })), label);
+  }
+});
+
+/** The trials of a base and its arm for one task and effort. */
+const armTrials = (arm, base = {}, with_ = {}, shared = {}) => [
+  ...cellTrials({ config: 'current', ...shared, ...base }),
+  ...cellTrials({ config: arm, ...shared, ...with_ }),
+];
+
+test('an arm is compared with its base per task and effort, the verdict named "with X" or "without X", with a summary line', () => {
+  const trials = [
+    ...armTrials('current-without-skills', {}, { scores: 0.5 }, { task: 'alpha' }),
+    ...armTrials('current-without-skills', { costs: [1000, 1100, 900] }, { costs: [500, 600, 400] }, { task: 'beta' }),
+    ...cellTrials({ config: 'minimal', task: 'alpha' }),
+  ];
+  const report = buildReport([{ name: 'run', file: 'run.json', doc: docOf('run', trials) }]);
+  assert.equal(report.arms.length, 1);
+  const [section] = report.arms;
+  assert.deepEqual({ ...section, efforts: section.efforts.length }, { arm: 'current-without-skills', base: 'current', direction: 'without', components: ['skills'], efforts: 1 });
+  const [{ effort, rows, summary }] = section.efforts;
+  assert.equal(effort, 'medium');
+  assert.deepEqual(rows.map((row) => [row.task, row.verdict, row.winner]), [['alpha', 'score', 'with'], ['beta', 'cost', 'without']]);
+  assert.equal(rows[0].with.config, 'current');
+  assert.equal(rows[0].without.config, 'current-without-skills');
+  assert.deepEqual({ ...summary, total: undefined }, { tasks: 2, higher: { with: 1, without: 0 }, cheaper: { with: 0, without: 1 }, total: undefined, ratio: 2000 / 1500 });
+  assert.deepEqual(summary.total.with.usd, 2000);
+  assert.deepEqual(summary.total.without.usd, 1500);
+  near(summary.total.with.se, Math.sqrt((100 * 100) / 3), 'the spread of the total with skills');
+  near(summary.total.without.se, Math.sqrt((100 * 100) / 3), 'the spread of the total without skills');
+  // The minimal-against-current table holds the tasks of minimal and current only.
+  assert.deepEqual(report.efforts.map(({ rows: main }) => main.map((row) => row.task)), [['alpha', 'beta']]);
+
+  const text = formatReport(report);
+  assert.match(text, /Arms of one component/);
+  assert.match(text, /current-without-skills, against current/);
+  assert.match(text, /alpha .* score: with skills/);
+  assert.match(text, /beta .* cost: without skills/);
+  assert.match(text, /skills at medium: scores higher with it on 1 of 2 tasks and without it on 0; total cost \$2000\.00 ±57\.74 with it, \$1500\.00 ±57\.74 without, with\/without 1\.33x/);
+});
+
+test('a minimal-with arm puts its component in: its side is "with X", and the base is "without X"', () => {
+  const trials = [
+    ...cellTrials({ config: 'minimal', task: 'alpha', scores: 0.5 }),
+    ...cellTrials({ config: 'minimal-with-mcp-engram', task: 'alpha' }),
+  ];
+  const [section] = buildReport([{ name: 'run', file: 'run.json', doc: docOf('run', trials) }]).arms;
+  assert.deepEqual([section.base, section.direction, section.components], ['minimal', 'with', ['mcp-engram']]);
+  const [row] = section.efforts[0].rows;
+  assert.deepEqual([row.with.config, row.without.config, row.verdict, row.winner], ['minimal-with-mcp-engram', 'minimal', 'score', 'with']);
+});
+
+test('a config that is neither a base nor an arm the agent takes is still refused, naming what the report compares', () => {
+  for (const config of ['bare', 'current-without-nothing', 'current-without-agents-md']) {
+    const message = refusal(() => loadRuns({ dir: resultsDir({ a: docOf('a', [trial({ config })]) }) }));
+    assert.match(message, new RegExp(`config "${config}"`), config);
+    assert.match(message, /minimal and current, and the arms of one component/, config);
+  }
+});
+
+test('an arm whose base has no trial in the runs is refused, so neither gate passes on a report with no base to check', () => {
+  for (const [config, base] of [['current-without-skills', 'current'], ['minimal-with-mcp-engram', 'minimal']]) {
+    const runs = [{ name: 'run', file: 'run.json', doc: docOf('run', [...cellTrials({ config }), ...cellTrials({ config: base === 'current' ? 'minimal' : 'current' })]) }];
+    const message = refusal(() => buildReport(runs));
+    assert.match(message, new RegExp(`${config}`), config);
+    assert.match(message, new RegExp(`no trial of its base, ${base}`), config);
+  }
+  const alone = [{ name: 'run', file: 'run.json', doc: docOf('run', cellTrials({ config: 'current-without-skills' })) }];
+  assert.match(refusal(() => buildReport(alone)), /no trial of its base, current/);
 });

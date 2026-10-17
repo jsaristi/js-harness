@@ -112,7 +112,8 @@ export function codexMinimalConfig(options) {
  * it is trusted, and keeps that trust in `config.toml` under the absolute path of the `hooks.json` that
  * declares it, so in a trial home, under another path, the same hooks would be new and skipped. The flag makes
  * them run as they do for him. ASSUMED, for the real trials to settle: that it runs nothing he has not
- * trusted (a plugin's hooks have no entry of that kind in the real `config.toml`). */
-export function codexCurrentConfig({ seed, ...options } = {}) {
-  return buildCodexConfig('current', options, ['--dangerously-bypass-hook-trust'], seed);
+ * trusted (a plugin's hooks have no entry of that kind in the real `config.toml`). An arm of one component
+ * (`evals/arms.mjs`) is this config under its own `name`, with a seed that takes its component out. */
+export function codexCurrentConfig({ seed, name = 'current', ...options } = {}) {
+  return buildCodexConfig(name, options, ['--dangerously-bypass-hook-trust'], seed);
 }

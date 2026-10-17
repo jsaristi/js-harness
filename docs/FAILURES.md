@@ -115,6 +115,8 @@ one runs.
   over 16 worktrees (claimed by JH 5)
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — a session that knew the rule ran
   `js-harness sessions` once while another session's gate ran
+- Seen: 2026-10-15 — odd/tasks/future-model-protocol.md, L17 — JH 14 chained a board read after a
+  test file's output while the gate of another worktree ran; it passed 120 s and was stopped
 - Control: protocol — bin/lib/manifest.mjs — "a whole test suite, a measure, a read of the board and
   a sub-agent that runs tests wait for the gate to end" — since 2026-10-14
 

@@ -76,6 +76,14 @@ matters, who holds it, and where it was seen.
   nothing ran; the command hung and was stopped). JH 12, 2026-10-14. The same family as the memory
   note that a heredoc eats backslashes: text with backticks or backslashes goes through the editor's
   Write and Edit, never a shell string. A candidate for a check or a protocol line; unassigned.
+- A `$`` in the replacement of a JavaScript `String.replace` inserts the text ahead of the match:
+  a design appended to JH 14's feature document with a script carried the runner's name pattern,
+  ending `)*$``, so the document's whole head (156 lines) was copied into it in `258bf6e` and stayed
+  there through three commits, unseen until a resume read the headings (2026-10-15). Fixed on
+  `feat/eval-arms-filters` after a byte-equal check of the copy. The same family as the entry
+  above: text goes through Write and Edit, or a script passes the replacement as a function
+  (`replace(x, () => text)`). A check could refuse a feature document with a heading twice;
+  unassigned.
 - A background timer, watcher or wake loop left running after what it guarded resolved: the
   orchestrator's 05:00 timer outlived the Linux gate it waited for (his correction, the
   orchestrator's transcript `ffe99ebf`, line 4215). Each one declares what it is for, what ends
@@ -111,6 +119,13 @@ matters, who holds it, and where it was seen.
 - The installed copy on his machine is at ad7b37b; main has moved by many pull requests. Updating it
   is a change on his machine he approved once; to be done at a quiet moment, with its undo.
 - The Codex plugin's removal waits for JH 5's doctor row (his order). JH 5.
+- Codex's `resume --hook` may never run on his machine: `~/.codex/hooks.json` holds four
+  `SessionStart` groups (gentle-ai, a PowerShell script, js-harness's doctor, js-harness's resume)
+  and `~/.codex/config.toml` holds a `[hooks.state.'...hooks.json:session_start:<n>:0']` trust
+  table for n = 0 to 2 only (headers read by JH 14, 2026-10-15, values not read). Codex keys a
+  hook's trust by its place, so a hook installed after the last trust prompt is untrusted until
+  someone answers one. `doctor` could say so per hook. Unassigned; JH 14 meets the same keys in
+  G2 (C3c), where taking a hook out moves the places of the rest.
 - 29 of the 31 memory notes of this project are rules or decisions that live only in memory (28 of
   type `feedback`, 1 `project`; none `user`), where nothing acts on them and a session may not recall
   them. Read on 2026-10-14 by the `memory-rules` row of `doctor`, built in JH 12's

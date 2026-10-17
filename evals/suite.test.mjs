@@ -116,7 +116,10 @@ test('--summary reads a recorded run: it takes --name and nothing else', () => {
 
 // ---- what a run was, and what a resumed run may not change -----------------------------------------------------------
 
-const STACK = { claude: '2.1.284 (Claude Code)', gentleAi: '2.4.0', engram: '2.1.0', engramPlugin: '0.1.5' };
+// Made up for these tests: the commit of the checkout whose `js-harness init` lays out the workspace.
+const COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const CHECKOUT = path.join('/', 'checkout');
+const STACK = { claude: '2.1.284 (Claude Code)', gentleAi: '2.4.0', engram: '2.1.0', engramPlugin: '0.1.5', codegraph: '1.6.2', jsHarness: COMMIT };
 const RUN = { model: EVAL_MODEL, permissionMode: 'bypassPermissions', stack: STACK };
 
 test('a resumed run that differs in a version, the model or the permission mode is named change by change', () => {
@@ -131,29 +134,74 @@ test('a resumed run that differs in a version, the model or the permission mode 
   assert.deepEqual(diffRun(RUN, { ...RUN, model: 'claude-other' }), [{ field: 'model', recorded: EVAL_MODEL, current: 'claude-other' }]);
 });
 
-/** A fake machine for the stack probes: a home with the plugin record, and a `spawn` that answers `<tool> version`. */
-function stackMachine({ plugin = '0.1.5', gentleAi = 'gentle-ai 2.4.0', engram = 'engram v2.1.0' } = {}) {
+test('a resumed run on another codegraph or another js-harness commit is named, and a file that recorded neither is too', () => {
+  assert.deepEqual(diffRun(RUN, { ...RUN, stack: { ...STACK, codegraph: '1.7.0', jsHarness: `${COMMIT}+dirty` } }), [
+    { field: 'codegraph', recorded: '1.6.2', current: '1.7.0' },
+    { field: 'js-harness commit', recorded: COMMIT, current: `${COMMIT}+dirty` },
+  ]);
+  const { codegraph, jsHarness, ...before } = STACK;
+  assert.deepEqual(diffRun({ ...RUN, stack: before }, RUN), [
+    { field: 'codegraph', recorded: null, current: '1.6.2' },
+    { field: 'js-harness commit', recorded: null, current: COMMIT },
+  ], 'nothing says what workspace the trials of an older file ran in');
+  const codexRun = { agent: 'codex', model: CODEX_EVAL_MODEL, permissionMode: CODEX_PERMISSION_MODE, stack: CODEX_STACK };
+  assert.deepEqual(diffRun(codexRun, { ...codexRun, stack: { ...CODEX_STACK, codegraph: null, jsHarness: 'fedcba' } }), [
+    { field: 'codegraph', recorded: '1.6.2', current: null },
+    { field: 'js-harness commit', recorded: COMMIT, current: 'fedcba' },
+  ]);
+});
+
+/** A fake machine for the stack probes: a home with the plugin record, and a `spawn` that answers `<tool> version`,
+ * and git's questions about the checkout: `commit` for `rev-parse HEAD` (null: git fails) and `changes` for
+ * `status` (null: git fails). */
+function stackMachine({ plugin = '0.1.5', gentleAi = 'gentle-ai 2.4.0', engram = 'engram v2.1.0', codegraph = '1.6.2', commit = COMMIT, changes = '' } = {}) {
   const home = tmp('stack-home');
   if (plugin !== null) write(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'engram@engram': [{ scope: 'user', version: plugin }], 'codex@openai-codex': [{ version: '9.9.9' }] } }));
   const calls = [];
   const spawn = (command, args) => {
     calls.push([command, args]);
-    const text = { 'gentle-ai': gentleAi, engram }[String(command).split(' ')[0]];
-    return text === undefined ? { error: Object.assign(new Error('ENOENT'), { code: 'ENOENT' }) } : text === null ? { status: 1, stdout: '' } : { status: 0, stdout: `${text}\n` };
+    const name = String(command).split(' ')[0];
+    const text = name === 'git' ? (args.includes('rev-parse') ? (commit === null ? null : `${commit}`) : changes) : { 'gentle-ai': gentleAi, engram, codegraph }[name];
+    return text === undefined ? { error: Object.assign(new Error('ENOENT'), { code: 'ENOENT' }) } : text === null ? { status: 1, stdout: '' } : { status: 0, stdout: text === '' ? '' : `${text}\n` };
   };
   return { home, spawn, calls };
 }
 
-test('the stack is the CLI, gentle-ai, engram and the engram plugin, each read where it is written down', () => {
+/** The tools a stack probe asked, in order. */
+const asked = (machine) => machine.calls.map(([command, args]) => (command === 'git' ? `git ${args.filter((arg) => !arg.startsWith('-') && arg !== CHECKOUT)[0]}` : command));
+
+test('the stack is the CLI, gentle-ai, engram, the engram plugin, codegraph and the js-harness commit, each read where it is written down', () => {
   const machine = stackMachine();
-  const stack = readStack({ claude: CLAUDE, home: machine.home, spawn: machine.spawn, platform: 'linux', probeClaude: (command) => (command === CLAUDE ? '2.1.284 (Claude Code)' : null) });
+  const stack = readStack({ claude: CLAUDE, home: machine.home, spawn: machine.spawn, platform: 'linux', root: CHECKOUT, probeClaude: (command) => (command === CLAUDE ? '2.1.284 (Claude Code)' : null) });
   assert.deepEqual(stack, STACK);
-  assert.deepEqual(machine.calls.map(([command]) => command), ['gentle-ai', 'engram'], 'no other tool is asked');
+  assert.deepEqual(asked(machine), ['gentle-ai', 'engram', 'codegraph', 'git rev-parse', 'git status'], 'no other tool is asked');
+  const git = machine.calls.filter(([command]) => command === 'git').map(([, args]) => args);
+  assert.ok(git.every((args) => args[0] === '-C' && args[1] === CHECKOUT), 'git is asked about the checkout whose init lays out the workspace');
+  assert.ok(git[1].includes('--untracked-files=no'), 'a file git does not track is not what init runs');
+  assert.ok(git[1].includes(':(exclude)evals/results'), 'the run\'s own results file is not a change to the checkout');
+});
+
+test('the js-harness commit says +dirty when a tracked file of the checkout differs from it, and is null when git cannot say', () => {
+  const dirty = stackMachine({ changes: ' M bin/init.mjs' });
+  assert.equal(readStack({ claude: CLAUDE, home: dirty.home, spawn: dirty.spawn, platform: 'linux', root: CHECKOUT, probeClaude: () => null }).jsHarness, `${COMMIT}+dirty`);
+  const noRepo = stackMachine({ commit: null });
+  assert.equal(readStack({ claude: CLAUDE, home: noRepo.home, spawn: noRepo.spawn, platform: 'linux', root: CHECKOUT, probeClaude: () => null }).jsHarness, null);
+  const noStatus = stackMachine({ changes: null });
+  assert.equal(readStack({ claude: CLAUDE, home: noStatus.home, spawn: noStatus.spawn, platform: 'linux', root: CHECKOUT, probeClaude: () => null }).jsHarness, null, 'a commit that cannot be told clean is not recorded as clean');
+  const notACommit = stackMachine({ commit: 'HEAD' });
+  assert.equal(readStack({ claude: CLAUDE, home: notACommit.home, spawn: notACommit.spawn, platform: 'linux', root: CHECKOUT, probeClaude: () => null }).jsHarness, null);
+});
+
+test('by default the js-harness commit is the one of this checkout', () => {
+  const machine = stackMachine();
+  readStack({ claude: CLAUDE, home: machine.home, spawn: machine.spawn, platform: 'linux', probeClaude: () => null });
+  const [, args] = machine.calls.find(([command]) => command === 'git');
+  assert.equal(path.resolve(args[1]), path.resolve(fileURLToPath(new URL('..', import.meta.url))));
 });
 
 test('a version that cannot be read is null, never a guess', () => {
-  const missing = stackMachine({ plugin: null, gentleAi: null, engram: 'no version here' });
-  assert.deepEqual(readStack({ claude: CLAUDE, home: missing.home, spawn: missing.spawn, platform: 'linux', probeClaude: () => null }), { claude: null, gentleAi: null, engram: null, engramPlugin: null });
+  const missing = stackMachine({ plugin: null, gentleAi: null, engram: 'no version here', codegraph: null, commit: null });
+  assert.deepEqual(readStack({ claude: CLAUDE, home: missing.home, spawn: missing.spawn, platform: 'linux', root: CHECKOUT, probeClaude: () => null }), { claude: null, gentleAi: null, engram: null, engramPlugin: null, codegraph: null, jsHarness: null });
   const broken = stackMachine();
   write(path.join(broken.home, '.claude', 'plugins', 'installed_plugins.json'), 'not json');
   assert.equal(readStack({ claude: CLAUDE, home: broken.home, spawn: broken.spawn, platform: 'linux', probeClaude: () => null }).engramPlugin, null);
@@ -799,7 +847,7 @@ test('--summary takes --agent too, so a recorded Codex run can be read', () => {
   assert.throws(() => parseArgs(['--agent', 'codex', '--summary', '--name', 'screen', '--codex', CODEX], { taskIds: TASKS }), usageError(/--summary .*--codex/));
 });
 
-const CODEX_STACK = { codex: 'codex-cli 0.159.1', gentleAi: '2.4.0', engram: '2.1.0' };
+const CODEX_STACK = { codex: 'codex-cli 0.159.1', gentleAi: '2.4.0', engram: '2.1.0', codegraph: '1.6.2', jsHarness: COMMIT };
 const CODEX_RUN = { agent: 'codex', model: 'gpt-6.1-sol', permissionMode: 'dangerously-bypass-approvals-and-sandbox', stack: CODEX_STACK };
 
 test('a resumed Codex run that differs in the agent, the model or a version is named change by change', () => {
@@ -815,13 +863,13 @@ test('a resumed Codex run that differs in the agent, the model or a version is n
   assert.deepEqual(diffRun(RUN, { ...RUN, agent: 'claude' }), [], 'and naming it changes nothing');
 });
 
-test('the Codex stack is the CLI asked under a sandbox environment in a throwaway home of the work root, with gentle-ai and engram as for Claude Code', async () => {
+test('the Codex stack is the CLI asked under a sandbox environment in a throwaway home of the work root, with gentle-ai, engram, codegraph and the js-harness commit as for Claude Code', async () => {
   const tools = stackMachine();
   const workRoot = path.join(tmp('stack-work'), 'not-there-yet');
   const probes = [];
   const released = [];
   const stack = await readCodexStack({
-    codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux',
+    codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', root: CHECKOUT,
     probeCodex: (command, env) => {
       probes.push({ command, env, there: [env.HOME, env.CODEX_HOME, env.TEMP].map((dir) => fs.statSync(dir).isDirectory()), login: fs.existsSync(path.join(env.CODEX_HOME, 'auth.json')) });
       return 'codex-cli 0.159.1';
@@ -829,7 +877,7 @@ test('the Codex stack is the CLI asked under a sandbox environment in a throwawa
     allocatePort: async () => 41000, releasePort: (port) => released.push(port),
   });
   assert.deepEqual(stack, CODEX_STACK);
-  assert.deepEqual(tools.calls.map(([command]) => command), ['gentle-ai', 'engram'], 'no other tool is asked');
+  assert.deepEqual(asked(tools), ['gentle-ai', 'engram', 'codegraph', 'git rev-parse', 'git status'], 'no other tool is asked');
   assert.equal(probes.length, 1);
   const [{ command, env, there, login }] = probes;
   assert.equal(command, CODEX);
@@ -842,11 +890,11 @@ test('the Codex stack is the CLI asked under a sandbox environment in a throwawa
 });
 
 test('a Codex version that cannot be read is null, and the throwaway home and its port are given back whatever the probe does', async () => {
-  const tools = stackMachine({ gentleAi: null, engram: 'no version here' });
+  const tools = stackMachine({ gentleAi: null, engram: 'no version here', codegraph: 'no version here', changes: null });
   const workRoot = tmp('stack-work');
   const released = [];
   const ports = { allocatePort: async () => 41001, releasePort: (port) => released.push(port) };
-  assert.deepEqual(await readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => null, ...ports }), { codex: null, gentleAi: null, engram: null });
+  assert.deepEqual(await readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => null, ...ports }), { codex: null, gentleAi: null, engram: null, codegraph: null, jsHarness: null });
   await assert.rejects(readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => { throw new Error('the probe exploded'); }, ...ports }), /the probe exploded/);
   assert.deepEqual(fs.readdirSync(workRoot), []);
   assert.deepEqual(released, [41001, 41001]);
@@ -1737,17 +1785,100 @@ test('--configs takes arms of one component beside their base, and refuses an ar
   assert.throws(() => parse({ '--configs': 'current,current-without-skills,current-without-skills' }), usageError(/listed twice/));
 });
 
-test('a run that names an arm is refused until arms are built, and nothing runs; --plan still states it', async () => {
+/** A `runTrial` stand-in that prepares each trial's home for real, in the scratch directory, and keeps whether the
+ * file `rel` of the home is there, by config. `js-harness init` is a stand-in that answers success. */
+function seedingRun(m, rel) {
+  const held = {};
+  const run = fakeRun(async (trial) => {
+    const home = path.join(m.base, 'seeded', `${trial.config.name}-${trial.task.id}-${trial.effort}`);
+    const workspace = path.join(home, 'workspace');
+    write(path.join(workspace, 'README.md'), 'a workspace\n');
+    await trial.config.prepare({ home, workspace });
+    held[trial.config.name] = fs.existsSync(path.join(home, ...rel.split('/')));
+  });
+  return { run, held };
+}
+const initStandIn = () => ({ status: 0, stdout: '', stderr: '' });
+
+test('an arm of current runs in a home seeded from the same template without its component, and its cut is pinned', async () => {
+  const m = machine();
+  const { run, held } = seedingRun(m, '.claude/CLAUDE.md');
+  const { io, deps } = depsFor(m, { runTrial: run, runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-claude-md', '--efforts': 'medium' }), ENV, deps), 0, io.err);
+  assert.deepEqual(held, { current: true, 'current-without-claude-md': false });
+  const configs = new Map(run.trials.map((trial) => [trial.config.name, trial.config]));
+  assert.deepEqual(configs.get('current-without-claude-md').args({ effort: 'medium' }), configs.get('current').args({ effort: 'medium' }), 'the arm runs as current does');
+  const doc = readDoc(m);
+  assert.deepEqual(keysOf(doc.trials).sort(), ['alpha|current-without-claude-md|medium|1', 'alpha|current|medium|1', 'beta|current-without-claude-md|medium|1', 'beta|current|medium|1']);
+  const pin = doc.arms?.['current-without-claude-md'];
+  assert.deepEqual({ ...pin, sha256: '' }, { base: 'current', components: ['claude-md'], sha256: '' });
+  assert.match(pin.sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(Object.keys(doc.arms), ['current-without-claude-md']);
+});
+
+test('a run without arms records no arms, as before', async () => {
   const m = machine();
   const { io, deps } = depsFor(m);
-  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-skills' }), ENV, deps), 2);
-  assert.match(io.err, /current-without-skills/);
+  assert.equal(await suiteMain(runArgv(m, { '--efforts': 'medium' }), ENV, deps), 0, io.err);
+  assert.equal('arms' in readDoc(m), false);
+});
+
+test('an arm whose component the home does not hold stops the run before any trial, with no results file and no template left', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m, { runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-agents', '--efforts': 'medium' }), ENV, deps), 1);
+  assert.match(io.err, /agents is not in the current arm's home/);
+  assert.deepEqual(deps.runTrial.asked, []);
+  assert.equal(fs.existsSync(resultsFile(m)), false);
+  assert.deepEqual(templatesIn(m.workRoot), []);
+});
+
+test('an arm is continued on the same cut, and refused on another or on none, before any trial and with the file untouched', async () => {
+  const m = machine();
+  const configs = 'current,current-without-claude-md';
+  const first = depsFor(m, { runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': configs, '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const same = depsFor(m, { runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': configs, '--efforts': 'medium', '--repeats': '2' }), ENV, same.deps), 0, same.io.err);
+  assert.equal(same.deps.runTrial.asked.length, 4, 'the same cut continues');
+
+  const doc = readDoc(m);
+  const pinned = doc.arms['current-without-claude-md'].sha256;
+  for (const [label, arms] of [['another cut', { 'current-without-claude-md': { base: 'current', components: ['claude-md'], sha256: '0'.repeat(64) } }], ['no pin', undefined]]) {
+    write(resultsFile(m), JSON.stringify({ ...doc, arms }));
+    const before = fs.readFileSync(resultsFile(m));
+    const again = depsFor(m, { runInit: initStandIn });
+    assert.equal(await suiteMain(runArgv(m, { '--configs': configs, '--efforts': 'medium', '--repeats': '3' }), ENV, again.deps), 1, label);
+    assert.match(again.io.err, /another cut of an arm/, label);
+    assert.match(again.io.err, new RegExp(`cut of current-without-claude-md: ${arms ? 'sha256 000000000000' : 'unknown'} -> sha256 ${pinned.slice(0, 12)}`), label);
+    assert.deepEqual(again.deps.runTrial.asked, [], label);
+    assert.deepEqual(fs.readFileSync(resultsFile(m)), before, label);
+  }
+});
+
+test('a run that names a minimal-with arm is refused until that arm is built, and nothing runs; --plan still states it', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal,minimal-with-mcp-engram' }), ENV, deps), 2);
+  assert.match(io.err, /minimal-with-mcp-engram/);
   assert.match(io.err, /not built yet/);
   assert.deepEqual(deps.runTrial.asked, []);
   nothingCreated(m);
   const plan = depsFor(m);
   assert.equal(await suiteMain([...runArgv(m, { '--configs': 'current,current-without-skills', '--efforts': 'medium' }), '--plan'], {}, plan.deps), 0, plan.io.err);
   assert.match(plan.io.out, /unknown for 4 trials, .*alpha current-without-skills medium \(1\)/);
+});
+
+test('a Codex arm runs in a home seeded from the Codex template without its component, and its cut is pinned', async () => {
+  const m = codexMachine();
+  const { run, held } = seedingRun(m, '.codex/AGENTS.md');
+  const { io, deps } = codexDeps(m, { runTrial: run, runInit: initStandIn });
+  assert.equal(await suiteMain(codexRunArgv(m, { '--configs': 'current,current-without-agents-md', '--efforts': 'medium' }), ENV, deps), 0, io.err);
+  assert.deepEqual(held, { current: true, 'current-without-agents-md': false });
+  const configs = new Map(run.trials.map((trial) => [trial.config.name, trial.config]));
+  assert.deepEqual(configs.get('current-without-agents-md').args({ effort: 'medium', workspace: m.base }), configs.get('current').args({ effort: 'medium', workspace: m.base }));
+  const pin = readCodexDoc(m).arms?.['current-without-agents-md'];
+  assert.deepEqual({ ...pin, sha256: '' }, { base: 'current', components: ['agents-md'], sha256: '' });
 });
 
 // ---- the honesty runs -------------------------------------------------------------------------------------------------

@@ -630,6 +630,20 @@ test('the seed of the current arm runs after the shared preparation and seeds th
   assert.deepEqual(order, [{ claudeJson: true, repo: true }]);
 });
 
+test('a seed without components takes them out of the trial\'s home, and without project skips init (G2, C3a)', async () => {
+  const { templateDir } = setup();
+  assert.throws(() => seedFromTemplate(templateDir, { without: ['mcp-nothing'] }), /mcp-nothing is not in the current arm's home/);
+  const calls = [];
+  const runInit = (call) => (calls.push(call), { status: 0, stdout: '', stderr: '' });
+  const home = path.join(tmp('trial'), 'home');
+  await seedFromTemplate(templateDir, { runInit, without: ['agents', 'project'] })({ home, workspace: tmp('workspace'), engramPort: PORT });
+  assert.equal(fs.existsSync(path.join(home, '.claude', 'agents')), false);
+  assert.ok(fs.existsSync(path.join(home, '.claude', 'CLAUDE.md')), 'the rest of the home is seeded');
+  assert.equal(calls.length, 0, 'an arm without project does not run js-harness init');
+  await seedFromTemplate(templateDir, { runInit, without: ['agents'] })({ home: path.join(tmp('trial'), 'home'), workspace: tmp('workspace'), engramPort: PORT });
+  assert.equal(calls.length, 1);
+});
+
 // ---- the fingerprint of the setup (G6 of odd/tasks/future-model-protocol.md) ---------------------------
 
 /** A template built from `realHome` after `change(realHome)`, and its fingerprint. */
