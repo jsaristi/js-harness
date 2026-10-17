@@ -141,8 +141,9 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     const harnessJsonPath = path.join(root, 'harness.json');
     assert.ok(fs.existsSync(harnessJsonPath));
     const harnessJsonContent = fs.readFileSync(harnessJsonPath, 'utf8');
-    assert.deepEqual(JSON.parse(harnessJsonContent), { version: '0.1.0' });
-    assert.equal(harnessJsonContent, JSON.stringify({ version: '0.1.0' }, null, 2) + '\n');
+    // The reply check is on in a new project: his answer 11, "Prendido por defecto" (odd/tasks/rule-hierarchy.md, T9).
+    assert.deepEqual(JSON.parse(harnessJsonContent), { version: '0.1.0', reply: true });
+    assert.equal(harnessJsonContent, JSON.stringify({ version: '0.1.0', reply: true }, null, 2) + '\n');
 
     const agentsPath = path.join(root, 'AGENTS.md');
     assert.ok(fs.existsSync(agentsPath));

@@ -843,9 +843,10 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     if (functions.errors) actions.push(functionsProblem(functions.errors));
 
     // harness.json: the pin — computed now (its content never depends on anything written after
-    // it), but not written until the very end (T2e item 1).
+    // it), but not written until the very end (T2e item 1). The reply check is on in a new project, with the
+    // English labels (odd/tasks/rule-hierarchy.md, T9: his answer "Prendido por defecto").
     const harnessJsonPath = path.join(root, 'harness.json');
-    const harnessJsonContent = JSON.stringify({ version }, null, 2) + '\n';
+    const harnessJsonContent = JSON.stringify({ version, reply: true }, null, 2) + '\n';
     const harnessJsonRel = toRepoRelative(root, harnessJsonPath);
     const harnessJsonHash = sha256(harnessJsonContent);
     if (clone) {

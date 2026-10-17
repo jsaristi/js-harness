@@ -22,8 +22,9 @@ js-harness init
 1. `npm i -g` puts the `js-harness` command on the path.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md`, an empty failures
-   register (`docs/FAILURES.md`) and the pre-commit gate of that project.
+3. `js-harness init`, in a git repository, writes `harness.json` (the pin, and `"reply": true`,
+   which turns the reply check on), `AGENTS.md`, an empty failures register (`docs/FAILURES.md`)
+   and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
@@ -1006,6 +1007,7 @@ markdown is taken off, followed by the end of the line or a mark such as a dash 
 (`**Working** — the gate wakes me`); a label inside a sentence, or a sentence that only begins
 with its word (`Working on the docs`), is none.
 
+`init` writes `"reply": true` in a new project's `harness.json`; `false` turns the check off.
 `"reply": true` takes the English labels (`Working`, `Decision`, `Cut`, `Finished`; `What it is`,
 `Where it goes`, `What sending it does`). An object names the project's own, each over the
 English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decisión", "cut":
