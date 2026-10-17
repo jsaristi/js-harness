@@ -770,6 +770,17 @@ test('cmdExeWord gives cmd.exe its own double-quoted home only where shellWord h
   assert.equal(cmdExeWord('/home/a $b', 'linux'), null);
 });
 
+test('a Windows home with a curly double quote goes in single quotes for PowerShell, which ends double quotes at one, and cmd.exe gets its own (memory-hygiene T12)', () => {
+  for (const quote of ['\u201c', '\u201d', '\u201e']) {
+    const home = `C:\\Users\\Ana ${quote}Ani${quote}`;
+    assert.equal(shellWord(home, 'win32'), `'${home}'`, quote);
+    assert.equal(cmdExeWord(home, 'win32'), `"${home}"`, quote);
+  }
+  // Inside single quotes PowerShell reads a curly double quote as it is; sh never took one for a quote.
+  assert.equal(shellWord('/home/Ana \u201cAni\u201d', 'linux'), `'/home/Ana \u201cAni\u201d'`);
+  assert.equal(cmdExeWord('/home/Ana \u201cAni\u201d', 'linux'), null);
+});
+
 test('uninstallMain keeps a project under a memory pass with the line that can release its lock, exit 1, in either mode', async () => {
   // A space in the home, as in C:\Users\First Last: the line's commands still run as they are copied.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness cli home '));

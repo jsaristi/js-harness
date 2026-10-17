@@ -515,6 +515,11 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   slice that touches `bin/lib/memory-pass.mjs` or `memoryKeptLine` in `bin/install.mjs` reads them. Open with it,
   from gentle-ai's advisories: a snapshot verified before `b761aef` whose index is not UTF-8 is now refused as
   damaged (nothing is written); a home holding `"` or `$` prints a command that does not run as copied. Done in L9.
+- [x] T12 (kind: build) T11's later work, gentle-ai's advisory: "PowerShell reads the curly double quotes “ ” „ as
+  `"` too, so a Windows home holding one and no `$` breaks the double-quoted form" (`shellWord`, `bin/install.mjs`).
+  Test first. Done in L10.
+- [x] T13 (kind: build) T11's later work, gentle-ai's advisory: "an after-index that holds U+FFFD and was damaged is
+  told as older rather than damaged" (`undoHeld`, `bin/lib/memory-pass.mjs`). Test first. Done in L10.
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para
@@ -585,6 +590,19 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   and no `$` breaks the double-quoted form (`bin/install.mjs:85`, a warning); an after-index that holds U+FFFD
   and was damaged is told as older rather than damaged (`bin/lib/memory-pass.mjs:325`). Per file: install 81,
   memory-pass 34 pass.
+- L10 2026-10-17, T12 and T13 built by `JH 21 · reserva de la noche` on `fix/memory-pass-advisories`, from
+  origin/main `5ea341af`, on the lead's note of 15:34Z ("(2) memory-hygiene T11: PowerShell's curly double quotes;
+  a damaged U+FFFD after-index told as older"; the lead's claim, not his words). T12: on Windows, `shellWord` gives
+  single quotes to a home holding “ ” or „ as it does to one holding `$` or a backtick, since PowerShell ends a
+  double-quoted string at each, and `cmdExeWord` gives cmd.exe its own double-quoted form there; one constant
+  holds the characters for both. T13: while the index is as the pass left it, an older verify's after-index is
+  exactly that index's text, so `undoHeld` now calls any other copy damaged, and so is one that is not UTF-8
+  itself, which no text write makes. Once the index is written since, an older copy cannot be told from a damaged
+  one that holds U+FFFD and is text, so the refusal names both readings; either way nothing is written. Tests
+  first, each seen RED: the curly-quote test in `bin/install.test.mjs`, the damaged after-index test in
+  `bin/lib/memory-pass.test.mjs` (another text, and bytes no text write makes), and the changed refusal of the
+  written-since test. GREEN: memory-pass 35 pass, and the quoting tests of install 5 pass (one file at a time: another
+  session's gate held the machine's lock).
 
 ## Next step (2026-10-16)
 - T10 (JH 21, branch `feat/memory-full-uninstall`, worktree `D:\js-harness-worktrees\memory-full-uninstall`): built

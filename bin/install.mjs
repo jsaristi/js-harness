@@ -81,16 +81,20 @@ function reportSessionMessages(home) {
 export function shellWord(value, platform = process.platform) {
   if (platform !== 'win32') return `'${value.replace(/'/g, "'\\''")}'`;
   // cmd.exe reads no single quotes, and a Windows path holds no `"`: double quotes serve all three shells there
-  // unless PowerShell would expand something in them. PowerShell takes ‘ ’ ‚ ‛ for a single quote too.
-  if (!/[$`]/.test(value)) return `"${value}"`;
+  // unless PowerShell would expand something in them or end them at “ ” „, which it takes for `"`. PowerShell
+  // takes ‘ ’ ‚ ‛ for a single quote too.
+  if (!PWSH_DOUBLE_QUOTED_UNSAFE.test(value)) return `"${value}"`;
   return `'${value.replace(/['‘’‚‛]/g, (quote) => quote + quote)}'`;
 }
 
 /** `value` in double quotes for cmd.exe where `shellWord` gave it single quotes on Windows, which cmd.exe splits
  * at a space: no one form serves cmd.exe and PowerShell there. `null` where `shellWord` serves every shell. */
 export function cmdExeWord(value, platform = process.platform) {
-  return platform === 'win32' && /[$`]/.test(value) ? `"${value}"` : null;
+  return platform === 'win32' && PWSH_DOUBLE_QUOTED_UNSAFE.test(value) ? `"${value}"` : null;
 }
+
+/** What PowerShell does not read as it is inside double quotes: what it expands, and the curly double quotes. */
+const PWSH_DOUBLE_QUOTED_UNSAFE = /[$`“”„]/;
 
 function memoryKeptLine(folder, home) {
   switch (folder.reason) {
