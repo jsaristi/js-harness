@@ -95,12 +95,17 @@ export function checkedOff(added, before) {
   return ticks;
 }
 
-/** The text of the task that starts at `line` (counted from 1) of `text`: that line and the indented lines that
- * continue it. */
+/** The text of the task that starts at `line` (counted from 1) of `text`: that line and the lines indented deeper
+ * that continue it, up to the next task line, so a nested task is read apart from its siblings (Codex, 2026-10-17). */
 export function taskText(text, line) {
   const lines = text.split(/\r?\n/);
   const held = [lines[line - 1] ?? ''];
-  for (let next = line; next < lines.length && /^\s+\S/.test(lines[next]); next += 1) held.push(lines[next]);
+  const indent = /^\s*/.exec(held[0])[0].length;
+  for (let next = line; next < lines.length; next += 1) {
+    const one = lines[next];
+    if (!/\S/.test(one) || /^\s*/.exec(one)[0].length <= indent || /^\s*- \[[ x]\] /.test(one)) break;
+    held.push(one);
+  }
   return held.join('\n');
 }
 

@@ -553,11 +553,18 @@ export function checkCitations(cwd, spawn = spawnSync) {
   const ticks = checkedOff(added, (file) => checkedTasks(git(['show', `HEAD:${file}`]) ?? ''));
   if (ticks.length > 0) {
     const head = git(['rev-parse', '-q', '--verify', 'HEAD^{commit}'])?.trim();
-    // HEAD reaches a commit when the commit is their merge base; no merge base, or no answer, is no claim.
+    // `merge-base --is-ancestor` answers no with exit 1, an unrelated history included (Codex, 2026-10-17); any
+    // other exit, or no git, is no claim. `git` has already answered here, so the repository is the one guarded.
     const reaches = (id) => {
       const full = git(['rev-parse', '-q', '--verify', `${id}^{commit}`])?.trim();
-      const base = full && head ? git(['merge-base', full, head])?.trim() : undefined;
-      return base ? base === full : null;
+      if (!full || !head) return null;
+      try {
+        const asked = spawn('git', ['merge-base', '--is-ancestor', full, head], { cwd, encoding: 'utf8' });
+        if (!asked || asked.error) return null;
+        return asked.status === 0 ? true : asked.status === 1 ? false : null;
+      } catch {
+        return null;
+      }
     };
     const names = git(['diff', '--cached', '--name-only', '-z', '--no-relative']) ?? '';
     const rides = names.split('\0').some((name) => name !== '' && !name.startsWith('odd/tasks/'));

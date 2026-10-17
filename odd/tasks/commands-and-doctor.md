@@ -272,10 +272,16 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   indented lines that continue it, read from the index, since a `-U0` diff holds only the changed
   line. One reading made here: a task checked off beside staged work outside `odd/tasks/` passes
   with no commit named, because it is checked off in the commit being made and a tick cannot name
-  its own commit; checked off alone, it must name one. "Reachable" is the commit being the merge base
-  of itself and HEAD; a commit git cannot place is no claim. RED: the new test of
-  `bin/check-citations.test.mjs` failed (no task part in the detail); GREEN: 4/4 there and 4/4 in
-  `bin/lib/citations.test.mjs`. The entry's Control is now that test.
+  its own commit; checked off alone, it must name one. "Reachable" is `git merge-base --is-ancestor`
+  answering yes; its no, exit 1, is not reachable, and any other answer is no claim. RED: the new test
+  of `bin/check-citations.test.mjs` failed (no task part in the detail); GREEN: 4/4 there and 4/4 in
+  `bin/lib/citations.test.mjs`. The entry's Control is now that test. Committed as `0308678`; its own
+  gate's row said "1 task checked off, each in a commit HEAD reaches or in this one".
+  gentle-ai on `0308678`: medium, 180 lines, review not due (`under_budget`). Codex on
+  `db31c96..0308678` (87,653 input tokens): incorrect (0.98), two P2s, both fixed in the next commit
+  with one test seen red: a commit of an unrelated history read as no claim, since `merge-base` has
+  no base to print (now `--is-ancestor`, whose exit 1 is a no); a nested task's text ran on into its
+  siblings and could borrow their commit (now it stops at the next task line or a line no deeper).
 
 ## Next step
 Codex review of the index fix (`--base fbad613`), push to update PR 144, tell the lead, then pause

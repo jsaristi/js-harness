@@ -134,3 +134,22 @@ test('a task the change checks off names a commit reachable from HEAD, unless it
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a checked-off task that names a commit of an unrelated history is not reachable, and a nested task is read alone', () => {
+  const root = repo();
+  try {
+    const tasks = path.join(root, 'odd', 'tasks', 'f.md');
+    fs.writeFileSync(tasks, '- [ ] T1 one\n- [ ] T2 parent\n  - [ ] T2a first\n  - [ ] T2b second\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'tasks');
+    const head = git(root, 'rev-parse', 'HEAD');
+    // A root commit with no parent: git finds no merge base of it and HEAD (Codex, 2026-10-17).
+    const orphan = git(root, 'commit-tree', 'HEAD^{tree}', '-m', 'orphan');
+    fs.writeFileSync(tasks, `- [x] T1 one, at \`${orphan}\`\n- [ ] T2 parent\n  - [x] T2a first\n  - [ ] T2b second, at \`${head}\`\n`);
+    git(root, 'add', '.');
+    const [row] = checkCitations(root);
+    assert.deepEqual(row.lines, [`odd/tasks/f.md:1 T1 \`${orphan}\`: not reachable from HEAD`, 'odd/tasks/f.md:3 T2a: names no commit, and nothing but feature documents is staged']);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
