@@ -4554,7 +4554,8 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   input tokens): the patch is correct (0.91), no finding. The lead asked that Codex also read `ac6cf2c..9c3f41a`;
   `codex-review --base ac6cf2c --again` from a detached worktree at `9c3f41a` refused it as a second recheck of the
   review that ended at `12773f4`, so that range keeps its skip record, and the matching code it held is the code the
-  review of `db31c96..b9fd628` read and found correct.
+  review of `db31c96..b9fd628` read and found correct. gentle-ai on `b9fd628`, the advisory's fix, assessed by its
+  gate: medium, 40 lines, review not due (`under_budget`).
 
 - 2026-10-17, T9, the reply check on by default, built by `JH 5 · canal entre sesiones` on
   `feat/init-reply-on` from origin/main, on the lead's order of 11:22Z (item 5 of its triage
