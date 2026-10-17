@@ -4277,8 +4277,9 @@ test('quoteOf takes his words from a queued list of text blocks, and leaves out 
   assert.deepEqual(lib.quoteOf(text, 1), { person: true, at: at(1), text: 'made up while it worked, from a phone', images: 0, pastedOnly: false, queued: true });
   assert.deepEqual([lib.quoteOf(text, 2).text, lib.quoteOf(text, 2).images], ['Dale\nla A', 1]);
   assert.equal(lib.quoteOf(text, 3).pastedOnly, true);
-  // Only the reminders that open a block are the host's: a tag he typed inside his words stays his.
-  const his = 'mirá <system-reminder>esto</system-reminder> que escribí';
+  // Only the reminders that open the first block are the host's: a tag he typed in his own words stays his, even at
+  // the start of his block.
+  const his = '<system-reminder>esto</system-reminder> lo escribí yo';
   assert.equal(lib.quoteOf(transcript(queued(4, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: his }] })), 1).text, his);
 });
 

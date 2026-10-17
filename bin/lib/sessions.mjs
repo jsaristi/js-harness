@@ -1875,18 +1875,18 @@ function queuedMessageOf(entry) {
   return { what: null, prompt: words.text, images: words.images, at: attachment.timestamp };
 }
 
-// The reminders the host puts at the start of a queued block, before his words, with the blank lines after them: the
-// host's text, never his. Only that leading run: a tag he typed inside his own words stays his.
+// The reminders the host puts at the start of a queued message's first block, before his words, with the blank lines
+// after them: the host's text, never his. Only that leading run: a tag he typed in his own words stays his.
 const HOST_REMINDERS = /^(?:\s*<system-reminder>[\s\S]*?<\/system-reminder>)+\s*/;
 
 /** His words in a queued message's `prompt` as `{ text, images }`, or `null` when it holds none. A string is his
  * text as it is. Host 2.1.299 (2026-10-17) writes a list of blocks instead, the first opening with its own reminders
- * of what happened while the session worked: each text block without that leading run, one a line, a block left
- * blank dropped, and how many image blocks came with them. */
+ * of what happened while the session worked: the text blocks, the first without that leading run, one a line, a
+ * block left blank dropped, and how many image blocks came with them. */
 function queuedWords(prompt) {
   if (typeof prompt === 'string') return { text: prompt, images: 0 };
   if (!Array.isArray(prompt)) return null;
-  const words = prompt.filter(isText).map((block) => block.text.replace(HOST_REMINDERS, '')).filter((text) => text.trim() !== '');
+  const words = prompt.filter(isText).map((block, i) => (i === 0 ? block.text.replace(HOST_REMINDERS, '') : block.text)).filter((text) => text.trim() !== '');
   return words.length === 0 ? null : { text: words.join('\n'), images: prompt.filter((block) => block?.type === 'image').length };
 }
 
