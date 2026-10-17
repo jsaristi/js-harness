@@ -47,7 +47,7 @@ function record(root, base, head, extra = {}) {
 
 /** A branch `feat` off `first`: c1, then M, a merge of `trunk` (where `origin/main` points) with a line
  * of `m.js` resolved by hand, then c2. `before` runs on the branch before c1 is made, `afterMine` after it. */
-function branchWithMerge({ before: setUp = () => {}, afterMine = () => {}, alsoWritten = {} } = {}) {
+function branchWithMerge({ before: setUp = () => {}, afterMine = () => {}, alsoWritten = {}, stacked = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-turns-'));
   made.push(root);
   git(root, 'init', '-q');
@@ -63,15 +63,21 @@ function branchWithMerge({ before: setUp = () => {}, afterMine = () => {}, alsoW
   const side = commit(root, 'm.js', 'main moves\n', 'feat: main moves');
   git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
   git(root, 'update-ref', 'refs/remotes/origin/main', side);
+  // `stacked`: the merge takes a stacked base off the default branch, with a commit of its own, not the branch.
+  let own = null;
+  if (stacked) {
+    git(root, 'checkout', '-q', '-b', 'stack');
+    own = commit(root, 's.js', 'stacked\n', 'feat: the stacked base');
+  }
   git(root, 'checkout', '-q', 'feat');
-  spawnSync('git', ['merge', '--no-ff', '--no-commit', 'trunk'], { cwd: root, encoding: 'utf8' });
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', stacked ? 'stack' : 'trunk'], { cwd: root, encoding: 'utf8' });
   fs.writeFileSync(path.join(root, 'm.js'), 'both\n', 'utf8');
   for (const [file, content] of Object.entries(alsoWritten)) fs.writeFileSync(path.join(root, file), content, 'utf8');
   git(root, 'add', '.');
   git(root, 'commit', '-q', '-m', 'merge trunk');
   const merge = git(root, 'rev-parse', 'HEAD');
   const c2 = commit(root, 'n.js', 'after\n', 'feat: after the merge');
-  return { root, first, c1, side, merge, c2 };
+  return { root, first, c1, side, own, merge, c2 };
 }
 
 // From the commit of the default branch the merge brought, as `codex-review --base origin/main` takes it: the
@@ -83,6 +89,15 @@ test('a merge of the default branch below HEAD, after commits that each have a r
   record(root, first, c1);
   const turn = turnOf(root, side, c2);
   assert.deepEqual(turn && { merge: turn.merge, from: turn.from, side: turn.side, branch: turn.branch, auto: /^[0-9a-f]{40}$/.test(turn.auto) }, { merge, from: c1, side, branch: 'origin/main', auto: true });
+});
+
+test('a merge of a stacked base below HEAD is cut when each commit of its own has a record, and not when one has none (gate-first T7)', () => {
+  const { root, first, c1, side, own, merge, c2 } = branchWithMerge({ stacked: true });
+  record(root, first, c1);
+  assert.equal(turnOf(root, side, c2), null);
+  record(root, side, own);
+  const turn = turnOf(root, side, c2);
+  assert.deepEqual(turn && { merge: turn.merge, from: turn.from, side: turn.side, stacked: turn.stacked }, { merge, from: c1, side: own, stacked: true });
 });
 
 test('a merge at HEAD is no cut: the review of a merge at HEAD reads it already', () => {

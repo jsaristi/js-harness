@@ -472,6 +472,9 @@ test('the base of a review that is a merge of the default branch says so, `merge
   const left = baseLeftOut(root, { from: ofOther });
   assert.equal(left?.id, ofOther);
   assert.equal('merged' in left, false);
+  // Once every commit of its own has a record, the other branch is a stacked base, and its merge says so (gate-first T7).
+  record(root, first, git(root, 'rev-parse', 'other'));
+  assert.equal(baseLeftOut(root, { from: ofOther })?.merged, 'a stacked base off origin/main');
 });
 
 test('the base of a review that is the tip of the default branch is no base left out, though it is a code commit with no record', () => {

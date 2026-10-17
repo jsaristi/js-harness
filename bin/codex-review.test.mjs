@@ -1470,7 +1470,7 @@ test('--session current is a usage error since the session was removed: exit 2 w
 // merge of the default branch read by what was written in it.
 const STARTS_WHERE_RECORDS_END =
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
-  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.';
 
 test(`the usage names no session: its flags are those of a review, and its second line says what a review loads and that it runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`, async () => {
   const result = await run(['--cwd', '.']);
@@ -5468,6 +5468,57 @@ test('a merge of a branch the default branch does not hold is reviewed as before
   assert.deepEqual([result.code, result.err], [0, '']);
   assert.ok(!result.out.includes('remerge'), result.out);
   assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
+});
+
+/** A branch that merged a stacked base, another branch that holds the remote's default branch, and resolved a
+ * conflict in `m.txt` (odd/tasks/gate-first.md, T7): `{ root, base, mine, main, side, head }`. The default branch
+ * moved on from `base` (`main`); the stacked base starts at it and has a commit of its own (`side`), with a
+ * record over `main..side` unless `sideRecorded` is false; the branch has a record over `base..mine`. */
+function makeStackedMergeRepo({ sideRecorded = true } = {}) {
+  const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
+  git(root, 'commit', '-qam', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'stacked', base);
+  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed on main\n', 'utf8');
+  git(root, 'commit', '-qam', 'main moves');
+  const main = git(root, 'rev-parse', 'HEAD');
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 theirs\n', 'utf8');
+  git(root, 'commit', '-qam', 'the stacked base');
+  const side = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', trunk);
+  spawnSync('git', ['merge', '--no-ff', '--quiet', 'stacked'], { cwd: root });
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 both\n', 'utf8');
+  git(root, 'commit', '-am', 'merge the stacked base, resolving m.txt');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  if (sideRecorded) appendCodexReview(root, reviewedRecord(main, side));
+  return { root, base, mine, main, side, head };
+}
+
+test('a merge of a stacked base whose own commits all have records is reviewed by what was written in it (gate-first T7)', async () => {
+  const { root, mine, main, side, head } = makeStackedMergeRepo();
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  nothing.untouched('the plan of a stacked merge');
+  const lines = result.out.split('\n');
+  assert.equal(lines[0], mergeReviewSaid({ head, side, branch: 'origin/main', stacked: true }));
+  assert.match(lines[0], /a stacked base off origin\/main/);
+  const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', head)).reduce((sum, file) => sum + file.changedLines, 0);
+  assert.deepEqual(lines.slice(1), plannedPlan(root, mine, head, [{ files: ['m.txt'], changedLines }]));
+});
+
+test('a merge of a stacked base with a commit of its own no record covers is reviewed as before, the whole range (gate-first T7)', async () => {
+  const { root, main, head } = makeStackedMergeRepo({ sideRecorded: false });
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('stacked'), result.out);
+  assert.ok(!result.out.includes('what was written in the merge'), result.out);
 });
 
 test('the review of a resolved merge asks Codex for a diff of two objects that exist, the automatic merge and the merge, and its record says so', async () => {
