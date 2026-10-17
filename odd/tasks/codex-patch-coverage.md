@@ -102,13 +102,18 @@ without it is valid.
 
 ## Tasks
 
-- [ ] T1 (kind: design) This design, read by two readers who did not write it; route: inline, the
-  readers delegated (Opus).
-- [ ] T2 (kind: build) S2 and S3: the patch ids of a range, and the record that keeps them; route:
-  inline (no writer trigger: one unit).
-- [ ] T3 (kind: build) S1, S4 and S5: coverage by patch id, and what is said of it; route: inline.
-- [ ] T4 (kind: verify) The "Done when" scratch repository, the timing of a check with and without a
-  match, and the reviews (gentle-ai, escalated if a high-risk item applies; Codex).
+- [x] T1 (kind: design) This design, read by two readers who did not write it; route: inline, the
+  readers delegated (Opus). Read: both found it unsound as written (Log).
+- T2, dropped by the stop rule, never built (Log; docs/ROADMAP.md, throughput item 6): (kind: build) S2
+  and S3: the patch ids of a range, and the record that keeps them; route: inline (no writer trigger:
+  one unit).
+- T3, dropped by the stop rule, never built: (kind: build) S1, S4 and S5: coverage by patch id, and
+  what is said of it; route: inline.
+- T4, dropped by the stop rule, never built: (kind: verify) The "Done when" scratch repository, the
+  timing of a check with and without a match, and the reviews (gentle-ai, escalated if a high-risk item
+  applies; Codex).
+- [x] T5 (kind: build) The merge hint: `js-harness rule change` on a branch not based on `origin/main`
+  says `git merge origin/main`; route: inline (Log; PR 321).
 
 ## Log
 
@@ -152,10 +157,12 @@ without it is valid.
 - 2026-10-16, T5 (kind: build, route: inline): `js-harness rule change` on a branch not based on
   `origin/main` now says `git merge origin/main`. RED: the updated assertion and a new test that runs the
   told command failed (`git rebase` refuses `--no-edit`); GREEN: 2 of 2.
+- 2026-10-16, the feature closed (the lead's notice to 27): `js-harness progress` still counted it 0 of 4
+  open after the drop. It counts every checkbox as a step and has no state for a dropped one, so T2-T4,
+  dropped and never built, are list items without a checkbox now, their text kept; T1 is checked, as the
+  readers did read it, and T5, built and merged in PR 321, has a checkbox of its own.
 
 ## Next step
 
-**State, 2026-10-16, JH 27:** item 6 dropped (T2-T4 not built); T5, the merge hint, built test first
-(641053b): gentle-ai assessed it medium, not due (`under_budget`); Codex reviewed 3b90b97..641053b,
-correct (0.97, 35,901 input tokens). `main` merged after PR 316 (e207dd9); item 6 marked dropped in the
-ROADMAP's throughput table. Next: push, PR, notify the lead.
+**Closed, 2026-10-16, JH 27:** item 6 dropped by the stop rule (T2-T4 not built); T5, the merge hint,
+merged in PR 321. Nothing is left to do here.
