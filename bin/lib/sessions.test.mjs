@@ -4587,6 +4587,14 @@ test('quoteOf names the sender of a message the app delivered for a session, as 
   assert.deepEqual([lib.quoteOf(text, 2).what, lib.quoteOf(text, 3).what], ['a message from another session ("JH ORQ · js-harness")', 'a queued message from another session ("JH ORQ · js-harness")']);
 });
 
+test('a message the app delivered for a session and queued as a list of blocks is read as his queued words are: the session is named', () => {
+  // Host 2.1.299 (2026-10-17) writes a queued prompt as a list, its own reminders opening the first block.
+  const blocks = [{ type: 'text', text: '<system-reminder>\nmade up while it worked\n</system-reminder>\n\n' }, { type: 'text', text: delivered('JH ORQ · js-harness') }];
+  const text = transcript(reply('working', 1), queuedInjected(2, blocks));
+  assert.equal(lib.quoteOf(text, 2).what, 'a queued message from another session ("JH ORQ · js-harness")');
+  assert.deepEqual(lib.compactionStretch(text).sessions, [{ line: 2, at: at(2), name: 'JH ORQ · js-harness' }]);
+});
+
 test('compactionStretch lists the messages the app delivered for a session among its sessions, with their titles', () => {
   const text = transcript(prompt('typed', 1), injected(2, delivered('JH ORQ · js-harness')), queuedInjected(3, delivered('JH ORQ · js-harness')), injected(4, 'made up'), reply('answer', 5));
   assert.deepEqual(lib.compactionStretch(text).sessions, [{ line: 2, at: at(2), name: 'JH ORQ · js-harness' }, { line: 3, at: at(3), name: 'JH ORQ · js-harness' }]);

@@ -205,10 +205,11 @@ function deliveredBy(text) {
   return { name: attributeOf(opening[1], 'name') || null };
 }
 
-/** The text of the entry that holds a peer message: a queued command's `prompt`, or a `user` entry's content as
- * `quoteEntry` reads it (the string, or its text blocks joined), `''` when it has none. */
+/** The text of the entry that holds a peer message: a queued command's `prompt` as `queuedWords` reads it (a list of
+ * blocks without the host's leading reminders), or a `user` entry's content as `quoteEntry` reads it (the string, or
+ * its text blocks joined), `''` when it has none. */
 function peerTextOf(entry) {
-  if (entry.type === 'attachment') return typeof entry.attachment.prompt === 'string' ? entry.attachment.prompt : '';
+  if (entry.type === 'attachment') return queuedWords(entry.attachment.prompt)?.text ?? '';
   const content = entry.message?.content;
   return typeof content === 'string' ? content : blocksOf(entry).filter(isText).map((block) => block.text).join('\n');
 }
