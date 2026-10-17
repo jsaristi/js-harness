@@ -2964,8 +2964,8 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     reliability: approved and acknowledged (`review-ea14564f6a7371ed`), three warnings left as later
     work (the first-parent listing has no depth bound; a relative `--cwd`; a test's unquoted temp
     dir). The pre-push hook refused the branch while the recheck's findings stood, so the three P2
-    were fixed test first in 93f8a8d (lib guard 24, guard 25 pass; it also settles the relative
-    `--cwd` warning); gentle-ai on it: medium, 15 lines, not due (under_budget). Codex recheck
+    were fixed test first (lib guard 24, guard 25 pass; it also settles the relative `--cwd` warning);
+    gentle-ai on 93f8a8d: medium, 15 lines, not due (under_budget). Codex recheck
     946df82..93f8a8d correct (0.98), 3 of 3 fixed. Left as later work: the listing's depth bound and
     the test's unquoted temp dir.
 
