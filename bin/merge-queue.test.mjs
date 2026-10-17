@@ -959,7 +959,8 @@ function makeRuleRepo(lines, { sources } = {}) {
   fs.writeFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), RULES_DATA(5), 'utf8');
   if (sources !== undefined) {
     fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'docs', 'rule-sources.json'), `${JSON.stringify(sources, null, 2)}\n`, 'utf8');
+    const text = typeof sources === 'string' ? sources : `${JSON.stringify(sources, null, 2)}\n`;
+    fs.writeFileSync(path.join(root, 'docs', 'rule-sources.json'), text, 'utf8');
     git(root, 'add', '.');
   }
   git(root, 'commit', '--quiet', '-am', 'rule a changes');
@@ -1118,6 +1119,14 @@ test('a land confirms the proposal whose source its head holds, not a newer one 
   const { code, out } = await landRule(made);
   assert.equal(code, 0, out.join('\n'));
   assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});
+
+test('a head whose sources file does not parse still confirms a proposal that names the declaration alone', async () => {
+  const made = makeRuleRepo(['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration ${declarationOf(RULES_DATA(5), 'a')}`], { sources: '{ not json' });
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+  assert.ok(out.some((line) => line.includes('docs/rule-sources.json does not parse')), out.join('\n'));
 });
 
 test('--land whose suite did not run exits 5, bisects nothing and pushes nothing, with two pull requests', async () => {

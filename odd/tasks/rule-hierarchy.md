@@ -2999,7 +2999,8 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     declaration with another source would be confirmed though the head holds the first source
     (verifier A1 on `9c3f41a`, 2026-10-16); tests of a CRLF relief file and of lines without a hash
     beside hashed ones (A3). Codex's second recheck of the P2 was refused by the one-recheck cap, and
-    the range `ac6cf2c..9c3f41a` is recorded as a skip naming this task. Route: inline.
+    the range `ac6cf2c..9c3f41a` is recorded as a skip naming this task. Route: inline. Commits
+    `fcae3dd` and the next, by JH 21 on `feat/landing-rule-hash`.
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block. Its second part, the hash in
     the installed command and `doctor`'s `js-harness` row, built by JH 28 on 2026-10-16 on
@@ -4543,7 +4544,13 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   <hash>`, keeps its match by the declaration alone; a line with neither keeps the time bound. RED: the sourced
   match, a line with no hash beside hashed ones, and the land of two proposals that differ only in source (three of
   `bin/merge-queue.test.mjs`), and the four relief-line tests of `bin/lib/rules-change-run.test.mjs`. The CRLF relief
-  file test passed at once and stays as a pin (A3): `\s*$` already took the `\r`.
+  file test passed at once and stays as a pin (A3): `\s*$` already took the `\r`. Committed as `fcae3dd` after
+  main's red `review-starts` test was fixed (PR 400). gentle-ai on `db31c96..fcae3dd`: high by escalation (item 3,
+  the relief line's format), lenses risk and reliability, approved and acknowledged (lineage
+  `review-82c5317205449ba6`), two advisories. R3: a sources file that does not parse also blocked the match by the
+  declaration alone; fixed in the next commit with its test seen red (the head's declarations are read apart from its
+  sources, and a sources file that does not parse is said and matches no sourced line). R3: the hash's shape when no
+  sources are given; left, since it is the old line's hash on purpose.
 
 - 2026-10-17, T9, the reply check on by default, built by `JH 5 · canal entre sesiones` on
   `feat/init-reply-on` from origin/main, on the lead's order of 11:22Z (item 5 of its triage

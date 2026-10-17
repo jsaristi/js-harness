@@ -474,17 +474,21 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
     const shown = gitIn(place, 'show', `${pr.headRefOid}:${RULES_DATA}`);
     const sourcesShown = gitIn(place, 'show', `${pr.headRefOid}:${RULE_SOURCES}`);
     let declarations = null;
-    let sourced = null;
+    let sourced = {};
+    try {
+      if (shown.ok) declarations = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)]));
+    } catch {
+      // A declaration file that does not parse is one the head cannot be matched by.
+    }
+    // A sources file that does not parse matches no line that names the source; a line that names the declaration
+    // alone, or neither, is still matched.
     try {
       const sources = sourcesShown.ok ? JSON.parse(sourcesShown.out) : {};
-      if (shown.ok) {
-        declarations = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)]));
-        sourced = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id, sources)]));
-      }
+      if (shown.ok) sourced = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id, sources)]));
     } catch {
-      // A declaration or a sources file that does not parse is one the head cannot be matched by.
+      stdout(`${said}, and its ${RULE_SOURCES} does not parse: a relief line that names a rule with its source is not matched.`);
     }
-    if (!Number.isFinite(committed) || committed <= 0 || declarations === null || sourced === null) {
+    if (!Number.isFinite(committed) || committed <= 0 || declarations === null) {
       stdout(`${said}, and what its head holds could not be read: no landing line is written for it.`);
       continue;
     }
