@@ -15,6 +15,7 @@ import {
 } from './suite.mjs';
 import { reportLines, summarize } from './honesty-report.mjs';
 import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
+import { readBatch } from '../bin/lib/batch-mark.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
@@ -1904,4 +1905,26 @@ test('a summary reaches an honesty run only with --honesty, prints the report of
   assert.doesNotMatch(report.io.out, /task\s+config|Headroom/, 'the rows and the screen are not its report');
   assert.deepEqual(report.deps.runTrial.asked, []);
   assert.equal(fs.readFileSync(honestyResultsFile(m), 'utf8'), before, 'nothing was rewritten');
+});
+
+// first-version T6a: a batch shows itself to the guard as a gate holder does, so no heavy test run starts beside it.
+test('a run leaves the batch mark the guard reads while its trials run, and takes it away when it ends', async () => {
+  const m = machine();
+  const marks = [];
+  const { io, deps } = depsFor(m, { runTrial: fakeRun(() => { marks.push(readBatch(m.realHome)); }) });
+  assert.equal(await suiteMain(runArgv(m), ENV, deps), 0, io.err);
+  assert.equal(marks.length, PLAN.length);
+  for (const mark of marks) {
+    assert.equal(mark?.batch, true);
+    assert.equal(mark.cwd, m.repoRoot);
+    assert.match(mark.command, /^suite .*--name screen/);
+  }
+  assert.equal(readBatch(m.realHome), null, 'the mark is gone once the run ends');
+});
+
+test('a run that stops leaves no batch mark behind', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m, { runTrial: fakeRun(stopped('quota')) });
+  assert.equal(await suiteMain(runArgv(m), ENV, deps), 1, io.err);
+  assert.equal(readBatch(m.realHome), null);
 });

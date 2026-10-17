@@ -2,9 +2,19 @@
 // another gate holds the machine's lock shares its cores, and both miss their time bounds with every test
 // green. On the night of 2026-10-14 JH 9 and JH 10 each started one. `js-harness guard --hook` (JH 15's)
 // calls this for a Bash command and, by his decision (`ffe99ebf` line 5718), refuses the call with the line
-// it answers (odd/tasks/test-run-warning.md).
+// it answers (odd/tasks/test-run-warning.md). Since first-version T6a a heavy run is refused whatever its size:
+// one file the gate log timed over a minute counts as several, and an eval batch's mark counts as a holder.
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
+import { readBatch } from './batch-mark.mjs';
 import { readGateHolder } from './gate-lock.mjs';
+import { GATE_COMMAND_MAX, gatesOf, readGateLog } from './gate-log.mjs';
+
+/** A test file a gate ran alone for longer than this, by the gate log, is heavy: run beside a gate, it counts
+ * as several files. Two such files ran beside gates past the protocol line, of 65 to 200 s, and one made a gate
+ * fail (docs/FAILURES.md, heavy-run-beside-gate). */
+export const HEAVY_FILE_SECONDS = 60;
 
 /** The flags of `node --test` that take the next word as their value, so that word is no file. */
 const VALUED = new Set(['--test-name-pattern', '--test-skip-pattern', '--test-reporter', '--test-reporter-destination', '--test-concurrency', '--test-timeout', '--test-shard', '--import', '--require', '-r', '--env-file']);
@@ -66,21 +76,77 @@ function gateWraps(words) {
   return rest.length === 1 ? commandsOf(rest[0].text).flat() : rest;
 }
 
-/** How many files the `node --test` of `words` names: `0` for none (every test file the runner finds),
- * `Infinity` when one is a wildcard (several, as a rule), or `null` for words that run no `node --test`. */
+/** The files the `node --test` of `words` names, as `{ files, names }`: `files` is `0` for none (every test
+ * file the runner finds) and `Infinity` when one is a wildcard (several, as a rule), and `names` holds the words
+ * that are files. `null` for words that run no `node --test`. */
 function filesOf(words) {
   const [program, ...rest] = words;
   if (!isNode(program) || !rest.some((word) => word.text === '--test')) return null;
   let files = 0;
+  const names = [];
   for (let i = 0; i < rest.length; i += 1) {
     const { text, globbed } = rest[i];
     if (VALUED.has(text)) i += 1;
     // A redirection is no file: `2>` (whose `&1` ended the command), `>` and its target, `>out.txt`.
     else if (/^\d*[<>]/.test(text)) {
       if (/^\d*[<>]+$/.test(text)) i += 1;
-    } else if (!text.startsWith('-')) files += globbed || text.includes('$') ? Infinity : 1;
+    } else if (!text.startsWith('-')) {
+      files += globbed || text.includes('$') ? Infinity : 1;
+      names.push(text);
+    }
   }
-  return files;
+  return { files, names };
+}
+
+/** A test file as the gate log and the guard both name it: from the folder the command ran in, with forward
+ * slashes and no leading `./`. A file named by its whole path is named from `cwd`. A run from another folder of
+ * the same tree names the file otherwise, and is then not matched: it stays free, as before T6a. */
+function fileKey(name, cwd) {
+  const whole = path.win32.isAbsolute(name) || path.posix.isAbsolute(name);
+  const relative = whole && typeof cwd === 'string' ? path.relative(cwd, name) : name;
+  return path.posix.normalize(relative.replace(/\\/g, '/')).replace(/^(\.\/)+/, '');
+}
+
+/** The repository of `cwd`, as the folder git keeps its objects in, shared by every worktree of it: the nearest
+ * `.git` folder, or the one a worktree's `.git` file names (`gitdir: <common>/worktrees/<name>`). Read from files
+ * only, since the guard runs on every Bash call; `null` where none is found. */
+export function repositoryOf(cwd) {
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    const dotGit = path.join(dir, '.git');
+    try {
+      if (fs.statSync(dotGit).isDirectory()) return path.resolve(dotGit).toLowerCase();
+      const named = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotGit, 'utf8'))?.[1];
+      if (!named) return null;
+      const gitdir = path.resolve(dir, named);
+      return (path.basename(path.dirname(gitdir)) === 'worktrees' ? path.dirname(path.dirname(gitdir)) : gitdir).toLowerCase();
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') return null;
+    }
+    if (path.dirname(dir) === dir) return null;
+  }
+}
+
+/** The longest that a gate of `events` (the gate log's, `readGateLog`) ran `file` alone: the `seconds` of the
+ * end of each gate whose command is `gate ... -- node --test` of that one file, or `undefined` when none did. A
+ * gate of several files times none of them, nor does a command the log cut at its length (`GATE_COMMAND_MAX`),
+ * which may have lost every file after the first. */
+export function timedSeconds(events, file, { project, projectOf = repositoryOf } = {}) {
+  let longest;
+  const projects = new Map();
+  const sameProject = (cwd) => {
+    if (project === undefined) return true;
+    if (!projects.has(cwd)) projects.set(cwd, typeof cwd === 'string' ? projectOf(cwd) : null);
+    return projects.get(cwd) === project;
+  };
+  for (const { start, end } of gatesOf(events)) {
+    if (!start || !end || typeof start.command !== 'string' || !Number.isFinite(end.seconds)) continue;
+    if (start.command.length >= GATE_COMMAND_MAX || !sameProject(start.cwd)) continue;
+    const words = gateWraps([{ text: 'js-harness', globbed: false }, ...commandsOf(start.command).flat()]);
+    const run = words === null ? null : filesOf(words);
+    if (run?.files !== 1 || fileKey(run.names[0], start.cwd) !== file) continue;
+    longest = Math.max(longest ?? 0, end.seconds);
+  }
+  return longest;
 }
 
 // The words a command line can hide a test run behind: `wsl.exe ... -- <command>` (or `-e <command>`), a
@@ -90,8 +156,8 @@ const WSL = /(^|[\\/])wsl(\.exe)?$/i;
 const SHELL = /(^|[\\/])(sh|bash|dash|zsh)(\.exe)?$/i;
 const KEYWORDS = new Set(['do', 'then', 'else', 'elif', '!', 'time', '{']);
 
-/** How many files the first `node --test` that `words` runs names (see `filesOf`), looking through
- * `wsl.exe` and `sh -c`, or `null` where there is none. A script a shell runs is not read. */
+/** The files the first `node --test` that `words` runs names (see `filesOf`), looking through `wsl.exe` and
+ * `sh -c`, or `null` where there is none. A script a shell runs is not read. */
 function scan(words, depth = 0) {
   let at = 0;
   while (at < words.length && KEYWORDS.has(words[at].text)) at += 1;
@@ -121,26 +187,57 @@ function scan(words, depth = 0) {
 /** How many files the first `node --test` of `command` that runs outside `js-harness gate` names (see
  * `filesOf`), or `null` where there is none: a run that `js-harness gate --` wraps is in a turn. */
 export function testRunFiles(command) {
+  return testRunOf(command)?.files ?? null;
+}
+
+/** The files of the first `node --test` of `command` that runs outside `js-harness gate`, as `filesOf` gives
+ * them, or `null` where there is none. */
+function testRunOf(command) {
   for (const words of commandsOf(command)) {
-    const files = scan(words);
-    if (files !== null) return files;
+    const run = scan(words);
+    if (run !== null) return run;
   }
   return null;
 }
 
 /** The warning for `command`, or `null`: one line, when the command runs, outside `js-harness gate --`, a
- * `node --test` of two or more files, of a wildcard or of none (every test file); is not inside a turn
- * already (`JS_HARNESS_GATE_HELD=1`, or `JS_HARNESS_CHECK_INNER=1` in a gate's sensor); and the machine's
- * lock is held now (`readGateHolder`). One test file stays free, as the skill says. `deps.holder` stands in
- * for the look at the lock, which is made only for a command that qualifies; `deps.home` is the home of the
- * lock (`JS_HARNESS_HOME`, else the user's). */
-export function testRunWarning(command, { env = process.env, home = env.JS_HARNESS_HOME || os.homedir(), holder = () => readGateHolder(home) } = {}) {
-  const files = testRunFiles(command);
-  if (files === null || files === 1) return null;
+ * heavy `node --test` (of two or more files, of a wildcard or of none, every test file; or of one file the gate
+ * log timed over `HEAVY_FILE_SECONDS`); is not inside a turn already (`JS_HARNESS_GATE_HELD=1`, or
+ * `JS_HARNESS_CHECK_INNER=1` in a gate's sensor); and the machine's lock is held now (`readGateHolder`) or an
+ * eval batch runs (`readBatch`). Any other single file stays free, as the skill says. `deps.holder` stands in
+ * for the look at the lock and the batch, made only for a command that qualifies, and `deps.fileSeconds` for
+ * the gate log's time of a file (`timedSeconds`), read only once the look found a holder; `deps.home` is the
+ * home of both (`JS_HARNESS_HOME`, else the user's), and `deps.cwd` the folder the command runs in. */
+export function testRunWarning(command, {
+  env = process.env,
+  home = env.JS_HARNESS_HOME || os.homedir(),
+  cwd = process.cwd(),
+  holder = () => readGateHolder(home) ?? readBatch(home),
+  // Only gates of this repository time its files: the gate log is the machine's (Codex, 2026-10-16).
+  fileSeconds = (file) => {
+    const project = repositoryOf(cwd);
+    return project === null ? undefined : timedSeconds(readGateLog(home).events, file, { project });
+  },
+} = {}) {
+  const run = testRunOf(command);
+  if (run === null) return null;
   if (env.JS_HARNESS_GATE_HELD === '1' || env.JS_HARNESS_CHECK_INNER === '1') return null;
   const held = holder();
   if (!held) return null;
-  const what = files === 0 ? 'every test file' : files === Infinity ? 'several test files' : `${files} test files`;
+  let what;
+  if (run.files === 1) {
+    const file = fileKey(run.names[0], cwd);
+    const seconds = fileSeconds(file);
+    if (!(seconds > HEAVY_FILE_SECONDS)) return null;
+    what = `${file}, which the gate log timed at ${seconds} s,`;
+  } else {
+    what = run.files === 0 ? 'every test file' : run.files === Infinity ? 'several test files' : `${run.files} test files`;
+  }
+  // One file at a time is a way out only for a run of several; a heavy file waits.
+  const several = run.files !== 1;
+  if (held.batch) {
+    return `node --test of ${what} starts outside a turn while the eval batch of ${held.cwd} runs: both share the cores and miss their bounds; wait for the batch to end${several ? ', or run one file at a time' : ''}`;
+  }
   const whose = held.cwd ? `the gate of ${held.cwd}` : 'another gate';
-  return `node --test of ${what} starts outside a turn while ${whose} holds the machine's gate lock: both share the cores and miss their bounds; run it with js-harness gate -- <command>, or one file at a time`;
+  return `node --test of ${what} starts outside a turn while ${whose} holds the machine's gate lock: both share the cores and miss their bounds; run it with js-harness gate -- <command>, ${several ? 'or one file at a time' : 'which waits its turn'}`;
 }
