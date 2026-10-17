@@ -91,6 +91,19 @@ export const RULES = [
     ]
   },
   {
+    "id": "double-review",
+    "subject": "a design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it",
+    "owner": "sebastian",
+    "since": "2026-10-16",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "first passes two read-only readers that did not write it",
+      "one attacks its claims, one looks only for what is missing"
+    ],
+    "failure": "proposal-unreviewed",
+    "review": "2026-11-16"
+  },
+  {
     "id": "gate-log-command",
     "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
     "owner": "project",

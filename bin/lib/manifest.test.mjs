@@ -2358,6 +2358,8 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('in the reply to their next message'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
+  // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
+  assert.ok(text.includes('- A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (`rule:double-review`, `js-harness-protocols` section 1), and says what its readers changed, or names by path the reviewed text it rests on.'));
   // A timer outlived what it waited for (his correction, 2026-10-14): a background task declares its purpose and its end.
   assert.ok(text.includes('A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it'));
   // A session the user refused or stopped waited six hours in silence: it tells the orchestrator first.

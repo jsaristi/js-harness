@@ -2857,11 +2857,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     (`old-rule-beside-new`; its control is owed by T16)
   - [x] T17e The 104 items still open on 2026-10-16, read again and closed where they could be:
     57 checked off, 47 left to their owners (Progress, 2026-10-16)
-- [ ] T18 The double review, by his words of 2026-10-11 and 2026-10-16 ("The double review
+- [x] T18 The double review, by his words of 2026-10-11 and 2026-10-16 ("The double review
   (T18)"; route: inline, design passed by two read-only readers first)
   - [x] T18a The design (version 2, after two readers), the failure entry and the template's
     sentence with its test
-  - [ ] T18b After pull request 284 lands and he has answered: the rule declared with its home,
+  - [x] T18b After pull request 284 lands and he has answered: the rule declared with its home,
     protocol 6's pointer, the orchestrator line, their tests and the shared-phrase test
 
 ## Progress
@@ -4315,6 +4315,14 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - Not touched: the step `project-uninstall`, where JH 22 holds a pending fix.
 
 ## Next step
+**State for a resume, 2026-10-16, T18b built by JH 28 on `rule/double-review-rule`** (worktree
+`D:/js-harness-worktrees/double-review-rule`): the rule double-review declared by `rules change`
+(his answer to question 12, "Sí, así (Recomendada)", e152c9d8 line 15242), its home in protocol 1,
+protocol 6's pointer, the orchestrator line, their tests (RED, then GREEN) and the failure's control.
+Next: commit through the gate, gentle-ai, Codex, pull request, notify the lead; then T16f's next
+part (the hash of the rules with no scope stamped in the installed command, doctor saying it is
+behind): design first with two readers.
+
 **State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai
 approved and acknowledged, the verifier passed. Next: Codex, `merge-tree`, and a draft pull
 request to the lead's queue. With it, step 2's batches are done; the `AMOUNT` fix is pull request
