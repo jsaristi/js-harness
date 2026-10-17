@@ -3059,6 +3059,24 @@ test('renderBoard: a row of the roster says what the record says of its session,
   assert.match(lib.ROSTER_NOT_KNOWN, /unless a notice of the session says it/);
 });
 
+// odd/tasks/session-close.md, T3: a session that closed with its summary waits for the lead to read it and archive it.
+test('renderBoard lists to archive each session that closed with its summary and that the app does not say is archived', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120), member(C, 'JH 3 · the lock', 180), member(D, 'JH 4 · the roster', 240), member('eeeeeeee-5555', 'JH 5 · the wait', 30)];
+  const notices = [
+    noticeOf(600, { id: B }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-2-the-board.md' }),
+    noticeOf(700, { id: C }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-3-the-lock.md' }),
+    // Closed before summaries existed: the board has nothing to point the lead at.
+    noticeOf(3600, { id: D }, 'orchestrator', 'closed', 'delivered; nothing more goes to this session'),
+    // Closed with a summary, then opened again: its last word is no close.
+    noticeOf(900, { id: 'eeeeeeee-5555' }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-5-the-wait.md' }),
+    noticeOf(300, { id: 'eeeeeeee-5555' }, 'orchestrator', 'opened', 'the next feature'),
+  ];
+  const app = new Map([[B, inSessions()], [C, inSessions({ where: 'archived', archived: true })]]);
+  const section = rosterSection(sessions, { record: recordOf(notices), app });
+  assert.deepEqual(section.filter((line) => line.includes('to archive')), ['  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it']);
+  assert.ok(section.indexOf('  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it') < section.indexOf(`  ${lib.ROSTER_NOT_KNOWN}`));
+});
+
 // Failure 8 of 2026-10-10 (odd/tasks/rule-hierarchy.md): stopped tasks and archived sessions printed as
 // live. No transcript says that a session was archived; a session that wrote `closed`, or that was
 // relieved, said so itself, and its line no longer reads as one that works or waits.

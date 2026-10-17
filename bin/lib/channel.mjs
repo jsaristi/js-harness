@@ -444,7 +444,7 @@ const titleOf = (text) => text.trim().normalize('NFC');
 export function titleSlug(title) {
   return titleOf(title)
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .slice(0, 60)

@@ -1271,7 +1271,9 @@ function recordOfRows(rows, notices) {
     if (!row) continue;
     const kept = said.get(row) ?? { status: null, worktree: null, branch: null, notices: 0 };
     kept.notices += 1;
-    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text };
+    // A closed notice keeps the summary its session left, which the lead reads before it archives it (session-close, T3).
+    const summary = notice.kind === 'closed' && typeof notice.summary === 'string' ? { summary: notice.summary } : {};
+    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text, ...summary };
     if (typeof notice.worktree === 'string') {
       kept.worktree = notice.worktree;
       kept.branch = typeof notice.branch === 'string' ? notice.branch : null;
@@ -3025,6 +3027,13 @@ function rosterLines(roster, now) {
   const orchestrators = roster.rows.filter((row) => row.role === 'orchestrator');
   if (orchestrators.length > 1) {
     lines.push(`  ${orchestrators.length} sessions carry the orchestrator's title: ${orchestrators.map((row) => JSON.stringify(row.title)).join(', ')}. A message to the orchestrator has no single address.`);
+  }
+  // A session whose last word is a close with its summary waits for the lead to read the summary and archive it,
+  // until the app says it is archived (odd/tasks/session-close.md, T3).
+  for (const row of roster.rows) {
+    const status = row.record?.status;
+    if (status?.kind !== 'closed' || typeof status.summary !== 'string' || row.where === 'archived') continue;
+    lines.push(`  to archive: ${row.title ?? '(no title)'}, closed ${ago(status.at, now)}: read ${status.summary}, then archive it`);
   }
   if (roster.unread > 0) lines.push(inNoRow(roster.unread, 'that could not be read'));
   if (roster.outside > 0) lines.push(inNoRow(roster.outside, 'with no entry inside the window'));
