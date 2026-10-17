@@ -239,3 +239,19 @@ test('a record it cannot read is said on standard error and lets the session sto
   assert.deepEqual(broken.answer, {});
   assert.match(broken.err, /js-harness reply: .*the wake check did not run/);
 });
+
+test('the opening a session read is its work though it was stored before the session began; an older one it never read is not', async () => {
+  const opening = { schema: 'js-harness.channel-opening/v1', title: 'JH 26 · canal', at: '2026-10-17T00:50:00.000Z', from: LEAD, text: 'Build T2.' };
+  const reading = JSON.stringify({ schema: 'js-harness.channel-reading/v1', at: '2026-10-17T01:02:00.000Z', reader: { host: 'claude-code', id: 's1', source: 'environment' }, title: 'JH 26 · canal' });
+  const read = await wakeHook({ record: [reading], openings: { 'jh-26.json': opening } });
+  assert.match(read.answer.reason, WARNING);
+  assert.match(read.answer.reason, /your opening/);
+  const unread = await wakeHook({ record: [], openings: { 'jh-26.json': opening } });
+  assert.deepEqual(unread.answer, {}, 'an opening from before the session that it never read is another session\'s');
+});
+
+test('a call the host moved to the background when it outlived its timeout counts as a launch after the warning', async () => {
+  const moved = line({ type: 'user', timestamp: '2026-10-17T01:36:00.000Z', toolUseResult: { stdout: '', backgroundTaskId: 'b7' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't9', content: 'moved to the background' }] } });
+  const result = await wakeHook({ transcript: [started, titled('JH 26 · canal'), warned('2026-10-17T01:35:00.000Z'), moved] });
+  assert.match(result.answer.reason, WARNING);
+});

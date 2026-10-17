@@ -87,6 +87,10 @@ Nothing of this feature is his: no spend, nothing irreversible, no product choic
   - RED: 8 of 16 tests of `bin/reply.test.mjs` failed. GREEN: reply 16, lib/reply 18, stall 16.
   - Run on this session's own transcript and the real record, it warned: it held the lead's note of 18:55 local
     with nothing in its background.
+  - Codex on 99234817 (incorrect, 0.98), two P2, both fixed test first: an opening is stored before its session
+    begins, so the cut by the transcript's start dropped the usual first handing (the opening the session read now
+    counts whenever it was stored); and a call the host moved to the background when it outlived its timeout
+    (`toolUseResult.backgroundTaskId`) now counts as a launch after the warning. RED 2, GREEN reply 18.
 
 ## Next step
 T4, S4: the hour check on `notify` text, by its design of two readers (`jh26-t4-design.md`, Version 2, in the

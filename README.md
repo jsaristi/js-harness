@@ -811,7 +811,8 @@ background, or to give the work back with `--kind closed`. A `waiting` notice do
 back: a session that waits still arms a wait. It says so once a handing, as the transcript records
 its earlier block, and again after a background task launched since has ended. A close with the
 decision state is not told, a handing older than the session's transcript belongs to another
-session of that number, and Codex, which sends no background tasks, is not checked. When the close
+session of that number (except the opening the session read, always stored before it began), a
+call the host moved to the background when it outlived its timeout counts as a launch, and Codex, which sends no background tasks, is not checked. When the close
 is refused too, both reasons go in one block.
 
 ```console
