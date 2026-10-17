@@ -176,7 +176,7 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, re
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, secondRecheckRefused,
+  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, runsLogged, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -1490,13 +1490,19 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
+    // Codex is looked for before anything is made: the turn would find it missing only after its worktree was
+    // added (the verifier of pull request 338).
+    if (!codexVersion(spawn, platform, childEnv(env, platform))) {
+      error(NO_CODEX);
+      return 1;
+    }
     log(turnSaid(1, turns));
     const { commonGitDir: common } = where;
     if (!common) {
       error('Could not find the git directory, where the worktree of the merge is made, so nothing was started or recorded.');
       return 1;
     }
-    sweepTurnWorktrees(root, { commonGitDir: common, spawn });
+    sweepTurnWorktrees(root, { commonGitDir: common, spawn, now: () => now().getTime() });
     const place = addTurnWorktree(root, turns.merge, { commonGitDir: common, spawn, now: () => now().getTime() });
     if (place === null) {
       error(`Could not make a worktree at the merge ${turns.merge.slice(0, 7)}, so nothing was started or recorded.`);
@@ -1526,8 +1532,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`Could not read the record of the turn at the merge (${err.message}), so the commits after it were not reviewed.`);
       return 1;
     }
-    if (!records.some((record) => record.base === turns.from && record.head === turns.merge)) {
+    const written = records.findLast((record) => record.base === turns.from && record.head === turns.merge);
+    if (written === undefined) {
       error(`The turn at the merge ${turns.merge.slice(0, 7)} wrote no record, so the commits after it were not reviewed.`);
+      return 1;
+    }
+    // A record whose run line never reached the log reads as owing nothing, which says nothing here.
+    if (!runsLogged(written, runs)) {
+      error(`The run line of the turn at the merge ${turns.merge.slice(0, 7)} is not in the run log, so whether it owes a correction cannot be said and the commits after it were not reviewed: run the review again.`);
       return 1;
     }
     if (recheckState({ from: turns.merge, records, runs }).kind !== 'review') {
