@@ -3,6 +3,7 @@
 // hands it records and the command (bin/throughput.mjs) hands it what it read. The facts and not the figures are
 // what a day keeps, so a median over several days is the median of their facts, never of their daily medians.
 
+import { recordedQuestions } from './channel.mjs';
 import { compareSteps, stepsOf } from './progress-pace.mjs';
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -233,6 +234,29 @@ export function landFacts(records, { from, to }) {
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 }
 
+/** The questions of `[from, to)` (B4), from the channel's `record` (`readNotices`): `recorded`, the question notices
+ * written in it, `{ number, at }`; `closed`, those whose closing notice was written in it, as the board settles one
+ * (`recordedQuestions`): `{ number, by, via, recordedAt, at, shownAt, answeredAt }`, `by` an answer or a withdrawal, and
+ * `via` how an answer came: by the question tool, typed in the chat, or not verified (no transcript could be read).
+ * `shownAt` and `answeredAt` are the answer notice's own times, which B4 adds: `null` on a notice written without them;
+ * `shownAt` is kept only for an answer by the question tool, since no tool showed a typed one. */
+export function questionFacts(record, { from, to }) {
+  const inDay = (at) => {
+    const ms = Date.parse(at);
+    return ms >= from && ms < to;
+  };
+  const time = (value) => (typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null);
+  const recorded = record.questions.filter(({ notice }) => inDay(notice.at)).map(({ number, notice }) => ({ number, at: notice.at }));
+  const closed = recordedQuestions(record)
+    .filter((one) => one.closed !== null && inDay(one.closed.notice.at))
+    .map(({ number, notice, closed: { by, notice: closing } }) => {
+      const via = by !== 'answer' ? null : closing.verified === false ? 'not verified' : closing.copy?.tool == null ? 'typed in the chat' : 'question tool';
+      return { number, by, via, recordedAt: notice.at, at: closing.at, shownAt: via === 'question tool' ? time(closing.shownAt) : null, answeredAt: by === 'answer' ? time(closing.answeredAt) : null };
+    })
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  return { recorded, closed };
+}
+
 /** The gentle-ai reviews of `[from, to)` (B6), from `record`: `starts`, the lines the pause hook recorded
  * (`readReviewStarts`); `ends`, gentle-ai's terminal records (`readReviewEnds`); `live`, the lineages whose folder is in
  * its store now. Returns `{ since, started, ended, open, gone }`. `since` is when this machine began recording starts
@@ -346,11 +370,12 @@ const SOURCES = {
   ready: 'the newest ready notice naming the pull request on the channel (notify --kind ready --pr) to its merge commit on origin/main',
   lands: '<git common dir>/js-harness/lands.jsonl, one line per merge-queue --land',
   reviews: 'gentle-ai\'s store (<git common dir>/gentle-ai/review-transactions: a terminal record per acknowledgement) and the starts the pause hook keeps (<home>/.js-harness/throughput/<slug>/review-starts.jsonl)',
+  questions: 'the channel (~/.js-harness/channel): each question notice to the answer or withdrawal that closes it, as the board settles it (recordedQuestions); shown and answered are the answer notice\'s own times (B4)',
   times: 'test-times.jsonl beside the gate log, one line per gate that traced its tests (exact tests on)',
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'], reviews: ['reviews'] };
+const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'], reviews: ['reviews'], questions: ['channel'] };
 
 /** Why `day` could not read `source`, or `undefined`. */
 const unreadOf = (day, source) => UNAVAILABLE_KEY[source].map((key) => day.unavailable?.[key]).find(Boolean);
@@ -505,6 +530,36 @@ export function throughputRows(days) {
     return row(label, 'reviews', parts.join('; '));
   };
 
+  // B4's row: what was asked and how long its answer took, from the channel's own notices. The relayed time holds today;
+  // the shown and answered times are the answer notice's own, which only notices written since B4 keep.
+  const questionsRow = () => {
+    const label = 'questions';
+    const unkept = days.filter((day) => day.questions === undefined && !unreadOf(day, 'questions')).map((day) => day.day);
+    const notKept = unkept.length > 0 ? `not recorded: ${unkept.join(', ')} (no questions kept)` : null;
+    if (unkept.length === days.length) return { label, value: notKept, source: SOURCES.questions };
+    const kept = days.filter((day) => day.questions !== undefined);
+    const closed = kept.flatMap((day) => day.questions.closed);
+    const answers = closed.filter((one) => one.by === 'answer');
+    const by = (via) => answers.filter((one) => one.via === via).length;
+    const ways = [['question tool', 'by the question tool'], ['typed in the chat', 'typed in the chat'], ['not verified', 'not verified']].filter(([via]) => by(via) > 0).map(([via, words]) => `${by(via)} ${words}`);
+    const span = (list, first, last) => list.map((one) => (Date.parse(one[last]) - Date.parse(one[first])) / 60000).filter(Number.isFinite);
+    const said = (words, values) => `${words}: median ${Math.round(median(values))} min ${counted(values)}`;
+    const parts = [`${kept.reduce((sum, day) => sum + day.questions.recorded.length, 0)} recorded`, `${answers.length} answered${ways.length ? ` (${ways.join(', ')})` : ''}, ${closed.length - answers.length} withdrawn`];
+    const relayed = span(answers, 'recordedAt', 'at');
+    if (relayed.length > 0) parts.push(said('recorded to answer relayed', relayed));
+    const timed = answers.filter((one) => one.answeredAt !== null);
+    if (answers.length > 0 && timed.length === 0) parts.push('shown and answered times: not recorded (B4)');
+    else if (timed.length > 0) {
+      const tapped = timed.filter((one) => one.shownAt !== null);
+      const typed = timed.filter((one) => one.via === 'typed in the chat');
+      if (tapped.length > 0) parts.push(said('recorded to shown', span(tapped, 'recordedAt', 'shownAt')), said('shown to answered', span(tapped, 'shownAt', 'answeredAt')));
+      if (typed.length > 0) parts.push(said('typed, recorded to answered', span(typed, 'recordedAt', 'answeredAt')));
+      if (timed.length < answers.length) parts.push(`no shown or answered time: ${answers.length - timed.length} of ${answers.length} answers`);
+    }
+    const { value, source } = row(label, 'questions', parts.join('; '));
+    return { label, value: [value, notKept].filter(Boolean).join('; '), source };
+  };
+
   const medianOf = (values, unit) => (values.length ? `median ${Math.round(median(values))} ${unit} ${counted(values)}` : 'none');
   return [
     row('pull requests merged', 'git', `${numbers.size} (${(numbers.size / hours).toFixed(2)} an hour)${twice.length ? `; merged twice: ${twice.join(', ')}` : ''}`),
@@ -528,6 +583,7 @@ export function throughputRows(days) {
     row('load at gate starts', 'gates', loads.length ? `median share ${median(loads).toFixed(2)} (${loads.length}); full at ${loads.filter((share) => share >= 1).length} of ${loads.length}` : 'none'),
     row('Codex reviews', 'codex', `${codex.length} attempts (${codex.filter((run) => run.part).length} parts), median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all; ${findings}`),
     reviewsRow(),
+    questionsRow(),
     row('idle upper bound', 'channel', idle.length
       ? `${idle.length} waits, median ${Math.round(median(idleMinutes))} min, ${(idleMinutes.reduce((sum, m) => sum + m, 0) / 60).toFixed(1)} session-h in all; longest: ${longest.title ?? short(longest.session)} ${Math.round(longest.minutes)} min`
       : 'none'),
