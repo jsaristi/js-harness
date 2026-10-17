@@ -313,6 +313,76 @@ export function withoutDigest(root, components, agent, settle = (rel, bytes) => 
   return hash.digest('hex');
 }
 
+/** The `.md` files at or below `rel` of the home, sorted. */
+function markdownFiles(root, rel) {
+  if (!fs.statSync(full(root, rel), { throwIfNoEntry: false })?.isDirectory()) return rel.endsWith('.md') ? [rel] : [];
+  return children(root, rel).flatMap((name) => markdownFiles(root, `${rel}/${name}`));
+}
+
+/** The front matter of a Markdown `text` and the lines after it. */
+function frontMatter(text) {
+  const lines = text.split(/\r?\n/);
+  if (lines[0] !== '---') return { head: [], body: lines };
+  const end = lines.indexOf('---', 1);
+  return end < 0 ? { head: [], body: lines } : { head: lines.slice(1, end), body: lines.slice(end + 1) };
+}
+
+/** The `description` of a front matter, a plain, quoted or folded value, or `null`. */
+function descriptionOf(head) {
+  const index = head.findIndex((line) => /^description:/.test(line));
+  if (index < 0) return null;
+  let value = head[index].slice('description:'.length).trim();
+  if (/^[>|][-+]?$/.test(value)) {
+    const rest = head.slice(index + 1);
+    const end = rest.findIndex((line) => !/^\s/.test(line));
+    value = rest.slice(0, end < 0 ? rest.length : end).map((line) => line.trim()).join(' ');
+  }
+  return value.replace(/^(["'])(.*)\1$/, '$2').trim() || null;
+}
+
+/** The lines of `before` that `after` (the same lines with some taken out, in order) no longer holds. */
+function droppedLines(before, after) {
+  const kept = after.split(/\r?\n/);
+  let next = 0;
+  return before.split(/\r?\n/).filter((line) => {
+    if (next < kept.length && kept[next] === line) {
+      next += 1;
+      return false;
+    }
+    return true;
+  });
+}
+
+/** What a request to the model carries of the component `id` when it is loaded, read from the home in `root`, for
+ * the isolation probe (`evals/isolation-probe.mjs`) to tell an arm that holds it from one that does not:
+ * `{ tools, lines, descriptions }`. `tools` are prefixes of the tool names Claude Code gives a server
+ * (`mcp__<name>__`) or a plugin's servers (`mcp__plugin_<name>_`); `lines` are the lines of text the model is sent
+ * whole, those the cut takes out of the instructions file and an output style's body; `descriptions` are what it is
+ * sent of a skill or an agent, the `description` of its front matter, not its body. A component the model is sent
+ * nothing of (hooks, the project) has all three empty, and the probe can only say so. Reads only. */
+export function withoutEvidence(root, id, agent) {
+  const name = id.slice(id.indexOf('-') + 1);
+  const tools = id.startsWith('mcp-') ? [`mcp__${name}__`] : id.startsWith('plugin-') ? [`mcp__plugin_${name}_`] : [];
+  const lines = [];
+  const descriptions = [];
+  for (const piece of piecesOf(root, id, agent)) {
+    if (piece.text) {
+      lines.push(...droppedLines(fs.readFileSync(full(root, piece.text), 'utf8'), piece.content));
+      continue;
+    }
+    for (const rel of piece.remove ? markdownFiles(root, piece.remove) : []) {
+      const text = fs.readFileSync(full(root, rel), 'utf8');
+      const parts = rel.split('/');
+      if (parts.includes('skills') || parts.includes('agents')) {
+        const description = (!parts.includes('skills') || parts.at(-1) === 'SKILL.md') ? descriptionOf(frontMatter(text).head) : null;
+        if (description) descriptions.push(description);
+      } else if (parts.includes('output-styles')) lines.push(...frontMatter(text).body);
+      else lines.push(...text.split(/\r?\n/));
+    }
+  }
+  return { tools, lines, descriptions: descriptions.sort() };
+}
+
 /** Takes `components` out of the home in `root`, one after the other, once `checkWithout` has passed for all of
  * them: a refused component leaves the home untouched. */
 export function applyWithout(root, components, agent) {

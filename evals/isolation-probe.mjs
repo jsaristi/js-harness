@@ -5,7 +5,7 @@
 // decisions"). This is the check that the sandbox is real, not assumed: the sandbox env is a list of
 // variables somebody believes every writer honours, and only a run of the real binary says whether it does.
 //
-//   node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both] [--control-ms <n>]
+//   node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both|current-without-<id>] [--control-ms <n>]
 //     [--report <path>] [--keep-sandbox] [--timeout-ms <n>]
 //
 // How it proves anything, rather than merely failing to find a leak:
@@ -39,8 +39,10 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ArmError, parseArm } from './arms.mjs';
 import { assertWorkRoot, currentConfig, defaultWorkRoot, minimalConfig, sandboxPaths } from './configs.mjs';
-import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
+import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
+import { withoutEvidence } from './without.mjs';
 import { findProcesses, isListening as portIsListening } from './ports.mjs';
 import { childEnv, killByPath, parseAgentOutput, removeDir, resolveAgent, runProcess } from './runner.mjs';
 
@@ -159,6 +161,30 @@ function carriesMarkers(body, markers) {
   return markers.filter((marker) => text.includes(marker)).length >= Math.min(2, markers.length);
 }
 
+/** A description is matched by its first characters, as a listing may cut a long one short, and only when it is long
+ * enough not to occur in another prompt by chance. */
+const DESCRIPTION_MIN_LENGTH = 30;
+const DESCRIPTION_PREFIX = 80;
+
+/** What the fake API looks for of a component an arm takes out (G2 of `odd/tasks/future-model-protocol.md`, C6a),
+ * from what `withoutEvidence` (`evals/without.mjs`) says a request carries of it: the prefixes of its tool names, and
+ * needles of its text, the markers of the lines it is sent whole (as `claudeMdMarkers` picks them) and the first
+ * characters of each description. Both empty: a request carries nothing of it, and the probe cannot see it. */
+export function needlesOf({ tools, lines, descriptions }) {
+  const prefixes = descriptions.map(normalize).filter((text) => text.length >= DESCRIPTION_MIN_LENGTH).map((text) => text.slice(0, DESCRIPTION_PREFIX));
+  return { tools, needles: [...new Set([...claudeMdMarkers(lines.join('\n')), ...prefixes])] };
+}
+
+/** Whether a request body, which offers the tools `toolNames`, carries a component (`needlesOf`): a tool of it, or
+ * two of its needles (one when it has one) anywhere in the system prompt, the messages or the tools' descriptions,
+ * where a listing of skills or agents goes. A boolean, so the text is never kept. */
+function carriesComponent(body, toolNames, { tools, needles }) {
+  if (toolNames.some((name) => tools.some((prefix) => name.startsWith(prefix)))) return true;
+  if (needles.length === 0) return false;
+  const text = normalize(allText([body.system, body.messages, body.tools]).join('\n'));
+  return needles.filter((needle) => text.includes(needle)).length >= Math.min(2, needles.length);
+}
+
 /** The text the first user message of a subagent the probe starts carries, which is how the fake API tells that
  * request from the main agent's. */
 export const SUBAGENT_MARKER = 'Isolation probe subagent';
@@ -186,16 +212,20 @@ export const engramNeedles = (nonce) => ({ prompt: `nonce:${nonce}`, memory: `me
  * honoured with SSE.
  *
  * `markers` (see `claudeMdMarkers`) are matched against every `/v1/messages` request: the log says whether the
- * request carried the real global CLAUDE.md, which is how the probe sees that a trial loaded it.
+ * request carried the real global CLAUDE.md, which is how the probe sees that a trial loaded it. `track` is the
+ * components an arm is about, each `{ id, tools, needles }` (`needlesOf`): every `/v1/messages` entry gets
+ * `components`, the ids mapped to whether the request carried each (`carriesComponent`); `track(list)` replaces them,
+ * for a caller that learns them only once the server runs.
  *
  * `requests` is the log: method, path (no query), model, whether tools were offered, whether the engram tool was among
  * them, whether the request carried the markers and what was replied, and nothing more. Headers (an API key), system prompts and message bodies, which hold the prompt and the
  * user's own memory, never reach it. `toolResults()` is the text of every tool_result the agent sent back,
  * once per tool_use id: the environment as the agent's tools saw it. */
-export async function startFakeApi({ nonce, workspace, markers = [], host = '127.0.0.1' }) {
+export async function startFakeApi({ nonce, workspace, markers = [], track = [], host = '127.0.0.1' }) {
   const requests = [];
   const results = new Map();
   let counter = 0;
+  let tracked = track;
 
   const toolUse = (name, input) => ({ type: 'tool_use', id: `toolu_probe_${++counter}`, name, input });
   const needles = engramNeedles(nonce);
@@ -271,6 +301,7 @@ export async function startFakeApi({ nonce, workspace, markers = [], host = '127
     entry.toolsOffered = tools.length > 0;
     entry.engramToolOffered = tools.some((name) => MEM_SAVE_TOOL.test(name));
     entry.globalClaudeMd = pathname === '/v1/messages' && carriesMarkers(body, markers);
+    if (pathname === '/v1/messages' && tracked.length > 0) entry.components = Object.fromEntries(tracked.map((component) => [component.id, carriesComponent(body, tools, component)]));
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
     for (const message of messages) {
@@ -313,6 +344,9 @@ export async function startFakeApi({ nonce, workspace, markers = [], host = '127
     port,
     requests,
     toolResults: () => [...results].map(([toolUseId, text]) => ({ toolUseId, text })),
+    track: (list) => {
+      tracked = list;
+    },
     close: () => new Promise((resolve) => {
       server.close(() => resolve());
       server.closeAllConnections();
@@ -828,7 +862,8 @@ const ENGRAM_CONTROLS = ['engramDb', 'engramHook', 'engramServer', 'engramSessio
 /** The positive controls: what a trial that really ran under the sandbox must have written inside it. A
  * check that finds nothing in the real trees means something only if these find something in the sandbox.
  * Each is something the real hooks write on every path they can take, on Windows and on POSIX. The engram ones
- * apply to the current arm only (the minimal arm has no MCP servers and no plugin hooks):
+ * apply to the current arm only (the minimal arm has no MCP servers and no plugin hooks), and not to an arm that takes
+ * out engram's MCP server, its plugin or the hooks (`ENGRAM_PARTS`): `engram` says whether they apply.
  *  - `engramDb`: the store was created.
  *  - `engramHook`: UserPromptSubmit ran inside the sandbox. Its state file, `engram-claude-<session id>-tools-loaded`
  *    in TMPDIR, is written by the full path (`user-prompt-submit.sh`, lines 391-401) and by the fast path that bash
@@ -848,7 +883,7 @@ const ENGRAM_CONTROLS = ['engramDb', 'engramHook', 'engramServer', 'engramSessio
  * `storeHits` is `findInStore` of the sandbox's engram store, `session` the trial's session id (or `null`: no control
  * that needs it can pass), `port` the trial's engram port, `log` the fake API's request log, which says whether
  * the tool was even offered, for the hint a failed control carries. */
-async function positiveControls({ arm, home, workspace, nonce, log = [], storeHits = {}, session = null, port = null }) {
+async function positiveControls({ engram, home, workspace, nonce, log = [], storeHits = {}, session = null, port = null }) {
   const controls = {};
   const found = await findTranscript(home, nonce);
   controls.transcript = { ok: found.rel !== null, path: found.rel === null ? null : `.claude/projects/${found.rel}`, transcripts: found.count };
@@ -861,7 +896,7 @@ async function positiveControls({ arm, home, workspace, nonce, log = [], storeHi
   };
   controls.workspaceNonce = { ok: holdsNonce('probe-nonce.txt') };
   controls.workspaceWrite = { ok: holdsNonce('probe-write.txt') };
-  if (arm === 'current') {
+  if (engram) {
     const db = walkFiles(path.join(home, '.engram')).find((rel) => /\.(db|sqlite3?)$/i.test(rel));
     controls.engramDb = { applies: true, ok: db !== undefined, path: db === undefined ? null : `.engram/${db}` };
     const offered = log.some((request) => request.engramToolOffered);
@@ -989,13 +1024,40 @@ function checkContamination(arm, log, markers) {
   return { expected, markers, requests: messages.length, withGlobalClaudeMd, mainRequestHit, ok: expected === 'present' ? mainRequestHit : withGlobalClaudeMd === 0 };
 }
 
-const probePrompt = (nonce) => `Isolation probe, nonce:${nonce}\nFollow the tool calls you are given, and do nothing else.\n`;
+/** The components that are a part of the global `CLAUDE.md`: an arm without one of them changes what the
+ * contamination check's markers are read from, so that check says nothing of it and the component check does. */
+const CLAUDE_MD_PARTS = /^(?:claude-md|claude-md-own|gentle-ai-.+)$/;
+/** The components without which a trial of the current arm starts no engram of its own (its MCP server, its plugin, or
+ * the hooks that start the server and post the session), so the engram controls do not apply to it. */
+const ENGRAM_PARTS = /^(?:mcp-engram|plugin-engram|hooks)$/;
+
+/** Whether each component in `track` (`{ id, tools, needles }`) reached the model, from the fake API's log (booleans
+ * only), for an arm that is expected to carry it (`present`, its base) or not (`absent`, the arm that takes it out). The
+ * requests counted are the contamination check's; `present` is read from the main agent's requests alone, as there.
+ * A component a request carries nothing of (no tool, no needle) is `unseen`, with `ok` null: the probe cannot tell. */
+function checkComponents(expected, log, track) {
+  const messages = log.filter((request) => request.method === 'POST' && request.path === '/v1/messages' && (request.reply === 'text' || request.reply === 'subagent' || request.reply.startsWith('tool_use')));
+  return track.map(({ id, tools, needles }) => {
+    if (tools.length === 0 && needles.length === 0) return { id, expected, ok: null, unseen: true };
+    if (messages.length === 0) return { id, expected, ok: null, skipped: 'the agent sent no /v1/messages request' };
+    const carried = messages.filter((request) => request.components?.[id] === true).length;
+    const mainRequestHit = messages.some((request) => request.reply !== 'subagent' && request.toolsOffered && !/haiku/i.test(request.model ?? '') && request.components?.[id] === true);
+    return { id, expected, requests: messages.length, carried, mainRequestHit, ok: expected === 'present' ? mainRequestHit : carried === 0 };
+  });
+}
+
+const probePrompt = (nonce) =>`Isolation probe, nonce:${nonce}\nFollow the tool calls you are given, and do nothing else.\n`;
 
 /** One trial of one arm, built the way the eval builds it (`minimalConfig` / `currentConfig` with the
  * template seed), against a fresh fake API. Returns the arm's report and the real trees' snapshot taken
  * right after the agent exited, which is the next arm's "before". `p` is the shared probe context. */
 async function runArm(p, arm, before) {
   const { o, nonce } = p;
+  // An arm of one component is the current arm with its components taken out after the seed, as the eval runs it. The
+  // current arm tracks the components of every arm beside it (it must carry them), such an arm its own (it must not).
+  const { kind, components } = o.plans.find((plan) => plan.name === arm);
+  const tracked = kind !== 'current' ? [] : components.length > 0 ? components : [...new Set(o.plans.flatMap((plan) => plan.components))];
+  let track = [];
   const root = fs.mkdtempSync(path.join(o.workRoot, SANDBOX_PREFIX));
   const token = path.basename(root);
   p.tokens.push(token);
@@ -1057,19 +1119,23 @@ async function runArm(p, arm, before) {
     let seeded = null;
     try {
       let seed;
-      if (arm === 'current') {
+      if (kind === 'current') {
         // Built per arm inside its own try, so the template (a copy of the account data in the real
         // config) is removed on every path below, whatever fails.
         templateParent = fs.mkdtempSync(path.join(o.workRoot, TEMPLATE_PREFIX));
         const templateDir = path.join(templateParent, 'template');
-        p.log('current: building the home template from the real configuration (read only)');
+        p.log(`${arm}: building the home template from the real configuration (read only)`);
         const built = buildTemplate({ realHome: o.realHome, templateDir });
         result.template = { files: built.files, bytes: built.bytes, warnings: built.warnings };
-        seed = seedFromTemplate(templateDir, { runInit: o.runInit });
+        // What a request would carry of each tracked component, read from the template before any cut: the arm's own
+        // home no longer holds it, which is the point.
+        track = tracked.map((id) => ({ id, ...needlesOf(withoutEvidence(path.join(templateDir, PAYLOAD), id, 'claude')) }));
+        api.track(track);
+        seed = seedFromTemplate(templateDir, { runInit: o.runInit, without: components });
       }
       // `allocatePort` and `killPort` are the config builders' own seams, for tests that must not touch real ports.
       const options = { command: o.claude, model: PROBE_MODEL, permissionMode: PROBE_PERMISSION_MODE, allocatePort: o.allocatePort, killPort: o.killPort };
-      config = arm === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options);
+      config = kind === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options);
       config = o.adaptConfig(config, { arm });
       const configEnv = config.env;
       // The agent talks to the fake API with a dummy key and no login: the only credential is not one.
@@ -1120,12 +1186,19 @@ async function runArm(p, arm, before) {
     result.fakeApi = { requestCount: log.length, requests: log.slice(0, 100), tally, unexpected: tally['404'] ?? 0, toolResults: api.toolResults().slice(0, 20), ...inspectEnv(api.toolResults(), token) };
     result.warnings = Object.entries(result.fakeApi.envChecks).filter(([, check]) => check === 'outside').map(([name]) => `the agent's tools see ${name} outside the sandbox`);
     if (result.fakeApi.envLines?.OAUTH_TOKEN_SET === 'yes') result.warnings.push("the agent's tools still see CLAUDE_CODE_OAUTH_TOKEN");
-    result.contamination = checkContamination(arm, log, p.markers.length);
+    result.contamination = components.some((id) => CLAUDE_MD_PARTS.test(id))
+      ? { skipped: 'the arm takes part of the global CLAUDE.md out, or all of it, so its markers say nothing of the arm: the component check does' }
+      : checkContamination(kind, log, p.markers.length);
     if (result.contamination.skipped && p.markers.length === 0) result.warnings.push(`the contamination check was skipped: ${result.contamination.skipped}`);
+    if (track.length > 0) {
+      result.components = checkComponents(components.length > 0 ? 'absent' : 'present', log, track);
+      for (const check of result.components.filter((entry) => entry.unseen)) result.warnings.push(`${check.id}: a request carries nothing of it, so the probe cannot see it`);
+    }
 
     if (!result.error) {
-      const storeHits = arm === 'current' ? await findInStore(path.join(home, '.engram'), { ...engramNeedles(nonce), ...(session.id && { session: session.id }) }) : {};
-      result.positiveControls = await positiveControls({ arm, home, workspace, nonce, log, storeHits, session: session.id, port: prepared?.engramPort ?? null });
+      const engram = kind === 'current' && !components.some((id) => ENGRAM_PARTS.test(id));
+      const storeHits = engram ? await findInStore(path.join(home, '.engram'), { ...engramNeedles(nonce), ...(session.id && { session: session.id }) }) : {};
+      result.positiveControls = await positiveControls({ engram, home, workspace, nonce, log, storeHits, session: session.id, port: prepared?.engramPort ?? null });
       const grown = await snapshotTrees([{ name: 'home', root: home, mode: 'content' }], { concurrency: o.concurrency, chunkSize: o.chunkSize });
       const changes = diffSnapshots(seeded, grown).home;
       const under = (prefix, list) => list.filter((rel) => rel.startsWith(prefix)).length;
@@ -1139,8 +1212,8 @@ async function runArm(p, arm, before) {
           historyJsonl: exists(path.join(home, '.claude', 'history.jsonl')),
           // Informational: whether the SubagentStop hook's capture was kept depends on what the server extracts, and
           // the prompt is never posted by the UserPromptSubmit hook's fast path under Git Bash on Windows.
-          engramPrompt: arm === 'current' ? storeHits.prompt != null : null,
-          engramSubagentStop: arm === 'current' ? storeHits.subagent != null : null,
+          engramPrompt: engram ? storeHits.prompt != null : null,
+          engramSubagentStop: engram ? storeHits.subagent != null : null,
           claudeCliNodejs: exists(path.join(home, 'AppData', 'Local', 'claude-cli-nodejs')),
           pluginsMarketplaces: {
             present: exists(path.join(home, '.claude', 'plugins', 'marketplaces')),
@@ -1201,6 +1274,11 @@ function armFailures(result) {
       ? `${label}: minimal arm loaded the real global CLAUDE.md: ${contamination.withGlobalClaudeMd} of ${contamination.requests} requests carried it, so the arm meant to load nothing is not measuring that (is the work root under the real home?)`
       : `${label}: current arm never carried the global CLAUDE.md on its main-model request: the seeded copy was not loaded, so the arm does not measure the setup it is named after`);
   }
+  for (const check of (result.components ?? []).filter((entry) => entry.ok === false)) {
+    failures.push(check.expected === 'absent'
+      ? `${label}: ${check.id} is still carried on ${check.carried} of ${check.requests} requests, so the arm does not measure the setup without it`
+      : `${label}: ${check.id} is not carried on the main-model request, so an arm that takes it out takes out nothing this arm had`);
+  }
   // A real file that could not be read, after the retries, was not scanned: the verdict on it is unknown, and
   // an unknown is not a pass.
   const unreadable = result.leak?.unreadable;
@@ -1212,6 +1290,22 @@ function armFailures(result) {
       : `${label}: LEAK: the real ${hit.tree} has ${hit.path} (${hit.via} holds the ${hit.found.join(' and ')})`);
   }
   return failures;
+}
+
+/** What the probe runs of each arm in `arms`, as `{ name, kind, components }`: `current` and `minimal` as they are, and an
+ * arm of one component (`parseArm`, `evals/arms.mjs`) as the current arm without its components, which needs its base
+ * beside it, since that the base carries a component is what makes the arm's not carrying it mean anything. A
+ * `minimal-with` arm is refused: the probe has not been taught to put a component into minimal. Throws before anything
+ * is made. */
+export function armPlans(arms) {
+  return arms.map((name) => {
+    if (name === 'current' || name === 'minimal') return { name, kind: name, components: [] };
+    const parsed = parseArm(name, 'claude');
+    if (parsed === null) throw new ArmError(`unknown arm ${JSON.stringify(name)}: use "current", "minimal" or an arm of one component, current-without-<id>`);
+    if (parsed.direction === 'with') throw new ArmError(`${name}: the probe runs no minimal-with arm yet, so it cannot show that one holds its component`);
+    if (!arms.includes('current')) throw new ArmError(`${name} needs its base, current, in the same probe: the base must carry what the arm takes out`);
+    return { name, kind: 'current', components: parsed.components };
+  });
 }
 
 /** Runs the isolation probe and resolves to its report (see the file's header for the method).
@@ -1261,7 +1355,7 @@ export async function runIsolationProbe(options) {
     realHome,
   };
   if (typeof o.claude !== 'string' || !path.isAbsolute(o.claude)) throw new Error(`"claude" must be the absolute path of the claude binary, got ${JSON.stringify(o.claude)}`);
-  for (const arm of o.arms) if (arm !== 'current' && arm !== 'minimal') throw new Error(`unknown arm ${JSON.stringify(arm)}: use "current" or "minimal"`);
+  o.plans = armPlans(o.arms);
   // Checked before anything is created: a work root inside the real home, or under project memory, would
   // contaminate every trial (see `assertWorkRoot`), and a probe that ran there would prove nothing.
   const workRoot = o.workRoot ?? defaultWorkRoot({ repoRoot: REPO_ROOT });
@@ -1451,6 +1545,10 @@ export function formatSummary(report) {
         ? `  real engram store: ${s.files} files, ${megabytes(s.bytes)} scanned for the nonce, the sandbox name and the session id: ${s.hits === 0 ? 'nothing found' : `${s.hits} HIT(S)`}`
         : `  real engram store: ${s.status}${s.status === 'missing' ? ' (the folder is not there, so nothing was scanned)' : ''}`);
     }
+    for (const check of arm.components ?? []) {
+      const seen = check.unseen ? 'unseen: a request carries nothing of it' : check.ok === null ? `not checked (${check.skipped})` : null;
+      lines.push(`  component ${check.id}: ${seen ?? `${check.expected === 'absent' ? (check.carried === 0 ? 'absent' : `carried on ${check.carried} of ${check.requests} requests`) : (check.mainRequestHit ? 'present on the main-model request' : 'not on the main-model request')}${check.ok ? ', as it should' : ': FAILED'}`}`);
+    }
     for (const warning of arm.warnings ?? []) lines.push(`  warning: ${warning}`);
     if (arm.positiveControls) {
       lines.push(`  positive controls: ${Object.entries(arm.positiveControls).map(([name, control]) => `${name} ${control.applies === false ? 'n/a' : control.ok ? 'ok' : 'FAILED'}`).join(', ')}`);
@@ -1479,7 +1577,10 @@ export function formatSummary(report) {
   return `${lines.join('\n')}\n`;
 }
 
-const USAGE = `usage: node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both] [--control-ms <n>] [--report <path>] [--keep-sandbox] [--timeout-ms <n>] [--work-root <abs>]
+const USAGE = `usage: node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both|current-without-<id>] [--control-ms <n>] [--report <path>] [--keep-sandbox] [--timeout-ms <n>] [--work-root <abs>]
+
+--arm current-without-<id> (an arm of one component, evals/arms.mjs) runs that arm beside its base, current,
+and checks that the base carries the component on its main-model request and the arm on none.
 
 --work-root is where sandbox homes, workspaces and the template are built (default: js-harness-evals-work
 next to this repository). It must be outside the real home and have no CLAUDE.md, CLAUDE.local.md, AGENTS.md
@@ -1517,7 +1618,16 @@ function parseArgs(argv) {
   if (!options.claude) throw new UsageError('--claude <absolute path of the claude binary> is required');
   if (!path.isAbsolute(options.claude)) throw new UsageError(`--claude must be an absolute path, got ${JSON.stringify(options.claude)}: no PATH lookup is made`);
   if (options.workRoot !== undefined && !path.isAbsolute(options.workRoot)) throw new UsageError(`--work-root must be an absolute path, got ${JSON.stringify(options.workRoot)}`);
-  if (!['current', 'minimal', 'both'].includes(options.arm)) throw new UsageError(`--arm must be current, minimal or both, got ${JSON.stringify(options.arm)}`);
+  if (['current', 'minimal', 'both'].includes(options.arm)) return options;
+  let parsed;
+  try {
+    parsed = parseArm(options.arm, 'claude');
+    if (parsed !== null) armPlans(['current', options.arm]);
+  } catch (err) {
+    if (err instanceof ArmError) throw new UsageError(`--arm: ${err.message}`);
+    throw err;
+  }
+  if (parsed === null) throw new UsageError(`--arm must be current, minimal, both or an arm of one component (current-without-<id>), got ${JSON.stringify(options.arm)}`);
   return options;
 }
 
@@ -1539,7 +1649,7 @@ export async function main(argv = process.argv.slice(2), { stdout = process.stdo
   try {
     report = await runIsolationProbe({
       claude: args.claude,
-      arms: args.arm === 'both' ? ['current', 'minimal'] : [args.arm],
+      arms: args.arm === 'both' ? ['current', 'minimal'] : args.arm === 'current' || args.arm === 'minimal' ? [args.arm] : ['current', args.arm],
       controlMs: args.controlMs,
       timeoutMs: args.timeoutMs,
       keepSandbox: args.keepSandbox,

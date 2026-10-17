@@ -12,6 +12,7 @@
 // stderr and exits 2, to prove the probe scrubs what it quotes), hang (reads the prompt and never ends),
 // wrong-env (ok, but its tools report a HOME outside the sandbox), loads-real (ok, and the real global
 // CLAUDE.md is in what it sends), blind (ok, but it sends no CLAUDE.md at all, not even the sandbox copy),
+// keeps-servers (ok, and context7's MCP tool offered to the current arm even when its home holds no such server),
 // side-call-only (blind, except that a small-model side call carries the sandbox copy), subagent-only (blind,
 // except that the subagent request carries it), subagent / subagent-loads-real (ok, and one subagent request
 // is made on any arm, clean or carrying the real global CLAUDE.md), orphan (ok, and a
@@ -93,7 +94,18 @@ const system = `a system prompt that mentions ${nonce}${memory ? `\n\n# claudeMd
 const sandboxMemory = readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'CLAUDE.md'));
 // Only the arm with a seeded home has the plugin: its sandbox holds the `settings.json` the template copied.
 const hasPlugin = fs.existsSync(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'settings.json'));
-const TOOLS = [{ name: 'Bash' }, { name: 'Write' }, { name: 'Read' }, ...(hasPlugin ? [{ name: 'mcp__engram__mem_save' }, { name: 'Agent' }] : [])];
+// Every other MCP server of the seeded `.claude.json` is offered one tool, named the way Claude Code names a server's
+// tools; `keeps-servers` offers context7's whatever the home holds, as a Claude Code that loaded a server from
+// somewhere an arm did not cut would.
+const servers = (() => {
+  try {
+    return Object.keys(JSON.parse(readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', '.claude.json')) || '{}').mcpServers ?? {});
+  } catch {
+    return [];
+  }
+})().filter((name) => name !== 'engram');
+if (mode === 'keeps-servers' && hasPlugin && !servers.includes('context7')) servers.push('context7');
+const TOOLS = [{ name: 'Bash' }, { name: 'Write' }, { name: 'Read' }, ...(hasPlugin ? [{ name: 'mcp__engram__mem_save' }, { name: 'Agent' }, ...servers.map((name) => ({ name: `mcp__${name}__ping` }))] : [])];
 const post = async (messages, { model = 'claude-opus-5-5', system: sent = system, tools = TOOLS } = {}) => {
   const response = await fetch(`${process.env.ANTHROPIC_BASE_URL}/v1/messages?beta=true`, {
     method: 'POST',

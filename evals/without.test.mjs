@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ArmError } from './arms.mjs';
-import { applyWithout, checkWithout, withoutDigest } from './without.mjs';
+import { applyWithout, checkWithout, withoutDigest, withoutEvidence } from './without.mjs';
 
 // C3a of G2 (`odd/tasks/future-model-protocol.md`): an arm of one component is the current arm's home with that
 // component's files and keys taken out, and nothing else changed.
@@ -364,4 +364,38 @@ test('Codex: the blocks of AGENTS.md come out the same way', (t) => {
   const { root, changed } = cut(t, ['gentle-ai-persona'], 'codex', make);
   assert.deepEqual(changed, ['.codex/AGENTS.md']);
   assert.equal(fs.readFileSync(path.join(root, '.codex', 'AGENTS.md'), 'utf8'), ['', open('engram-protocol'), 'e', close('engram-protocol'), ''].join('\n'));
+});
+
+// ---- C6a: what a request carries of a component -----------------------------------------------------------
+
+test('the evidence of a server or a plugin is the prefix of the tool names Claude Code gives it', (t) => {
+  const root = claudeHome(tmp(t));
+  assert.deepEqual(withoutEvidence(root, 'mcp-context7', 'claude'), { tools: ['mcp__context7__'], lines: [], descriptions: [] });
+  assert.deepEqual(withoutEvidence(root, 'plugin-engram', 'claude'), { tools: ['mcp__plugin_engram_'], lines: [], descriptions: [] });
+});
+
+test('the evidence of the instructions file, a block or its own lines is the lines the cut takes out', (t) => {
+  const root = claudeHome(tmp(t));
+  put(root, '.claude/CLAUDE.md', ['# global', 'own line', open('persona'), 'persona line', close('persona'), 'last own line', ''].join('\r\n'));
+  assert.deepEqual(withoutEvidence(root, 'claude-md', 'claude').lines, ['# global', 'own line', open('persona'), 'persona line', close('persona'), 'last own line', '']);
+  assert.deepEqual(withoutEvidence(root, 'gentle-ai-persona', 'claude').lines, [open('persona'), 'persona line', close('persona')]);
+  assert.deepEqual(withoutEvidence(root, 'claude-md-own', 'claude').lines, ['# global', 'own line', 'last own line', '']);
+});
+
+test('the evidence of skills and agents is their descriptions, and of an output style its body, which is what a request is sent', (t) => {
+  const root = claudeHome(tmp(t));
+  put(root, '.claude/skills/review/SKILL.md', '---\nname: review\ndescription: "Reviews a pull request against the house rules."\n---\n\n# Body never sent\n');
+  put(root, '.claude/skills/deep/nested/SKILL.md', '---\nname: deep\ndescription: >\n  Folded over\n  two lines.\n---\nbody\n');
+  put(root, '.claude/skills/js-harness/SKILL.md', '---\nname: js-harness\ndescription: The harness skill.\n---\nbody\n');
+  put(root, '.claude/agents/judge.md', '---\nname: judge\ndescription: Judges code blind.\ntools: Read\n---\nYou judge.\n');
+  put(root, '.claude/output-styles/gentleman.md', '---\nname: Gentleman\ndescription: A mentor.\n---\n\n# Style\nSpeak as a mentor.\n');
+  assert.deepEqual(withoutEvidence(root, 'skills', 'claude'), { tools: [], lines: [], descriptions: ['Folded over two lines.', 'Reviews a pull request against the house rules.'] });
+  assert.deepEqual(withoutEvidence(root, 'js-harness', 'claude').descriptions, ['The harness skill.']);
+  assert.deepEqual(withoutEvidence(root, 'agents', 'claude').descriptions, ['Judges code blind.']);
+  assert.deepEqual(withoutEvidence(root, 'output-style', 'claude'), { tools: [], lines: ['', '# Style', 'Speak as a mentor.', ''], descriptions: [] });
+});
+
+test('hooks and the project leave nothing a request carries, so their evidence is empty', (t) => {
+  const root = claudeHome(tmp(t));
+  for (const id of ['hooks', 'project']) assert.deepEqual(withoutEvidence(root, id, 'claude'), { tools: [], lines: [], descriptions: [] }, id);
 });

@@ -956,6 +956,72 @@ test('the command rejects bad arguments with exit 2, a message and the usage, an
   assert.deepEqual(leftovers(machine), []);
 });
 
+// ---- C6a: an arm of one component holds it not, and its base holds it -----------------------------------
+
+/** The fake machine with a second MCP server, which the fake claude offers a tool of. */
+function armMachine() {
+  const machine = fakeMachine();
+  write(path.join(machine.realHome, '.claude.json'), '{"numStartups":1,"mcpServers":{"engram":{"command":"engram","args":["mcp"]},"context7":{"command":"c7"}}}\n');
+  return machine;
+}
+const componentChecks = (arm) => arm.components.map((check) => [check.id, check.expected, check.ok]);
+
+test('an arm of one component runs beside its base: the base carries the component, the arm carries none of it, and both pass', async () => {
+  for (const [arm, id] of [['current-without-mcp-context7', 'mcp-context7'], ['current-without-claude-md', 'claude-md']]) {
+    const machine = armMachine();
+    const report = await probe(machine, 'ok', { arms: ['current', arm] });
+    assert.deepEqual(report.failures, [], arm);
+    assert.deepEqual(report.arms.map((entry) => entry.arm), ['current', arm]);
+    const [base, cut] = report.arms;
+    assert.deepEqual(componentChecks(base), [[id, 'present', true]], arm);
+    assert.equal(base.components[0].mainRequestHit, true, arm);
+    assert.deepEqual(componentChecks(cut), [[id, 'absent', true]], arm);
+    assert.equal(cut.components[0].carried, 0, arm);
+    assert.equal(cut.positiveControls.transcript.ok, true, arm);
+    assert.equal(cut.positiveControls.engramDb.applies, true, `${arm}: an arm that keeps engram is held to its controls`);
+    assert.match(formatSummary(report), new RegExp(`component ${id}: absent, as it should`), arm);
+    assert.deepEqual(leftovers(machine), [], arm);
+  }
+  const [, cut] = (await probe(armMachine(), 'ok', { arms: ['current', 'current-without-claude-md'] })).arms;
+  assert.match(cut.contamination.skipped, /takes part of the global CLAUDE\.md out/);
+});
+
+test('an arm that still carries its component fails, and so does a base that never carried it', async () => {
+  const kept = await probe(armMachine(), 'keeps-servers', { arms: ['current', 'current-without-mcp-context7'] });
+  assert.equal(kept.ok, false);
+  assert.ok(kept.failures.some((failure) => /^current-without-mcp-context7: mcp-context7 is still carried on \d+ of \d+ requests/.test(failure)), kept.failures.join('\n'));
+  const blind = await probe(armMachine(), 'blind', { arms: ['current', 'current-without-claude-md'] });
+  assert.ok(blind.failures.some((failure) => /^current: claude-md is not carried on the main-model request/.test(failure)), blind.failures.join('\n'));
+});
+
+test('a component a request carries nothing of is reported unseen, as a warning that fails nothing', async () => {
+  const report = await probe(armMachine(), 'ok', { arms: ['current', 'current-without-project'] });
+  assert.deepEqual(report.failures, []);
+  const [base, cut] = report.arms;
+  assert.deepEqual(componentChecks(base), [['project', 'present', null]]);
+  assert.equal(base.components[0].unseen, true);
+  assert.ok(cut.warnings.some((warning) => /project: a request carries nothing of it, so the probe cannot see it/.test(warning)));
+});
+
+test('an arm the probe cannot run yet, or without its base, is refused before anything is made', async () => {
+  const machine = armMachine();
+  await assert.rejects(probe(machine, 'ok', { arms: ['current-without-mcp-context7'] }), /needs its base, current/);
+  await assert.rejects(probe(machine, 'ok', { arms: ['minimal', 'minimal-with-mcp-engram'] }), /minimal-with/);
+  await assert.rejects(probe(machine, 'ok', { arms: ['current', 'current-without-agents-md'] }), /agents-md is not a component/);
+  assert.deepEqual(leftovers(machine), []);
+});
+
+test('--arm takes an arm of one component, and runs it beside its base', async () => {
+  const machine = armMachine();
+  const io = capture();
+  const reportFile = path.join(tmp('out'), 'report.json');
+  assert.equal(await main(['--claude', process.execPath, '--arm', 'current-without-mcp-context7', '--report', reportFile], { ...io, overrides: overridesFor(machine, 'ok') }), 0, io.out.stdout);
+  assert.deepEqual(JSON.parse(fs.readFileSync(reportFile, 'utf8')).arms.map((arm) => arm.arm), ['current', 'current-without-mcp-context7']);
+  const bad = capture();
+  assert.equal(await main(['--claude', process.execPath, '--arm', 'current-without-nothing'], { ...bad, overrides: overridesFor(machine, 'ok') }), 2);
+  assert.match(bad.out.stderr, /nothing is not a component/);
+});
+
 // ---- the work root ---------------------------------------------------------------------------------------
 
 test('trials run under the work root and never under the temp folder, and the current arm template is built there too', async () => {
