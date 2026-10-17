@@ -422,3 +422,33 @@ test('verify keeps the index after the pass byte for byte, so its hash is the on
     assert.deepEqual(fs.readFileSync(path.join(dir, 'after-index.txt')), fs.readFileSync(path.join(folder, 'MEMORY.md')));
   });
 });
+
+// Before b761aef, verify wrote the after-index as text: an index that was not UTF-8 came out with other bytes, so
+// its hash is not the one after.json records, and the snapshot is not damaged for that.
+const NOT_UTF8 = Buffer.concat([Buffer.from('- [A](a.md) — a '), Buffer.from([0xff]), Buffer.from('\n')]);
+const asOldVerifyWroteIt = (stateDir, stamp, index) => fs.writeFileSync(path.join(stateDir, 'snapshots', stamp, 'after-index.txt'), index.toString('utf8'));
+
+test('an undo from a snapshot an older verify wrote, of an index that is not UTF-8, restores it while the index is as the pass left it', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    fs.writeFileSync(path.join(folder, 'MEMORY.md'), NOT_UTF8);
+    verifyPass({ folder, stateDir, stamp, now: NOW });
+    asOldVerifyWroteIt(stateDir, stamp, NOT_UTF8);
+    const result = undoPass({ folder, stateDir, stamp, now: NOW });
+    assert.deepEqual(result.restored, ['MEMORY.md']);
+    assert.equal(read('MEMORY.md'), '- [A](a.md) — a long line\n');
+  });
+});
+
+test('an undo from such a snapshot, once the index is written since, is refused for that reason and writes nothing', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    fs.writeFileSync(path.join(folder, 'MEMORY.md'), NOT_UTF8);
+    verifyPass({ folder, stateDir, stamp, now: NOW });
+    asOldVerifyWroteIt(stateDir, stamp, NOT_UTF8);
+    write('MEMORY.md', '- [A](a.md) — a\n- [B](b.md) — b\n');
+    assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError
+      && err.message === `snapshot ${stamp} was verified before the index was kept byte for byte, and its index is not UTF-8: it cannot be merged with the index written since; nothing was undone`);
+    assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n- [B](b.md) — b\n');
+  });
+});

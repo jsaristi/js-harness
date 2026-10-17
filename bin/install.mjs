@@ -75,11 +75,28 @@ function reportSessionMessages(home) {
 
 /** What the uninstall says of a part of the folder of memory hygiene it left, other than kept snapshots (D7).
  * A planned pass is released from its project's checkout, which no file records, against the uninstall's home. */
+/** `value` as one word the user's shell reads back as it is: in single quotes, inside which neither sh nor
+ * PowerShell expands `$` or ends at `"`, as they do in double quotes. A single quote is written as each reads it:
+ * `'\''` for sh, `''` for PowerShell (`platform` win32). */
+export function shellWord(value, platform = process.platform) {
+  if (platform !== 'win32') return `'${value.replace(/'/g, "'\\''")}'`;
+  // cmd.exe reads no single quotes, and a Windows path holds no `"`: double quotes serve all three shells there
+  // unless PowerShell would expand something in them. PowerShell takes ‘ ’ ‚ ‛ for a single quote too.
+  if (!/[$`]/.test(value)) return `"${value}"`;
+  return `'${value.replace(/['‘’‚‛]/g, (quote) => quote + quote)}'`;
+}
+
+/** `value` in double quotes for cmd.exe where `shellWord` gave it single quotes on Windows, which cmd.exe splits
+ * at a space: no one form serves cmd.exe and PowerShell there. `null` where `shellWord` serves every shell. */
+export function cmdExeWord(value, platform = process.platform) {
+  return platform === 'win32' && /[$`]/.test(value) ? `"${value}"` : null;
+}
+
 function memoryKeptLine(folder, home) {
   switch (folder.reason) {
     case 'locked':
       return folder.stamp !== null && folder.manifest
-        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run js-harness memory verify ${folder.stamp} --home "${home}" or js-harness memory undo ${folder.stamp} --home "${home}", then uninstall again`
+        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run${cmdExeWord(home) === null ? '' : ', in PowerShell,'} js-harness memory verify ${folder.stamp} --home ${shellWord(home)} or js-harness memory undo ${folder.stamp} --home ${shellWord(home)}${cmdExeWord(home) === null ? '' : ` (in cmd.exe, --home ${cmdExeWord(home)})`}, then uninstall again`
         : `kept ${folder.path}: ${folder.lock} holds no finished plan (pid ${folder.pid ?? 'unknown'}); if that process is not running, remove the file and uninstall again`;
     case 'locked-whole':
       return `kept ${folder.path}: --full removes it in one piece, and a project in it is under a memory pass; nothing of it was removed`;

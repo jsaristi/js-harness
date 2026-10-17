@@ -1594,14 +1594,18 @@ function ownTicketRows(reason, cwd, lock, env, deps) {
 }
 
 /** Claims the ticket of the session of `lock` for the gate that checks `cwd` (`claimTicket`), and writes in
- * the gate log what the claim did: the tickets its sweep found expired, and the claim, with the gates that
+ * the gate log what the claim did: the tickets its sweep found expired, those it left because their file was
+ * held, and the claim, with the gates that
  * waited then, which this one passes. Nothing is written with the log switched off (`lock.log` false).
- * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines. */
+ * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines, and
+ * `deps.claimTicket` for the claim. The code of a hold goes in `error`: the log's `code` is the key of a tree. */
 export function claimOf(lock, cwd, deps, { named = false } = {}) {
-  const { ticket, expired } = claimTicket({ home: lock.home, session: lock.session, cwd: path.resolve(cwd), named });
+  const claim = deps.claimTicket ?? claimTicket;
+  const { ticket, expired, unclaimed = [] } = claim({ home: lock.home, session: lock.session, cwd: path.resolve(cwd), named });
   if (lock.log === false) return ticket;
   const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
   for (const gone of expired) logTicket(lock.home, 'first-expired', gone, {}, written);
+  for (const { ticket: held, code } of unclaimed) logTicket(lock.home, 'first-unclaimed', held, { error: code, cwd: path.resolve(cwd), pid: process.pid }, written);
   if (ticket) {
     let waiting = [];
     try {

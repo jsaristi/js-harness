@@ -196,6 +196,7 @@ const BODY = {
   load: shaped(LOAD),
   rows: listOf(isText),
   code: isTreeKey,
+  error: isText,
   by: isText,
 };
 
@@ -211,10 +212,10 @@ export function isTreeKey(value) {
 
 /** The kinds of event this version writes and reads. `stopped` came after the other three: a version that
  * does not know it leaves its line out in silence (`readGateLog`), which is why a gate that stopped writes
- * no start for that version to show alone. The four `first-` kinds are a ticket's (./gate-first.mjs):
- * issued, claimed, expired, cancelled, each under the ticket's id; they are no gate (`gatesOf`). `ci-fallback` is a
+ * no start for that version to show alone. The five `first-` kinds are a ticket's (./gate-first.mjs):
+ * issued, claimed, expired, cancelled, left unclaimed (its file held), each under the ticket's id; they are no gate (`gatesOf`). `ci-fallback` is a
  * gate's that asked GitHub's machines first and got no answer, under the id of the gate it then runs here. */
-const KINDS = ['start', 'end', 'refused', 'stopped', 'same', 'first-issued', 'first-claimed', 'first-expired', 'first-cancelled', 'ci-fallback'];
+const KINDS = ['start', 'end', 'refused', 'stopped', 'same', 'first-issued', 'first-claimed', 'first-expired', 'first-cancelled', 'first-unclaimed', 'ci-fallback'];
 
 /** Whether `value` has the head of a line of this log, enough to be paired: the version, an event that is
  * a text, the id and when. The kind of the event is not asked here (`readGateLog`). */
