@@ -584,7 +584,7 @@ test('the main worktree is made beside the candidate, and removed with it: on su
   assert.equal(failed.code, 4, failed.out.join('\n'));
   assert.deepEqual(redSeen, [true]);
   assert.equal(git(red.root, 'worktree', 'list').split('\n').length, 1, 'no worktree is left after the red CircleCI');
-  assert.deepEqual(fs.readdirSync(path.join(red.root, '.git', 'js-harness')), []);
+  assert.deepEqual(fs.readdirSync(path.join(red.root, '.git', 'js-harness')), ['lands.jsonl'], 'only the land record is left (odd/tasks/land-unattended.md, B2), neither the candidate nor main');
 });
 
 // gentle-ai's evidence on the pull request's own branch, and the coverage commit by commit (odd/tasks/rule-hierarchy.md,
@@ -1140,4 +1140,72 @@ test('localSuite with no session takes no ticket, and one refused says the land 
   const said = [];
   assert.equal(localSuite(refused.run, place, { env: { CLAUDE_CODE_SESSION_ID: 's1' }, say: (line) => said.push(line) }).ok, true);
   assert.deepEqual(said, ['No gate-first ticket for the land (gate first: two tickets are open: a, b): it waits its turn in the gate line.']);
+});
+
+/** The land records `--land` wrote in the clone at `root` (odd/tasks/land-unattended.md, B2). */
+const landsOf = (root) => {
+  const file = path.join(root, '.git', 'js-harness', 'lands.jsonl');
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)) : [];
+};
+
+/** What a land record says, without the times and the session, which no test fixes. */
+const landSaid = ({ startedAt, endedAt, session, phases, ...rest }) => {
+  for (const at of [startedAt, endedAt, ...phases.map((phase) => phase.startedAt)]) assert.ok(!Number.isNaN(Date.parse(at)), String(at));
+  for (const { seconds } of phases) assert.ok(typeof seconds === 'number' && seconds >= 0, String(seconds));
+  assert.ok(session === null || typeof session === 'string', String(session));
+  return { ...rest, phases: phases.map(({ startedAt: _, seconds: __, ...phase }) => phase) };
+};
+
+test('--land writes one land record: the pull requests it looked at, each left out with its reason, its phases, CircleCI and what landed (odd/tasks/land-unattended.md, B2)', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const prs = [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b']), pr(3, 'feat/c', heads['feat/c']), pr(4, 'feat/d', heads['feat/d'], { isDraft: true })];
+  const { code, out } = await land(root, prs);
+  assert.equal(code, 0, out.join('\n'));
+  const landed = git(origin, 'rev-parse', 'main');
+  const records = landsOf(root);
+  assert.equal(records.length, 1);
+  assert.deepEqual(landSaid(records[0]), {
+    v: 1,
+    main,
+    considered: [1, 2, 3, 4],
+    leftOut: [
+      { pr: 4, reason: 'not-ready', said: 'PR 4 is a draft.' },
+      { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far in a.txt.', files: ['a.txt'] },
+    ],
+    phases: [{ phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }],
+    circleci: { state: 'green', name: 'check', conclusion: 'success', url: 'https://app.circleci.com/x' },
+    candidate: landed,
+    landed: [1, 2],
+    exit: 0,
+    said: out.at(-1),
+  });
+});
+
+test('a bisected land records each suite run and the pull request that turned the candidate red, with what the suite said', async () => {
+  const { root, heads } = makeQueueRepo();
+  const suite = (dir) => (fs.readFileSync(path.join(dir, 'b.txt'), 'utf8').includes('B from b') ? { ok: false, said: 'FAIL  tests  1 failed' } : { ok: true });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite });
+  assert.equal(code, 0, out.join('\n'));
+  const [record] = landsOf(root).map(landSaid);
+  assert.deepEqual(record.leftOut, [{ pr: 2, reason: 'red', said: 'FAIL  tests  1 failed' }]);
+  assert.deepEqual(record.phases, [{ phase: 'suite', ok: false }, { phase: 'suite', ok: true }, { phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }]);
+  assert.deepEqual(record.landed, [1]);
+});
+
+test('a land whose suite did not run records exit 5, a suite phase that is neither green nor red, and nothing landed', async () => {
+  const { root, heads } = makeQueueRepo();
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, notRun: true, said: 'gate: nothing ran' }) });
+  assert.equal(code, 5, out.join('\n'));
+  const [record] = landsOf(root).map(landSaid);
+  assert.deepEqual([record.exit, record.phases, record.landed, record.circleci, record.said], [5, [{ phase: 'suite', ok: null }], [], null, out.at(-1)]);
+});
+
+test('--dry-run writes no land record, and a land whose record cannot be written keeps its exit and says so', async () => {
+  const { root, heads } = makeQueueRepo();
+  assert.equal((await dryRun(root, [pr(1, 'feat/a', heads['feat/a'])])).code, 0);
+  assert.deepEqual(landsOf(root), []);
+  fs.mkdirSync(path.join(root, '.git', 'js-harness', 'lands.jsonl'), { recursive: true });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(out.at(-1), /^Could not write the land record to .*lands\.jsonl \(.+\): the land's exit stands\.$/);
 });

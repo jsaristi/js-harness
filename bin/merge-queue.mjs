@@ -47,9 +47,45 @@ write none. A gate that ran nothing (no turn in time, or a waiting push took it)
 ended is no red: nothing is pushed or bisected. Exit 0 landed or nothing to land, 4 red, 3 main moved
 meanwhile (nothing pushed), 5 the suite did not run (nothing pushed), 1 anything else.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
-are not in main, so it needs another run of the queue.`;
+are not in main, so it needs another run of the queue.
+Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
+one left out with its reason, the time of each suite run, of CircleCI and of the push, what landed, and its exit.`;
 
 const TIMEOUT_MS = 60_000;
+
+/** One land's record (odd/tasks/land-unattended.md, Design 4, B2), filled while the land runs and written
+ * once as it ends: what the throughput command measures lands by. `file` is set only by a land that is not a
+ * dry run and found its git directory; `said` keeps the last line the land printed. */
+function landLog({ now, session }) {
+  const iso = (ms) => new Date(ms).toISOString();
+  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], circleci: null, candidate: null, landed: [], exit: null, said: null };
+  return {
+    record,
+    file: null,
+    said(line) {
+      record.said = String(line);
+    },
+    leave(pr, reason, said, extra = {}) {
+      record.leftOut.push({ pr: pr.number, reason, said, ...extra });
+    },
+    /** Starts a phase; the function it returns ends it, `ok` true, false, or null for a run that judged nothing. */
+    phase(name) {
+      const at = now();
+      return (ok) => record.phases.push({ phase: name, startedAt: iso(at), seconds: (now() - at) / 1000, ok });
+    },
+    write(exit) {
+      fs.mkdirSync(path.dirname(this.file), { recursive: true });
+      fs.appendFileSync(this.file, `${JSON.stringify({ ...record, endedAt: iso(now()), exit })}\n`);
+    },
+  };
+}
+
+/** Says that `pr` is left out, and why (`line`), and records it in the land's record with its `reason` and
+ * `said`, the line itself unless the cause has words of its own (a red's are the suite's). */
+function leaveOut(log, stdout, pr, reason, line, { said = line, ...extra } = {}) {
+  stdout(`PR ${pr.number} is left out: ${line}`);
+  log.leave(pr, reason, said, extra);
+}
 
 function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
   let result;
@@ -91,7 +127,10 @@ export function circleciState(checkRuns, statuses) {
   const all = runs.length + posted.length;
   // Every run a success: a skipped or neutral run is no run of the suite, and green is the suite passing (Codex, 2026-10-14).
   const done = runs.every((one) => one.status === 'completed' && one.conclusion === 'success') && posted.every((one) => one.state === 'success');
-  return { state: all > 0 && done ? 'green' : 'pending' };
+  if (!(all > 0 && done)) return { state: 'pending' };
+  // Named as a red is, so the land record keeps the build that passed (odd/tasks/land-unattended.md, B2).
+  const [run] = runs;
+  return run ? { state: 'green', name: run.name, conclusion: run.conclusion, url: run.html_url } : { state: 'green', name: posted[0].context, conclusion: posted[0].state, url: posted[0].target_url };
 }
 
 /** The rows of `status` (`FAIL`, `INFO`) in a `check` `output`. `check` prints its rows as one block, then each failed
@@ -374,9 +413,10 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
  * moved to it when both are green (S6, S7). Its CircleCI run is that of a `queue/*` branch pushed for it and
  * removed afterwards, whatever the result. Main moves by fast-forward only, leased on the `main` the candidate
  * was built from: a main that moved in between is left as it is (exit 3). Red anywhere is exit 4. */
-async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail, landed }) {
+async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail, landed, log }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
+  log.record.candidate = candidate;
   // A suite that did not run judged nothing: no red to bisect, and nothing to push (odd/tasks/land-unattended.md).
   const notRun = (result) => {
     stdout(`The suite did not run on this machine (${result.said}): nothing was pushed, and nothing was bisected.`);
@@ -404,7 +444,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       else high = mid;
     }
     const culprit = merged[low - 1];
-    stdout(`PR ${culprit.number} is left out: the candidate turns red on this machine when it is merged (${local.said}).`);
+    leaveOut(log, stdout, culprit, 'red', `the candidate turns red on this machine when it is merged (${local.said}).`, { said: local.said });
     const failed = low > 1 ? resetTo(merged[low - 2].merge, `the merge of PR ${merged[low - 2].number}`) : resetTo(main, 'main');
     if (failed !== null) return failed;
     const kept = merged.slice(0, low - 1);
@@ -413,14 +453,14 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       const step = mergeThroughDoor({ run, gitIn, place, door, pr, stdout });
       if (step.kind === 'merged') kept.push({ ...pr, merge: step.merge });
       else if (step.kind === 'broken') return fail(step.line);
-      else if (step.kind === 'door') stdout(`PR ${pr.number} is left out: ${step.line}.`);
-      else stdout(`PR ${pr.number} is left out: it does not merge into the candidate without PR ${culprit.number}.`);
+      else if (step.kind === 'door') leaveOut(log, stdout, pr, 'door', `${step.line}.`);
+      else leaveOut(log, stdout, pr, 'merge', `it does not merge into the candidate without PR ${culprit.number}.`);
     }
     if (kept.length === 0) {
       stdout('No pull request is left to land: nothing was pushed.');
       return 4;
     }
-    return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail, landed });
+    return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail, landed, log });
   }
   if (!local.ok) {
     stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
@@ -431,6 +471,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
   let ci = { state: 'pending' };
+  const ciEnded = log.phase('circleci');
   try {
     for (let waited = 0; waited <= CI_WAIT_MS; waited += CI_POLL_MS) {
       const read = (what) => {
@@ -447,6 +488,8 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       await sleep(CI_POLL_MS);
     }
   } finally {
+    ciEnded(ci.state === 'green' ? true : ci.state === 'red' ? false : null);
+    log.record.circleci = { state: ci.state === 'pending' ? 'none' : ci.state, name: ci.name ?? null, conclusion: ci.conclusion ?? null, url: ci.url ?? null };
     const removed = gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
     // Named, never silent: a queue branch origin keeps runs nothing more, and only a hand removes it.
     if (!removed.ok) stdout(`Could not remove ${branch} from origin (${removed.err.split('\n')[0] || 'git gave no reason'}): remove it by hand.`);
@@ -461,9 +504,12 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   }
   stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
   // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
+  const pushEnded = log.phase('push');
   const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
-  if (!pushed.ok) {
+  if (pushed.ok) pushEnded(true);
+  else {
     const now = gitIn(place, 'ls-remote', 'origin', 'refs/heads/main').out.split('\t')[0];
+    pushEnded(now === candidate);
     // A push that reached origin and lost its answer, as a timeout loses it: main is the candidate, landed.
     if (now === candidate) {
       stdout(`The push of main reported a failure (${pushed.err.split('\n')[0] || 'git gave no reason'}), and origin's main is the candidate all the same.`);
@@ -474,6 +520,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
     }
   }
+  log.record.landed = merged.map((pr) => pr.number);
   stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
   // Main has moved: the relief's lines never turn a land into a failure.
   try {
@@ -496,16 +543,40 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   return 0;
 }
 
-export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout = console.log, stderr = console.error } = {}) {
+export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
+  const { env = process.env, now = Date.now, stdout: printOut = console.log, stderr: printErr = console.error } = deps;
   if (argv.includes('--help') || argv.includes('-h')) {
-    stdout(USAGE);
+    printOut(USAGE);
     return 0;
   }
   const args = parseArgs(argv);
   if (args === null) {
-    stderr(USAGE);
+    printErr(USAGE);
     return 2;
   }
+  // Every line the run prints passes through the land's record, which keeps the last as its `said`.
+  const log = landLog({ now, session: env.CLAUDE_CODE_SESSION_ID || null });
+  const stdout = (line) => {
+    log.said(line);
+    printOut(line);
+  };
+  const stderr = (line) => {
+    log.said(line);
+    printErr(line);
+  };
+  const code = await queueRun(args, { ...deps, stdout, stderr, log });
+  if (log.file) {
+    // Written after the land ended, whatever its end: a record that cannot be written changes no exit.
+    try {
+      log.write(code);
+    } catch (err) {
+      stdout(`Could not write the land record to ${log.file} (${err.message}): the land's exit stands.`);
+    }
+  }
+  return code;
+}
+
+async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout, stderr, log }) {
   const cwd = args.cwd;
   const fail = (line) => {
     stderr(`merge-queue: ${line}`);
@@ -513,9 +584,13 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
   };
   const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
 
+  // The git directory, read first so a land that fails at once still leaves its record (B2); a dry run leaves none.
+  const common = gitIn(cwd, 'rev-parse', '--git-common-dir').out.trim();
+  if (common && !args.dryRun) log.file = path.join(path.resolve(cwd, common), 'js-harness', 'lands.jsonl');
   if (!gitIn(cwd, 'fetch', '-q', 'origin').ok) return fail('could not fetch origin.');
   const main = gitIn(cwd, 'rev-parse', 'origin/main').out.trim();
   if (!main) return fail('could not read origin/main.');
+  log.record.main = main;
   const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head, { cutover }));
   let listed;
   try {
@@ -527,17 +602,19 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
 
   // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later.
   const candidates = [];
-  for (const pr of [...listed].sort((a, b) => a.number - b.number)) {
+  const ordered = [...listed].sort((a, b) => a.number - b.number);
+  log.record.considered = ordered.map((pr) => pr.number);
+  for (const pr of ordered) {
     // UNKNOWN is GitHub not having computed the merge yet, for about a minute after main moves: the merge into
     // the candidate below is the queue's own test of it, so it decides. CONFLICTING is GitHub's answer.
     const problems = pullRequestProblems(pr.mergeable === 'UNKNOWN' ? { ...pr, mergeable: 'MERGEABLE' } : pr);
     if (problems.length) {
-      stdout(`PR ${pr.number} is left out: ${problems.join(' ')}`);
+      leaveOut(log, stdout, pr, 'not-ready', problems.join(' '));
       continue;
     }
     const coverage = isCovered(pr.headRefOid);
     if (!coverage?.pass) {
-      stdout(`PR ${pr.number} is left out: ${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
+      leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
       continue;
     }
     if (coverage.lines?.length) {
@@ -553,7 +630,6 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
 
   // The candidate is built in a worktree under the git directory, which this command removes before it ends,
   // whatever happens in between: nothing it makes outlives the run.
-  const common = gitIn(cwd, 'rev-parse', '--git-common-dir').out.trim();
   if (!common) return fail('could not find the git directory.');
   const place = path.join(path.resolve(cwd, common), 'js-harness', `merge-queue-${process.pid}-${Date.now()}`);
   fs.mkdirSync(path.dirname(place), { recursive: true });
@@ -574,9 +650,9 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
       const step = mergeThroughDoor({ run, gitIn, place, door, pr, stdout });
       if (step.kind === 'merged') merged.push({ ...pr, merge: step.merge });
       else if (step.kind === 'broken') return fail(step.line);
-      else if (step.kind === 'door') stdout(`PR ${pr.number} is left out: ${step.line}.`);
-      else if (step.conflicted.length) stdout(`PR ${pr.number} is left out: it conflicts with the candidate so far in ${step.conflicted.join(', ')}.`);
-      else stdout(`PR ${pr.number} is left out: it does not merge into the candidate so far: ${step.said}.`);
+      else if (step.kind === 'door') leaveOut(log, stdout, pr, 'door', `${step.line}.`);
+      else if (step.conflicted.length) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${step.conflicted.join(', ')}.`, { files: step.conflicted });
+      else leaveOut(log, stdout, pr, 'merge', `it does not merge into the candidate so far: ${step.said}.`);
     }
     if (merged.length === 0) {
       stdout('No pull request merges into main: nothing was built.');
@@ -591,14 +667,22 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
       stdout('Dry run: nothing was tested or pushed, and the candidate was removed.');
       return 0;
     }
-    const local = documents ? () => ({ ok: true, skipped: true }) : (suite ?? ((dir) => localSuite(run, dir, { env, say: stdout })));
+    const tested = documents ? () => ({ ok: true, skipped: true }) : (suite ?? ((dir) => localSuite(run, dir, { env, say: stdout })));
+    // Each run is a phase of the land's record, a bisection's halves too; one that did not run judged nothing,
+    // and a candidate of documents alone has no run to record.
+    const local = (dir) => {
+      const ended = log.phase('suite');
+      const result = tested(dir);
+      if (!result.skipped) ended(result.notRun ? null : result.ok);
+      return result;
+    };
     // The relief file is found as `notify` finds it: the harness home, and the slug of the main checkout.
     const landed = (candidate, landedPrs) => recordLandings({
       gitIn, place, main, candidate, merged: landedPrs, now, stdout,
       home: env.JS_HARNESS_HOME || os.homedir(),
       slug: projectSlug(mainCheckout((command, gitArgs, options) => run(command, gitArgs, { ...options, encoding: 'utf8' }), cwd)),
     });
-    return await landCandidate({ run, gitIn, place, main, door, merged, suite: local, sleep, stdout, fail, landed });
+    return await landCandidate({ run, gitIn, place, main, door, merged, suite: local, sleep, stdout, fail, landed, log });
   } finally {
     gitIn(cwd, 'worktree', 'remove', '--force', mainPlace);
     gitIn(cwd, 'worktree', 'remove', '--force', place);
