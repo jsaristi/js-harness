@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `6f6c55bb27ff`. In force: 32 (16 of Sebastián, 16 of the project). Retired: 0.
+Hash `0e6c19b21d63`. In force: 33 (16 of Sebastián, 17 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -107,6 +107,11 @@ The most work sessions open at one time: 3 sessions.
 The most estimated tokens AGENTS.md may hold, since every session pays it on every turn: 1,500 estimated tokens.
 - Read by: `bin/check.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `docs/ROADMAP.md`.
+
+### ci-gate-bound
+How long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine: 8 minutes.
+- Read by: `bin/lib/ci-gate.mjs`.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/commit-gates-first.md`.
 
 ### contract-run-timeout
 How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.

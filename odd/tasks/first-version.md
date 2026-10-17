@@ -446,3 +446,8 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   Windows once T6g lands, and T6f, which waits on his answer. Seen on the way: the selection of (1) handed
   `bin/lib/test-run-warning.mjs`, not a test file, to `node --test`, which ran it as a file of no tests; not read
   further.
+- L26 (2026-10-17, commit-gates-first): "Overflow only" in T7's design above is superseded: every gate a
+  commit's or a merge's hook runs now sends its tests to GitHub first, whether or not the lock is free, and a
+  check by hand stays here (it tests the working tree). The bound from the push is the rule `ci-gate-bound`, 8
+  minutes, and `gate.yml` stops its job two minutes later. Design, readers and figures:
+  `odd/tasks/commit-gates-first.md`.

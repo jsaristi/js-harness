@@ -897,7 +897,8 @@ podamos implementar todo"), each a feature of its own with its own document and 
      slow for this suite, not his machine. The figure of a month of gates there (about 21 to
      26 dollars while the repository was private) went to him, and nothing was paid; once it
      was public, the gates that would wait for the lock go to GitHub's Linux machines instead
-     (`odd/tasks/first-version.md`, T7).
+     (`odd/tasks/first-version.md`, T7), and since `odd/tasks/commit-gates-first.md` every
+     commit's gate goes there first.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait

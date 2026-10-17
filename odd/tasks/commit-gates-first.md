@@ -15,7 +15,7 @@ commit wrapped in `js-harness gate --` holds the lock and can never go to GitHub
 runs, although the README says one does (R1).
 
 ## Done when
-- `node --test bin/lib/ci-gate.test.mjs bin/check-ci-gate.test.mjs scripts/github-workflows.test.mjs` exits 0
+- `node --test bin/lib/ci-gate.test.mjs bin/check-ci-gate.test.mjs scripts/github-workflows.test.mjs bin/lib/gate-log.test.mjs` exits 0
 - `node --test bin/guard.test.mjs bin/lib/test-run-warning.test.mjs` exits 0
 - `node bin/js-harness.mjs rules check` exits 0
 - A commit made in this repository with a free lock shows a `gate` row that says its tests ran on CI.
@@ -51,7 +51,54 @@ Spend: none is expected (GitHub Actions is free on a public repository); a chang
 
 ## Design
 
-### C: every commit gate goes to GitHub first (S1-S3)
+### Version 2: what the two readers changed (2026-10-17)
+
+Reader 1 attacked the claims, reader 2 looked for what is missing; both read version 1 below against the code.
+Version 2 governs where they differ.
+
+- C, hook only (both readers, blocker). A check by hand does build a lock (`check.mjs:2565-2571`), so version 1
+  would have sent `npm run check` to GitHub, which tests the index (`git write-tree`), not the working tree. Built:
+  `ciGateWanted` sends a gate to GitHub only when git handed it `GIT_INDEX_FILE` (a commit's or a merge's hook), as
+  `check.mjs:505-510` already tells a hook; a check by hand runs here, as it should have all along (before C it too
+  overflowed to GitHub when the lock was busy). `--no-wait` and `--first` by hand are unchanged by that.
+- C, the job's timeout (reader 1). Equal to the bound, GitHub's own timeout races the gate's cancel (the measured
+  queue is 0 s). Built: `timeout-minutes` is the rule plus 2 minutes, 10, and the test holds that relation.
+- C, a push that cannot answer (reader 1). Every commit now pushes, so before anything is written or pushed the gate
+  asks `gh run list --repo <repo> --workflow gate.yml --limit 1`; a `gh` missing, signed out or barred is no answer
+  with nothing pushed. Git runs with `GIT_TERMINAL_PROMPT=0` and `GCM_INTERACTIVE=never`, so a push never prompts.
+  A `gh` that fails after the run started cancels that run. Not built: a breaker that skips GitHub for a while after
+  a run that never started; during a GitHub outage each commit pays the 3 minutes before it runs here.
+- C, the rule (reader 2). Declared with `js-harness rules change ci-gate-bound` on `rule/ci-gate-bound`, after this
+  document was committed (its source must be a file of the repository); scope everywhere (ci-gate.mjs runs in every
+  project), one pattern for a restated bound, its planted line in `bin/lib/rules-scan.test.mjs`.
+- C, the texts (reader 2). Also changed: `docs/SPEC.md` (the requirement and its title), `docs/ROADMAP.md:899`, the
+  work-session skill line in `bin/lib/manifest.mjs` (and the test that holds it), a Log line in
+  `odd/tasks/first-version.md` superseding "Overflow only", and `gate log`, which now says a CI gate ran "on GitHub's
+  machines" instead of reading like a run under the lock (`LOCK_SAID`, `bin/lib/gate-log.mjs`).
+- C, measures (reader 2). B3 (CI fallbacks and CI failing test names in the gate log) is built by the throughput
+  review session (feat/throughput-review), which the lead gave it; told that `failingTests` (`check.mjs:1014`) reads
+  nothing of `gh run view --log-failed`, whose lines start with the job, step and time, and that `LOG_LINES` (80) can
+  cut the `✖ failing tests:` header. B5 is not in this feature.
+- C, known and not fixed here: a CI green writes no tree key, so with `"sameTree": "skip"` a retried commit of the
+  same tree runs again (a cost, not a weaker proof); the sessions board shows a gate on GitHub as "not in its
+  sensors" (`bin/lib/sessions.mjs:3129`); the first ticket is claimed before the gate goes to GitHub
+  (`check.mjs:1713`); a pushed merge's commit carries HEAD only as parent, which changes no tree; plan v2 orders F
+  (the lead's text) before C, and F has not landed; the 516-minute case (branches without `gate.yml`) is not fixed by
+  C. Re-measure after it ships: the land's skipped count and `test-run-warning`'s per-file seconds, both fed only by
+  local runs.
+- E (both readers). A wrapped `git merge` holds the lock as a wrapped commit does (`.githooks/pre-merge-commit`), so
+  the hint covers `commit` and `merge`; never with `--no-verify`/`-n`, which run no gate; it reads each wrapped command
+  apart (`gateWraps` flattens them), and a commit after the wrapper (`gate -- npm test && git commit`) is outside it.
+  Its words follow `ciGateWanted`'s conditions: in a project without `gate.yml` or with the switch off it says only
+  that the hook waits by itself. The guard is registered for Claude Code only (`manifest.mjs:361-378`): Codex
+  sessions get no hint. No notice is added: the hint reaches the one session that wrapped, at the call.
+- R1 (both readers). Pin `windows-2025`, a `timeout-minutes`, and a shape test of its own (the workflow test today
+  holds exactly one file); one green `workflow_dispatch` run before the schedule counts (plan v2: "a green Windows
+  run before R1"); the reader strips gh's prefix before `failingTests`, applies `docs/FLAKY.md` (no notice when every
+  failing file is quarantined), keeps "told" under the home where `uninstall` removes it, and names who runs it:
+  `rg "DUE:" bin` finds nothing, so the heartbeat has no such line to hang it on yet.
+
+### C: every commit gate goes to GitHub first (S1-S3), version 1
 
 What exists. `ciGateWanted` (`bin/lib/ci-gate.mjs:36-50`) sends a gate to GitHub only when the machine's lock is
 held or has waiters; `testsOnCi` (`bin/check.mjs:1837-1859`) asks it, runs `runCiGate`, and on `{ ran: false }`
@@ -136,7 +183,8 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   bound, so it does not depend on T6f's figure, but the brief orders it after T6f and that order is kept.
 
 ## Tasks
-- [ ] T1 (kind: design) S1-S5: this design read by two readers (one attacks, one looks for what is missing).
+- [x] T1 (kind: design) S1-S5: this design read by two readers (one attacks, one looks for what is missing);
+  "Version 2" above.
 - [ ] T2 (kind: build) S1-S3: C, test first, on `rule/ci-gate-bound`; gate, gentle-ai (item 5), Codex, PR.
 - [ ] T3 (kind: build) S4: E, test first, on `feat/wrapped-commit-hint`; gate, gentle-ai, Codex, PR.
 - [ ] T4 (kind: build) S5: R1, once T6f is resolved; test first; gate, gentle-ai (item 5), Codex, PR.
@@ -158,3 +206,8 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
 - L2 (2026-10-17): measured for the bound: `gh run list --workflow gate.yml --limit 500`, runs created since
   2026-10-16: 86 (80 success, 6 failure), run time median 125 s, p90 135 s, max 164 s. T6f is open on `main`
   `ead4e8d` (`odd/tasks/first-version.md:246`), so R1 is designed and not built.
+- L3 (2026-10-17, state): T2 (C) built test first on `rule/ci-gate-bound`: RED seen for the free lock, the
+  bound, the hook-only rule, the gh probe, the cancel after a failing gh, pushEnv and the gate log's CI line; GREEN
+  one file at a time. Next: commit through the gate, gentle-ai (item 5, consent pre-granted), Codex
+  (`js-harness codex-review --base origin/main`), push, PR stating the 0 $ spend, notify the lead. Then T3 (E) on
+  `feat/wrapped-commit-hint` from main. R1 waits on T6f.

@@ -1829,15 +1829,15 @@ export async function checkSensors(cwd, deps = {}, lock) {
   return (await testsOnCi(cwd, lock, deps)) ?? underGateLock(cwd, lock, deps, run, record);
 }
 
-/** The rows of a gate whose tests ran on GitHub's machines because its turn at the lock would wait
- * (./lib/ci-gate.mjs), or null for a gate that runs here: its turn is free, the project has no gate workflow, or
- * CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its tests
- * marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate` stand
- * in for the two halves. */
+/** The rows of a gate whose tests ran on GitHub's machines, where every commit's gate goes first
+ * (./lib/ci-gate.mjs), or null for a gate that runs here: the project has no gate workflow, the switch keeps it
+ * here, or CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its
+ * tests marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate`
+ * stand in for the two halves. */
 async function testsOnCi(cwd, lock, deps) {
-  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, home: lock.home, env: lock.env ?? process.env });
+  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
   if (!why) return null;
-  console.error(`check: ${why}; the tests go to GitHub's machines (${CI_WORKFLOW}) instead of waiting`);
+  console.error(`check: ${why}; the push of the tree being committed starts their run`);
   const startedAt = Date.now();
   const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
   if (!ci.ran) {
@@ -1852,7 +1852,7 @@ async function testsOnCi(cwd, lock, deps) {
   record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
   at = Date.now();
   record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci' }] });
-  return [gateRow(`${why}, so the tests ran on CI`), tests, ...gateLogRows(record)];
+  return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */

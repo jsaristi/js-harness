@@ -3,6 +3,10 @@
     "kind": "design",
     "path": "docs/ROADMAP.md"
   },
+  "ci-gate-bound": {
+    "kind": "design",
+    "path": "odd/tasks/commit-gates-first.md"
+  },
   "codex-review-floor": {
     "kind": "words",
     "quotes": [

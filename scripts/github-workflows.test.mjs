@@ -1,6 +1,7 @@
 // The repository is public (2026-10-16), and a GitHub workflow of a public repository runs on GitHub's machines
 // for free, 20 jobs at once. It holds one workflow, `.github/workflows/gate.yml`: the gate of a commit whose
-// tests overflow this machine's line (odd/tasks/first-version.md, "Gates on CI machines"). What bounds it is
+// tests go to GitHub's machines first (odd/tasks/first-version.md, "Gates on CI machines";
+// odd/tasks/commit-gates-first.md). What bounds it is
 // held here, because a public repository is read and forked by anyone:
 // - it runs for a push to a `gate/` branch and for nothing else, so a pull request starts no run (the merge
 //   queue's CircleCI run tests main as it will be, odd/tasks/merge-queue.md S4), `pull_request_target` never
@@ -13,6 +14,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ruleValue } from '../bin/lib/rules.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FOLDER = path.join(ROOT, '.github', 'workflows');
@@ -60,12 +62,15 @@ test('its token reads the contents and nothing more, and no secret is named', ()
   assert.doesNotMatch(text, /GITHUB_TOKEN|github\.token/, 'the token handed to a step');
 });
 
-test('one job on a fixed runner, bounded, running the gate', () => {
+// The job stops itself two minutes past the bound a gate waits for its run (the rule ci-gate-bound): a run whose
+// gate died and cancels nothing ends there, and a gate that is alive always cancels first, so the job's own
+// timeout never races it.
+test('one job on a fixed runner, bounded by the rule ci-gate-bound, running the gate', () => {
   const lines = workflowLines();
   const jobs = below(lines, 'jobs:');
   assert.deepEqual(level(jobs), ['check:']);
   const job = level(below(jobs, 'check:'));
-  assert.deepEqual(job, ['runs-on: ubuntu-24.04', 'timeout-minutes: 15', 'steps:']);
+  assert.deepEqual(job, ['runs-on: ubuntu-24.04', `timeout-minutes: ${ruleValue('ci-gate-bound', 'minutes') + 2}`, 'steps:']);
   const runs = lines.filter((line) => line.text.startsWith('run:') || line.text.startsWith('- run:')).map((line) => line.text);
   assert.ok(runs.some((text) => text.endsWith('node bin/check.mjs')), 'a step runs `node bin/check.mjs`');
 });

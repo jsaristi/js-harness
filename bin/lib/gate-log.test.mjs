@@ -419,6 +419,8 @@ test('formatGates says one gate a line: when, seconds, result, lock, load, whom 
     { start: start('d', { lock: 'none', waitedSeconds: 61, waitedFor: [unknown, { ...unknown, pid: null }] }) },
     { refused: refused('e', { waitedFor: [other] }) },
     { refused: refused('f', { reason: 'timeout', waitedSeconds: 30, waitedFor: [other] }) },
+    // A commit's gate whose tests ran on GitHub (../check.mjs, `testsOnCi`): never read as a run under the lock.
+    { start: start('g', { lock: 'ci' }), end: end('g', { seconds: 144.2, sensors: [{ name: 'tests', seconds: 144, pass: true, ranIn: 'ci' }] }) },
   ];
   const at = when(AT);
   assert.deepEqual(formatGates(gates), [
@@ -428,6 +430,7 @@ test('formatGates says one gate a line: when, seconds, result, lock, load, whom 
     `${at}  no end (killed, or still running)  without the lock  waited 61 s for another gate (pid 77), another gate  C:\\work\\one`,
     `${at}  refused (held)  waited 0 s for D:\\js-harness  C:\\work\\one`,
     `${at}  refused (timeout)  waited 30 s for D:\\js-harness  C:\\work\\one`,
+    `${at}  144 s  pass  on GitHub's machines  C:\\work\\one`,
   ]);
   assert.deepEqual(formatGates([]), []);
 });
