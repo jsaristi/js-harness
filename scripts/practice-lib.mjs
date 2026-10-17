@@ -240,9 +240,9 @@ export function ownsFolder(markerText) {
 
 // ---- the real home, before and after ---------------------------------------------------------------------------------
 
-// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): two skills
+// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): three skills
 // for each of two hosts, two entries in a file of each host, and the pause entry in Claude Code's (`HARNESS_HOOKS` below).
-const SKILLS = ['js-harness', 'js-harness-orchestrator'];
+const SKILLS = ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols'];
 const HOSTS = ['.claude', '.codex'];
 // The arrays of the manifest whose records name a file by `path`: what `install` wrote, the files it grafted
 // an entry onto, and what was written only when asked (the login launcher, which lies outside the home).
@@ -263,7 +263,7 @@ function recordedPaths(manifestText) {
 }
 
 /** The files the harness owns in the user's REAL home `home`, as absolute paths without duplicates: the
- * manifest, the `SKILL.md` of both skills for both hosts, the two files that hold a `SessionStart` entry,
+ * manifest, the `SKILL.md` of the three skills for both hosts, the two files that hold a `SessionStart` entry,
  * and every file the real manifest (`manifestText`, the content of `<home>/.js-harness/manifest.json`, or
  * `undefined`) records. The manifest records absolute paths; a relative one is taken from `home`. On Windows
  * two paths that differ only in case are one file.
@@ -323,6 +323,12 @@ const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 /** The command of the share check, as `bin/lib/manifest.mjs` spells it (`SHARE_HOOK_COMMAND`); the same test holds the two together. */
 const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 
+/** The command of the reply check, as `bin/lib/manifest.mjs` spells it (`REPLY_HOOK_COMMAND`); the same test holds the two together. */
+const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
+
+/** The command of the rules' turn-start hook, as `bin/lib/manifest.mjs` spells it (`RULES_HOOK_COMMAND`); the same test holds the two together. */
+const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
+
 /** The matcher of the guard hook, as `bin/lib/manifest.mjs` spells it: anchored, so that each tool is a whole name. The same test holds the two together. */
 const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$';
 
@@ -330,7 +336,9 @@ const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_mess
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
  * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
  * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
- * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool. The test holds
+ * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool; the guard's before a tool call and the
+ * share check's at a stop, for Claude Code only; and the reply check's at a stop, for both hosts, since it reads only the
+ * reply's text. The test holds
  * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
  * an install that changed. */
 export const HARNESS_HOOKS = Object.freeze([
@@ -340,6 +348,10 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'UserPromptSubmit', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|resume', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
@@ -393,27 +405,34 @@ export function hostHooksProblem(text, seededCommand, host) {
     const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
     return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(entryShown).join(' | ')}`;
   }
-  return postToolUseProblem(data, host);
+  return postToolUseProblem(data, host) ?? tailProblem(data, host, 'UserPromptSubmit') ?? tailProblem(data, host, 'SubagentStart');
 }
 
 /** What is wrong with `hooks.PostToolUse` of a host file, or `null` when nothing is. Claude Code holds the pause
  * entry once, with no matcher, at the end of the list: `install` appends it, so a user's own entry before it stays
  * first and untouched. Codex holds no entry of the harness there, so one found in its file is a problem. */
 function postToolUseProblem(data, host) {
-  const list = data?.hooks?.PostToolUse;
-  const ours = hooksOfHost(host).filter((hook) => hook.event === 'PostToolUse');
-  if (!Array.isArray(list)) return ours.length === 0 ? null : 'the file holds no list at hooks.PostToolUse';
-  const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === 'PostToolUse').map((hook) => hook.command);
+  return tailProblem(data, host, 'PostToolUse');
+}
+
+/** What is wrong with the list `hooks.<event>` of a host file, held as `postToolUseProblem` holds `PostToolUse`: the
+ * harness's entries of that event once each at its end, and none where the host gets none (the rules' turn-start
+ * entries are Claude Code's alone). */
+function tailProblem(data, host, event) {
+  const list = data?.hooks?.[event];
+  const ours = hooksOfHost(host).filter((hook) => hook.event === event);
+  if (!Array.isArray(list)) return ours.length === 0 ? null : `the file holds no list at hooks.${event}`;
+  const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === event).map((hook) => hook.command);
   const harnessFound = list.filter((entry) => harnessCommands.includes(entryCommand(entry)));
   const found = list.length === 0 ? 'no entry' : list.map(entryShown).join(' | ');
-  if (ours.length === 0) return harnessFound.length === 0 ? null : `expected no entry of the harness in hooks.PostToolUse of ${host}; found: ${found}`;
+  if (ours.length === 0) return harnessFound.length === 0 ? null : `expected no entry of the harness in hooks.${event} of ${host}; found: ${found}`;
   const tail = list.slice(-ours.length);
   const asExpected =
     harnessFound.length === ours.length &&
     ours.every((hook, index) => entryCommand(tail[index]) === hook.command && tail[index]?.matcher === hook.matcher);
   if (asExpected) return null;
   const expected = ours.map((hook) => `"${hook.command}" (${hook.matcher === undefined ? 'no matcher' : `matcher ${hook.matcher}`})`).join(', then ');
-  return `expected ${expected} once, at the end of hooks.PostToolUse; found: ${found}`;
+  return `expected ${expected} once, at the end of hooks.${event}; found: ${found}`;
 }
 
 /** What is wrong with a host file after `uninstall`, or `null` when it is the file as `setup` seeded it (`seededText`, the
@@ -441,7 +460,7 @@ function leftoverList(text, seededText) {
   } catch {
     return null;
   }
-  return ['SessionStart', 'PostToolUse', 'PostToolUseFailure'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
+  return ['SessionStart', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'SubagentStart'].find((key) => Array.isArray(data?.hooks?.[key]) && data.hooks[key].length === 0 && seeded?.hooks?.[key] === undefined) ?? null;
 }
 
 // ---- the gate log of the practice home -------------------------------------------------------------------------------
@@ -459,7 +478,8 @@ export function gateLogFolder(home, platform = process.platform) {
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-/** The journey of `run`, in order: the ten steps of the feature document ("The journey"), and `pause-hook`, which that document does not list yet. An `id` goes into
+/** The journey of `run`, in order: the steps of the feature document ("The journey"), with `pause-hook` and `channel`
+ * (odd/tasks/session-channel.md, T10), the two the session channel adds. An `id` goes into
  * the record, so it never changes once a line was written with it; a feature that changes what a project
  * receives adds its own step here, with its test. */
 export const JOURNEY = Object.freeze([
@@ -471,9 +491,12 @@ export const JOURNEY = Object.freeze([
   { id: 'commit-refused', title: 'a commit that breaks the test of the project is refused, and the file is restored' },
   { id: 'project-rules', title: "the project's own rules are listed and checked, and a commit that drops one is refused" },
   { id: 'project-uninstall', title: 'uninstall removes what init wrote and nothing the project owns; init again' },
+  { id: 'template-lines', title: "the AGENTS.md init wrote is the candidate's template, with the lines that hold in any project, in at most half the budget" },
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
+  { id: 'channel', title: 'a notice recorded in the installed project is read back on its board, and nothing reaches the real home' },
   { id: 'opening-tools', title: 'the guard lets the scheduled-task and cloud tools pass in the project, and refuses them where the rule is declared, naming start_session' },
+  { id: 'reply-hook', title: 'the reply check turns back a reply with no state where harness.json turns it on, lets a closed reply stop, and turns nothing back in the project' },
   { id: 'host-loads', title: 'a real Claude Code session in the project loads the skills and AGENTS.md, runs the three hook entries, and leaves nothing in the real home' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
@@ -487,6 +510,28 @@ export function secondInitProblem(porcelainText, agentsText, template) {
   const lines = porcelainText.split('\n').filter(Boolean);
   const onlyTemplate = lines.length === 1 && lines[0] === ' M AGENTS.md' && agentsText === template;
   return lines.length === 0 || onlyTemplate ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
+}
+
+/** The sections `agentsTemplate` gained with the lines that hold in any project (odd/tasks/rule-hierarchy.md, T9), whose
+ * wording is the owner's yes: the step `template-lines` looks for each in the AGENTS.md the installed `init` wrote. */
+export const TEMPLATE_SECTIONS = Object.freeze(['What good looks like', 'Working with the owner']);
+
+/** What is wrong with the AGENTS.md the installed `init` wrote, or `null` (odd/tasks/rule-hierarchy.md, T12).
+ * `agentsText` is the file, or nothing; `template` is `agentsTemplate` of the candidate's source, so the two match only
+ * when the copy installed is the candidate. The file must hold each of `TEMPLATE_SECTIONS` as a `## ` heading and the
+ * line of the four states (read with the wrapping undone), and `tokens`, its estimated size, must be at most half of
+ * `budget` (agents-budget), so that a project keeps the other half for its own lines. */
+export function templateLinesProblem({ agentsText, template, tokens, budget }) {
+  if (agentsText === undefined) return 'the project has no AGENTS.md after js-harness init';
+  if (agentsText !== template) return "the AGENTS.md js-harness init wrote is not this candidate's template (agentsTemplate of bin/lib/project.mjs), so the copy installed is not the candidate";
+  const headings = agentsText.split(/\r?\n/);
+  for (const section of TEMPLATE_SECTIONS) {
+    if (!headings.includes(`## ${section}`)) return `the template js-harness init wrote has no section "${section}"`;
+  }
+  if (!agentsText.replace(/\s+/g, ' ').includes('A reply ends with one of four states')) return 'the template js-harness init wrote does not say that a reply ends with one of four states';
+  const half = budget / 2;
+  if (tokens > half) return `the template js-harness init wrote is ${tokens} estimated tokens, over ${half}, half of agents-budget: a project keeps less than half for its own lines`;
+  return null;
 }
 
 /** The one step that starts a host session, and so spends a model: `run --no-host` leaves it out. */
@@ -536,6 +581,8 @@ export function hostEnv(layout, baseEnv, token, platform = process.platform) {
 const FILE_TOOLS = ['Read', 'Grep', 'Glob', 'Bash', 'PowerShell', 'NotebookRead', 'Task', 'Agent'];
 // The first words `js-harness resume --hook` prints after a compaction (bin/resume.mjs).
 const RESUME_WORDS = 'js-harness resume:';
+// What the host entry setup seeds before the harness is installed prints (`echo unrelated-claude-hook`, scripts/e2e.mjs).
+const SEEDED_HOOK_OUTPUT = 'unrelated-claude-hook';
 
 /** The parts of a host's `--output-format stream-json --verbose --include-hook-events` output the step reads: the
  * `system/init` event, every `system/hook_response` as `{ name, exitCode, outcome, stdout }`, and the last result.
@@ -559,13 +606,21 @@ export function readHostStream(text) {
 }
 
 /** What is wrong with one call of the host session, one sentence each; none when it proves what it is for.
- * `load` (no tools, one turn): both skills listed, no file tool, every startup hook a success, and the answer holds
- * `word`, which only the practice's AGENTS.md holds. `skill`: the pause entry ran after the skill and succeeded, and
- * the answer quotes the skill. `compact`: the compact entry printed the words of `js-harness resume`. */
+ * `load` (no tools, one turn): both skills listed, no file tool, every startup hook a success, the turn's hook ran
+ * (the rules hook, `UserPromptSubmit`), and the answer holds `word`, which only the practice's AGENTS.md holds.
+ * `skill`: the pause entry ran after the skill and succeeded, and the answer quotes the skill. `compact`: the compact
+ * entry printed the words of `js-harness resume`, and a second compact entry, the rules hook, succeeded. `subagent`: a
+ * sub-agent's start hook ran and succeeded, the rules hook's third event (odd/tasks/rule-hierarchy.md, T16f). The host
+ * names a hook of an event with a matcher `<event>:<what matched>`, and one without a matcher by its event alone. */
 export function hostCallProblems(kind, { init, hooks, result }, { word } = {}) {
   const problems = [];
   const succeeded = (hook) => hook.exitCode === 0 && hook.outcome === 'success';
   const named = (name) => hooks.filter((hook) => hook.name === name);
+  const ofEvent = (event) => hooks.filter((hook) => hook.name === event || String(hook.name).startsWith(`${event}:`));
+  const ranAndSucceeded = (event, found) => {
+    if (found.length === 0) problems.push(`no ${event} hook ran`);
+    for (const hook of found.filter((item) => !succeeded(item))) problems.push(`a ${event} hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
+  };
   if (kind === 'load') {
     if (init === null) problems.push('the stream has no init event');
     else {
@@ -578,14 +633,21 @@ export function hostCallProblems(kind, { init, hooks, result }, { word } = {}) {
     const started = named('SessionStart:startup');
     if (started.length === 0) problems.push('no SessionStart:startup hook ran');
     for (const hook of started.filter((item) => !succeeded(item))) problems.push(`a SessionStart:startup hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
+    ranAndSucceeded('UserPromptSubmit', ofEvent('UserPromptSubmit'));
   }
+  if (kind === 'subagent') ranAndSucceeded('SubagentStart', ofEvent('SubagentStart'));
   if (kind === 'skill') {
     const after = named('PostToolUse:Skill');
     if (after.length === 0) problems.push('no PostToolUse:Skill hook ran');
     for (const hook of after.filter((item) => !succeeded(item))) problems.push(`a PostToolUse:Skill hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
   }
-  if (kind === 'compact' && !named('SessionStart:compact').some((hook) => succeeded(hook) && hook.stdout.startsWith(RESUME_WORDS))) {
-    problems.push('no SessionStart:compact hook printed the words of js-harness resume');
+  if (kind === 'compact') {
+    const compacted = named('SessionStart:compact').filter(succeeded);
+    if (!compacted.some((hook) => hook.stdout.startsWith(RESUME_WORDS))) problems.push('no SessionStart:compact hook printed the words of js-harness resume');
+    // The one left is the rules hook: the entry setup seeds (`SEEDED_HOOK_OUTPUT`) runs at a compaction too.
+    if (!compacted.some((hook) => !hook.stdout.startsWith(RESUME_WORDS) && hook.stdout.trim() !== SEEDED_HOOK_OUTPUT)) {
+      problems.push('no SessionStart:compact hook ran beside the one of js-harness resume, so the rules hook did not');
+    }
   }
   if (result === null) {
     problems.push('the stream has no result');
@@ -859,6 +921,72 @@ export function pauseHookProblem({ first, second, outside }) {
   return null;
 }
 
+// ---- the channel, as the installed project meets it (odd/tasks/session-channel.md, T10) ----
+
+// The names `channelEnv` replaces: the two a child reads its home from (`os.homedir()` takes USERPROFILE on Windows and
+// HOME elsewhere), the harness's home, and the two by which a command started from a live session reaches that
+// session's files: its id (`notify` reads the sender's transcript by it) and its config folder (the Claude home both
+// commands read the sessions from when no `--claude-home` is given).
+const CHANNEL_REPLACED = ['HOME', 'USERPROFILE', 'JS_HARNESS_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_SESSION_ID'];
+
+/** Where `notify` records the notices of the project `slug` under the home `home` (`recordPath` of
+ * `bin/lib/channel.mjs`). Spelled here, as `gateLogFolder` is, because the practice looks at the candidate from outside;
+ * a test holds the two spellings together. The step reads the real home's record by it, to show the notice is not there. */
+export function channelRecord(home, slug, platform = process.platform) {
+  return pathFor(platform).join(home, '.js-harness', 'channel', `${slug}.jsonl`);
+}
+
+/** The environment of the two commands of the step `channel`, as a new object; `baseEnv` (the practice's `childEnv`)
+ * is left as it is. `notify` and the board find the record under the harness home, which is `JS_HARNESS_HOME` or the
+ * user's home: both are the practice home here, so a command that ignored the one would still write and read there,
+ * and never in the real home. The host session's id and config folder are dropped, so the session that starts a run
+ * is never taken for the sender and its transcripts are never read. Windows does not tell names apart by case: every
+ * spelling of a replaced name goes, and the result holds each once. */
+export function channelEnv(baseEnv, home, platform = process.platform) {
+  const windows = platform === 'win32';
+  const replaced = (name) => CHANNEL_REPLACED.includes(windows ? name.toUpperCase() : name);
+  return {
+    ...Object.fromEntries(Object.entries(baseEnv).filter(([name]) => !replaced(name))),
+    HOME: home,
+    USERPROFILE: home,
+    JS_HARNESS_HOME: home,
+  };
+}
+
+/** How a child of the step ended, for its message: the spawn error, or its exit code. */
+const endedAs = (result) => (result.error ? result.error.message : `exit ${result.status}`);
+/** The first line of `text` that is not blank, or `null`. */
+const firstLine = (text) => String(text ?? '').split(/\r?\n/).find((line) => line.trim() !== '') ?? null;
+const failedRun = (what, result) => `${what} failed (${endedAs(result)}): ${firstLine(result.stderr) ?? 'it printed nothing on stderr'}`;
+
+/** What is wrong with the step `channel`, or `null` when nothing is. `notify` is the run of the installed
+ * `js-harness notify --to orchestrator --kind note "<a line holding marker>"` in the practice project, and `board` the
+ * run of `js-harness sessions --json` after it, each `{ status, stdout, stderr, error? }` of the child. `notify` must
+ * exit 0; the real home's record of the project (`realRecord`, its text, or `null` when there is none) must not hold
+ * `marker`; the board must exit 0 and print JSON whose `channel` was read from a record under the practice home `home`
+ * and lists, among its last notices, one whose text holds `marker`. The real home is looked at before the board: a
+ * notice written there instead would otherwise read only as a board that does not show it. One line names what failed. */
+export function channelStepProblem({ notify, board, marker, home, realRecord = null, platform = process.platform }) {
+  if (notify.error || notify.status !== 0) return failedRun('js-harness notify', notify);
+  if (typeof realRecord === 'string' && realRecord.includes(marker)) return `the real home's channel record holds ${marker}: the notice reached the real home`;
+  if (board.error || board.status !== 0) return failedRun('js-harness sessions --json', board);
+  let parsed;
+  try {
+    parsed = JSON.parse(board.stdout);
+  } catch {
+    return `js-harness sessions --json printed text that is not JSON: ${firstLine(board.stdout) ?? '(nothing)'}`;
+  }
+  const channel = parsed?.channel;
+  if (!Array.isArray(channel?.notices)) return 'the board shows no channel notices: its JSON has no channel.notices list';
+  if (typeof channel.path !== 'string' || !isInside(home, channel.path, platform)) {
+    return `the board read the channel's record at ${channel.path}, outside the practice home ${home}`;
+  }
+  if (!channel.notices.some((notice) => typeof notice?.text === 'string' && notice.text.includes(marker))) {
+    return `no notice on the board holds ${marker}: it shows ${channel.notices.length} of the ${channel.noticeCount} notices of ${channel.path}`;
+  }
+  return null;
+}
+
 // ---- the tools that open a session where he does not see it, as the guard meets them ----
 
 /** The four tools the guard refuses where the rule `sessions-open-in-sidebar` is declared, as `bin/lib/guard.mjs` names
@@ -908,6 +1036,45 @@ export function openingToolsProblem({ plain, declared }) {
     if (!reason.includes(tool) || !reason.includes('start_session')) {
       return `the refusal of ${tool} does not name the tool and start_session: ${reason}`;
     }
+  }
+  return null;
+}
+
+// ---- the reply check, as a Stop hook meets it (odd/tasks/rule-hierarchy.md, T12) ----
+
+/** The hook input the host sends a `Stop` hook on standard input, as JSON text: the session, its folder, the event, the
+ * reply that ends the turn and no background work running, the fields `bin/reply.mjs` reads. */
+export function replyHookInput({ sessionId, cwd, message }) {
+  return JSON.stringify({ session_id: sessionId, cwd, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: message, background_tasks: [] });
+}
+
+/** The run's answer as JSON, or the reason it is none: a `Stop` hook answers with one JSON object, `{}` to let the session
+ * stop. */
+function replyAnswer(run, which) {
+  if (run?.status !== 0) return { problem: `the reply check exited ${run?.status} on ${which}, not 0` };
+  const printed = (run.stdout ?? '').trim();
+  return printed === '' ? { printed } : { printed, answer: (() => { try { return JSON.parse(printed); } catch { return undefined; } })() };
+}
+
+/** What is wrong with the three runs of the reply check, or `null`. `refused` is a reply with no state, in a folder whose
+ * `harness.json` holds `"reply": true`: it must be turned back with `decision: "block"` and a reason that names the
+ * English label `Working`. `passed` is a reply there that closes with `Working — …`, and `plain` the reply with no state
+ * in the practice project, whose `harness.json` from `init` has no `reply` key: both must print `{}`. Each run is
+ * `{ status, stdout }` of the child. */
+export function replyHookProblem({ refused, passed, plain }) {
+  const turned = replyAnswer(refused, 'the reply with no state');
+  if (turned.problem) return turned.problem;
+  if (turned.answer?.decision !== 'block') return `the reply check let a reply with no state stop in the folder whose harness.json turns it on: ${turned.printed}`;
+  const reason = typeof turned.answer.reason === 'string' ? turned.answer.reason : '';
+  if (!reason.includes('Working')) return `the reply check turned the reply back without naming the state Working: ${reason}`;
+  for (const [run, which, where] of [
+    [passed, 'the reply that closes with its state', 'a reply that closes with its state'],
+    [plain, 'the reply in the practice project', 'a reply in the practice project, whose harness.json does not turn it on'],
+  ]) {
+    const read = replyAnswer(run, which);
+    if (read.problem) return read.problem;
+    if (read.printed === '') return `the reply check printed nothing in ${run === plain ? 'the practice project' : 'the folder whose harness.json turns it on'}, though a Stop hook answers with JSON`;
+    if (read.answer === undefined || Object.keys(read.answer).length !== 0) return `the reply check turned back ${where}: ${read.printed}`;
   }
   return null;
 }

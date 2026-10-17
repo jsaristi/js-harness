@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseStatus, resumeMain, transcriptTitle } from './resume.mjs';
 import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, recordPath, reliefPath, writeOpening } from './lib/channel.mjs';
-import { pauseNotice, statePath } from './lib/pause.mjs';
+import { HOST_COMPACTION_RESERVE, pauseNotice, statePath } from './lib/pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every test below has a machine of its own under a temp folder: a project with one linked worktree
@@ -22,6 +22,9 @@ const NOW = Date.parse('2026-01-01T12:00:00.000Z');
 const writtenAt = (file, minutes) => fs.utimesSync(file, new Date(NOW - minutes * 60000), new Date(NOW - minutes * 60000));
 const FIRST = 'js-harness resume: this session was just compacted. What follows is read from files; the summary of the compaction is not the record.';
 const READ = 'Read "Next step" in that document, and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.';
+const PARTS_TRUST = 'Trust them over the summary. Then repeat to the user any question that is still open.';
+// The parts of the machine's default feature document (`makeMachine`), as the hook names them (odd/tasks/resume-open-task.md, S6).
+const PARTS = ['Read these parts of it (6 lines in all), not the whole file:', '  "Next step": lines 5-6 (2 lines)', '  the task T6: line 3 (1 line)', PARTS_TRUST];
 
 function makeMachine() {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-resume-')));
@@ -128,7 +131,10 @@ const NOT_TOLD = 'The pause: not known whether this session was told (it keeps n
 const NO_USER = 'The user wrote nothing in this stretch.';
 const NONE_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = 'Then tell the orchestrator in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session\'s title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator\'s title, or that there is none).';
+// The hook writes the hour of the compaction from the clock it runs at (odd/tasks/wake-and-flag.md, T4): 7 of 60 such
+// notices typed it in UTC when the line left it to the session.
+const COMPACTED_AT = `${String(new Date(NOW).getHours()).padStart(2, '0')}:${String(new Date(NOW).getMinutes()).padStart(2, '0')}`;
+const NOTIFY = `Then tell the orchestrator (the session that leads this project's sessions, where one does: the js-harness-orchestrator skill says how) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at ${COMPACTED_AT}, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
 const USER_LINE = (count, lines) => `The user wrote at ${count} lines of it, the last at ${lines}: read each with  js-harness sessions --quote ${SESSION} <line>`;
 const REPLY_LINE = (line, at, text) => `This session's last reply with text is line ${line} (${at}); it ended: "${text}"`;
 // The feature document of `titled` and `notified`, and the state line the hook says of it: written 12 minutes before the test's now, committed at 09:00.
@@ -198,7 +204,7 @@ test('after a compaction the hook prints the session\'s title, its opening, its 
     `Session: "${TITLE}" (the title the host gave the hook)`,
     `Opening: ${opening}  (print it: js-harness sessions --opening '${TITLE}')`,
     `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
-    READ,
+    ...PARTS,
     ...TITLED_BLOCK(machine),
     NOTIFY,
   ]);
@@ -232,7 +238,7 @@ test('a title is looked up as it was given, with the blanks it holds; only what 
     `Session: "JH 5 · the channel" (${how})`,
     `Opening: ${stored}  (print it: js-harness sessions --opening 'JH 5 · the  channel')`,
     `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
-    READ,
+    ...PARTS,
     ...tail,
   ];
   assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: wide }))).lines, said('the title the host gave the hook', [NOTIFY]));
@@ -312,8 +318,8 @@ test('the feature document is the last one the session wrote, by its transcript,
   const rule = path.join(tasks, 'rule-hierarchy.md');
   fs.writeFileSync(rule, '# Rule hierarchy\n');
   const forward = path.join(tasks, 'session-channel.md').replaceAll('\\', '/');
-  const feature = async (more = {}, deps = {}) => (await runHook(machine, hookInput(machine, { session_title: TITLE, ...more }), deps)).lines.slice(3, 5);
-  const reading = [`Feature document: ${forward}  (branch feat/channel, the last feature document this session wrote, by its transcript)`, READ];
+  const feature = async (more = {}, deps = {}) => (await runHook(machine, hookInput(machine, { session_title: TITLE, ...more }), deps)).lines.slice(3, 4 + PARTS.length);
+  const reading = [`Feature document: ${forward}  (branch feat/channel, the last feature document this session wrote, by its transcript)`, ...PARTS];
   // The notice was written on another branch of the worktree, and no transcript says otherwise: the transcript decides.
   notified(machine, { branch: 'feat/old' });
   // The latest of the documents the session wrote that is still there: a removed one and the notes it wrote do not count.
@@ -327,13 +333,13 @@ test('the feature document is the last one the session wrote, by its transcript,
   // A transcript that names no document still there gives nothing: the notice decides, as before.
   notified(machine);
   transcriptWith(machine, [editedAt('2026-01-01T10:20:00.000Z', path.join(tasks, 'removed.md'))]);
-  const fromNotice = [`Feature document: ${path.join(tasks, 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`, READ];
+  const fromNotice = [`Feature document: ${path.join(tasks, 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`, ...PARTS];
   assert.deepEqual(await feature(), fromNotice);
   // A transcript that cannot be read gives nothing here, and the hook goes on.
   transcriptWith(machine, [editedAt('2026-01-01T10:10:00.000Z', forward)]);
   assert.deepEqual(await feature({ transcript_path: path.join(machine.claudeHome, 'projects', 'other-project', `${SESSION}.jsonl`) }), fromNotice);
   // The branch of the document's worktree is not known when git does not say it.
-  assert.deepEqual(await feature({}, { git: fakeGit(machine, { failing: ['branch'] }) }), [`Feature document: ${forward}  (branch not known, the last feature document this session wrote, by its transcript)`, READ]);
+  assert.deepEqual(await feature({}, { git: fakeGit(machine, { failing: ['branch'] }) }), [`Feature document: ${forward}  (branch not known, the last feature document this session wrote, by its transcript)`, ...PARTS]);
 }));
 
 test('an orchestrator\'s state is its relief file: the hook names it with its lines and when it was written, and no feature document', withMachine(async (machine) => {
@@ -543,8 +549,8 @@ test('when the disk cannot be read the hook prints what it still knows, and says
   // No folder can be listed: an opening is stored, and the hook says it could not look, not that there is none.
   opened(machine);
   const unlisted = `Opening: could not look in ${dir} (made up)`;
-  assert.deepEqual(await printed({ session_title: TITLE }, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, unlisted, document, READ, ...TITLED_BLOCK(machine), NOTIFY]);
-  assert.deepEqual(await printed({}, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title its transcript carries)`, unlisted, document, READ, ...TITLED_BLOCK(machine), NOTIFY]);
+  assert.deepEqual(await printed({ session_title: TITLE }, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, unlisted, document, ...PARTS, ...TITLED_BLOCK(machine), NOTIFY]);
+  assert.deepEqual(await printed({}, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title its transcript carries)`, unlisted, document, ...PARTS, ...TITLED_BLOCK(machine), NOTIFY]);
   // No file can be read, and now the folder holds one: it may be the opening asked for, so "none stored" is not said.
   assert.deepEqual(await printed({ session_title: TITLE }, { readFile: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: not known whether one is stored for that title (1 file of ${dir} could not be read as an opening)`, ...unread, NOTIFY]);
 }));
@@ -627,10 +633,10 @@ test('a title that names several openings gets their titles and no command: sess
   const second = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the channel, reworded', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   writeOpening(machine.home, machine.slug, { title: 'JH 6 · other', text: 'Another.\n', at: AT, from });
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = (count, more = '') => `Opening: ${count} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${more})`;
+  const several = (count, more = '') => `Opening: ${count} openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it${more})`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
-  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several(2), `  "JH 5 · the channel, reworded"  (${second})`, `  "JH 5 · the channel"  (${first})`, document, READ, NOTIFY]);
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several(2), `  "JH 5 · the channel, reworded"  (${second})`, `  "JH 5 · the channel"  (${first})`, document, ...PARTS, NOTIFY]);
   // The command for `JH 5` would exit 2, so none is written.
   assert.deepEqual(lines.filter((line) => line.includes('print it:') || line.includes('--opening \'')), []);
   // A file that could not be read may be a third: it is said as not counted, as for one opening.
@@ -638,7 +644,7 @@ test('a title that names several openings gets their titles and no command: sess
   assert.equal((await runHook(machine, hookInput(machine, { session_title: 'JH 5' }))).lines[2], several(2, `; 1 file of ${dir} could not be read as an opening and is not counted`));
   fs.rmSync(path.join(dir, 'torn.json'));
   // A whole title names one opening, and nothing changes for it.
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines, [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: ${first}  (print it: js-harness sessions --opening '${TITLE}')`, document, READ, NOTIFY]);
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines, [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: ${first}  (print it: js-harness sessions --opening '${TITLE}')`, document, ...PARTS, NOTIFY]);
   // And the code and the role that name one opening are a title a command is written for.
   assert.equal((await runHook(machine, hookInput(machine, { session_title: 'JH 6' }))).lines[2], `Opening: ${path.join(dir, openingFileName('JH 6 · other'))}  (print it: js-harness sessions --opening 'JH 6')`);
 }));
@@ -649,10 +655,10 @@ test('the titles of several openings are listed as the files hold them: a second
   const single = opened(machine).path;
   const double = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the  channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it)`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
-  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the  channel"  (${double})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the  channel"  (${double})`, `  "JH 5 · the channel"  (${single})`, document, ...PARTS, NOTIFY]);
 }));
 
 test('a title the list prints stays on its line: a quote, a line break and a line separator are escaped as the file holds them', withMachine(async (machine) => {
@@ -661,9 +667,9 @@ test('a title the list prints stays on its line: a quote, a line break and a lin
   const quoted = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the "odd" channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
   const single = opened(machine).path;
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
-  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (give js-harness sessions --opening one title below, between single quotes, and it prints it)`;
   const { lines } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
-  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the \\"odd\\" channel"  (${quoted})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the \\"odd\\" channel"  (${quoted})`, `  "JH 5 · the channel"  (${single})`, document, ...PARTS, NOTIFY]);
   // A hand-written file may hold what writeOpening refuses: a line break and a line separator. Two files with that title are found by the whole title and listed on one line each.
   const torn = 'JH 5 · the\nchannel\u2028end';
   const handWritten = (name, at) => {
@@ -674,7 +680,7 @@ test('a title the list prints stays on its line: a quote, a line break and a lin
   const newer = handWritten('hand-newer.json', '2026-01-01T12:00:00.000Z');
   const older = handWritten('hand-older.json', '2026-01-01T11:30:00.000Z');
   const listed = await runHook(machine, hookInput(machine, { session_title: torn }));
-  assert.deepEqual(listed.lines, [FIRST, 'Session: "JH 5 · the channel end" (the title the host gave the hook)', several, `  "JH 5 · the\\nchannel\\u2028end"  (${newer})`, `  "JH 5 · the\\nchannel\\u2028end"  (${older})`, document, READ, NOTIFY]);
+  assert.deepEqual(listed.lines, [FIRST, 'Session: "JH 5 · the channel end" (the title the host gave the hook)', several, `  "JH 5 · the\\nchannel\\u2028end"  (${newer})`, `  "JH 5 · the\\nchannel\\u2028end"  (${older})`, document, ...PARTS, NOTIFY]);
 }));
 
 test('a notice written on no branch, and a worktree git names no branch for, tell no feature document', withMachine(async (machine) => {
@@ -700,7 +706,7 @@ test('a compaction the user asked for, with no reply after it, is said so with i
 test('a compaction the host wrote, with a reply of the session after it, is not written yet: the line names the one before it, and the host line is said', withMachine(async (machine) => {
   notified(machine);
   transcriptWith(machine, [asked(1, 'before the host compacted'), hostBoundary(2), answered(3, 'the stretch answer')]);
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(4 + PARTS.length), [
     headOf(machine),
     ...indented(`${NO_BOUNDARY}; the one before it was at ${minute(2)}.`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), NO_USER, REPLY_LINE(4, minute(3), 'the stretch answer'), HOST),
     NOTIFY,
@@ -710,7 +716,7 @@ test('a compaction the host wrote, with a reply of the session after it, is not 
 test('with no boundary in the transcript, the compaction line says that it records none before it', withMachine(async (machine) => {
   notified(machine);
   transcriptWith(machine, [asked(1, 'the question'), answered(2, 'the answer')]);
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(4 + PARTS.length), [
     headOf(machine),
     ...indented(`${NO_BOUNDARY}; the transcript records none before it.`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), USER_LINE(1, '2'), REPLY_LINE(3, minute(2), 'the answer'), HOST),
     NOTIFY,
@@ -720,7 +726,7 @@ test('with no boundary in the transcript, the compaction line says that it recor
 test('a file the host continued holds a copy of the boundary and none of the stretch: its line says so in place of the stretch lines', withMachine(async (machine) => {
   notified(machine);
   transcriptWith(machine, [hostBoundary(1)]);
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(4 + PARTS.length), [
     headOf(machine),
     ...indented(`Compaction: made by the host at ${minute(1)}, holding ${K(HELD)} tokens (line 2).`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), 'The stretch of work before this compaction is not in this transcript: the host continued the session in a new file, and no other session\'s file is read.', HOST),
     NOTIFY,
@@ -773,13 +779,13 @@ test('the last reply is said by its last 300 characters, with a leading ellipsis
   notified(machine);
   const long = Array.from({ length: 120 }, (_, index) => `w${index}`).join(' ');
   transcriptWith(machine, [answered(1, long), askedBoundary(2)]);
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(4 + PARTS.length), [
     headOf(machine),
     ...indented(`Compaction: asked for by the user at ${minute(2)}, holding ${K(HELD)} tokens (line 3).`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), NO_USER, REPLY_LINE(2, minute(1), `…${long.slice(-300).trim()}`)),
     NOTIFY,
   ]);
   transcriptWith(machine, [asked(1, 'the question'), toolOnly(2), askedBoundary(3)]);
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(4 + PARTS.length), [
     headOf(machine),
     ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), USER_LINE(1, '2'), NONE_REPLY),
     NOTIFY,
@@ -859,7 +865,7 @@ test('past the deadline after the stretch is read, its lines are printed, and th
   assert.deepEqual([code, stderr], [0, '']);
   assert.deepEqual(lines.slice(3), [
     `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
-    READ,
+    ...PARTS,
     headOf(machine),
     ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, USER_LINE(1, '2')),
     'Not read before this hook\'s own deadline (9 s): the pause\'s notice, when the state was last written and committed, the worktree\'s changes, the work in flight and the machine\'s gate, this session\'s last reply, the questions.',
@@ -877,7 +883,7 @@ test('a step that throws is said as not read in its place, and the rest of the h
   const at = lines.indexOf(headOf(machine));
   assert.notEqual(at, -1, 'the head is said: the transcript was read');
   assert.match(lines[at + 1], /^ {2}The stretch of work before this compaction: not read \(.+\)$/);
-  assert.deepEqual(lines.slice(0, at), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`, `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`, READ]);
+  assert.deepEqual(lines.slice(0, at), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`, `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`, ...PARTS]);
   assert.deepEqual(lines.slice(at + 2), [NOTIFY]);
 }));
 
@@ -971,7 +977,7 @@ test('a transcript the hook cannot read is no stretch: its lines are left out, a
     `Session: "${TITLE}" (the title the host gave the hook)`,
     `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`,
     `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
-    READ,
+    ...PARTS,
     NOTIFY,
   ]);
 }));
@@ -1255,6 +1261,37 @@ test('past the pause the command prints one JSON line with the notice, and nothi
   assert.ok(fs.existsSync(statePath(machine.home, SESSION)), 'the state remembers that the session was told');
   assert.deepEqual(await runPause(machine, input), { code: 0, lines: [], stderr: '', calls: [] }, 'the second call of the stretch says nothing');
   assert.deepEqual(first.calls, [], 'no git is asked: the project is found by its harness.json alone');
+}));
+
+// The window the host is configured with moves the pause (odd/tasks/session-channel.md, T6b): read from the
+// environment, the project's settings or the user's, under the home the hook writes to.
+const CONFIGURED = 350000;
+const CONFIGURED_POINT = CONFIGURED - HOST_COMPACTION_RESERVE;
+const CONFIGURED_PAUSED = Math.round((CONFIGURED_POINT * DEFAULT_CONTEXT_PAUSE_PERCENT) / DEFAULT_CONTEXT_COMPACTION_PERCENT) + 1000;
+
+/** Writes `settings` as JSON into `file`, making its folder. */
+function writeSettings(file, settings) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(settings));
+}
+
+test('a window the user settings configure tells the session at that window\'s pause, under the default one', withMachine(async (machine) => {
+  assert.ok(CONFIGURED_PAUSED < PAUSED, 'the context is under the pause of the default window');
+  const input = pauseInput(machine, CONFIGURED_PAUSED);
+  assert.deepEqual((await runPause(machine, input)).lines, [], 'with nothing configured the default pause holds');
+  writeSettings(path.join(machine.home, '.claude', 'settings.json'), { autoCompactWindow: CONFIGURED });
+  const told = await runPause(machine, input);
+  assert.equal(told.lines.length, 1);
+  assert.match(JSON.parse(told.lines[0]).hookSpecificOutput.additionalContext, new RegExp(`^js-harness: this session holds ${percentOf(CONFIGURED_PAUSED, CONFIGURED)}% of its context window, and the host compacts it at about ${percentOf(CONFIGURED_POINT, CONFIGURED)}%: `));
+}));
+
+test('a window the project\'s local settings or the environment configure moves the pause too', withMachine(async (machine) => {
+  writeSettings(path.join(machine.root, '.claude', 'settings.local.json'), { autoCompactWindow: CONFIGURED });
+  assert.equal((await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED))).lines.length, 1);
+  const other = await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED, { id: SECOND }), { env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(CONFIGURED) } });
+  assert.equal(other.lines.length, 1);
+  fs.rmSync(path.join(machine.root, '.claude'), { recursive: true });
+  assert.equal((await runPause(machine, pauseInput(machine, CONFIGURED_PAUSED, { id: THIRD }), { env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(CONFIGURED) } })).lines.length, 1, 'the environment alone');
 }));
 
 // The channel's inbox rides on the same hook: a note to this session reaches it after its next tool call, once.
@@ -1702,4 +1739,64 @@ test('after the feature document the hook names the mode its next open task call
   assert.deepEqual(await modeOf(), []);
   fs.writeFileSync(doc, '# Session channel\n\n- [ ] T6 The resume hook\n- [ ] T7 (kind: build) Later\n');
   assert.deepEqual(await modeOf(), []);
+}));
+
+test('the hook names the parts of the one feature document, the task its Next step names first, and the mode of that task', withMachine(async (machine) => {
+  const doc = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md');
+  // Shaped like odd/tasks/session-channel.md at 64933f6: its first unchecked task, T2, is stale.
+  fs.writeFileSync(doc, [
+    '# Session channel', '',
+    '## Specs', '- S1. The hook names parts.', '',
+    '## Tasks', '- [ ] T2 (kind: design) Stale (S1)', '- [ ] T6b (kind: build) The resume hook (S1)', '',
+    '## Progress', '- 2026-01-01, T6b. Started.', '',
+    '## Next step', 'T6b first, then T2.', '',
+  ].join('\n'));
+  notified(machine);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
+  const at = lines.findIndex((line) => line.startsWith('Feature document: '));
+  assert.deepEqual(lines.slice(at + 1, at + 8), [
+    'Read these parts of it (14 lines in all), not the whole file:',
+    '  "Next step": lines 13-14 (2 lines)',
+    '  the task T6b: line 8 (1 line)',
+    '  its spec S1: line 4 (1 line)',
+    '  its last log entry: line 11 (1 line)',
+    PARTS_TRUST,
+    'Mode of the next open task: T6b (kind: build): no effort or model declared in this project. Tell the person: only they set the session\'s effort.',
+  ], lines.join('\n'));
+}));
+
+test('a feature document that gives no part keeps today\'s line, and one that cannot be read does too', withMachine(async (machine) => {
+  const doc = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md');
+  fs.writeFileSync(doc, '# Session channel\n\nNotes, and no task.\n');
+  notified(machine);
+  const after = async (deps) => {
+    const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }), deps);
+    return lines[lines.findIndex((line) => line.startsWith('Feature document: ')) + 1];
+  };
+  assert.equal(await after(), READ);
+  const unreadable = (file) => {
+    if (String(file) === doc) throw Object.assign(new Error('EACCES: denied'), { code: 'EACCES' });
+    return fs.readFileSync(file, 'utf8');
+  };
+  assert.equal(await after({ readFile: unreadable }), READ);
+}));
+
+test('every tool call in a harness project records the gentle-ai reviews live in its store, a sub-agent\'s too, and says nothing of it', withMachine(async (machine) => {
+  const v2 = path.join(machine.root, '.git', 'gentle-ai', 'review-transactions', 'v2');
+  fs.mkdirSync(path.join(v2, 'review-aaa'), { recursive: true });
+  fs.writeFileSync(path.join(v2, 'LOCK'), '');
+  const starts = path.join(machine.home, '.js-harness', 'throughput', machine.slug, 'review-starts.jsonl');
+  const sub = await runPause(machine, JSON.stringify({ session_id: SESSION, agent_id: 'agent-1', cwd: machine.root, hook_event_name: 'PostToolUse' }));
+  assert.deepEqual([sub.code, sub.lines], [0, []]);
+  assert.deepEqual(fs.readFileSync(starts, 'utf8').trim().split('\n').map((line) => JSON.parse(line).lineage), ['review-aaa']);
+  // A store that cannot be read leaves the session's own notices as they are.
+  const denied = { ...fs, readdirSync: () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); } };
+  const own = await runPause(machine, pauseInput(machine, PAUSED), { fileSystem: denied });
+  assert.equal(own.code, 0);
+  assert.equal(own.lines.length, 1);
+  // A folder with no harness.json above it is not a harness project: nothing is recorded for it.
+  const outside = path.join(machine.dir, 'other');
+  fs.mkdirSync(path.join(outside, '.git', 'gentle-ai', 'review-transactions', 'v2', 'review-bbb'), { recursive: true });
+  await runPause(machine, JSON.stringify({ session_id: SESSION, agent_id: 'agent-1', cwd: outside, hook_event_name: 'PostToolUse' }));
+  assert.equal(fs.existsSync(path.join(machine.home, '.js-harness', 'throughput', projectSlug(outside))), false);
 }));

@@ -45,7 +45,7 @@ First request of a one-word prompt, estimated tokens:
 | Stack | gentle-ai 4 (ODD, RDD review, test-first by default), engram 3 (the binary, and its Claude plugin since `gentle-ai sync` installs it: hooks and one skill, no second MCP server), codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` on every turn — Claude Code reads it natively; the skills `install` writes for each host (`js-harness`, `js-harness-orchestrator`) load on demand |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
-| Release source | Built 2026-10-16 (`odd/tasks/first-version.md`, T4 and T4b), no release tagged yet: git tags in the private repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it stays private (Name, home), so that step has no date. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: `status --global`, `update` and `upgrade` read the newest `vX.Y.Z` tag with `git ls-remote` (`--repo` or `JS_HARNESS_REPO` names another repository, a test's local one), and until the first tag they say that no release is tagged yet; `--source`, a folder of tarballs, still wins when named (2026-10-13, `odd/tasks/install-update.md`, T5; tags 2026-10-16). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
+| Release source | Built 2026-10-16 (`odd/tasks/first-version.md`, T4 and T4b), no release tagged yet: git tags in the repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it is public since 2026-10-16 (Name, home), and that step still has no date. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: `status --global`, `update` and `upgrade` read the newest `vX.Y.Z` tag with `git ls-remote` (`--repo` or `JS_HARNESS_REPO` names another repository, a test's local one), and until the first tag they say that no release is tagged yet; `--source`, a folder of tarballs, still wins when named (2026-10-13, `odd/tasks/install-update.md`, T5; tags 2026-10-16). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | License | MIT, in `LICENSE` and `package.json`. Chosen before the repository went public for free parallel CI gates (`odd/tasks/first-version.md`, S7): asked which license, among MIT, Apache-2.0, AGPL-3.0 or none, he tapped "MIT (Recomendada)" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 10941, 2026-10-16T10:55Z, read with `js-harness sessions --quote`) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
@@ -56,13 +56,18 @@ First request of a one-word prompt, estimated tokens:
 | Per project | `init` writes a committed `harness.json` that pins the version, a base `AGENTS.md` only if none exists, and the `check` gate in pre-commit, and runs `codegraph init`; `sync` brings the project to its pinned version; raising the pin is an explicit commit, like a lockfile. When the running js-harness differs from the pin, a project `sync` writes nothing and names both ways out: the command that installs the pinned version, or the commit that raises the pin; it never changes the machine from inside a project (decided 2026-09-28) |
 | Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap; it never installs or configures another tool |
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
-| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in one session, the lean one (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts. `--session current`, which loaded the user's own configuration instead, was removed on 2026-10-08 because the model it ran on could not be verified (until that day it ran on whatever `~/.codex/config.toml` named); a machine where the lean session cannot run records an `--unavailable` skip. A review that fails is not that case: it is repeated, and one that fails because the weekly use of his Codex plan is spent is told to him at once and never recorded as a skip (Sebastián, 2026-10-11, recorded in the orchestrator's relief file; the command does not tell the two failures apart yet). Review model: `gpt-6.1-sol` at `high`, fixed by the command (Sebastián, 2026-10-08, `odd/tasks/codex-review-cost.md`), so neither a `gentle-ai sync` nor `~/.codex/config.toml` changes it, and a review whose session ran on anything else, as its own rollout file says, does not stand. It replaces the `medium` he fixed for the lean session on 2026-10-06. Since 2026-10-08 a review reads only code (not Markdown, not the paths a project marks `-codex-review` in `.gitattributes`), starts where the review records end and starts nothing over a range they cover whole (`--again` reviews it on purpose), prints its plan and an estimate before it spends (`--plan` prints them and starts nothing), and refuses more than 6 parts without `--max-parts`; `check` says at every commit how much code waits for a review. Since 2026-10-14 a review runs out of the gate lock unless its caller holds a turn: Codex's `node --test` is refused by a preload in `NODE_OPTIONS`, the own prompt tells it the gate already ran the suite on the range, and an `incorrect` that rests on those refusals alone, with no finding of P0 to P2, owes no correction and is marked `excused` in its record (`odd/tasks/faster-check.md`, part 2) |
+| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in one session, the lean one (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts. `--session current`, which loaded the user's own configuration instead, was removed on 2026-10-08 because the model it ran on could not be verified (until that day it ran on whatever `~/.codex/config.toml` named); a machine where the lean session cannot run records an `--unavailable` skip. A review that fails is not that case: it is repeated, and one that fails because the weekly use of his Codex plan is spent is told to him at once and never recorded as a skip (Sebastián, 2026-10-11, recorded in the orchestrator's relief file; the command does not tell the two failures apart yet). Review model: `gpt-6.1-sol`, fixed by the command (Sebastián, 2026-10-08, `odd/tasks/codex-review-cost.md`), at the effort of `rule:review-effort`, so neither a `gentle-ai sync` nor `~/.codex/config.toml` changes them, and a review whose session ran on anything else, as its own rollout file says, does not stand. Since 2026-10-08 a review reads only code (not Markdown, not the paths a project marks `-codex-review` in `.gitattributes`), starts where the review records end and starts nothing over a range they cover whole (`--again` reviews it on purpose), prints its plan and an estimate before it spends (`--plan` prints them and starts nothing), and refuses more parts than `rule:review-parts-unflagged` without `--max-parts`; `check` says at every commit how much code waits for a review. Since 2026-10-14 a review runs out of the gate lock unless its caller holds a turn: Codex's `node --test` is refused by a preload in `NODE_OPTIONS`, the own prompt tells it the gate already ran the suite on the range, and an `incorrect` that rests on those refusals alone, with no finding of P0 to P2, owes no correction and is marked `excused` in its record (`odd/tasks/faster-check.md`, part 2) |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
-| Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
+| Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): the effort of `rule:review-effort`, fixed by the command, in the one session there is, the lean one (2026-10-08; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
-| Context | `autoCompactWindow: 500000`; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
+| Context | `autoCompactWindow: 350000` (his setting of 2026-10-15), which the context pause reads to know where the host compacts; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
+| First version's scope | New work that is not a defect (follow-ups, design ideas) keeps entering the first version, rather than waiting for after 1.0.0 so it can close in a day or two. Asked whether it should wait, between "Sí, después de 1.0 (Recomendada)" and "No, sigue entrando", he tapped "No, sigue entrando" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z) |
+| 1.0.0 and gentle-ai #4036 | 1.0.0 waits for the three tasks that wait for gentle-ai to publish its issue #4036, though nobody knows whether it will. Asked, between "No la espera (Recomendada)" and "Sí, la espera", he tapped "Sí, la espera" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z) |
+| 1.0.0 review and record | Before the 1.0.0 tag, the whole project is reviewed and documented so that it can later be rebuilt exactly by reverse engineering: "Quiero que cuando lleguemos a la version 1.0.0 hagamos una revision completa de todo el proyecto y de una ve documentamos para poder en un futuro hacer un ingenieria inversa exacta y precisa." (typed, the lead's transcript `e152c9d8`, line 21180, 2026-10-17T09:32Z). Its scope, readers and record are designed when 1.0.0's other tasks are done; the per-session summaries (`odd/tasks/session-close.md`, his order of the same day, line 21112) are part of what it reads |
+| Throughput review protocol | A fixed procedure with a command measures where the time goes, keeps a dated snapshot a day, enters each improvement with its baseline, target and cost, and measures it again after it ships; two readers run only before a proposal reaches him, and two runs in a row that find nothing worth building make it weekly (the lead's `throughput-v3-plan.md`, version 2, in the side-session notes). Asked whether he approved it, he tapped "Sí, aprobalo (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z) |
+| Windows suite | The Windows suite, which no gate ran though `README.md` promised it, runs once a day (`.github/workflows/windows-daily.yml`, read by `js-harness windows-daily` and the lead's heartbeat; `odd/tasks/commit-gates-first.md`, T4), off the land's path, after the Windows sensor bound is settled (`odd/tasks/first-version.md`, T6f); running it on every batch would take 15 to 19 hours of the gate lock a day. Asked how often, he tapped "Una vez por día (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z). Merged via `jsaristi/js-harness#367`; its first run on `main` (run 39011662138, 2026-10-17) passed: 6,116 tests, 0 failed, 11 skipped, in 12 min 28 s |
 
 ## Phases
 
@@ -116,6 +121,8 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] `doctor` `host-update` row: a Claude Desktop or Code tab CLI update is a gap, with its review steps, until `doctor --host-reviewed` records the review; an update downloaded and not applied is `outdated` (his request of 2026-10-15, `odd/tasks/host-update-check.md`; pull request 242, and its follow-ups: the app folder read under `--home` only, `--host-reviewed --json`)
 - [x] `doctor` `gentle-ai-sync` row: a new gentle-ai version is a gap, with its review steps, until `doctor --gentle-ai-reviewed` records the review; one step diffs the global `CLAUDE.md`, which a sync rewrites and js-harness never writes, against gentle-ai's pre-sync snapshot, and the next checks the changes against `AGENTS.md` (his request of 2026-10-16, `odd/tasks/gentle-ai-update-check.md`; ticked in its own pull request, which lands at once)
 
+- [x] `doctor` `js-harness` row: the hash of the installed copy's unscoped rules against main's, read fresh; `outdated` with the newest copy and the ids that differ (letter F, `odd/tasks/rule-hierarchy.md`, T16f second part)
+
 ### Progress view
 - [x] Parser for roadmap phases and feature docs
 - [x] `progress` and `progress --json`
@@ -138,6 +145,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] `sync` moves a project to its pinned version
 - [x] The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and the machine commands outside one
 - [x] `doctor` reports the Codex CLI (installed and logged in) when the project's codexReview switch is on, with its fix command
+- [x] `doctor` shows no TypeScript plugin row where the project's languageServer switch is off, so it never offers to enable what the switch turned off
 - [x] The Codex review of each approved code slice leaves a record a check verifies, so a skipped review is caught
 
 ### F3 Task contract
@@ -191,7 +199,7 @@ te tienen bloqueado al ser una ia ese es el problema"); measured on nine pages, 
 - [x] `js-harness fetch <url>`: rung 2, read or blocked with the next rung
 - [x] The `resume --pause` hook names the next rung after a blocked WebFetch
 - [x] And after a WebFetch that failed as a tool error, through a `PostToolUseFailure` entry `install` writes (Sebastián, 2026-10-16: "Sí, agregala (Recomendada)")
-- [ ] Reviewed (gentle-ai and Codex) and merged
+- [x] Reviewed (gentle-ai and Codex) and merged (`jsaristi/js-harness#204`, its `PostToolUseFailure` entry `#260`)
 
 ## F5 result
 
@@ -312,7 +320,7 @@ Closed on 2026-10-09 (`odd/tasks/codex-review-cost.md`), built on 2026-10-08 and
 measurement of the part size run the day after. What `js-harness codex-review` does since, each behaviour
 with a test written first and the spending ones run on the real binary:
 
-- One model. `gpt-6.1-sol` at `high`, passed by the command and held to what the rollout
+- One model. `gpt-6.1-sol`, at the effort of `rule:review-effort` (`high` when this closed), passed by the command and held to what the rollout
   file of the session says: a session that ran on another model, or whose file names none,
   is no review and leaves no record.
 - Only code. Markdown and the paths a project marks `-codex-review` in `.gitattributes` are
@@ -325,7 +333,7 @@ with a test written first and the spending ones run on the real binary:
   lines.
 - The cost first. `--plan` prints the parts, the lines and a range of input tokens from the
   run log of the machine, and starts nothing; a run prints the same before its first
-  session and refuses more than 6 parts without `--max-parts`; the plain `check` says at
+  session and refuses more parts than `rule:review-parts-unflagged` without `--max-parts`; the plain `check` says at
   every commit how much code waits for a review.
 
 What the reviews of the feature's own code measured, 7 runs in 22 parts over 8,528 changed
@@ -858,6 +866,45 @@ podamos implementar todo"), each a feature of its own with its own document and 
      bin/check.mjs`, written where merges are made: the README's `js-harness merge-queue`. An
      installed project gets nothing unless its machine has the file.
      Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
+   - The ticket that goes first (2026-10-16, `odd/tasks/gate-first.md`, his "agrega la prioridad
+     del gate"): `js-harness gate first --session <id> --reason <why>` puts that session's next
+     whole check before every gate that waits; the turn that runs is never cut. Two are open at
+     most, for an hour at most; a gate claims its session's ticket as it arrives and spends it
+     whatever comes next. The orchestrator's batch run carries one by itself with `check --first
+     <reason>`. It cannot be made impossible, so it is made seen: `js-harness sessions` prints
+     each open ticket with its issuer and flags one the orchestrator did not issue, a gate that
+     went first says by which ticket, and the gate log keeps each issue, claim, expiry and
+     cancellation. Undo: `gate first --cancel <id>`, or delete `~/.js-harness/gate-first`.
+   - A faster whole check of the same quality (2026-10-14 to 2026-10-16, closed,
+     `odd/tasks/faster-check.md`): the design that ranked how to free the lock without proving
+     less, read by two readers and handed to the orchestrator as version 2. Its first three parts
+     are built, each in its own document: the sensors in WSL2 and the ticket that goes first
+     (both above), and Codex's review out of the lock (the Review row of "Decided"); with them,
+     two guards on a turn of `js-harness gate` (`odd/tasks/gate-turn-guards.md`). The parts it
+     ranked after those were not built there, and it claims nothing of their state.
+   - The wait for the gate, measured and cut (2026-10-12 to 16, `odd/tasks/gate-wait.md`, closed).
+     *What the measurement found*: one whole run under the lock, 77 files, started 1,005 Node
+     processes and 12,041 git processes and ended at 780 s, its longest file at 686 s. After
+     the command's tests ran as two processes, no file was the wall any more (533 s, the
+     machine 94% busy), so only less work shortens a run: fewer process starts, or less of
+     what the antivirus spends on each (1,077 processor-seconds of 5,524 in that run, his).
+     Two cuts of git were taken, each judged by a second count: the questions a
+     `codex-review` run asks (its test file, 7,840 to 6,628 git processes), and test
+     repositories built once per process and copied (`bin/lib/git-fixture.testkit.mjs`,
+     1,545 fewer in 15 files, 6.8% of the suite's git). *What may run beside a gate*: both
+     reviews. Codex ran beside a commit gate 67 times and every run ended reviewed; a
+     gentle-ai review adds at most 12 s to a gate, against 30 s written before it was
+     measured. A test run still may not: the guard refuses `node --test` of several files
+     while another gate holds the lock, outside a turn. A review in parts keeps the parts
+     that passed, a review runs at medium effort, and a queued command can be refused before
+     it waits (`js-harness gate --ready`). *What the trial on GitHub answered* (run
+     38296748258): on machines of one size the suite took 1,258 s on Windows (124 failing)
+     and 184 s on Linux (7 failing), 6.8 times longer on Windows, so it is Windows that is
+     slow for this suite, not his machine. The figure of a month of gates there (about 21 to
+     26 dollars while the repository was private) went to him, and nothing was paid; once it
+     was public, the gates that would wait for the lock go to GitHub's Linux machines instead
+     (`odd/tasks/first-version.md`, T7), and since `odd/tasks/commit-gates-first.md` every
+     commit's gate goes there first.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
@@ -927,9 +974,54 @@ rows, `progress` counting table rows, the 2026-10-13 list checked in the code, t
 version), a clean-home run of install, update and uninstall, and a stability pass at the end.
 Creating the 1.0.0 tag stays his.
 
+**Throughput, by his word of 2026-10-16, inside the frozen scope.** Shown the day's yield, he asked
+to optimize until going further costs more than it returns, without trading quality or
+reliability ("Ojala podamos optimizar a un nivel sin sacrificar calidad que me tengas que decir que
+optimizar mas es mas el costo que el beneficio esa es la idea pero manteniendo la calidad y
+fiabilidad", typed in the lead's chat during a turn, a queued message the transcript keeps without
+its text), and then to apply it at once ("apliquemos todo eso de una vez para que cuando trabajes
+autonomamente avancemos de una manera excepcional y a la maxima eficiencia", the lead's transcript
+`e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 14742, 2026-10-16T20:48Z). The second sentence puts
+these items inside the first version despite the freeze; that reading is the lead's.
+
+The stop rule, the lead's reading: each item carries its baseline, its target and its cost, and
+items stop being added when the next one is estimated to return less than it costs, which the lead
+tells him. Nothing that lowers quality or reliability is an item: no dropping the Windows run from
+a land, no skipped review, no weaker test. (The Windows run after each land, a hand step no land
+made, became the daily run he chose, row "Windows suite" above: an automated run replaced a promise,
+odd/tasks/commit-gates-first.md, L8.) Version 1 of this list was the lead's and reached him
+unreviewed; two readers on Opus 5.5 at high then found most of it built or mismeasured (the
+docs-only skip, the same-tree skip, exact tests, the rerun of a failed test file and the pnpm lock
+fix already ship; suite gates are about 2.9 per merged PR, not 5.5; the lock was idle about 30% of
+the day; the 82 conflict lines were 17 distinct PRs, mostly code; the merge door of T16e is a rules
+door, not a gate moved off this machine). This is version 2. Baselines are of 2026-10-16 UTC.
+
+| # | Item | Baseline | Owner |
+|---|---|---|---|
+| 1 | Fix the doctor `pnpm-lock` test (ext4 under WSL keeps the mtime 1 ms off) | 3 red land candidates | JH 27, `#315` |
+| 2 | Ready pull requests land without waiting for a lead turn, with the same checks and reviews. Measured again (`odd/tasks/land-unattended.md`, Why): from each pull request's last "ready to land" note to GitHub's `mergedAt`, the 48 and 391 being creation to merge; the time queued for the gate lock, about 160 minutes that afternoon, outweighs the lead's own delay, about 5 minutes off the median. Built (#346): a land whose suite never ran exits 5 with nothing pushed or bisected, and a land's gate goes first in the line by a gate-first ticket (the lead's decision). The keeper, a loop that lands without the lead, is deferred by the stop rule (about 5 of 37 minutes). The land's items of the throughput plan v3 follow in the same document: a land record per land (B2), CircleCI started with the local suite (D), and the left-out pull requests' sessions told (A(b)) | ready to merged: median 37 min, p75 87, worst 127, over 47 pull requests merged 2026-10-16 12:35Z to 23:34Z | JH 24, `odd/tasks/land-unattended.md` |
+| 3 | Stale conflicting pull requests merged with `main` or closed | 8 of 15 open conflicting | the lead |
+| 4 | Shared hot files generated, not hand-edited: the README command list from `--help`, manifest rows derived | README in 26 of 61 merged PRs, ROADMAP 17, manifest 11 | JH 25, after `#282` |
+| 5 | Resume reads the open task (`#332`). Closed Log sections moving to a sibling file is dropped by the stop rule: about 9k to 14k tokens per whole-document read by a verifier, against gentle-ai's one-document rule and 119 shifting citations (`odd/tasks/resume-open-task.md`, Part B) | `session-channel.md` 345 KB, `rule-hierarchy.md` 306 KB; the resume sections 381 and 1,036 lines, the mode line on a stale task in both | JH 26, `#332` |
+| 6 | Dropped by the stop rule. Codex coverage surviving a rebase (commits matched by patch-id): two readers found a per-commit match unsound, since a review reads its range's net diff, and a sound match is a push-guard change (high-risk item 2); measured, 4 re-reviews in 491 records since 2026-09-29 would have been saved. Built instead: the one rebase hint, `js-harness rule change`, now says `git merge origin/main` (`odd/tasks/codex-patch-coverage.md`) | about 157k tokens per review redone (the plan's figure; records keep no token count) | JH 27, dropped by the lead |
+| 7 | A land of only documentation skips the suite (`bin/merge-queue.mjs:95` always runs `check.mjs`) | 14 of 61 merged PRs were documentation | JH 24, before item 2 |
+| 8 | A session silent for 60 minutes with open work is flagged | 3 sessions stalled 5 to 6 h | JH 22, `feat/stalled-sessions` |
+| 9 | Windows Defender's real-time protection off on this machine (his change); gates measured against the day's check median of about 150 s | `MsMpEng` 552 CPU-seconds in gate-start samples | the lead measures |
+| 10 | Finished sessions archived, since each open one keeps a `claude` process and its MCP servers | `claude` 5.9 GB, `node` 2.1 GB, 4.5 of 19.7 GB free | the lead, with his yes per session |
+
+Each item that needs a design passes two readers that did not write it before it is built, and
+its version says what they changed; each build is test first, through the gate, gentle-ai and
+Codex.
+
 **Later (found after the freeze; not in the first version).**
 
-- (none yet)
+- [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
+  handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
+  hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.
+- [ ] Shorter resume sections in feature documents. The "Next step" and "State for a resume" sections
+  have grown into history: 381 lines in `rule-hierarchy.md` and 1,036 lines in `session-channel.md`
+  at 64933f6. Since `#332` a resumed session reads them through named ranges, but nothing bounds
+  their size. Not tracked yet; it waits for him. Source: `odd/tasks/resume-open-task.md`, "In scope / Out of scope".
 
 **What the first version holds, by his answer of 2026-10-13.** Asked what enters the first
 version, the 1.0.0, he had four options: what is already installed, well finished (the one
@@ -1209,13 +1301,14 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
    off at their update, and say so ("Sí, y avisa (Recomendada)", line 12814); with the Codex
    review off, gentle-ai reviews high and medium risk ("Riesgo alto y medio (Recomendada)", line
    12828).
-5. Whether the Codex review stays at `high` at what it costs (the number is in "Codex review
-   cost result").
+5. The effort the Codex review runs at, for what it costs (the number is in "Codex review
+   cost result"). **Answered on 2026-10-12**: his rule `rule:review-effort` (`docs/RULES.md`), which
+   every Codex run since 2026-10-15 ran at.
 6. What the harness turns on by default in a project from the sub-agent models result
    ("Subagent models result", the recommendation). For this repository's way of working it is
    decided (2026-10-11): the writing sub-agent on Haiku 5.5.
-7. The gate run by GitHub on every pull request: the repository is private, so its runs spend
-   the account's minutes ("Session channel", the order, item 2). **Answered on 2026-10-13, held
+7. The gate run by GitHub on every pull request: the repository was private then, so its runs
+   spent the account's minutes; it is public since 2026-10-16 ("Name, home" above) ("Session channel", the order, item 2). **Answered on 2026-10-13, held
    by "JH 10 · comprobación en GitHub"** (by line 12000 above), each line read with `sessions
    --quote` in the lead's transcript `65318fd5`: no payment method on the GitHub account, now or
    later ("no tiene tarjeta, dejémosla sin tarjeta", line 12461); the gate on GitHub runs on

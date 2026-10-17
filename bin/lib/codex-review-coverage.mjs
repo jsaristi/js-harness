@@ -74,7 +74,7 @@ function headsPastTip(spawn, cwd, tip, heads) {
 // What `git log` is asked to write for each commit: an empty field, then its line,
 // `<id>\t<short id>\t<parents>\t<subject>` (four fields, the subject last so that a tab inside it
 // survives). `loggedCommits` reads what comes back, and takes for such a line only what `COMMIT_LINE` matches.
-const COMMIT_FORMAT = '%x00%H%x09%h%x09%P%x09%s';
+export const COMMIT_FORMAT = '%x00%H%x09%h%x09%P%x09%s';
 const COMMIT_LINE = /^[0-9a-f]{40,64}\t[0-9a-f]+\t[0-9a-f ]*\t/;
 
 /** The commits of what `git log -z --diff-merges=combined --name-only --format=<COMMIT_FORMAT>` printed, in
@@ -99,7 +99,7 @@ const COMMIT_LINE = /^[0-9a-f]{40,64}\t[0-9a-f]+\t[0-9a-f ]*\t/;
  * whose files it was not asked for, is no list. One such text reads as a list all the same: a merge with
  * nothing after its line and then a commit, which is also a merge whose first name is the line of that
  * commit. The two differ in how many commits they hold, which is what `reviewCoverage` holds a list to. */
-function loggedCommits(log) {
+export function loggedCommits(log) {
   const fields = log.split('\0');
   // Every field ends with a NUL, so what follows the last one is empty unless the text was cut.
   if (fields.pop() !== '') return null;
@@ -335,8 +335,8 @@ export function defaultBranch(spawn, cwd, remote) {
 }
 
 /** The base of a review, when it is a code commit of the branch that no Codex review record covers: `{ id,
- * shortId, subject }` of `from`, else `null`. `from` is the full id of the commit a review's range starts at
- * (`js-harness codex-review --base`). A git range starts after its base, so the base itself is never read,
+ * shortId, subject }` of `from`, with `merged`, the label of the default branch, when `from` is a merge of it;
+ * else `null`. `from` is the full id of the commit a review's range starts at (`js-harness codex-review --base`). A git range starts after its base, so the base itself is never read,
  * and no record of the range covers it: a branch whose first commit was the base kept that commit with no
  * review and no word about it.
  *
@@ -371,7 +371,15 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
     // which is where the push check reads it.
     let commit = uncoveredUpTo(from);
     if (commit && tip !== undefined && tip !== from) commit = uncoveredUpTo(tip);
-    return commit ? { id: commit.id, shortId: commit.shortId, subject: commit.subject } : null;
+    if (!commit) return null;
+    // A merge of the default branch is read by what was written in it only where it is HEAD (`mergeStart`), so its
+    // first parent is no base that reviews it: the caller names the worktree at it instead (merge-review-covers-main
+    // in docs/FAILURES.md).
+    const parents = gitOut(spawn, cwd, ['rev-list', '--parents', '-n', '1', from])?.split(' ') ?? [];
+    // A merge of a stacked base is read so as well (`sideReadAs`), and `merged` names it as such.
+    const readAs = parents.length === 3 ? sideReadAs(spawn, cwd, { first: parents[1], side: parents[2], branch, where }) : null;
+    const merged = readAs?.kind === 'stacked' ? `a stacked base off ${branch.label}` : readAs?.kind === 'default' ? branch.label : null;
+    return { id: commit.id, shortId: commit.shortId, subject: commit.subject, ...(merged ? { merged } : {}) };
   } catch {
     return null;
   }
@@ -421,14 +429,16 @@ function automaticMerge(spawn, cwd, first, side) {
  * (`defaultBranch`), and every code commit of `given` up to the first parent has a record. The record of
  * `<first parent>..head` then covers the merge and the commits of the default branch it brought in, which
  * had their reviews where they were made; a second parent off that branch would be commits nobody read
- * called covered. `null` whenever git or the records cannot say. */
+ * called covered, unless it is a stacked base whose own code commits each have a record (`sideReadAs`).
+ * `null` whenever git or the records cannot say. */
 export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, remote = 'origin' }) {
   const parents = gitOut(spawn, cwd, ['rev-list', '--parents', '-n', '1', head])?.split(' ') ?? [];
   if (parents.length !== 3 || parents[0] !== head) return null;
   const [, first, side] = parents;
   const branch = defaultBranch(spawn, cwd, remote);
   if (branch === null) return null;
-  if (!gitYes(spawn, cwd, ['merge-base', '--is-ancestor', side, branch.ref])) return null;
+  const readAs = sideReadAs(spawn, cwd, { first, side, branch, where });
+  if (readAs === null) return null;
   if (given !== first) {
     const before = reviewCoverage(cwd, { from: given, tip: first, spawn, where });
     if (before.unknown !== undefined || before.uncovered.length > 0) return null;
@@ -440,7 +450,29 @@ export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, re
   // And only a merge the push check counts as code: one that took a side whole has a remerge-diff of the
   // markers it removed, and no line anybody wrote (verifier B1, 2026-10-14).
   if (!atMerge.uncovered.some((commit) => commit.id === head)) return null;
+  // A commit of a stacked base's own is judged again by the marks at the merge, which the push check reads at
+  // the head: one that is code only there, with no record, is no commit of the default branch the merge's
+  // record may cover (verifier B1 of gate-first T7).
+  if (readAs.kind === 'stacked' && atMerge.uncovered.some((commit) => readAs.owned.has(commit.id))) return null;
   const auto = automaticMerge(spawn, cwd, first, side);
   if (auto === null) return null;
-  return { from: first, side, branch: branch.label, auto };
+  return { from: first, side, branch: branch.label, auto, ...(readAs.kind === 'stacked' ? { stacked: true } : {}) };
+}
+
+/** How the merged parent `side` of a merge whose first parent is `first` lets the merge be read by what was
+ * written in it: `{ kind: 'default' }` when the default branch `branch` holds it; `{ kind: 'stacked', owned }`
+ * when it is a stacked base, a branch that started from the default branch, and each code commit of its own
+ * (`owned`, the ids of the commits neither `first` nor the default branch holds) has a record by the marks at
+ * `side` (odd/tasks/gate-first.md, T7), which the caller checks again by the marks at the merge; `null` otherwise, and whenever git or the
+ * records cannot say. The record of the merge then covers no commit nobody read: the default branch's had their
+ * reviews where they were made, and the stacked base's have their records. */
+function sideReadAs(spawn, cwd, { first, side, branch, where }) {
+  if (gitYes(spawn, cwd, ['merge-base', '--is-ancestor', side, branch.ref])) return { kind: 'default' };
+  const start = gitOut(spawn, cwd, ['merge-base', side, branch.ref]);
+  const own = gitOut(spawn, cwd, ['rev-list', side, `^${first}`, `^${branch.ref}`]);
+  if (start === null || own === null) return null;
+  const owned = new Set(own.split('\n').filter(Boolean));
+  const coverage = reviewCoverage(cwd, { from: start, tip: side, spawn, where });
+  if (coverage.unknown !== undefined || coverage.uncovered.some((commit) => owned.has(commit.id))) return null;
+  return { kind: 'stacked', owned };
 }

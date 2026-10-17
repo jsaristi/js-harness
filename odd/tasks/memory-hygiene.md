@@ -227,7 +227,7 @@ Everything else goes to him, settled by evidence first:
 ### D4 Undo
 1. `js-harness memory plan <files...>` takes a lock (the pattern of `bin/lib/gate-lock.mjs`),
    snapshots the whole folder with each file's sha256 under
-   `~/.js-harness/memory-hygiene/<slug>/<stamp>/`, and records the write set: the files the pass
+   `~/.js-harness/memory-hygiene/<slug>/snapshots/<stamp>/`, and records the write set: the files the pass
    may change, create or delete.
 2. The pass edits only those files.
 3. `memory verify <stamp>` records the after-hashes always, even when it refuses, since a failed
@@ -241,7 +241,7 @@ Everything else goes to him, settled by evidence first:
    is refused by name. The index is undone line by line: the pass's own lines are put back and the
    lines others added since are kept.
 5. Snapshots are kept, the last ten per project; `uninstall` lists the open stamps and keeps them
-   unless asked to purge, since they are the only copy of what a pass changed. `install` records
+   unless `--full` is given (D7), since they are the only copy of what a pass changed. `install` records
    the folder.
 Line endings and bytes are compared raw; the notes are LF today.
 
@@ -263,6 +263,120 @@ minutes. A later pass reads only the notes written since the last verified one. 
 verification, so high effort, by his effort rule. It reports in the shape of every handoff (done,
 checked and how, not checked, failed, open), closes with his reply states, sends its one question
 through the lead, and gives the index bytes before and after.
+
+### D7 The full uninstall (L7, his answer to L6.2; design, version 2, after two readers)
+
+His words (L7): "Debe dar la opcion de guardar las copias osea desintalacion completa o la desintalacion
+normal que deja las copias". Two ways out, and he picks: the normal uninstall keeps the snapshots, the
+full one removes them. Today there is only the first (T9's "The folder at uninstall"), and its output
+tells him to remove a kept folder by hand.
+
+1. *The normal uninstall* is `uninstall --global` as T9 built it (`removeMemoryHygieneFolder`,
+   `bin/lib/manifest.mjs`): a project folder that holds a snapshot is kept, with its journal, and its
+   stamps are named; every other project folder goes, and the hygiene folder goes when nothing is
+   kept. Its line "remove the folder by hand to drop them" becomes "`js-harness uninstall --global
+   --full` removes them", so the choice is offered when it matters (the two assertions of
+   `bin/install.test.mjs` that hold the old words are rewritten).
+2. *The full uninstall* is `uninstall --global --full`: everything the normal one removes, and the
+   snapshots too, so `~/.js-harness/memory-hygiene` is gone. Each project removed with snapshots is
+   named with its stamps ("removed <project>: N snapshot(s) of a memory pass (<stamps>)"). `--full` is
+   his "completa"; since "full" could be read as more, the help says what it adds and what it never
+   removes: "--full also removes the memory snapshots, the only copy of what a pass changed; files you
+   modified and the memory notes themselves are kept either way".
+3. *Only with `--global`.* The snapshots live under the machine's home, one folder per project
+   (`<home>/.js-harness/memory-hygiene/<slug>/snapshots/<stamp>/`). `--full` without `--global` is
+   refused, exit 2 ("--full removes the memory snapshots of the machine: it goes with --global"), even
+   outside a git repository where `uninstall` alone is the machine one: a flag that deletes the only
+   copy is asked for in full words. `uninstallMain` filters it out before `parseScopeArgs`, which `sync`
+   shares, so `sync --full` stays an unknown flag. The project uninstall gains one stdout line when that
+   project's hygiene folder holds snapshots: where it is, and that `uninstall --global --full` removes
+   them; a project-scope `--full` waits until he asks.
+4. *Never under a pass.* A project whose `<slug>/lock` exists is never removed. The lock is read by a
+   new export of `bin/lib/memory-pass.mjs`, `readLock(stateDir)`, which never throws: `null` when there
+   is none, else `{ stamp, pid, manifest }` with `stamp` null for a lock that is empty or does not
+   parse, and `manifest` whether that stamp's `manifest.json` exists. Its line follows what can release
+   it:
+   - a stamp with a manifest: "a memory pass is planned (<stamp>) for the memory folder <the memory
+     folder the manifest records>; from that project's checkout run js-harness memory verify <stamp>
+     --home "<home>" or js-harness memory undo <stamp> --home "<home>", then uninstall again" (verify
+     and undo run from the project's checkout, which no file records, against the uninstall's home);
+   - an empty or unreadable lock, or a stamp with no manifest (a plan killed between its lock and its
+     snapshot, which verify and undo cannot release): "<lock path> holds no finished plan (pid <pid>);
+     if that process is not running, remove the file and uninstall again".
+   `planPass`'s own refusal of a held lock takes the same two lines.
+   The normal uninstall keeps such a project and exits 1, since the uninstall did not finish. This part
+   is not his request but T9's open advisory ("a `memory plan` started during an uninstall could lose
+   its snapshot"), and is recorded as that.
+   The full uninstall with any lock present removes nothing of the hygiene folder, names every lock as
+   above, and exits 1 (as PR 263 did): one rename takes the folder whole, or not at all.
+5. *Every writer sees the uninstall.* When the hygiene folder exists, and only then (so an empty home
+   gets no `.js-harness`), the uninstall first creates the marker `<home>/.js-harness/
+   memory-hygiene.purge` with `wx`, holding `{ pid, startedAt }`; then lists the projects; then reads
+   the locks. It removes the marker in `finally`, and before `uninstallInstalled` runs, so the marker
+   never keeps `.js-harness` alive. The writers:
+   - `planPass` checks the marker after it takes its lock (and takes an ENOENT of its folder, moved away
+     meanwhile, as the same refusal); when it is there it releases the lock, removes the folders it made
+     empty, and refuses, naming the marker.
+   - `undoPass`, which today only reads the lock, takes it with `wx` for its whole run when no pass holds
+     it (a verified pass), checks the marker after, and releases it at the end; refused, it writes
+     nothing. Before it writes, it checks that every file of the snapshot is there with the hash the
+     manifest records, so a damaged snapshot is refused by name.
+   - `verifyPass` already needs the lock, and a locked project is kept: covered by 4.
+   - `dueNotice` writes no `told` stamp while the marker is there.
+   Either a writer's lock is there when the uninstall reads the locks (4 keeps it), or the writer sees
+   the marker and stops. A marker already there is another uninstall, or a stale one: when its pid is
+   alive, refused with exit 1; when not (a killed run skips `finally`), the refusal says the run that
+   made it ended and to remove the file. The refusals of the writers name the file and say the same.
+6. *A removal that cannot finish.* The full uninstall moves the folder aside in one rename
+   (`memory-hygiene.purging-<pid>-<time>`), then removes that with `maxRetries: 3`. If the removal fails,
+   the folder is renamed back and the error says it may be partly removed and to run `uninstall --global
+   --full` again; the hash check of 5 refuses an undo from a snapshot it damaged. Only when the rename
+   back fails too is the aside name reported. Either mode names a `memory-hygiene.purging-*` folder it
+   finds beside the hygiene folder (left by a killed run), with what to do: rename it back when no
+   `memory-hygiene` is there, else remove it.
+7. *What is reused.* Closed PR 263 (`feat/memory-hygiene-uninstall`, kept) built 3 to 6 on the code T9
+   replaced: its flag parsing, marker, lock rule, rename aside and rename back are carried over and
+   rewritten on T9's per-project shape (`{ path, stamps, journal }`, now with `lock`), on `hygieneDir`,
+   and on `readLock`. Not reused: its default, which kept the whole folder, and its flag's name.
+8. *The menu.* `bin/tui.mjs`'s Uninstall asks, after its yes and only when snapshots exist, "Remove
+   the memory snapshots too, the only copy of what a pass changed? (y/N)"; yes adds `--full`.
+9. *Tests, first* (`bin/lib/manifest.test.mjs`, `bin/install.test.mjs`, `bin/lib/memory-pass.test.mjs`,
+   `bin/tui.test.mjs`), one per rule: the normal line names `--full` (1); the full uninstall removes the
+   snapshots and the folder and names each stamp, exit 0 (2); `--full` without `--global` exits 2, `sync
+   --full` is an unknown flag, the project uninstall names a project's snapshots (3); a locked project
+   is kept by the normal uninstall with exit 1, a full uninstall with one locked and one other project
+   removes nothing with exit 1, a lock with no manifest and an empty one get the remove-the-file line
+   (4); `planPass` and `undoPass` refuse while the marker is there and write nothing, an undo of a
+   damaged snapshot is refused, an uninstall refuses a live marker and names a stale one, no folder means
+   no marker and an output identical to today's, the marker is gone after a run (5); a failed removal
+   leaves the folder in place and a `purging-*` folder is named (6); the menu's second question (8).
+10. *Docs.* The help line of `uninstall` (`bin/js-harness.mjs`, `bin/install.mjs` usage), README's
+   "Remove", its command reference ("### js-harness uninstall") and its memory hygiene section, the
+   installed skill's line in `bin/lib/manifest.mjs`, D4.5 ("unless asked to purge" becomes "unless
+   `--full` is given"), and D4.1's layout, which is `<slug>/snapshots/<stamp>/`.
+11. *Risk.* Item 1 (it deletes stored data that is the only copy of what a pass changed) and item 4 (the
+    marker and the locks order several processes): an independent verifier after the build, and the
+    gentle-ai review of the slice. The Codex review of this slice reads the lock fix `2e082ca` (T8),
+    since it touches `bin/lib/memory-pass.mjs`.
+
+#### Review of D7 (two readers, 2026-10-16)
+Version 1 went to two independent readers (data safety and races; fit to his words and the code). Every
+finding taken, with where:
+- Both: a full uninstall cannot keep a locked project inside a folder it renames whole; now nothing is
+  removed while any lock is there (4). Both: an undo of a verified pass takes no lock, so a full
+  uninstall could delete its snapshot mid-copy; undo now takes the lock and checks the marker, and
+  refuses a damaged snapshot (5).
+- A lock left by a killed plan cannot be released by verify or undo, so "run verify or undo" led
+  nowhere; the lines now follow what releases it (4). The marker comes before the listing, since a plan
+  could start between the two (5). A marker or an aside folder left by Ctrl+C, which skips `finally`,
+  is detected by pid and named (5, 6). Windows: retries on removal, and a partly removed folder is said
+  so (6). `dueNotice` writes into the folder too (5). `lockHolder` is private and throws on an empty
+  lock, so `readLock` (4). An ENOENT in `planPass` when the folder moved (5).
+- The menu offers the choice (8). The help says what `--full` never removes (2). The skill text and the
+  command reference were missing (10). The marker only when the folder exists, released before the rest
+  of the uninstall (5). The two old assertions are rewritten, not kept (1). The normal mode's lock rule
+  is T9's advisory, not his request (4). The project uninstall names its snapshots (3). Refusing `--full`
+  without `--global` outside a repository is kept, with its reason (3).
 
 ## Review of the design
 
@@ -346,14 +460,66 @@ Merge into the sibling note, his words copied verbatim, the source file removed:
   compacted session to notify the lead)
 
 The audit with the evidence for each is `jh16-memory-notes-audit.md` in the group's shared notes folder.
-- [ ] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
+- [x] T8 (kind: verify) Follow-up of the Codex recheck of 3fbfb31..b3dac0f, which left finding 2 open ("Require
   the active lock before recording after-state"): the fix (verify refuses a stamp that does not hold the lock) is
   committed after b3dac0f with its test, and a second recheck is refused by design; a Codex review of the next
-  slice that touches `bin/lib/memory-pass.mjs` reads it
-- [ ] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
+  slice that touches `bin/lib/memory-pass.mjs` reads it. That slice (JH 26, 2026-10-16, branch
+  `fix/memory-lock-holder`, route: inline) moves every read of the lock into `lockHolder`, so the diff holds the
+  lines of 2e082ca, and closes two edges of the same rule, test first (RED: 2 of 3 new tests; then `node --test
+  bin/lib/memory-pass.test.mjs` 22 pass, `node --test bin/memory.test.mjs` 8 pass): `memory undo` of a pass
+  while another pass holds the lock is refused and writes nothing, since it would write under that pass and its
+  verify would take the undo as its own after-state; and a lock that does not parse, or names no stamp, is a
+  refusal naming the lock file from plan, verify and undo, where it was a `SyntaxError` the command does not
+  catch. Codex on `6a6ce9e..13619cb` (commit `13619cb`, gate PASS; gentle-ai: medium, 86 lines, not due): "the
+  patch is correct (confidence 0.94)", no finding, 92,937 input tokens, recorded
+- [x] T9 (kind: build) What T3 and T5 left unbuilt, each waiting on its owner: the install record of
   `~/.js-harness/memory-hygiene/` (so `uninstall` can remove it; `bin/lib/manifest.mjs`), the board row of a due
   pass (`js-harness sessions`), and the rule ids `memory-index-bytes` and `memory-pass-days` the sensor's budgets
   are to be read from
+  - [x] The folder at uninstall (JH 27, 2026-10-16, inline, branch `feat/memory-hygiene-t9`). Nothing records the
+    folder, like the channel's: `uninstall --global` removes it, with a manifest and without. A project's folder
+    that holds snapshots is kept with its journal, and its stamps are named on stdout (D4.5: the only copy of what
+    a pass changed). One that cannot be looked at or removed goes to stderr and exits 1. `hygieneDir`
+    (`bin/lib/memory-hygiene.mjs`) is the one home of the path. RED: manifest's import failed, then install's
+    printed "nothing installed"; GREEN: manifest 160/160, install 72/72.
+  - [x] The board row (same branch). `js-harness sessions` prints "Memory hygiene" after the pull requests: due
+    with the ids of its reasons, nothing due, n/a with no memory folder, or unavailable with its reason
+    (`boardMemory`, `memoryLines`); `--json` carries it as `memory`. RED: both tests failed; GREEN:
+    lib/sessions 296/296, sessions 232/232.
+  - [x] The rule ids (JH 21, 2026-10-17, inline, branch `rule/memory-hygiene-budgets`; L8): `memory-index-bytes`
+    and `memory-pass-days` are declared by `rules change`, each in its own commit (`adf4328`, `2019114`), and
+    `hygieneState` reads them from the declared list, which a test can replace. RED: the test that gives a list
+    with 10 bytes and 2 days failed; GREEN: memory-hygiene 15, memory 8, rules 34 pass, `rules check` PASS.
+    - gentle-ai: `2b814bf..e231c8a` (`adf4328`, `2019114`, `e231c8a`) assessed `medium`, review not due
+      (`under_budget`, 107 lines). Codex on the same range: "the patch is correct (confidence 0.97)", no finding,
+      recorded. PR 377.
+  - Verified (item 1: uninstall now deletes the journal, stamp and lock of a project with no snapshot): an
+    independent verifier on `498b418` found no blocker. Twelve uninstall cases never deleted a snapshot, and
+    with no folder the output was identical to the baseline. Three of its advisories are fixed test first:
+    - a project that could not be removed now no longer hides the others or the kept stamps;
+    - the journal is named only when it is there;
+    - a doc comment is back over `reliefLines`.
+    Left as advisories:
+    - a `memory plan` started during an uninstall could lose its snapshot, since uninstall takes no lock;
+    - the board reads the memory folder from `--claude-home`/`CLAUDE_CONFIG_DIR`, `memory status` from
+      `<home>/.claude`;
+    - an unreadable journal reads as `no-pass` (already so at the baseline).
+
+- [x] T10 (kind: build) The full uninstall, D7: `uninstall --global --full` removes the snapshots, the normal one
+  offers it, neither removes a project under a pass; from closed PR 263's pieces, on T9's code, tests first
+  (L7; route: inline; risk items 1 and 4, so an independent verifier and the slice's review)
+- [x] T11 (kind: verify) Follow-up of the Codex recheck of 7fe1b24..5018d1b, which left findings 1 ("Point
+  recovery commands at the project checkout") and 4 ("Validate the after-index against its recorded hash") fixed
+  only in part: both are fixed in `b761aef` with their tests (gentle-ai approved, `review-66e30d0a70858dbd`), and a
+  second recheck is refused by design, so `5018d1b..b761aef` is recorded as a skip. A Codex review of the next
+  slice that touches `bin/lib/memory-pass.mjs` or `memoryKeptLine` in `bin/install.mjs` reads them. Open with it,
+  from gentle-ai's advisories: a snapshot verified before `b761aef` whose index is not UTF-8 is now refused as
+  damaged (nothing is written); a home holding `"` or `$` prints a command that does not run as copied. Done in L9.
+- [x] T12 (kind: build) T11's later work, gentle-ai's advisory: "PowerShell reads the curly double quotes “ ” „ as
+  `"` too, so a Windows home holding one and no `$` breaks the double-quoted form" (`shellWord`, `bin/install.mjs`).
+  Test first. Done in L10.
+- [x] T13 (kind: build) T11's later work, gentle-ai's advisory: "an after-index that holds U+FFFD and was damaged is
+  told as older rather than damaged" (`undoHeld`, `bin/lib/memory-pass.mjs`). Test first. Done in L10.
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para
@@ -376,8 +542,107 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   D3, settled by his words of 2026-10-15; the deletions go to him as one list.
 - L5 2026-10-15 evening, the lead (JH ORQ), after #188, #191, #202, #220 and #235 landed: mark T2-T7 done on
   main by a short branch. T2-T6 marked with where each landed; the pieces T3 and T5 left unbuilt became T9.
+- L6 2026-10-16, the lead (JH ORQ) at 17:00, after JH 16 did not answer: "take memory-hygiene T9 items that need
+  no choice of his, per odd/tasks/memory-hygiene.md; write any choice of his as a question in its Log". JH 27 built
+  the folder at uninstall and the board row. **Two questions for him, open:**
+  1. *The rule ids.* `memory-index-bytes` (4,000 bytes) and `memory-pass-days` (7 days) are his values (L4). But
+     both answers were tapped options, and `js-harness rules change` refuses a tapped answer as the source of a
+     rule of his ("the option's text was written by a session, not typed by him", `bin/lib/rules-change.mjs`). Should
+     the two rules be his, which needs him to type the two values once, or the project's, with this document as
+     their source? Until he answers, the values stay constants in `bin/lib/memory-hygiene.mjs`, where they are
+     today.
+  2. *A purge at uninstall.* D4.5 keeps the snapshots "unless asked to purge". Nothing asks yet: `uninstall` keeps a
+     project's folder that holds snapshots and says to remove it by hand. Should `uninstall` take a flag that deletes
+     them? They are the only copy of what a pass changed.
 
-## Next step (2026-10-15 evening)
+- L7 2026-10-16, his answer to L6.2, typed in place of the options "No, se borran a mano (Recomendada)" and
+  "Sí, con un flag --purge" (the lead's question 13, transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line
+  13602, 19:30:08Z, read by JH 21 with `sessions --quote`): "Debe dar la opcion de guardar las copias osea
+  desintalacion completa o la desintalacion normal que deja las copias". The lead (JH ORQ, 17:19 local) gave it
+  to JH 21 with closed PR 263's branch, test first, two readers on its design: D7 and T10.
+- L8 2026-10-17, L6.1 answered with the recommended choice. His words (transcript
+  `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 20374, a message queued at 08:11:16Z, read by JH 21 from the file
+  because `sessions --quote` reads no text in a queued message): "recuerda que no estoy asi que procede siempre con
+  la respuesta recomendada por favor se autonomo, te voy a dejar unas 10 horas solo". The lead (JH ORQ, 08:20Z)
+  gave the recommendation: `memory-index-bytes` (4,000 bytes) and `memory-pass-days` (7 days) become the project's
+  rules, with this document as their source, and the sensor reads them, not constants. He can make them his later
+  by typing the two values once (`js-harness rules change`, a change of owner). The harness's own rules live in
+  `bin/lib/rules-data.mjs`, not `docs/rules.json`, which is a project's list, so the branch is
+  `rule/memory-hygiene-budgets`.
+- L9 2026-10-17, T11 built by `JH 5 · canal entre sesiones` on `fix/memory-pass-quoting`, on the lead's order of
+  11:33Z (item 7 of its triage note). The kept line of `uninstall` (`memoryKeptLine`, `bin/install.mjs`) prints
+  the home with `shellWord`, so the printed verify and undo run as copied with a dollar sign or a double quote in
+  the home. `undoHeld` (`bin/lib/memory-pass.mjs`) tells an after-index an older verify wrote as text (it holds
+  U+FFFD) from a damaged one: while the index is as the pass left it, its own bytes stand for the after-index;
+  once written since, the undo is refused for that reason and writes nothing. Tests first, each seen RED. An
+  independent verifier (probes in a scratch clone) confirmed both; it also found this document tripled by a
+  scripted edit (restored from 16301239 and edited again by hand) and that cmd.exe splits a single-quoted home
+  with a space, so on Windows `shellWord` keeps double quotes unless the home holds `$` or a backtick.
+  Commits on origin/main db31c96c (rebased past PR 400, the review-starts clock fix every gate needed from
+  12:00Z): 15ca5bb9, 065780ea (the verifier's two blockers), 8ab6abe7 (gates passed). Codex db31c96..065780e
+  incorrect (0.98), one P2: a Windows home with `$` and a space, in single quotes for PowerShell, splits in
+  cmd.exe; no one form serves both, so the line now says its commands are for PowerShell and gives cmd.exe its
+  own `--home` in double quotes (`cmdExeWord`), test first. Codex recheck db31c96..8ab6abe correct (0.88).
+  `5018d1b..b761aef` stays the recorded skip (a second recheck is refused by design); this slice's reviews read
+  that code, `undoHeld` and `memoryKeptLine`, as the code they change. gentle-ai db31c96c..8ab6abe7 high
+  (item 1), lenses risk and reliability: approved and acknowledged (`review-4794badca4c9c8a7`). Left as later
+  work, its advisories: PowerShell reads the curly double quotes “ ” „ as `"` too, so a Windows home holding one
+  and no `$` breaks the double-quoted form (`bin/install.mjs:85`, a warning); an after-index that holds U+FFFD
+  and was damaged is told as older rather than damaged (`bin/lib/memory-pass.mjs:325`). Per file: install 81,
+  memory-pass 34 pass.
+- L10 2026-10-17, T12 and T13 built by `JH 21 · reserva de la noche` on `fix/memory-pass-advisories`, from
+  origin/main `5ea341af`, on the lead's note of 15:34Z ("(2) memory-hygiene T11: PowerShell's curly double quotes;
+  a damaged U+FFFD after-index told as older"; the lead's claim, not his words). T12: on Windows, `shellWord` gives
+  single quotes to a home holding “ ” or „ as it does to one holding `$` or a backtick, since PowerShell ends a
+  double-quoted string at each, and `cmdExeWord` gives cmd.exe its own double-quoted form there; one constant
+  holds the characters for both. T13: while the index is as the pass left it, an older verify's after-index is
+  exactly that index's text, so `undoHeld` now calls any other copy damaged, and so is one that is not UTF-8
+  itself, which no text write makes. Once the index is written since, an older copy cannot be told from a damaged
+  one that holds U+FFFD and is text, so the refusal names both readings; either way nothing is written. Tests
+  first, each seen RED: the curly-quote test in `bin/install.test.mjs`, the damaged after-index test in
+  `bin/lib/memory-pass.test.mjs` (another text, and bytes no text write makes), and the changed refusal of the
+  written-since test. GREEN: memory-pass 35 pass, and the quoting tests of install 5 pass (one file at a time: another
+  session's gate held the machine's lock). Committed as `76b06df`. gentle-ai on `5ea341af..76b06df`: high by
+  escalation (item 1, `undoHeld` decides whether an undo writes a project's memory index), lenses risk and
+  reliability, approved and acknowledged (lineage `review-e255530cff15e77c`), one suggestion: run the whole install
+  file, not its quoting tests only. Run in a gate turn: 82 pass, 0 fail. Codex on `5ea341a..76b06df`: correct
+  (0.96), no finding.
+
+## Next step (2026-10-16)
+- T10 (JH 21, branch `feat/memory-full-uninstall`, worktree `D:\js-harness-worktrees\memory-full-uninstall`): built
+  test first, every rule of D7.9 seen RED before its code, in two commits: the pass library (`readLock`, `lockLine`,
+  the marker in `planPass`, `undoPass` and `dueNotice`, the snapshot hash check) and the uninstall (`--full`, the
+  lock rule, the marker, rename aside and back, the project line, the menu's second question, the docs). Per file:
+  memory-pass 27, memory-hygiene 13, manifest 169, install 77, tui 79 tests pass. Beyond D7: `readLock` takes as a
+  stamp only the shape `planPass` writes, and a lock it cannot read counts as held. Commits `155af74` and `a0501e6`.
+  The independent verifier and the gentle-ai review of the slice (three lenses) found one blocker: a refused undo
+  released the lock of a pass still planned; fixed in `e6417d9`, and gentle-ai approved the slice
+  (`review-d7256531515c8365`, acknowledged). Their warnings are fixed in the commit after it: the full uninstall reads
+  a project's lock before its snapshots, so one it cannot look at is still seen under a pass, and an undo whose
+  folder was moved away names the uninstall's marker. Advisories left open, all needing a filesystem error or a race
+  of milliseconds: `dueNotice` checks the marker and then writes its stamp, with no lock between; a stale marker with no folder blocks and names the folder. State for a
+  resume: next the gentle-ai assess of the last commit, Codex over `155af74^..HEAD` reading `2e082ca`, a PR, tell
+  the lead. L6.2 is answered (L7).
+- T10 after Codex (e36005a..7fe1b24, recorded): four P2 findings open, to fix test first in one commit: the locked
+  line points at the memory folder instead of the project; `--home --full <path>` slips past the value check; `lockLine`
+  of a lock released meanwhile throws; the damage check of an undo skips `after-index.txt`. All four fixed, each
+  seen RED first: the line names the project, a `--full` right after `--cwd`/`--home` is that flag's missing value,
+  `lockLine` of a released lock says to run again, and an undo refuses a snapshot without `after-index.txt`.
+  Per file: memory-pass 30, install 77 pass. Commit `5018d1b`; gentle-ai approved it (risk and reliability lenses,
+  `review-0edbd08ed86951bf`, acknowledged).
+- Codex rechecked them over `7fe1b24..5018d1b` (recorded): two fixed, two only in part. Fixed in the commit after
+  it, each seen RED first: the locked line gives both commands in full, with the stamp and `--home "<home>"`, from
+  that project's checkout (no file records the checkout's path, and the slug cannot be turned back into it); verify
+  keeps the index after the pass byte for byte, and undo refuses an `after-index.txt` whose hash is not the one
+  `after.json` records, before it merges anything. Per file: memory-pass 32, install 77 pass. Commit `b761aef`;
+  gentle-ai approved it (`review-66e30d0a70858dbd`); Codex refused a second recheck, so that range is a recorded
+  skip and T11 carries it to the next slice. Then the PR.
+- T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
+  reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
+  to L6.1; L6.2 adds a flag only if he wants one. The folder at uninstall and the board row are on
+  `feat/memory-hygiene-t9`.
+
+## Next step, earlier (2026-10-15 evening)
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`) and T9 (install record, board row, rule ids; each waits on its owner).
   The sections below are the history of the build.

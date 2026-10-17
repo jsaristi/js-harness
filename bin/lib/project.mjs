@@ -341,9 +341,10 @@ function resolveHookContainment(root, hookPath, gitBases = {}) {
 
 /** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
  * file loads on every turn — see "T2 design"), titled with the project's own folder name. Placeholder
- * prompts are left in angle brackets for the project to fill in. */
+ * prompts are left in angle brackets for the project to fill in. The harness's lines are in their marked block. */
 export function agentsTemplate(root) {
   const name = path.basename(path.resolve(root));
+  const body = templateBlock();
   return `<!-- Written by \`js-harness init\`. This file loads on every turn: keep it short. -->
 # ${name}
 
@@ -354,11 +355,8 @@ export function agentsTemplate(root) {
 <where the work lives: the code, the data, the documents>. The single command that checks a change:
 \`<command>\`.
 
-## What good looks like
-A behavior change arrives with the test that proves it, written first; a finding, with the
-evidence that proves it. A claim about this project carries its evidence.
-Where the Codex review is off (\`js-harness functions\`), gentle-ai reviews every change of medium
-or high risk.
+${templateBlockMark(body)}
+${body}${TEMPLATE_BLOCK_END}
 
 ## Constraints
 - <a real constraint> — <the reason behind it>
@@ -366,6 +364,93 @@ or high risk.
 A constraint the gate must hold gets an id in docs/rules.json (\`js-harness rules\`).
 `;
 }
+
+/** The mark that ends the harness's block of `AGENTS.md`. */
+const TEMPLATE_BLOCK_END = '<!-- js-harness block end -->';
+/** The mark that opens it, carrying the hash of its lines: lines that no longer match it were edited. */
+const TEMPLATE_BLOCK_MARK = /^<!-- js-harness block ([0-9a-f]{12}): .*-->\r?$/m;
+/** The hash a block's mark carries: of its lines with LF line ends, so a checkout with CRLF ones reads as unedited. */
+const blockHash = (body) => sha256(body.replace(/\r\n/g, '\n')).slice(0, 12);
+const templateBlockMark = (body) => `<!-- js-harness block ${blockHash(body)}: sync renders the lines to the end mark again while they are unedited -->`;
+
+/** `text`, an `AGENTS.md`, with the harness's block rendered as this version writes it: `{ text, state }`. The state
+ * is `rendered` when the block's lines matched the hash of its mark and differed from this version's, `current` when
+ * they are this version's already, `edited` when they no longer match their mark (or the block has no end mark), and
+ * `none` when the file has no block. Every line outside the block is kept, and the file's line ends with them. */
+export function renderTemplateBlock(text) {
+  const opened = TEMPLATE_BLOCK_MARK.exec(text);
+  if (opened === null) return { text, state: 'none' };
+  const after = opened.index + opened[0].length;
+  const from = after + (text.startsWith('\n', after) ? 1 : 0);
+  const to = text.indexOf(TEMPLATE_BLOCK_END, from);
+  if (to === -1 || blockHash(text.slice(from, to)) !== opened[1]) return { text, state: 'edited' };
+  const body = templateBlock();
+  if (text.slice(from, to).replace(/\r\n/g, '\n') === body) return { text, state: 'current' };
+  const lineEnd = text.includes('\r\n') ? '\r\n' : '\n';
+  const block = `${templateBlockMark(body)}\n${body}`.replace(/\n/g, lineEnd);
+  return { text: text.slice(0, opened.index) + block + text.slice(to), state: 'rendered' };
+}
+
+/** The harness's lines of the base `AGENTS.md` template: the ones that hold in any project, whose wording is the
+ * owner's yes (odd/tasks/rule-hierarchy.md, T9). They sit in a marked block that `sync` renders again while the project
+ * has not edited them (`renderTemplateBlock`, T16f). */
+export function templateBlock() {
+  return `## What good looks like
+Work here is done properly, not to comply: no shortcut; under the agreed protocols; nothing stated
+that was not checked; what is passed on is complete and true; and each mistake leaves a control, of
+the smallest kind that does the job. A rule is not recorded until it has its place in a check, a
+line of this file or a protocol.
+
+A behavior change arrives with the test that proves it, written first; a finding, with the
+evidence that proves it. A claim about this project carries its evidence.
+Where the Codex review is off (\`js-harness functions\`), gentle-ai reviews every change of medium
+or high risk.
+
+Every claim is checked (with its evidence), assumed, or not known. What another session, a
+sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it.
+What is passed on says what failed and what was not checked, "nothing" when that is true.
+
+## Working with the owner
+The owner decides spend outside the plan, anything installed or changed on a machine, a product
+choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report
+published outside this project. Ask those one at a time, never while work runs, naming which it is.
+Everything else is decided, its cost said, and the work goes on.
+
+The owner's wording is the need, not the specification: an answer to a proposal of theirs says the
+need that was understood, what would be done differently from their words and why, and what it
+costs or is not known; only then is it recorded.
+
+A design before it is built, and a plan, an analysis with figures or a protocol put to the owner,
+first passes two readers that did not write it: one attacks its claims, one looks only for what is
+missing. The owner gets the improved version, with what each reader changed and what stays
+unguaranteed.
+
+A reply ends with one of four states: working (the owner sends nothing; say what wakes the work),
+decision (one question for the owner, never while work runs), cut (a new session, with the text to
+send it), or finished (name where to return).
+`;
+}
+
+/** The empty failures register `init` writes as `docs/FAILURES.md` when a project has none: what an entry is and how
+ * one is written, with no class and no entry, since the classes are the project's own. `js-harness failures` and the
+ * gate's `failures` row read it (`bin/lib/failures.mjs`); it parses with no fault. */
+export const FAILURES_TEMPLATE = `<!-- Written by \`js-harness init\`. -->
+# Failures
+
+What went wrong in this project: one entry per failure, with each time it was seen and the control
+that corrects it. A failure is work that went wrong in a way a control could prevent. A test that
+fails and is fixed inside its own task is not one: the gate is that control, working.
+
+A class is declared under "## Classes" as a list item: the id in backticks, then what it means. A
+failure is a "### <id>" entry under "## Entries", in the alphabetical order of the ids, with
+"- Class:" and one "- Seen:" line each time it happens, then the "- Control:" that corrects it. Its
+state is never written: \`js-harness failures\` computes it, and \`js-harness failures check
+--settled\` exits 1 while an entry is not settled.
+
+## Classes
+
+## Entries
+`;
 
 /** A semver version (semver.org's grammar, without a leading `v`): what `harness.json` may pin. */
 const SEMVER =
@@ -794,9 +879,10 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     if (functions.errors) actions.push(functionsProblem(functions.errors));
 
     // harness.json: the pin — computed now (its content never depends on anything written after
-    // it), but not written until the very end (T2e item 1).
+    // it), but not written until the very end (T2e item 1). The reply check is on in a new project, with the
+    // English labels (odd/tasks/rule-hierarchy.md, T9: his answer "Prendido por defecto").
     const harnessJsonPath = path.join(root, 'harness.json');
-    const harnessJsonContent = JSON.stringify({ version }, null, 2) + '\n';
+    const harnessJsonContent = JSON.stringify({ version, reply: true }, null, 2) + '\n';
     const harnessJsonRel = toRepoRelative(root, harnessJsonPath);
     const harnessJsonHash = sha256(harnessJsonContent);
     if (clone) {
@@ -824,6 +910,29 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       const hash = sha256(content);
       files.push({ path: agentsRel, sha256: hash });
       actions.push(wrote(agentsRel, hash));
+    }
+
+    // The failures register, empty, under the same terms as AGENTS.md: only when the project has none, and
+    // never by sync in a clone (odd/tasks/rule-hierarchy.md, T9). A `docs/` this run makes is recorded, so
+    // uninstall removes it while it is empty. Its folder is judged as the hooks path is: a link that sends it
+    // outside the working tree is never written through, since uninstall would not follow it back.
+    const registerPath = path.join(root, 'docs', 'FAILURES.md');
+    const registerRel = toRepoRelative(root, registerPath);
+    const register = resolveHookContainment(root, registerPath);
+    if (register.outside) {
+      actions.push(kept(toForwardSlashes(register.real), 'a link sends docs/ outside the repository; the failures register is not written there', true));
+    } else if (register.occupied) {
+      actions.push(kept(registerRel, clone ? 'committed' : 'exists'));
+    } else if (clone) {
+      actions.push({ kind: 'skip', path: registerRel, reason: 'not in this clone; sync does not create one' });
+    } else {
+      const docsShallow = mkdirTracked(path.dirname(registerPath), root, createdDirs);
+      if (docsShallow) reportedDirs.push({ absolute: docsShallow, isWorkingTree: true });
+      createdPaths.push(registerPath);
+      writeFile(registerPath, FAILURES_TEMPLATE, 'utf8');
+      const hash = sha256(FAILURES_TEMPLATE);
+      files.push({ path: registerRel, sha256: hash });
+      actions.push(wrote(registerRel, hash));
     }
 
     // Pre-commit gate (see `writeHookGate`) and codegraph init (see `codegraphStep`): the two steps a
@@ -1769,6 +1878,7 @@ export function syncProject(cwd, version, deps = {}) {
   const platform = deps.platform ?? process.platform;
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const rm = deps.rm ?? fs.rmSync;
+  const lstat = deps.lstat ?? fs.lstatSync;
   const manifestDeps = { open: deps.open, write: deps.write, close: deps.close };
 
   if (!fs.existsSync(cwd)) return { code: 1, noSuchDirectory: true, cwd };
@@ -1789,9 +1899,41 @@ export function syncProject(cwd, version, deps = {}) {
 
   if (!manifestPresent) {
     const result = writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, true);
-    return { ...result, version, setUp: true };
+    return syncTemplateBlock(root, { ...result, version, setUp: true }, writeFile, lstat);
   }
-  return syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps);
+  return syncTemplateBlock(root, syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps), writeFile, lstat);
+}
+
+/** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` rendered
+ * again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md, T16f): a `rendered`
+ * action, and no longer up to date. An edited block is a `kept` action, said on every sync, and writes nothing. The file
+ * is a committed one, so git is what undoes the write; no manifest records it. A refusal is returned as it is. */
+function syncTemplateBlock(root, result, writeFile, lstat = fs.lstatSync) {
+  if (result.code !== 0) return result;
+  const agents = path.join(root, 'AGENTS.md');
+  let text;
+  try {
+    // A link is not written through: git holds the link, not its target, so it could not give the target back
+    // (Codex, 2026-10-17).
+    const stat = lstat(agents);
+    if (stat.isSymbolicLink()) return { ...result, actions: [...result.actions, kept('AGENTS.md', 'it is a link, so sync does not write through it')] };
+    if (!stat.isFile()) return result;
+    text = fs.readFileSync(agents, 'utf8');
+  } catch {
+    return result; // No AGENTS.md, or none that can be read: there is no block to render.
+  }
+  const rendered = renderTemplateBlock(text);
+  if (rendered.state === 'edited') {
+    return { ...result, actions: [...result.actions, kept('AGENTS.md', "its block of the harness's lines was edited, so sync does not render it again")] };
+  }
+  if (rendered.state !== 'rendered') return result;
+  try {
+    writeFile(agents, rendered.text, 'utf8');
+  } catch (err) {
+    // The sync did not finish, so it exits non-zero and is not up to date.
+    return { ...result, code: 1, upToDate: false, actions: [...result.actions, { kind: 'problem', path: 'AGENTS.md', reason: `its block of the harness's lines could not be rendered again (${err.message})` }] };
+  }
+  return { ...result, actions: [...result.actions, { kind: 'rendered', path: 'AGENTS.md' }], upToDate: false };
 }
 
 /** Runs `js-harness functions apply` against the git repository at `cwd`'s top-level: makes this clone what

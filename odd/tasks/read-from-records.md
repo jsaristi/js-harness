@@ -225,13 +225,18 @@ What each change counts as:
 - [x] T0 · S7 to S11, the recheck, test first, its own pull request; his order of 2026-10-14,
       first in the queue. Route: inline (one understood change; no writer reason). Risk to name
       at its close.
-- [ ] T1 · This document, opened with the task contract, mirrored in engram. Route: inline.
-- [ ] T2 · Two readers attack the design (opus, high, read-only); what they changed written
-      under the design; the design to the orchestrator. Route: delegated, read-only.
-- [ ] T3 · S1 to S3 test first: the fitted estimate, the high figure, the line on how the method
-      did. Route: inline. Risk to name at its close.
-- [ ] T4 · S4: the plan recorded in the run log, once its readers are read. Route: inline.
-- [ ] T5 · S5 and S6 test first: `progress --pace`. Route: inline.
+- [x] T1 · This document, opened with the task contract, mirrored in engram. Route: inline.
+      Done: the document and its design, `0eaf5d0`.
+- [x] T2 · Two readers attack the design (opus, high, read-only); what they changed written
+      under the design; the design to the orchestrator. Route: delegated, read-only. Done: "What
+      its two readers changed", `0eaf5d0`.
+- [x] T3 · S1 to S3 test first: the fitted estimate, the high figure, the line on how the method
+      did. Route: inline. Risk: none (see Progress, 2026-10-16). Commits `f66a822`, `e23892b` (S1,
+      S2) and `44cbf2e` (S3) on `feat/plan-from-records` after the merge of `main`; PR 286.
+- [x] T4 · S4: the plan recorded in the run log, once its readers are read. Route: inline.
+      Risk: none (see Progress, 2026-10-16, T4). Commit `2327a0c`, PR 289 (merged).
+- [x] T5 · S5 and S6 test first: `progress --pace`. Route: inline.
+      Risk: none (see Progress, 2026-10-16, T5). Commits `8829caa`, `27b297b` (the Codex fix), PR 292.
 - [x] T6 · A defect of T0 (L8 of odd/tasks/merge-queue.md): a range from the head of a rechecked
       review was refused as a second recheck even on a branch that forked there, without the recheck
       and its correction. Route: inline, branch fix/recheck-fork (PR 170, merged). See Progress,
@@ -297,9 +302,7 @@ What each change counts as:
   was asked whether to merge it once more.
 
 ## Next
-0. PR 128 (T0, the recheck): pushed at 95a3294 with main f819d0b merged; the orchestrator merges it. If main moves with code before that, it asks for one more merge of main.
-1. T3, S1 to S3, test first, on its own branch: off main once 128 is merged, or stacked on feat/read-from-records if the orchestrator wants it sooner. Read "Design (second version)" first; reader A's replay numbers are there. Merge main before any gate on bin/codex-review.mjs (JH 12 is changing its flag parser).
-2. T4 (S4), then T5 (S5, S6).
+1. Nothing: T0 to T6 are done. PRs 286 (T3) and 289 (T4) are merged; 292 (T5) waits to land.
 
 - 2026-10-14 · **T6, a fork at a rechecked head.** Found by JH 10 on feat/merge-queue (forked at
   e61ae6a, whose findings 8ccd689 rechecked): its own review was refused as "a second recheck".
@@ -322,5 +325,69 @@ What each change counts as:
   correction amended after its recheck keeps the plain review PR 170 gives it, and nothing more is
   built for it.
 
+- 2026-10-16 · **T1 and T2 ticked, T3 built (JH 22).** T1 and T2 were done in substance by
+  `0eaf5d0` (the document and the design after its two readers). T3 sits on
+  `feat/plan-from-records` in the worktree `D:/js-harness-worktrees/plan-from-records`: S1 and S2
+  were already committed (`f66a822`, `e23892b`); a merge of `main` begun at 03:01 and left with one
+  conflict was aborted and made again on `origin/main` `6a6ce9e` (the conflict: `main` renamed the
+  fixtures' model to `gpt-fixture`, `41ee91f`; the branch's expectations were kept with that name).
+  S3, test first: RED by the missing export, then 3 unit tests (`methodRecord`, `methodRecordLine`)
+  and one by the command (`--plan` without records, then with one review), which failed before the
+  line was printed. Decisions the design left open:
+  - "between x and y" is the least and the most of the last ten reviews' estimate over what they
+    took, with the median;
+  - a kept part is told by its line: a run line an earlier record named is kept, and left out; a
+    part kept from a run that recorded nothing is counted once, by the first record that names it;
+  - a review is measured on its measured parts that had an estimate (a measured line before them);
+  - the line is printed by `--plan` alone, after the estimate and before the recheck, allowance and
+    flag lines, and not for a plan of no part.
+  Nine tests of the command and two of the allowance that read `--plan`'s whole output or its last
+  lines gained the line, and the two usage tests its new words. On this machine's records: "on the last 10 reviews this machine recorded, its
+  estimate came to between 0.54 and 2.65 times what each took, 1.38 at the median". Risk: none (no
+  high-risk item: `--plan` output gains one line, no flag, record or format changes).
+  Gate PASS on `fa8e650` and `44cbf2e`; gentle-ai on 6a6ce9e..44cbf2e medium, not due
+  (under_budget, 672 lines); Codex correct (0.86, 0.93), 350,983 input tokens against a plan of
+  300,000 to 420,000. PR 286.
+- 2026-10-16 · **T4 built (JH 22), on `feat/plan-from-records` above T3.** Its readers were read
+  first: `readCodexReviewRuns` and the review records keep any JSON object
+  (`bin/lib/codex-reviews.mjs:92-97`), and no reader of the run log (`check`, the recheck, the
+  kept parts, the plan) looks at a field it does not know, so `plan` needs no new schema. Test
+  first: RED by the missing exports and by the run line without `plan`, then GREEN. Decisions:
+  - `PLAN_METHOD` is 2: the fit of S1; 1 names the median method it replaced, whose lines hold no
+    plan;
+  - each part of `reviewPlan` now holds its own `inputTokensHigh`, and the whole's is their sum;
+  - `partPlanned(plan, index)` gives `{ estimate, high, method }`, or `null` when the plan had no
+    estimate, and then the line has no `plan` field;
+  - a range reviewed whole records its plan too, as the one part of its plan, though its line has
+    no `part` and so is in no basis: the figure is still what it was planned at;
+  - `methodRecord` reads `plan.estimate` when `plan.method` is this method's and the estimate is a
+    number, and replays otherwise.
+  Tests: two unit tests and one by the command (two parts unplanned, then planned at 300,000
+  each, `--plan` writing nothing, a whole range recording its plan); the "one figure" keys test
+  gained the field. Risk: none (an added optional field in the run log, read by nothing that
+  could misread it; the schema stays `v1`, as through five additions).
+- 2026-10-16 · **T5 built (JH 22), on `feat/progress-pace` off `main` (PR 292).** Test first: RED
+  by the missing module, then by the four `--pace` tests of the command; GREEN. Decisions and the
+  one change of design:
+  - **One git log instead of log plus cat-file.** `git log -p -U100000` gives every changed file
+    whole, before and after each commit, so the design's second process (`cat-file --batch` for
+    the blobs of `--raw`) is not needed; the two processes are `for-each-ref` (the branch) and
+    that log. Each has a 30 s limit and a 256 MiB buffer. A file of more than 100,000 lines would
+    lose its far lines.
+  - The branch: what `refs/remotes/origin/HEAD` points at, else `refs/heads/main`, else `HEAD`,
+    named on the first line.
+  - Matching is per file: a task by its leading ID (`T3`, `T5b`, bold or not) when both sides have
+    one, in order, and otherwise by its exact text. So a moved file counts its tasks as removed
+    and added, as S6 says.
+  - Reopened is printed beside closed, added and removed, each day and in the totals.
+  - `--relative`, so a `--cwd` below the top of the repository reads its own paths.
+  - A change git writes no `---`/`+++` header for (a mode alone, an empty file born or gone) is no
+    file of the commit. It was Codex's one finding on 8829caa (P2, 0.99), fixed in 27b297b and
+    rechecked fixed.
+  On this repository the whole history closes 511 tasks, the 511 the map counts as done today.
+  Gate PASS on `8829caa` and `27b297b`; gentle-ai on aac0024..27b297b medium, not due
+  (under_budget, 656 lines); Codex 284,946 input tokens, then 47,206 for the recheck. Risk: none
+  (a new flag on a read-only command; no existing output, flag or format changes).
+
 ## Resume here
-Worktree D:/js-harness-worktrees/read-from-records, branch feat/read-from-records, pushed at 95a3294 (PR 128). T0 is done; T1 and T2 are written (the design's second version, 0eaf5d0); T3 to T5 are not started. The scratchpad files rfr-reader-a.md and rfr-reader-b.md hold the readers' full lists, all taken into the design. The session was cut at 76 percent of context after T0 closed.
+Every task is done: T3 in PR 286 (f66a822, e23892b, 44cbf2e), T4 in PR 289 (2327a0c), both merged; T5 in PR 292 (8829caa, 27b297b) on feat/progress-pace, in the worktree D:/js-harness-worktrees/plan-from-records. Once 292 lands the feature is closed.

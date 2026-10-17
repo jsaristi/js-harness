@@ -57,6 +57,14 @@ function recordRuns(rec) {
   return typeof rec.run === 'string' ? [rec.run] : [];
 }
 
+/** Whether every run line the record `rec` names is in `runs`, the run log, and it names one at least. A
+ * record whose line never reached the log reads in `recheckState` as owing nothing, which a caller that must
+ * know whether it owes a correction cannot take as an answer (the verifier of pull request 338). */
+export function runsLogged(rec, runs) {
+  const ids = recordRuns(rec);
+  return ids.length > 0 && ids.every((id) => typeof id === 'string' && runs.some((one) => one?.id === id));
+}
+
 /** Whether an answer found something a correction is owed for: a verdict of `incorrect`, or a finding of
  * P0 to P2. A review that found only P3 findings and called the patch correct leaves the next range a
  * review as any other, since that range is then more likely new work than a correction. So does an

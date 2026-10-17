@@ -13,14 +13,16 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
-import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf } from '../bin/lib/sessions.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf, projectSlug } from '../bin/lib/sessions.mjs';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
-  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
-  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
+  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, channelEnv, channelStepProblem, channelRecord, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
+  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem, TEMPLATE_SECTIONS, templateLinesProblem,
 } from './practice-lib.mjs';
 import { agentsTemplate } from '../bin/lib/project.mjs';
+import { estimateTokens } from '../bin/lib/payload.mjs';
+import { TOKEN_BUDGET } from '../bin/check.mjs';
 import { classifyAgentFailure } from '../evals/agent-output.mjs';
 import { killByPath } from '../evals/runner.mjs';
 
@@ -186,9 +188,17 @@ const npmIn = (ctx, cwd, ...args) => withOutput(npm(ctx.npmCli, [...args, '--cac
  * input on standard input and `cwd` as the folder of the call. `input` is the JSON text of `pauseHookInput`. */
 const pauseHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'resume', '--pause'], { ...childOptions(ctx, cwd), input }));
 
+/** One command of the installed candidate for the step `channel`: in the practice project, with `channelEnv`, where the
+ * home, the harness's home and the Claude home are all the practice home's and no live session is named. */
+const channelCommand = (ctx, ...args) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), ...args], { ...childOptions(ctx, ctx.layout.project), env: channelEnv(ctx.env, ctx.layout.home) }));
+
 /** The guard run as the host runs its `PreToolUse` hook: the installed entry file, `guard --hook`, the call on standard
  * input and `cwd` as the folder of the call. `input` is the JSON text of `openingToolInput`. */
 const openingHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'guard', '--hook'], { ...childOptions(ctx, cwd), input }));
+
+/** The reply check run as a host runs its `Stop` hook: the installed entry file, `reply --hook`, the hook input on standard
+ * input and `cwd` as the folder of the session. `input` is the JSON text of `replyHookInput`. */
+const replyHook = (ctx, cwd, input) => withOutput(run(process.execPath, [installedBin(ctx.layout.prefix), 'reply', '--hook'], { ...childOptions(ctx, cwd), input }));
 
 /** The tokens of a made-up reply that is past the context pause: the share the host compacts at, which is above the
  * pause's share of the same window, so the reply passes the pause and is not yet a compaction. Built from the constants
@@ -244,7 +254,7 @@ const hasRow = (output, status, name) => checkRows(output).some((line) => line.s
 const snapshot = (files) => Object.fromEntries(files.map((file) => [file, contentHash(readIfThere(file))]));
 
 // ---- the host session ------------------------------------------------------------------------------------------------
-// The step `host-loads` (odd/tasks/practice-project.md, "T5: the step host-loads"): three calls of a real Claude Code in
+// The step `host-loads` (odd/tasks/practice-project.md, "T5: the step host-loads"): four calls of a real Claude Code in
 // the practice project, with the practice home as its config and a scratch home for everything else.
 
 const HOST_TIMEOUT_MS = 2 * 60 * 1000;
@@ -280,7 +290,7 @@ function realHostTraces(realHome) {
   return [...folders, ...keys].sort();
 }
 
-/** The three calls and what they prove; returns the evidence, or throws with every problem found. A host that could
+/** The four calls and what they prove; returns the evidence, or throws with every problem found. A host that could
  * not answer (its plan's cap, its login, a timeout) is said to be unavailable, never taken for a fault of the harness. */
 function hostLoads(ctx, token) {
   const { project, home, hostHome, root, prefix } = ctx.layout;
@@ -340,10 +350,12 @@ function hostLoads(ctx, token) {
     session = load.init.session_id;
     fs.writeFileSync(agents, original);
     call('skill', ['-p', 'Invoke the js-harness skill, then quote its line that starts with `js-harness check --push`, and nothing else.', '--resume', session, '--tools', 'Skill', '--allowedTools', 'Skill']);
+    // A sub-agent's start, the rules hook's third event (odd/tasks/rule-hierarchy.md, T16f).
+    call('subagent', ['-p', 'Use the Agent tool once, with a sub-agent whose whole task is to reply ok; then reply done, and nothing else.', '--resume', session, '--tools', 'Agent', '--allowedTools', 'Agent']);
     call('compact', ['-p', '/compact', '--resume', session]);
     ctx.host = { ...hostCost(streams), binary: claude, version };
     const cost = ctx.host;
-    detail = `${version} (${claude}), ${cost.model}: three calls, ${cost.inputTokens} input, ${cost.cacheTokens} cache and ${cost.outputTokens} output tokens, ${cost.costUsd.toFixed(4)} dollars, ${cost.durationMs} ms`;
+    detail = `${version} (${claude}), ${cost.model}: four calls, ${cost.inputTokens} input, ${cost.cacheTokens} cache and ${cost.outputTokens} output tokens, ${cost.costUsd.toFixed(4)} dollars, ${cost.durationMs} ms`;
   } finally {
     fs.writeFileSync(agents, original);
   }
@@ -581,6 +593,18 @@ const STEPS = {
     return `uninstall removed the hook, the project manifest, harness.json, AGENTS.md and .codegraph, and git status showed:\n${after.join('\n')}\ninit again: the hook is back and no tracked file differs${templated}`;
   },
 
+  'template-lines': (ctx) => {
+    const { project } = ctx.layout;
+    // The step before ran `init` again on a project `uninstall` had emptied, so AGENTS.md is the one the installed copy
+    // wrote, not one committed by an earlier candidate.
+    const agentsText = readIfThere(path.join(project, 'AGENTS.md'))?.toString('utf8');
+    const template = agentsTemplate(project);
+    const tokens = estimateTokens(template);
+    const problem = templateLinesProblem({ agentsText, template, tokens, budget: TOKEN_BUDGET });
+    assertThat(problem === null, problem);
+    return `the AGENTS.md js-harness init wrote in ${project} is this candidate's template: it holds the sections ${TEMPLATE_SECTIONS.map((section) => `"${section}"`).join(' and ')} and the four states, in ${tokens} estimated tokens of the ${TOKEN_BUDGET / 2} it may take`;
+  },
+
   'global-uninstall': (ctx) => {
     const { home } = ctx.layout;
     const { manifest, skills } = installedFiles(home);
@@ -623,6 +647,42 @@ const STEPS = {
     return `the first run printed one PostToolUse notice of ${first.stdout.trim().length} characters; the second run printed nothing, and so did the run from ${outside}, where no harness.json lies above; all three exited 0`;
   },
 
+  channel: (ctx) => {
+    const { project, home } = ctx.layout;
+    // The Claude home is the practice home's, where `install` wrote the host's settings: the board lists the sessions
+    // folder of the project there, and refuses a project that has none, so the step gives it one when no host session of
+    // an earlier run left it, and removes only what it made.
+    const claudeHome = path.join(home, '.claude');
+    const slug = projectSlug(path.resolve(project));
+    const sessionsFolder = path.join(claudeHome, 'projects', slug);
+    // New for each run, so the board's last notices can only show it because this run recorded it. The sender is a
+    // made-up session as well: `channelEnv` drops the id of the session that started the run.
+    const marker = `practice-channel-${randomUUID()}`;
+    const self = `practice-channel-${randomUUID()}`;
+    let notify;
+    let board;
+    // The first folder `mkdirSync` had to create (`projects` itself on a home no host session used yet), or `undefined`.
+    let made;
+    try {
+      made = fs.mkdirSync(sessionsFolder, { recursive: true });
+      notify = channelCommand(ctx, 'notify', '--to', 'orchestrator', '--kind', 'note', '--self', self, '--claude-home', claudeHome, `the practice journey's notice ${marker}`);
+      board = channelCommand(ctx, 'sessions', '--json', '--claude-home', claudeHome);
+    } finally {
+      if (made !== undefined) fs.rmSync(made, { recursive: true, force: true });
+    }
+    // The real home's record of the same project: a notice that ignored the practice home would be there.
+    const realFile = channelRecord(ctx.realHome, slug);
+    const realRecord = readIfThere(realFile)?.toString('utf8') ?? null;
+    const problem = channelStepProblem({ notify, board, marker, home, realRecord });
+    assertThat(problem === null, problem);
+    const { channel } = JSON.parse(board.stdout);
+    return [
+      tail(notify.stdout, 4),
+      `js-harness sessions --json shows ${channel.notices.length} of the ${channel.noticeCount} notices of ${channel.path}, one of them holding ${marker}`,
+      `${realFile} ${realRecord === null ? 'is not there' : 'does not hold it'}`,
+    ].join('\n');
+  },
+
   'opening-tools': (ctx) => {
     const { project, root } = ctx.layout;
     // The project that declares the rule is a folder of the journey's root, a git repository holding the rules file the
@@ -643,6 +703,24 @@ const STEPS = {
     const problem = openingToolsProblem({ plain, declared });
     assertThat(problem === null, problem);
     return `the guard let the ${OPENING_TOOLS.length} tools pass in ${project}, which declares no rule, and refused each in ${declaring}, which declares it, naming start_session`;
+  },
+
+  'reply-hook': (ctx) => {
+    const { project, root } = ctx.layout;
+    // A folder of the journey's root whose harness.json turns the check on with the English labels; no harness.json lies
+    // above the root, so this file is the nearest one. The practice project keeps init's harness.json, which has no reply
+    // key: a project that installs the harness has the check off until it asks for it.
+    const replying = path.join(root, 'replying');
+    fs.mkdirSync(replying, { recursive: true });
+    fs.writeFileSync(path.join(replying, 'harness.json'), `${JSON.stringify({ reply: true }, null, 2)}\n`);
+    const sessionId = `practice-reply-${randomUUID()}`;
+    const unclosed = 'Merged the change; next I write its documentation.';
+    const refused = replyHook(ctx, replying, replyHookInput({ sessionId, cwd: replying, message: unclosed }));
+    const passed = replyHook(ctx, replying, replyHookInput({ sessionId, cwd: replying, message: 'Merged the change.\n\n**Working** — the gate of the next commit wakes me.' }));
+    const plain = replyHook(ctx, project, replyHookInput({ sessionId, cwd: project, message: unclosed }));
+    const problem = replyHookProblem({ refused, passed, plain });
+    assertThat(problem === null, problem);
+    return `the reply check turned back a reply with no state in ${replying}, whose harness.json turns it on, let a reply that closes with Working stop there, and turned nothing back in ${project}; all three exited 0`;
   },
 
   'host-loads': (ctx) => {

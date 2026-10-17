@@ -950,7 +950,10 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
 - [x] T3 · M1: one whole run under the lock; the tables in Progress; the cuts chosen, with
       the counts they are judged by. Route: inline, no source written. Evidence: the entry
       of T3 in Progress.
-- [ ] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3.
+- [x] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3. Evidence:
+      cut 1 never reached `main` and T17 took its point; cut 2 is T16; cut 3 is
+      `bin/lib/git-fixture.testkit.mjs`, 1,545 git processes fewer in 15 files; cut 4 is his. The
+      entry of 2026-10-16 in Progress.
 - [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
 - [x] T5b · The four notes gentle-ai left on T5 (Progress; `8bae23f`). Route: delegated, one writer,
       tests first.
@@ -969,11 +972,17 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       can and cannot catch; the note on a base left out tested on a skip, not on a plan
       alone. The remote `origin` of that note stays, said as a limit: the command has no
       `--remote`. Route: delegated, one writer, tests first, on `feat/gate-wait`.
-- [ ] T7 · M2: what a review spends against its number, and one review beside one gate.
-      Route: inline, with the reviews of S1. gentle-ai measured; Codex not yet (Progress).
-- [ ] T8 · If M2 holds: the texts. Route: delegated, one writer.
-- [ ] T9 · The trial on GitHub: the workflow on its branch, one run, what it answered, the
+- [x] T7 · M2: what a review spends against its number, and one review beside one gate.
+      Route: inline, with the reviews of S1. gentle-ai measured; Codex from the records
+      since 2026-10-15: it holds for both (Progress, 2026-10-16).
+- [x] T8 · If M2 holds: the texts. Route: inline (one sentence was left; faster-check T4
+      had taken the rest). The orchestrator skill lets both reviews run beside a gate and
+      keeps a sub-agent that runs tests waiting; test in `bin/lib/manifest.test.mjs`.
+- [x] T9 · The trial on GitHub: the workflow on its branch, one run, what it answered, the
       figure and the two questions sent to the orchestrator. Route: inline, one file.
+      Superseded, not built further (2026-10-16, JH 24, by the orchestrator's brief): the gates on
+      GitHub are `first-version.md` T7, owned by the session "JH 21", which builds the workflow
+      this trial was to inform; its branch `trial/gate-on-github` stays unmerged as evidence.
 - [x] T11 · The merge hook, first and alone: `.githooks/pre-merge-commit` on
       `feat/gate-merge-hook`, both reviews, its pull request. Route: inline.
 - [x] T12 · The identical-tree proof (Design, "No repeated control"), after the cut of git
@@ -1004,20 +1013,65 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       (`evals/task-proof.test.mjs`) take their five runs from a stand-in. Route: inline.
       Evidence: `85566a8` on `test/eval-fewer-starts`; 176 other starts of that file
       before, 85 after. The second row (`evals/runner.test.mjs`) is not built.
-- [ ] T19 · A gate keeps who spent the processor over its run (2026-10-13, from the measure of
+- [x] T19 · A gate keeps who spent the processor over its run (2026-10-13, from the measure of
       the slower check in Progress; ordered by the orchestrator at 20:13, after the stretch of
       "JH 9" on `bin/check.mjs` is on `main`). With it, the comment at the head of
-      `bin/gate.mjs` says the whole rule for runs beside a gate. Route: inline, with a reader
-      for the design.
-- [ ] T20 · A queued command is refused before it waits, not after (candidate, 2026-10-13, the
+      `bin/gate.mjs` says the whole rule for runs beside a gate. Route: delegated (one writer,
+      by the context backstop of JH 24), reviewed by JH 24. Evidence: `feat/gate-busiest-run`;
+      `watchBusiest`, `busiestOverRun`, `processTimes` (`machine-busiest.mjs`), `busiest.jsonl`
+      keyed by the start's id (`appendGateBusiest`, `readGateBusiest`, `gateRecord.busiest`),
+      `watchRun` in `check` and `gate`, `gate log` ending a line with the three heaviest; 21
+      tests seen red then green; `check.test.mjs` 219/219. Cost: the end reading runs before
+      the lock is released, about 3 to 4 s a gate on a loaded machine (11 s at most), since one
+      after the release would count the next gate's run.
+- [x] T20 · A queued command is refused before it waits, not after (candidate, 2026-10-13, the
       orchestrator's, from a failure of the session "JH 9": its Codex review waited about 40
       minutes for the lock and then started nothing, "Tracked files have uncommitted changes").
       Two parts: `codex-review --plan` says that the tree is dirty; and `js-harness gate` can
       run a cheap refusal the queued command declares, when it is queued and again when its
       turn comes. The turn scripts of this session have the same hole: their check of the head
       and of a clean tree runs after the wait. Not sized.
-- [ ] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
-      the closing notice.
+      Built (2026-10-16, JH 24) on `feat/gate-refuse-early`, test first: `codex-review --plan`
+      says uncommitted tracked changes on stderr, its plan and exit 0 unchanged; `js-harness gate
+      --ready <command>` runs the check before the wait and again as the turn comes after one,
+      and a failure runs nothing (exit 75, `refused` with reason `not ready` in the gate log).
+      The box is checked at T10, so this line and T19's do not meet in a merge. The turn
+      scripts are scratch files of their sessions and are left: `--ready` is what they can use.
+      Codex on `6a6ce9e..2c519af` (P2, correct): a wait behind a gate in the line that left before
+      it held the lock named no gate waited for, so the check was not asked again. The check is now
+      asked again whenever the turn was not taken at the first look of the lock (`looks`, the count
+      the launcher's last look already uses), with a test for that wait.
+      *Later, non-blocking (gentle-ai, 2026-10-16).* T19 (lineage `review-cf7d0d2ecad4ae1a`, PR 276):
+      the last read of the busiest processes holds the lock 3 to 4 s; the watch is not ended when a
+      run throws, in `check` and in `gate`; a failed write of `busiest.jsonl` is said although the
+      docs say nothing is; names are not cleaned when read. The pull request counts six of them; the
+      record of this session kept these four. T20 (lineage `review-8d18a3a8381fa79c`): no test for a
+      failing check at the turn on the inner path, nor for `codex-review --plan` when its `git status`
+      fails; that `git status` takes git's optional index lock beside other commands.
+- [x] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
+      the closing notice. Evidence: the entry of T10 in Progress.
+- [x] T11 · `review-tool-timeout` (docs/FAILURES.md): three of its four sightings ran beside
+      a gate or a full machine (2026-10-11 beside a gate; 2026-10-15, host-update-check L4,
+      while a retry on a quiet machine answered in 23 s, L6; 2026-10-16, first-version L10, at
+      100% CPU with `--base-ref=origin/main`, then 9 s with the merge-base commit). M2 read "no
+      sighting since 2026-10-11" from the review records, which keep no timeout; the manifest
+      still says a gentle-ai review runs beside a gate. Design, read by two readers: whether a
+      gentle-ai review waits for the gate lock, or is given the merge-base commit, and what a
+      session does on `operation_timeout` (one retry with no gate running; then continue
+      without reporting, record it in the feature document, Codex covers the range, he is not
+      asked), written in the manifest's review text so an installed project gets it too. The
+      provider defect stays tracked upstream as gentle-ai #5422, open (an occurrence on 4.1.1
+      on 2026-10-16; this machine runs 4.2.0). When done, the entry's Control becomes the check
+      or the manifest line it leaves. The lead's order of 2026-10-16 22:10Z: "fix the cause
+      test first if it breaks shipped behavior, else open its task in the owning feature doc
+      and settle the entry"; the cause is not shown (the timeouts are an observation beside
+      the gate), so it is a task.
+- [x] T12 · T11's later work, gentle-ai's warning: "the first-parent listing has no depth bound"
+      (`onFirstParentLine`, `bin/lib/guard.mjs`, read `git rev-list --first-parent HEAD` whole).
+      Test first. Evidence: the entry of T12 and T13 in Progress.
+- [x] T13 · T11's later work, gentle-ai's warning: "a test's unquoted temp dir" (the real-repo
+      test of `reviewBaseRefusal` in `bin/lib/guard.test.mjs`). Test first. Evidence: the entry of
+      T12 and T13 in Progress.
 
 ## Progress
 - 2026-10-12 · Opened (`335ce6f`). The map of the code is a read-only sub-agent's (72 test
@@ -2751,199 +2805,207 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   - *T19 is ordered:* after the stretch of the session "JH 9" on `bin/check.mjs` is on
     `main`. The antivirus is his and nothing is recommended there: the numbers are 1,139
     processor-seconds in a run of 805 s, 859 in one of 533.
+- 2026-10-16 07:05 by `date` · **JH 24 takes T19, T20 and T9.** T9 is closed as superseded by
+  `first-version.md` T7 (the gates on GitHub, the session "JH 21"); nothing of it is built here.
+  T19 is built on `feat/gate-busiest-run` (worktree `gate-busiest`, from main `6a6ce9e`); T20
+  follows on a branch of its own.
+- 2026-10-16 · **M2 holds for both reviews (T7), and T8 is one sentence** (session "JH 27",
+  on the orchestrator's order of 12:55; nothing spent: every figure is read from records).
+  Since faster-check T4 (2026-10-14, `e06cf68`) a review runs out of the gate lock, so the
+  records since 2026-10-15 already hold reviews beside gates.
+  - *Number 2, a review beside a gate still ends with an answer.* Codex,
+    `.git/js-harness/codex-review-runs.jsonl` against the commit gates of
+    `~/.js-harness/gate-log/` (`command` `check`, `lock` `own`): 67 runs overlapped a commit
+    gate (59 for most of their run, 8 partly), and all 67 ended `reviewed`, median 60 s; 119
+    ran with no gate beside, median 48 s. The one `not-inspected` run of the set had no gate
+    beside it. gentle-ai: 35 reviews acknowledged since 2026-10-15, 9 of them inside a
+    commit gate's sensors (by the mtime of their record in
+    `.git/gentle-ai/review-transactions/terminal-consumption/v1/`, the only time it keeps);
+    no rejected result since 2026-10-15, and `review-tool-timeout` has no sighting since
+    2026-10-11.
+  - *Number 1, a review adds less than 30 s to a gate beside it.* The commit gates with a
+    review beside: 53, 46 passed, none timed out, median 237 s; without: 114, 103 passed,
+    none timed out, median 169.5 s. That difference mixes in what each gate ran, so the
+    figure taken is per test file the tests sensor ran, WSL gates only: 2.20 s a file over
+    22 gates (median 102 files) against 2.09 over 80 (median 93), about 5%, some 11 s on a
+    gate of 100 files: under the bound. It is a correlation over records, not the design's
+    processor-second measure of one review beside one gate; gentle-ai's number 1 stays the
+    2.3 s and 12 s of 2026-10-12, since its records keep no duration.
+  - *T8.* A search of `bin/`, `AGENTS.md`, `README.md` and `docs/ROADMAP.md` for a review
+    held to the gate found one text left: the orchestrator skill's "a reviewer wait for the
+    gate to end" (`bin/lib/manifest.mjs`). It now says both reviews run beside a gate, and
+    names a sub-agent that runs tests among what waits. "T8 as half" (2026-10-12) is
+    overtaken: faster-check T4 moved both reviews out of the lock.
+- 2026-10-16 · **T4 closed, with cut 3: repositories of fixtures built once and copied**
+  (JH 21, by the lead's order of 13:50: "Next for JH 21: gate-wait T4 (the cuts T3 chose,
+  each judged by a second run), per odd/tasks/gate-wait.md"). The four cuts of T3:
+  1. *The order the files start in*: its runner (`fc70dc3`) stayed on
+     `feat/gate-wait-count` and never reached `main`; T17 split the long file in two, so no
+     file is the wall that order was for. Nothing built.
+  2. *The git a review asks*: T16, done (7,840 to 6,628 git processes in its file).
+  3. *Fixtures built once*: built here. `bin/lib/git-fixture.testkit.mjs`, `repoTemplate(build)`:
+     `build` runs once in a process, in a folder of its own, and every call after copies that
+     folder with `fs.cpSync`; a build that throws leaves nothing, the template goes at exit.
+     Measured first, on this machine under load: `git init` 276 ms, init with two `config`,
+     `add` and `commit` 1,058 ms, a copy of that repository 84 ms. Taken in 15 test files,
+     where each test gets a repository of its own that never meets another by commit ids
+     (`merge-queue` copies its origin and clone as one folder and points the clone at the
+     copy's origin, one `git remote set-url`). Left as they were: `evals/configs.mjs` (489,
+     the sandbox a trial prepares is the product under test), `bin/codex-review.test.mjs`
+     (it copied already), and the tests that commit in their body.
+     *The second run* (`scripts/count-git.mjs --frames 2`): the whole suite on `origin/main`
+     `8b3c031` before, 22,475 git processes in 40 min 43 s (the machine shared); the 15 files
+     after, alone. In those files **5,729 to 4,184 git processes, 1,545 fewer**; `init` 551 to
+     17, `config` 402 to 95, `commit` 359 to 165, `add` 258 to 143. The new test file adds 27.
+     So 1,518 net, 6.8% of the suite's git, over the twentieth T3 asked of a cut. The largest:
+     `merge-queue` 710 to 269, `rules-change-run` 970 to 738, `codex-review-coverage` 829 to
+     640, `remote` 449 to 270, `project` 1,076 to 941. Their attributed seconds read 2,768 to
+     1,126, a reading under two different loads and no proof. Each file passed alone through
+     `js-harness gate`, 15 of 15.
+  4. *The antivirus*: his; nothing built, the numbers stand in T3's entry.
+- 2026-10-16 · **T10, the close** (JH 21, by the lead's order of 15:08: "Next for JH 21:
+  gate-wait T10, the close (ROADMAP, both reviews per slice, PRs), once 287 and 288 are on
+  main"). The map is a read-only sub-agent's (Opus 5.5, high), spot-checked here: `grep -n
+  gate-wait docs/ROADMAP.md` gave line 52 alone before this close.
+  - *Pull requests.* With code: 75 (T11), 77 (T13), 79 (T14), 87 (T15), 89 (T5, T5b, T6, T6b,
+    T6c), 90 (T16), 92 (T17), 99 (T12), 100 (T18), 276 (T19), 281 (T7, T8), 288 (T20), 290
+    (T4, cut 3). Documents alone: 105, 106, 108, 110, 115, 116. T9 is superseded and its
+    branch never merged; T3 wrote no source.
+  - *Both reviews.* Every code commit of those thirteen is covered by a Codex record: each
+    commit was mapped to the records of `.git/js-harness/codex-reviews.jsonl` by `git rev-list
+    base..head`, and the only commits with none are clean merges of `main`, which owe none.
+    gentle-ai reviewed and acknowledged 75, 89 (T5 `review-66d7ba384db9da9a`, S1
+    `review-a1061d8e43757870`), 276 (`review-cf7d0d2ecad4ae1a`) and 288
+    (`review-8d18a3a8381fa79c`); the other slices were assessed and not due (under budget),
+    each recorded in its entry here or in its pull request's body.
+  - *T20* is ticked here, as its line asked: on `main` through 288 (`2c519af`, `f535100`).
+  - *Done when.* `contract check` printed PASS, exit 0. `docs/ROADMAP.md` now says the three
+    things, in the item "The wait for the gate, measured and cut". `npm run check` is this
+    commit's gate. Cut 3 was counted on its 15 files, not in a whole run (its entry says so).
+  - *Left open.* T2's tool by file (`scripts/measure-run.mjs`, `c844f29`) and cut 1
+    (`fc70dc3`) are only on `feat/gate-wait-count` and never reached `main`, although T2's box
+    is ticked; the cuts were counted with `scripts/count-git.mjs`, which is on `main`. The
+    notes gentle-ai left on T19 and T20, none blocking (under T20 in Tasks), stay follow-ups.
+    Worktrees whose work is merged, for the lead to remove or hand back: `gate-busiest`,
+    `gate-refuse-early`, `reviews-beside-gate`, `gate-wait-run-load`; and `gate-wait-count`,
+    `gate-on-github`, branches never merged. `gate-wait-t4` is this session's, removed at the close.
+  - *Spent on Codex on 2026-10-16 by this session:* 156,948 input tokens (cut 3) and 49,467 (its
+    merge of `main`).
+- 2026-10-17 · **T11 opened by JH 5 on the lead's note of 13:07Z** ("Next: triage item 11, gate-wait
+  T11 (design with two readers, docs/FAILURES.md review-tool-timeout): how a gentle-ai review waits
+  for the gate lock or uses the merge-base commit, and what a session does on operation_timeout;
+  then build what the design settles, in the manifest's review text. Ask him nothing."), branch
+  `feat/review-timeout-rule` from origin/main 13:15Z.
+  - *The probe.* gentle-ai takes `--base-ref` as a tree and diffs it against the head's: the target
+    evidence of `review-482ab063172d1bb1` reads `base-diff:workspace:7c00d719…:919d5889…`, and
+    `7c00d719` is the tree of `db31c96c`, the tip of origin/main then (`git rev-parse db31c96c^{tree}`).
+    So a branch behind the default branch, given `--base-ref origin/main`, is assessed with every
+    later change of the default branch in it, reversed. Measured at 13:20Z on a detached checkout of
+    `24139b7e` (PR 400's head, 19 commits behind origin/main, nothing of its own outside it):
+    `gentle-ai review assess --base-ref origin/main --committed-only` took 20 s and saw 20 paths and
+    470 changed lines, which is `git diff --shortstat origin/main HEAD` (51 + 419); with the
+    merge-base commit (`24139b7e` itself) it answered in 1 s that there is nothing pending. This is
+    also L10 of first-version: three timeouts with `--base-ref=origin/main`, 9 s with the merge-base
+    commit. The other sightings name no base or `origin/main`; none names a merge-base commit.
+  - *Design, version 1, for two readers.*
+    1. *The base is a commit the head contains.* A gentle-ai review is given the merge-base of the
+       head with the default branch (`git merge-base origin/main HEAD`) or the last reviewed
+       boundary, never the name of a branch that moves: a moving name puts the default branch's
+       newer work in the candidate, reversed, which reviews the wrong change and makes the
+       preflight slower the further the branch is behind. The base goes on the assess, so its
+       `next_transition` carries it to the preflight unchanged.
+    2. *It does not wait for the gate lock.* Its reviewer has no tools, and the gate of this repo
+       sends its tests to GitHub's machines; no sighting shows the gate as the cause (each is "an
+       observation beside the gate"), while the base is shown. Waiting would hold every review
+       behind every gate for a cause not shown.
+    3. *On `operation_timeout`, once more, then on.* The session runs the same command once again,
+       after no gate runs on the machine (`js-harness gate -- <the same command>` waits for that
+       turn). If it times out again, the candidate goes on without that review: the feature
+       document gets a gentle-ai line naming the range, both times and that it was not reviewed
+       (the line `notify --kind ready` reads); Codex reviews the range as for every code commit;
+       he is not asked, since the provider defect is tracked upstream (gentle-ai #5422). In this
+       repo the time is also a `Seen:` line of `review-tool-timeout`.
+    4. *Where it lives.* The work session's part of the orchestrator skill (`bin/lib/manifest.mjs`,
+       the line on what runs beside a gate), so an installed project gets it; its test in
+       `bin/lib/manifest.test.mjs` pins the text. The entry's Control becomes that test.
+    Left to the readers: whether 1 should also be a check (the guard's PreToolUse hook could refuse
+    a gentle-ai review command whose `--base-ref` the head does not contain, and print the
+    merge-base command), and whether 3's retry through `js-harness gate` is worth its wait.
+  - *What the two readers changed (version 2, settled).* Reader A (mechanism, probes with a logging
+    `git` shim in a scratch clone) found the cost is not the diff's size: after the diff gentle-ai
+    4.2.0 walks `git log --first-parent -n 64 HEAD~1` with a `git diff-tree` per ancestor, so a base
+    off the head's first-parent line costs about 216 git runs against 31 (17 to 45 s against 2.6 to
+    7 s on a loaded machine, the slowest with a 2-line diff), and load multiplies each run. So the
+    condition is a base on the head's first-parent line, given by its hash (assess copies the string
+    into its `next_transition`, names too): after a merge of the default branch, its merge-base is
+    the default branch's tip on the second parent, slow and holding reviewed slices, and the merge
+    commit is the base, as section 3 of the protocols already said. Reader A also corrected the
+    probe: the assess from `24139b7e` itself answered `unassessable`, high and due, exit 1 ("no
+    pending changes"), which is no candidate. The sighting of 2026-10-07 timed out with a base on
+    the line, so the fallback stays. Reader B (operability) moved the rule to its home, the
+    protocols skill, section 3 (`bin/lib/protocols-skill.mjs`), leaving the orchestrator skill's line
+    a pointer; dropped the retry through `js-harness gate --`, which would hold the machine's lock for
+    the whole review, and with it the wait (a commit's tests run on GitHub, so the lock does not even
+    mean a quiet machine); recommended the guard, which makes the Control a check; and made the
+    record line say "not reviewed", since the merge queue counts any gentle-ai line that names the
+    range. Left out of the shipped text, as reader B advised: "he is not asked" (the defect handoff
+    of the global instructions asks the user before reporting; here the lead's order and the open
+    upstream issue #5422 settle it).
+  - *Built (7c44b96e, then the first-parent correction).* `reviewBaseRefusal` in `bin/lib/guard.mjs`,
+    wired into the guard's Bash check: an assess, status or start whose `--base-ref` resolves to a
+    commit off the head's first-parent line is denied, naming the bases to give; a base git cannot
+    resolve as a commit (a tree, an unknown name) runs. Protocols section 3 gives the base and the
+    timeout procedure (one more run of the same status, never a new start; then on, a gentle-ai line
+    with both times and "not reviewed", Codex on the range) and says an assess with nothing pending is
+    no candidate; the orchestrator skill's line points there. The entry's Control is the guard's test.
+    Tests first: the lib tests failed before (no export, then the merge case let through); after,
+    guard 25, lib guard 23, manifest 173, protocols-skill 11 pass.
+  - *Reviews.* Codex e20291a..5533618 incorrect (0.99), two P2 (a newline did not end a command; a
+    `cd` before it was not followed); the independent verifier (risk item 2) found the same `cd` case
+    and heredoc bodies read as commands, both false refusals at 55336181. All fixed test first in
+    1cebd69a with its advisories (a 5 s git timeout, the protocols wording, a protocols test, the
+    help lines): lib guard 24, guard 25, protocols-skill 12, manifest 173, js-harness 44 pass.
+    Codex recheck e20291a..1cebd69 found three new P2 (a `\` line continuation, a relative `--cwd`
+    after a `cd`, a `#` comment). gentle-ai e20291ab..1cebd69a high (item 2), lenses risk and
+    reliability: approved and acknowledged (`review-ea14564f6a7371ed`), three warnings left as later
+    work (the first-parent listing has no depth bound; a relative `--cwd`; a test's unquoted temp
+    dir). The pre-push hook refused the branch while the recheck's findings stood, so the three P2
+    were fixed test first (lib guard 24, guard 25 pass; it also settles the relative `--cwd` warning);
+    gentle-ai on 93f8a8d: medium, 15 lines, not due (under_budget). Codex recheck
+    946df82..93f8a8d correct (0.98), 3 of 3 fixed. Left as later work: the listing's depth bound and
+    the test's unquoted temp dir.
+- 2026-10-17 · **T12 and T13 by JH 21 on the lead's note of 15:34Z** ("the advisories recorded as
+  later work, outside gate-first […] (1) gate-wait T11: the first-parent listing has no depth bound;
+  one test's temp dir is unquoted"; the lead's claim, not his words), branch `fix/review-base-walk`
+  from origin/main `5ea341af`.
+  - *T12.* A bound by count cannot tell a base off the line from one deeper than the bound, so the
+    walk is bounded by the base instead: `git rev-list --first-parent HEAD ^<base>` stops at the
+    first commit the base holds, right above it when the base is on the line, at the fork point
+    when it is off. The base is on the line when the first parent of the last commit listed is the
+    base, or, when nothing is listed, when it is the head. `onFirstParentLine` is exported and
+    takes `run` for the test. RED: on a branch of two commits over 41, the lookup read 42 lines of
+    history. Differential check against the old lookup on this repository's history (32 bases: on
+    the line, on second parents, `HEAD^2`, a tree, the root, an unknown name): 0 differ.
+  - *T13.* The real-repo test's folder now holds a space, as a home like `C:\Users\Ana María`
+    puts one in every temp dir, and its command quotes `--cwd`. RED: without the quotes, the test
+    fails. GREEN: `bin/lib/guard.test.mjs` and `bin/guard.test.mjs`, 50 pass.
+  - *Reviews.* Committed as `a9109b1` (gate: medium, 90 lines). gentle-ai on `5ea341af..a9109b1`: high by
+    escalation (item 2, the guard decides which review commands are refused), lenses risk and reliability,
+    approved and acknowledged (lineage `review-9cb629c08f739b2c`), two advisories from R3. The warning: the
+    verdict read only the last commit printed, so a walk git cuts late (committer dates out of order) and that
+    prints commits below the base would call a base on the line off it. Each commit now comes with its parents
+    (`--parents`, one git run fewer), and the base is on the line when it is the first parent of any commit
+    printed, since every one is on the head's line. The suggestion: tests for a root, a tree, and a base merged
+    in by a second parent. Both done test first in the next commit (RED: a run that prints a commit below the
+    base was called off the line); lib guard 26, guard 25 pass; the differential check, 32 bases, 0 differ.
+    That commit is `3d4194c`; gentle-ai on `a9109b1..3d4194c`: medium, not due (`under_budget`). Codex on
+    `5ea341a..3d4194c`: correct (0.94), no finding.
 
 ## Next
 
-**At 20:10 on 2026-10-13, before the list below:** the gate on GitHub is no longer this
-session's. The orchestrator gave it to a new session, "JH 10", at 18:40, in its own document
-`odd/tasks/gate-on-github.md`; all this session knows of the trial is in Part 3 and in the
-entries of T9 in Progress (the worktree `gate-on-github` and the branch
-`trial/gate-on-github` stay as they are; no second push without telling the orchestrator).
-First in line here now: his answer on `PcaSvc` and the measure of the check after it; then
-T19 if the orchestrator orders it; then the guard of the Codex review (one slice, one probe);
-then the list below.
-
-Written on 2026-10-13 at the close of T17. The order is the orchestrator's (inside his
-"option 3", a faster suite on his machine); the last entries of Progress hold the proof
-of each line here.
-
-**Where the suite stands.** A whole run by file took 625 s before S1, 601 s with S1 and
-the git cut, and takes 533 s with the command's test file as two processes (M1g). No
-file is the wall any more: the run ends at the work's own bound, with the machine 94%
-busy. So from here only less work shortens it: fewer process starts, or what the
-antivirus spends on each (his).
-
-1. **Pull request of T17** (`feat/gate-wait-two-halves`): open, the orchestrator
-   merges. If `main` moves under it, merge `main` once more with
-   `clean-merge-turn.sh <worktree>` in a lock turn.
-2. **Road 1, slice 2**: its first row is done (T18, Progress of 2026-10-13: 91 fewer
-   starts in `evals/task-proof.test.mjs`). Its second row (21 starts in
-   `evals/runner.test.mjs`, by the reading) is not built; slice 3 needs its own design.
-3. **The merge-base in the join** (Progress, 2026-10-12, "A probe for the design's
-   point 6"): about 550 git starts of the command's tests; the rule is written there
-   (taken only when there is exactly one caret line). It changes
-   `gitDirsAndCommits` from two revs to a three-dot range, so its tests change with
-   it. Small; not worth a review alone: ride it with another change of that command,
-   after JH 7's two pieces on `bin/codex-review.mjs` are on `main`.
-4. **The counting tool to `main`**: gentle-ai and Codex on `47484bd..fc70dc3`
-   (`feat/gate-wait-count`, worktree `gate-wait-count`, not pushed). Every measure of
-   this feature calls it by path from that worktree.
-5. **T8 as half**: gentle-ai's review leaves the lock, Codex's stays, and a Codex
-   record says when the review ran tests; behind road 1, on a day a gentle-ai review
-   is due.
-6. **T12** is done (Progress, 2026-10-13: `b4309dd`, `0e0f385`) and waits only for its
-   pull request to be merged. **T9** (`trial/gate-on-github`, pushed, never merged) is
-   answered in Progress and waits for nothing.
-7. **T10, the close**: `docs/ROADMAP.md`, the closing notice.
-
-**Lessons that bind the next slices.**
-- A reader's attack asks, for each case the real path covers, what the stand-in or the
-  join does with it.
-- A count is counted: no number of starts, tests or lines is given from reading.
-- A measure is taken on a machine that was looked at first: this session's own
-  tsserver spun beside the measures twice on 2026-10-12 and 13 (sample CPU by process,
-  find the parent chain, stop only one's own).
-- A turn script that restores a file for its RED names the commit
-  (`git checkout HEAD -- <file>`); a baseline it compares with is taken in the same
-  turn, on the same tree.
-- A commit of a merge of `main` that resolved a conflict owes a Codex review of all
-  `main` brought (927,266 input tokens for nine lines on 2026-10-12); a clean merge
-  owes none. So: one merge of `main` a branch, late, and a pick onto the merged base
-  where a second merge would follow. The orchestrator holds the candidate "review a
-  merge's own resolution only" as his.
-
-## Resume here
-
-**BEFORE EVERYTHING, by his answer typed at 2026-10-14T05:41Z (the orchestrator's transcript `ffe99ebf-72fb-48da-a79b-e7db21a20b3f`, line 1350, read by me): "Se instala ahora y ademas tiene que quedar funcionando y JH8 tiene que diseñarlo ya y debe quedar funcionando ya". He installs WSL2 (Ubuntu 24.04) now, with a reboot that restarts every session. The first task after it: design the gate running in WSL2 and get it working: node 22 from the nodejs.org tarball in his Linux home, no sudo; the code run from a mirror of the worktree on the Linux filesystem, synced before each run (not over /mnt/d); the memory cap in C:\Users\Oficina\.wslconfig is HIS file, its text goes to the orchestrator; anything installed or changed outside his Linux home goes to the orchestrator first; WSL measured against Windows on the same commit; Windows kept by one local whole run per merged batch. The orchestrator says when his Ubuntu is ready.**
-
-**THEN, by his answer (written at 00:37 on 2026-10-14): design a faster whole check of the
-same quality.** His request: the orchestrator's transcript `f6584277-0ceb-482c-a3d3-a7168c0f74ae`,
-line 1090; "Sí, primero que todo (Recomendada)", line 1111; "Seguir y darle prioridad
-(Recomendada)", line 1203 (the other sessions go on; this design comes first; when building
-starts, the orchestrator keeps the others off the gate). "Sol" is `gpt-6.1-sol`. Before T19, the
-Codex guard, T20 and the spec notes (those follow at the design's end).
-- *Measure, the orchestrator's:* last 3 hours at 00:10, 28 turns, 14 whole checks (164 minutes
-  held, 115 waited), the lock never free, 235 minutes of waiting in all. The same suite takes
-  145 s on GitHub's Linux (run 38511223058) and 11 to 12 minutes here. In that run's log 4,197
-  top-level tests sum to 139 s against a wall of 145 (measure whether the files run in
-  parallel there before believing it); 23 tests, 0.5%, take 55 s, most waiting out real
-  timeouts of 3 s or more.
-- *Ideas to design, each with its cost, what it can miss, and the safety net:* (1) at each
-  commit only the changed files' tests and their importers; (2) the whole suite once per pull
-  request on GitHub (JH 10's pull request 109; minutes against his 2,000); (3) merges in
-  batches of pull requests with disjoint files, one whole check on `main` after; (4) a slow
-  tier out of the commit, on the pull request and nightly; (5) the plan reviewed by Opus and
-  `gpt-6.1-sol` before writing, and one review by both over the pull request, instead of Codex
-  per slice; (6) Windows kept: one whole local run a day or per merged batch; (7) an
-  affected-test cache keyed by each test file's import closure, with declared data files;
-  (8) fixture repositories built once and copied; (9) the slow tests made fast (an injected
-  clock, shorter timeouts) or moved to the slow tier; (10) a `merge-ready <pr>` command; (11)
-  his machine, his decision, measured first: the gate in WSL2, antivirus exclusions. Safety
-  net explicit: a whole suite before any merge, a Windows run per merged batch. Say what
-  installed projects get by default.
-- *Process:* his earlier words searched; two independent readers (Opus, effort high) attack
-  it; the version after them to the orchestrator with what each reader changed; the questions
-  that can be undone apart (the orchestrator decides them) from his (spend outside the plan,
-  irreversible, his machine). Tell the orchestrator before touching JH 10's workflow or JH 5's
-  skill.
-
-**At 21:14 on 2026-10-13, at 84% of the context, the session "JH 8" cuts at a task's end.
-This paragraph is the newest; where the state below it says "in flight", it is done.**
-
-- **install-update T8 is delivered:** pull request 107 (`fix/upgrade-sync-from-path`, head
-  `0d09e14`: `0cca602`, the correction `c188381`, the record `f0567a4`, and a clean merge of
-  `main` `02567ed`), the orchestrator's to merge. Codex: 125,690 and 43,527 input tokens, the
-  second correct (0.98). The session "JH 9" adds its two lines to `bin/js-harness.mjs` after
-  it is on `main`. Its worktree `upgrade-sync-path` goes once it is merged, with
-  `package-contents` and `status-no-pin`.
-- **Done at 22:24:** the measure after his restart is in Progress (576 s, `PcaSvc` at 0 s).
-- **Was owed, waiting on him:** he answered that he restarts `PcaSvc` himself (Progress); at
-  21:10 it still had pid 8936 and the whole checks of the ninety minutes before read 641 to
-  815 s. When the orchestrator says the pid changed: the seconds of the first whole check in
-  the gate log after it (`checks-load.cjs <log> 2`), and one read of 20 s beside it
-  (`two-pids.ps1 20`), both written in Progress and sent to the orchestrator.
-- **Next, in the orchestrator's order:** T19 (ordered, after the stretch of "JH 9" on
-  `bin/check.mjs` is on `main`; with it the whole sentence of the rule in the comment at the
-  head of `bin/gate.mjs`, and T20 below if it is a few lines); then the guard of the Codex
-  review outside the lock (one slice, one probe granted; the design it starts from is in
-  the state below); then the list of "Next".
-- **Codex of this session on 2026-10-13 after its compaction of 17:55:** 135,381 (T6), 74,849
-  (T7), 125,690 and 43,527 (T8): 379,447 input tokens in four reviews, each inside its
-  allowance. No sub-agent.
-
-**State of the session "JH 8" at 20:13 on 2026-10-13, at 78% of its context (the app
-compacts it at 93%). Read this first; it is newer than the rest of this section.**
-
-- **In flight: the correction of install-update T8.** Worktree
-  `D:\js-harness-worktrees\upgrade-sync-path`, branch `fix/upgrade-sync-from-path`, head
-  `0cca602` (T8: after `upgrade --source` with no `--prefix` the copy on the path says its
-  version, with a new `js-harness --version`, before it is let to sync; design `6d09c57` in
-  `odd/tasks/install-update.md`, "T8 design"). Codex on `6d09c57..0cca602`: one P2, true (the
-  refusal offered a second `upgrade` with `--prefix`, which would say "up to date" and sync
-  nothing), 125,690 input tokens (plan 76,000, allowance 300,000). The correction is applied
-  in that tree, not committed (`bin/update.mjs`, `bin/update.test.mjs`,
-  `odd/tasks/install-update.md`), and its turn waits in the line of the lock since 20:03:
-  `t8b-turn.sh` (red with `bin/update.mjs` at HEAD, green, the commit with the message
-  `t8b-msg.txt`, then the Codex plan); its log is `t8b-turn.log`. **Then:** Codex once on
-  `0cca602..<the correction>` (`codex-turn.sh <worktree> 0cca602 <short head> 315000 t8b`,
-  only if the printed plan is inside the allowance); the record in
-  `odd/tasks/install-update.md` (T8 checked, Progress with both turns and both reviews,
-  "Next step"); merge `origin/main` in (`clean-merge-turn.sh <worktree>`: the branch is
-  stacked on `6dd2480`, and `main` `75b0ceb` holds it by a merge commit); push; pull request
-  with no AI attribution; the head to the orchestrator. The session "JH 9" adds two lines to
-  `bin/js-harness.mjs` only after T8 is on `main`.
-- **Done by this session on 2026-10-13 after its compaction of 17:55:** install-update T6
-  (`243794e`, pull request 103, merged), T7 (`5502d54`, pull request 104, merged), T8's first
-  commit; the measure of the slower check (Progress above; pull request 105, documents only,
-  this branch). Codex since that compaction: 135,381 (T6), 74,849 (T7), 125,690 (T8). No
-  sub-agent.
-- **Waiting on others:** his answer on `PcaSvc` (through the orchestrator), then one measured
-  check; the orchestrator's word on T19 and on the one text for the rule about small runs
-  beside a gate (my proposal: beside a gate, a quote and one test file of under half a minute
-  are free; a whole run, a measure, a board read and a reviewer are not; `bin/gate.mjs:4`
-  changes to match).
-- **Next after T8, by the orchestrator's order:** T19 if it orders it; then the guard of the
-  Codex review outside the lock (one slice at most, with a reader; one probe granted, 100,000
-  input tokens at most, medium effort, in a scratch folder, recorded here). The design I
-  would write first: `codex-review` builds Codex's environment in one place
-  (`bin/codex-review.mjs`, `childEnv` and `leanEnv`); outside a turn of the lock it adds a
-  `NODE_OPTIONS` preload that ends any `node` started with `--test` with one line, so a
-  review beside a gate cannot run a second copy of the tests; the probe is whether Codex
-  hands that variable to the commands it starts (else Codex's own
-  `shell_environment_policy.set`). The sandbox is no guard: seven of this session's reviews
-  ran `node --test`. If it comes out larger than one slice or needs anything of his: a
-  candidate with its number (43 minutes of lock a day, up to 42 of waits) and on to "Next".
-- **Worktrees of this session now:** `upgrade-sync-path` (T8, in flight);
-  `gate-wait-run-load` (this branch, pull request 105); `package-contents` and
-  `status-no-pin` (merged: to remove); `gate-wait-count` (the counting tool, `fc70dc3`, not
-  pushed); `gate-on-github` (JH 10 reads it; leave it).
-- **Scripts of this evening in the scratchpad:** `t6-turn.sh` and `t8-turn.sh` (the model of a
-  turn with several code files), `codex-turn.sh`, `m1h-turn.sh` with `m1-table.cjs` (the whole
-  suite by file against M1g), `checks-load.cjs`, `svchost-since.cjs`, `codex-in-lock.cjs`,
-  `cpu-sample.ps1`, `cpu-speed-log.ps1`, `two-pids.ps1`, `svchost-who.ps1`.
-- **Engram refuses this session's saves** ("Claude host session already ended"), so nothing
-  of this evening is in memory: the feature documents are the record.
-
-- **This document** is on `feat/gate-wait-two-halves` (worktree
-  `D:\js-harness-worktrees\gate-wait-two-halves`) until its pull request is merged,
-  then on `main`. A new slice starts on a branch off `main` and carries the document.
-- **Worktrees of this feature still there:**
-  `gate-wait-count` (`feat/gate-wait-count`, `fc70dc3`, the counting tool, not
-  pushed); `gate-on-github` (`trial/gate-on-github`, pushed, never merged);
-  `gate-wait-same-tree` (T12, `0e0f385`, pushed, to remove once its pull request is
-  merged). Gone: `gate-wait-two-halves` (removed on 2026-10-13, merged), `gate-wait`,
-  `gate-wait-git-cut`, `review-effort-medium`, `gate-wait-eval-sweep`.
-- **The scratchpad of the session that wrote this** holds the turn scripts worth
-  reusing: `clean-merge-turn.sh`, `m1g-turn.sh` with `m1-table.cjs` (the whole suite
-  by file), `c3-before-turn.sh` with `c3-table.cjs` (one file's git by subcommand),
-  `halves-check.cjs`, `crlf.cjs`, `doc-apply2.cjs`.
-- **Rules of his that bind every step** (each read in the orchestrator's transcript
-  `65318fd5`): a question for him goes to the orchestrator, which asks him with the
-  question tool, never in this chat (lines 8423, 8439, 8528); Codex runs without a
-  question when the printed plan is inside 1.05 times the larger of 300,000 input
-  tokens and 1,200 a changed line (line 3800), at medium effort (line 8962); over
-  that, or a second run, is his.
-- **Spent on Codex in the feature:** 4,854,672 input tokens. On 2026-10-12 and 13 at
-  medium: 161,777 (T15), 927,266 (S1's merge commit), 130,472 (T16), 90,519 (T17).
-- **On `main` from this feature:** pull requests 79 (T14), 87 (T15), 89 (S1), 90
-  (T16).
+T11 landed (PR 407). T12 and T13, its later work (JH 21, `fix/review-base-walk`): built test first;
+reviewed (gentle-ai approved, Codex correct); next, the PR and `notify --kind ready`. After them, nothing
+open from T11. Before T11,
+nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
+Progress. Spent on Codex in the feature: 4,854,672 input tokens to 2026-10-13, and 206,415 on
+2026-10-16 by the session "JH 21".

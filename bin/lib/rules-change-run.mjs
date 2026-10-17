@@ -4,6 +4,7 @@
 // repository (./rules-check.mjs), and only then
 // writes the declaration, the sources and docs/RULES.md, and appends one line to the relief file. It never commits:
 // the commit, the gate, the reviews and the pull request are the session's. It runs only in the checkout it changes.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { appendRelief, reliefLineOf, reliefPath } from './channel.mjs';
@@ -31,6 +32,17 @@ export function rulesOfText(text) {
   const end = text.lastIndexOf(';');
   if (start === -1 || end < start) throw new RuleChangeError(`${DATA} is not in the shape writeRules gives`);
   return JSON.parse(text.slice(start + 'export const RULES = '.length, end));
+}
+
+/** The declaration of rule `id` in `text`, the text of `bin/lib/rules-data.mjs`, as the short hash a proposal's relief
+ * line carries, so a landing confirms the proposal whose declaration the landed head holds; `none` when `text` declares
+ * no such rule. Given `sources`, the parsed `docs/rule-sources.json`, the hash covers the rule's entry there too (none
+ * when it has none), so a second proposal of the same declaration with another source is told apart (T16e-f). */
+export function declarationOf(text, id, sources) {
+  const rule = rulesOfText(text).find((one) => one.id === id);
+  if (rule === undefined) return 'none';
+  const held = sources === undefined ? rule : { rule, source: sources[id] ?? null };
+  return crypto.createHash('sha256').update(JSON.stringify(held)).digest('hex').slice(0, 12);
 }
 
 /** A home that names AGENTS.md, however it is spelled: `./AGENTS.md`, `docs/../AGENTS.md` or another case. */
@@ -124,8 +136,9 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       const fetched = git(['fetch', 'origin', 'main']);
       if (fetched.status !== 0) throw new RuleChangeError(`a turn to refuse counts on ${BASE} as it is now, and git fetch origin main failed${fetched.stderr ? `: ${String(fetched.stderr).trim()}` : ''}`);
     }
+    // A merge, not a rebase: a rebase gives every commit a new id, and a Codex review record covers commits by id.
     if (git(['merge-base', '--is-ancestor', BASE, 'HEAD']).status !== 0) {
-      throw new RuleChangeError(`${branch} is not based on ${BASE}: git rebase ${BASE}`);
+      throw new RuleChangeError(`${branch} is not based on ${BASE}: git merge ${BASE}`);
     }
 
     // The list and the sources in force, from origin/main.
@@ -250,7 +263,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     const reliefFile = reliefPath(home, slug);
     const relief = fs.existsSync(reliefFile) ? fs.readFileSync(reliefFile, 'utf8') : '';
     const previous = lastLineFor(relief, id);
-    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}`;
+    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}; declaration and source ${declarationOf(dataText, id, sources)}`;
     try {
       reliefLineOf(line);
     } catch (err) {

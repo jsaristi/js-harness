@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, cutRule, percentOf, shareOf } from './sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, ORCHESTRATOR_IS, cutRule, percentOf, shareOf } from './sessions.mjs';
 
 /** The most of a transcript's end that the hook reads, in bytes. The hook runs after every tool call, so a
  * file of megabytes costs what this many bytes cost: the end is all it may look at. */
@@ -26,6 +26,60 @@ const DEFAULT_COMPACTION = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPA
  * tenth of the default. A point under it is a broken measure (a zero would put every reply past the pause), so
  * it is read as if it were absent. */
 const LEAST_COMPACTION = DEFAULT_COMPACTION / 10;
+
+/** How far under its configured window the host compacts a session, in tokens. Measured over this project's
+ * automatic compactions of 2026-10-11 to 2026-10-16: on a window of 500,000 they came between 466,827 and 469,728
+ * tokens, on 350,000 between 316,910 and 319,101, on 300,000 between 265,976 and 268,077, so the host compacts once
+ * a request passes about this many tokens under the window, whatever its size (odd/tasks/session-channel.md, T6b).
+ * Taken at the top of the measures, so a point read from it is at or a little under the host's. */
+export const HOST_COMPACTION_RESERVE = 34000;
+
+/** How far from the configured point a session's measured point may lie and still be read, as a share of the window.
+ * A measure taken on another window (the setting changed since) or an early compaction of the host (one came 26,000
+ * tokens early, after an hour idle) is further than this, and the configured point is read instead. */
+const MEASURE_TOLERANCE = 0.05;
+
+/** The environment variable that sets the window the host compacts on, ahead of every settings file. */
+const WINDOW_VARIABLE = 'CLAUDE_CODE_AUTO_COMPACT_WINDOW';
+
+/** `value` when it is a whole positive number of tokens, else `null`. */
+const windowOf = (value) => (Number.isInteger(value) && value > 0 ? value : null);
+
+/** The window the host is configured to compact a session on, `{ window, source }`, or `null` when nothing sets it:
+ * the environment's `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, then `autoCompactWindow` of the project's
+ * `.claude/settings.local.json`, of its `.claude/settings.json` and of the user's `settings.json` in `claudeHome`,
+ * the first that gives a whole positive number winning. That is the order Claude Code reads its settings in; that the
+ * environment comes first is how its own message names the two ("set CLAUDE_CODE_AUTO_COMPACT_WINDOW ... (or the
+ * autoCompactWindow setting)"). A place that is missing, does not parse or gives another value is passed over, and
+ * nothing throws. */
+export function configuredWindow({ env = {}, claudeHome = null, projectDir = null, fileSystem = fs } = {}) {
+  const variable = typeof env?.[WINDOW_VARIABLE] === 'string' && /^\d+$/.test(env[WINDOW_VARIABLE]) ? windowOf(Number(env[WINDOW_VARIABLE])) : null;
+  if (variable !== null) return { window: variable, source: WINDOW_VARIABLE };
+  const files = [
+    ...(typeof projectDir === 'string' ? [path.join(projectDir, '.claude', 'settings.local.json'), path.join(projectDir, '.claude', 'settings.json')] : []),
+    ...(typeof claudeHome === 'string' ? [path.join(claudeHome, 'settings.json')] : []),
+  ];
+  for (const file of files) {
+    let settings;
+    try {
+      settings = JSON.parse(fileSystem.readFileSync(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    const window = isObject(settings) ? windowOf(settings.autoCompactWindow) : null;
+    if (window !== null) return { window, source: file };
+  }
+  return null;
+}
+
+/** The configured window in tokens for a hook that runs under `home` (the harness home: `JS_HARNESS_HOME`, else the
+ * user's), or `null`: the Claude home is `CLAUDE_CONFIG_DIR`, else `.claude` under that home, so a made-up home never
+ * reads the real settings. The pause notice and the reply check of `guard --stop` both read it here, so the share the
+ * notice says is the share the check accepts. */
+export function hostWindow({ env = {}, home, projectDir = null, fileSystem = fs } = {}) {
+  const claudeHome = env?.CLAUDE_CONFIG_DIR || (typeof home === 'string' ? path.join(home, '.claude') : null);
+  return configuredWindow({ env, claudeHome, projectDir, fileSystem })?.window ?? null;
+}
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -236,20 +290,38 @@ function writeStateFile(file, state, fileSystem) {
  * prompt that resumes it, so a compaction in the middle of a task resumes from what was written minutes before it. The
  * last notice never says to stop: the host compacts with the session's next requests, so a session that waits for it
  * waits for good. */
-function noticeOf(tokens, compaction, stage) {
-  const window = (compaction * 100) / DEFAULT_CONTEXT_COMPACTION_PERCENT;
+function noticeOf(tokens, compaction, stage, configured = null) {
+  const window = configured ?? (compaction * 100) / DEFAULT_CONTEXT_COMPACTION_PERCENT;
+  const compactionShare = configured === null ? DEFAULT_CONTEXT_COMPACTION_PERCENT : percentOf(compaction, configured);
   const whole = Math.round(tokens);
   const share = percentOf(whole, window);
   const room = Math.round(Math.max(0, compaction - tokens));
-  const head = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%: about ${thousands(room)} tokens are left.`;
-  const where = 'the "Next step" of the session\'s feature document; the relief file for an orchestrator';
+  // With nothing configured and nothing measured the figures rest on the default window: said, never given as the
+  // session's own (odd/tasks/first-version.md, T3b).
+  const assumed = configured === null && compaction === DEFAULT_COMPACTION
+    ? ` No window is configured and no compaction is measured, so these figures assume a window of ${DEFAULT_CONTEXT_WINDOW} tokens: set ${WINDOW_VARIABLE} or autoCompactWindow to the host's window.`
+    : '';
+  const head = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${compactionShare}%: about ${thousands(room)} tokens are left.${assumed}`;
+  // A project that only installs the harness defines no orchestrator in its AGENTS.md: the first mention says
+  // what one is and where that is taught (odd/tasks/first-version.md, T3a).
+  const where = `the "Next step" of the session's feature document; for the orchestrator (${ORCHESTRATOR_IS}), its relief file instead`;
   const opening = 'js-harness notify --opening "<this session\'s title>" (its text on standard input: the feature document, the task, the branch and worktree, any question still open; it is what a new session under that title reads too)';
   // Two sessions near their compaction ended their turn waiting and were never woken (odd/tasks/pause-no-idle.md).
   const noIdle = 'Never end your turn idle: the host compacts only inside a turn, and a turn that ends with nothing running to wake it is never woken. When the work waits on something, write your state, then keep a declared wait running in the background (js-harness wait, which says what it waits for and when it ends, and wakes you when it holds), so the compaction happens inside a turn.';
   const text = stage === 'last'
     ? `${head} The host compacts this session in a moment: write your state and store your resume prompt now, before anything else, then go on with the task: the compaction comes with your next requests, and never by waiting for it. The state goes where it is read after a compaction (${where}); the prompt with ${opening}. ${noIdle} The cut: ${cutRule()}.`
     : `${head} This is the context pause. From now on keep your state where it is read after a compaction (${where}): write it after every step you finish, not once, and commit it with your next commit. Store the prompt that resumes you with ${opening}, and store it again when it changes. Say this share to the user in your next reply, once, and go on with the task. ${noIdle} The cut: ${cutRule()}.`;
-  return { tokens: whole, share, compactionShare: DEFAULT_CONTEXT_COMPACTION_PERCENT, room, stage, text };
+  return { tokens: whole, share, compactionShare, room, stage, text };
+}
+
+/** The point a session is measured against: the first of `measured` (the transcript's, then the state's) that is
+ * a point at all and, when the host's window is configured, lies within `MEASURE_TOLERANCE` of the window from the
+ * point that window gives; else that configured point; else the default. A session's own measure is more exact than
+ * the reserve, but one taken on another window is not its point any more. */
+function compactionPoint(measured, configured) {
+  const expected = configured === null ? null : configured - HOST_COMPACTION_RESERVE;
+  const near = (point) => expected === null || Math.abs(point - expected) <= configured * MEASURE_TOLERANCE;
+  return measured.find((point) => point !== null && point !== undefined && near(point)) ?? expected ?? DEFAULT_COMPACTION;
 }
 
 /** The places a session's state is kept in, the state file under `home` first and then the file of the same name in
@@ -274,12 +346,13 @@ function placesOf(home, sessionId, tmpdir) {
  * takes it the session is not told, and the board and the reply check still say the pause. Telling a session
  * twice, once each time the write fails, would cost it the context the pause is there to protect. It never
  * throws for a transcript or a state it cannot read or write. */
-export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(), fileSystem = fs, tmpdir = os.tmpdir() } = {}) {
+export function pauseNotice({ transcript, sessionId, home, window = null, now = () => Date.now(), fileSystem = fs, tmpdir = os.tmpdir() } = {}) {
   const files = placesOf(home, sessionId, tmpdir);
   const end = readEnd(transcript, { fileSystem });
   if (end === null) return null;
   const state = readState(files, fileSystem);
-  const compaction = end.compaction ?? state.compaction ?? DEFAULT_COMPACTION;
+  const configured = windowOf(window);
+  const compaction = compactionPoint([end.compaction, state.compaction], configured);
   const past = end.tokens >= pauseAt(compaction);
   // The last notice is said once a stretch too, past its point; a call that jumps past both points gets it alone,
   // since it says everything the pause says that is still worth doing.
@@ -293,7 +366,7 @@ export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(
   };
   if (told || last) {
     if (!writeState(files, next, fileSystem, now)) return null;
-    return noticeOf(end.tokens, compaction, last ? 'last' : 'pause');
+    return noticeOf(end.tokens, compaction, last ? 'last' : 'pause', configured);
   }
   if (next.armed !== state.armed || next.lastArmed !== state.lastArmed || next.compaction !== state.compaction) writeState(files, next, fileSystem, now);
   return null;

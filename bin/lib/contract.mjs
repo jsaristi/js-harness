@@ -167,15 +167,33 @@ const KIND_PATTERN = /\(kind:\s*([^)]*?)\s*\)/;
  * order. `kind` is the text of its `(kind: …)` as written, or `null` when the first line names none. */
 export function tasksOf(markdown) {
   const tasks = [];
-  for (const token of tokenize(markdown, { stripComments: true })) {
-    if (token.fence || token.heading) continue;
+  const tokens = tokenize(markdown, { stripComments: true });
+  tokens.forEach((token, index) => {
+    if (token.fence || token.heading) return;
     const step = token.line.match(TASK_LINE_PATTERN);
     const id = step && TASK_ID_PATTERN.exec(step[2])?.[1];
-    if (!id) continue;
+    if (!id) return;
     const kind = KIND_PATTERN.exec(step[2])?.[1] ?? null;
-    tasks.push({ id, kind, done: step[1] !== ' ' });
-  }
+    // `tokenize` gives one token a line, so a token's index plus one is its line (the resume hook names it).
+    tasks.push({ id, kind, done: step[1] !== ' ', start: index + 1, end: itemEnd(tokens, index) + 1 });
+  });
   return tasks;
+}
+
+/** The index of the last written line of the list item at `tokens[index]`: the item runs over every line indented
+ * further than its own line, blank lines between them included, and stops at a heading or at the first written
+ * line indented no further than it. */
+function itemEnd(tokens, index) {
+  const indent = (line) => line.length - line.trimStart().length;
+  const own = indent(tokens[index].line);
+  let last = index;
+  for (let at = index + 1; at < tokens.length; at++) {
+    const { line, heading } = tokens[at];
+    if (line.trim() === '') continue;
+    if (heading || indent(line) <= own) break;
+    last = at;
+  }
+  return last;
 }
 
 // The rows of the rules list a task's mode is read from (bin/lib/rules-data.mjs). A kind may have its own

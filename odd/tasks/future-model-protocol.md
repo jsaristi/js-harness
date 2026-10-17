@@ -226,7 +226,7 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
 - [x] T3 The seven signals read and recorded, and the carry list for the roadmap's section (S2;
   route: inline)
 - [x] T4 The roadmap's F7 row and checkbox point to `docs/future-model.md`, through the lead (S1; the lead cleared this session to make the one-hunk edit itself, JH 7 being paused)
-- [ ] T5 G5 and G6, the eval model per run and the setup recorded with it: without G5 no step
+- [x] T5 G5 and G6, the eval model per run and the setup recorded with it: without G5 no step
   that spends can run on a new model (S3; route: inline). G5 `a23f834` and G6a `f6e09fc`, each
   assessed medium and under budget by gentle-ai; G6b, the record and the refusal, next; left of
   G6: codegraph's version and the js-harness commit
@@ -485,3 +485,6 @@ without the whole alone under another name: `parseArm` refuses it. T10 is writte
 the scratchpad (`scratchpad/tree/evals/suite.mjs`, `suite.test.mjs`: `codegraph` and `jsHarness`
 in both stacks, the commit read by `git -C <checkout>` with `+dirty` for a changed tracked file
 outside `evals/results`, null when git cannot say), for its own commit after the push.
+
+L23 (2026-10-17, JH 21, on the lead's triage of open work; written as L15 on main and renumbered
+when JH 23 merged main into this branch) T5 checked off: G5 `a23f834`, G6a `f6e09fc` and G6b `148d5dd` are on origin/main through pull request 130 (merged as 2f45666e; `git merge-base --is-ancestor 148d5dd origin/main` exits 0). G6's last part, codegraph's version and the js-harness commit, is T10's and stays open there.

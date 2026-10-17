@@ -76,8 +76,13 @@ const squash = (text) => text.replace(/\s+/g, ' ').trim();
 // subject and still finds it after the value changes. A number with an optional unit word ("60 minutes", "3,600 s",
 // "88%"), an hour or half of one, a model id ("gpt-6.1-sol", "claude-opus-5-5"), or an effort level ("high"). An
 // effort word counts only as a word of its own: inside a mark (`rule:gate-max`), a flag (`--max`) or a call
-// (`Math.max(`) it is no amount, or the mark that cures a finding would be one.
-const AMOUNT = String.raw`(?:\d[\d,.]*\s*(?:%|[a-z]+\b)?|(?:half )?an? (?:hour|minute|day)\b|[a-z]+(?:-[a-z0-9.]+)*-\d[\w.]*|(?<![\w.:-])(?:low|medium|x?high|max)(?![\w(-]|\.\w))`;
+// (`Math.max(`) it is no amount, or the mark that cures a finding would be one. A number, too, counts only as a
+// number of its own: the digits inside an id ("S1"), a hash ("e5b7588", "3fa2b91") or a line number
+// ("check.mjs:42") are none. So, on purpose, are a signed or dotted number ("-5", ".5 h"), the second half of a
+// hyphen range ("30-60") and a compact duration ("1h30m"): no rule's value is written so, and taking a digit after
+// a letter back would take the hashes back.
+const OWN = String.raw`(?<![\w.:-])`;
+const AMOUNT = String.raw`(?:${OWN}\d[\d,.]*(?:\s*(?:%|[a-z]+\b))?(?!\w)|(?:half )?an? (?:hour|minute|day)\b|[a-z]+(?:-[a-z0-9.]+)*-\d[\w.]*|${OWN}(?:low|medium|x?high|max)(?![\w(-]|\.\w))`;
 
 /** The regular expression of `pattern`, its `{amount}` written out, tried case-insensitively on one line. */
 export function patternOf(pattern) {
@@ -424,7 +429,7 @@ const FILE_KEYS = [
   'path', 'phrases', 'retired', 'successors', 'patterns', 'row', 'failure', 'differs', 'review',
 ];
 // The keys that say what a rule says, in the order the hash reads them.
-const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phrases', 'retired', 'successors'];
+export const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phrases', 'retired', 'successors'];
 
 // The last line of that paragraph: where the engine version and the day of a check are read, since the list holds neither.
 const LIST_NOTE = 'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
@@ -469,6 +474,18 @@ export function writeRules(list) {
 export function rulesHash(list) {
   const reduced = byId(list).map((rule) => pick(rule, HASH_KEYS));
   return createHash('sha256').update(JSON.stringify(reduced)).digest('hex').slice(0, 12);
+}
+
+/** The rules of `list` that hold everywhere: those with no `scope`. */
+export function unscoped(list) {
+  return list.filter((rule) => rule.scope === undefined);
+}
+
+/** The hash a copy of the harness ships, over its unscoped rules only, so that a change of a rule scoped to this
+ * repository (his Codex rate) does not call every installed copy behind (odd/tasks/rule-hierarchy.md, "Reach: the
+ * hash of the installed command"). The copy's own list is the stamp: computed, never written apart from it. */
+export function shippedRulesHash(list) {
+  return rulesHash(unscoped(list));
 }
 
 /** `text` with its first character in upper case, for a sentence that opens with a subject. */

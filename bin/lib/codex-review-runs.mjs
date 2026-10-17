@@ -73,6 +73,12 @@
 // `notFixed`, and the new ones it found, the `followUps` that do not block and the `blocking` ones. A line
 // written before these fields has neither, and a review recorded then is never rechecked. The schema stayed
 // `v1` here too.
+//
+// What the part was planned at. The line of an attempt whose plan had an estimate also holds `plan`: the
+// `estimate` and the `high` figure the plan printed for its part (a range reviewed whole is the one part of its
+// plan), and the `method` that made them (`PLAN_METHOD`, ./codex-review-plan.mjs), so that how close the method
+// came is read and not replayed (`methodRecord`). A line written before 2026-10-16, or planned with no estimate,
+// has none. The schema stayed `v1` here too.
 import { createHash } from 'node:crypto';
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 

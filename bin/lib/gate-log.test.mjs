@@ -7,7 +7,9 @@ import { spawn } from 'node:child_process';
 import {
   GATE_COMMAND_MAX,
   GATE_LOG_ENV,
+  appendGateBusiest,
   appendGateEvent,
+  appendGateTestTimes,
   formatGates,
   gateLogDir,
   gateLogSwitchedOff,
@@ -15,7 +17,9 @@ import {
   gatesOf,
   isTreeKey,
   provenBy,
+  readGateBusiest,
   readGateLog,
+  readGateTestTimes,
 } from './gate-log.mjs';
 
 // The gate log: JSON lines, two per gate, in a folder of its own under the home. Every test here has a
@@ -180,6 +184,24 @@ test('readGateLog reads the line of a gate that stopped before its sensors, and 
   assert.deepEqual(read, { dir: gateLogDir(home), events: sound, skipped: malformed.length });
   // And what is read can be said, a line for each.
   assert.equal(formatGates(gatesOf(read.events)).length, 4);
+}));
+
+// A ticket that puts a session's next check first (./gate-first.mjs) leaves lines of four kinds of its own,
+// whose id is the ticket's: they are read as events, and are no gate.
+test('readGateLog reads the lines of a ticket, which are no gate, and a gate that went first by one is marked so among the gates another waited for', withHome(async (home) => {
+  const ticket = { session: 's', reason: 'unblocks the others', until: AT };
+  const lines = [
+    { v: 1, event: 'first-issued', id: '0a0a0a0a', at: AT, ...ticket, by: 'orq' },
+    { v: 1, event: 'first-claimed', id: '0a0a0a0a', at: AT, ...ticket, cwd: 'C:\\work\\one', pid: 100, passed: [{ cwd: 'C:\\work\\two', pid: 7 }] },
+    { v: 1, event: 'first-expired', id: '0b0b0b0b', at: AT, ...ticket },
+    { v: 1, event: 'first-cancelled', id: '0c0c0c0c', at: AT, ...ticket },
+  ];
+  for (const line of [start('a'), ...lines, end('a'), { ...lines[0], id: '0d0d0d0d', by: null }]) appendGateEvent(home, line);
+  const read = readGateLog(home);
+  assert.deepEqual([read.events, read.skipped], [[start('a'), ...lines, end('a')], 1]);
+  assert.deepEqual(gatesOf(read.events), [{ start: start('a'), end: end('a') }]);
+  const passer = { cwd: 'D:\\js-harness', pid: 4321, command: 'check', first: true };
+  assert.deepEqual(formatGates([{ start: start('b', { waitedSeconds: 12, waitedFor: [passer] }) }]), [`${when(AT)}  no end (killed, or still running)  waited 12 s for D:\\js-harness (first by a ticket)  C:\\work\\one`]);
 }));
 
 // Found in review (Codex), 2026-10-11: a write that was cut short leaves a tail with no line break, and the
@@ -399,6 +421,8 @@ test('formatGates says one gate a line: when, seconds, result, lock, load, whom 
     { start: start('d', { lock: 'none', waitedSeconds: 61, waitedFor: [unknown, { ...unknown, pid: null }] }) },
     { refused: refused('e', { waitedFor: [other] }) },
     { refused: refused('f', { reason: 'timeout', waitedSeconds: 30, waitedFor: [other] }) },
+    // A commit's gate whose tests ran on GitHub (../check.mjs, `testsOnCi`): never read as a run under the lock.
+    { start: start('g', { lock: 'ci' }), end: end('g', { seconds: 144.2, sensors: [{ name: 'tests', seconds: 144, pass: true, ranIn: 'ci' }] }) },
   ];
   const at = when(AT);
   assert.deepEqual(formatGates(gates), [
@@ -408,6 +432,7 @@ test('formatGates says one gate a line: when, seconds, result, lock, load, whom 
     `${at}  no end (killed, or still running)  without the lock  waited 61 s for another gate (pid 77), another gate  C:\\work\\one`,
     `${at}  refused (held)  waited 0 s for D:\\js-harness  C:\\work\\one`,
     `${at}  refused (timeout)  waited 30 s for D:\\js-harness  C:\\work\\one`,
+    `${at}  144 s  pass  on GitHub's machines  C:\\work\\one`,
   ]);
   assert.deepEqual(formatGates([]), []);
 });
@@ -459,6 +484,19 @@ test('gateRecord writes the start and the end of one gate under one id, with wha
     { home: 'C:\\home', event: { v: 1, event: 'end', id: 'id-1', at: '2026-10-11T07:33:40.460Z', seconds: 12.5, result: 'pass', sensors } },
   ]);
   assert.equal(record.failure(), undefined);
+});
+
+test('gateRecord writes the session that ran the gate when it is given one, so a reader can tell whose it was', () => {
+  const { events, deps } = captured();
+  const record = gateRecord({ home: 'h', cwd: 'c', command: 'check', pid: 100, session: '9a1b2c3d-0000-0000-0000-000000000000', ...deps });
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  record.refused({ reason: 'timeout', waitedMs: 0, waitedFor: [] });
+  assert.equal(events[0].event.session, '9a1b2c3d-0000-0000-0000-000000000000');
+  assert.equal(events[1].event.session, '9a1b2c3d-0000-0000-0000-000000000000');
+  // With none (a gate run from a terminal, or a host that gives no id) the line has no such field.
+  const { events: bare, deps: bareDeps } = captured();
+  for (const session of [undefined, null, '']) gateRecord({ home: 'h', cwd: 'c', command: 'check', pid: 100, session, ...bareDeps }).start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  assert.ok(bare.every(({ event }) => !('session' in event)));
 });
 
 test('gateRecord leaves out a load that was not sampled and the sensors of a gate that has none, cuts the command, and writes a refusal as one line', () => {
@@ -724,4 +762,173 @@ test('a line whose key is not one is no event: an end with it is left out and co
   const { events, skipped } = readGateLog(home);
   assert.deepEqual(events.map(({ event, id }) => [event, id]), [['start', 'g1'], ['same', 'g4']]);
   assert.equal(skipped, 3);
+}));
+
+// --- who spent the processor over a gate's run: a file of its own beside the log ---
+// odd/tasks/gate-wait.md, T19. The log's own lines do not change: no reader of them meets a new field.
+
+const RUN = [
+  { pid: 5736, name: 'MsMpEng', cpuSeconds: 412.3 },
+  { pid: 1204, name: 'svchost', cpuSeconds: 380 },
+  { pid: 9120, name: 'node', script: 'check.mjs', cpuSeconds: 2100.4 },
+  { pid: 77, name: 'PcaSvc', cpuSeconds: 50 },
+];
+const busiestLine = (id, more = {}) => ({ v: 1, id, at: AT, seconds: 700.2, busiest: RUN, ...more });
+
+test('appendGateBusiest writes one JSON line per gate in busiest.jsonl beside the log, and readGateBusiest reads them back by the gate\'s id', withHome(async (home) => {
+  assert.deepEqual(appendGateBusiest(home, busiestLine('g1')), { ok: true });
+  assert.deepEqual(appendGateBusiest(home, busiestLine('g2', { busiest: RUN.slice(0, 1) })), { ok: true });
+  assert.deepEqual(files(home), ['busiest.jsonl']);
+  assert.deepEqual(linesOf(home, 'busiest.jsonl').map((line) => (line ? JSON.parse(line).id : line)), ['g1', 'g2', '']);
+  const read = readGateBusiest(home);
+  assert.deepEqual([...read.keys()], ['g1', 'g2']);
+  assert.deepEqual(read.get('g1'), busiestLine('g1'));
+  // A home with no file has nobody.
+  assert.deepEqual(readGateBusiest(path.join(home, 'none')).size, 0);
+}));
+
+test('readGateBusiest skips a line that is torn, not JSON, of another version or of another shape, and keeps the rest', withHome(async (home) => {
+  appendGateBusiest(home, busiestLine('g1'));
+  const bad = [
+    '{"v":1,"id":"torn',
+    'not json',
+    JSON.stringify(busiestLine('g2', { v: 2 })),
+    JSON.stringify(busiestLine('g3', { id: 7 })),
+    JSON.stringify(busiestLine('g4', { at: 'yesterday' })),
+    JSON.stringify(busiestLine('g5', { busiest: 'MsMpEng' })),
+    JSON.stringify(busiestLine('g6', { busiest: [{ name: 'MsMpEng', cpuSeconds: 'a lot' }] })),
+    JSON.stringify(busiestLine('g7', { busiest: [{ name: { toString: null }, cpuSeconds: 1 }] })),
+    JSON.stringify(busiestLine('g8', { seconds: null })),
+    JSON.stringify(busiestLine('g9', { busiest: [{ name: 'node', script: 5, cpuSeconds: 1 }] })),
+    '[]',
+    'null',
+  ];
+  fs.appendFileSync(path.join(gateLogDir(home), 'busiest.jsonl'), `${bad.join('\n')}\n`);
+  appendGateBusiest(home, busiestLine('g10'));
+  assert.deepEqual([...readGateBusiest(home).keys()], ['g1', 'g10']);
+}));
+
+test('busiest.jsonl past its bound is renamed to busiest.1.jsonl, both are read, the newer line of a gate first', withHome(async (home) => {
+  for (const id of ['a', 'b', 'c']) appendGateBusiest(home, busiestLine(id), { maxBytes: 100 });
+  assert.deepEqual(files(home), ['busiest.1.jsonl', 'busiest.jsonl']);
+  assert.deepEqual([...readGateBusiest(home).keys()].sort(), ['b', 'c']);
+  // The log of the gates is not touched by it.
+  assert.deepEqual(readGateLog(home).events, []);
+}));
+
+test('appendGateBusiest never throws: a home that cannot be written is an error in one sentence', withHome(async (home) => {
+  const notAFolder = path.join(home, 'file');
+  fs.writeFileSync(notAFolder, '');
+  assert.match(appendGateBusiest(notAFolder, busiestLine('g1')).error, /^E[A-Z]+: /);
+  assert.deepEqual(readGateBusiest(notAFolder).size, 0);
+}));
+
+test('gateRecord says its id, and keeps who spent the processor over a gate that started, keyed by that id', () => {
+  const { events, deps, pass } = captured();
+  const kept = [];
+  const appendBusiest = (home, line) => {
+    kept.push({ home, line });
+    return { ok: true };
+  };
+  const record = gateRecord({ home: 'C:\\home', cwd: 'C:\\work\\one', command: 'check', pid: 100, ...deps, appendBusiest });
+  assert.equal(record.id, 'id-1');
+  assert.equal(record.started(), false);
+  // Before its start a gate keeps nobody: there is no line of the log to key it by.
+  record.busiest({ seconds: 1, busiest: RUN });
+  assert.deepEqual(kept, []);
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  assert.equal(record.started(), true);
+  pass(700_200);
+  record.end({ result: 'pass', sensors: [] });
+  // What the reader would refuse is left out, a script of `null` is not written, and fields no reader looks at are dropped.
+  record.busiest({ seconds: 700.2, busiest: [...RUN.map((one) => ({ ...one, script: one.script ?? null })), { name: 5, cpuSeconds: 1 }, null, { name: 'x', cpuSeconds: NaN }] });
+  assert.deepEqual(kept, [{ home: 'C:\\home', line: { v: 1, id: 'id-1', at: '2026-10-11T07:45:08.200Z', seconds: 700.2, busiest: RUN } }]);
+  assert.deepEqual(events.map(({ event }) => event.event), ['start', 'end']);
+  // Nobody found is nothing written, and so is what is no list.
+  for (const nobody of [[], undefined, 'x']) record.busiest({ seconds: 1, busiest: nobody });
+  assert.equal(kept.length, 1);
+  assert.equal(record.failure(), undefined);
+});
+
+test('gateRecord says once that who spent the processor could not be kept, and never throws', () => {
+  const said = [];
+  const record = gateRecord({ home: 'h', cwd: 'c', command: 'check', ...captured().deps, appendBusiest: () => ({ error: 'EACCES: permission denied' }), onFailure: (why) => said.push(why) });
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  record.busiest({ seconds: 1, busiest: RUN });
+  assert.deepEqual(said, ['could not be written (EACCES: permission denied), so who spent the processor over this gate is not in it']);
+  const threw = gateRecord({ home: 'h', cwd: 'c', command: 'check', ...captured().deps, appendBusiest: () => { throw new Error('blew up'); } });
+  threw.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  threw.busiest({ seconds: 1, busiest: RUN });
+  assert.equal(threw.failure(), 'could not be written (blew up), so who spent the processor over this gate is not in it');
+});
+
+test('formatGates ends the line of a gate that has who spent the processor with the three heaviest, in whole seconds, and leaves every other line as it was', () => {
+  const gates = [{ start: start('a'), end: end('a', { seconds: 700.2 }) }, { start: start('b'), end: end('b') }, { refused: refused('c') }, { start: start('d') }];
+  const busiest = new Map([['a', busiestLine('a')], ['c', busiestLine('c')], ['d', busiestLine('d', { busiest: RUN.slice(3) })]]);
+  const at = when(AT);
+  assert.deepEqual(formatGates(gates, busiest), [
+    `${at}  700 s  pass  C:\\work\\one  busiest: MsMpEng 412 s, svchost 380 s, node (check.mjs) 2,100 s`,
+    `${at}  13 s  pass  C:\\work\\one`,
+    `${at}  refused (held)  waited 0 s  C:\\work\\one`,
+    `${at}  no end (killed, or still running)  C:\\work\\one  busiest: PcaSvc 50 s`,
+  ]);
+  // Without the file's lines, every gate prints as it did.
+  assert.deepEqual(formatGates(gates), formatGates(gates, new Map()));
+  assert.deepEqual(formatGates(gates).slice(0, 2), [`${at}  700 s  pass  C:\\work\\one`, `${at}  13 s  pass  C:\\work\\one`]);
+});
+
+test('a ci-fallback line under a gate\'s id is read, and pairs, prints and proves nothing of its own', withHome(async (home) => {
+  const code = 'a'.repeat(64);
+  const fallback = { v: 1, event: 'ci-fallback', id: 'g1', at: AT, seconds: 185, reason: 'no run started' };
+  for (const event of [fallback, start('g1'), end('g1', { code })]) appendGateEvent(home, event);
+  const { events, skipped } = readGateLog(home);
+  assert.equal(skipped, 0);
+  assert.deepEqual(events.map((event) => event.event), ['ci-fallback', 'start', 'end']);
+  // One gate, its start and its end: the fallback before them is neither.
+  const gates = gatesOf(events);
+  assert.equal(gates.length, 1);
+  assert.deepEqual(Object.keys(gates[0]).sort(), ['end', 'start']);
+  assert.equal(formatGates(gates).length, 1);
+  assert.equal(provenBy(events, code).id, 'g1');
+  // Alone, with its gate rotated away, it is no gate at all.
+  assert.deepEqual(gatesOf([fallback]), []);
+}));
+
+const timesLine = (id, more = {}) => ({ v: 1, id, at: AT, files: [{ test: 'bin/a.test.mjs', seconds: 2.5 }, { test: 'bin/b.test.mjs', seconds: 0.4 }], ...more });
+
+test('appendGateTestTimes writes one line per gate in test-times.jsonl beside the log, rotated as busiest.jsonl is, and readGateTestTimes reads them by id', withHome(async (home) => {
+  for (const id of ['a', 'b', 'c']) assert.deepEqual(appendGateTestTimes(home, timesLine(id), { maxBytes: 100 }), { ok: true });
+  assert.deepEqual(files(home), ['test-times.1.jsonl', 'test-times.jsonl']);
+  const read = readGateTestTimes(home);
+  assert.deepEqual([...read.keys()].sort(), ['b', 'c']);
+  assert.deepEqual(read.get('c'), timesLine('c'));
+  // Torn, foreign and misshapen lines are left out; a home with no file has none.
+  fs.appendFileSync(path.join(gateLogDir(home), 'test-times.jsonl'), `${['{"v":1,"id":"torn', 'not json', JSON.stringify(timesLine('d', { v: 2 })), JSON.stringify(timesLine('e', { files: [{ test: 'x', seconds: 'slow' }] })), JSON.stringify(timesLine('f', { files: 'x' }))].join('\n')}\n`);
+  assert.deepEqual([...readGateTestTimes(home).keys()].sort(), ['b', 'c']);
+  assert.equal(readGateTestTimes(path.join(home, 'none')).size, 0);
+  assert.deepEqual(readGateLog(home).events, []);
+}));
+
+test('gateRecord keeps the test times of a gate that started, under its id, and only the files it can read back', () => {
+  const { deps } = captured();
+  const kept = [];
+  const appendTestTimes = (home, line) => {
+    kept.push(line);
+    return { ok: true };
+  };
+  const record = gateRecord({ home: 'C:\\home', cwd: 'C:\\work\\one', command: 'check', pid: 100, ...deps, appendTestTimes });
+  record.testTimes([{ test: 'bin/a.test.mjs', seconds: 1 }]);
+  assert.deepEqual(kept, [], 'before its start a gate has no id in the log to key them by');
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  record.testTimes([{ test: 'bin/a.test.mjs', seconds: 1.25 }, { test: 7, seconds: 1 }, { test: 'bin/b.test.mjs', seconds: null }]);
+  record.testTimes([]);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].id, record.id);
+  assert.deepEqual(kept[0].files, [{ test: 'bin/a.test.mjs', seconds: 1.25 }]);
+});
+
+test('readGateTestTimes says why a times file that is there cannot be read, and reads none from one that is not there', withHome(async (home) => {
+  const failing = (code) => ({ ...fs, readFileSync: () => { throw Object.assign(new Error(code), { code }); } });
+  assert.throws(() => readGateTestTimes(home, { fileSystem: failing('EACCES') }), /EACCES/);
+  assert.equal(readGateTestTimes(home, { fileSystem: failing('ENOENT') }).size, 0);
 }));

@@ -37,6 +37,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { markBatch } from '../bin/lib/batch-mark.mjs';
 import { tools } from '../bin/lib/stack.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
 import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
@@ -734,6 +735,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     fileExists = fs.existsSync,
     now = () => new Date(),
     process: proc = process,
+    markBatch: mark = markBatch,
   } = deps;
   let token = '';
   // Anything that is printed or stored passes through here once the token is known: a message a trial produced
@@ -865,6 +867,9 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
   }
 
   let templateParent = null;
+  // The mark the guard reads while trials run, as it reads a gate's holder (first-version T6a): set before the first
+  // trial, taken away on every way out.
+  let unmark = () => {};
   let doc;
   let code = 0;
   const cleanupFailures = [];
@@ -898,6 +903,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       interrupted.abort();
       return;
     }
+    unmark();
     release();
     for (const message of cleanupFailures) warn(`${message}\n`);
     proc.exit(statusOf(signal));
@@ -1047,6 +1053,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     };
     // Raw logs are named by task, config, effort and repeat, so runs that share trials (the headroom screen and the
     // A/B run) would overwrite each other's in one directory: each run keeps its own, named like its results file.
+    unmark = mark(env.JS_HARNESS_HOME || realHome, { cwd: repoRoot, command: `suite ${argv.join(' ')}` });
     const result = await runSuite({
       tasks, configs, efforts: args.efforts, repeats: args.repeats, store, runsDir: path.join(rawHome, args.name), workRoot,
       runTrial: reporting, signal: interrupted.signal, log: (message) => warn(`${message}\n`),
@@ -1065,6 +1072,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     code = 1;
   } finally {
     for (const signal of SIGNALS) proc.removeListener(signal, onSignal);
+    unmark();
     release();
     for (const message of cleanupFailures) warn(`${message}\n`);
     if (cleanupFailures.length > 0) code = 1;

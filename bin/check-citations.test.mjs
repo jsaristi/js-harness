@@ -97,3 +97,59 @@ test('a citation resolves against the staged file, not the working tree', () => 
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// T6 of odd/tasks/commands-and-doctor.md (docs/FAILURES.md, record-states-wrong-fact): tasks were checked off
+// while their files were in no commit.
+test('a task the change checks off names a commit reachable from HEAD, unless it rides with staged work', () => {
+  const root = repo();
+  try {
+    const tasks = path.join(root, 'odd', 'tasks', 'f.md');
+    fs.writeFileSync(tasks, '- [ ] T1 one\n- [ ] T2 two\n- [ ] T3 three\n- [x] T4 done before\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'tasks');
+    const head = git(root, 'rev-parse', 'HEAD');
+    // A commit this repository holds that HEAD does not reach.
+    const side = git(root, 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'side');
+    fs.writeFileSync(tasks, `- [x] T1 one\n  Commit \`${head}\`.\n- [x] T2 two, at \`${side}\`\n- [x] T3 three\n- [x] T4 done before, reworded\n`);
+    git(root, 'add', '.');
+    const said = '2 citations in the lines this change adds to feature documents, all resolved; 3 tasks checked off';
+    assert.deepEqual(checkCitations(root), [{
+      name: 'citations',
+      pass: true,
+      info: true,
+      detail: `${said}, 2 of them in no commit HEAD reaches`,
+      lines: [`odd/tasks/f.md:3 T2 \`${side}\`: not reachable from HEAD`, 'odd/tasks/f.md:4 T3: names no commit, and nothing but feature documents is staged'],
+    }]);
+    // Staged beside its work, a task is checked off in the commit being made, which it cannot name.
+    fs.appendFileSync(path.join(root, 'bin', 'a.mjs'), 'four\n');
+    git(root, 'add', '.');
+    assert.deepEqual(checkCitations(root), [{
+      name: 'citations',
+      pass: true,
+      info: true,
+      detail: `${said}, 1 of them in no commit HEAD reaches`,
+      lines: [`odd/tasks/f.md:3 T2 \`${side}\`: not reachable from HEAD`],
+    }]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a checked-off task that names a commit of an unrelated history is not reachable, and a nested task is read alone', () => {
+  const root = repo();
+  try {
+    const tasks = path.join(root, 'odd', 'tasks', 'f.md');
+    fs.writeFileSync(tasks, '- [ ] T1 one\n- [ ] T2 parent\n  - [ ] T2a first\n  - [ ] T2b second\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'tasks');
+    const head = git(root, 'rev-parse', 'HEAD');
+    // A root commit with no parent: git finds no merge base of it and HEAD (Codex, 2026-10-17).
+    const orphan = git(root, 'commit-tree', 'HEAD^{tree}', '-m', 'orphan');
+    fs.writeFileSync(tasks, `- [x] T1 one, at \`${orphan}\`\n- [ ] T2 parent\n  - [x] T2a first\n  - [ ] T2b second, at \`${head}\`\n`);
+    git(root, 'add', '.');
+    const [row] = checkCitations(root);
+    assert.deepEqual(row.lines, [`odd/tasks/f.md:1 T1 \`${orphan}\`: not reachable from HEAD`, 'odd/tasks/f.md:3 T2a: names no commit, and nothing but feature documents is staged']);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

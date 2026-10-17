@@ -17,13 +17,28 @@ export const RULES = [
     ]
   },
   {
+    "id": "ci-gate-bound",
+    "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 8,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|jobs?)\\b.{0,60}\\b(?:not done|cancelled|stopped)\\b.{0,15}\\b(?:after|within|past)\\s+{amount}"
+    ]
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-11",
     "value": 300000,
-    "unit": "input tokens a review"
+    "unit": "input tokens a review",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bfloor\\b(?!\\s*\\().{0,40}(?<![\\w:.\\x60-]){amount}\\s*input tokens",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.\\x60-]){amount}\\s*input tokens (?:a|per|for each) review\\b"
+    ]
   },
   {
     "id": "codex-review-margin",
@@ -32,7 +47,11 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-12",
     "value": 5,
-    "unit": "percent of the allowance"
+    "unit": "percent of the allowance",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bmargin\\b.{0,40}(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent))",
+      "^(?!.*\\bruleValue\\().*(?<![\\w:.-]){amount}(?<=(?:%|\\bpercent)).{0,20}\\bof the allowance\\b"
+    ]
   },
   {
     "id": "codex-review-rate",
@@ -41,7 +60,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "input tokens a changed line"
+    "unit": "input tokens a changed line",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:rate|cap|put at)\\b.{0,20}(?<![\\w:.-]){amount}\\s*(?:input )?tokens (?:a|per|for each) changed line"
+    ]
   },
   {
     "id": "context-pause",
@@ -50,7 +72,11 @@ export const RULES = [
     "since": "2026-10-11",
     "value": 88,
     "unit": "percent of the context window",
-    "flag": "--context-pause"
+    "flag": "--context-pause",
+    "patterns": [
+      "^(?!.*\\bruleValue\\()(?=.*\\b(?:paus\\w*|compact\\w*|writes? its state)\\b).*(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))\\s*of (?:its|the|a|this session's|the session's) (?:context )?window",
+      "^(?!.*\\bruleValue\\().*\\bcontext pause\\b.{0,30}(?<![\\w:.\\x60-]){amount}(?<=(?:%|\\bpercent))"
+    ]
   },
   {
     "id": "contract-run-timeout",
@@ -74,6 +100,19 @@ export const RULES = [
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bcontrol\\b.{0,50}{amount}\\s*characters"
     ]
+  },
+  {
+    "id": "double-review",
+    "subject": "a design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it",
+    "owner": "sebastian",
+    "since": "2026-10-16",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "first passes two read-only readers that did not write it",
+      "one attacks its claims, one looks only for what is missing"
+    ],
+    "failure": "proposal-unreviewed",
+    "review": "2026-11-16"
   },
   {
     "id": "gate-log-command",
@@ -123,6 +162,22 @@ export const RULES = [
     ]
   },
   {
+    "id": "memory-index-bytes",
+    "subject": "the bytes the memory index may hold before a memory hygiene pass is due",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 4000,
+    "unit": "bytes"
+  },
+  {
+    "id": "memory-pass-days",
+    "subject": "the days after a verified memory hygiene pass when the next is due, if a note was written since",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
     "id": "person-present",
     "subject": "how long after the user last wrote in a session a question is put to them at once with the question tool",
     "owner": "project",
@@ -149,14 +204,21 @@ export const RULES = [
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
     "since": "2026-10-12",
-    "value": "medium"
+    "value": "medium",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}\\bgpt-[\\w.-]+`?\\s+at\\s+`?{amount}`?"
+    ]
   },
   {
     "id": "review-model",
     "subject": "the one model a Codex review runs on",
     "owner": "sebastian",
     "since": "2026-10-08",
-    "value": "gpt-6.1-sol"
+    "value": "gpt-6.1-sol",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?=gpt-){amount}"
+    ]
   },
   {
     "id": "review-part-files",
@@ -213,15 +275,35 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
-    "unit": "changed lines"
+    "unit": "changed lines",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bcommits?\\b.{0,50}\\b(?:up to|at most|under|no more than|holds?)\\s+(?:about\\s+)?(?<![\\w:.-]){amount}\\s*changed lines"
+    ]
+  },
+  {
+    "id": "sensor-silence",
+    "subject": "how long one sensor of the gate may write nothing before it is stopped and the commit refused",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 20,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:silent|silence|writes nothing|wrote nothing)\\b.{0,30}{amount}"
+    ]
   },
   {
     "id": "sensor-timeout",
     "subject": "how long one sensor of the gate may run before it is stopped and the commit refused",
     "owner": "project",
-    "since": "2026-10-15",
-    "value": 20,
+    "since": "2026-10-16",
+    "value": 60,
     "unit": "minutes",
+    "was": [
+      {
+        "value": 20,
+        "until": "2026-10-16"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
     ]
@@ -232,7 +314,10 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort"
+    ]
   },
   {
     "id": "session-model",
@@ -240,7 +325,19 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-10",
-    "value": "claude-opus-5-5"
+    "value": "claude-opus-5-5",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
+  },
+  {
+    "id": "session-stall",
+    "subject": "how long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 60,
+    "unit": "minutes",
+    "flag": "--stall"
   },
   {
     "id": "sessions-open-in-sidebar",
@@ -257,7 +354,11 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-07",
-    "value": "high"
+    "value": "high",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*(?<![\\w/.-])(?:subagents?|sub-agents?|agent calls?|writers?|verifiers?|readers?)\\b(?![\\w-]*\\.\\w).{0,40}\\b(?:runs?|launched|launch(?:es)?|go(?:es)?)\\b.{0,20}\\b(?:at|with) `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\()(?!.*\\bgpt-).*\\beffort: \"{amount}\""
+    ]
   },
   {
     "id": "subagent-reader-model",
@@ -266,7 +367,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-10",
     "value": "claude-opus-5-5",
-    "alias": "opus"
+    "alias": "opus",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:readers?|verifiers?|reviewers?)\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
   },
   {
     "id": "subagent-writer-model",
@@ -275,7 +379,42 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-11",
     "value": "claude-haiku-5-5",
-    "alias": "haiku"
+    "alias": "haiku",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
+  },
+  {
+    "id": "throughput-backfill-days",
+    "subject": "how many closed days back the heartbeat writes a missing throughput snapshot for",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 14,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-compare-days",
+    "subject": "how many days a side a throughput comparison needs before it judges a change",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-quiet-days",
+    "subject": "how many days after the last recorded throughput review the next is due once the review has gone quiet",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-quiet-runs",
+    "subject": "how many recorded throughput reviews in a row that found nothing make the review weekly instead of daily",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 2,
+    "unit": "reviews"
   },
   {
     "id": "wait-every",
@@ -310,6 +449,10 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-09",
     "value": 3,
-    "unit": "sessions"
+    "unit": "sessions",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:at most|up to|no more than)\\s+{amount}\\s*(?:work )?sessions\\b",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*work sessions\\b"
+    ]
   }
 ];

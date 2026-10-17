@@ -8,7 +8,10 @@
 //     odd/tasks/session-channel.md, layer 3).
 //   - `SendMessage` and `mcp__ccd_session_mgmt__send_message`: the hour a message stamps as its time of sending
 //     against the clock (`hourRefusal`).
-//   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a `node --test` of
+//   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a recursive `rm` or
+//     an `rmdir` of a drive's root or a folder at its top, which the host holds for the user even in bypass mode
+//     (`driveRootRemovalRefusal`; odd/tasks/held-sessions.md, T4); then a gentle-ai review
+//     given a `--base-ref` its head does not contain (`reviewBaseRefusal`; odd/tasks/gate-wait.md, T11); then a `node --test` of
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
 //     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8).
 //   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters, judged in the file the
@@ -25,6 +28,7 @@
 // reads the transcript only when the reply states a share, and a failure inside it lets the session stop.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { memoryIndexRefusal } from './lib/memory-index-guard.mjs';
 
@@ -32,9 +36,10 @@ const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
   + '  sessions-open-in-sidebar), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
-  + '  with backticks inside double quotes, a node --test of several files while another gate holds the lock, and\n'
+  + '  with backticks inside double quotes, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
-  + '  file that stamps today with an hour ahead of the clock; always exits 0\n'
+  + '  file that stamps today with an hour ahead of the clock; lets a git commit or merge wrapped in js-harness gate --\n'
+  + '  run with a hint beside its result, since a plain one waits for its turn by itself; always exits 0\n'
   + '       js-harness guard --stop\n'
   + '  reads a Stop payload on standard input; turns the stop back when the reply states this session\'s context share\n'
   + '  more than 2 points from the share its transcript records, so the session corrects it; always exits 0\n';
@@ -64,7 +69,7 @@ function rulesTextOf(root, readFile) {
 }
 
 /** Why the call of `payload` is refused, or null. */
-async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
   if (FILE_TOOLS.has(tool)) {
@@ -72,7 +77,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, allowedModels, backtickRefusal, hourRefusal, modelRefusal, openingRefusal } = await import('./lib/guard.mjs');
+  const { OPENING_TOOLS, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal } = await import('./lib/guard.mjs');
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
@@ -80,21 +85,43 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
   const backticks = backtickRefusal(input.command);
   if (backticks !== null) return backticks;
+  const driveRoot = driveRootRemovalRefusal(input.command);
+  if (driveRoot !== null) return driveRoot;
+  const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
+  const base = reviewBaseRefusal(input.command, { cwd, ...(baseContains && { contains: baseContains }) });
+  if (base !== null) return base;
   const run = testRun ?? (await import('./lib/test-run-warning.mjs')).testRunWarning;
-  return run(String(input.command ?? ''));
+  // The folder the command runs in names its test file as the gate log does (first-version T6a).
+  return run(String(input.command ?? ''), { ...(typeof payload.cwd === 'string' && payload.cwd !== '' && { cwd: payload.cwd }) });
+}
+
+/** The hint for the Bash call of `payload` that wraps a commit in `js-harness gate --`, or null (lib/wrapped-commit.mjs).
+ * A command that names no commit loads nothing. */
+async function hintOf(payload, { env, projectRoot, exists }) {
+  const command = String(payload.tool_input?.command ?? '');
+  if (!/\bgate\b/.test(command) || !/\b(commit|merge)\b/.test(command)) return null;
+  const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
+  return (await import('./lib/wrapped-commit.mjs')).wrappedCommitHint(command, { cwd, env, projectRoot, exists });
 }
 
 /** Why the reply that ends the turn of the `Stop` payload is to be corrected, or null. The text is the host's
  * `last_assistant_message`, else the transcript's last own reply: the host writes its transcript after the fact, so
- * the recorded share may be the step before the reply's, a tool result short of it. */
-async function stopRefusalOf(payload, readTranscript) {
+ * the recorded share may be the step before the reply's, a tool result short of it. The window the share is of is the one
+ * the host is configured with when a setting gives it, as the pause notice says it (`hostWindow`), ahead of the
+ * session's last get_usage read and of the default: a read of the window before the setting changed would turn back a
+ * reply that says what the notice told it (odd/tasks/session-channel.md, T6b). */
+async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoot }) {
   if (payload?.stop_hook_active === true || typeof payload?.transcript_path !== 'string' || payload.transcript_path === '') return null;
   const { lastShare, shareRefusal } = await import('./lib/audit.mjs');
   const given = typeof payload.last_assistant_message === 'string' ? payload.last_assistant_message : null;
   // A reply that names no context share costs no read of the transcript; the window the share is of comes from it.
   if (given !== null && !(/context/i.test(given) && /\d\s?%/.test(given))) return null;
-  const recorded = lastShare(readTranscript(payload.transcript_path).split(/\r?\n/));
-  if (recorded === null) return null;
+  const read = lastShare(readTranscript(payload.transcript_path).split(/\r?\n/));
+  if (read === null) return null;
+  const { hostWindow } = await import('./lib/pause.mjs');
+  const projectDir = typeof payload.cwd === 'string' && payload.cwd !== '' ? projectRoot(path.resolve(payload.cwd)) : null;
+  const window = hostWindow({ env, home: env.JS_HARNESS_HOME || homedir(), projectDir });
+  const recorded = window === null ? read : { ...read, window };
   return shareRefusal(given ?? recorded.text, recorded);
 }
 
@@ -106,9 +133,13 @@ export async function guardMain(argv, {
   stdout = (text) => process.stdout.write(text),
   stderr = (text) => process.stderr.write(text),
   testRun,
+  baseContains,
   readIndex = (file) => fs.readFileSync(file, 'utf8'),
   claudeConfigDir = process.env.CLAUDE_CONFIG_DIR,
   readTranscript = (file) => fs.readFileSync(file, 'utf8'),
+  env = process.env,
+  homedir = os.homedir,
+  exists = fs.existsSync,
 } = {}) {
   if (argv.length !== 1 || (argv[0] !== '--hook' && argv[0] !== '--stop')) {
     stderr(USAGE);
@@ -117,7 +148,7 @@ export async function guardMain(argv, {
   if (argv[0] === '--stop') {
     let turnBack = null;
     try {
-      turnBack = await stopRefusalOf(JSON.parse(readStdin()), readTranscript);
+      turnBack = await stopRefusalOf(JSON.parse(readStdin()), readTranscript, { env, homedir, projectRoot });
     } catch {
       return 0;
     }
@@ -125,11 +156,16 @@ export async function guardMain(argv, {
     return 0;
   }
   let reason = null;
+  let hint = null;
   try {
-    reason = await refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir });
+    const payload = JSON.parse(readStdin());
+    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains });
+    // A denial wins; a Bash call that runs adds the hint for a wrapped commit beside its result (commit-gates-first S4).
+    if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists });
   } catch {
     return 0;
   }
   if (reason !== null) stdout(`${JSON.stringify(denial(reason))}\n`);
+  else if (hint !== null) stdout(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: hint } })}\n`);
   return 0;
 }

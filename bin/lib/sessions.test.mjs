@@ -2046,6 +2046,23 @@ test('renderBoard says so when there is nothing: no session, no gate, no pull re
   ]);
 });
 
+test('renderBoard: Memory hygiene says whether a pass is due for the project and why, after the pull requests', () => {
+  const base = { root: '/home/me/proj', hours: 1, sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] } };
+  const section = (memory) => {
+    const lines = lib.renderBoard({ ...base, memory }, { now: NOW });
+    return lines.slice(lines.indexOf('Pull requests') + 3, lines.indexOf(lib.NOT_VISIBLE));
+  };
+  assert.deepEqual(section({ available: true, folder: '/m', due: true, reasons: ['no-pass', 'index-bytes'] }), [
+    'Memory hygiene',
+    '  a pass is due (no-pass, index-bytes): js-harness memory status says why; the orchestrator runs it at a task boundary',
+    '',
+  ]);
+  assert.deepEqual(section({ available: true, folder: '/m', due: false, reasons: [] }), ['Memory hygiene', '  nothing due', '']);
+  assert.deepEqual(section({ available: true, folder: '/m', na: true }), ['Memory hygiene', '  n/a: no memory folder at /m', '']);
+  assert.deepEqual(section({ available: false, reason: 'EACCES: permission denied' }), ['Memory hygiene', '  unavailable: EACCES: permission denied', '']);
+  assert.deepEqual(section(undefined), [], 'a board read without it has no such section');
+});
+
 test('renderBoard: Gates says which gate runs and which wait, from the lock, and any other gate as the listing has it', () => {
   const section = (parts) => {
     const lines = lib.renderBoard({ ...BOARD, ...parts }, { now: NOW });
@@ -2211,6 +2228,60 @@ test('renderBoard says a room at, just short of and just past where the host com
     `no room: 1k past where ${where}`,
     `no room: 1k past where ${where}`,
   ]);
+});
+
+// odd/tasks/stalled-sessions.md S3: the work sessions that hold handed work and went quiet, in a section of their own.
+const STALL_LIMIT = 60;
+const stalledItem = (number, quietSeconds, more = {}) => ({
+  number,
+  title: `JH ${number} · work`,
+  ids: [`${number}0000000-0000-0000-0000-000000000000`],
+  quietSince: before(quietSeconds),
+  quietMs: quietSeconds * 1000,
+  holding: { what: 'notice', at: before(quietSeconds + 600), from: 'JH ORQ · lead', kind: 'note', text: 'T3 is yours' },
+  worktree: null,
+  branch: null,
+  ...more,
+});
+
+test('renderBoard lists the stalled work sessions with how long they have been quiet and what they hold', () => {
+  const section = (stalled) => {
+    const lines = lib.renderBoard({ ...BOARD, stalled }, { now: NOW });
+    const start = lines.findIndex((line) => line.startsWith('Stalled  '));
+    return start === -1 ? null : lines.slice(start, lines.indexOf('', start) + 1);
+  };
+  const heading = 'Stalled  work sessions that hold handed work and made no commit, notice or gate for 60m or more (rule session-stall)';
+  const opening = stalledItem(23, 5400, { title: null, holding: { what: 'opening', at: before(5400), from: 'JH ORQ · lead', kind: null, text: 'Read odd/tasks/x.md' } });
+  assert.deepEqual(section({ limitMinutes: STALL_LIMIT, items: [stalledItem(19, 4 * 3600), opening], unavailable: [] }), [
+    heading,
+    '  JH 19 · work  quiet 4h 00m  holding a note from JH ORQ · lead of 4h 10m ago: T3 is yours',
+    '  work session 23  quiet 1h 30m  holding its opening of 1h 30m ago: Read odd/tasks/x.md',
+    '',
+  ]);
+  // Nobody stalled is said, and a record it could not read is named: "could not look" is not "nobody".
+  assert.deepEqual(section({ limitMinutes: STALL_LIMIT, items: [], unavailable: [] }), [heading, '  none', '']);
+  assert.deepEqual(section({ limitMinutes: STALL_LIMIT, items: [], unavailable: ["the channel's record (x): EISDIR"] }), [heading, '  none', "  not read: the channel's record (x): EISDIR", '']);
+  // A board from before the key (one a watch keeps) prints no section; the section comes before the roster and the worktrees.
+  assert.equal(section(undefined), null);
+  const lines = lib.renderBoard({ ...BOARD, stalled: { limitMinutes: STALL_LIMIT, items: [], unavailable: [] } }, { now: NOW });
+  assert.ok(lines.indexOf(heading) < lines.indexOf('Worktrees'));
+});
+
+test('boardChanges says a stalled session once when it crosses the limit, and again each time its quiet doubles', () => {
+  // One stall, read at several looks: its quiet grows while where it started and what it holds stay.
+  const held = { quietSince: before(99999), holding: { what: 'notice', at: before(99999), from: 'JH ORQ · lead', kind: 'note', text: 'T3 is yours' } };
+  const look = (quietSeconds, more) => ({ stalled: { limitMinutes: STALL_LIMIT, items: quietSeconds === null ? [] : [stalledItem(19, quietSeconds, { ...held, ...more })], unavailable: [] } });
+  const said = (age) => `JH 19 · work has made no commit, notice or gate for ${age} while it holds a note from JH ORQ · lead: T3 is yours`;
+  assert.deepEqual(changes(look(null), look(3600)), [said('1h 00m')], 'said when it first appears stalled');
+  assert.deepEqual(changes(look(3600), look(3700)), [], 'not again at the next look');
+  assert.deepEqual(changes(look(7000), look(7300)), [said('2h 01m')], 'again when the quiet doubles');
+  assert.deepEqual(changes(look(5 * 3600), look(6 * 3600)), [], 'not between two doublings');
+  // A new quiet (it did something, then went quiet again) is a new stall, said from its first crossing.
+  assert.deepEqual(changes(look(3 * 3600, { quietSince: before(4 * 3600) }), look(3600)), [said('1h 00m')]);
+  // A board with no key on either side, or one that leaves the list, says nothing of it.
+  assert.deepEqual(changes({}, look(3600)), [said('1h 00m')]);
+  assert.deepEqual(changes(look(3600), look(null)), []);
+  assert.deepEqual(changes(look(3600), {}), []);
 });
 
 // T5 B: a worktree's feature plans are printed under it.
@@ -2929,6 +3000,17 @@ test('renderBoard prints the channel after the roster: the last notices of the r
   ]);
 });
 
+// odd/tasks/wake-and-flag.md, T1: the board names the pull request a ready notice is for.
+test('renderBoard names the pull request of a ready notice', () => {
+  const ready = { ...noticeOf(60, FROM_TWO, 'orchestrator', 'ready', 'T3 is ready'), pr: 344 };
+  assert.deepEqual(channelSection({ channel: lib.channelOf(recordOf([ready]), []) }), [
+    'Channel',
+    '  H:\\.js-harness\\channel\\D--proj.jsonl  1 notice:',
+    '  | 1m ago  JH 2 · the board to orchestrator  ready for pull request 344  T3 is ready',
+    `  ${lib.CHANNEL_NOT_KNOWN}`,
+  ]);
+});
+
 test('renderBoard prints no channel when there is nothing to show, and says so when the record could not be read', () => {
   assert.equal(channelSection({}), null, 'a board that was given none');
   assert.equal(channelSection({ channel: lib.channelOf(recordOf(), []) }), null, 'no record yet, and no message');
@@ -2975,6 +3057,24 @@ test('renderBoard: a row of the roster says what the record says of its session,
   ]);
   assert.match(lib.ROSTER_NOT_KNOWN, /one session the app restarted or several sessions under one title/);
   assert.match(lib.ROSTER_NOT_KNOWN, /unless a notice of the session says it/);
+});
+
+// odd/tasks/session-close.md, T3: a session that closed with its summary waits for the lead to read it and archive it.
+test('renderBoard lists to archive each session that closed with its summary and that the app does not say is archived', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120), member(C, 'JH 3 · the lock', 180), member(D, 'JH 4 · the roster', 240), member('eeeeeeee-5555', 'JH 5 · the wait', 30)];
+  const notices = [
+    noticeOf(600, { id: B }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-2-the-board.md' }),
+    noticeOf(700, { id: C }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-3-the-lock.md' }),
+    // Closed before summaries existed: the board has nothing to point the lead at.
+    noticeOf(3600, { id: D }, 'orchestrator', 'closed', 'delivered; nothing more goes to this session'),
+    // Closed with a summary, then opened again: its last word is no close.
+    noticeOf(900, { id: 'eeeeeeee-5555' }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-5-the-wait.md' }),
+    noticeOf(300, { id: 'eeeeeeee-5555' }, 'orchestrator', 'opened', 'the next feature'),
+  ];
+  const app = new Map([[B, inSessions()], [C, inSessions({ where: 'archived', archived: true })]]);
+  const section = rosterSection(sessions, { record: recordOf(notices), app });
+  assert.deepEqual(section.filter((line) => line.includes('to archive')), ['  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it']);
+  assert.ok(section.indexOf('  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it') < section.indexOf(`  ${lib.ROSTER_NOT_KNOWN}`));
 });
 
 // Failure 8 of 2026-10-10 (odd/tasks/rule-hierarchy.md): stopped tasks and archived sessions printed as
@@ -3056,6 +3156,54 @@ test('renderBoard: each gate that waits is printed with the session it hangs fro
   const unplaced = lib.renderBoard({ ...BOARD, sessions, roster: lib.rosterOf(sessions) }, { now: NOW }).find((line) => line.startsWith('  pid 77  '));
   assert.equal(unplaced.split('  ')[4], 'session not known: the gate names no folder');
   assert.deepEqual(section(null)[1], ['pid 4250', 'D:/proj-worktrees/board', 'waiting for the gate of pid 4242, began 2m ago', 'check (no process of the listing has this pid)']);
+});
+
+// odd/tasks/gate-first.md, T4: a ticket cannot be made impossible to write, so it is made seen. The board prints
+// each open ticket with who issued it, flags one whose issuer is not the orchestrator, and says of a gate of the
+// lock that went first by a ticket which one and why.
+test('readGateLock carries the ticket a gate of the lock went first by, and nothing for a gate without one', () => {
+  const holder = { token: '11-aaaaaaaaaaaa', pid: 11, cwd: 'D:\\a', command: 'check', startedAt: before(170), beatAt: NOW - 2000, stale: false, first: '0a0a0a0a', firstReason: 'the fix of main' };
+  const waiter = { token: '22-bbbbbbbbbbbb', pid: 22, cwd: 'D:\\b', command: 'check', waitingSince: before(60), first: '0b0b0b0b', firstReason: null };
+  const read = lib.readGateLock(() => ({ holder, waiters: [waiter, { pid: 33, cwd: 'D:\\c', command: 'check', waitingSince: before(30) }] }));
+  assert.deepEqual([read.holder.first, read.holder.firstReason], ['0a0a0a0a', 'the fix of main']);
+  assert.deepEqual([read.waiters[0].first, read.waiters[0].firstReason], ['0b0b0b0b', null]);
+  assert.equal('first' in read.waiters[1], false);
+});
+
+test('renderBoard: the gates of the lock that went first say by which ticket and why, and the open tickets are printed with their issuer, flagged when that is not the orchestrator', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120)];
+  const roster = lib.rosterOf(sessions);
+  const ticket = (id, more = {}) => ({ id, session: B, reason: 'his fix waits on it', by: A, issuedAt: before(300), until: before(-1800), ...more });
+  const lock = { gateLock: { available: true, holder: holds(4242, 'D:\\proj', { first: '0a0a0a0a', firstReason: 'the batch of main' }), waiters: [{ ...waits(4250, 'D:\\proj', 50), first: '0b0b0b0b', firstReason: null }] } };
+  const section = (parts) => {
+    const lines = lib.renderBoard({ ...BOARD, sessions, roster, gates: { available: true, items: [] }, ...lock, ...parts }, { now: NOW });
+    return lines.slice(lines.indexOf('Gates') + 1, lines.indexOf('Pull requests') - 1);
+  };
+  const states = section({}).map((line) => line.split('  ')[3]);
+  assert.deepEqual(states, ['running, took the gate lock 2m ago, first by ticket 0a0a0a0a: the batch of main', 'waiting for the gate of pid 4242, began 50s ago, first by ticket 0b0b0b0b: no reason read']);
+
+  const tickets = section({ gateTickets: { available: true, open: [ticket('0c0c0c0c', { tree: 'D:\\proj-worktrees\\board' }), ticket('0d0d0d0d', { by: B, session: A })], unreadable: ['0e0e0e0e.json'] } }).slice(2);
+  assert.deepEqual(tickets, [
+    '  ticket 0c0c0c0c  the next check of JH 2 · the board in D:\\proj-worktrees\\board goes first, for 30m more: his fix waits on it  issued by JH ORQ · proj',
+    '  ticket 0d0d0d0d  the next check of JH ORQ · proj goes first, for 30m more: his fix waits on it  issued by JH 2 · the board, which is not the orchestrator',
+    '  ticket file 0e0e0e0e.json could not be read as a ticket, so no gate claims it',
+  ]);
+  // An issuer the ticket does not name, or one no row of the roster is, is not known to be the orchestrator.
+  const [unnamed, unknown] = section({ gateTickets: { available: true, open: [ticket('0c0c0c0c', { by: undefined }), ticket('0d0d0d0d', { by: 'ffffffff-0000-0000-0000-000000000000', session: 'ffffffff-1111' })], unreadable: [] } }).slice(2);
+  assert.equal(unnamed.split('  ').at(-1), 'issued by a session the ticket does not name, so not known to be the orchestrator');
+  assert.equal(unknown, '  ticket 0d0d0d0d  the next check of session ffffffff goes first, for 30m more: his fix waits on it  issued by session ffffffff, on no row of the roster, so not known to be the orchestrator');
+  // None open says nothing; a folder that cannot be read says why.
+  assert.deepEqual(section({ gateTickets: { available: true, open: [], unreadable: [] } }).length, 2);
+  assert.deepEqual(section({ gateTickets: { available: false, reason: 'the gate tickets: EACCES' } }).slice(2), ['  unavailable: the gate tickets: EACCES']);
+});
+
+test('readGateTickets gives the open tickets and the unreadable files, and the reason when the folder cannot be read', () => {
+  const open = [{ id: '0a0a0a0a', session: 's', reason: 'r', by: null, issuedAt: before(10), until: before(-10) }];
+  assert.deepEqual(lib.readGateTickets(() => ({ open, expired: [{ id: 'x' }], unreadable: ['bad.json'] })), { available: true, open, unreadable: ['bad.json'] });
+  const noAccess = () => {
+    throw new Error('EACCES: permission denied');
+  };
+  assert.deepEqual(lib.readGateTickets(noAccess), { available: false, reason: 'the gate tickets: EACCES: permission denied' });
 });
 
 // --- `sessions --quote`: whose words a line of a transcript holds ---
@@ -4135,6 +4283,24 @@ test('quoteOf takes a message the person sent while the session worked: a queued
   assert.equal(lib.quoteOf(transcript({ ...queued(5, { timestamp: undefined }), timestamp: undefined }), 1).at, null);
 });
 
+// Host 2.1.299 (2026-10-17) queues his message as a list of text blocks: the first holds the host's own
+// reminders, each a `<system-reminder>` block, and the last his words (e152c9d8, line 20374, keys and lengths read).
+test('quoteOf takes his words from a queued list of text blocks, and leaves out the reminders the host queued with them', () => {
+  const reminders = '<system-reminder>\nThe session "made up" finished a turn.\n</system-reminder>\n<system-reminder>\nLinked sessions now: made up.\n</system-reminder>\n\n';
+  const text = transcript(
+    queued(1, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: 'made up while it worked, from a phone' }] }),
+    queued(2, { prompt: [{ type: 'text', text: `${reminders}Dale` }, { type: 'image', source: {} }, { type: 'text', text: 'la A' }] }),
+    queued(3, { prompt: [{ type: 'text', text: pasted('Sos JH 5.') }] }),
+  );
+  assert.deepEqual(lib.quoteOf(text, 1), { person: true, at: at(1), text: 'made up while it worked, from a phone', images: 0, pastedOnly: false, queued: true });
+  assert.deepEqual([lib.quoteOf(text, 2).text, lib.quoteOf(text, 2).images], ['Dale\nla A', 1]);
+  assert.equal(lib.quoteOf(text, 3).pastedOnly, true);
+  // Only the reminders that open the first block are the host's: a tag he typed in his own words stays his, even at
+  // the start of his block.
+  const his = '<system-reminder>esto</system-reminder> lo escribí yo';
+  assert.equal(lib.quoteOf(transcript(queued(4, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: his }] })), 1).text, his);
+});
+
 test('quoteOf refuses every other attachment and says what it is: another origin, no turn of his, no text, another type', () => {
   const lines = [
     queued(1, { origin: { kind: 'peer', name: 'JH 1 · made up', from: 'local_1', body: 'made up' }, isMeta: true, humanTurn: undefined }),
@@ -4146,7 +4312,7 @@ test('quoteOf refuses every other attachment and says what it is: another origin
     queued(7, { humanTurn: 'true' }),
     queued(8, { origin: 'human' }),
     queued(9, { origin: { kind: 'something-new' } }),
-    queued(10, { prompt: [{ type: 'text', text: 'made up' }] }),
+    queued(10, { prompt: [{ type: 'text', text: '<system-reminder>\nmade up\n</system-reminder>\n\n' }, { type: 'image', source: {} }] }),
     queued(11, { prompt: undefined }),
     { type: 'attachment', ...base(12), attachment: { type: 'hook_success', stdout: 'made up', origin: { kind: 'human' }, humanTurn: true, prompt: 'made up' } },
     { type: 'attachment', ...base(13), attachment: null },
@@ -4419,6 +4585,14 @@ test('a message the app put in, with text no session wrote, starts no task and i
 test('quoteOf names the sender of a message the app delivered for a session, as it names any other session', () => {
   const text = transcript(reply('working', 1), injected(2, delivered('JH ORQ · js-harness')), queuedInjected(3, delivered('JH ORQ · js-harness')));
   assert.deepEqual([lib.quoteOf(text, 2).what, lib.quoteOf(text, 3).what], ['a message from another session ("JH ORQ · js-harness")', 'a queued message from another session ("JH ORQ · js-harness")']);
+});
+
+test('a message the app delivered for a session and queued as a list of blocks is read as his queued words are: the session is named', () => {
+  // Host 2.1.299 (2026-10-17) writes a queued prompt as a list, its own reminders opening the first block.
+  const blocks = [{ type: 'text', text: '<system-reminder>\nmade up while it worked\n</system-reminder>\n\n' }, { type: 'text', text: delivered('JH ORQ · js-harness') }];
+  const text = transcript(reply('working', 1), queuedInjected(2, blocks));
+  assert.equal(lib.quoteOf(text, 2).what, 'a queued message from another session ("JH ORQ · js-harness")');
+  assert.deepEqual(lib.compactionStretch(text).sessions, [{ line: 2, at: at(2), name: 'JH ORQ · js-harness' }]);
 });
 
 test('compactionStretch lists the messages the app delivered for a session among its sessions, with their titles', () => {

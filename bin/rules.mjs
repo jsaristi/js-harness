@@ -26,7 +26,7 @@ import { RULES } from './lib/rules-data.mjs';
 import { beforeProgress, checkRules } from './lib/rules-check.mjs';
 import { countFindings, registerFindings } from './lib/rules-scan.mjs';
 import { parseRegister } from './lib/failures.mjs';
-import { renderList, rulesHash, ruleHere, ruleOf } from './lib/rules.mjs';
+import { renderList, rulesHash, ruleHere, ruleOf, unscoped } from './lib/rules.mjs';
 import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
 import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
@@ -35,7 +35,7 @@ import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule } from './lib/rules-change-run.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source]]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
@@ -258,7 +258,7 @@ async function projectForm(parsed, top, { run, stdout, stderr }) {
   }
 
   stdout('The rules of the harness in force here:');
-  for (const rule of RULES.filter((item) => item.scope === undefined)) stdout(`${rule.id}  ${describeRule(rule)}  ${rule.owner}`);
+  for (const rule of unscoped(RULES)) stdout(`${rule.id}  ${describeRule(rule)}  ${rule.owner}`);
   if (!read.present) {
     stdout(`This project declares no rules of its own: they would be in ${PROJECT_RULES_PATH}`);
     return 0;
@@ -395,6 +395,8 @@ export async function rulesMain(argv, {
   stdin = () => fs.readFileSync(0, 'utf8'),
   rename = fs.renameSync,
 } = {}) {
+  // Letter F's turn-start hook is a module of its own (bin/lib/rules-reach.mjs); run on its own, this sends it there.
+  if (argv[0] === '--hook') return (await import('./lib/rules-reach.mjs')).rulesHookMain(argv.slice(1));
   let parsed;
   try {
     parsed = parseArgs(argv);

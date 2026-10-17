@@ -551,6 +551,7 @@ decided today would use them.
 ### 13. Tests owed
 Each is run once by the build, with its result recorded in Progress.
 1. A one-line opening pasted on the phone and on the desktop: typed text or pasted content?
+   Run 2026-10-16 at 02:16 local: typed text, both times (Progress, 02:16).
 2. A session opened by the orchestrator through a scheduled task: can he type in it; can it
    commit in a folder of its own (one gate turn)? His rule of 2026-10-12 is that no session
    opens where he does not see it (T16), and the app files such a session under its routines,
@@ -560,11 +561,22 @@ Each is run once by the build, with its result recorded in Progress.
    `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
    scheduled task, so the test would ask about a way this project no longer opens sessions.
 3. `claude --name` with an initial prompt, from a command: does the session appear in the app?
+   Run 2026-10-16 at 02:37 local: it does not appear in his sidebar, though the session ran
+   (Progress, 02:39).
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
+   Read 2026-10-17, not run: yes, `Stop` and `SessionStart` on `startup`, `resume` and
+   `compact`; no js-harness hook is seen there, since no such session is newer than
+   2026-10-10 (Progress, "T2 test 4").
 5. After a rename, does the old title stop resolving as an address?
+   Run 2026-10-16 at 18:43 local: it does, at once, and the restored title resolves again
+   (Progress, "T2 test 5").
 6. The clean start against the compaction: may a session clear itself while he has it open, and
    does it lose less than a summary?
+   Run 2026-10-17 at 17:36 local on JH 26: the clear happened and started a new transcript
+   with the source `startup`, so no hook of this project ran; all seven written facts came
+   back from this document by the lead's opening. It loses less than a summary only when the
+   state is written first and the opening is sent (Progress, "T2 test 6").
 
 ### 14. A compaction that loses nothing (T6b; design, version 2, after its two readers)
 
@@ -1650,8 +1662,12 @@ and 3.
   `--opening` with a lone `--` after it is refused instead of taken (`bin/notify.mjs:89-92`);
   one test pipes an opening through the dispatcher's real standard input; the concurrent
   append test proves its writers overlapped, or starts them on a barrier
-- [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
-  2 is retired by his answer of 2026-10-15 (section 13); tests 1, 3, 4, 5 and 6 remain
+- [x] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
+  2 is retired by his answer of 2026-10-15 (section 13); test 1 is run (2026-10-16, typed
+  text); test 3 is run (2026-10-16, not in his sidebar); test 5 is run (2026-10-16, the old
+  title stops resolving at once); test 4 is read (2026-10-17, both events fire, `compact`
+  included); test 6 is run (2026-10-17, the clear starts as `startup`, no hook runs, the
+  written state came back whole by the opening)
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
@@ -1680,7 +1696,7 @@ and 3.
 - [x] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on this machine by the lead once the fourth slice is on `main`: his answer of
   2026-10-11 (Progress, 22:03)
-- [ ] T6b The compaction protocol, so that a compaction never again arrives with nothing
+- [x] T6b The compaction protocol, so that a compaction never again arrives with nothing
   saved (his words of 2026-10-11, Progress 22:03). Design first, read twice by independent
   readers before it reaches him. Three parts: (1) at the pause a session writes its state to
   the feature document and its very next reply to him carries the percentage and the two
@@ -1696,7 +1712,12 @@ and 3.
   only pasted text (`quoteOf` already returns `pastedOnly`), and can show the question an
   answer was given to, since an answer he sends as a block names no value by itself; the
   contract's "Effort" section as the home of a task's effort. What the hosts' documentation
-  says of part (2) is in Progress, 2026-10-11 23:20
+  says of part (2) is in Progress, 2026-10-11 23:20. JH 26, 2026-10-16 (Progress, 06:51): the pause reads the
+  window the host is configured to compact on (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` of the
+  project's or the user's settings), since 28 of 32 automatic compactions that missed a fact missed `told`, most
+  of them the first compaction of a session after his window went from 500,000 to 350,000; branch
+  `fix/pause-configured-window`. Proof owed once it is installed: `js-harness sessions --measures` counts no
+  `told` miss for a compaction on a configured window
 - [x] T7, MOVED to JH 12 (2026-10-14, by the lead's message; its record is there now), and DONE there: PR 144 (feat/commands-and-doctor, c77ce5d), merged 2026-10-14 at 16:45 local; the state is in odd/tasks/commands-and-doctor.md L8. The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
 - [x] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
@@ -1832,17 +1853,19 @@ and 3.
   JH 15's hour guard refuses a wrong typed hour (the lead's message of 05:37; the lead's
   wording). After T18
 - [x] T20 `js-harness wait`: one command a session runs in the background that ends when its condition holds (a pull request merged, by gh; origin/main holding a commit or a file content; a notice addressed to this session in the channel record), printing its purpose and its end at start (T18); and the skill and the hooks say that while he is not present a work session never ends a turn waiting for a message, his /compact or an event: it writes its state, arms `js-harness wait` and keeps working. His order of 2026-10-14, typed, read with `sessions --quote`, exit 0 (the lead's transcript `ffe99ebf`, line 5141): nothing ran from 06:40 to 13:34. The rule's wording is the lead's message of 13:58. Done: merged as PR 156, 3b9e681.
+- [x] T20b `wait-blind-to-notices` (docs/FAILURES.md): every `js-harness wait` also ends on a notice to the waiting session's own number, with an exit code of its own, so a session that waits on a pull request or on `main` still wakes for the lead (JH 7, 2026-10-16: five of the lead's notices reached it hours late). Its number is read as `notify` reads its sender (`senderOf`, bin/lib/channel.mjs, from `CLAUDE_CODE_SESSION_ID`); a session with no number (the lead, Codex, a phone session whose transcript has no title) keeps today's wait, and a project with no channel sees no error. The notice watch is no second condition (bin/wait.mjs refuses two); a wait ended by a notice names the wait to arm again, and `js-harness wake` re-arms waits from their command lines (bin/lib/wake.mjs). Test first; wait's help, README.md and the manifest's wait lines say the new exit. When done, the entry's Control becomes that test (`check — bin/wait.test.mjs — "<its name>" — since <date>`). The lead's order of 2026-10-16 22:10Z: "fix the cause test first if it breaks shipped behavior, else open its task in the owning feature doc and settle the entry"; this one breaks nothing shipped (each mode does what its help says), so it is a task.
 - [x] T21 The merge checks and the pre-leave list in the orchestrator skill: a code pull request merges on a green CI run whose checkout says `Merge <head> into <base>` with that base origin's default branch now (a stale run: close and reopen; the merge's message names the run, the base and the head); a documents-only one merges when `git merge-tree` is clean; the gate rule stays for a project with no CI; before the user leaves, every waiting session has a declared wait running, none ended its turn to wait for them, and the orchestrator's watch runs. His words: "Sí, tomemos el intercambio con verde de GitHub" (`ffe99ebf` line 5394) and "pausemos todo e implementemos las soluciones" (line 5906, 14:43, quoted by this session with `sessions --quote`); the wording is the lead's orders of 14:21 and 14:45. Branch `feat/orchestrator-merge-checks`, worktree `D:\js-harness-worktrees\merge-checks`, inline. Done: merged as PR 149, eb6abf7.
 - [x] T22 The cut only while the user is here: the pause notice reads when the user last wrote (`personAtOf`, the end of the transcript it reads) and says by `cutRule` (15 minutes, as `askingRule`) to give the two blocks only then, and otherwise never to stop, since the host compacts inside a turn; AGENTS.md says the same in place of its old cut sentence, inside 1500 tokens. Same orders as T21. Widened by the lead's correction of 15:52 and 15:58, on his words "pero si se autocompacta en la mitad de una tarea creo que es malo" (`b878a67f` line 3189, 15:37) and "despues de la autocompactacion se le puede inyectar el siguiente prompt automaticamente?" (line 3535, 15:49), both quoted by this session: from the pause on, the notice says to write the state after every step (committed with the next commit) and to store the session's own resume prompt with `notify --opening` (what a compaction by the host or a new session under that title reads); a last notice, once a stretch, at `DEFAULT_CONTEXT_LAST_PERCENT` (three points under the compaction, the lead's 15:58 correction) says to write both now, before anything else, and then to go on with the task (never to wait for the compaction: Codex's P2 on cab5d69, since the host compacts with the next requests). Caveats sent to the lead: the last notice had about 10k tokens of room at two points, so it moved to three (about 15k), and a self-written opening replaces the lead's. Branch `feat/cut-while-present`, worktree `D:\js-harness-worktrees\cut-rule`, inline. Done: merged as PR 151, 34be88d.
+- [x] T23 `sessions --quote` and `notify --kind answer` read a message he queued while the session worked when host 2.1.299 writes its `prompt` as a list of blocks: `[{type:'text', text:'<system-reminder>…</system-reminder>\n\n'}, {type:'text', text:'<his words>'}]`. Before, `quoteOf` read only a string prompt and said the line held no text to quote; JH 21 met it on his message of 2026-10-17 08:11:16Z (`e152c9d8` line 20374). Now `queuedWords` (bin/lib/sessions.mjs) joins the text blocks one a line, drops only the run of reminders that opens the first text block, where the host puts them (a tag he types in his own words stays his, even at the start of a later block), and counts the list's image blocks. The lead's order of 09:04Z: "Fix so --quote reads a queued_command's text, and notify --kind answer verifies an answer there too." Test first: sessions.test.mjs "quoteOf takes his words from a queued list of text blocks…" and notify.test.mjs "an answer he sent while the session worked is verified from his words alone…"; with the fix, `sessions --quote` on line 20374 prints his words. Branch `fix/quote-queued-command`, worktree `D:\js-harness-worktrees\quote-queued-command`, inline. Commits `8a50cd6` (the list), `73428d3` (Codex's two P2 on it: the anchored strip and the image count) and `0139d8d` (Codex's recheck: the strip ran on every block, so it runs on the first only).
+  gentle-ai: `297c407..8a50cd6` high (item 2 escalated: it decides which transcript text counts as his words), reviewed and approved, lineage review-b1e9abe1c7d3de6e; `8a50cd6..73428d3` high, same escalation, risk and reliability lenses, approved and acknowledged, lineage review-8ca44ae7bf3aaf32; `73428d3..0139d8d` high, same escalation and lenses, approved and acknowledged, lineage review-590e7f52c48d9770. Informational, left as they are: reliability's WARNINGs that a reminder the host put after his words, or in a second reminder-only block, would now stay in the quote (that quote then fails to match, so the answer check fails closed; the host's shape seen has one reminder block), and its SUGGESTIONs to pin that a string prompt reports 0 images and an image block before the first text block.
+  Codex: `297c407..8a50cd6` incorrect (0.94), two P2; `8a50cd6..73428d3` fixed one, not the other, and wrote no record because this document was edited while it ran; `8a50cd6..0985899` correct (0.97), both fixed, recorded.
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
 
 | Open point | Where it is written | It waits for |
 |---|---|---|
-| The yardstick of "the last task". A message that arrives while a session works starts a task since the round of fixes, and it closes the task before it even when that task's work is not over, so the last task can read far smaller than the work done and "it fits" leans towards true (gentle-ai's warning on `bin/lib/sessions.mjs`, `instructionBy`) | point 7, "Open"; Progress, 2026-10-11 19:57 to 20:42 and 22:20 to 23:57 | his decision, before T9 |
-| The refusal of a pause not below the compaction point also fires for a window so small that the two default shares round to one token, and names two flags nobody gave (gentle-ai's suggestion on `bin/sessions.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
-| The hint above the list of several openings says to ask with the title in double quotes, the quoting the hook's rule for a printed command rejects (gentle-ai's suggestion on `bin/resume.mjs`) | Progress, 2026-10-11 22:20 to 23:57 | a fix with its test, with the next code of this feature |
+| The yardstick of "the last task". A message that arrives while a session works starts a task since the round of fixes, and it closes the task before it even when that task's work is not over, so the last task can read far smaller than the work done and "it fits" leans towards true (gentle-ai's warning on `bin/lib/sessions.mjs`, `instructionBy`) | point 7, "Open"; Progress, 2026-10-11 19:57 to 20:42 and 22:20 to 23:57 | his decision; it was to come before T9, and T9 is done (`--measures`), so it now waits on him alone |
 | Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | kept as compaction by default, a relief on request, by the lead's notice of 2026-10-15 05:44 (T8, Progress); no question to him |
 
 ## Progress
@@ -2996,6 +3019,200 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `sessions --quote`). The reason: since T16 the guard refuses opening a session through a
   scheduled task. Tests 1, 3 and 6 go to him next, one question at a time, through the lead;
   tests 4 and 5 do not need him at the app.
+- 2026-10-16, 02:16 local, T2, test 1 run. To the lead's question 3, "Prueba 1 del canal (JH 5):
+  ¿una línea pegada llega a la sesión como texto escrito o como contenido pegado?", he tapped
+  "Sí, ahora (Recomendada)" (`e152c9d8`:8485, read with `sessions --quote`). He then pasted
+  "Prueba 1 de T2: línea pegada para ver cómo llega; no hagas nada con ella." twice into
+  JH 5's chat, once from the desktop and once from the phone (his plan, as he was asked). Both
+  reached the session as typed text: `sessions --quote` read each one as his own words, exit 0,
+  with no pasted-content warning.
+  - `e5376fe9`:36884, 07:16:23Z: a `user` entry whose content is a plain string, with `origin`
+    kind human, `turnOrigin` human and `entrypoint` claude-desktop.
+  - `e5376fe9`:36915, 07:16:38Z: sent while the session was working, so the host queued it as a
+    `queued_command` attachment with `origin` kind human; `sessions --quote` reads it as "sent by
+    the user while the session was working (the host queued it)".
+
+  Neither entry records the device it came from, so which line came from which device is his
+  word only. The assumption of section 6 holds: a one-line opening pasted from either device
+  arrives as typed text, and nothing has to be typed by hand.
+- 2026-10-16, 02:39 local, T2, test 3 run. To the lead's question 4 he tapped "Sí, ahora
+  (Recomendada)" (`e152c9d8`:8787). He ran `claude --name "JH prueba 3" "Prueba 3 de T2:
+  respondé solo ok."` in a terminal in `D:\js-harness` and wrote: "Prueba 3: no, "JH prueba 3"
+  no aparece en la barra lateral." (`e152c9d8`:9027, read with `sessions --quote`). The session
+  did run: its transcript is `38272b60`, 52 entries from 07:37:31Z, `entrypoint` cli, titled
+  "JH prueba 3". So a session started by a command runs but is not one he sees in the app,
+  as layer 1's `by a command` already marks it, and opening a session stays one line of his
+  or `start_session` (T16).
+- 2026-10-16, 06:51 local, T6b (JH 26, by the lead's order): why the pause still missed. `js-harness sessions
+  --measures --hours 24` on this machine at 06:30: "54 automatic compactions judged in 12 sessions: 32 miss a fact
+  (told 28, kept 4)". Each automatic compaction since 2026-10-13 was read again in its transcript (a scratch
+  script, each boundary counted once by `uuid`, side chains skipped): the host compacted between 466,827 and
+  469,728 tokens until 2026-10-15, and from then between 316,910 and 319,101 (and 265,976 to 268,077 in four
+  sessions), because `~/.claude/settings.json` holds `"autoCompactWindow": 350000` since his change of
+  2026-10-15 05:50 (`odd/tasks/fixed-load.md`, "Window"). The host compacts about 33,000 tokens under its
+  window on all three sizes. Nothing in `bin/` read that setting (`grep -rn autoCompactWindow bin/`: no
+  line), so the pause measured a session against the point its last compaction gave, on the old window, or
+  against the default of 500,000: the session reached its compaction under that pause and was never told.
+  Eleven of the misses are of that shape (JH 7 at 267,182 against a pause at 443,236; JH 21, JH ORQ, JH 19,
+  JH 16 twice, JH 5, JH 20, JH 18, the relieved orchestrators at 380,757). One is another: JH 5 ended a turn at
+  435,728, under its pause of 442,309, sat idle 56 minutes, and the host compacted at 441,758 on the next
+  message, before any tool call; no `PostToolUse` hook can see that one. Built, test first (RED: 1 of the
+  pause file's tests, the import, and 2 of the resume file's; then `node --test bin/lib/pause.test.mjs` 55
+  pass, `node --test bin/resume.test.mjs` 92 pass): `configuredWindow` in `bin/lib/pause.mjs` reads the
+  environment's `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, then `autoCompactWindow` of the project's
+  `.claude/settings.local.json`, its `.claude/settings.json` and the user's `settings.json` (the host's own
+  message names the variable and the setting together; that the variable wins is read from it, not tried);
+  `pauseNotice` takes the window, and the point is the session's measured one when it lies within 5 percent
+  of the window from the window less `HOST_COMPACTION_RESERVE` (34,000), else that configured point; the
+  notice's share and the share it says the host compacts at are of the configured window. `resume --pause`
+  hands it the window from the project its `harness.json` walk finds and the Claude home under the hook's
+  home. Not built here: the board (`sessionFacts`) still measures a session that has no compaction of its own
+  against the 500,000 default, and a compaction the host makes early on the first request after an idle turn.
+  That commit is `17266f3` (gate PASS; gentle-ai: medium, 252 lines, not due). Codex on `6a6ce9e..17266f3`
+  (271,027 input tokens): incorrect (0.98), one P2, right: `guard --stop` checks a stated share against the
+  window of the last get_usage read, else 500,000, so a session with no read that says the share the notice gave
+  it (86% of 350,000) was turned back for not saying 60%. Fixed test first in the commit after it (RED: the new
+  test of `bin/guard.test.mjs`; then guard 22, audit 15, resume 92, pause 55 pass): `hostWindow` in the pause
+  library resolves the configured window once for both hooks, and the stop check takes it ahead of a get_usage
+  read and of the default; its refusal names the order.
+- 2026-10-16, JH 26, T2 test 5, run on its own session only, by the lead's answer ("run it on your own session
+  only ... Touch no other session's title").
+  - Before: `js-harness sessions --address 26 --self 00000000-0000-4000-8000-000000000000` printed
+    `JH 26 · canal y compactación`, exit 0. The `--self` is a made-up id, so that the asking session is counted.
+  - `set_session_title` on this session to `JH 29 · prueba de renombre`; then `--address 26` printed "no session
+    carries the title of work session 26", exit 1, and `--address 29` printed the new title, exit 0.
+  - The title put back exactly; 31 s after the rename, `--address 26` printed `JH 26 · canal y compactación`,
+    exit 0, and `--address 29` exited 1.
+  - So a rename moves the address at once: the board reads the title the session carries now.
+- 2026-10-16, JH 26, T20b, on `feat/wait-own-notice` from `main` 685a451, by the lead's notice ("the open task
+  T20b ... build it test first, gate, gentle-ai, Codex, PR"; a claim of the lead's). Inline, test first.
+  - Built: every `js-harness wait` of a work session also looks, before its condition at each tick, for a notice to
+    its own number written after it started. The number is the title's, from the transcript `CLAUDE_CODE_SESSION_ID`
+    names, read with `senderOf` and `roleOfTitle`, as `notify` reads its sender.
+  - On such a notice the wait exits 3 and prints three things: that the notice came first, the notice, and the same
+    wait to run again, as one line a POSIX shell reads back (a Windows path goes in single quotes, since bash would
+    eat its backslashes).
+  - Kept as it was:
+    - no second condition, since the parser still refuses two;
+    - the wait of a session with no number: no id, a transcript with no title, the orchestrator, a title of no
+      agreed shape;
+    - a wait already for a notice to that number;
+    - a project with no channel record, which sees no error;
+    - `wake`, which re-arms from the command line, which is unchanged.
+  - A record that exists and cannot be read is said once on stderr, and the condition is still checked.
+  - RED: 5 of the 8 new tests of `bin/wait.test.mjs` failed on `main`'s `wait`. GREEN: 22 of 22.
+    `bin/lib/manifest.test.mjs` passes 166.
+  - A real run on this session: `js-harness wait --pr 340 --for 2 --every 5` in a scratch home ended with exit 3, 7 s
+    after `notify --to 26` there, printing the notice and the wait to run again.
+  - Help, the README's section, the skill's line in `bin/lib/manifest.mjs` and SPEC's "Waiting and waking" say the new
+    exit. `wait-blind-to-notices`'s Control is now that test; `failures` reads it as controlled.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `docs/open-work-text`, on the lead's triage of open work: T6b
+  checked off. Its owed proof was that `js-harness sessions --measures` counts no `told` miss for a compaction
+  on a configured window. Read on 2026-10-17 before 11:22Z (by `date`): after pull request 275 merged (2026-10-16T13:32:49Z), 37 of 37
+  automatic compactions in the record were told, and every `told no` is older. The triage note said 41 of 41;
+  the count read here is 37.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `fix/peer-text-blocks`, item 4 of the lead's triage: `peerTextOf`
+  (bin/lib/sessions.mjs) reads a queued prompt through `queuedWords`, as T23 reads his, so a message the app
+  delivered for a session and queued as a list of blocks names its sender (RED: "a queued message the app put in").
+  Commit `175e15f`. gentle-ai on `67e04cb..175e15f`: high (item 2 escalated), lenses risk and reliability, approved
+  and acknowledged, lineage review-afeb3126c951c989; its SUGGESTION, a negative case, left. Codex on
+  `67e04cb..175e15f`: correct (0.97), recorded.
+- 2026-10-17, JH 26, T2 test 6, run on itself, by the lead's assignment of 08:15Z. The assignment is a claim of the
+  lead's. His answer is typed and read with `sessions --quote` (`e152c9d8`:20292, 08:10Z): "Sí, que la corra
+  (Recomendada)". The question he answered named JH 5. The lead moved the run to JH 26 because JH 26 held no work,
+  so its conversation was the cheap one to lose.
+  - The method: write the state, store the resume prompt with `notify --opening`, and commit (`feat/t2-test6`,
+    worktree `D:\js-harness-worktrees\jh26-test6`). Then `clear_session` on "self", which clears once the turn ends
+    and the session is idle. Then go on from files only and compare. Nothing wakes a cleared session by itself, so
+    before the clear the lead was asked to send it its opening.
+  - Before, written at 08:17Z (03:17 local), the facts the cleared session should get back; each is checked after:
+    - B1. JH 26's feature document `odd/tasks/wake-and-flag.md`, T1 to T4, landed: PR 349 (B1, `--kind ready
+      --pr`), PR 351 (A(a), the Stop hook's wake warning, `bin/lib/stop-wake.mjs`), PR 352 (T4, notify holds a
+      stamped hour to the clock, `stampOff` in `bin/lib/guard.mjs`).
+    - B2. The lead's next two units landed at 07:27Z: PR 371 (`notify --kind ready` runs the land's
+      `pullRequestProblems` and `reviewEvidence`, `readyProblems` in `bin/notify.mjs`, `odd/tasks/ready-checks.md`)
+      and PR 370 (protocols skill section 3: run the installed `js-harness`, `odd/tasks/installed-harness.md`).
+    - B3. JH 26 sent `--kind closed` to the lead at 07:59Z. Its worktrees `jh26-ready` and `jh26-installed` were
+      removed. `jh26-failures-owed` (`docs/failures-owed-t6`) was left untouched and not checked.
+    - B4. Its own mistake this stretch: it edited a worktree while Codex reviewed it, so no record was written, and
+      it cost two more runs. The rule it broke: commit the evidence first, then review.
+    - B5. Channel facts it holds: notices are lines of `~/.js-harness/channel/<slug>.jsonl` (schema
+      `js-harness.channel-notice/v1`); a ready notice carries `pr`; openings are under `openingsDir`; the Stop hook
+      (`js-harness reply --hook`) blocks a session that holds work with nothing in its background.
+    - B6. Its state before this: one host compaction this session (about 07:02Z), with the resume hook's text read
+      and acted on. The opening stored then was stale (it still named 349-352 as open).
+    - B7. The conversation-only facts, which no file held before this line: the lead's two units came from the
+      double-reviewed notes `improvements-2026-10-17-reader1.md` and `-reader2.md` in the lead's notes folder.
+      PR 371's Risk line was edited from "item 3" to "none", since a requested change is not high risk by itself.
+      The `js-harness gate --` guard now says to commit with a plain `git commit`, whose hook waits its turn.
+  - What happened next, read from JH 26's transcript (`74d9b5ac`) and git, not from memory:
+    - The Bash call that committed and pushed the Before started at 08:18:18Z and returned at 22:21:09Z. Its
+      timeout was 400 s, and it never fired. The commit `7d0db2f7` is dated 22:19:48Z, so the pre-commit hook ran
+      for about 14 hours.
+    - The machine did not sleep. The System log since 03:00 local holds no sleep or wake event, only three clock
+      corrections under 2 s at 09:31Z.
+    - The gate log has no event from `jh26-test6`, so the wait is not a gate's. Its cause is not known.
+    - The lead's board saw this hang as "quiet 10h 44m". It was not a clear.
+    - At 22:2xZ the first `clear_session` on "self" was refused: "a message the user sent is waiting in the queue,
+      and a clear would erase it". The queued message was the throughput session's B4b question, sent while the call
+      hung. The answer to it was not delivered, because that session is archived.
+    - At 19:37Z by its stamp, the lead wrote that JH 26 "was cleared". That was the lead's reading of the board.
+      JH 26's conversation was whole when the lead's message reached it.
+  - So by 22:25Z test 6 had not run: the clear never happened. It is asked again now that the queue is empty, from
+    this same Before. B7 gains: the hook's 14-hour hang, and the refusal on a queued message.
+  - After, written by the cleared session at 22:41Z from files only; the old transcript `74d9b5ac` was not read
+    (only its file time, 22:29:55Z, the last write before the clear).
+    - The clear happened. The old conversation is gone from this session's context, and the session came back
+      under a new transcript, `a6db53fe`, with the same title: the channel records its reading of the opening as
+      `a6db53fe`, title `JH 26 · canal y compactación`, at 22:37:20Z.
+    - The start: `SessionStart` ran at 22:36:46Z with the source `startup`, not `clear` (this transcript's first
+      hook records). The first prompt after the clear, the lead's message naming the opening, was queued at
+      22:36:57.659Z and read at 22:36:57.993Z: 7 min 2 s after the old transcript's last write. The lead had read
+      the opening at 22:36:29Z (the channel's reading record, reader `e152c9d8`).
+    - Because the source was `startup`: the resume hook (`js-harness resume --hook`, matcher `compact`) and the
+      rules hook (matcher `compact|clear|resume`) did not run. `js-harness doctor --hook` ran and was cancelled at
+      its 10 s timeout (11,180 ms). The session's folder was `D:\js-harness`, on `main`, not the worktree; the
+      opening named the worktree. So no hook carried anything back: what came back came from the lead's message,
+      the opening it pointed to, and this document the opening pointed to.
+    - The opening itself holds no Bn: it names the worktree, the branch, this entry and the steps after it.
+    - B1. Came back, from this document. Checked against git: `origin/main` holds the merges of PR 349
+      (`8fd28014`), 351 (`43f2ad99`) and 352 (`52c5e7ae`).
+    - B2. Came back, from this document. Checked against git: PR 371 (`4fb0bc90`) and PR 370 (`45c4ba3f`) merged.
+    - B3. Came back, from this document. Checked: `git worktree list` holds `jh26-failures-owed` on
+      `docs/failures-owed-t6` and `jh26-test6`, and no `jh26-ready` or `jh26-installed`. The `--kind closed`
+      notice of 07:59Z was not checked in the channel.
+    - B4. Came back, from this document only; no other file holds it to check it by.
+    - B5. Came back, from this document. Checked: the channel's notices in `~/.js-harness/channel/D--js-harness.jsonl`
+      carry `js-harness.channel-notice/v1`, and `openings` is a folder beside it. The Stop hook's rule was not
+      checked.
+    - B6. Came back, from this document only.
+    - B7. Came back, from this document only, with the two facts it gained (the 14-hour hang, the refused clear).
+    - The board was not read for any Bn: none needed it.
+    - Does it lose less than a summary? For what was written, yes: all seven came back whole, four of them checked
+      against git or files, and none is a paraphrase. For what was not written, it loses everything, where a
+      summary keeps some of it; and the clear brings nothing back by itself. With the start's source `startup`, no
+      hook of this project runs after a clear, so a cleared session that no message reaches starts with nothing
+      but its folder, and that folder was `main`, not its worktree. So a clear loses less than a summary only when
+      the state was written first and the lead sends the opening; this run had both.
+    - Whether he had the session open at the clear is not known from files.
+- 2026-10-17, 17:41 local, JH 26, T2 test 4, by the opening's order ("run test 4 ... as the doc allows"). Read, not
+  run: section 13 and the Progress of 2026-10-15 23:32 say test 4 does not need him at the app, and since T16 no
+  session is opened where he does not see it, so no `claude remote-control` session was started for it. It
+  extends the reading of 2026-10-11 ("Not shown by this: that the matcher `compact` fires there ... nor which hook
+  ran").
+  - The method: a scratchpad script read every transcript of this project and kept those whose entries carry the
+    entry point `sdk-cli` (the remote server's sessions): four, `213bd4ec`, `4454b298`, `8c91f279`, `dec4f35e`.
+    For each it counted the hook records by event, matcher source and command, and the compaction boundaries.
+  - The matcher `compact` fires there: `213bd4ec` (from 2026-10-10) and `4454b298` (from 2026-10-04) each hold one
+    compaction and, after it, one `SessionStart:compact` record of the Orca hook and one of engram's ("Recovering
+    engram context after compaction..."). `SessionStart:resume` fired in `4454b298` (4) and `dec4f35e` (1);
+    `SessionStart:startup` in all four; `Stop` in all four (35, 53 and 6 blocking errors, 3, 1).
+  - Which hook ran: only the Orca hook and engram's are recorded. No js-harness hook appears, and that does not show
+    it would not run: the newest of the four starts 2026-10-10, and a hook that prints nothing leaves no record.
+    This session's own start shows that: gentle-ai's `review stop-hook` and herdr's state hook, both matched on
+    `startup`, left no record, while Orca's (stdout `{}`) and engram's (a warning on stderr) did.
+  - So test 4 is answered: yes, both events fire, `compact` included. Whether a js-harness hook runs there is not
+    shown; a remote session opened by him after a compaction would show it.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -3238,6 +3455,14 @@ session needs beside it to go on; the summary of a compaction is not the record.
   `bin/resume.mjs` to the channel library with `openingCommand`, which both use; such a title
   gets its command between single quotes, and any other the request in words; the guard
   matches ids either way (`sameSession`).
+- 2026-10-16, JH 25, `odd/tasks/first-version.md` T3c: two of "Open points" closed, test first. The
+  refusal of a pause not below the compaction names each figure by what gave it, its flag or "the
+  default pause (N% of the window)", so a window too small for the two defaults names no flag
+  nobody gave (`bin/sessions.mjs`; RED on the default compaction, then green). The hint above
+  several openings says in words to give `--opening` one title below between single quotes: a
+  placeholder in double quotes is what Windows PowerShell drops on the way to a program, and one
+  in single quotes reads as a command that would exit 2 (`bin/resume.mjs`, 92 of 92). The
+  yardstick's row no longer waits "before T9", which is done.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is

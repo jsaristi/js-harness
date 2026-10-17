@@ -205,10 +205,11 @@ function deliveredBy(text) {
   return { name: attributeOf(opening[1], 'name') || null };
 }
 
-/** The text of the entry that holds a peer message: a queued command's `prompt`, or a `user` entry's content as
- * `quoteEntry` reads it (the string, or its text blocks joined), `''` when it has none. */
+/** The text of the entry that holds a peer message: a queued command's `prompt` as `queuedWords` reads it (a list of
+ * blocks without the host's leading reminders), or a `user` entry's content as `quoteEntry` reads it (the string, or
+ * its text blocks joined), `''` when it has none. */
 function peerTextOf(entry) {
-  if (entry.type === 'attachment') return typeof entry.attachment.prompt === 'string' ? entry.attachment.prompt : '';
+  if (entry.type === 'attachment') return queuedWords(entry.attachment.prompt)?.text ?? '';
   const content = entry.message?.content;
   return typeof content === 'string' ? content : blocksOf(entry).filter(isText).map((block) => block.text).join('\n');
 }
@@ -1081,14 +1082,28 @@ export function readGateLock(read) {
   try {
     const { holder, waiters, readAt } = read();
     const beatAt = holder === null || holder.beatAt === null ? null : new Date(holder.beatAt).toISOString();
+    // The ticket a gate went first by (./gate-first.mjs), where its file names one.
+    const firstOf = (gate) => (typeof gate.first === 'string' ? { first: gate.first, firstReason: gate.firstReason ?? null } : {});
     return {
       available: true,
-      holder: holder && { pid: holder.pid, cwd: holder.cwd, command: holder.command, startedAt: holder.startedAt, beatAt, stale: holder.stale },
-      waiters: waiters.map(({ pid, cwd, command, waitingSince }) => ({ pid, cwd, command, waitingSince })),
+      holder: holder && { pid: holder.pid, cwd: holder.cwd, command: holder.command, startedAt: holder.startedAt, beatAt, stale: holder.stale, ...firstOf(holder) },
+      waiters: waiters.map((waiter) => ({ pid: waiter.pid, cwd: waiter.cwd, command: waiter.command, waitingSince: waiter.waitingSince, ...firstOf(waiter) })),
       ...(readAt !== undefined && { readAt: new Date(readAt).toISOString() }),
     };
   } catch (err) {
     return { available: false, reason: `the gate lock: ${err.message}` };
+  }
+}
+
+/** The tickets that put a session's next check first in the gate lock (`bin/lib/gate-first.mjs`):
+ * `{ available: true, open, unreadable }`, from `read()`, which gives them as `readTickets` does and throws
+ * when the folder cannot be read; or `{ available: false, reason }`. An expired ticket is no ticket. */
+export function readGateTickets(read) {
+  try {
+    const { open, unreadable } = read();
+    return { available: true, open, unreadable };
+  } catch (err) {
+    return { available: false, reason: `the gate tickets: ${err.message}` };
   }
 }
 
@@ -1136,7 +1151,8 @@ export function boardGates(board) {
     const named = gate.cwd === null ? undefined : (trees.find((tree) => comparable(tree) === comparable(gate.cwd)) ?? gate.cwd);
     const worktree = named ?? process?.worktree ?? { unavailable: 'the gate lock does not say which folder it checks' };
     const none = process ? undefined : noProcess(gate.pid);
-    return { pid: gate.pid, startedAt: process?.startedAt ?? none, worktree, commandLine: process?.commandLine ?? none, lock: { ...role, since, command: gate.command } };
+    const first = typeof gate.first === 'string' ? { first: gate.first, firstReason: gate.firstReason ?? null } : {};
+    return { pid: gate.pid, startedAt: process?.startedAt ?? none, worktree, commandLine: process?.commandLine ?? none, lock: { ...role, since, command: gate.command, ...first } };
   };
   const { holder } = lock;
   const holding = holder ? [ofLock(holder, holder.startedAt, { role: 'holder', beatAt: holder.beatAt, stale: holder.stale })] : [];
@@ -1256,7 +1272,9 @@ function recordOfRows(rows, notices) {
     if (!row) continue;
     const kept = said.get(row) ?? { status: null, worktree: null, branch: null, notices: 0 };
     kept.notices += 1;
-    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text };
+    // A closed notice keeps the summary its session left, which the lead reads before it archives it (session-close, T3).
+    const summary = notice.kind === 'closed' && typeof notice.summary === 'string' ? { summary: notice.summary } : {};
+    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text, ...summary };
     if (typeof notice.worktree === 'string') {
       kept.worktree = notice.worktree;
       kept.branch = typeof notice.branch === 'string' ? notice.branch : null;
@@ -1855,8 +1873,24 @@ function queuedMessageOf(entry) {
   if (kind === 'peer') return { what: peerInWords(peerMessageOf(entry), { queued: true }) };
   if (kind !== 'human') return { what: `a queued message of origin ${JSON.stringify(kind)}` };
   if (attachment.humanTurn !== true) return { what: 'a queued message of origin "human" that the host does not mark as a turn of the person' };
-  if (typeof attachment.prompt !== 'string') return { what: 'a queued message of the person that holds no text to quote' };
-  return { what: null, prompt: attachment.prompt, at: attachment.timestamp };
+  const words = queuedWords(attachment.prompt);
+  if (words === null) return { what: 'a queued message of the person that holds no text to quote' };
+  return { what: null, prompt: words.text, images: words.images, at: attachment.timestamp };
+}
+
+// The reminders the host puts at the start of a queued message's first block, before his words, with the blank lines
+// after them: the host's text, never his. Only that leading run: a tag he typed in his own words stays his.
+const HOST_REMINDERS = /^(?:\s*<system-reminder>[\s\S]*?<\/system-reminder>)+\s*/;
+
+/** His words in a queued message's `prompt` as `{ text, images }`, or `null` when it holds none. A string is his
+ * text as it is. Host 2.1.299 (2026-10-17) writes a list of blocks instead, the first opening with its own reminders
+ * of what happened while the session worked: the text blocks, the first without that leading run, one a line, a
+ * block left blank dropped, and how many image blocks came with them. */
+function queuedWords(prompt) {
+  if (typeof prompt === 'string') return { text: prompt, images: 0 };
+  if (!Array.isArray(prompt)) return null;
+  const words = prompt.filter(isText).map((block, i) => (i === 0 ? block.text.replace(HOST_REMINDERS, '') : block.text)).filter((text) => text.trim() !== '');
+  return words.length === 0 ? null : { text: words.join('\n'), images: prompt.filter((block) => block?.type === 'image').length };
 }
 
 /** The entry at line `line` (from 1) of a transcript's `text`, when it is what the person sent: `{
@@ -1920,7 +1954,7 @@ function quoteEntry(entry, calls = NO_CALLS) {
   const blocks = queued ? [] : blocksOf(entry);
   const said = typeof content === 'string' ? content : blocks.filter(isText).map((block) => block.text).join('\n');
   const typed = said.replace(PASTED_CONTENT, '');
-  return { person: true, at: entry.timestamp ?? queued?.at ?? null, text: said, images: blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '', queued: queued !== null };
+  return { person: true, at: entry.timestamp ?? queued?.at ?? null, text: said, images: queued ? queued.images : blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '', queued: queued !== null };
 }
 
 /** What an entry is when it is not a reply of the session, in words, or `null` for the session's own reply. The
@@ -2290,6 +2324,16 @@ function pendingAge(session, now, ended) {
   return now - (Number.isNaN(written) ? launched : Math.max(launched, written));
 }
 
+/** Whether `session` (its facts, as `sessionFacts` gives them) ends on a call that has had no result for the held-call
+ * limit at `now`, as the board's held line counts it. A session the host holds on a card writes nothing, so this is what
+ * keeps it on the board past its window (odd/tasks/held-sessions.md, S4). Facts read from a transcript's tail lack the
+ * subagent files `readSession` adds, so a subagent at work counts as held there: the board reads such a session whole
+ * and asks again. */
+export function heldPastLimit(session, now) {
+  const age = pendingAge(session, now, false);
+  return age !== null && age >= PENDING_CALL_LIMIT_MS;
+}
+
 /** How many times the limit fits in an age of `pendingAge`, as a power of two: -1 below the limit or when no call
  * counts, 0 from the limit to twice it, 1 from twice to four times it, and so on. A watch says a call each time it grows. */
 const crossingOf = (age) => (age === null || age < PENDING_CALL_LIMIT_MS ? -1 : Math.floor(Math.log2(age / PENDING_CALL_LIMIT_MS)));
@@ -2482,6 +2526,34 @@ function channelChanges(before, after, self) {
   return lines;
 }
 
+/** What a stalled session holds, in a few words: the handed notice with its kind and sender, or its opening. */
+const holdingWords = (holding) => (holding.what === 'opening' ? 'its opening' : `${article(holding.kind ?? 'notice')} ${holding.kind ?? 'notice'} from ${holding.from ?? 'an unknown sender'}`);
+
+/** The name a stalled session goes by: its title, or its number when it never wrote one. */
+const stalledName = (item) => item.title ?? `work session ${item.number}`;
+
+/** The text a stalled session was handed, on one line and cut to the board's width. */
+const handedText = (holding) => clipped(String(holding.text ?? '').replace(/\s+/g, ' ').trim());
+
+/** The stalled work sessions (odd/tasks/stalled-sessions.md, S4): one line when a session first reads stalled, and again
+ * each time its quiet doubles, as a call with no result is said (`crossingOf`). A stall is the same while its quiet
+ * starts at the same time and it holds the same handed work; a board on either side with no such list says nothing. */
+function stallChanges(before, after) {
+  if (!after.stalled) return [];
+  const limit = after.stalled.limitMinutes * 60 * 1000;
+  const crossing = (item) => (item.quietMs < limit ? -1 : Math.floor(Math.log2(item.quietMs / limit)));
+  const earlier = new Map((before.stalled?.items ?? []).map((item) => [item.number, item]));
+  const lines = [];
+  for (const item of after.stalled.items) {
+    const was = earlier.get(item.number);
+    const same = was && was.quietSince === item.quietSince && was.holding?.at === item.holding.at;
+    if (crossing(item) > (same ? crossing(was) : -1)) {
+      lines.push(`${stalledName(item)} has made no commit, notice or gate for ${durationOf(Math.round(item.quietMs / 1000))} while it holds ${holdingWords(item.holding)}: ${handedText(item.holding)}`);
+    }
+  }
+  return lines;
+}
+
 /** The sessions of the board `newer`, each one it could not read as the board `older` last read it, when it
  * did: what is known of a session across a look that failed on its transcript. A session kept so has `readAt`,
  * the time its facts were read: the `generatedAt` of the board that read them, or the one it was kept from. */
@@ -2652,6 +2724,7 @@ function planChanges(before, after) {
 export function boardChanges(before, after, { self } = {}) {
   return [
     ...sessionChanges(before, after, self),
+    ...stallChanges(before, after),
     ...gateChanges(before, after),
     ...pullRequestChanges(before, after),
     ...planChanges(before, after),
@@ -2751,6 +2824,10 @@ export function askingRule(personAt, now, { waiting = 1 } = {}) {
  * away: nothing to send. The user no longer compacts by hand (odd/tasks/no-manual-compact.md S1): the host compacts a
  * session by itself inside a turn, and a session that stops gets its next prompt from the orchestrator, so no
  * block of the bare command is handed to anyone and no time of the user's last message is read for it. */
+/** What the orchestrator is, said where a hook first names it: a project that only installs the harness defines
+ * no orchestrator in its AGENTS.md, and the skill that teaches the role is installed beside it. */
+export const ORCHESTRATOR_IS = 'the session that leads this project\'s sessions, where one does: the js-harness-orchestrator skill says how';
+
 export function cutRule() {
   return 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 }
@@ -2876,6 +2953,17 @@ export function reliefTail(text, count = RELIEF_LINES) {
   return { lineCount: lines.length, lines: lines.slice(lines.length - Math.min(count, lines.length)) };
 }
 
+/** The section that says whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5),
+ * with the ids of its reasons; `memory status` says why, and the pass is the orchestrator's, at a task boundary. */
+function memoryLines(memory) {
+  let line;
+  if (!memory.available) line = `  unavailable: ${memory.reason}`;
+  else if (memory.na) line = `  n/a: no memory folder at ${memory.folder}`;
+  else if (!memory.due) line = '  nothing due';
+  else line = `  a pass is due (${memory.reasons.join(', ')}): js-harness memory status says why; the orchestrator runs it at a task boundary`;
+  return ['Memory hygiene', line, ''];
+}
+
 /** The `Relief` section: the file's path with its last lines, or that there is none yet (and where the
  * first line would create it), or why it could not be read. */
 function reliefLines(relief) {
@@ -2967,6 +3055,13 @@ function rosterLines(roster, now) {
   if (orchestrators.length > 1) {
     lines.push(`  ${orchestrators.length} sessions carry the orchestrator's title: ${orchestrators.map((row) => JSON.stringify(row.title)).join(', ')}. A message to the orchestrator has no single address.`);
   }
+  // A session whose last word is a close with its summary waits for the lead to read the summary and archive it,
+  // until the app says it is archived (odd/tasks/session-close.md, T3).
+  for (const row of roster.rows) {
+    const status = row.record?.status;
+    if (status?.kind !== 'closed' || typeof status.summary !== 'string' || row.where === 'archived') continue;
+    lines.push(`  to archive: ${row.title ?? '(no title)'}, closed ${ago(status.at, now)}: read ${status.summary}, then archive it`);
+  }
   if (roster.unread > 0) lines.push(inNoRow(roster.unread, 'that could not be read'));
   if (roster.outside > 0) lines.push(inNoRow(roster.outside, 'with no entry inside the window'));
   lines.push(`  ${ROSTER_NOT_KNOWN}`, '');
@@ -3000,7 +3095,8 @@ function channelLines(channel, now) {
   for (const notice of channel.notices) {
     const to = notice.to.role === 'orchestrator' ? 'orchestrator' : `work ${notice.to.number}`;
     const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (the user's words: transcript ${notice.transcript}, line ${notice.line})` : '';
-    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)}${shareWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
+    const kind = notice.kind === 'ready' ? `ready for pull request ${notice.pr}` : notice.kind;
+    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)}${shareWords(notice.from)} to ${to}  ${kind}  ${clipped(notice.text)}${read}`);
   }
   if (channel.skipped > 0) lines.push(`  ${channel.skipped} line${channel.skipped === 1 ? ' of the record is' : 's of the record are'} neither a notice nor a reading: skipped`);
   if (channel.messageCount > 0) lines.push(`  ${plural(channel.messageCount, 'message')} between sessions in the transcripts of the window${lastOf(channel.messageCount, channel.messages.length)}:`);
@@ -3056,6 +3152,14 @@ function gateSession(gate, roster) {
  * was read at, against which what the lock gives is said: when a gate took it or began to wait, and the
  * holder's last beat. */
 function gateState(gate, now, lockRead, lockNow = now) {
+  const state = lockState(gate, now, lockRead, lockNow);
+  // A gate of the lock that went first by a ticket says which, and why (odd/tasks/gate-first.md, T4).
+  const first = gate.lock?.first;
+  return typeof first === 'string' ? `${state}, first by ticket ${first}: ${gate.lock.firstReason ?? 'no reason read'}` : state;
+}
+
+/** What `gateState` says of a gate before any ticket it went first by. */
+function lockState(gate, now, lockRead, lockNow) {
   const { lock } = gate;
   if (!lock) {
     const started = gate.startedAt?.unavailable ? `start unavailable: ${gate.startedAt.unavailable}` : `started ${ago(gate.startedAt, now)}`;
@@ -3095,7 +3199,31 @@ function gateLines(board, now) {
   if (!board.gates.available) lines.push(`  unavailable: ${board.gates.reason}`);
   else if (lines.length === 0) lines.push('  none running');
   if (board.gateLock && !board.gateLock.available) lines.push(`  unavailable: ${board.gateLock.reason}`);
+  lines.push(...ticketLines(board.gateTickets, board.roster, now));
   return ['Gates', ...lines, ''];
+}
+
+/** The lines of the open tickets of the gate lock (`readGateTickets`), each with the session whose next check it
+ * puts first, until when, why, and who issued it. Any process of the user can write a ticket, so a ticket is made
+ * seen instead (odd/tasks/gate-first.md, S2): one whose issuer is not the orchestrator by its title on the roster
+ * (`roleOfTitle`) is flagged, and so is one whose issuer is not known. None for a board with no tickets. */
+function ticketLines(tickets, roster, now) {
+  if (!tickets) return [];
+  if (!tickets.available) return [`  unavailable: ${tickets.reason}`];
+  const rowOf = (id) => (typeof id === 'string' ? roster?.rows.find((row) => row.transcripts.some((transcript) => transcript.id === id)) : undefined);
+  const named = (id) => rowOf(id)?.title ?? `session ${String(id).slice(0, 8)}`;
+  const issuer = (by) => {
+    if (typeof by !== 'string') return 'issued by a session the ticket does not name, so not known to be the orchestrator';
+    const row = rowOf(by);
+    if (!row) return `issued by session ${by.slice(0, 8)}, on no row of the roster, so not known to be the orchestrator`;
+    const title = row.title ?? `transcript ${by.slice(0, 8)}`;
+    return roleOfTitle(row.title)?.role === 'orchestrator' ? `issued by ${title}` : `issued by ${title}, which is not the orchestrator`;
+  };
+  const left = (until) => `for ${Math.max(0, Math.ceil((Date.parse(until) - now) / 60_000))}m more`;
+  return [
+    ...tickets.open.map((ticket) => `  ticket ${ticket.id}  the next check of ${named(ticket.session)}${ticket.tree ? ` in ${ticket.tree}` : ''} goes first, ${left(ticket.until)}: ${ticket.reason}  ${issuer(ticket.by)}`),
+    ...tickets.unreadable.map((name) => `  ticket file ${name} could not be read as a ticket, so no gate claims it`),
+  ];
 }
 
 const QUESTION_STATE_WORDS = { closed: 'closed by the user without an answer', pending: 'on the user\'s screen, no answer yet', unanswered: 'no answer in its result' };
@@ -3166,6 +3294,18 @@ function contextColumnLines(board) {
   ];
 }
 
+/** The work sessions that hold handed work and went quiet (`readStalled` of ./stall.mjs), the longest quiet first: each
+ * with how long, and what it was handed and when; `none` when nobody is, and each record that could not be read. */
+function stalledLines(stalled, now) {
+  const quiet = (item) => durationOf(Math.max(0, Math.round((now - Date.parse(item.quietSince)) / 1000)));
+  return [
+    `Stalled  work sessions that hold handed work and made no commit, notice or gate for ${stalled.limitMinutes}m or more (rule session-stall)`,
+    ...(stalled.items.length === 0 ? ['  none'] : stalled.items.map((item) => `  ${stalledName(item)}  quiet ${quiet(item)}  holding ${holdingWords(item.holding)} of ${ago(item.holding.at, now)}: ${handedText(item.holding)}`)),
+    ...stalled.unavailable.map((why) => `  not read: ${why}`),
+    '',
+  ];
+}
+
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, '', ...contextColumnLines(board)];
   const sizes = contextSizes(board);
@@ -3173,6 +3313,7 @@ export function renderBoard(board, { now }) {
   for (const session of board.sessions) lines.push(...sessionLines(session, now, sizes, ended.get(session.id)), '');
 
   lines.push(
+    ...(board.stalled ? stalledLines(board.stalled, now) : []),
     ...(board.roster ? rosterLines(board.roster, now) : []),
     ...channelLines(board.channel, now),
     ...openQuestionLines(board.questions, now, board.sessions.find((session) => session.self === true) ?? null),
@@ -3183,6 +3324,7 @@ export function renderBoard(board, { now }) {
     }),
     ...gateLines(board, now),
     ...sectionLines('Pull requests', board.pullRequests, 'none open', (pr) => `  #${pr.number}  ${pr.title}  (${pr.branch})`),
+    ...(board.memory ? memoryLines(board.memory) : []),
     ...(board.relief ? reliefLines(board.relief) : []),
     NOT_VISIBLE,
   );

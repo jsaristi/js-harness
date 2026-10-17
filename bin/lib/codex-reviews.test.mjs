@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appendCodexReview, codexReviewsPath, isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
+import { repoTemplate } from './git-fixture.testkit.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -36,14 +37,19 @@ function tmp(prefix) {
   return dir;
 }
 
-function makeRepo() {
-  const root = tmp('js-harness-codex-reviews-');
+/** The repository `makeRepo` hands out, built once and copied (`git-fixture.testkit.mjs`). */
+const oneCommit = repoTemplate((root) => {
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
   fs.writeFileSync(path.join(root, 'f.txt'), 'x', 'utf8');
   git(root, 'add', '.');
   git(root, 'commit', '-m', 'init');
+});
+
+function makeRepo() {
+  const root = tmp('js-harness-codex-reviews-');
+  oneCommit(root);
   return root;
 }
 

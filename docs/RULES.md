@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `6ceefeb4a3f8`. In force: 30 (15 of Sebastián, 15 of the project). Retired: 0.
+Hash `4a95a3907229`. In force: 40 (16 of Sebastián, 24 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -30,6 +30,12 @@ The share of its context window at which a session pauses, writes its state and 
 - Read by: `bin/lib/sessions.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
 
+### double-review
+A design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it: "- A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Looked at again on 2026-11-16.
+- Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
+
 ### questions-one-place
 Every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
 - Home: `bin/lib/manifest.mjs`.
@@ -48,7 +54,7 @@ The one model a Codex review runs on: gpt-6.1-sol.
 ### reviewed-commit-lines
 About how many changed lines a commit that will be reviewed stays under: 1,200 changed lines.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/check.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### session-effort
@@ -102,6 +108,11 @@ The most estimated tokens AGENTS.md may hold, since every session pays it on eve
 - Read by: `bin/check.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `docs/ROADMAP.md`.
 
+### ci-gate-bound
+How long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine: 8 minutes.
+- Read by: `bin/lib/ci-gate.mjs`.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/commit-gates-first.md`.
+
 ### contract-run-timeout
 How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.
 - Read by: `bin/contract.mjs`.
@@ -124,13 +135,23 @@ The size past which the gate log is renamed over its older file, so the log stay
 
 ### gate-max
 How long a command run under the gate lock may run before it is stopped with every process it started: 30 minutes. The flag `--max` overrides it for one run.
-- Read by: `bin/gate.mjs`, `bin/js-harness.mjs`, `bin/lib/manifest.mjs`.
+- Read by: `bin/gate.mjs`, `bin/js-harness.mjs`, `bin/lib/manifest.mjs`, `bin/throughput.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `odd/tasks/gate-turn-guards.md`.
 
 ### gate-wait
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
 - Read by: `bin/js-harness.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
+
+### memory-index-bytes
+The bytes the memory index may hold before a memory hygiene pass is due: 4,000 bytes.
+- Read by: `bin/lib/memory-hygiene.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
+
+### memory-pass-days
+The days after a verified memory hygiene pass when the next is due, if a note was written since: 7 days.
+- Read by: `bin/lib/memory-hygiene.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
 
 ### person-present
 How long after the user last wrote in a session a question is put to them at once with the question tool: 15 minutes.
@@ -157,10 +178,41 @@ How long a Codex review may run before it is stopped as stalled: 30 minutes.
 - Read by: `bin/codex-review.mjs`.
 - Since 2026-10-14. Row: reports. Source: design, `odd/tasks/codex-exec-review.md`.
 
-### sensor-timeout
-How long one sensor of the gate may run before it is stopped and the commit refused: 20 minutes.
+### sensor-silence
+How long one sensor of the gate may write nothing before it is stopped and the commit refused: 20 minutes.
 - Read by: `bin/check.mjs`.
-- Since 2026-10-15. Row: reports. Source: design, `odd/tasks/remote-control.md`.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/first-version.md`.
+
+### sensor-timeout
+How long one sensor of the gate may run before it is stopped and the commit refused: 60 minutes.
+- Was: 20 minutes until 2026-10-16.
+- Read by: `bin/check.mjs`.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/first-version.md`.
+
+### session-stall
+How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.
+- Read by: `bin/lib/manifest.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
+- Since 2026-10-16. Row: reports. Source: design, `odd/tasks/stalled-sessions.md`.
+
+### throughput-backfill-days
+How many closed days back the heartbeat writes a missing throughput snapshot for: 14 days.
+- Read by: `bin/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
+
+### throughput-compare-days
+How many days a side a throughput comparison needs before it judges a change: 7 days.
+- Read by: `bin/lib/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
+
+### throughput-quiet-days
+How many days after the last recorded throughput review the next is due once the review has gone quiet: 7 days.
+- Read by: `bin/lib/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
+
+### throughput-quiet-runs
+How many recorded throughput reviews in a row that found nothing make the review weekly instead of daily: 2 reviews.
+- Read by: `bin/lib/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
 
 ### wait-every
 How often js-harness wait checks its condition, unless --every says otherwise: 120 seconds. The flag `--every` overrides it for one run.

@@ -1,3 +1,5 @@
 #!/bin/sh
 # The gate of a commit, for the commit a merge makes by itself: git runs no pre-commit hook for that one.
+# Git runs this hook before it writes MERGE_HEAD, so the gate is told here that the commit is a merge's.
+export JS_HARNESS_HOOK=pre-merge-commit
 exec node "$(git rev-parse --show-toplevel)/bin/check.mjs"

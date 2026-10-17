@@ -90,7 +90,9 @@ export const word = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
  * `SYNCED_MARK`, and runs `command` there with nothing of the caller's environment but a Linux home of
  * its own, a `PATH` of Linux alone that starts with `node`, the variables a sensor of a gate is given, and
  * the mark of a held lock when `held`. `seconds` bounds the command inside the distribution, a little
- * short of the gate's own bound, so what the gate kills on Windows has already been stopped in Linux.
+ * short of the gate's ceiling, so what the gate kills on Windows at its ceiling has already been stopped
+ * in Linux. A sensor stopped sooner for its silence has its `wsl.exe` killed on Windows, and WSL then
+ * ends what that session started (first-version L29: no `timeout` or `sleep` was left behind).
  * The tree is synced without `.git`, which on Windows names folders that Linux cannot read, `.codegraph`
  * and `node_modules`, and what the mirror holds of those goes too (`--delete-excluded`): a test that made
  * one there must not change the next run. Files are compared by content (`--checksum`): `/mnt` shows

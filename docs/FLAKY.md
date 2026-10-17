@@ -20,15 +20,6 @@ The gate's `flaky` row reads this file: a malformed entry, a path that is no tes
 repository, or a failure that docs/FAILURES.md does not hold fails the gate; an expired entry is listed.
 Other lines are for people.
 
-### evals/suite.test.mjs
-- Owner: JH 21
-- Expires: 2026-10-22
-- Failure: eval-interrupt-process-alive
-
-The test "an interrupt during a real trial against a hanging fake agent leaves nothing of it" finds the
-fake agent's grandchild still running at the suite's exit, under load. The fix is fix/sweep-waits-for-exit:
-after its kills, a run waits, bounded, until the killed process group is gone.
-
 ### evals/codex-configs.test.mjs
 - Owner: JH 21
 - Expires: 2026-10-22
@@ -36,3 +27,13 @@ after its kills, a run waits, bounded, until the killed process group is gone.
 
 The test "a missing login stops the trial before the agent starts" finds the trial's directory still in
 the work root under load: its removal had not ended when the test read the folder.
+
+### evals/isolation-probe.test.mjs
+- Owner: JH 28
+- Expires: 2026-10-23
+- Failure: engram-listener-unseen-at-kill
+
+The test "the probe stops what the trial left listening on its engram port, by number, and leaves nothing
+behind" (line 1734) failed once in WSL2 under load, in a land that touched nothing of the evals; alone it
+passes. It asserts that one listener was found on the trial's port at the kill: its timing against the
+stand-in server is the suspect, not yet read.
