@@ -4568,6 +4568,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     unedited. README, under `js-harness sync`.
   - The first two parts are commit `968f0fc`; gentle-ai on `968f0fc` (`--base-ref db31c96`, untracked excluded):
     medium, 81 lines, review not due (`under_budget`). The third is the next commit, reviewed alone (item 3).
+  - gentle-ai on `968f0fc..cf820d2`, the third part: high by escalation (item 3, sync writes a project's committed
+    `AGENTS.md`), lenses risk, resilience and reliability, approved and acknowledged (lineage
+    `review-442164ed6054f39b`). Four advisories. R3 and R4: a block sync could not write again left the sync up to
+    date with exit 0; fixed in the next commit, test seen red (code 1, not up to date, the problem said). Left: a read
+    error of `AGENTS.md` is taken as no block (R3, the same as before this change for a missing file), and the
+    install log lines of `rendered` have no test of their own (R3, a suggestion).
 
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**

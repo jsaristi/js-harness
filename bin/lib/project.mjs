@@ -1924,7 +1924,8 @@ function syncTemplateBlock(root, result, writeFile) {
   try {
     writeFile(agents, rendered.text, 'utf8');
   } catch (err) {
-    return { ...result, actions: [...result.actions, { kind: 'problem', path: 'AGENTS.md', reason: `its block of the harness's lines could not be rendered again (${err.message})` }] };
+    // The sync did not finish, so it exits non-zero and is not up to date.
+    return { ...result, code: 1, upToDate: false, actions: [...result.actions, { kind: 'problem', path: 'AGENTS.md', reason: `its block of the harness's lines could not be rendered again (${err.message})` }] };
   }
   return { ...result, actions: [...result.actions, { kind: 'rendered', path: 'AGENTS.md' }], upToDate: false };
 }

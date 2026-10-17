@@ -3637,6 +3637,18 @@ test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md
     assert.deepEqual(third.actions, [{ kind: 'kept', path: 'AGENTS.md', reason: "its block of the harness's lines was edited, so sync does not render it again" }]);
     assert.equal(third.upToDate, true);
     assert.equal(fs.readFileSync(agents, 'utf8'), edited);
+
+    // A block sync cannot write again is a failed sync, not an up-to-date one (gentle-ai R3 and R4 on cf820d2).
+    fs.writeFileSync(agents, block(old), 'utf8');
+    const refused = (file, ...rest) => {
+      if (file === agents) throw new Error('EACCES');
+      return fs.writeFileSync(file, ...rest);
+    };
+    const fourth = syncProject(root, '0.1.0', syncDeps({ writeFile: refused }));
+    assert.equal(fourth.code, 1);
+    assert.equal(fourth.upToDate, false);
+    assert.deepEqual(fourth.actions, [{ kind: 'problem', path: 'AGENTS.md', reason: "its block of the harness's lines could not be rendered again (EACCES)" }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(old));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
