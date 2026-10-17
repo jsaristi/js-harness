@@ -6,6 +6,9 @@ import path from 'node:path';
 import { LINEAGE_ID, liveLineages, readReviewEnds, readReviewStarts, recordReviewStarts, reviewStartsFile, startOf } from './review-starts.mjs';
 
 const NOW = Date.parse('2026-10-17T12:00:00Z');
+// A test that makes real folders reads their real birthtime, which a fixed NOW falls behind once the clock passes it:
+// a birthtime after now is not one. Those tests take a now a minute after the clock instead.
+const later = () => Date.now() + 60_000;
 
 /** A git common dir with gentle-ai's store under it, and a harness home, in a temp folder removed after `body`. */
 function withStore(body) {
@@ -61,17 +64,18 @@ test('the live lineages are the folders of v2 named as lineages; the lock, tempo
 
 test('recording appends one line for each live lineage and birthtime not recorded yet, and makes the folder only to write one', withStore(({ commonDir, v2, home }) => {
   const file = reviewStartsFile(home, 'D--repo');
-  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now: NOW, platform: 'win32' }), 0);
+  const now = later();
+  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now, platform: 'win32' }), 0);
   assert.equal(fs.existsSync(path.dirname(file)), false);
   fs.mkdirSync(path.join(v2, 'review-aaa'));
   fs.writeFileSync(path.join(v2, 'LOCK'), '');
-  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now: NOW, platform: 'win32' }), 1);
-  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now: NOW + 5000, platform: 'win32' }), 0);
+  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now, platform: 'win32' }), 1);
+  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now: now + 5000, platform: 'win32' }), 0);
   const [line] = readReviewStarts(file);
   assert.equal(line.v, 1);
   assert.equal(line.lineage, 'review-aaa');
   assert.equal(line.from, 'birthtime');
-  assert.equal(line.seenAt, '2026-10-17T12:00:00.000Z');
+  assert.equal(line.seenAt, new Date(now).toISOString());
   assert.equal(line.at, new Date(fs.statSync(path.join(v2, 'review-aaa')).birthtimeMs).toISOString());
   // A start seen where no birthtime is kept is recorded once, whatever time the later calls see it at.
   const noBirth = { ...fs, statSync: (...args) => ({ ...fs.statSync(...args), birthtimeMs: 0, isDirectory: () => true }) };
