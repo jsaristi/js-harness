@@ -211,3 +211,8 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   one file at a time. Next: commit through the gate, gentle-ai (item 5, consent pre-granted), Codex
   (`js-harness codex-review --base origin/main`), push, PR stating the 0 $ spend, notify the lead. Then T3 (E) on
   `feat/wrapped-commit-hint` from main. R1 waits on T6f.
+- L4 (2026-10-17, state): C committed as d81b45b5, its own gate ran on GitHub in 148 s (run 38998247373).
+  gentle-ai assess: high, review due (high_risk). Its preflight status (--base-ref origin/main --committed-only,
+  lenses risk,resilience,reliability) failed with operation_timeout (retry_safe false, next_action stop). Next:
+  retry the preflight once; if it fails again, report it unavailable and go on with Codex
+  (`js-harness codex-review --base origin/main`), push, PR, notify. Then E. R1 waits on T6f.
