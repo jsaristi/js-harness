@@ -856,7 +856,8 @@ read it, and he found its holes, or was asked to approve a version its next roun
 - Seen: 2026-10-16 — the lead's transcript e152c9d8, line 14210 — the lead's improvement plan
   reached him with no reader: "siempre tenemos que hacer una doble revision a todo para que salga
   sin errores por favor cementa esto"
-- Control: owed — odd/tasks/rule-hierarchy.md — "the rule declared with its home"
+- Control: check — bin/lib/protocols-skill.test.mjs — "a proposal reaches the user only after two readers, and a handoff
+  names the rule" — since 2026-10-16
 
 ### push-check-read-as-gate
 The board counted the few seconds of a push's check as a second gate.

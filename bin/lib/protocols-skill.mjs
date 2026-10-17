@@ -36,6 +36,7 @@ Incident (2026-10-09): a session stopped and waited 17 hours for the user's yes 
 - One decision a question, one question at a time, never while work runs. Where an orchestrator holds its role, the question goes through it (\`js-harness-orchestrator\`, "Questions to the user").
 - A question asked again says first that the earlier answer still holds, and what changed since.
 - A short answer that fits two readings is asked about, not guessed.
+- A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing. The writer searches the user's earlier words on the subject and names the search. Each reader gets the whole text, the user's words and the paths it cites; the findings go in the feature document, or the orchestrator's notes when there is none. The version the user gets says what each reader changed and what stays unguaranteed; where readers disagree the writer decides on evidence, and what is not settled is unguaranteed. A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round. Readers run on the reader model the rules give, or where none is declared on the session's own model; a host with no sub-agents asks another session. Code is not this: it has its reviews (section 3). Not for a question of fact (a figure or an outcome looked up, nothing proposed), nor for a step or a choice whose reviewed text the question names by path.
 
 ## 2. ${PROTOCOLS[1]}
 
@@ -93,5 +94,6 @@ Incident (2026-10-10): a figure that was arithmetic and never measured, that thr
 - What another session, a sub-agent or the user reports as done outside the session is a claim: check one thing of it before building on it.
 - A claim that something is absent names the search that proves it, and why that search could have found it.
 - A sub-agent runs on the model and effort that the rules in force give its kind of work (\`rule:subagent-reader-model\`, \`rule:subagent-writer-model\`, \`rule:subagent-effort\`; \`js-harness rules <id>\` prints one); the guard refuses another model where those rules are in force.
+- A plan or a design handed on has passed its double review first (\`rule:double-review\`, section 1).
 `;
 }

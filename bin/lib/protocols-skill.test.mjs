@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { protocolsSkillContent, PROTOCOLS } from './protocols-skill.mjs';
 import { RULES } from './rules-data.mjs';
+import { agentsTemplate } from './project.mjs';
 
 const TEXT = protocolsSkillContent('0.1.0');
 
@@ -77,6 +78,18 @@ test('every rule id the protocols skill names is declared, and none of their val
     assert.ok(rule, `${id} is declared`);
     if (rule.value !== undefined) assert.ok(!TEXT.includes(String(rule.value)), `${id}'s value is not written in the skill`);
   }
+});
+
+// The double review (odd/tasks/rule-hierarchy.md, T18): its home is section 1, section 6 names it for what is handed
+// on, and the template init writes keeps a copy that may not drift from it.
+test('a proposal reaches the user only after two readers, and a handoff names the rule', () => {
+  const squash = (text) => text.replace(/\s+/g, ' ');
+  const [asking, , , , , handoff] = sections(TEXT).map((section) => squash(section.lines.join('\n')));
+  assert.match(asking, /A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing\./);
+  assert.match(asking, /A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round\./);
+  assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
+  assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
+  assert.ok(squash(agentsTemplate('project')).includes('one attacks its claims, one looks only for what is missing'));
 });
 
 test('the protocols skill ships to every user of the harness, so it speaks of the user', () => {

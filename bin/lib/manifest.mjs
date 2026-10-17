@@ -95,6 +95,7 @@ Every question of the project reaches the user in one place: the orchestrator's 
 - A question is recorded before it is asked: \`js-harness notify --to orchestrator --kind question\`, with its fields (\`text\`, \`options\`, \`waits\`) as JSON on standard input. It prints the question's number and the words its text is headed by in the tool: that heading is how the answer is joined to its question.
 - The question tool holds the session that calls it until the user answers. So it is called at once only when the user wrote in that session a short while ago; otherwise in the reply to their next message, and until then a reply says in one line how many questions wait. \`notify\`, the board (\`to ask:\`) and the resume after a compaction print this rule for the moment.
 - The answer is recorded once given: \`--kind answer --question <n>\`, with \`--transcript\` and \`--line\` naming where the user's words are, and the session that asked is rung. \`--kind withdrawn --question <n> "<why>"\` closes one that no longer needs an answer.
+- A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (\`rule:double-review\`, \`js-harness-protocols\` section 1), and says what its readers changed, or names by path the reviewed text it rests on.
 - The board lists every question still open, and whether it is recorded and not shown yet, on the user's screen, closed without an answer, or answered and not carried yet.
 
 ## The lead
