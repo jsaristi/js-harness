@@ -31,7 +31,7 @@ export const READING_SCHEMA = 'js-harness.channel-reading/v1';
  * (who has the role now), `question` (a question put to him, written before it is asked: its options, what
  * waits on it, and the number it is known by, which is its line's place in the record) and `withdrawn` (a
  * question closed without his answer, said as not his). */
-export const NOTICE_KINDS = ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn'];
+export const NOTICE_KINDS = ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn', 'ready'];
 
 /** The longest text of a notice, in characters: two or three sentences. A notice says that something
  * happened; what happened is in the feature document, the commit or the transcript it points at. */
@@ -103,11 +103,12 @@ function oneLine(text, max, what) {
  * `null` when it could not be read. An `answer` also has the `transcript` (a file or a session id) and the
  * `line` the user's words are read at; nothing here checks the quote. A `question` has no text of a note's
  * length: its `text` is the question, and it has an `id`, its `options` (`checkedQuestion`) and its `waits`.
- * A `withdrawn` closes the question numbered `question` without his answer, and its text is the reason. An
+ * A `withdrawn` closes the question numbered `question` without his answer, and its text is the reason. A `ready`
+ * says the pull request numbered `pr` is ready to land, so the land can tell whose it is without a branch. An
  * `answer` may name the question it answers with `question`, with `verified` (whether its line was read) and
  * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). Throws a
  * `ChannelInputError` for anything that is not a notice. */
-export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy }) {
+export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy, pr }) {
   const role = typeof to === 'string' ? roleNamed(to) : null;
   if (role === null) throw new ChannelInputError('--to takes a role: orchestrator (or ORQ), or the number of a work session');
   if (!NOTICE_KINDS.includes(kind)) throw new ChannelInputError(`--kind takes one of ${NOTICE_KINDS.join(', ')}`);
@@ -115,10 +116,16 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (kind !== 'question' && (id !== undefined || options !== undefined || waits !== undefined)) throw new ChannelInputError('only a question takes id, options and waits');
   if (kind !== 'answer' && kind !== 'withdrawn' && question !== undefined) throw new ChannelInputError('only an answer or a withdrawal takes --question');
   if (kind !== 'answer' && (verified !== undefined || copy !== undefined)) throw new ChannelInputError('only an answer with a question takes verified and copy');
+  if (kind !== 'ready' && pr !== undefined) throw new ChannelInputError('only a ready notice takes --pr');
   if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks the user: --to orchestrator');
   const asked = kind === 'question' ? checkedQuestion({ text, options, waits }) : null;
   const notice = { schema: NOTICE_SCHEMA, at, from, to: role, kind, text: asked === null ? oneLine(text, NOTICE_TEXT_MAX, 'the text of a notice') : asked.text, cwd, worktree, branch };
   if (kind === 'question') return { ...notice, id: oneLine(id, QUESTION_ID_MAX, 'the id of a question'), options: asked.options, waits: asked.waits };
+  if (kind === 'ready') {
+    if (pr === undefined) throw new ChannelInputError('a ready notice names its pull request: --pr <n>');
+    if (!isPullRequestNumber(pr)) throw new ChannelInputError('--pr takes the number of a pull request, from 1');
+    return { ...notice, pr };
+  }
   if (kind === 'withdrawn') {
     if (question === undefined) throw new ChannelInputError('a withdrawal names its question: --question <n>');
     return { ...notice, question: questionNumberOf(question) };
@@ -146,6 +153,11 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
 function questionNumberOf(question) {
   if (!isQuestionNumber(question)) throw new ChannelInputError('--question takes the number of a question, from 1');
   return question;
+}
+
+/** Whether `value` is the number of a pull request: a whole number from 1. */
+function isPullRequestNumber(value) {
+  return Number.isSafeInteger(value) && value >= 1;
 }
 
 /** Whether `value` is the number of a question: a whole number from 1. */
@@ -319,6 +331,7 @@ function isNotice(value) {
     (value.to.role === 'orchestrator' || (value.to.role === 'work' && Number.isSafeInteger(value.to.number))) &&
     (value.kind !== 'question' || (typeof value.id === 'string' && value.id !== '' && Array.isArray(value.options) && typeof value.waits === 'string')) &&
     (value.kind !== 'withdrawn' || isQuestionNumber(value.question)) &&
+    (value.kind !== 'ready' || isPullRequestNumber(value.pr)) &&
     (value.kind !== 'answer' || value.question === undefined || isQuestionNumber(value.question))
   );
 }

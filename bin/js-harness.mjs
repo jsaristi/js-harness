@@ -15,9 +15,9 @@ Commands:
   sync        Move the project to its pinned version (inside one) or re-write the machine install (--global, or outside a git repository).
   uninstall   Undo the project (inside one) or the machine install (--global, or outside a git repository).
   status      Show the project's pin and this clone (inside one) or the machine's installed, manifest and latest versions (--global, or outside a git repository).
-  update      Say whether a newer release exists: the newest vX.Y.Z tag of the private repository, read with the machine's git and its credentials (--repo <url or folder> names another). None is tagged before 1.0.0, so it says that and how to get the newest copy; --source <dir> reads a folder of npm pack tarballs instead. Tags that cannot be listed exit 1 and say why.
+  update      Say whether a newer release exists: the newest vX.Y.Z tag of the repository, read with the machine's git (--repo <url or folder> names another). None is tagged before 1.0.0, so it says that and how to get the newest copy; --source <dir> reads a folder of npm pack tarballs instead. Tags that cannot be listed exit 1 and say why.
   upgrade     Install the newer release, the repository at its newest vX.Y.Z tag (or the newest tarball of --source <dir>), then sync with the installed copy. With no release tagged it installs nothing and exits 1: no package registry is ever asked.
-  doctor      Report the stack's tools: installed, configured, up to date.
+  doctor      Report the stack's tools: installed, configured, up to date; and whether the installed copy's rules are behind main's.
   progress    Show roadmap and feature progress from their checkboxes.
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition), modes (each task's effort and sub-agent models).
   failures    The register of what went wrong, docs/FAILURES.md: the totals, the count by class and one line per failure, the most seen first, with its state. failures <id> prints one entry whole; failures check runs the gate's row alone and exits 1 when the register is refused, and with --settled also while a failure is not settled (repeated with no control, a control owed that is stale, a control lost or seen again, or a measurement lost or seen again). Read-only: only an editor writes the register.

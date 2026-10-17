@@ -273,14 +273,17 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `hook-commands` runs the commands a manifest records, and a temp home has no manifest: it starts none here.
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
-      // is `stack-update`, whatever tools it reads.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'unseen', 'host-update', 'stack-update', 'gentle-ai-sync'],
+      // is `stack-update`, whatever tools it reads. `js-harness`, the harness's own rules against main's, comes right
+      // after the checks, for every caller.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'host-update', 'stack-update', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.
     const host = rows.find((r) => r.id === 'host-update');
     assert.deepEqual([host.version, host.installed, host.claude, host.upToDate], [null, 'n/a', 'n/a', 'n/a']);
     assert.equal('host' in readCache(home), false);
+    // Offline, outside the harness's checkout, the rules row reads no main list.
+    assert.equal(rows.find((r) => r.id === 'js-harness').upToDate, 'n/a');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(cwd, { recursive: true, force: true });

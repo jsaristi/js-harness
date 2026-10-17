@@ -3059,7 +3059,8 @@ function channelLines(channel, now) {
   for (const notice of channel.notices) {
     const to = notice.to.role === 'orchestrator' ? 'orchestrator' : `work ${notice.to.number}`;
     const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (the user's words: transcript ${notice.transcript}, line ${notice.line})` : '';
-    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)}${shareWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
+    const kind = notice.kind === 'ready' ? `ready for pull request ${notice.pr}` : notice.kind;
+    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)}${shareWords(notice.from)} to ${to}  ${kind}  ${clipped(notice.text)}${read}`);
   }
   if (channel.skipped > 0) lines.push(`  ${channel.skipped} line${channel.skipped === 1 ? ' of the record is' : 's of the record are'} neither a notice nor a reading: skipped`);
   if (channel.messageCount > 0) lines.push(`  ${plural(channel.messageCount, 'message')} between sessions in the transcripts of the window${lastOf(channel.messageCount, channel.messages.length)}:`);

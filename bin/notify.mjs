@@ -21,7 +21,7 @@ import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPE
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
-  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] "<one line>"',
+  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] "<one line>"',
   '       js-harness notify --to orchestrator --kind question   (the fields of the question as JSON on standard input)',
   '       js-harness notify --relief "<one line>"',
   '       js-harness notify --opening "<title>"   (the opening\'s text on standard input)',
@@ -33,6 +33,8 @@ const USAGE = [
   `    Kinds: ${NOTICE_KINDS.join(', ')}. An answer carries the user's words and says where they`,
   '    are read, with --transcript and --line; no other kind takes them. The text is one line of',
   `    ${NOTICE_TEXT_MAX} characters at most.`,
+  '  A ready notice says a pull request is ready to land, and names it with --pr <n>, so the land knows whose it',
+  '    is from the record and not from a branch; no other kind takes --pr.',
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
   '    keys text, options and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
@@ -72,7 +74,7 @@ function requireValue(argv, i, flag) {
 function parseArgs(argv) {
   const parsed = {};
   // A Map, not an object: `constructor` and `__proto__` are keys of every object literal.
-  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--question', 'question'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
+  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--question', 'question'], ['--pr', 'pr'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
   const texts = [];
   // `--relief` or `--opening` when a lone `--` follows it: its value is the text after that `--`.
   let fromText;
@@ -111,7 +113,7 @@ function parseArgs(argv) {
   if (texts.length > 1) throw new NotifyArgError('the text is one argument: put it between quotes');
 
   const places = { self: parsed.self, cwd: parsed.cwd, home: parsed.home, claudeHome: parsed.claudeHome };
-  const ofANotice = ['to', 'kind', 'transcript', 'line', 'question'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
+  const ofANotice = ['to', 'kind', 'transcript', 'line', 'question', 'pr'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
   for (const [flag, other] of [['relief', 'opening'], ['opening', 'relief']]) {
     if (parsed[flag] === undefined) continue;
     const extra = [...ofANotice, ...(parsed[other] !== undefined ? [`--${other}`] : []), ...(texts.length > 0 ? ['a text'] : [])];
@@ -132,7 +134,12 @@ function parseArgs(argv) {
     if (!/^\d+$/.test(parsed.question) || Number(parsed.question) < 1) throw new NotifyArgError('--question takes the number of a question, from 1');
     question = Number(parsed.question);
   }
-  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line, question } };
+  let pr;
+  if (parsed.pr !== undefined) {
+    if (!/^\d+$/.test(parsed.pr) || Number(parsed.pr) < 1) throw new NotifyArgError('--pr takes the number of a pull request, from 1');
+    pr = Number(parsed.pr);
+  }
+  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line, question, pr } };
 }
 
 /** The copy an answer to question `number` keeps, read from the transcript's `text` at `line`: `{ copy }`, or
@@ -394,6 +401,7 @@ export async function notifyMain(
   const what = notice.kind === 'question' ? (questionNumber === null ? 'question (number not known)' : `question ${questionNumber}`)
     : notice.kind === 'answer' && notice.question !== undefined ? `answer to question ${notice.question}`
       : notice.kind === 'withdrawn' ? `withdrawn question ${notice.question}`
+        : notice.kind === 'ready' ? `ready for pull request ${notice.pr}`
         : notice.kind;
   // The hour is read from this clock at the instant `at` names, and the share from the sender's transcript: nobody types either.
   const clock = new Date(at);
