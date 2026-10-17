@@ -518,3 +518,6 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   the deferred decision could run before the fake exit and fail a correct `runSensor`. The T6h test now emits the
   exit inside the sensor's own timer, right after it runs (it wraps `setTimeout` only while `runSensor` arms it);
   it passes, and fails against a copy without the deferral (next commit).
+  That test is `2531fa8`; gentle-ai on `9a62f82..2531fa8`: medium, not due (`under_budget`). Codex recheck of
+  `9a62f82..2531fa8`: correct (0.98), its one finding fixed. Left: no test breaks a silence with a chunk inside the
+  deferred turn (R3's advisory).
