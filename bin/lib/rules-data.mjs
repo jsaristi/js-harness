@@ -385,6 +385,38 @@ export const RULES = [
     ]
   },
   {
+    "id": "throughput-backfill-days",
+    "subject": "how many closed days back the heartbeat writes a missing throughput snapshot for",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 14,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-compare-days",
+    "subject": "how many days a side a throughput comparison needs before it judges a change",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-quiet-days",
+    "subject": "how many days after the last recorded throughput review the next is due once the review has gone quiet",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 7,
+    "unit": "days"
+  },
+  {
+    "id": "throughput-quiet-runs",
+    "subject": "how many recorded throughput reviews in a row that found nothing make the review weekly instead of daily",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 2,
+    "unit": "reviews"
+  },
+  {
     "id": "wait-every",
     "subject": "how often js-harness wait checks its condition, unless --every says otherwise",
     "owner": "project",
