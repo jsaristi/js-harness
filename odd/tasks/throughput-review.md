@@ -168,5 +168,7 @@ questions answered, its cost (one command a day, the readers only with a candida
 
 - L21 (2026-10-17): the rows unit committed as f16be6d1; gate green on CI (153 s). gentle-ai assess on fe98af86..f16be6d1: medium, not due (under_budget); no high-risk item applies (the ci-gate change only adds a printed line), so no review started, and the Stop hook's offer of that range got the read-only status only. Codex on 1e46e47..f16be6d: one P2, correct: `readJsonLines` swallows a read failure, so an unreadable `lands.jsonl` printed `land phases  none`. Fixed test first: the command reads the record itself, none for a file that is not there, `not read: <day> <code>` for one that cannot be read.
 
+- gentle-ai (2026-10-17): fe98af86..b592d8d0 assessed medium, not due (under_budget); no high-risk item applies, so no review started; this line is the written evidence for f16be6d1 and b592d8d0 (PR 365).
+
 ## Next step
 Rows unit is PR 365 (L20, L21; Codex recheck of f16be6d..b592d8d: correct, 1 of 1 fixed; ready notice sent to the lead at 06:18Z). When it merges: B5 (per-test-file times; its row reads "of local gates that traced", an optional snapshot field) on a branch from main, then B6 (capture a real PostToolUse payload first), B4 with JH 26's agreement. The four rules on a `rule/` branch before T4. Then B5, B6 (capture a real PostToolUse payload first), B4 with JH 26's agreement. The four rules on a `rule/` branch before T4.
