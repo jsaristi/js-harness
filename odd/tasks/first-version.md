@@ -528,3 +528,5 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   own timer, right after it runs, so the chunk lands before the deferred decision, then ends the command 10 ms
   later: the run is reported by its exit 0, with the chunk in its output, and nothing is killed. It passed at once
   (T6h built the behavior) and stays as a pin; against a copy of `bin/check.mjs` without `chunks !== seen` it fails.
+  Committed as `8da9efa`; gentle-ai on `5ea341af..8da9efa`: medium, 33 lines, not due (`under_budget`), a test
+  only. Codex on `5ea341a..8da9efa`: correct (0.94), no finding.
