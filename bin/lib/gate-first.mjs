@@ -297,7 +297,7 @@ export function claimTicket({ home, session, cwd, named = false, now = Date.now,
       .filter((ticket) => ticket.session === session && (ticket.tree === null ? !named : ofTree(ticket.tree, cwd, platform)));
     for (const candidate of mine) {
       const claimed = path.join(dir, `${candidate.id}.claimed-${process.pid}-${randomBytes(3).toString('hex')}`);
-      const held = renameHeld(io, path.join(dir, `${candidate.id}.json`), claimed, pause);
+      const held = renameHeld(io, path.join(dir, `${candidate.id}.json`), claimed, pause, platform);
       if (held === 'gone') continue;
       if (held !== null) {
         unclaimed.push({ ticket: candidate, code: held });
@@ -324,21 +324,25 @@ export function claimTicket({ home, session, cwd, named = false, now = Date.now,
 }
 
 /** The codes of a rename Windows refuses for a moment, while another process holds the file open: the
- * ticket is still there, unlike one another gate claimed or a cancel removed (ENOENT). */
+ * ticket is still there, unlike one another gate claimed or a cancel removed (ENOENT). Elsewhere the same
+ * codes are no hold but a refusal that stays (a folder that cannot be written), so they are tried once and
+ * said (gate-first T8). */
 const HELD = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const HELD_TRIES = 3;
 const HELD_PAUSE_MS = 25;
 
-/** Renames `from` to `to`, trying again after `pause` while the file is held: `null` once it is renamed,
- * `'gone'` when it is no longer there (or any code that is not a hold), else the code of the last hold. */
-function renameHeld(io, from, to, pause) {
+/** Renames `from` to `to`, trying again after `pause` while the file is held on Windows (`platform`): `null`
+ * once it is renamed, `'gone'` when it is no longer there (or any code that is not a hold), else the code of
+ * the last hold. */
+function renameHeld(io, from, to, pause, platform) {
+  const tries = platform === 'win32' ? HELD_TRIES : 1;
   for (let attempt = 1; ; attempt += 1) {
     try {
       io.renameSync(from, to);
       return null;
     } catch (err) {
       if (!HELD.has(err?.code)) return 'gone';
-      if (attempt === HELD_TRIES) return err.code;
+      if (attempt === tries) return err.code;
       pause(HELD_PAUSE_MS);
     }
   }

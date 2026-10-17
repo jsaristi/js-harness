@@ -245,7 +245,7 @@ test('a claim whose rename meets a held file tries it again, and takes the ticke
   const { ticket } = issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
   const pauses = [];
   const io = failingRename(['EPERM', 'EBUSY']);
-  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now, fileSystem: io, pause: (ms) => pauses.push(ms) }), { ticket, expired: [] });
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now, platform: 'win32', fileSystem: io, pause: (ms) => pauses.push(ms) }), { ticket, expired: [] });
   assert.equal(pauses.length, 2);
   assert.equal(fs.existsSync(gateFirstDir(home)), false, 'spent: the claim removed it');
 }));
@@ -254,8 +254,47 @@ test('a ticket whose file stays held is not claimed, is said with the code, and 
   const clock = clockAt();
   const { ticket } = issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
   const io = failingRename(Array(10).fill('EBUSY'));
-  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now, fileSystem: io, pause: () => {} }), { ticket: null, expired: [], unclaimed: [{ ticket, code: 'EBUSY' }] });
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now, platform: 'win32', fileSystem: io, pause: () => {} }), { ticket: null, expired: [], unclaimed: [{ ticket, code: 'EBUSY' }] });
   assert.deepEqual(readTickets(home, { now: clock.now }).open, [ticket]);
+}));
+
+/** A file system whose rename of a ticket answers `code` every time, counting the tries in `tries`. */
+const alwaysHeld = (code) => {
+  const tries = [];
+  const io = new Proxy(fs, {
+    get: (target, name) => (name === 'renameSync'
+      ? (from, to) => {
+        if (path.basename(from).endsWith('.json')) {
+          tries.push(from);
+          throw Object.assign(new Error(code), { code });
+        }
+        return target.renameSync(from, to);
+      }
+      : target[name]),
+  });
+  return { io, tries };
+};
+
+test('on Windows a held file is tried three times in all, with a pause before each try again, then said with its code (gate-first T8)', withHome((home) => {
+  const clock = clockAt();
+  const { ticket } = issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  const { io, tries } = alwaysHeld('EPERM');
+  const pauses = [];
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now, platform: 'win32', fileSystem: io, pause: (ms) => pauses.push(ms) }), { ticket: null, expired: [], unclaimed: [{ ticket, code: 'EPERM' }] });
+  assert.equal(tries.length, 3);
+  assert.deepEqual(pauses, [25, 25]);
+}));
+
+test('on POSIX a refused rename is no hold: it is tried once, with no pause, and said with its code (gate-first T8)', withHome((home) => {
+  const clock = clockAt();
+  for (const code of ['EACCES', 'EPERM', 'EBUSY']) {
+    const { ticket } = issue(home, clock, { session: `sess-${code}` }, '0a0a0a0a');
+    const { io, tries } = alwaysHeld(code);
+    const pauses = [];
+    assert.deepEqual(claimTicket({ home, session: `sess-${code}`, cwd: '/x', now: clock.now, platform: 'linux', fileSystem: io, pause: (ms) => pauses.push(ms) }), { ticket: null, expired: [], unclaimed: [{ ticket, code }] }, code);
+    assert.deepEqual([tries.length, pauses.length], [1, 0], code);
+    fs.rmSync(gateFirstDir(home), { recursive: true, force: true });
+  }
 }));
 
 test('a claimed ticket whose file cannot be removed is still spent: the claim returns it, and no reader lists it again', withHome((home) => {
