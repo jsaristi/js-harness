@@ -493,3 +493,4 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   the quiet test (1.5 s of silence) and the ceiling test (1 s) could stop while node starts, before the first
   line; both now use the 4 s the steady test uses. The third: no test said the WSL2 run is given the silence
   bound; the silent fallback test now asserts both runs get `SENSOR_SILENCE_MS`. 5 of 5 of those tests pass.
+- L31 (2026-10-17, JH 25): gentle-ai evidence, one line a land reads: 7a19ed98..99316599 approved and acknowledged (lineage `review-eecd8b566b6888dd`, high, item 4 escalated); 08214376 assessed medium, not due (under_budget), its three advisories fixed.
