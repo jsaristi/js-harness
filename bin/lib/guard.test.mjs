@@ -248,6 +248,13 @@ test('a review on a later line of the command is checked, and a cd before it nam
   assert.equal(reviewBaseRefusal(body, { cwd: 'D:/p', contains: () => assert.fail('a heredoc body is not a command') }), null);
   assert.match(reviewBaseRefusal(`${body}gentle-ai review assess --base-ref origin/main`, { cwd: 'D:/p', contains: () => false }), /first-parent line/);
   assert.equal(reviewBaseRefusal('cat <<-END\n\tgentle-ai review start --base-ref x\n\tEND\n', { cwd: 'D:/p', contains: () => assert.fail('body') }), null);
+  // Codex's recheck, 2026-10-17: a `\` line continuation joins lines, a `#` comment runs to the end of its line, and a
+  // relative --cwd is read from the folder a cd moved to.
+  assert.match(reviewBaseRefusal('gentle-ai review assess \\\n  --base-ref origin/main --json', { cwd: 'D:/p', contains: () => false }), /first-parent line/);
+  assert.equal(reviewBaseRefusal('ls # then; gentle-ai review assess --base-ref origin/main', { cwd: 'D:/p', contains: () => assert.fail('a comment') }), null);
+  const moved = [];
+  reviewBaseRefusal('cd D:/w && gentle-ai review assess --cwd sub --base-ref x', { cwd: 'D:/p', contains: (base, at) => { moved.push(at); return true; } });
+  assert.deepEqual(moved, ['D:/w/sub']);
   const never = () => assert.fail('a folder it cannot follow is not looked up');
   for (const command of ['cd && gentle-ai review assess --base-ref x', 'cd - && gentle-ai review assess --base-ref x', 'cd "$REPO" && gentle-ai review assess --base-ref x', 'pushd D:/w && gentle-ai review assess --base-ref x']) {
     assert.equal(reviewBaseRefusal(command, { cwd: 'D:/p', contains: never }), null, command);

@@ -225,6 +225,10 @@ function shellWords(command) {
     } else if (c === "'" || c === '"') {
       quote = c;
       word ??= '';
+    } else if (c === '\\' && text[i + 1] === '\n') {
+      i += 1;
+    } else if (c === '#' && word === null) {
+      while (i + 1 < text.length && text[i + 1] !== '\n') i += 1;
     } else if (c === '<' && text[i + 1] === '<' && text[i + 2] !== '<' && HEREDOC.test(text.slice(i))) {
       const [found, single, double, bare] = HEREDOC.exec(text.slice(i));
       if (word !== null) words.push(word);
@@ -310,7 +314,9 @@ export function reviewBaseRefusal(command, { cwd, contains = onFirstParentLine }
     const own = words.slice(i + 3, end);
     const base = optionOf(own, 'base-ref');
     if (base === null || base === '') continue;
-    const repository = optionOf(own, 'cwd') ?? here;
+    const named = optionOf(own, 'cwd');
+    const relative = named !== null && !/^([A-Za-z]:)?[\\/]/.test(named);
+    const repository = named === null ? here : !relative ? named : here === null ? null : `${String(here).replace(/[\\/]+$/, '')}/${named}`;
     if (repository === null || contains(base, repository) !== false) continue;
     return `js-harness guard: --base-ref ${base} is not on this head's first-parent line, where gentle-ai walks for the `
       + 'base: off it the preflight runs about 216 git commands instead of 31 and can time out, and a base the head is '
