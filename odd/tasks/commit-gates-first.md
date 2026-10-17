@@ -260,8 +260,8 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   Route: inline. Commit d81b45b5; PR 353 (ready, waiting to land).
 - [x] T3 (kind: build) S4: E, test first, on `feat/wrapped-commit-hint` (stacked on C: its words name C's
   GitHub-first gate); gate, gentle-ai, Codex, PR. Route: inline. Commits 8ba73c22, 4665c503; PR 354.
-- [ ] T4 (kind: build) S5: R1, once T6f is resolved; test first; gate, gentle-ai (item 5), Codex, PR. Route: inline
-  (one unit, under the writer trigger). Branch `feat/windows-daily`.
+- [x] T4 (kind: build) S5: R1, once T6f is resolved; test first; gate, gentle-ai (item 5), Codex, PR. Route: inline
+  (one unit, under the writer trigger). Commits 8b96b9d2, e251c12e, 1c7d985d, eeeeb2e5; PR 367.
 
 ## Log
 - L1 (2026-10-17, the brief from the session that started this one, verbatim): "Build items C and E and the daily
@@ -357,3 +357,6 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   one, so the run read as told while no one was told. Pinned by a RED test (the notice's arguments name the
   marker's home) and fixed by passing `--home` to notify; a real `notifyMain` with `--home` wrote the record under
   the given home. Next: Codex's recheck of that commit, push, PR, notify the lead --kind ready.
+- L12 (2026-10-17, state): Codex's recheck of 1c7d985..eeeeb2e: 1 of 1 fixed, correct, 0.99, recorded. Pushed;
+  PR 367 opened (0 $ stated); the lead told --kind ready --pr 367. Left: after it lands, one `gh workflow run
+  windows-daily.yml` on main, whose result is the first daily run.
