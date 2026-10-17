@@ -46,7 +46,7 @@ export function ciGateWanted({ cwd, env = process.env }) {
 }
 
 /** Whether `env` is a CI machine's, read as `onCi` of ../check.mjs reads it: a `CI` of `false` or `0` says it is not. */
-function onCiMachine(env) {
+export function onCiMachine(env) {
   const value = env.CI?.trim().toLowerCase();
   return Boolean(value) && value !== 'false' && value !== '0';
 }

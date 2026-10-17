@@ -64,16 +64,21 @@ export function commandsOf(text) {
 
 const isNode = (word) => /(^|[\\/])node(\.exe)?$/i.test(word?.text ?? '');
 
-/** The words a `js-harness gate` command runs after its `--`, or `null` for a command that is no gate:
- * `js-harness gate ...` or `node .../js-harness.mjs gate ...`. One word after `--` is a command line of
- * its own, as `gate` reads it. */
-function gateWraps(words) {
+/** The commands a `js-harness gate` command runs after its `--`, each as its words, or `null` for a command that
+ * is no gate: `js-harness gate ...` or `node .../js-harness.mjs gate ...`. One word after `--` is a command line
+ * of its own, as `gate` reads it. */
+export function gateCommands(words) {
   const at = /(^|[\\/])js-harness(\.mjs)?$/.test(words[0]?.text ?? '') ? 0 : isNode(words[0]) && /js-harness\.mjs$/.test(words[1]?.text ?? '') ? 1 : -1;
   if (at === -1 || words[at + 1]?.text !== 'gate') return null;
   const split = words.findIndex((word) => word.text === '--');
   if (split === -1) return [];
   const rest = words.slice(split + 1);
-  return rest.length === 1 ? commandsOf(rest[0].text).flat() : rest;
+  return rest.length === 1 ? commandsOf(rest[0].text) : [rest];
+}
+
+/** The words a `js-harness gate` command runs after its `--`, all its commands' in one list (see `gateCommands`). */
+function gateWraps(words) {
+  return gateCommands(words)?.flat() ?? null;
 }
 
 /** The files the `node --test` of `words` names, as `{ files, names }`: `files` is `0` for none (every test
