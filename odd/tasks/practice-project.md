@@ -895,6 +895,14 @@ run itself.
   commit, the fix of the script it had not proven, and this record, which corrects what the
   first of them says of the branch. With them the feature spent twelve gates, five gentle-ai
   reviews and 1,186,367 input tokens of Codex in three runs.
+- 2026-10-17 (JH 22, the lead's order: "uninstall must leave nothing it wrote, or record
+  FAILURES.md"). `practice run --no-host` failed `project-uninstall` on main 44df727, 9 of 14:
+  uninstall removed `docs/FAILURES.md`, which `init` now writes untracked, and the step still
+  expected it, since its list knew only `.codegraph/`. Fixed in `843add0` (pull request 423): the
+  step reads init's manifest before uninstall and expects every untracked path it records to go
+  (`uninstallExpected`, test first). A run with the fix passed 14 of 14. gentle-ai: `843add0`
+  assessed medium, 3 paths, 54 lines, review not due (under_budget). Codex: `843add0` correct
+  (0.9); the merge of origin/main, `843add0..df67330`, correct (0.98); both recorded.
 
 ## Next step
 Nothing is left to build. Left for Sebastián or the orchestrator, none of it this session's
