@@ -235,7 +235,8 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
   C1 `fa39244` and C2 `21a06bf` merged in #141; C3a `776b03a`, the filters of paths and JSON keys,
   see L17; C3b `9d82100`, the marker blocks, see L18; C3c `dde2216`, Codex's TOML tables and hook
   trust, see L19; C4 `8ce28f0`, the suite's wiring and pins; C5, the report's arms section, see
-  L21, in #426; C6a, the probe, see L26; C6b and C7 next)
+  L21, in #426; C6a, the probe, see L26, in #428; C6b, `minimal-with-mcp-<name>`, and C7, the
+  documents, see L29)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
@@ -535,3 +536,18 @@ imports it. 205 tests of the probe, `without`, `home` and `arms` pass.
 L28 (2026-10-17, 23:39 UTC by `date`) Codex rechecked `cb9f1f3..3f3d59a` (48,783 input tokens, recorded): all three fixed, no new finding.
 gentle-ai assessed C6a `cb9f1f3` from `3badd8b`: medium, not due (`under_budget`, 338 changed lines).
 gentle-ai assessed the slice `cb9f1f3..3f3d59a` (C6a and its fixes) from `3badd8b`: medium, not due (`under_budget`, 498 changed lines).
+
+L29 (2026-10-17, 23:55 UTC by `date`) C6b and C7, on `feat/eval-arms-minimal-with` from `b743fd0`
+(#428 landed; the old worktree was removed by the land, so this one is new at the same path). C6b:
+`minimal-with-mcp-<name>` runs for Claude. `minimalWithConfig` is minimal's flags plus `--mcp-config`
+of `<home>/.claude/mcp-with.json`; `seedMinimalWith` writes there only the chosen server of the current
+template's `.claude.json`, engram's given the trial's own data dir and port by `trialEngram`, which
+`seedHome` now shares, and refuses a non-MCP id or a server the template lacks. The suite drops its
+"not built yet" refusal, builds the template for any arm, records `setup` only with `current`, and
+pins the arm's server like a cut. The probe takes `--arm minimal-with-mcp-<name>` beside `minimal`
+and checks the reverse of a cut: the arm offers `mcp__<name>__` tools on its main-model request, the
+base none. C7: Step 5 of `docs/future-model.md` rewritten from what the design found (arms continue
+Step 4's run and cost their own 15 trials; `minimal-with` holds only for MCP servers on Claude; five
+gentle-ai blocks and `claude-md-own`; `hooks` are settings entries; the project's `AGENTS.md` unverified;
+the probe before any spend), Step 6's spread defined as the standard error of the totals the report
+prints, and G2 marked built. 410 tests of the probe, suite, configs, home, without and arms: 409 pass, 0 fail.

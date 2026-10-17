@@ -1022,9 +1022,29 @@ test('a component a request carries nothing of is reported unseen, as a warning 
 test('an arm the probe cannot run yet, or without its base, is refused before anything is made', async () => {
   const machine = armMachine();
   await assert.rejects(probe(machine, 'ok', { arms: ['current-without-mcp-context7'] }), /needs its base, current/);
-  await assert.rejects(probe(machine, 'ok', { arms: ['minimal', 'minimal-with-mcp-engram'] }), /minimal-with/);
+  await assert.rejects(probe(machine, 'ok', { arms: ['minimal', 'minimal-with-hooks'] }), /setting-sources user/);
+  await assert.rejects(probe(machine, 'ok', { arms: ['current', 'minimal-with-mcp-context7'] }), /needs its base, minimal/);
   await assert.rejects(probe(machine, 'ok', { arms: ['current', 'current-without-agents-md'] }), /agents-md is not a component/);
   assert.deepEqual(leftovers(machine), []);
+});
+
+test('a minimal-with arm runs beside minimal: the arm carries the server it puts in, its base none, and both pass (G2, C6b)', async () => {
+  const machine = armMachine();
+  const report = await probe(machine, 'ok', { arms: ['minimal', 'minimal-with-mcp-context7'] });
+  assert.deepEqual(report.failures, []);
+  const [base, put] = report.arms;
+  assert.deepEqual(componentChecks(base), [['mcp-context7', 'absent', true]]);
+  assert.deepEqual(componentChecks(put), [['mcp-context7', 'present', true]]);
+  assert.equal(put.components[0].mainRequestHit, true);
+  assert.equal(put.contamination.ok, true, 'the arm still loads no global CLAUDE.md');
+  assert.equal(put.positiveControls.engramDb.applies, false, 'a minimal arm starts no engram of its own');
+  assert.match(formatSummary(report), /component mcp-context7: present on the main-model request, as it should/);
+  assert.deepEqual(leftovers(machine), []);
+
+  const io = capture();
+  const reportFile = path.join(tmp('out'), 'report.json');
+  assert.equal(await main(['--claude', process.execPath, '--arm', 'minimal-with-mcp-context7', '--report', reportFile], { ...io, overrides: overridesFor(machine, 'ok') }), 0, io.out.stdout);
+  assert.deepEqual(JSON.parse(fs.readFileSync(reportFile, 'utf8')).arms.map((arm) => arm.arm), ['minimal', 'minimal-with-mcp-context7']);
 });
 
 test('--arm takes an arm of one component, and runs it beside its base', async () => {

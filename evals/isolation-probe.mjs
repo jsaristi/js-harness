@@ -5,7 +5,7 @@
 // decisions"). This is the check that the sandbox is real, not assumed: the sandbox env is a list of
 // variables somebody believes every writer honours, and only a run of the real binary says whether it does.
 //
-//   node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both|current-without-<id>] [--control-ms <n>]
+//   node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both|current-without-<id>|minimal-with-mcp-<name>] [--control-ms <n>]
 //     [--report <path>] [--keep-sandbox] [--timeout-ms <n>]
 //
 // How it proves anything, rather than merely failing to find a leak:
@@ -40,8 +40,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ArmError, parseArm } from './arms.mjs';
-import { assertWorkRoot, currentConfig, defaultWorkRoot, minimalConfig, sandboxPaths } from './configs.mjs';
-import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
+import { assertWorkRoot, currentConfig, defaultWorkRoot, minimalConfig, minimalWithConfig, sandboxPaths } from './configs.mjs';
+import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate, seedMinimalWith } from './home.mjs';
 import { withoutEvidence } from './without.mjs';
 import { findProcesses, isListening as portIsListening } from './ports.mjs';
 import { childEnv, killByPath, parseAgentOutput, removeDir, resolveAgent, runProcess } from './runner.mjs';
@@ -1057,8 +1057,11 @@ async function runArm(p, arm, before) {
   // An arm of one component is the current arm with its components taken out after the seed, as the eval runs it. The
   // current arm tracks the components of every arm beside it (it must carry them), such an arm its own (it must not).
   const { kind, components } = o.plans.find((plan) => plan.name === arm);
-  const tracked = kind !== 'current' ? [] : components.length > 0 ? components : [...new Set(o.plans.flatMap((plan) => plan.components))];
-  let track = [];
+  // A base tracks the components of the arms built on it; a minimal-with arm puts its server in, so it must carry it and
+  // minimal must not. A server is told by its tool prefix alone, which needs no template.
+  const tracked = components.length > 0 ? components : [...new Set(o.plans.filter((plan) => plan.kind === kind).flatMap((plan) => plan.components))];
+  const expected = (kind === 'current') === (components.length > 0) ? 'absent' : 'present';
+  let track = kind === 'minimal' ? tracked.map((id) => ({ id, ...needlesOf({ tools: [`mcp__${id.slice('mcp-'.length)}__`], lines: [], descriptions: [] }) })) : [];
   const root = fs.mkdtempSync(path.join(o.workRoot, SANDBOX_PREFIX));
   const token = path.basename(root);
   p.tokens.push(token);
@@ -1115,12 +1118,12 @@ async function runArm(p, arm, before) {
     fs.mkdirSync(home);
     fs.mkdirSync(workspace);
     fs.writeFileSync(path.join(workspace, 'fixture.txt'), 'the isolation probe workspace\n');
-    api = await startFakeApi({ nonce, workspace, markers: p.markers });
+    api = await startFakeApi({ nonce, workspace, markers: p.markers, track });
     let run = null;
     let seeded = null;
     try {
       let seed;
-      if (kind === 'current') {
+      if (kind === 'current' || components.length > 0) {
         // Built per arm inside its own try, so the template (a copy of the account data in the real
         // config) is removed on every path below, whatever fails.
         templateParent = fs.mkdtempSync(path.join(o.workRoot, TEMPLATE_PREFIX));
@@ -1130,13 +1133,13 @@ async function runArm(p, arm, before) {
         result.template = { files: built.files, bytes: built.bytes, warnings: built.warnings };
         // What a request would carry of each tracked component, read from the template before any cut: the arm's own
         // home no longer holds it, which is the point.
-        track = tracked.map((id) => ({ id, ...needlesOf(withoutEvidence(path.join(templateDir, PAYLOAD), id, 'claude')) }));
+        if (kind === 'current') track = tracked.map((id) => ({ id, ...needlesOf(withoutEvidence(path.join(templateDir, PAYLOAD), id, 'claude')) }));
         api.track(track);
-        seed = seedFromTemplate(templateDir, { runInit: o.runInit, without: components });
+        seed = kind === 'minimal' ? seedMinimalWith(templateDir, components) : seedFromTemplate(templateDir, { runInit: o.runInit, without: components });
       }
       // `allocatePort` and `killPort` are the config builders' own seams, for tests that must not touch real ports.
       const options = { command: o.claude, model: PROBE_MODEL, permissionMode: PROBE_PERMISSION_MODE, allocatePort: o.allocatePort, killPort: o.killPort };
-      config = kind === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options);
+      config = kind === 'minimal' && components.length > 0 ? minimalWithConfig({ ...options, name: arm, seed }) : kind === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options);
       config = o.adaptConfig(config, { arm });
       const configEnv = config.env;
       // The agent talks to the fake API with a dummy key and no login: the only credential is not one.
@@ -1192,7 +1195,7 @@ async function runArm(p, arm, before) {
       : checkContamination(kind, log, p.markers.length);
     if (result.contamination.skipped && p.markers.length === 0) result.warnings.push(`the contamination check was skipped: ${result.contamination.skipped}`);
     if (track.length > 0) {
-      result.components = checkComponents(components.length > 0 ? 'absent' : 'present', log, track);
+      result.components = checkComponents(expected, log, track);
       for (const check of result.components.filter((entry) => entry.unseen)) result.warnings.push(`${check.id}: a request carries nothing of it, so the probe cannot see it`);
     }
 
@@ -1303,9 +1306,8 @@ export function armPlans(arms) {
     if (name === 'current' || name === 'minimal') return { name, kind: name, components: [] };
     const parsed = parseArm(name, 'claude');
     if (parsed === null) throw new ArmError(`unknown arm ${JSON.stringify(name)}: use "current", "minimal" or an arm of one component, current-without-<id>`);
-    if (parsed.direction === 'with') throw new ArmError(`${name}: the probe runs no minimal-with arm yet, so it cannot show that one holds its component`);
-    if (!arms.includes('current')) throw new ArmError(`${name} needs its base, current, in the same probe: the base must carry what the arm takes out`);
-    return { name, kind: 'current', components: parsed.components };
+    if (!arms.includes(parsed.base)) throw new ArmError(`${name} needs its base, ${parsed.base}, in the same probe: the base must ${parsed.base === 'current' ? 'carry what the arm takes out' : 'lack what the arm puts in'}`);
+    return { name, kind: parsed.base, components: parsed.components };
   });
 }
 
@@ -1578,10 +1580,12 @@ export function formatSummary(report) {
   return `${lines.join('\n')}\n`;
 }
 
-const USAGE = `usage: node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both|current-without-<id>] [--control-ms <n>] [--report <path>] [--keep-sandbox] [--timeout-ms <n>] [--work-root <abs>]
+const USAGE = `usage: node evals/isolation-probe.mjs --claude <absolute path> [--arm current|minimal|both|current-without-<id>|minimal-with-mcp-<name>] [--control-ms <n>] [--report <path>] [--keep-sandbox] [--timeout-ms <n>] [--work-root <abs>]
 
 --arm current-without-<id> (an arm of one component, evals/arms.mjs) runs that arm beside its base, current,
 and checks that the base carries the component on its main-model request and the arm on none.
+--arm minimal-with-mcp-<name> runs that arm beside its base, minimal, and checks the reverse: the arm offers
+the server's tools on its main-model request and the base offers none.
 
 --work-root is where sandbox homes, workspaces and the template are built (default: js-harness-evals-work
 next to this repository). It must be outside the real home and have no CLAUDE.md, CLAUDE.local.md, AGENTS.md
@@ -1623,12 +1627,12 @@ function parseArgs(argv) {
   let parsed;
   try {
     parsed = parseArm(options.arm, 'claude');
-    if (parsed !== null) armPlans(['current', options.arm]);
+    if (parsed !== null) armPlans([parsed.base, options.arm]);
   } catch (err) {
     if (err instanceof ArmError) throw new UsageError(`--arm: ${err.message}`);
     throw err;
   }
-  if (parsed === null) throw new UsageError(`--arm must be current, minimal, both or an arm of one component (current-without-<id>), got ${JSON.stringify(options.arm)}`);
+  if (parsed === null) throw new UsageError(`--arm must be current, minimal, both or an arm of one component (current-without-<id> or minimal-with-mcp-<name>), got ${JSON.stringify(options.arm)}`);
   return options;
 }
 
@@ -1650,7 +1654,7 @@ export async function main(argv = process.argv.slice(2), { stdout = process.stdo
   try {
     report = await runIsolationProbe({
       claude: args.claude,
-      arms: args.arm === 'both' ? ['current', 'minimal'] : args.arm === 'current' || args.arm === 'minimal' ? [args.arm] : ['current', args.arm],
+      arms: args.arm === 'both' ? ['current', 'minimal'] : args.arm === 'current' || args.arm === 'minimal' ? [args.arm] : [parseArm(args.arm, 'claude').base, args.arm],
       controlMs: args.controlMs,
       timeoutMs: args.timeoutMs,
       keepSandbox: args.keepSandbox,

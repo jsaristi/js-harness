@@ -268,6 +268,25 @@ export function minimalConfig(options) {
   return buildConfig('minimal', options, MINIMAL_FLAGS);
 }
 
+/** Where a minimal-with arm's trial home holds the one MCP server it puts in, for `--mcp-config`. */
+export const minimalWithMcpFile = (home) => path.join(home, '.claude', 'mcp-with.json');
+
+/** A minimal-with arm of one MCP server (G2 of `odd/tasks/future-model-protocol.md`): the minimal arm under its own
+ * `name`, whose `seed` writes that server to `minimalWithMcpFile` (`seedMinimalWith`, `evals/home.mjs`), passed by
+ * `--mcp-config`; `--strict-mcp-config` keeps every other server out, so the arm differs from minimal by that one. */
+export function minimalWithConfig({ name, seed, ...options } = {}) {
+  if (!isNonEmptyString(name)) throw new Error('a minimal-with config needs its arm\'s name');
+  if (typeof seed !== 'function') throw new Error(`${name} config: a seed that writes its server is required`);
+  const config = buildConfig(name, options, MINIMAL_FLAGS, seed);
+  return {
+    ...config,
+    args: (context) => {
+      if (!isNonEmptyString(context?.home)) throw new Error(`${name} config: the trial has no home to read its server from`);
+      return [...config.args(context), '--mcp-config', minimalWithMcpFile(context.home)];
+    },
+  };
+}
+
 /** The current arm: the machine's Claude Code setup as it is used daily, so no flag restricts it. The
  * setup itself lives in the trial's home and workspace, which `seed({ home, workspace })`, an optional
  * (async) function, fills after the shared preparation (`prepareSandbox`); without one the home is as bare
