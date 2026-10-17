@@ -453,8 +453,8 @@ Builds the candidate main would be: origin/main with each ready pull request mer
 order of number, and names each one it leaves out and why. Ready means the pull request is open,
 not a draft, mergeable, on main and with a gentle-ai line in its body, has a Codex review record for
 every code commit, and merges into the candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
-this machine under the gate lock and then on CircleCI on a `queue/*` branch, and when both are
-green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+this machine under the gate lock and, at the same time, on CircleCI on a `queue/*` branch pushed
+before the suite starts, and when both are green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
 A candidate whose every changed path is a document main's `harness.json` declares (`documents`) runs
 no suite on this machine, as a commit of documents alone runs none, and takes no turn of the gate
 lock: CircleCI's run of the whole gate is its test.
@@ -464,13 +464,19 @@ A candidate red on this machine is bisected: the pull request that turns it red 
 named, and the rest is landed. The land asks `js-harness gate first` for a ticket of the running
 session, so its gate goes first in the line; with no session id or a refused ticket it waits its turn
 and says so. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped
-before it ended is no red: the land exits 5, with nothing pushed and nothing bisected
-(`odd/tasks/land-unattended.md`). The pre-push hook refuses every other push of main from a clone; a
+before it ended is no red: the land exits 5, with main not pushed and nothing bisected
+(`odd/tasks/land-unattended.md`). The `queue/*` branch is removed as soon as its answer no longer
+matters: when the candidate is red or untested on this machine, or once CircleCI answered. Starting
+CircleCI with the suite saves the minutes the two took in series; its cost is one CircleCI run spent
+on each candidate this machine turns red or does not test, since removing the branch does not
+cancel its build. A land killed before it ends leaves its `queue/*` branch on origin, to be removed
+by hand. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
 Each `--land` appends one JSON line to `lands.jsonl` under the git directory's `js-harness` folder:
 the pull requests it looked at, each one left out with its reason (`not-ready`, `review`, `door`,
 `conflict`, `merge` or `red`, with what the suite said), the start and seconds of each suite run,
-of CircleCI and of the push, the CircleCI build, what landed and the exit. A `--dry-run` writes none,
+of CircleCI (from the push of the `queue/*` branch, so it spans the local suite) and of the push,
+the CircleCI build, what landed and the exit. A `--dry-run` writes none,
 and a record that cannot be written is said and changes no exit.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
