@@ -508,3 +508,8 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   proof was missing; the bound is 4 s, not the rule's 20 minutes, and the rule's value reaching `checkSensor` is
   the test "checkSensor gives every sensor the silence bound and the ceiling of the rules by default". GREEN: the
   twelve tests of the sensor's bounds in `bin/check.test.mjs`.
+  Committed as `22455a7`. gentle-ai on `3586f40..22455a7`: high by escalation (item 4, the order of a timer and an
+  exit), lenses resilience and reliability, approved and acknowledged (lineage `review-cdd7f329fb92c696`), three
+  advisories. R3: a killed child may answer `kill(pid, 0)` while it is reaped; the test now waits up to 5 s for it to
+  be gone (next commit). Left: the order of two timers of one duration is node's, which the test leans on (R3, a
+  suggestion), and no test breaks a silence with a chunk inside the deferred turn (R3).

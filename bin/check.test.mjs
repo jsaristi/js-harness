@@ -666,7 +666,10 @@ test('a gate stops a real silent hang at its silence bound: the row says so and 
     assert.deepEqual([row.pass, row.timedOut, row.detail], [false, true, 'node hang.js wrote nothing for 4 s and was stopped']);
     assert.match(row.output, /started/);
     const held = Number(fs.readFileSync(path.join(dir, 'held.pid'), 'utf8'));
-    assert.throws(() => process.kill(held, 0), { code: 'ESRCH' }, `pid ${held} still runs`);
+    // A killed process can answer a moment longer while it is reaped (gentle-ai R3 on 22455a7): wait up to 5 s.
+    const gone = () => { try { process.kill(held, 0); return false; } catch (err) { return err.code === 'ESRCH'; } };
+    for (const until = Date.now() + 5000; !gone() && Date.now() < until;) await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.ok(gone(), `pid ${held} still runs`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
