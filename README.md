@@ -721,7 +721,10 @@ watchdog task: off
 
 The board of the project's recent Claude Code sessions: each one's state, context size and
 last reply, the worktrees and their feature plans, the running gates, the open pull
-requests and whether a memory hygiene pass is due. It only reads. `--watch` waits until the board changes in a way that needs a
+requests and whether a memory hygiene pass is due. It only reads. A session is listed when its
+transcript changed in the last `--hours` (12 by default), and also, up to seven days back, when its
+last call has had no result for 15 minutes: a session the host holds on a card writes nothing, and
+the board keeps it with the line that the host may be holding it for approval. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
 the host made, whether the session was told the pause and committed its feature document (the
