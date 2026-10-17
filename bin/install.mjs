@@ -75,11 +75,18 @@ function reportSessionMessages(home) {
 
 /** What the uninstall says of a part of the folder of memory hygiene it left, other than kept snapshots (D7).
  * A planned pass is released from its project's checkout, which no file records, against the uninstall's home. */
+/** `value` as one word the user's shell reads back as it is: in single quotes, inside which neither sh nor
+ * PowerShell expands `$` or ends at `"`, as they do in double quotes. A single quote is written as each reads it:
+ * `'\''` for sh, `''` for PowerShell (`platform` win32). */
+export function shellWord(value, platform = process.platform) {
+  return `'${value.replace(/'/g, platform === 'win32' ? "''" : "'\\''")}'`;
+}
+
 function memoryKeptLine(folder, home) {
   switch (folder.reason) {
     case 'locked':
       return folder.stamp !== null && folder.manifest
-        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run js-harness memory verify ${folder.stamp} --home "${home}" or js-harness memory undo ${folder.stamp} --home "${home}", then uninstall again`
+        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run js-harness memory verify ${folder.stamp} --home ${shellWord(home)} or js-harness memory undo ${folder.stamp} --home ${shellWord(home)}, then uninstall again`
         : `kept ${folder.path}: ${folder.lock} holds no finished plan (pid ${folder.pid ?? 'unknown'}); if that process is not running, remove the file and uninstall again`;
     case 'locked-whole':
       return `kept ${folder.path}: --full removes it in one piece, and a project in it is under a memory pass; nothing of it was removed`;
