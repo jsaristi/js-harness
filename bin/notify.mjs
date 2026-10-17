@@ -48,7 +48,8 @@ const USAGE = [
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
   '    The record numbers it, and the number is printed: the user is asked with its text headed by',
   '    "Pregunta <n>: ". An answer or a withdrawal names its question with --question <n>. A verified answer',
-  '    is one read at its line of the transcript, and its copy is kept with it; with no transcript to read,',
+  '    is one read at its line of the transcript, and its copy is kept with it, with the time of his line and,',
+  '    for a question-tool answer, the time the question was shown; with no transcript to read,',
   '    the answer is recorded unverified, and that is said.',
   `  --relief appends one line, of ${RELIEF_LINE_MAX} characters at most, to the orchestrator's relief file, with the`,
   '    local date and time of the clock.',
@@ -156,7 +157,8 @@ function parseArgs(argv) {
 /** The copy an answer to question `number` keeps, read from the transcript's `text` at `line`: `{ copy }`, or
  * `{ refused }` in words when that line is not his answer to it. A typed answer counts when it was sent after the
  * question was recorded (`asked`, its notice). A question-tool answer counts when its call was asked after that
- * and holds a question that starts with the question's prefix: one call may ask several questions. */
+ * and holds a question that starts with the question's prefix: one call may ask several questions. With the copy come
+ * its `times` (throughput B4): `answeredAt`, the time of his line, and for a question-tool answer `shownAt`, its call's. */
 function copyOfAnswer(text, { line, file, number, asked }) {
   const quote = quoteOf(text, line);
   if (!quote.person) return { refused: `line ${line} of ${file} is ${quote.what}: not the user's answer` };
@@ -165,7 +167,7 @@ function copyOfAnswer(text, { line, file, number, asked }) {
     if (quote.pastedOnly) return { refused: `line ${line} of ${file} holds only pasted text: not the user's words typed in the chat` };
     if (quote.at === null) return { refused: `line ${line} of ${file} has no time, so it cannot be told to come after question ${number}` };
     if (!(Date.parse(quote.at) > recordedAt)) return { refused: `line ${line} of ${file} was sent before question ${number} was recorded` };
-    return { copy: { tool: null, answers: [{ question: asked.text, options: [], answer: quote.text, how: 'typed in the chat' }] } };
+    return { copy: { tool: null, answers: [{ question: asked.text, options: [], answer: quote.text, how: 'typed in the chat' }] }, times: { answeredAt: quote.at } };
   }
   const { answered } = quote;
   if (answered.askedAt === null) return { refused: `the call that line ${line} answers has no time, so it cannot be told to answer question ${number}` };
@@ -173,7 +175,7 @@ function copyOfAnswer(text, { line, file, number, asked }) {
   const prefix = questionPrefix(number);
   const answers = answered.answers.filter((one) => typeof one.question === 'string' && one.question.startsWith(prefix));
   if (answers.length === 0) return { refused: `no question of that call starts with ${JSON.stringify(prefix)}: it answers another question` };
-  return { copy: { tool: answered.tool, answers } };
+  return { copy: { tool: answered.tool, answers }, times: { shownAt: answered.askedAt, ...(quote.at === null ? {} : { answeredAt: quote.at }) } };
 }
 
 /** The text of an opening, from what standard input gave: bytes read as UTF-8, or a string as it is. Bytes
@@ -421,6 +423,7 @@ export async function notifyMain(
     if (parsed.notice.kind === 'answer') {
       const found = transcriptNamed(projectDir, parsed.notice.transcript, { cwd, readdir });
       let copy = null;
+      let times = {};
       if (found.not === 'outside') return notRecorded(`${parsed.notice.transcript} is not a transcript of this project: a file outside its sessions folder is none`);
       if (found.not === 'several') return notRecorded(`${plural(found.count, 'transcript')} start with ${parsed.notice.transcript}: give more of the session id`);
       if (found.not === 'short') return notRecorded(`${parsed.notice.transcript} is too short to name a session: a session id takes its first eight characters or more`);
@@ -437,11 +440,12 @@ export async function notifyMain(
           const read = copyOfAnswer(text, { line: parsed.notice.line, file: found.file, number, asked: theQuestion.notice });
           if (read.refused !== undefined) return notRecorded(read.refused);
           copy = read.copy;
+          times = read.times;
         }
       }
       if (claimed && copy === null) return notRecorded(closedSaid());
       try {
-        draft = newNotice({ at: null, from: null, ...parsed.notice, verified: copy !== null, copy });
+        draft = newNotice({ at: null, from: null, ...parsed.notice, verified: copy !== null, copy, ...times });
       } catch (failed) {
         if (!(failed instanceof ChannelInputError)) throw failed;
         return notRecorded(failed.message);

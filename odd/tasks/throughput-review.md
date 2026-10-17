@@ -133,7 +133,7 @@ questions answered, its cost (one command a day, the readers only with a candida
 ## Tasks
 - [x] T1 (kind: design) The design above, through two readers. Route: inline, readers as sub-agents. Two rounds (L4, L14).
 - [x] T2 (kind: build) (S2, S6) Unit 1: `throughput`, `snapshot`, `status`, `--against`; README; uninstall of the folder. Route: inline. PRs 357 and 359, merged.
-- [ ] T3 (kind: build) (S3) Unit 2: B3, B4, B5, B6, each with its row. Route: inline. B3 and the rows PR 365, B5 PR 368, B6 PR 373, B4a PR 378, merged; open only for B4b.
+- [x] T3 (kind: build) (S3) Unit 2: B3, B4, B5, B6, each with its row. Route: inline. B3 and the rows PR 365, B5 PR 368, B6 PR 373, B4a PR 378, merged; B4b on feat/answer-shown-times (L38).
 - [x] T4 (kind: build) (S4) Unit 3: the heartbeat's snapshots and DUE line, `reviewed`, the rule `throughput-quiet-runs`. Route: inline. Commits 26c693cd, 9c5eda8a.
 - [x] T5 (kind: docs) (S5) Unit 4: section 7. Route: inline. Commit 49de368c.
 
@@ -218,5 +218,6 @@ questions answered, its cost (one command a day, the readers only with a candida
 
 - L37 (2026-10-17): PR 384 (T4 and T5) merged at 10:35Z as bb4d80c4. T1 checked off (its two rounds are L4 and L14). Left open: B4b, the shown and answered times of an answer in `notify`, which is the channel session JH 26's code and waits for its agreement (asked by message, no answer); until then the questions row says those times are not recorded.
 
+- L38 (2026-10-17): B4b built by JH 5 on the lead's order of 11:22Z (JH 26 holds no channel work, so the lead cleared it), branch feat/answer-shown-times from origin/main 16301239. `copyOfAnswer` (bin/notify.mjs) returns the answer's `times` with its copy: `answeredAt`, the time of his line, and for a question-tool answer `shownAt`, the time of the call that asked it; `newNotice` (bin/lib/channel.mjs) keeps them on a verified answer only, as ISO times, and refuses `shownAt` on a typed one. An unverified answer and every notice written before keep none, so `questionFacts` still reads them as `null`. Test first: channel.test.mjs "a verified answer keeps when its question was shown…" and notify.test.mjs "a verified answer keeps when its question was shown and when he answered it…" failed before the change (`[undefined, undefined]`); after it, channel, notify, throughput and sessions tests: 527 tests, 526 pass, 0 fail.
 ## Next step
-The feature is done but for B4b. When JH 26 agrees, B4b is built on a branch from origin/main (bin/notify.mjs and bin/lib/channel.mjs keep shownAt and answeredAt on an answer notice that names --question; the questions row already reads them), test first, then gate, assess, evidence line, Codex, PR, notify the lead --kind ready; T3 is checked off with it.
+The feature is done once feat/answer-shown-times (B4b, L38) merges; nothing else is open.
