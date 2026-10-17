@@ -14,6 +14,7 @@ import {
   gitDirs,
   gitDirsAndCommits,
   agentsTemplate,
+  templateBlock,
   runCodegraphInit,
   InitWriteError,
 } from './project.mjs';
@@ -3603,6 +3604,39 @@ test('an invalid harness.json never echoes its own bytes: a fixed reason for JSO
     assert.equal(unreadable.kind, 'invalidHarnessJson');
     assert.match(unreadable.reason, /^it cannot be read \(([A-Z0-9_]+|unknown error)\)$/);
     assert.equal(syncProject(root, '0.1.0', syncDeps()).reason, unreadable.reason);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T16f of odd/tasks/rule-hierarchy.md: the harness's lines of AGENTS.md, in their marked block, are rendered again by sync
+// while the project has not edited them (bin/lib/template-block.test.mjs holds the block itself).
+test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md again and says so; an edited one is kept', () => {
+  const root = makeTmpRepo('js-harness-project-template-block-');
+  const mark = (body) => `<!-- js-harness block ${sha256(body).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->`;
+  const block = (body) => `# project\n\nOur own line.\n\n${mark(body)}\n${body}<!-- js-harness block end -->\n\n## Constraints\n- ours\n`;
+  const old = '## What good looks like\nAn older line of the harness.\n';
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, block(old), 'utf8');
+
+    const first = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(first.code, 0);
+    assert.equal(first.upToDate, false);
+    assert.deepEqual(first.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+
+    const second = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(second.upToDate, true);
+    assert.deepEqual(second.actions, []);
+
+    const edited = block(old).replace('An older line', 'Our edited line');
+    fs.writeFileSync(agents, edited, 'utf8');
+    const third = syncProject(root, '0.1.0', syncDeps());
+    assert.deepEqual(third.actions, [{ kind: 'kept', path: 'AGENTS.md', reason: "its block of the harness's lines was edited, so sync does not render it again" }]);
+    assert.equal(third.upToDate, true);
+    assert.equal(fs.readFileSync(agents, 'utf8'), edited);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

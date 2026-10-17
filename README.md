@@ -210,6 +210,10 @@ js-harness loop: stopped heartbeat: 2 processes, none left (looked at 05:18)
 Inside a project, moves it to the version its `harness.json` pins. With `--global`, or outside a
 git repository, writes the machine install again.
 
+The lines of `AGENTS.md` that `init` wrote for any project sit between two `js-harness block`
+marks. While the project has not edited them, `sync` writes them as the running version has them,
+for the project to commit; an edited block is kept and said.
+
 ```console
 $ js-harness sync
 up to date at 0.1.0
