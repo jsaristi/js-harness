@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { notifyMain } from './notify.mjs';
+import { notifyMain, readyProblems } from './notify.mjs';
 import { sessionsMain } from './sessions.mjs';
 import { channelDir, findOpenings, openingFileName, openingsDir, readNotices, recordPath, reliefPath, reliefStamp } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -87,6 +87,8 @@ async function runNotify(machine, argv, deps = {}) {
     // use it, so this is a folder that must stay as it is: not there.
     homedir: () => path.join(machine.dir, 'os-home'),
     run: fakeGit(machine).run,
+    // The land's checks of a ready notice ask gh and git of a real pull request: a test that holds them gives its own.
+    landChecks: async () => [],
     ...deps,
   });
   return { code, out, err };
@@ -307,10 +309,79 @@ test('a ready notice is recorded with the number of its pull request, and the co
   assert.match(out[0], /^js-harness notify: recorded ready for pull request 344 for the orchestrator at /);
 }));
 
+test('a ready notice the land would leave out is refused with the land\'s reasons, and nothing is recorded', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const asked = [];
+  const landChecks = async (pr, cwd) => {
+    asked.push([pr, cwd]);
+    return ['PR 360: its body has no gentle-ai line.'];
+  };
+  const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'ready', '--pr', '360', 'T1 is ready'], { landChecks });
+  assert.equal(code, 1);
+  assert.deepEqual(asked, [[360, machine.worktree]]);
+  assert.deepEqual(out, []);
+  assert.match(err.join('\n'), /pull request 360 is not ready to land: PR 360: its body has no gentle-ai line\. Not recorded\./);
+  assert.deepEqual(recorded(machine).notices, []);
+}));
+
+test('a notice of another kind runs no land checks', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const landChecks = async () => assert.fail('a note is no ready notice');
+  const { code } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'probe'], { landChecks });
+  assert.equal(code, 0);
+}));
+
+/** A `run` that answers gh with the pull request `view` and git with origin/main's id, and keeps what it was asked. */
+function landRun(view, { ghStatus = 0, fetchStatus = 0 } = {}) {
+  const calls = [];
+  const run = (command, args, options) => {
+    calls.push([command, ...args, options?.cwd]);
+    if (command === 'gh') return { status: ghStatus, stdout: ghStatus === 0 ? JSON.stringify(view) : '', stderr: ghStatus === 0 ? '' : 'no such pull request' };
+    if (args[0] === 'fetch') return { status: fetchStatus, stdout: '', stderr: fetchStatus === 0 ? '' : 'no network' };
+    if (args[0] === 'rev-parse') return { status: 0, stdout: 'main0sha\n', stderr: '' };
+    return { status: 1, stdout: '', stderr: 'unexpected' };
+  };
+  return { run, calls };
+}
+
+const READY_VIEW = { number: 360, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'gentle-ai: approved\nRisk: none', headRefOid: 'head0sha' };
+
+test('readyProblems asks the land\'s reviewEvidence about the head against fetched origin/main, and passes what passes', async () => {
+  const { run, calls } = landRun(READY_VIEW);
+  const seen = [];
+  const evidence = (cwd, main, head) => {
+    seen.push([cwd, main, head]);
+    return { pass: true, detail: 'covered' };
+  };
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run, evidence }), []);
+  assert.deepEqual(seen, [['D:/wt', 'main0sha', 'head0sha']]);
+  assert.deepEqual(calls[0].slice(0, 4), ['gh', 'pr', 'view', '360']);
+  assert.ok(calls.some((call) => call[1] === 'fetch'));
+});
+
+test('readyProblems gives pullRequestProblems\' words, and reads UNKNOWN mergeable as the land does', async () => {
+  const evidence = () => ({ pass: true, detail: 'covered' });
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, body: 'Risk: none' }).run, evidence }), ['PR 360: its body has no gentle-ai line.']);
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'UNKNOWN' }).run, evidence }), []);
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING).']);
+});
+
+test('readyProblems gives reviewEvidence\'s detail when the reviews do not cover the head', async () => {
+  const evidence = () => ({ pass: false, detail: 'commit abc1234 has no gentle-ai line on its branch' });
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW).run, evidence }), ['PR 360: commit abc1234 has no gentle-ai line on its branch.']);
+});
+
+test('readyProblems says so when gh or the fetch does not answer', async () => {
+  const evidence = () => assert.fail('nothing to ask before the pull request is read');
+  assert.match((await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW, { ghStatus: 1 }).run, evidence }))[0], /could not read pull request 360 with gh \(no such pull request\)/);
+  assert.match((await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW, { fetchStatus: 1 }).run, evidence }))[0], /could not fetch origin \(no network\)/);
+});
+
 test('the usage says what a ready notice takes', async () => {
   const err = [];
   assert.equal(await notifyMain([], { stdout: () => {}, stderr: (line) => err.push(line) }), 2);
   assert.match(err.join('\n'), /A ready notice says a pull request is ready to land, and names it with --pr <n>/);
+  assert.match(err.join('\n'), /refused, with the land's reasons,\s+while the land would leave that pull request out/);
 });
 
 // --- who sends ---

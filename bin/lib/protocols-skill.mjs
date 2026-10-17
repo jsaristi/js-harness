@@ -57,6 +57,7 @@ Incident (2026-10-10): a check and the step it should allow were joined by a sem
 - The proof is read before the command it allows. Two steps share one command only when the second is conditional on the first (\`&&\`, never \`;\`).
 - An assessment is read before the next command. After the default branch is merged into a branch, the base of the range to review or assess is that merge commit.
 - A stacked pull request is merged after its base, or its base is changed before the one under it is merged.
+- Run the installed \`js-harness\`, not your branch's \`node bin/js-harness.mjs\`, except to test your own change: a branch's copy lacks what main gained since it was cut, and five ready notices were never sent because their branch's notify had no \`--pr\` (2026-10-17).
 - A review candidate is a work-unit commit or a slice, never the whole branch. Where the project's \`AGENTS.md\` pre-grants review consent, run the \`granted\` invocation unasked; otherwise the consent is the user's. Where the project's \`codexReview\` switch is on, Codex reviews each approved slice of code (\`js-harness codex-review --base <boundary>\`) before the push. Name each code commit the review approved, by its hash or a range \`a..b\` that holds it, on a line of the feature document that says gentle-ai, on the same branch: the merge queue refuses a code commit with no such line.
 
 ## 4. ${PROTOCOLS[3]}

@@ -132,7 +132,7 @@ test('plan refuses while a pass holds the lock (exit 1), and verify of an unknow
     assert.equal((await run(['plan', 'b.md', '--cwd', project, '--home', home], {})).code, 0);
     const second = await run(['plan', 'b.md', '--cwd', project, '--home', home], {});
     assert.equal(second.code, 1);
-    assert.match(second.err, /a pass holds the lock/);
+    assert.match(second.err, /a memory pass is planned \(\d{8}T\d{9}Z\); js-harness memory verify or memory undo \d{8}T\d{9}Z releases it/);
     const unknown = await run(['verify', '20990101T000000000Z', '--cwd', project, '--home', home], {});
     assert.equal(unknown.code, 1);
     assert.match(unknown.err, /no snapshot 20990101T000000000Z/);

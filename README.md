@@ -36,6 +36,10 @@ js-harness uninstall --global
 npm rm -g js-harness
 ```
 
+`uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
+and names them; `uninstall --global --full` removes them too. Files you modified and the memory
+notes themselves are kept either way.
+
 `uninstall` removes from the project what `init` wrote, and `uninstall --global` removes from
 the home what `install` wrote. Each one reads the manifest the install recorded, so it removes
 only those files, and all of them. Measured on Windows with an empty home and an empty project:
@@ -206,6 +210,9 @@ up to date at 0.1.0
 ### js-harness uninstall
 
 Inside a project, removes what `init` wrote; with `--global`, removes what `install` wrote.
+`--global --full` also removes the memory snapshots, the only copy of what a pass changed; files
+you modified and the memory notes themselves are kept either way. Neither removes a project's
+memory folder while a pass holds its lock: the line says what releases it.
 
 ```console
 $ js-harness uninstall
@@ -583,6 +590,18 @@ as the gate log names them, by a note to that session's number in the channel, w
 (`js-harness notify --kind ready --pr <n>`); one that sent none is not told, and the lead relays it. The
 same reason is told once for one ready notice. Each left-out entry of the record keeps the failing
 tests of a red (`failing`) and the number of the session told (`told`, or `null`).
+After it lands, a land removes the worktree of each pull request it landed, with `git worktree remove` and
+never `--force`, when nothing in it can be lost: its head is in the main it pushed, `git status` shows
+nothing, ignored files included (the removal takes them, and no branch brings them back), its index has
+not changed for 10 minutes, and it is neither the Claude app's (under `.claude/worktrees`),
+the main one, a locked one nor the one the land runs from. The branch stays, so `git worktree add` brings
+it back; the record names each one removed (`removed`, each `{ pr, path }`). A session still open in such a
+worktree that staged nothing for 10 minutes is not seen: on Windows the removal of a folder in use fails
+and is said; elsewhere the session loses its folder.
+`--prune` removes by the same rule every worktree on a branch origin/main holds, whatever landed it, after
+a fetch; it asks about no pull request, moves nothing and writes no record. `js-harness doctor` counts
+those worktrees in its `worktrees` row, a gap that names `--prune` and each one; its hook, run at every
+session start, does not count them, since that asks a `git status` of each.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
@@ -629,7 +648,8 @@ Dry run: nothing was tested or pushed, and the candidate was removed.
 ### js-harness functions
 
 Shows each function the project can turn off and on in `harness.json` under `"functions"`: its
-value here and why.
+value here and why. `doctor` follows them: where `languageServer` is off it shows no row for the
+TypeScript plugin, and where `codexReview` is off no row for Codex.
 
 ```console
 $ js-harness functions
@@ -693,15 +713,17 @@ unseen: 1 to clear
 Keeps the project's Claude Code memory small and true. The index of that memory is read on every
 turn of every session, and in this repository it grew from 233 to 10,917 characters in 18 days with
 nothing watching it. `memory status` says whether a hygiene pass is due and why: no verified pass
-yet, the index over 4,000 bytes, a line over the host's 150 characters, a link to no file or a note
-with no line, a rule note written since the last pass, or 7 days since it with notes written since.
+yet, the index over its budget (rule `memory-index-bytes`), a line over the host's 150 characters, a
+link to no file or a note with no line, a rule note written since the last pass, or the cadence (rule
+`memory-pass-days`) passed since it with notes written since. `js-harness rules <id>` prints each value.
 It reads the main checkout's memory folder, so a worktree sees the same notes, and exits 1 when a
 pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
 of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
 user is lost and no file another session wrote is overwritten, and an undo that puts back only what
 nobody wrote since and refuses while another pass holds the lock. `uninstall --global` removes that
 folder, except a project's folder that holds snapshots: they are the only copy of what a pass changed,
-so it is kept, with its journal, and its stamps are named. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+so it is kept, with its journal, and its stamps are named; `uninstall --global --full` removes them
+too. Neither removes a project under a pass. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
 
 ```console
 $ js-harness memory status

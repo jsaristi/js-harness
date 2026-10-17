@@ -897,6 +897,48 @@ test('doctorMain on auto shows the codex row only for a project with a program f
   }
 });
 
+// --- the typescript-lsp row follows the project's languageServer switch: off is the control of language-server-load ---
+
+test('doctorMain leaves the typescript-lsp row out, and offers no enable, when the project declares languageServer off', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeJson(path.join(project, 'harness.json'), { functions: { languageServer: 'off' } });
+    const spawn = fakeSpawn({ codexLogin: 'in', lsFiles: 'src/app.ts\0' });
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(JSON.parse(json.output).some((r) => r.id === 'typescript-lsp'), false);
+    assert.doesNotMatch(text.output, /typescript-lsp/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain on auto shows the typescript-lsp row only for a project with a TypeScript file', async () => {
+  for (const [lsFiles, shown] of [
+    ['README.md\0bin/app.mjs\0', false],
+    ['README.md\0src/app.ts\0', true],
+  ]) {
+    const home = makeTmpHome();
+    const project = makeTmpHome();
+    try {
+      seedHealthyHome(home);
+      const spawn = fakeSpawn({ codexLogin: 'in', lsFiles });
+
+      const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+      assert.equal(JSON.parse(output).some((r) => r.id === 'typescript-lsp'), shown, JSON.stringify(lsFiles));
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  }
+});
+
 test('doctorMain shows codegraph project n/a, with no gap and no init offered, where codeMap is off', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
@@ -2177,6 +2219,54 @@ test("in the harness's checkout the hook tells a copy behind main once, and agai
     assert.equal((await hook()).output, '', 'the same main is told once');
     onMain = mainAhead(2).list;
     assert.match((await hook()).output, /1 stack gap/, 'a main that moved again is told again');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main already holds, clean
+// and idle, which no land removed, counted with the command that removes them. Counting asks a `git status` of each,
+// so the hook, run at every session start, does not ask.
+test('doctorMain shows the worktrees row stale, naming the command that removes them, when some are in main', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const worktrees = () => [{ path: 'D:/w/one', branch: 'feat/one' }, { path: 'D:/w/two', branch: 'feat/two' }];
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees });
+
+    assert.equal(code, 0);
+    assert.match(output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(output.includes('  worktrees (project):\n    2 worktrees on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them\n    D:/w/one (feat/one)\n    D:/w/two (feat/two)\n'), output);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows the worktrees row ok with none, unknown when it cannot tell, and its hook never counts them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+
+    const none = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => [] });
+    assert.match(none.output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.doesNotMatch(none.output, /^ {2}worktrees \(/m, 'no fix line for the worktrees row');
+
+    const unread = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => null });
+    assert.match(unread.output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => { asked = true; return [{ path: 'D:/w/one', branch: 'feat/one' }]; } });
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook counted the worktrees');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

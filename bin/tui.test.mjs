@@ -18,6 +18,7 @@ import {
   summarizeStackRow,
   computeStackState,
   buildCommands,
+  hasMemorySnapshots,
 } from './tui.mjs';
 import { installMain } from './install.mjs';
 import { manifestPath, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
@@ -154,6 +155,39 @@ test('y confirms the uninstall; anything else cancels back to the menu', () => {
   assert.equal(escaped.effect, null);
 });
 
+// T10 (odd/tasks/memory-hygiene.md, D7.8): with memory snapshots in the home, the yes to Uninstall is followed by a
+// second question, whose yes adds --full; without them the yes runs the uninstall as before.
+test('with memory snapshots, the yes to Uninstall asks whether to remove them too: y full, n or enter normal, escape cancels', () => {
+  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null, memorySnapshots: true });
+  const asked = handleKey({ ...base, mode: 'confirm', pending: 'uninstall' }, 'y');
+  assert.deepEqual([asked.state.mode, asked.state.pending, asked.effect], ['confirm', 'uninstall-full', null]);
+  assert.match(render(asked.state).join('\n'), /Remove the memory snapshots too, the only copy of what a pass changed\? \(y\/N\)$/);
+  assert.deepEqual(handleKey(asked.state, 'y').effect, { type: 'run', command: 'uninstall-full' });
+  assert.deepEqual(handleKey(asked.state, 'n').effect, { type: 'run', command: 'uninstall' });
+  assert.deepEqual(handleKey(asked.state, 'enter').effect, { type: 'run', command: 'uninstall' });
+  const escaped = handleKey(asked.state, 'escape');
+  assert.deepEqual([escaped.state.mode, escaped.effect], ['menu', null]);
+});
+
+test('buildCommands uninstall-full removes the memory snapshots, which the normal uninstall keeps', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-home-'));
+  const originalLog = console.log;
+  try {
+    const project = path.join(home, '.js-harness', 'memory-hygiene', 'C--proj');
+    fs.mkdirSync(path.join(project, 'snapshots', '20261015T120606108Z'), { recursive: true });
+    assert.equal(hasMemorySnapshots(home), true);
+    console.log = () => {};
+    assert.equal(await buildCommands({ home }).uninstall(), 0);
+    assert.equal(hasMemorySnapshots(home), true, 'the normal uninstall keeps them');
+    assert.equal(await buildCommands({ home })['uninstall-full'](), 0);
+    assert.equal(hasMemorySnapshots(home), false);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    console.log = originalLog;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('q, escape, and enter on Quit all request quitting', () => {
   const state = initialState({ installedVersion: '0.1.0', updateAvailable: null });
   assert.deepEqual(handleKey(state, 'quit').effect, { type: 'quit' });
@@ -215,6 +249,29 @@ test('runTui asks for confirmation before uninstalling', async () => {
   const code = await done;
   assert.equal(code, 0);
   assert.deepEqual(calls, ['uninstall']);
+});
+
+test('runTui asks the second question while snapshots are there, and reads again after each command whether they are', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const calls = [];
+  let snapshots = true;
+  const commands = {
+    uninstall: async () => calls.push('uninstall'),
+    'uninstall-full': async () => {
+      calls.push('uninstall-full');
+      snapshots = false;
+    },
+  };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, memorySnapshots: true, readSnapshots: () => snapshots, commands, stdin, stdout });
+  for (let i = 0; i < MENU_ITEMS.indexOf('uninstall'); i++) stdin.emit('data', 'j');
+  for (const key of ['\r', 'y', 'n', '\r', 'y', 'y', '\r', 'y']) {
+    stdin.emit('data', key);
+    await flush();
+  }
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+  assert.deepEqual(calls, ['uninstall', 'uninstall-full', 'uninstall'], 'with none left, the yes runs the uninstall alone');
 });
 
 // --- CLI entry: tuiMain ---
