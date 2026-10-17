@@ -2,6 +2,7 @@
 // a `PreToolUse` hook, so it answers the host with the hooks contract's JSON on standard output and always exits 0:
 // an older js-harness on the path answers 2 to a command it does not know, and 2 blocks the host, so every hook
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
+import { spawnSync } from 'node:child_process';
 import { ruleHere, ruleOf } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
@@ -205,6 +206,125 @@ export function backtickRefusal(command) {
   return `js-harness guard: backticks inside double quotes run as commands in bash (${shown}). `
     + 'Write the text through a file (Write, then `git commit -F <file>` or `--file`), put it in single quotes, '
     + 'or write $(...) where a command is meant.';
+}
+
+/** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
+ * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
+ * as it is: a Windows path is written with them. */
+function shellWords(command) {
+  const words = [];
+  let word = null;
+  let quote = null;
+  const pending = [];
+  const text = String(command ?? '');
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (quote !== null) {
+      if (c === quote) quote = null;
+      else word += c;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+      word ??= '';
+    } else if (c === '\\' && text[i + 1] === '\n') {
+      i += 1;
+    } else if (c === '#' && word === null) {
+      while (i + 1 < text.length && text[i + 1] !== '\n') i += 1;
+    } else if (c === '<' && text[i + 1] === '<' && text[i + 2] !== '<' && HEREDOC.test(text.slice(i))) {
+      const [found, single, double, bare] = HEREDOC.exec(text.slice(i));
+      if (word !== null) words.push(word);
+      word = null;
+      pending.push({ end: single ?? double ?? bare, tabs: found.startsWith('<<-') });
+      i += found.length - 1;
+    } else if (c === '\n') {
+      if (word !== null) words.push(word);
+      word = null;
+      // Each pending heredoc's body runs to the line that is its delimiter alone (tabs before it for <<-).
+      for (const { end, tabs } of pending.splice(0)) {
+        while (i < text.length) {
+          const next = text.indexOf('\n', i + 1);
+          const line = text.slice(i + 1, next === -1 ? text.length : next).replace(/\r$/, '');
+          i = next === -1 ? text.length : next;
+          if ((tabs ? line.replace(/^\t+/, '') : line) === end) break;
+        }
+      }
+      words.push(';');
+    } else if (/\s/.test(c)) {
+      if (word !== null) words.push(word);
+      word = null;
+    } else if (c === ';' || c === '|' || c === '&') {
+      if (word !== null) words.push(word);
+      word = null;
+      const pair = text[i + 1] === c && c !== ';';
+      words.push(pair ? c + c : c);
+      if (pair) i += 1;
+    } else {
+      word = (word ?? '') + c;
+    }
+  }
+  if (word !== null) words.push(word);
+  return words;
+}
+
+const SEPARATORS = new Set([';', '&&', '||', '|', '&']);
+const BASE_VERBS = new Set(['assess', 'status', 'start']);
+
+/** The value of `--<name>` among `words`, written `--name value` or `--name=value`, or null. */
+function optionOf(words, name) {
+  for (let i = 0; i < words.length; i += 1) {
+    if (words[i] === `--${name}`) return words[i + 1] ?? null;
+    if (words[i].startsWith(`--${name}=`)) return words[i].slice(name.length + 3);
+  }
+  return null;
+}
+
+/** Whether `base` is a commit on the first-parent line of the head of the repository at `cwd`: true, false, or null
+ * when git cannot tell (a tree, a name it does not know, no repository). */
+function onFirstParentLine(base, cwd) {
+  // A git that hangs (a loaded machine, a scanner) times out, and a call it cannot judge runs.
+  const git = (...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 5000 });
+  const resolved = git('rev-parse', '--verify', '--quiet', `${base}^{commit}`);
+  if (resolved.status !== 0) return null;
+  const line = git('rev-list', '--first-parent', 'HEAD');
+  if (line.status !== 0) return null;
+  return line.stdout.split(/\r?\n/).includes(resolved.stdout.trim());
+}
+
+/** Why the Bash command `command` is refused for the base it gives a gentle-ai review, or null (odd/tasks/gate-wait.md,
+ * T11). gentle-ai diffs the tree of `--base-ref` against the head's, then walks up to 64 first-parent ancestors of the
+ * head: a base off that line costs it about 216 git runs against 31, which a loaded machine stretches past its timeout,
+ * and a base the head is behind also puts that branch's newer work in the candidate, reversed (on 2026-10-17 a head 19
+ * commits behind origin/main was assessed as 470 changed lines in 20 s, and as nothing in 1 s from its merge-base).
+ * Only `assess`, `status` and `start` take a base. The repository is the command's `--cwd`, else `cwd`; `contains`
+ * stands in for git. A base git cannot read (a tree, an unknown name) is let run: the check says nothing it cannot tell. */
+export function reviewBaseRefusal(command, { cwd, contains = onFirstParentLine } = {}) {
+  const words = shellWords(command);
+  // The folder the commands run in, moved by a plain `cd <folder>`; null once a move it cannot follow came.
+  let here = cwd;
+  for (let i = 0; i < words.length; i += 1) {
+    const atStart = i === 0 || SEPARATORS.has(words[i - 1]);
+    if (atStart && (words[i] === 'cd' || words[i] === 'pushd' || words[i] === 'popd')) {
+      const to = SEPARATORS.has(words[i + 1] ?? ';') ? null : words[i + 1];
+      const followed = words[i] === 'cd' && to !== null && to !== '-' && !/^~|\$/.test(to) && here !== null;
+      here = !followed ? null : /^([A-Za-z]:)?[\\/]/.test(to) ? to : `${String(here).replace(/[\\/]+$/, '')}/${to}`;
+      continue;
+    }
+    if (!atStart || words[i] !== 'gentle-ai' || words[i + 1] !== 'review' || !BASE_VERBS.has(words[i + 2])) continue;
+    let end = i + 3;
+    while (end < words.length && !SEPARATORS.has(words[end])) end += 1;
+    const own = words.slice(i + 3, end);
+    const base = optionOf(own, 'base-ref');
+    if (base === null || base === '') continue;
+    const named = optionOf(own, 'cwd');
+    const relative = named !== null && !/^([A-Za-z]:)?[\\/]/.test(named);
+    const repository = named === null ? here : !relative ? named : here === null ? null : `${String(here).replace(/[\\/]+$/, '')}/${named}`;
+    if (repository === null || contains(base, repository) !== false) continue;
+    return `js-harness guard: --base-ref ${base} is not on this head's first-parent line, where gentle-ai walks for the `
+      + 'base: off it the preflight runs about 216 git commands instead of 31 and can time out, and a base the head is '
+      + 'behind puts its newer work in the candidate, reversed. Give it, by its hash, a commit on that line: the last '
+      + `reviewed boundary, the commit that merged the default branch in, or the hash of git merge-base ${base} HEAD `
+      + 'when it never was (odd/tasks/gate-wait.md, T11).';
+  }
+  return null;
 }
 
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
