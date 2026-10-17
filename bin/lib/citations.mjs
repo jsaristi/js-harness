@@ -74,3 +74,57 @@ export function resolveCitations(added, { lineCount, commitExists }) {
   }
   return { checked, unresolved };
 }
+
+// A task line checked off, `- [x] T6 …`: its id is the first word after the box.
+const CHECKED_TASK = /^\s*- \[x\] (T[\w.-]*\w)/;
+
+/** The ids of the tasks `text`, a feature document, holds checked off. */
+export function checkedTasks(text) {
+  return new Set(text.split(/\r?\n/).map((line) => CHECKED_TASK.exec(line)?.[1]).filter(Boolean));
+}
+
+/** The tasks `added` (from `addedLines`) checks off, as `{ file, line, id }`: each added `- [x]` task line whose id
+ * `before(file)`, the set of ids the file held checked off before the change (`checkedTasks`), lacks. A checked-off
+ * line that is only reworded checks nothing off. */
+export function checkedOff(added, before) {
+  const ticks = [];
+  for (const { file, line, text } of added) {
+    const id = CHECKED_TASK.exec(text)?.[1];
+    if (id !== undefined && !before(file).has(id)) ticks.push({ file, line, id });
+  }
+  return ticks;
+}
+
+/** The text of the task that starts at `line` (counted from 1) of `text`: that line and the indented lines that
+ * continue it. */
+export function taskText(text, line) {
+  const lines = text.split(/\r?\n/);
+  const held = [lines[line - 1] ?? ''];
+  for (let next = line; next < lines.length && /^\s+\S/.test(lines[next]); next += 1) held.push(lines[next]);
+  return held.join('\n');
+}
+
+/** Resolves each task `ticks` (from `checkedOff`) checks off (T6 of odd/tasks/commands-and-doctor.md): it names a
+ * commit, and one commit it names is reachable from HEAD, since a feature branch checks its tasks off before it
+ * merges. A task that names none passes only when `rides`, the change staging more than feature documents: it is
+ * then checked off in the commit being made, which it cannot name. `text(file, line)` is the task's text
+ * (`taskText`), `commitExists(id)` whether the repository has that commit, and `reaches(id)` whether HEAD reaches
+ * it, `null` when git cannot say, which is no claim. Returns the unresolved ones as `{ file, line, id, citation,
+ * why }`, `citation` being `null` when the task names no commit. */
+export function resolveTicks(ticks, { text, commitExists, reaches, rides }) {
+  const unresolved = [];
+  for (const { file, line, id } of ticks) {
+    const named = citationsIn(text(file, line)).filter((citation) => citation.kind === 'commit');
+    if (named.length === 0) {
+      if (!rides) unresolved.push({ file, line, id, citation: null, why: 'names no commit, and nothing but feature documents is staged' });
+      continue;
+    }
+    const whys = named.map((citation) => {
+      if (!commitExists(citation.id)) return 'no such commit';
+      return reaches(citation.id) === false ? 'not reachable from HEAD' : null;
+    });
+    if (whys.includes(null)) continue;
+    unresolved.push({ file, line, id, citation: named[0].text, why: whys[0] });
+  }
+  return unresolved;
+}

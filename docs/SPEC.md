@@ -99,7 +99,7 @@ proofs and by those tasks.
 ### Contracts and citations
 
 **Problem:** F3 asked that a task contract with no executable done-when never reach the autonomy loop (`odd/tasks/task-contract.md`). False citations lived in prose: the first full read found 1,857 citations, 190 unresolved (`odd/tasks/commands-and-doctor.md`).
-**Requirement:** Every gate validates every contract under `odd/tasks/` statically, never running a done-when command (one may be the gate itself). It resolves the `path:line` citations the pending change adds against the commit's index and reports how many do not resolve.
+**Requirement:** Every gate validates every contract under `odd/tasks/` statically, never running a done-when command (one may be the gate itself). It resolves the `path:line` citations the pending change adds against the commit's index and reports how many do not resolve, and each task the change checks off that names no commit HEAD reaches, unless the change stages the work beside it.
 **Reason:** A feature's end stays a set of commands, and a citation is evidence only if it points at something.
 **Proof:** `node --test bin/lib/contract.test.mjs`, `node --test bin/lib/citations.test.mjs`, `node --test bin/check-citations.test.mjs`
 **Discarded:** Running the done-when commands in the gate: it recurses through the gate. Citations as a failing row: documents cite other branches and repositories on purpose, so the row informs.
