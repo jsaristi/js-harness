@@ -457,7 +457,12 @@ const HELD_TAIL_BYTES = 256 * 1024;
 function heldOutsideWindow(file, changedAt, now, io) {
   if (changedAt < now - HELD_HORIZON_MS || typeof io.readTail !== 'function') return false;
   try {
-    return heldPastLimit(io.readFacts(io.readTail(file, HELD_TAIL_BYTES)), now);
+    let text = io.readTail(file, HELD_TAIL_BYTES);
+    // The first line of a tail may be cut; an entry longer than the tail leaves no whole line after it, so the
+    // whole transcript is read then (Codex P2 on f9195084).
+    const lines = text.split('\n').filter((line) => line.trim() !== '');
+    if (text.length >= HELD_TAIL_BYTES && lines.length < 2) text = io.readFile(file);
+    return heldPastLimit(io.readFacts(text), now);
   } catch {
     return false;
   }
