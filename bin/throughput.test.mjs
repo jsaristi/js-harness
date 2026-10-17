@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { SNAPSHOT_SCHEMA, throughputMain } from './throughput.mjs';
+import { SNAPSHOT_SCHEMA, throughputMain, throughputTick } from './throughput.mjs';
 import { newNotice } from './lib/channel.mjs';
 
 const NOW = Date.parse('2026-10-17T03:00:00Z');
@@ -168,7 +168,10 @@ test('snapshot refuses a day that is not over yet', async () => {
 
 test('status names each day since the first one kept that has none, and exits 1', async () => {
   const home = makeHome(GATES);
-  assert.equal((await run(['status'], { home })).code, 0);
+  // No snapshot at all: a project whose heartbeat never ran is flagged, not passed.
+  const none = await run(['status'], { home });
+  assert.equal(none.code, 1);
+  assert.match(none.stdout, /^MISSING: no day is kept for this project .*js-harness throughput snapshot --day 2026-10-16/m);
   await run(['snapshot', '--day', '2026-10-14'], { home });
   await run(['snapshot', '--day', '2026-10-16'], { home });
   const { code, stdout } = await run(['status'], { home });
@@ -217,7 +220,9 @@ test('with the git of the machine, not a fake, it reads a repository', async () 
   assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0);
   const out = [];
   const code = await throughputMain(['status', '--home', home], {}, { cwd: repo, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
-  assert.equal(code, 0, out.join('\n'));
+  // Nothing kept yet, so the project's own folder is named as missing (A8).
+  assert.equal(code, 1, out.join('\n'));
+  assert.match(out[0], new RegExp(`^MISSING: no day is kept for this project \\(.*js-harness-throughput-repo-`));
 });
 
 test('--against compares the window with an equal one before it, row by row, and judges nothing under 7 days', async () => {
@@ -461,4 +466,101 @@ test('a starts file that cannot be read leaves the acknowledgements from gentle-
     cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], readLands: () => [], fileSystem,
   });
   assert.match(out.join(String.fromCharCode(10)), /gentle-ai reviews +0 acknowledged; started not read: 2026-10-17 EBUSY/);
+});
+
+/** The outcomes file of the one project the home holds. */
+function outcomesFile(home) {
+  const folder = path.join(home, '.js-harness', 'throughput');
+  return path.join(folder, fs.readdirSync(folder)[0], 'outcomes.jsonl');
+}
+const outcomesOf = (home) => fs.readFileSync(outcomesFile(home), 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+
+test('reviewed and shipped record the outcomes, and status prints the reviews they leave due', async () => {
+  const home = makeHome(GATES);
+  await run(['snapshot', '--day', '2026-10-16'], { home });
+  let status = await run(['status'], { home });
+  assert.equal(status.code, 0, status.stdout);
+  assert.match(status.stdout, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/m);
+
+  const reviewed = await run(['reviewed', '--day', '2026-10-16', '--found', 'nothing'], { home });
+  assert.equal(reviewed.code, 0, reviewed.stderr);
+  assert.match(reviewed.stdout, /recorded the review of 2026-10-16 \(found nothing\)/);
+  assert.doesNotMatch((await run(['status'], { home })).stdout, /DUE/);
+
+  assert.equal((await run(['shipped', 'the faster gate', '--day', '2026-10-05'], { home })).code, 0);
+  assert.equal((await run(['shipped', 'the lean session'], { home, now: Date.parse('2026-10-05T18:00:00Z') })).code, 0);
+  status = await run(['status'], { home });
+  assert.match(status.stdout, /^DUE: throughput re-measure of the faster gate, the lean session, shipped 2026-10-05: js-harness throughput --since 2026-10-06 --until 2026-10-13 --against 2026-09-29\.\.2026-10-06; then js-harness throughput reviewed --shipped 2026-10-05 --found nothing\|candidates$/m);
+
+  assert.equal((await run(['reviewed', '--shipped', '2026-10-05', '--found', 'candidates'], { home })).code, 0);
+  assert.doesNotMatch((await run(['status'], { home })).stdout, /DUE/);
+  assert.deepEqual(outcomesOf(home).map(({ v, at, ...rest }) => [v, typeof at, rest]), [
+    [1, 'string', { kind: 'reviewed', day: '2026-10-16', found: 'nothing' }],
+    [1, 'string', { kind: 'shipped', item: 'the faster gate', day: '2026-10-05' }],
+    [1, 'string', { kind: 'shipped', item: 'the lean session', day: '2026-10-05' }],
+    [1, 'string', { kind: 'reviewed', shipped: '2026-10-05', found: 'candidates' }],
+  ]);
+});
+
+test('a torn last line of the outcomes is ended before the next one, and left out when read', async () => {
+  const home = makeHome(GATES);
+  await run(['snapshot', '--day', '2026-10-16'], { home });
+  fs.writeFileSync(outcomesFile(home), '{"v":1,"kind":"revie');
+  assert.equal((await run(['reviewed', '--day', '2026-10-16', '--found', 'nothing'], { home })).code, 0);
+  const lines = fs.readFileSync(outcomesFile(home), 'utf8').split(String.fromCharCode(10));
+  assert.equal(lines[0], '{"v":1,"kind":"revie');
+  assert.equal(JSON.parse(lines[1]).day, '2026-10-16');
+  const status = await run(['status'], { home });
+  assert.equal(status.code, 0, status.stdout);
+  assert.doesNotMatch(status.stdout, /DUE/);
+});
+
+test('the heartbeat\'s tick keeps each settled day the live gate log holds that has no snapshot, and remembers a day it does not hold', async () => {
+  const home = makeHome(GATES);
+  const skip = new Set();
+  const tick = (options = {}) => throughputTick({ home, cwd: ROOT, now: NOW, run: fakeGit(), skip, ...options });
+  const first = tick();
+  // The log begins at 23:00Z on the 15th: the 15th is kept as partial, the 16th whole, and the twelve days before
+  // (throughput-backfill-days, 14, back from the 16th) hold no gate, so they are remembered and never kept empty.
+  assert.deepEqual(first.lines, [
+    'throughput: kept 2026-10-15 (partial: the gate log begins at 2026-10-15T23:00:00Z)',
+    'throughput: kept 2026-10-16',
+  ]);
+  assert.deepEqual([...skip].sort(), ['2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14']);
+  assert.deepEqual(first.dues.map((due) => due.id), ['review 2026-10-16']);
+  assert.deepEqual(tick().lines, []);
+  const status = await run(['status'], { home });
+  assert.match(status.stdout, /2026-10-16 {2}kept$/m);
+  assert.doesNotMatch(status.stdout, /2026-10-14/);
+});
+
+test('the heartbeat\'s tick writes nothing while a gate holds the lock, and still says what is due', async () => {
+  const home = makeHome(GATES);
+  const held = throughputTick({ home, cwd: ROOT, now: NOW, run: fakeGit(), skip: new Set(), gateHolder: () => ({ stale: false }) });
+  assert.deepEqual(held.lines, []);
+  assert.deepEqual(held.dues.map((due) => due.id), ['review 2026-10-16']);
+  assert.equal(fs.existsSync(path.join(home, '.js-harness', 'throughput')), false);
+  // A stale holder is no gate: the days are kept.
+  const stale = throughputTick({ home, cwd: ROOT, now: NOW, run: fakeGit(), skip: new Set(), gateHolder: () => ({ stale: true }) });
+  assert.equal(stale.lines.length, 2);
+});
+
+test('reviewed and shipped refuse what they cannot record, and write nothing', async () => {
+  const home = makeHome(GATES);
+  for (const argv of [
+    ['reviewed', '--day', '2026-10-16'],
+    ['reviewed', '--day', '2026-10-16', '--found', 'maybe'],
+    ['reviewed', '--found', 'nothing'],
+    ['reviewed', '--day', '2026-10-16', '--shipped', '2026-10-05', '--found', 'nothing'],
+    ['reviewed', '--day', '2026-10-17', '--found', 'nothing'],
+    ['reviewed', '--shipped', '2026-10-12', '--found', 'nothing'],
+    ['shipped'],
+    ['shipped', 'a', 'b'],
+    ['shipped', 'a', '--day', '2026-10-18'],
+    ['shipped', 'a', '--found', 'nothing'],
+  ]) {
+    const result = await run(argv, { home });
+    assert.equal(result.code, 2, `${argv.join(' ')}: ${result.stdout}`);
+  }
+  assert.equal(fs.existsSync(path.join(home, '.js-harness', 'throughput')), false);
 });

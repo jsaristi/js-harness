@@ -34,6 +34,8 @@ function world({ files = {}, channel = '', onSleep = () => {} } = {}) {
     run: noGit,
     // The daily Windows run is read only where a test asks for it: no other body here reaches GitHub.
     windowsDaily: async () => null,
+    // So is the throughput tick: no body here writes a snapshot.
+    throughputTick: async () => null,
     readdir: (dir) => Object.keys(state.files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file)),
     mtime: (file) => {
       if (state.files[file] === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
@@ -229,4 +231,57 @@ test('heartbeat: a reader that throws is said once and ends nothing', async () =
   };
   assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], {}, deps), 1);
   assert.equal(state.out.filter((line) => line.includes('gh vanished')).length, 1);
+});
+
+const DUE_AT = T0 + 10 * 60000;
+const DUE = { id: 'review 2026-10-14', at: new Date(DUE_AT).toISOString(), line: 'DUE: throughput review of 2026-10-14: js-harness throughput --since 2026-10-14' };
+
+test('heartbeat ends with the DUE line when a throughput review falls due, and a relaunch is woken again only as the wait doubles', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  const asked = [];
+  deps.throughputTick = async (options) => {
+    asked.push(options);
+    return { lines: [], dues: options.now >= DUE_AT ? [DUE] : [] };
+  };
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.equal(state.out.at(-1), DUE.line);
+  assert.equal(state.clock, T0 + 10 * 60000, 'it ends at the first tick the review is due');
+  assert.equal(asked[0].home, HOME);
+  assert.equal(asked[0].cwd, CWD);
+  assert.equal(asked[0].slug, projectSlug(CWD));
+  assert.equal(asked[0].now, T0);
+  assert.equal(asked.at(-1).skip, asked[0].skip, 'the days the gate log does not hold are remembered across ticks');
+
+  // Relaunched 20 minutes later: named at the start, and ended again at one hour due (then three, then seven).
+  state.clock = DUE_AT + 20 * 60000;
+  state.out = [];
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.equal(state.out.filter((line) => /^already due: throughput review of 2026-10-14, since \d\d:\d\d$/.test(line)).length, 1);
+  assert.equal(state.out.at(-1), DUE.line);
+  assert.equal(state.clock, DUE_AT + 60 * 60000);
+  state.out = [];
+  assert.equal(await loopMain(['heartbeat', '--every', '600'], {}, deps), 0);
+  assert.equal(state.clock, DUE_AT + 3 * 60 * 60000);
+});
+
+test('heartbeat: every line that ends it is followed by the open DUE lines', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  deps.throughputTick = async () => ({ lines: [], dues: [{ ...DUE, at: new Date(T0 - 2 * 3600000).toISOString() }] });
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, deps), 0);
+  assert.equal(state.out.at(-2), `STALL: no gate-log or channel write since ${hour(T0)}`);
+  assert.equal(state.out.at(-1), DUE.line);
+});
+
+test('heartbeat says once each what the throughput tick said or could not do, and a tick that throws never ends it', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  let ticks = 0;
+  deps.throughputTick = async () => {
+    ticks += 1;
+    if (ticks % 2 === 0) throw new Error('disk gone');
+    return { lines: ['throughput: kept 2026-10-14'], dues: [] };
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], {}, deps), 1);
+  assert.equal(state.out.filter((line) => line === 'throughput: kept 2026-10-14').length, 1);
+  assert.equal(state.out.filter((line) => line === 'throughput: the tick failed (disk gone)').length, 1);
+  assert.ok(ticks > 3);
 });

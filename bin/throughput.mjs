@@ -2,12 +2,14 @@
 // `js-harness throughput`: the measure of the throughput review (odd/tasks/throughput-review.md, unit 1). It prints
 // a fixed table over whole UTC days, each row naming its source, from each day's snapshot when there is one and from
 // the live records otherwise. `snapshot` keeps the facts of a closed day under the harness home, once, so a
-// before/after reads what the day was and not what a rotating log still holds; `status` names the days with none.
-// The table and the status write nothing.
+// before/after reads what the day was and not what a rotating log still holds; `status` names the days with none
+// and the reviews due. `reviewed` and `shipped` record the review's outcomes, which say when the next one is due
+// (unit 3). The table and the status write nothing.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { readGateHolder } from './lib/gate-lock.mjs';
 import { readGateLog, readGateTestTimes } from './lib/gate-log.mjs';
 import { paceLogArgs, parsePaceLog } from './lib/progress-pace.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -18,14 +20,17 @@ import { gitDirs } from './lib/project.mjs';
 import { liveLineages, readReviewEnds, readReviewStarts, reviewStartsFile } from './lib/review-starts.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import {
+  addDays,
   channelIdle,
   codexFacts,
+  COMPARE_DAYS,
   compareWindows,
   conflictFiles,
   dayBounds,
   daysBetween,
   gateFacts,
   landFacts,
+  lastSettledDay,
   questionFacts,
   reviewFacts,
   parseCommitTimes,
@@ -36,6 +41,7 @@ import {
   taskCounts,
   testTimeFacts,
   withReadyAt,
+  throughputDues,
   throughputRows,
   utcDay,
 } from './lib/throughput.mjs';
@@ -46,6 +52,8 @@ const USAGE = [
   'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--against <since>..<until>] [--json]',
   '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]... [--copied-at <YYYY-MM-DDTHH:MMZ>]',
   '       js-harness throughput status',
+  '       js-harness throughput reviewed (--day <YYYY-MM-DD> | --shipped <YYYY-MM-DD>) --found nothing|candidates',
+  '       js-harness throughput shipped <item> [--day <YYYY-MM-DD>]',
   '       (each also takes --cwd <path> and --home <path>)',
   '  The table: the UTC days [since, until), by default the day before today. The gates of a day are read from its',
   '    snapshot when there is one, else from the live gate log; main and the Codex runs are always read live. Every row',
@@ -61,19 +69,29 @@ const USAGE = [
   '  --against: the window compared with an equal window before it, a row each, daily value with daily value. Under 7',
   '    days a side it prints both and how often the after median of a window that did not change falls outside the',
   '    before range, and judges nothing; from 7, a row moved only when the after median lies outside the before range.',
-  '  status: the days kept, each partial one with why, and each day since the first one kept that has none (exit 1).',
+  '  status: the days kept, each partial one with why, and each day since the first one kept that has none (exit 1);',
+  '    none kept at all is missing too (exit 1). Then a DUE line for each review owed, which changes no exit code: the',
+  '    last settled day, unless a review of it or later is recorded, or weekly once the last reviews in a row the rule',
+  '    throughput-quiet-runs counts found nothing; and a re-measure of each day something shipped, once the',
+  '    throughput-compare-days after it have settled.',
+  '  reviewed: records a review of the days up to --day, or the re-measure of what shipped on --shipped, and whether',
+  '    it found candidates, in <home>/.js-harness/throughput/<project>/outcomes.jsonl. The day must have settled.',
+  '  shipped: records that <item> shipped on --day (default today), so its re-measure falls due.',
   '  Exit 2: a usage error, and nothing is done.',
 ].join('\n');
 
 class ThroughputArgError extends Error {}
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const VERBS = new Set(['snapshot', 'status']);
+const VERBS = new Set(['snapshot', 'status', 'reviewed', 'shipped']);
 const FLAGS_OF = {
   table: ['--since', '--until', '--against', '--json', '--cwd', '--home'],
   snapshot: ['--day', '--gate-log', '--copied-at', '--cwd', '--home'],
   status: ['--cwd', '--home'],
+  reviewed: ['--day', '--shipped', '--found', '--cwd', '--home'],
+  shipped: ['--day', '--cwd', '--home'],
 };
+const FOUND = ['nothing', 'candidates'];
 
 /** Whether `value` is a day of the calendar as `YYYY-MM-DD`: a month 13 does not parse, and a 31st of a month of 30
  * rolls over to another day. */
@@ -89,6 +107,12 @@ function parseArgs(argv) {
   const flags = {};
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
+    if (verb === 'shipped' && !arg.startsWith('--')) {
+      if (flags.item !== undefined) throw new ThroughputArgError(`throughput shipped takes one item, quoted if it has spaces: ${flags.item}, then ${arg}`);
+      if (arg.trim() === '') throw new ThroughputArgError('throughput shipped takes the item that shipped, not an empty one');
+      flags.item = arg;
+      continue;
+    }
     if (!allowed.has(arg)) throw new ThroughputArgError(arg.startsWith('--') ? `${arg} is not an option of throughput${verb === 'table' ? '' : ` ${verb}`}` : `unexpected argument: ${arg}`);
     if (arg === '--json') {
       flags.json = true;
@@ -96,7 +120,8 @@ function parseArgs(argv) {
     }
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) throw new ThroughputArgError(`${arg} requires a value`);
-    if (['--since', '--until', '--day'].includes(arg) && !isDay(value)) throw new ThroughputArgError(`${arg} takes a day as YYYY-MM-DD: ${value}`);
+    if (['--since', '--until', '--day', '--shipped'].includes(arg) && !isDay(value)) throw new ThroughputArgError(`${arg} takes a day as YYYY-MM-DD: ${value}`);
+    if (arg === '--found' && !FOUND.includes(value)) throw new ThroughputArgError(`--found takes ${FOUND.join(' or ')}: ${value}`);
     if (arg === '--against') {
       const [since, until] = value.split('..');
       if (!isDay(since) || !isDay(until) || !(since < until)) throw new ThroughputArgError(`--against takes the window before as <since>..<until>, each YYYY-MM-DD: ${value}`);
@@ -111,6 +136,9 @@ function parseArgs(argv) {
     i += 1;
   }
   if (flags['copied-at'] !== undefined && !flags['gate-log']) throw new ThroughputArgError('--copied-at says when the --gate-log copies were made, and needs them');
+  if (verb === 'reviewed' && (flags.day === undefined) === (flags.shipped === undefined)) throw new ThroughputArgError('throughput reviewed takes one of --day <day> (a review) and --shipped <day> (a re-measure)');
+  if (verb === 'reviewed' && flags.found === undefined) throw new ThroughputArgError(`throughput reviewed says what the review found: --found ${FOUND.join('|')}`);
+  if (verb === 'shipped' && flags.item === undefined) throw new ThroughputArgError('throughput shipped names what shipped: js-harness throughput shipped <item> [--day <day>]');
   return { verb, flags };
 }
 
@@ -479,8 +507,16 @@ function snapshot(ctx, flags) {
     ctx.err(`js-harness throughput: ${day} is already kept (${file}); a kept day is written again only by one that covers more of it`);
     return 1;
   }
+  const notes = keepDay(ctx, day, facts, kept, flags['gate-log'] ?? null);
+  ctx.out(`js-harness throughput: kept ${day} in ${file}${notes.length ? ` (${notes.join('; ')})` : ''}`);
+  return 0;
+}
+
+/** Writes the snapshot of `day` from `facts`, replacing `kept` when there is one, and returns what to say of it. */
+function keepDay(ctx, day, facts, kept, gateLogs) {
+  const file = path.join(ctx.folder, `${day}.json`);
   const record = {
-    schema: SNAPSHOT_SCHEMA, day, writtenAt: new Date(ctx.now()).toISOString(), from: flags['gate-log'] ?? ['the live gate log'], ...facts,
+    schema: SNAPSHOT_SCHEMA, day, writtenAt: new Date(ctx.now()).toISOString(), from: gateLogs ?? ['the live gate log'], ...facts,
     ...(kept && { replaced: { at: kept.writtenAt ?? null, partialFrom: kept.partialFrom, partialUntil: kept.partialUntil ?? null } }),
   };
   ctx.fileSystem.mkdirSync(ctx.folder, { recursive: true });
@@ -489,9 +525,49 @@ function snapshot(ctx, flags) {
   ctx.fileSystem.writeFileSync(aside, `${JSON.stringify(record, null, 2)}
 `);
   ctx.fileSystem.renameSync(aside, file);
-  const notes = [kept && 'replaced a partial snapshot', facts.partialFrom && `partial: the gate log begins at ${facts.partialFrom}`, facts.partialUntil && `partial: the copies end at ${facts.partialUntil}, before the day settles; --copied-at <time> says when it was made`, ...Object.entries(facts.unavailable).map(([what, why]) => `${what} not read: ${why}`)].filter(Boolean);
-  ctx.out(`js-harness throughput: kept ${day} in ${file}${notes.length ? ` (${notes.join('; ')})` : ''}`);
-  return 0;
+  return [kept && 'replaced a partial snapshot', facts.partialFrom && `partial: the gate log begins at ${facts.partialFrom}`, facts.partialUntil && `partial: the copies end at ${facts.partialUntil}, before the day settles; --copied-at <time> says when it was made`, ...Object.entries(facts.unavailable).map(([what, why]) => `${what} not read: ${why}`)].filter(Boolean);
+}
+
+/** How many settled days back the heartbeat keeps a day that has no snapshot (the rule throughput-backfill-days),
+ * so a machine away for a month does not write a month at once. */
+const BACKFILL_DAYS = ruleValue('throughput-backfill-days', 'days');
+
+/** The heartbeat's tick (bin/loop.mjs): keeps each of the last `BACKFILL_DAYS` settled days that the live gate log
+ * holds and has no snapshot, and says what review is due. A day the log does not reach holds no gate to keep, so it
+ * is never kept empty (A8): it is added to `skip`, which the caller keeps across ticks, since the log only loses
+ * days. While a gate holds the lock nothing is written, so the tick never runs beside one. Returns `{ lines, dues }`,
+ * `lines` being what it kept or could not read. */
+export function throughputTick({ home, cwd, slug: known, now, run, skip = new Set(), fileSystem = fs, gateHolder = (at) => readGateHolder(home, { now: () => at }) }) {
+  const slug = known ?? projectSlug(mainCheckout(run, cwd));
+  const ctx = { home, slug, folder: snapshotFolder(home, slug), now: () => now, fileSystem };
+  const lines = [];
+  const holder = gateHolder(now);
+  if (!(holder && !holder.stale)) {
+    const last = lastSettledDay(now, settlesAt);
+    for (let back = BACKFILL_DAYS - 1; back >= 0; back -= 1) {
+      const day = addDays(last, -back);
+      if (skip.has(day) || readSnapshot(path.join(ctx.folder, `${day}.json`), fileSystem) !== null) continue;
+      const facts = rotatingFacts(day, ctx);
+      if (facts.unavailable['gate log']) {
+        lines.push(`throughput: the gate log could not be read (${facts.unavailable['gate log']}), so no day is kept`);
+        break;
+      }
+      if (facts.partialFrom && Date.parse(facts.partialFrom) >= dayBounds(day).to) {
+        skip.add(day);
+        continue;
+      }
+      const notes = keepDay(ctx, day, facts, null, null);
+      lines.push(`throughput: kept ${day}${notes.length ? ` (${notes.join('; ')})` : ''}`);
+    }
+  }
+  let dues;
+  try {
+    dues = throughputDues(readOutcomes(ctx), { now, settlesAt });
+  } catch (err) {
+    lines.push(`throughput: the outcomes could not be read (${err.code ?? err.message}), so the reviews due are not known`);
+    dues = [];
+  }
+  return { lines, dues };
 }
 
 function status(ctx) {
@@ -503,10 +579,25 @@ function status(ctx) {
     names = [];
   }
   const kept = names.filter((name) => DAY.test(name.replace(/\.json$/, '')) && name.endsWith('.json')).map((name) => name.slice(0, -5)).sort();
-  if (kept.length === 0) {
-    ctx.out(`js-harness throughput: no day is kept for this project (${ctx.folder})`);
-    return 0;
+  const code = kept.length === 0 ? noneKept(ctx) : keptDays(ctx, kept);
+  let outcomes;
+  try {
+    outcomes = readOutcomes(ctx);
+  } catch (err) {
+    ctx.out(`outcomes not read (${outcomesFile(ctx)}): ${err.code ?? err.message}, so the reviews due are not known`);
+    return 1;
   }
+  for (const due of throughputDues(outcomes, { now: ctx.now(), settlesAt })) ctx.out(due.line);
+  return code;
+}
+
+/** No snapshot at all: a project whose heartbeat never ran, flagged rather than passed (A8). */
+function noneKept(ctx) {
+  ctx.out(`MISSING: no day is kept for this project (${ctx.folder}); js-harness throughput snapshot --day ${lastSettledDay(ctx.now(), settlesAt)}`);
+  return 1;
+}
+
+function keptDays(ctx, kept) {
   for (const day of kept) {
     const facts = readSnapshot(path.join(ctx.folder, `${day}.json`), ctx.fileSystem);
     const notes = facts?.unreadable ? [`unreadable: ${facts.unreadable}`] : [facts.partialFrom && `partial from ${facts.partialFrom}`, facts.partialUntil && `partial until ${facts.partialUntil}`, ...Object.keys(facts.unavailable ?? {}).map((what) => `${what} not read`)].filter(Boolean);
@@ -516,6 +607,71 @@ function status(ctx) {
   const missing = daysBetween(kept[0], utcDay(ctx.now())).filter((day) => !kept.includes(day) && settlesAt(day) <= ctx.now());
   for (const day of missing) ctx.out(`${day}  MISSING: no snapshot (js-harness throughput snapshot --day ${day})`);
   return missing.length > 0 ? 1 : 0;
+}
+
+const outcomesFile = (ctx) => path.join(ctx.folder, 'outcomes.jsonl');
+
+/** The text of the outcomes file, empty where it is not there; one that is there and cannot be read throws. */
+function outcomesText(ctx) {
+  try {
+    return ctx.fileSystem.readFileSync(outcomesFile(ctx), 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return '';
+    throw err;
+  }
+}
+
+/** The whole lines of the outcomes file: a torn line, or one that is no object, is left out. */
+function readOutcomes(ctx) {
+  return outcomesText(ctx).split(/\r?\n/).flatMap((line) => {
+    try {
+      const one = JSON.parse(line);
+      return one && typeof one === 'object' && !Array.isArray(one) ? [one] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function appendOutcome(ctx, record) {
+  const text = outcomesText(ctx);
+  ctx.fileSystem.mkdirSync(ctx.folder, { recursive: true });
+  // A line left without its newline (a writer stopped mid-line) is ended first, so the new line is whole.
+  const unterminated = text !== '' && !text.endsWith('\n');
+  ctx.fileSystem.appendFileSync(outcomesFile(ctx), `${unterminated ? '\n' : ''}${JSON.stringify({ v: 1, ...record, at: new Date(ctx.now()).toISOString() })}\n`, 'utf8');
+}
+
+/** The after window of a ship day: `[since, until)`, the throughput-compare-days after it. */
+function afterWindow(day) {
+  const since = addDays(day, 1);
+  return { since, until: addDays(since, COMPARE_DAYS) };
+}
+
+function reviewed(ctx, flags) {
+  const { found } = flags;
+  if (flags.day !== undefined) {
+    const settles = settlesAt(flags.day);
+    if (settles > ctx.now()) throw new ThroughputArgError(`${flags.day} settles at ${new Date(settles).toISOString()}: a review reads settled days`);
+    appendOutcome(ctx, { kind: 'reviewed', day: flags.day, found });
+    ctx.out(`js-harness throughput: recorded the review of ${flags.day} (found ${found}) in ${outcomesFile(ctx)}`);
+    return 0;
+  }
+  const { since, until } = afterWindow(flags.shipped);
+  const settles = settlesAt(addDays(until, -1));
+  if (settles > ctx.now()) throw new ThroughputArgError(`the re-measure of ${flags.shipped} reads ${since}..${until}, which settles at ${new Date(settles).toISOString()}`);
+  appendOutcome(ctx, { kind: 'reviewed', shipped: flags.shipped, found });
+  ctx.out(`js-harness throughput: recorded the re-measure of what shipped ${flags.shipped} (found ${found}) in ${outcomesFile(ctx)}`);
+  return 0;
+}
+
+function shipped(ctx, flags) {
+  const today = utcDay(ctx.now());
+  const day = flags.day ?? today;
+  if (day > today) throw new ThroughputArgError(`--day ${day} is after today (${today}): record what shipped once it has`);
+  appendOutcome(ctx, { kind: 'shipped', item: flags.item, day });
+  const { since, until } = afterWindow(day);
+  ctx.out(`js-harness throughput: recorded that ${flags.item} shipped ${day} in ${outcomesFile(ctx)}; its re-measure falls due once ${since}..${until} has settled (${new Date(settlesAt(addDays(until, -1))).toISOString()})`);
+  return 0;
 }
 
 /** The command. The seams are the folder (`cwd`), the output, the clock (`now`), `run` (spawnSync's shape, for git),
@@ -553,6 +709,8 @@ export async function throughputMain(
   try {
     if (parsed.verb === 'snapshot') return snapshot(ctx, parsed.flags);
     if (parsed.verb === 'status') return status(ctx);
+    if (parsed.verb === 'reviewed') return reviewed(ctx, parsed.flags);
+    if (parsed.verb === 'shipped') return shipped(ctx, parsed.flags);
     return table(ctx, parsed.flags);
   } catch (err) {
     if (!(err instanceof ThroughputArgError)) throw err;

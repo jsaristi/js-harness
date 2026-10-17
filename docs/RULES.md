@@ -196,7 +196,7 @@ How long a work session that holds handed work may make no commit, send no notic
 
 ### throughput-backfill-days
 How many closed days back the heartbeat writes a missing throughput snapshot for: 14 days.
-- Read by: none.
+- Read by: `bin/throughput.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
 
 ### throughput-compare-days
@@ -206,12 +206,12 @@ How many days a side a throughput comparison needs before it judges a change: 7 
 
 ### throughput-quiet-days
 How many days after the last recorded throughput review the next is due once the review has gone quiet: 7 days.
-- Read by: none.
+- Read by: `bin/lib/throughput.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
 
 ### throughput-quiet-runs
 How many recorded throughput reviews in a row that found nothing make the review weekly instead of daily: 2 reviews.
-- Read by: none.
+- Read by: `bin/lib/throughput.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
 
 ### wait-every

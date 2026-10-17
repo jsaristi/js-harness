@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, questionFacts, reviewFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows, withReadyAt } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, questionFacts, reviewFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputDues, throughputRows, withReadyAt } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -502,4 +502,30 @@ test('a day\'s questions: those recorded in it, and those an answer or a withdra
   // A day kept before this row, and a day whose channel could not be read.
   assert.equal(rowOf(throughputRows([dayOf()]), 'questions').value, 'not recorded: 2026-10-16 (no questions kept)');
   assert.equal(rowOf(throughputRows([dayOf({ unavailable: { channel: 'EBUSY' } })]), 'questions').value, 'not read: 2026-10-16 EBUSY');
+});
+
+test('the reviews due: the last settled day unless reviewed, weekly once the last quiet runs found nothing, and a re-measure once a ship day has its after window', () => {
+  const settlesAt = (day) => dayBounds(day).to + 3600 * 1000;
+  const now = Date.parse('2026-10-17T02:00:00Z'); // 2026-10-16 settled at 01:00Z
+  const reviewed = (day, found) => ({ v: 1, kind: 'reviewed', day, found, at: `${day}T12:00:00.000Z` });
+  // Nothing recorded: the review of the last settled day.
+  assert.deepEqual(throughputDues([], { now, settlesAt }).map((due) => [due.id, due.at]), [['review 2026-10-16', '2026-10-17T01:00:00.000Z']]);
+  assert.match(throughputDues([], { now, settlesAt })[0].line, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/);
+  // Reviewed: nothing due.
+  assert.deepEqual(throughputDues([reviewed('2026-10-16', 'candidates')], { now, settlesAt }), []);
+  // Two quiet reviews in a row: weekly, due seven days after the last one.
+  const quiet = [reviewed('2026-10-14', 'nothing'), reviewed('2026-10-15', 'nothing')];
+  assert.deepEqual(throughputDues(quiet, { now, settlesAt }), []);
+  const week = Date.parse('2026-10-23T02:00:00Z');
+  assert.deepEqual(throughputDues(quiet, { now: week, settlesAt }).map((due) => [due.id, due.at]), [['review 2026-10-22', '2026-10-23T01:00:00.000Z']]);
+  // One that found candidates makes it daily again.
+  assert.equal(throughputDues([...quiet.slice(0, 1), reviewed('2026-10-15', 'candidates')], { now, settlesAt }).length, 1);
+  // Two items shipped on the 5th are re-measured together once 6..12 settled, until the re-measure is recorded.
+  const shipped = (item, day) => ({ v: 1, kind: 'shipped', item, day, at: `${day}T15:00:00.000Z` });
+  const ships = [reviewed('2026-10-16', 'nothing'), shipped('a', '2026-10-05'), shipped('b', '2026-10-05'), shipped('c', '2026-10-14')];
+  const dues = throughputDues(ships, { now, settlesAt });
+  assert.deepEqual(dues.map((due) => due.id), ['re-measure 2026-10-05']);
+  assert.equal(dues[0].line, 'DUE: throughput re-measure of a, b, shipped 2026-10-05: js-harness throughput --since 2026-10-06 --until 2026-10-13 --against 2026-09-29..2026-10-06; then js-harness throughput reviewed --shipped 2026-10-05 --found nothing|candidates');
+  assert.equal(dues[0].at, '2026-10-13T01:00:00.000Z');
+  assert.deepEqual(throughputDues([...ships, { v: 1, kind: 'reviewed', shipped: '2026-10-05', found: 'nothing', at: '2026-10-16T13:00:00.000Z' }], { now, settlesAt }), []);
 });

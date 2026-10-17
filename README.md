@@ -181,9 +181,16 @@ Every `--windows` minutes (an hour; `0` for never) it also reads the daily Windo
 told before. The time of the last reading is kept in a file, so a heartbeat started again after a
 `STALL` still reads it once an hour.
 
+Each tick also keeps the throughput snapshot of every settled day of the last
+`throughput-backfill-days` that the gate log holds and that has none, never while a gate holds
+the lock, and reads the throughput reviews due (`js-harness throughput status`). One that falls
+due ends the heartbeat with its `DUE:` line, again an hour, three and seven after; and every line
+that ends it is followed by the `DUE:` lines still open, so the daily review never waits on the
+lead remembering it.
+
 ```console
 $ js-harness loop heartbeat
-js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours; every 60 minutes, the daily Windows run is read, and a red one told now ends it
+js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours; every 60 minutes, the daily Windows run is read, and a red one told now ends it; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it
 STALLED: JH 19 · skill del orquestador (T8) — no commit, notice or gate since 11:49, holding a note from JH ORQ · js-harness (350k) of 11:49: 17:00 JH ORQ: first-version T3 moved to JH 25 after 6h without an answer…
 ```
 
@@ -401,13 +408,24 @@ archived copies of the log instead, for a day the live log has lost; a copy made
 settled may lack its last gates, so the day is kept as partial until then. A copy is made no
 earlier than its modification time; one that kept its source's time (`cp -p`) says when it was
 made with `--copied-at <YYYY-MM-DDTHH:MMZ>`, never a time after now. `throughput status` lists
-the kept days and exits 1 naming each day since the first one kept that has none. Uninstall
+the kept days and exits 1 naming each day since the first one kept that has none, or that none
+is kept at all, since a project whose snapshots never ran must not read as fine. Uninstall
 leaves the snapshots in place.
+
+`status` then prints a `DUE:` line for each review owed, which changes no exit code. The review
+of the last settled day is due a day after the last one recorded; once the last
+`throughput-quiet-runs` reviews found nothing it is due `throughput-quiet-days` after it, and one
+that finds candidates makes it daily again. `throughput reviewed --day <day> --found
+nothing|candidates` records a review, `throughput shipped <item> [--day <day>]` records a change
+that shipped, and each ship day owes a re-measure of the `throughput-compare-days` after it
+against as many before, everything shipped that day compared together, until `throughput
+reviewed --shipped <day>` records it. The outcomes go to `outcomes.jsonl` beside the snapshots.
 
 ```console
 $ js-harness throughput status
 2026-10-15  kept
 2026-10-16  kept
+DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing|candidates
 ```
 
 `--against <since>..<until>` compares the window with an equal window before a change, row by
