@@ -329,8 +329,9 @@ export function readGateBusiest(home, { fileSystem: io = fs } = {}) {
 const isTestTime = (value) => isObject(value) && isText(value.test) && Number.isFinite(value.seconds);
 
 /** The lines of `test-times.jsonl` and `test-times.1.jsonl` (`appendGateTestTimes`), as a Map from the gate's id to
- * its line, read as `readGateBusiest` reads its own: none for a file that is not there or cannot be read, a line
- * that is torn or of another shape left out, a gate's line in the newer file the one kept. */
+ * its line: none for a file that is not there, a line that is torn or of another shape left out, a gate's line in
+ * the newer file the one kept. A file that is there and cannot be read throws its code, so the throughput row says
+ * it was not read rather than that no gate kept times. */
 export function readGateTestTimes(home, { fileSystem: io = fs } = {}) {
   const dir = gateLogDir(home);
   const byId = new Map();
@@ -338,8 +339,9 @@ export function readGateTestTimes(home, { fileSystem: io = fs } = {}) {
     let text;
     try {
       text = io.readFileSync(path.join(dir, name), 'utf8');
-    } catch {
-      continue;
+    } catch (err) {
+      if (err?.code === 'ENOENT') continue;
+      throw new Error(err?.code ?? err?.message ?? String(err));
     }
     for (const line of text.split('\n')) {
       let parsed;

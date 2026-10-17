@@ -364,6 +364,17 @@ test('a day after B1 and B2 reads its ready notices from the channel and its lan
   assert.match(stdout, /land phases +1 lands, median 300 s, landed 1 of 1 looked at; exit 0 ×1; suite 1, median 270 s +\[<git common dir>\/js-harness\/lands\.jsonl/);
 });
 
+test('a test times file that is there and cannot be read is said on its row, never read as no times', async () => {
+  const home = makeHome(GATES);
+  const out = [];
+  const timesFile = (file) => String(file).replace(/[\\/]+/g, '/').endsWith('/gate-log/test-times.jsonl');
+  const readFileSync = (file, ...rest) => (timesFile(file) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readFileSync(file, ...rest));
+  await throughputMain(['--since', '2026-10-17', '--until', '2026-10-18'], {}, {
+    cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], fileSystem: { ...fs, readFileSync },
+  });
+  assert.match(out.join(String.fromCharCode(10)), /test files +not read: 2026-10-17 EACCES/);
+});
+
 test('a land record that is there and cannot be read is said on its row, never read as no land', async () => {
   const home = makeHome(GATES);
   const table = async (readFileSync) => {

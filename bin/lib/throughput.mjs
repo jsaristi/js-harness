@@ -297,7 +297,7 @@ const SOURCES = {
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log'] };
+const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'] };
 
 /** Why `day` could not read `source`, or `undefined`. */
 const unreadOf = (day, source) => UNAVAILABLE_KEY[source].map((key) => day.unavailable?.[key]).find(Boolean);
@@ -407,15 +407,16 @@ export function throughputRows(days) {
     return `${phase} ${runs.length}, median ${Math.round(median(runs.map((one) => one.seconds)))} s${red ? `, red ${red}` : ''}`;
   });
 
-  // B5's row: a day whose facts hold no times (a snapshot or a copy from before B5) is not recorded, and the rest
-  // say of how many traced gates they hold times, so a gate that traced and kept none is seen.
+  // B5's row: a day whose facts hold no times (a snapshot or a copy from before B5) is not recorded, one whose gate
+  // log or times could not be read is not read, and the rest say of how many local gates that traced they hold
+  // times, so a gate that traced and kept none is seen. A gate sent to GitHub's machines writes no local times.
   const testFilesRow = () => {
     const label = 'test files';
-    const unkept = days.filter((day) => day.testTimes === undefined).map((day) => day.day);
+    const unkept = days.filter((day) => day.testTimes === undefined && !unreadOf(day, 'times')).map((day) => day.day);
     const notKept = unkept.length > 0 ? `not recorded: ${unkept.join(', ')} (no test times kept)` : null;
     if (unkept.length === days.length) return { label, value: notKept, source: SOURCES.times };
     const kept = days.filter((day) => day.testTimes !== undefined);
-    const traced = kept.flatMap((day) => day.gates ?? []).filter((gate) => gate.traced && gate.endedAt).length;
+    const traced = kept.flatMap((day) => day.gates ?? []).filter((gate) => gate.traced && gate.endedAt && gate.lock !== 'ci').length;
     const withTimes = kept.reduce((sum, day) => sum + day.testTimes.gates, 0);
     const files = new Map();
     for (const file of kept.flatMap((day) => day.testTimes.files)) {

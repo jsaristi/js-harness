@@ -926,3 +926,9 @@ test('gateRecord keeps the test times of a gate that started, under its id, and 
   assert.equal(kept[0].id, record.id);
   assert.deepEqual(kept[0].files, [{ test: 'bin/a.test.mjs', seconds: 1.25 }]);
 });
+
+test('readGateTestTimes says why a times file that is there cannot be read, and reads none from one that is not there', withHome(async (home) => {
+  const failing = (code) => ({ ...fs, readFileSync: () => { throw Object.assign(new Error(code), { code }); } });
+  assert.throws(() => readGateTestTimes(home, { fileSystem: failing('EACCES') }), /EACCES/);
+  assert.equal(readGateTestTimes(home, { fileSystem: failing('ENOENT') }).size, 0);
+}));

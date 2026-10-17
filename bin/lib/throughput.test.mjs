@@ -388,3 +388,14 @@ test('a day keeps each test file\'s runs, total and longest seconds over the gat
   assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', gates: facts.gates })]), 'test files').value, 'not recorded: 2026-10-17 (no test times kept)');
   assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', testTimes: { gates: 0, files: [] } })]), 'test files').value, 'no local gate traced');
 });
+
+test('the test files row counts only local gates among those that traced, and a day whose times could not be read says so', () => {
+  const ends = (id, lock) => [{ v: 1, event: 'start', id, at: '2026-10-17T10:00:00Z', lock }, { v: 1, event: 'end', id, at: '2026-10-17T10:04:00Z', seconds: 240, result: 'pass', sensors: [{ name: 'tests', shadow: { files: 1 } }] }];
+  const facts = gateFacts([...ends('local', 'own'), ...ends('remote', 'ci')], dayBounds('2026-10-17'));
+  const times = { gates: 1, files: [{ test: 'a.test.mjs', runs: 1, seconds: 2, max: 2 }] };
+  // A gate sent to GitHub's machines never writes local times, so it is not one that could have.
+  assert.match(rowOf(throughputRows([dayOf({ day: '2026-10-17', gates: facts.gates, testTimes: times })]), 'test files').value, /^1 of 1 local gates that traced/);
+  // A day whose times or gate log could not be read was not read, never "not recorded".
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', gates: facts.gates, unavailable: { times: 'EACCES' } })]), 'test files').value, 'not read: 2026-10-17 EACCES');
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', unavailable: { 'gate log': 'EBUSY' } })]), 'test files').value, 'not read: 2026-10-17 EBUSY');
+});
