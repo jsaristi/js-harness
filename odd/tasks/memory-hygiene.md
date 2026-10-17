@@ -573,6 +573,18 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   independent verifier (probes in a scratch clone) confirmed both; it also found this document tripled by a
   scripted edit (restored from 16301239 and edited again by hand) and that cmd.exe splits a single-quoted home
   with a space, so on Windows `shellWord` keeps double quotes unless the home holds `$` or a backtick.
+  Commits on origin/main db31c96c (rebased past PR 400, the review-starts clock fix every gate needed from
+  12:00Z): 15ca5bb9, 065780ea (the verifier's two blockers), 8ab6abe7 (gates passed). Codex db31c96..065780e
+  incorrect (0.98), one P2: a Windows home with `$` and a space, in single quotes for PowerShell, splits in
+  cmd.exe; no one form serves both, so the line now says its commands are for PowerShell and gives cmd.exe its
+  own `--home` in double quotes (`cmdExeWord`), test first. Codex recheck db31c96..8ab6abe correct (0.88).
+  `5018d1b..b761aef` stays the recorded skip (a second recheck is refused by design); this slice's reviews read
+  that code, `undoHeld` and `memoryKeptLine`, as the code they change. gentle-ai db31c96c..8ab6abe7 high
+  (item 1), lenses risk and reliability: approved and acknowledged (`review-4794badca4c9c8a7`). Left as later
+  work, its advisories: PowerShell reads the curly double quotes “ ” „ as `"` too, so a Windows home holding one
+  and no `$` breaks the double-quoted form (`bin/install.mjs:85`, a warning); an after-index that holds U+FFFD
+  and was damaged is told as older rather than damaged (`bin/lib/memory-pass.mjs:325`). Per file: install 81,
+  memory-pass 34 pass.
 
 ## Next step (2026-10-16)
 - T10 (JH 21, branch `feat/memory-full-uninstall`, worktree `D:\js-harness-worktrees\memory-full-uninstall`): built
