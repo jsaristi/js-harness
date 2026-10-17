@@ -185,8 +185,10 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
 ## Tasks
 - [x] T1 (kind: design) S1-S5: this design read by two readers (one attacks, one looks for what is missing);
   "Version 2" above.
-- [ ] T2 (kind: build) S1-S3: C, test first, on `rule/ci-gate-bound`; gate, gentle-ai (item 5), Codex, PR.
-- [ ] T3 (kind: build) S4: E, test first, on `feat/wrapped-commit-hint`; gate, gentle-ai, Codex, PR.
+- [x] T2 (kind: build) S1-S3: C, test first, on `rule/ci-gate-bound`; gate, gentle-ai (item 5), Codex, PR.
+  Route: inline. Commit d81b45b5; PR 353 (ready, waiting to land).
+- [x] T3 (kind: build) S4: E, test first, on `feat/wrapped-commit-hint` (stacked on C: its words name C's
+  GitHub-first gate); gate, gentle-ai, Codex, PR. Route: inline. Commits 8ba73c22, 4665c503; PR 354.
 - [ ] T4 (kind: build) S5: R1, once T6f is resolved; test first; gate, gentle-ai (item 5), Codex, PR.
 
 ## Log
@@ -216,3 +218,24 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   lenses risk,resilience,reliability) failed with operation_timeout (retry_safe false, next_action stop). Next:
   retry the preflight once; if it fails again, report it unavailable and go on with Codex
   (`js-harness codex-review --base origin/main`), push, PR, notify. Then E. R1 waits on T6f.
+- L5 (2026-10-17, state): C's review. The preflight's retry passed; START with consent granted created lineage
+  review-76121cbe1ba624cf; its bound `review status` then failed 8 times, each at about 26 s, with
+  operation_timeout (phase pre_native, mutation not_started, next_action stop), spaced or not, at 92 % CPU (mostly
+  Chrome) and with 179 worktrees in the repository. Codex reviewed C (7f6395a..8b5ed1a): correct, confidence 0.86,
+  no findings, recorded. The choice (report the gentle-ai defect and decline this candidate, decline without
+  reporting, or stop) went to the lead for him. E built meanwhile in `D:/js-harness-worktrees/wrapped-commit-hint`,
+  branched from `rule/ci-gate-bound`, because C's open review is bound to its worktree's HEAD. RED: the module was
+  missing. GREEN one file at a time: wrapped-commit 7, guard 24, test-run-warning 10, manifest 166. `gateWraps`
+  now flattens `gateCommands`, which keeps each wrapped command apart; its tests pass unchanged.
+- L6 (2026-10-17, state): his choice for C's review, relayed by the lead: "Reportar y seguir" (report_and_continue).
+  The definitive lookup found gentle-ai #5422 open, with no published fix (4.2.0 is the latest release), so one
+  occurrence comment was posted there, privacy-scanned (issuecomment-6229376872). The captured decline was run
+  once: `action: declined`, `consent: declined_this_candidate`, same target; STATUS then said
+  `fresh_target_ready`. PR 353 opened (0 $ stated). Main was merged in twice: first-version.md's conflict was
+  resolved by keeping JH 25's L26 and renumbering this feature's entry to L27. The lead was told ready. E:
+  committed 8ba73c22 (its gate ran on GitHub in 105 s). Codex found 2 P2s: a commit through `sh -c` got no
+  hint, and the gate's `--cwd` was ignored. Each was pinned by a RED test and fixed in 4665c503 (gate on GitHub
+  128 s). The Codex recheck said correct, 0.95, 2 of 2 fixed. gentle-ai was not due (medium, under_budget).
+  C was merged into E (48adfe64), and PR 354 opened, based on `rule/ci-gate-bound`. The Stop hook then offered
+  C's whole branch (base main); only its read-only status ran, and it timed out the same way. Next: retarget
+  354 to main once 353 lands; R1 once first-version T6f lands, which waits on 353.

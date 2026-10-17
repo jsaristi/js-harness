@@ -35,7 +35,8 @@ const USAGE = 'Usage: js-harness guard --hook\n'
   + '  sessions-open-in-sidebar), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a node --test of several files while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
-  + '  file that stamps today with an hour ahead of the clock; always exits 0\n'
+  + '  file that stamps today with an hour ahead of the clock; lets a git commit or merge wrapped in js-harness gate --\n'
+  + '  run with a hint beside its result, since a plain one waits for its turn by itself; always exits 0\n'
   + '       js-harness guard --stop\n'
   + '  reads a Stop payload on standard input; turns the stop back when the reply states this session\'s context share\n'
   + '  more than 2 points from the share its transcript records, so the session corrects it; always exits 0\n';
@@ -86,6 +87,15 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   return run(String(input.command ?? ''), { ...(typeof payload.cwd === 'string' && payload.cwd !== '' && { cwd: payload.cwd }) });
 }
 
+/** The hint for the Bash call of `payload` that wraps a commit in `js-harness gate --`, or null (lib/wrapped-commit.mjs).
+ * A command that names no commit loads nothing. */
+async function hintOf(payload, { env, projectRoot, exists }) {
+  const command = String(payload.tool_input?.command ?? '');
+  if (!/\bgate\b/.test(command) || !/\b(commit|merge)\b/.test(command)) return null;
+  const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
+  return (await import('./lib/wrapped-commit.mjs')).wrappedCommitHint(command, { cwd, env, projectRoot, exists });
+}
+
 /** Why the reply that ends the turn of the `Stop` payload is to be corrected, or null. The text is the host's
  * `last_assistant_message`, else the transcript's last own reply: the host writes its transcript after the fact, so
  * the recorded share may be the step before the reply's, a tool result short of it. The window the share is of is the one
@@ -120,6 +130,7 @@ export async function guardMain(argv, {
   readTranscript = (file) => fs.readFileSync(file, 'utf8'),
   env = process.env,
   homedir = os.homedir,
+  exists = fs.existsSync,
 } = {}) {
   if (argv.length !== 1 || (argv[0] !== '--hook' && argv[0] !== '--stop')) {
     stderr(USAGE);
@@ -136,11 +147,16 @@ export async function guardMain(argv, {
     return 0;
   }
   let reason = null;
+  let hint = null;
   try {
-    reason = await refusalOf(JSON.parse(readStdin()), { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir });
+    const payload = JSON.parse(readStdin());
+    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir });
+    // A denial wins; a Bash call that runs adds the hint for a wrapped commit beside its result (commit-gates-first S4).
+    if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists });
   } catch {
     return 0;
   }
   if (reason !== null) stdout(`${JSON.stringify(denial(reason))}\n`);
+  else if (hint !== null) stdout(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: hint } })}\n`);
   return 0;
 }
