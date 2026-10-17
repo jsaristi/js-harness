@@ -1014,8 +1014,11 @@ Node's native copy (`CpSyncCopyDir` in `src/node_file.cc`, 24.21.0) lists a dire
 regular file, and reports a file gone in between as ENOENT on the directory it copies into. That the lock
 was the file is inferred, not observed: it is the one regular file of `.git/objects` a fresh repository's
 commit leaves to a process still running, and 200 commits in WSL2 with nothing else running never left it
-for a copy to see. The template now sets `maintenance.auto` to false before its commit. The same cause
-in another fixture is eval-missing-login-workroot-kept.
+for a copy to see. The template now sets `maintenance.auto` to false before its commit. Since 76179ca the
+shared helper does it for every fixture that copies a fresh repository: `repoTemplate` in
+`bin/lib/git-fixture.testkit.mjs` builds with it off and writes it into every repository it made, the two
+`copyOf` fixtures use the same exports, and `bin/check.test.mjs` puts it in its own global git config. The
+same cause in another fixture is eval-missing-login-workroot-kept.
 - Class: machine
 - Seen: 2026-10-17 — the gate of fix/merge-commit-size (d83be66^..39665eb) on GitHub, run
   39007490864, Linux, git 2.55.0, node 24.21.0, by JH 24's odd/tasks/land-unattended.md L21 and the
