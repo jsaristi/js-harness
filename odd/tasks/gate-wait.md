@@ -2998,11 +2998,14 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     printed, since every one is on the head's line. The suggestion: tests for a root, a tree, and a base merged
     in by a second parent. Both done test first in the next commit (RED: a run that prints a commit below the
     base was called off the line); lib guard 26, guard 25 pass; the differential check, 32 bases, 0 differ.
+    That commit is `3d4194c`; gentle-ai on `a9109b1..3d4194c`: medium, not due (`under_budget`). Codex on
+    `5ea341a..3d4194c`: correct (0.94), no finding.
 
 ## Next
 
 T11 landed (PR 407). T12 and T13, its later work (JH 21, `fix/review-base-walk`): built test first;
-next, their reviews, PR and `notify --kind ready`. After them, nothing open from T11. Before T11,
+reviewed (gentle-ai approved, Codex correct); next, the PR and `notify --kind ready`. After them, nothing
+open from T11. Before T11,
 nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
 Progress. Spent on Codex in the feature: 4,854,672 input tokens to 2026-10-13, and 206,415 on
 2026-10-16 by the session "JH 21".
