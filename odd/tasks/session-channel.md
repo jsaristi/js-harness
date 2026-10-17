@@ -3122,6 +3122,9 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
       double-reviewed notes `improvements-2026-10-17-reader1.md` and `-reader2.md` in the lead's notes folder.
       PR 371's Risk line was edited from "item 3" to "none", since a requested change is not high risk by itself.
       The `js-harness gate --` guard now says to commit with a plain `git commit`, whose hook waits its turn.
+  - The first clear_session on "self" (08:19Z) was refused: "a message the user sent is waiting in the queue, and a
+    clear would erase it". The message was the throughput session's B4b question. After it was answered (yes, the
+    throughput session writes it and sends the branch again, since this conversation is lost), the clear was asked again.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
