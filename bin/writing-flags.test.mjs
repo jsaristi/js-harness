@@ -34,6 +34,7 @@ const WRITING = [
   ['sessions'],
   ['notify', '--to', 'orchestrator', '--kind', 'note', 'probe'],
   ['resume', '--hook'],
+  ['throughput', 'snapshot'],
 ];
 
 function probe(args, flag) {

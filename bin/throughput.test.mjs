@@ -30,6 +30,7 @@ function fakeGit({ origin = true } = {}) {
     if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') return ok(`${ROOT}/.git\n`);
     if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return ok(`${ROOT}\n`);
     if (args[0] === 'rev-parse') return origin ? ok('abc\n') : { status: 1, stdout: '', stderr: '' };
+    if (args[0] === 'log' && args[1] === '-m') return ok('\u0001m7\n\nodd/tasks/x.md\n');
     if (args[0] === 'log' && args[1] === '--first-parent') return ok('m7\t2026-10-16T10:30:00Z\tp7 h7\tMerge pull request #7 from feat/x\n');
     if (args[0] === 'show') return ok('h7\t2026-10-16T10:00:00Z\n');
     if (args[0] === 'rev-list') return ok('c1\n');
@@ -39,12 +40,12 @@ function fakeGit({ origin = true } = {}) {
   };
 }
 
-async function run(argv, { home, git = fakeGit(), codex = [], now = NOW } = {}) {
+async function run(argv, { home, git = fakeGit(), codex = [], now = NOW, timezoneOffset = 300 } = {}) {
   const out = [];
   const err = [];
   const code = await throughputMain(argv, {}, {
     cwd: ROOT, stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => now, run: git,
-    homedir: () => home, readCodexRuns: () => codex,
+    homedir: () => home, readCodexRuns: () => codex, timezoneOffset: () => timezoneOffset,
   });
   return { code, stdout: out.join('\n'), stderr: err.join('\n') };
 }
@@ -71,8 +72,32 @@ test('the table of the day before today names, for each row, its source, and the
   assert.match(stdout, /2026-10-16 {2}live records/);
   assert.match(stdout, /pull requests merged +1 \(0\.04 an hour\) +\[git log of origin\/main/);
   assert.match(stdout, /gate waits +2 min in all; most: aaaaaaaa 2 min +\[the gate log/);
-  assert.match(stdout, /Codex reviews +1 runs, median 49 s/);
+  assert.match(stdout, /Codex reviews +1 attempts \(0 parts\), median 49 s/);
   assert.match(stdout, /ready to merged +not recorded \(B1, JH 26\)/);
+  // The window in the machine's own hours too, and the gates said to be the machine's, not this project's.
+  assert.match(stdout, /local UTC-05:00: 2026-10-15 19:00 to 2026-10-16 19:00/);
+  assert.match(stdout, /gates: every project of this machine/);
+  // A merge whose every file is Markdown is a docs-only pull request.
+  assert.match(stdout, /last commit to merge commit +median 30 min, p75 30 min, worst 30 min \(1\); docs-only median 30 min \(1\); code none/);
+});
+
+test('the idle upper bound is read from the channel record of the project', async () => {
+  const home = makeHome(GATES);
+  const channel = path.join(home, '.js-harness', 'channel');
+  fs.mkdirSync(channel, { recursive: true });
+  const notices = [
+    { schema: 'js-harness.channel-notice/v1', at: '2026-10-16T10:00:00Z', kind: 'waiting', from: { id: 's1', title: 'JH 28' }, to: { role: 'orchestrator' }, text: 'ready' },
+    { schema: 'js-harness.channel-notice/v1', at: '2026-10-16T10:45:00Z', kind: 'note', from: { id: 's1', title: 'JH 28' }, to: { role: 'orchestrator' }, text: 'back' },
+  ];
+  fs.writeFileSync(path.join(channel, `${ROOT.replace(/[^A-Za-z0-9]/g, '-')}.jsonl`), notices.map((notice) => JSON.stringify(notice)).join(String.fromCharCode(10)) + String.fromCharCode(10) + 'not json' + String.fromCharCode(10));
+  const { stdout } = await run([], { home });
+  assert.match(stdout, /idle upper bound +1 waits, median 45 min, 0\.8 session-h in all; longest: JH 28 45 min/);
+});
+
+test('a channel record that is not there is said on its row, never read as no wait', async () => {
+  const home = makeHome(GATES);
+  const { stdout } = await run([], { home });
+  assert.match(stdout, /idle upper bound +not read: 2026-10-16 no channel record/);
 });
 
 test('a main that is not there is said on the rows git gives, never read as no pull request', async () => {
@@ -152,4 +177,15 @@ test('a partial day is replaced by a fuller one, and the replacement is recorded
   const kept = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'throughput', ROOT.replace(/[^A-Za-z0-9]/g, '-'), '2026-10-16.json'), 'utf8'));
   assert.equal(kept.partialFrom, null);
   assert.equal(kept.replaced.partialFrom, '2026-10-16T09:00:00Z');
+});
+
+test('with the git of the machine, not a fake, it reads a repository', async () => {
+  const home = makeHome();
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-throughput-repo-'));
+  homes.push(repo);
+  const { spawnSync } = await import('node:child_process');
+  assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0);
+  const out = [];
+  const code = await throughputMain(['status', '--home', home], {}, { cwd: repo, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
 });

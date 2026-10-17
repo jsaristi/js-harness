@@ -333,6 +333,42 @@ Total       closed 111  reopened 0  added 89  removed 2
 A day       closed 55.5  reopened 0  added 44.5  removed 1
 ```
 
+### js-harness throughput
+
+The throughput review's measure: a fixed table of a window of UTC days, by default yesterday,
+where every row names the record it was read from and a fact no record holds yet says which
+recorder it waits for, never a zero. It is read-only and fetches nothing: main is `origin/main`
+as last fetched (`git merge-tree`, which names the files of a conflicted merge, writes objects
+into the object store). The gates are every project's on the machine, as the gate lock is.
+
+```console
+$ js-harness throughput --since 2026-10-16 --until 2026-10-17
+Throughput  2026-10-16 to 2026-10-17 (UTC, until excluded; local UTC-05:00: 2026-10-15 19:00 to 2026-10-16 19:00)  D:\js-harness
+  gates: every project of this machine, as the gate lock is; the other rows: this project
+  2026-10-16  snapshot
+pull requests merged         94 (3.92 an hour); merged twice: #292, #305  [git log of origin/main as last fetched]
+ready to merged              not recorded (B1, JH 26)  [a ready notice that names its pull request]
+lock busy                    16.8 h of 24 h; by kind: check 125 / 446 min, land 65 / 230 min, copy 49 / 150 min, run 39 / 111 min, commit 25 / 70 min  [the gate log (~/.js-harness/gate-log)]
+commit gates                 here: median 200 s (150), lock free median 217 s (52); GitHub: median 144 s (75)  [the gate log (~/.js-harness/gate-log)]
+lands                        65, median 216 s, red 8; 65 gates for 49 lands  [the gate log (~/.js-harness/gate-log)]
+…
+```
+
+The gate log rotates in about two days, so `throughput snapshot [--day <day>]` keeps a day's
+gates under the home (`.js-harness/throughput/<project>/<day>.json`) once the day has settled,
+two `gate-max` after its midnight, and the table reads a kept day from there. Main's history,
+the Codex runs and the channel are append-only and always read live. A kept day is written
+again only by a fuller one, the replacement recorded; `--gate-log <file>` (twice at most) reads
+archived copies of the log instead, for a day the live log has lost. `throughput status` lists
+the kept days and exits 1 naming each day since the first one kept that has none. Uninstall
+leaves the snapshots in place.
+
+```console
+$ js-harness throughput status
+2026-10-15  kept
+2026-10-16  kept
+```
+
 ### js-harness contract
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`

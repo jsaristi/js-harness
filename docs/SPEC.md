@@ -195,6 +195,15 @@ proofs and by those tasks.
 **Discarded:** A published page. Editing checkboxes from the command.
 **Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `js-harness progress`
 
+### The throughput review
+
+**Problem:** The 2026-10-17 measure of where a task's wall-clock goes took hand-written scripts in the lead's notes, and its gate figures could not be taken again a few days later: the gate log rotates in about 2.3 days, so a before/after comparison had nothing to read (`odd/tasks/throughput-review.md`).
+**Requirement:** A read-only command prints a fixed table of a window of UTC days in which every figure names its source, and a fact no record holds yet says which recorder it waits for, never a zero. A settled day's gates are kept in a dated snapshot under the home, which the table reads in place of the rotated log; append-only records are read live.
+**Reason:** A measure taken again the same way is what tells a change that helped from noise, and it cannot depend on someone keeping scripts.
+**Proof:** `node --test bin/throughput.test.mjs`, `node --test bin/lib/throughput.test.mjs`
+**Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
+**Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput`
+
 ### The task contract
 
 **Problem:** The host's `/goal` stops when a small model judges a condition from the transcript, so a condition in prose is judged by opinion (`odd/tasks/task-contract.md`). One effort setting covered design and build tasks alike, and nothing applied or printed it (`odd/tasks/effort-by-task.md`).

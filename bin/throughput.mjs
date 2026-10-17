@@ -10,15 +10,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { readGateLog } from './lib/gate-log.mjs';
 import { ruleValue } from './lib/rules.mjs';
+import { recordPath } from './lib/channel.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import {
+  channelIdle,
   codexFacts,
   conflictFiles,
   dayBounds,
   daysBetween,
   gateFacts,
   parseCommitTimes,
+  parseMergeFiles,
   parseMerges,
   prFacts,
   taskCounts,
@@ -30,14 +33,18 @@ export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 
 const USAGE = [
   'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--json]',
-  '       js-harness throughput snapshot [--day <YYYY-MM-DD>]',
+  '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]...',
   '       js-harness throughput status',
   '       (each also takes --cwd <path> and --home <path>)',
-  '  The table: the UTC days [since, until), by default the day before today. Each day is read from its snapshot when',
-  '    there is one, else from the live records; every row names its source, and a fact no record holds says which',
-  '    recorder it waits for. It writes nothing and fetches nothing: main is origin/main as last fetched.',
-  '  snapshot: keeps the facts of one closed UTC day (default yesterday) in',
-  '    <home>/.js-harness/throughput/<project>/<day>.json, once: a day already kept is not written again (exit 1).',
+  '  The table: the UTC days [since, until), by default the day before today. The gates of a day are read from its',
+  '    snapshot when there is one, else from the live gate log; main and the Codex runs are always read live. Every row',
+  '    names its source, and a fact no record holds says which recorder it waits for. It fetches nothing: main is',
+  '    origin/main as last fetched. It writes no file, but git merge-tree, which names the files of a conflicted',
+  '    merge, writes objects into the object store.',
+  '  snapshot: keeps the gates of one UTC day (default yesterday) in <home>/.js-harness/throughput/<project>/<day>.json,',
+  '    once the day has settled, two gate-max after its midnight. A kept day is written again only by a fuller one,',
+  '    the replacement recorded (exit 1 otherwise). --gate-log reads copies of the gate log instead of the live one,',
+  '    at most two (the log and its rotated file), for a day the live log has rotated away.',
   '  status: the days kept, each partial one with why, and each day since the first one kept that has none (exit 1).',
   '  Exit 2: a usage error, and nothing is done.',
 ].join('\n');
@@ -97,7 +104,9 @@ function gitFacts(run, root, { from, to }) {
   const merges = parseMerges(firstParent.stdout);
   const heads = merges.map((merge) => merge.head).filter(Boolean);
   const shown = heads.length ? git(run, root, ['show', '-s', '--format=%H%x09%cI', ...heads]) : { stdout: '' };
-  const prs = prFacts(merges, parseCommitTimes(shown.stdout ?? ''), { from, to });
+  // What each merge changed against main before it, so a docs-only pull request is told from one with code.
+  const changed = git(run, root, ['log', '-m', '--first-parent', '--merges', '--name-only', `--since=${since}`, '--format=%x01%H', 'origin/main']);
+  const prs = prFacts(merges, parseCommitTimes(shown.stdout ?? ''), { from, to }, parseMergeFiles(changed.stdout ?? ''));
 
   const countAt = (ms) => {
     const commit = git(run, root, ['rev-list', '-1', '--first-parent', `--before=${new Date(ms).toISOString()}`, 'origin/main']);
@@ -112,14 +121,16 @@ function gitFacts(run, root, { from, to }) {
 
   const all = git(run, root, ['log', '--merges', `--since=${new Date(from).toISOString()}`, `--until=${until}`, '--format=%H%x09%cI%x09%P%x09%s', 'origin/main']);
   const conflicts = [];
+  let branchMerges = 0;
   for (const line of String(all.stdout ?? '').split(/\r?\n/)) {
     const [commit, at, parents, subject] = line.split('\t');
     if (!commit || /^Merge pull request #/.test(subject ?? '') || !(Date.parse(at) >= from && Date.parse(at) < to)) continue;
+    branchMerges += 1;
     const [ours, theirs] = String(parents).split(' ');
     const tree = git(run, root, ['merge-tree', '--write-tree', '--name-only', '--no-messages', ours, theirs]);
     if (tree.status === 1) conflicts.push({ merge: commit, files: conflictFiles(tree.stdout) });
   }
-  return { prs, tasks: start && end ? { start, end } : null, conflicts };
+  return { prs, tasks: start && end ? { start, end } : null, conflicts, branchMerges };
 }
 
 /** The facts of `day` that a rotating record holds, the only ones a snapshot keeps: the gates. `gateLogs`, when
@@ -140,7 +151,7 @@ function rotatingFacts(day, ctx, gateLogs = null) {
  * snapshot of them would freeze what a stale fetch had not seen yet. */
 function appendOnlyFacts(day, ctx) {
   const bounds = dayBounds(day);
-  const facts = { prs: [], codex: [], tasks: null, conflicts: [], unavailable: {} };
+  const facts = { prs: [], codex: [], tasks: null, conflicts: [], branchMerges: 0, idle: [], unavailable: {} };
   const fromGit = gitFacts(ctx.run, ctx.root, bounds);
   if (fromGit.unavailable) facts.unavailable.git = fromGit.unavailable;
   else Object.assign(facts, fromGit);
@@ -149,7 +160,33 @@ function appendOnlyFacts(day, ctx) {
   } catch (err) {
     facts.unavailable.codex = err.message;
   }
+  const notices = channelNotices(ctx);
+  if (notices.unavailable) facts.unavailable.channel = notices.unavailable;
+  else facts.idle = channelIdle(notices, bounds);
   return facts;
+}
+
+/** The notices of the project's channel record, read once a run; `{ unavailable }` with why. A line that does not
+ * parse is left out, as every reader of the record leaves it. */
+function channelNotices(ctx) {
+  if (ctx.channel) return ctx.channel;
+  let text;
+  try {
+    text = ctx.fileSystem.readFileSync(recordPath(ctx.home, ctx.slug), 'utf8');
+  } catch (err) {
+    ctx.channel = { unavailable: err.code === 'ENOENT' ? 'no channel record' : (err.code ?? err.message) };
+    return ctx.channel;
+  }
+  const notices = [];
+  for (const line of text.split(/\r?\n/)) {
+    try {
+      if (line.trim() !== '') notices.push(JSON.parse(line));
+    } catch {
+      // a torn or foreign line
+    }
+  }
+  ctx.channel = notices;
+  return notices;
 }
 
 /** The live facts of `day`, both halves. */
@@ -191,6 +228,15 @@ function dayFacts(day, ctx) {
 
 const yesterday = (now) => utcDay(now - 24 * 3600 * 1000);
 
+/** The window `[since, until)` in the machine's hours, `offset` being `getTimezoneOffset`'s minutes (UTC minus
+ * local): `local UTC-05:00: 2026-10-15 19:00 to 2026-10-16 19:00`. */
+function localWindow(since, until, offset) {
+  const at = (day) => new Date(dayBounds(day).from - offset * 60000).toISOString().slice(0, 16).replace('T', ' ');
+  const sign = offset > 0 ? '-' : '+';
+  const zone = `${String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')}:${String(Math.abs(offset) % 60).padStart(2, '0')}`;
+  return `local UTC${sign}${zone}: ${at(since)} to ${at(until)}`;
+}
+
 function table(ctx, flags) {
   const until = flags.until ?? utcDay(ctx.now());
   const since = flags.since ?? utcDay(Date.parse(`${until}T00:00:00Z`) - 24 * 3600 * 1000);
@@ -201,7 +247,8 @@ function table(ctx, flags) {
     ctx.out(JSON.stringify({ since, until, days: days.map(({ day, source, partialFrom, unavailable }) => ({ day, source, partialFrom, unavailable })), rows }, null, 2));
     return 0;
   }
-  ctx.out(`Throughput  ${since} to ${until} (UTC, until excluded)  ${ctx.root}`);
+  ctx.out(`Throughput  ${since} to ${until} (UTC, until excluded; ${localWindow(since, until, ctx.timezoneOffset())})  ${ctx.root}`);
+  ctx.out('  gates: every project of this machine, as the gate lock is; the other rows: this project');
   for (const day of days) ctx.out(`  ${day.day}  ${day.source === 'snapshot' ? 'snapshot' : 'live records'}${day.partialFrom ? `, the gate log from ${day.partialFrom}` : ''}${day.snapshotUnreadable ? ` (its snapshot is unreadable: ${day.snapshotUnreadable})` : ''}`);
   const width = Math.max(...rows.map((row) => row.label.length));
   for (const row of rows) ctx.out(`${row.label.padEnd(width)}  ${row.value}  [${row.source}]`);
@@ -275,10 +322,11 @@ export async function throughputMain(
     stdout = console.log,
     stderr = console.error,
     now = Date.now,
-    run = spawnSync,
+    run = (command, args, options) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options }),
     homedir = os.homedir,
     fileSystem = fs,
     readCodexRuns = (root) => readCodexReviewRuns(root, { spawn: run }),
+    timezoneOffset = () => new Date().getTimezoneOffset(),
   } = {},
 ) {
   let parsed;
@@ -292,7 +340,8 @@ export async function throughputMain(
   const cwd = path.resolve(defaultCwd, parsed.flags.cwd ?? '.');
   const home = path.resolve(defaultCwd, parsed.flags.home ?? (env.JS_HARNESS_HOME || homedir()));
   const root = mainCheckout(run, cwd);
-  const ctx = { root, home, folder: snapshotFolder(home, projectSlug(root)), now, run, fileSystem, readCodexRuns, out: stdout, err: stderr };
+  const slug = projectSlug(root);
+  const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, out: stdout, err: stderr };
   try {
     if (parsed.verb === 'snapshot') return snapshot(ctx, parsed.flags);
     if (parsed.verb === 'status') return status(ctx);

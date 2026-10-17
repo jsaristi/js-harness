@@ -67,6 +67,9 @@ export function gateFacts(events, { from, to }) {
       result: end?.result ?? null,
       ranIn: tests ? (tests.ranIn ?? 'windows') : null,
       failing: (end?.sensors ?? []).flatMap((sensor) => (Array.isArray(sensor?.failing) ? sensor.failing : [])),
+      // The candidate's folder, one per land: a land that bisects runs several gates in it.
+      land: /merge-queue/.test(String(start.cwd ?? '')) ? String(start.cwd).split(/[\\/]/).filter(Boolean).at(-1) : null,
+      load: Number.isFinite(start.load?.share) ? start.load.share : null,
     });
   }
   return { gates, partialFrom: oldest !== null && Date.parse(oldest.at) > from ? oldest.at : null };
@@ -128,20 +131,69 @@ export function parseCommitTimes(text) {
   return times;
 }
 
-/** The pull requests merged in `[from, to)`: `{ number, mergedAt, lastCommitAt }`, merged at the merge commit's
- * committer time and last committed at its head's (`null` where git did not give it), oldest first. */
-export function prFacts(merges, headTimes, { from, to }) {
+/** The files each merge changed against its first parent, from `git log --first-parent -m --name-only
+ * --format=%x01%H`: a map from the merge commit to its paths. */
+export function parseMergeFiles(text) {
+  const files = new Map();
+  for (const block of String(text).split('\u0001').slice(1)) {
+    const [commit, ...paths] = block.split(/\r?\n/);
+    files.set(commit.trim(), paths.filter((line) => line.trim() !== ''));
+  }
+  return files;
+}
+
+/** Whether a path is a document, as the Codex review's scope says (`isDocument`): a Markdown file. */
+const isDocument = (path) => /\.md$/i.test(path);
+
+/** The pull requests merged in `[from, to)`: `{ number, mergedAt, lastCommitAt, docsOnly }`, merged at the merge
+ * commit's committer time and last committed at its head's (`null` where git did not give it), oldest first.
+ * `docsOnly` is whether every file the merge changed is a document, `null` where `files` does not name it. */
+export function prFacts(merges, headTimes, { from, to }, files = new Map()) {
   return merges
     .filter((merge) => Date.parse(merge.at) >= from && Date.parse(merge.at) < to)
-    .map((merge) => ({ number: merge.number, mergedAt: iso(merge.at), lastCommitAt: headTimes.has(merge.head) ? iso(headTimes.get(merge.head)) : null }))
+    .map((merge) => ({
+      number: merge.number,
+      mergedAt: iso(merge.at),
+      lastCommitAt: headTimes.has(merge.head) ? iso(headTimes.get(merge.head)) : null,
+      docsOnly: files.has(merge.commit) ? files.get(merge.commit).every(isDocument) : null,
+    }))
     .sort((a, b) => Date.parse(a.mergedAt) - Date.parse(b.mergedAt));
 }
 
-/** The Codex review runs started in `[from, to)` (`readCodexReviewRuns`): `{ startedAt, seconds, outcome }`. */
+/** Whether a notice says its session waits, as the 2026-10-17 measure read them: a `waiting` or a `question`, or a
+ * note that says it is ready or asks to be told. */
+const waits = (notice) => notice.kind === 'waiting' || notice.kind === 'question' || (notice.kind === 'note' && /\bready\b|notify me/i.test(String(notice.text ?? '')));
+
+/** The waits a session announced in `[from, to)` on the channel (`waits`), each to
+ * that session's next notice: `{ session, title, at, minutes }`. An upper bound of its idle time, since a session
+ * may keep working without a notice; a wait with no notice after it yet is left out. */
+export function channelIdle(notices, { from, to }) {
+  const sorted = [...notices].filter((notice) => Number.isFinite(Date.parse(notice?.at)) && notice.from?.id).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const idle = [];
+  sorted.forEach((notice, index) => {
+    const at = Date.parse(notice.at);
+    if (!(at >= from && at < to) || !waits(notice)) return;
+    const next = sorted.slice(index + 1).find((later) => later.from.id === notice.from.id);
+    if (next) idle.push({ session: notice.from.id, title: notice.from.title ?? null, at: notice.at, minutes: Math.round((Date.parse(next.at) - at) / 6000) / 10 });
+  });
+  return idle;
+}
+
+const isObjectLike = (value) => typeof value === 'object' && value !== null;
+
+/** The Codex review runs started in `[from, to)` (`readCodexReviewRuns`): `{ startedAt, seconds, outcome, findings,
+ * part }`. */
 export function codexFacts(runs, { from, to }) {
   return runs
     .filter((run) => Date.parse(run?.startedAt) >= from && Date.parse(run.startedAt) < to)
-    .map((run) => ({ startedAt: run.startedAt, seconds: Number.isFinite(run.durationMs) ? Math.round(run.durationMs / 100) / 10 : null, outcome: run.outcome ?? null }));
+    .map((run) => ({
+      startedAt: run.startedAt,
+      seconds: Number.isFinite(run.durationMs) ? Math.round(run.durationMs / 100) / 10 : null,
+      outcome: run.outcome ?? null,
+      findings: Number.isFinite(run.findings?.total) ? run.findings.total : null,
+      // A part of a range is an attempt of its own (codex-review-runs.mjs, `runPart`).
+      part: isObjectLike(run.part),
+    }));
 }
 
 /** The checkboxes among `git grep -hE` lines of the task documents: `{ open, done }`, as the measure counted them. */
@@ -163,14 +215,16 @@ export function conflictFiles(stdout) {
 
 const SOURCES = {
   git: 'git log of origin/main as last fetched',
+  merge: "git log of origin/main as last fetched; a merge commit is made when its land builds it, before the land's tests",
   gates: 'the gate log (~/.js-harness/gate-log)',
   codex: '<git common dir>/js-harness/codex-review-runs.jsonl',
   tasks: 'git grep of the checkboxes of odd/tasks/*.md and docs/ROADMAP.md on origin/main',
   conflicts: 'git merge-tree of each merge into a branch on origin/main',
+  channel: "the channel (~/.js-harness/channel): a waiting notice to the same session's next one; a session may keep working meanwhile",
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: 'git', gates: 'gate log', codex: 'codex', tasks: 'git', conflicts: 'git' };
+const UNAVAILABLE_KEY = { git: 'git', merge: 'git', gates: 'gate log', codex: 'codex', tasks: 'git', conflicts: 'git', channel: 'channel' };
 
 const minutes = (seconds) => `${Math.round(seconds / 60)} min`;
 const counted = (values) => `(${values.length})`;
@@ -203,38 +257,65 @@ export function throughputRows(days) {
   };
 
   const prs = all('prs');
-  const leadTimes = prs.filter((pr) => pr.lastCommitAt).map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.lastCommitAt)) / 60000);
+  const numbers = new Map();
+  for (const pr of prs) numbers.set(pr.number, (numbers.get(pr.number) ?? 0) + 1);
+  const twice = [...numbers].filter(([, n]) => n > 1).map(([number]) => `#${number}`);
+  const leadOf = (list) => list.filter((pr) => pr.lastCommitAt).map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.lastCommitAt)) / 60000);
+  const leadTimes = leadOf(prs);
   const ended = gates.filter((gate) => gate.endedAt);
-  const busy = busySeconds(ended.filter((gate) => gate.lock === 'own').map((gate) => [Date.parse(gate.startedAt), Date.parse(gate.endedAt)]));
+  // The check a gate runs under its lock writes a line of its own (lock "parent"); its gate already counts it.
+  const own = ended.filter((gate) => gate.lock === 'own');
+  const busy = busySeconds(own.map((gate) => [Date.parse(gate.startedAt), Date.parse(gate.endedAt)]));
+  const byKind = new Map();
+  for (const gate of own) {
+    const kind = byKind.get(gate.kind) ?? { count: 0, seconds: 0 };
+    byKind.set(gate.kind, { count: kind.count + 1, seconds: kind.seconds + gate.seconds });
+  }
+  const kinds = [...byKind].sort((a, b) => b[1].seconds - a[1].seconds).map(([kind, { count, seconds }]) => `${kind} ${count} / ${minutes(seconds)}`);
   const waits = new Map();
   for (const gate of gates) waits.set(gate.session, (waits.get(gate.session) ?? 0) + gate.waitedSeconds);
   const waited = [...waits.values()].reduce((sum, seconds) => sum + seconds, 0);
   const mostWaited = [...waits].filter(([, seconds]) => seconds > 0).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const here = ended.filter((gate) => gate.kind === 'check' && gate.lock === 'own').map((gate) => gate.seconds);
+  const commits = own.filter((gate) => gate.kind === 'check' || gate.kind === 'commit');
+  // As the measure had it: a session's own check that waited under 5 s found the lock free, so its time is the run's alone.
+  const free = commits.filter((gate) => gate.kind === 'check' && gate.waitedSeconds < 5).map((gate) => gate.seconds);
   const github = ended.filter((gate) => gate.lock === 'ci').map((gate) => gate.seconds);
-  const lands = ended.filter((gate) => gate.kind === 'land');
+  const lands = own.filter((gate) => gate.kind === 'land');
   const red = lands.filter((gate) => gate.result !== 'pass' && gate.result !== 'exit 0');
+  const landFolders = new Set(lands.map((gate) => gate.land).filter(Boolean));
+  const loads = gates.filter((gate) => gate.lock === 'own' && Number.isFinite(gate.load)).map((gate) => gate.load);
   const codex = all('codex');
   const codexSeconds = codex.map((run) => run.seconds).filter(Number.isFinite);
+  const findings = codex.reduce((sum, run) => sum + (Number.isFinite(run.findings) ? run.findings : 0), 0);
+  const idle = all('idle');
+  const idleMinutes = idle.map((wait) => wait.minutes);
+  const longest = [...idle].sort((a, b) => b.minutes - a.minutes)[0];
   const first = days[0]?.tasks?.start;
   const last = days.at(-1)?.tasks?.end;
   const conflicts = all('conflicts');
+  const branchMerges = days.reduce((sum, day) => sum + (day.branchMerges ?? 0), 0);
 
   const medianOf = (values, unit) => (values.length ? `median ${Math.round(median(values))} ${unit} ${counted(values)}` : 'none');
   return [
-    row('pull requests merged', 'git', `${prs.length} (${(prs.length / hours).toFixed(2)} an hour)`),
-    row('last commit to merged', 'git', leadTimes.length ? `median ${Math.round(median(leadTimes))} min, worst ${Math.round(Math.max(...leadTimes))} min ${counted(leadTimes)}` : 'none'),
+    row('pull requests merged', 'git', `${numbers.size} (${(numbers.size / hours).toFixed(2)} an hour)${twice.length ? `; merged twice: ${twice.join(', ')}` : ''}`),
+    row('last commit to merge commit', 'merge', leadTimes.length
+      ? `median ${Math.round(median(leadTimes))} min, p75 ${Math.round(percentile(leadTimes, 75))} min, worst ${Math.round(Math.max(...leadTimes))} min ${counted(leadTimes)}; docs-only ${medianOf(leadOf(prs.filter((pr) => pr.docsOnly === true)), 'min')}; code ${medianOf(leadOf(prs.filter((pr) => pr.docsOnly === false)), 'min')}`
+      : 'none'),
     notRecorded('ready to merged', 'B1, JH 26', 'a ready notice that names its pull request'),
-    row('lock busy', 'gates', `${(busy / 3600).toFixed(1)} h of ${hours} h`),
+    row('lock busy', 'gates', `${(busy / 3600).toFixed(1)} h of ${hours} h${kinds.length ? `; by kind: ${kinds.join(', ')}` : ''}`),
     row('gate waits', 'gates', `${minutes(waited)} in all${mostWaited.length ? `; most: ${mostWaited.map(([session, seconds]) => `${short(session)} ${minutes(seconds)}`).join(', ')}` : ''}`),
-    row('commit gates', 'gates', `here: ${medianOf(here, 's')}; GitHub: ${medianOf(github, 's')}`),
-    row('lands', 'gates', `${lands.length}, median ${lands.length ? Math.round(median(lands.map((gate) => gate.seconds))) : '-'} s, red ${red.length}${red.length ? `: ${topNames(red.map((gate) => gate.failing), 3).map(([name]) => name).join(', ') || 'no test named'}` : ''}`),
+    row('commit gates', 'gates', `here: ${medianOf(commits.map((gate) => gate.seconds), 's')}, lock free ${medianOf(free, 's')}; GitHub: ${medianOf(github, 's')}`),
+    row('lands', 'gates', `${lands.length}, median ${lands.length ? Math.round(median(lands.map((gate) => gate.seconds))) : '-'} s, red ${red.length}; ${lands.length} gates for ${landFolders.size} lands`),
     notRecorded('land phases', 'B2, JH 24', 'one land record per land'),
     row('failing tests', 'gates', topNames(ended.map((gate) => gate.failing), 5).map(([name, n]) => `${name} ×${n}`).join(', ') || 'none'),
-    row('Codex reviews', 'codex', `${codex.length} runs, median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all`),
+    row('load at gate starts', 'gates', loads.length ? `median share ${median(loads).toFixed(2)} (${loads.length}); full at ${loads.filter((share) => share >= 1).length} of ${loads.length}` : 'none'),
+    row('Codex reviews', 'codex', `${codex.length} attempts (${codex.filter((run) => run.part).length} parts), median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all; ${findings} findings`),
+    row('idle upper bound', 'channel', idle.length
+      ? `${idle.length} waits, median ${Math.round(median(idleMinutes))} min, ${(idleMinutes.reduce((sum, m) => sum + m, 0) / 60).toFixed(1)} session-h in all; longest: ${longest.title ?? short(longest.session)} ${Math.round(longest.minutes)} min`
+      : 'none'),
     notRecorded('idle with nothing armed', 'B8', 'a presence record of each session'),
     notRecorded('tool calls open long', 'G, JH 26', 'a record of the calls the board flags'),
     row('tasks closed and added', 'tasks', first && last ? `closed ${last.done - first.done}, added ${last.done - first.done + last.open - first.open}, open ${first.open} to ${last.open}` : 'not read'),
-    row('conflicts by file', 'conflicts', `${conflicts.length} merges conflicted${conflicts.length ? `: ${topNames(conflicts.map((merge) => merge.files), 5).map(([file, n]) => `${file} ×${n}`).join(', ')}` : ''}`),
+    row('conflicts by file', 'conflicts', `${conflicts.length} of ${branchMerges} merges into branches conflicted${conflicts.length ? `: ${topNames(conflicts.map((merge) => merge.files), 5).map(([file, n]) => `${file} ×${n}`).join(', ')}` : ''}`),
   ];
 }
