@@ -4518,7 +4518,8 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `bin/lib/project.test.mjs` "initProject on a fresh repo writes harness.json…" failed before the
   change (actual `{ version: '0.1.0' }`); after it, the project, init, install, update, reply,
   doctor and journey tests: 612 tests, 607 pass, 0 fail. README says it at `init` and under
-  `js-harness reply`.
+  `js-harness reply`. Committed as 0d3535aa (gate passed); gentle-ai 16301239..0d3535aa medium, not
+  due (under_budget), not escalated; Codex 1630123..0d3535a correct (0.98), no findings.
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
 (worktree `D:/js-harness-worktrees/rules-installed-hash`): designed with two readers and a second round,
