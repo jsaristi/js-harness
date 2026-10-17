@@ -602,7 +602,11 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   first, each seen RED: the curly-quote test in `bin/install.test.mjs`, the damaged after-index test in
   `bin/lib/memory-pass.test.mjs` (another text, and bytes no text write makes), and the changed refusal of the
   written-since test. GREEN: memory-pass 35 pass, and the quoting tests of install 5 pass (one file at a time: another
-  session's gate held the machine's lock).
+  session's gate held the machine's lock). Committed as `76b06df`. gentle-ai on `5ea341af..76b06df`: high by
+  escalation (item 1, `undoHeld` decides whether an undo writes a project's memory index), lenses risk and
+  reliability, approved and acknowledged (lineage `review-e255530cff15e77c`), one suggestion: run the whole install
+  file, not its quoting tests only. Run in a gate turn: 82 pass, 0 fail. Codex on `5ea341a..76b06df`: correct
+  (0.96), no finding.
 
 ## Next step (2026-10-16)
 - T10 (JH 21, branch `feat/memory-full-uninstall`, worktree `D:\js-harness-worktrees\memory-full-uninstall`): built
