@@ -364,3 +364,10 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   - gentle-ai approved 8b96b9d2 and its correction e251c12e (lineage review-64a52f3e0ae9f6fa, acknowledged; L10).
   - gentle-ai assess of 1c7d985d alone (--base-ref e251c12e --committed-only): medium, review not due (under_budget).
   - gentle-ai assess of eeeeb2e5 (--base-ref 1c7d985d --committed-only): medium, review not due (under_budget).
+- L14 (2026-10-17, the first daily run on main): PR 367 merged at 06:53:58Z (main 246851e4). The one
+  `gh workflow run windows-daily.yml --ref main` gave run 39011662138
+  (https://github.com/jsaristi/js-harness/actions/runs/39011662138): success. The job ran 06:54:51Z to 07:07:19Z,
+  12 min 28 s; the step "The whole suite" took 12 min 5 s (node's `duration_ms` 724,260). 6,116 tests: 6,105
+  passed, 0 failed, 11 skipped, 0 cancelled. `js-harness windows-daily` read it as passed and told nothing. The
+  feature is closed: T1-T4 done, nothing left; the schedule (`23 7 * * *`) runs it from here, and the lead's
+  heartbeat reads each run.
