@@ -3102,6 +3102,12 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   on a configured window. Read on 2026-10-17 before 11:22Z (by `date`): after pull request 275 merged (2026-10-16T13:32:49Z), 37 of 37
   automatic compactions in the record were told, and every `told no` is older. The triage note said 41 of 41;
   the count read here is 37.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `fix/peer-text-blocks`, item 4 of the lead's triage: `peerTextOf`
+  (bin/lib/sessions.mjs) reads a queued prompt through `queuedWords`, as T23 reads his, so a message the app
+  delivered for a session and queued as a list of blocks names its sender (RED: "a queued message the app put in").
+  Commit `175e15f`. gentle-ai on `67e04cb..175e15f`: high (item 2 escalated), lenses risk and reliability, approved
+  and acknowledged, lineage review-afeb3126c951c989; its SUGGESTION, a negative case, left. Codex on
+  `67e04cb..175e15f`: correct (0.97), recorded.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
