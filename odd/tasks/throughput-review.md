@@ -91,10 +91,13 @@ y preciso" and approved it on 2026-10-17 ("Sí, aprobalo (Recomendada)").
   the log, `test-times.jsonl`, rotated by the same bound into `test-times.1.jsonl`, as `busiest.jsonl` is: a whole
   list of about 150 files on every end line would shrink the log's 2.3 days. Only gates that trace (exact tests on)
   record it.
-- B6, gentle-ai: the harness never runs a review, and gentle-ai deletes a transaction when it burns it, so the start
-  is lost. The PostToolUse hook already installed (`resume --pause`, every tool) appends, for a Bash command that runs
-  `gentle-ai review start` and returns a lineage, `{ at, event: "start", lineage, session, cwd }`, and for a successful
-  `review acknowledge-approved`, `{ at, event: "end", lineage }`, to `<home>/.js-harness/throughput/<slug>/reviews.jsonl`.
+- B6, gentle-ai (revised in L25): the harness never runs a review, and gentle-ai deletes a transaction when it burns
+  it, so the start is lost. gentle-ai keeps each live transaction as a folder `<git common dir>/gentle-ai/review-transactions/v2/<lineage>/`,
+  made at START, and writes one `terminal-consumption/v1/<hash>.json` naming the lineage when it burns it. The PostToolUse
+  hook already installed (`resume --pause`, every tool) lists `v2/` and appends, for each lineage it has not recorded,
+  `{ v, lineage, at, from }` to `<home>/.js-harness/throughput/<slug>/review-starts.jsonl` (`at` the folder's birthtime,
+  `from: "birthtime"`; the hook's own time with `from: "seen"` where the file system keeps none). The end is read by
+  `throughput` from the terminal records' birthtimes, which outlive the transaction, so ends before B6 count too.
   A lineage's duration is its first start to its end. Codex sessions are not covered (no such hook), and say so.
 
 ### Unit 3 · the daily trigger
@@ -176,5 +179,7 @@ questions answered, its cost (one command a day, the readers only with a candida
 - gentle-ai (2026-10-17): 8e967797..8fa9421b (9aad62bb, 4a613415, 8fa9421b, the B5 range before its rebase 0fd31437..1503c27e) assessed high with item 1 escalated, reviewed with lenses risk and reliability, approved and acknowledged (lineage review-b5f68ca4bb29dffe); this line is the written evidence for 9aad62bb and 8fa9421b.
 - gentle-ai (2026-10-17): 8fa9421b..552af1de assessed medium, not due (under_budget); no high-risk item applies (it reads a failed read as not read, and leaves CI gates out of a count), so no review started; this line is the written evidence for 552af1de.
 
+- L25 (2026-10-17): B5 went up as PR 368 (Codex on 8e96779..b28f3fa: correct, 0.87, recorded; the lead notified ready). B6 redesigned before any code: matching `gentle-ai review start` in a Bash command's payload would miss every review this session itself ran, since START, the granted invocation and the acknowledgement went through a node script whose output went to a file. gentle-ai's own store says both ends whatever ran them: each live transaction is a folder `v2/<lineage>/` made at START (its birthtime, on NTFS distinct from its mtime: review-76121cbe1ba624cf born 03:24:32.813Z), and each burn writes one `terminal-consumption/v1/<hash>.json` naming the lineage (287 on this machine, born at the acknowledgement: this session's review-b5f68ca4bb29dffe at 06:38:01Z, a minute after its acknowledgement). Only the start is lost at the burn, so the hook keeps that alone, and the ends, durable, are read by `throughput` and count before B6 too. The captured PostToolUse payload is no longer needed. Sent to one reader (opus, high) before tests.
+
 ## Next step
-B5 on feat/throughput-test-times (worktree D:/js-harness/.claude/worktrees/brave-taussig-2a280c), rebased on main after PR 365 merged, reviewed and approved by gentle-ai (L24); its three warnings fixed in the next commit. Left: commit the fixes (gate), assess them, Codex on the whole B5 range `--base 8e967797` (full SHA), the evidence line for the fix commit, push, open the PR, notify the lead --kind ready. Then B6 (capture a real PostToolUse payload first), B4 with JH 26's agreement. The four rules on a `rule/` branch before T4.
+B6 on feat/throughput-reviews (stacked on feat/throughput-test-times, PR 368; worktree D:/js-harness/.claude/worktrees/brave-taussig-2a280c), design revised (L25, the B6 bullet), one reader running on it. Next: weigh the reader's findings, then test first: the hook step in bin/resume.mjs (review-starts.jsonl), the reader of the terminal records and the `gentle-ai` row in bin/lib/throughput.mjs, the wiring in bin/throughput.mjs, README; gate, assess, Codex, PR after 368 merges. Then B4 with JH 26's agreement; the four rules on a `rule/` branch before T4.
