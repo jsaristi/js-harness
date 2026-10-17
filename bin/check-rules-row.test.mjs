@@ -46,6 +46,7 @@ const harnessRepo = repoTemplate((root) => {
   git(root, 'init', '-q', '-b', 'main');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  git(root, 'config', 'maintenance.auto', 'false');
   write(root, 'bin/lib/rules-data.mjs', 'export const RULES = [];\n');
   write(root, 'AGENTS.md', `${'a'.repeat(400)}\n`);
   write(root, 'docs/ROADMAP.md', '# Roadmap\n');
@@ -191,6 +192,20 @@ test('a gate whose rules row fails stops before its sensors', async () => {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which holds
+// `.git/objects/maintenance.lock` after the commit returns. The first copy of the template comes right after its
+// commit, and a copy that lists the lock and then finds it gone stops with ENOENT on `.git/objects` (GitHub, gate run
+// 39007490864, 2026-10-17). So the template's commit, and every commit in a copy, starts none.
+test('a commit in the repository the tests copy starts no detached git maintenance', () => inRepo((root) => {
+  const run = spawnSync('git', ['commit', '-q', '--allow-empty', '-m', 'traced'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_TRACE: '1' },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.doesNotMatch(run.stderr, /maintenance run/);
+}));
 
 test('a git that names the sides of a diff otherwise, and a path with a space or an accent, still give their lines', () => inRepo((root) => {
   git(root, 'config', 'diff.mnemonicPrefix', 'true');
