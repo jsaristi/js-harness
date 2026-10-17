@@ -244,6 +244,7 @@ cuts) shortens the run but does not make any fixed figure true for a growing sui
 - [x] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4); built by `feat/merge-below-head` on his answer of 2026-10-16, "Solo lo escrito" (`odd/tasks/merge-below-head.md`; L24)
 - [x] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1) (above, L21; the figure is his, asked through the lead)
 - [ ] T6f (kind: build) S6: the bound T6e's design gives, once he answers L21's question; inline, test first
+- [x] T6g (kind: build) S6: `bin/gate.test.mjs`, "a real gate leaves its two lines in the log of its home", passes inside a Claude Code session as on CI: its helper drops the host's session and the test sets one itself (L25, the one red of T6's second pass); built inline
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -426,3 +427,22 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   run from such a merge still reviewed the range as one, re-reading the branch's covered work. His answer,
   "Solo lo escrito", asks for a merge to be reviewed by what was written in it, and `feat/merge-below-head`
   builds that: `codex-review` reviews the merge in a turn of its own wherever two turns cost less.
+- L25 (2026-10-17, JH 25): T6's second pass, on `main` `3a74f8a` (#337 landed), the same six checks as L18,
+  each heavy run under `js-harness gate --max 60`, one after another, with `TEMP`/`TMP` on the `js-harness-tmp`
+  folder of drive D and `JS_HARNESS_GATE_CI=0`. (1) `check` on Windows (`JS_HARNESS_GATE_WSL=0`): every row passed
+  but `tests`, which this time ended inside its bound, exit 1 after 1,051 s on the 134 files selection kept (42 of
+  176 skipped), with one failure. (2) `node --test` whole on Windows: 5,886 tests, 5,866 pass, 1 fail, 19 skipped,
+  `duration_ms 862303`, against L18's 1,398 s; the machine was 99% busy before both runs, so the figure is one run,
+  not a bound, and L21's question stands as asked. The one failure, in both runs, is
+  `bin/gate.test.mjs:1557`, "a real gate leaves its two lines in the log of its home": the gate records the host's
+  session (`CLAUDE_CODE_SESSION_ID`, `bin/gate.mjs:432`, since `a83730b`), and the test's helper `outsideAGate`
+  kept that variable, so inside a Claude Code session the start line held a `session` the test did not expect,
+  while CI, which sets no session, passed; a defect of the test, not of what ships (T6g: the helper drops it and
+  the test sets `a-session` and expects it; the test passes alone with the variable set and unset, 1 of 1 each).
+  (3) WSL2: `check` with `CI=1 JS_HARNESS_TEST_CONCURRENCY=2`, as CircleCI runs it, in a clone of `main` in the
+  Ubuntu home (node 24.15.0): every row passed, `tests` with the whole suite, exit 0. (4) CircleCI:
+  `ci/circleci: check success` on `3a74f8a` (2026-10-17T00:14:41Z, `gh api`). (5) `docs/FAILURES.md`:
+  `failures check --settled` exits 0, 94 failures, 0 not settled. Left for T6's close: one more `node --test` on
+  Windows once T6g lands, and T6f, which waits on his answer. Seen on the way: the selection of (1) handed
+  `bin/lib/test-run-warning.mjs`, not a test file, to `node --test`, which ran it as a file of no tests; not read
+  further.
