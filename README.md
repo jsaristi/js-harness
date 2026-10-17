@@ -459,7 +459,8 @@ the queue prints, commit by commit, the Codex record that covers it and the line
 
 A landed pull request from a `rule/` branch closes what `js-harness rules change` opened: for each
 rule it changed in `bin/lib/rules-data.mjs`, the newest relief line "rule:<id> proposed on
-<branch>, not landed" that no later landing confirms gets one line of the queue's, "rule:<id>
+<branch>, not landed" that the landed head holds (the line ends with a hash of the declaration it
+wrote, which must be the head's) and that no later landing confirms gets one line of the queue's, "rule:<id>
 landed on main <sha> from <branch>: confirms relief line <n>". A branch with no such line is named;
 `--dry-run` and a land that does not move main write none. A rule's row is read three times: the
 commit refuses a restated value, `js-harness check --push` reports it as INFO for the lines the push

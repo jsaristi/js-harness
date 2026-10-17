@@ -7,6 +7,7 @@ import test, { after, before } from 'node:test';
 import { circleciState, failedRows, landingLines, mergeQueueMain } from './merge-queue.mjs';
 import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
+import { declarationOf } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
@@ -1051,6 +1052,21 @@ test('landingLines given until confirms only a proposal stamped by then, so a la
 test('a land confirms the proposal its tested head holds, not one rules change wrote after that head', async () => {
   const made = makeRuleRepo(['# Relief', proposed('a', 'rule/a', '00:00')]);
   fs.appendFileSync(made.reliefFile, `2099-01-01 00:00:00 local (rules change). rule:a proposed on rule/a, not landed: value; source design; supersedes relief line 2\n`, 'utf8');
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});
+
+test('landingLines given declarations confirms the newest proposal whose declaration the landed head holds', () => {
+  const relief = ['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration aaaaaaaaaaaa`, `${proposed('a', 'rule/a', '01:00')}; declaration bbbbbbbbbbbb`].join('\n');
+  const until = new Date(2026, 9, 16, 11, 0, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'aaaaaaaaaaaa' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'cccccccccccc' } }), { lines: [], none: ['a'] });
+});
+
+test('a land confirms the proposal whose declaration its head holds, not a newer one rules change wrote for another', async () => {
+  const held = declarationOf(RULES_DATA(5), 'a');
+  const made = makeRuleRepo(['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration ${held}`, `${proposed('a', 'rule/a', '05:00')}; declaration 000000000000`]);
   const { code, out } = await landRule(made);
   assert.equal(code, 0, out.join('\n'));
   assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);

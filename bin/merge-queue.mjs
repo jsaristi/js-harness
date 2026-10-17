@@ -14,7 +14,7 @@ import { appendRelief, reliefPath } from './lib/channel.mjs';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
-import { rulesOfText } from './lib/rules-change-run.mjs';
+import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
@@ -38,8 +38,8 @@ runs none, and CircleCI's run is its test. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. For each landed rule/ pull request and each rule it
 changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> landed on main <sha> from
-<branch>: confirms relief line <n>", for the newest "rule:<id> proposed on <branch>, not landed" line stamped
-no later than the landed head's commit that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
+<branch>: confirms relief line <n>", for the newest "rule:<id> proposed on <branch>, not landed" line whose
+declaration hash is the landed head's that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
 write none. Exit 0 landed or nothing to land, 4 red, 3 main moved meanwhile (nothing pushed), 1 anything
 else.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
@@ -248,15 +248,20 @@ function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
  * newest line "rule:<id> proposed on <branch>, not landed" (`js-harness rules change` writes it; the comma after the
  * branch keeps `rule/a` from matching `rule/ab`, the space after "proposed" `rule:a` from matching `rule:ab`) that no
  * later "rule:<id> landed on main ... from <branch>: " line confirms gets one line naming its place, from 1, blank lines
- * counted, as `rules change` names the line it supersedes; `none` are the ids no proposed line names. Given `until`
- * (ms), only a proposed line stamped by then counts: `rules change` stamps its line before the commit that holds it, so
- * a line stamped after the landed head's commit proposes a change that head does not hold. */
-export function landingLines(relief, { branch, ids, sha, until = Infinity }) {
+ * counted, as `rules change` names the line it supersedes; `none` are the ids no proposed line names. Only a proposal
+ * the landed head holds counts: a line that ends "; declaration <hash>" when `declarations[id]` is that hash (the head's
+ * declaration of the rule, `declarationOf`), and an older line that names none when it is stamped before `until` (ms),
+ * the start of the second of the head's commit, since `rules change` stamps its line before the commit that holds it. */
+export function landingLines(relief, { branch, ids, sha, declarations = {}, until = Infinity }) {
   const lines = String(relief).split('\n');
   const found = { lines: [], none: [] };
   for (const id of ids) {
     const proposal = `rule:${id} proposed on ${branch}, not landed`;
-    const newest = lines.findLastIndex((line) => line.includes(proposal) && stampOf(line) <= until);
+    const held = (line) => {
+      const named = /; declaration ([0-9a-f]{12}|none)\s*$/.exec(line);
+      return named === null ? stampOf(line) < until : named[1] === declarations[id];
+    };
+    const newest = lines.findLastIndex((line) => line.includes(proposal) && held(line));
     if (newest === -1) {
       found.none.push(id);
       continue;
@@ -316,13 +321,20 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
     } catch {
       // No relief file is no proposed line.
     }
-    // The landed head's commit time bounds the proposals it can hold, to the end of its second.
+    // What the landed head holds: each rule's declaration, and its commit time for a proposal line that names none.
     const committed = Number(gitIn(place, 'show', '-s', '--format=%ct', pr.headRefOid).out.trim());
-    if (!Number.isFinite(committed) || committed <= 0) {
-      stdout(`${said}, and the time of its head commit could not be read: no landing line is written for it.`);
+    const shown = gitIn(place, 'show', `${pr.headRefOid}:${RULES_DATA}`);
+    let declarations = null;
+    try {
+      declarations = shown.ok ? Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)])) : null;
+    } catch {
+      // A declaration that does not parse is one the head cannot be matched by.
+    }
+    if (!Number.isFinite(committed) || committed <= 0 || declarations === null) {
+      stdout(`${said}, and what its head holds could not be read: no landing line is written for it.`);
       continue;
     }
-    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), until: committed * 1000 + 999 });
+    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), declarations, until: committed * 1000 });
     for (const id of none) stdout(`${said} with no relief line "rule:${id} proposed on ${pr.headRefName}, not landed": no landing line is written for it.`);
     for (const line of lines) {
       try {
