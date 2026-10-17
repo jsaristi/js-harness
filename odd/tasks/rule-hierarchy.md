@@ -2802,11 +2802,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `AGENTS.md` and deletes the draft, so there is never a second source. The reason the lead
   added: a session that edits `AGENTS.md` in its own worktree reads that file on every turn, so
   a half-written version would govern the session that writes it
-- [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
+- [x] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
   reply check on is asked of him. The lines are built and their wording is his yes
   (`feat/template-lines`, Progress, 2026-10-16); the empty register is built
-  (`feat/empty-register`); open: `init` turning the reply check on by default, his answer,
-  built once C1 is (T2)
+  (`feat/empty-register`); `init` turns the reply check on by default, his answer, on
+  `feat/init-reply-on` (Progress, 2026-10-17)
 - Moved on 2026-10-14 to "JH 15 · auditoría de honestidad", by the lead's message to this
   session; their state is kept in `odd/tasks/honesty-audit.md`, and only there: T10 (the honesty
   eval: the task and its proof; then, before any spend is asked of him, the number of trials,
@@ -4518,6 +4518,18 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - T16e, the merge command: its three slices are pull requests 314 (225da7d3), 328 (d0b25553) and 339
     (685a4518).
   - T17, the sweep of 2026-10-11: T17a to T17e are all checked.
+
+- 2026-10-17, T9, the reply check on by default, built by `JH 5 · canal entre sesiones` on
+  `feat/init-reply-on` from origin/main, on the lead's order of 11:22Z (item 5 of its triage
+  note). His answer 11, "Prendido por defecto (Recomendada)", read above (the lead's transcript
+  `e152c9d8`, line 13566). `writeProject` (`bin/lib/project.mjs`) writes `{ version, reply: true }`
+  in a new project's `harness.json`, so the reply check runs there with the English labels; a
+  clone's committed pin is kept as it is, and `false` turns the check off. Test first:
+  `bin/lib/project.test.mjs` "initProject on a fresh repo writes harness.json…" failed before the
+  change (actual `{ version: '0.1.0' }`); after it, the project, init, install, update, reply,
+  doctor and journey tests: 612 tests, 607 pass, 0 fail. README says it at `init` and under
+  `js-harness reply`. Committed as 0d3535aa (gate passed); gentle-ai 16301239..0d3535aa medium, not
+  due (under_budget), not escalated; Codex 1630123..0d3535a correct (0.98), no findings.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
