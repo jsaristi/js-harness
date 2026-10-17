@@ -12,7 +12,8 @@ import { gateFirstDir } from './gate-first.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
-import { hygieneDir } from './memory-hygiene.mjs';
+import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
+import { readLock } from './memory-pass.mjs';
 
 function skillContent(version) {
   return `---
@@ -26,7 +27,7 @@ js-harness commands:
 - \`js-harness sync --global\` — re-write installed files for the running version.
 - \`js-harness update\` — say whether a newer release exists; none is tagged before 1.0.0, so it says how to get the newest copy.
 - \`js-harness upgrade\` — install the newer release of a folder of tarballs (\`--source <dir>\`), then sync; with no source it installs nothing.
-- \`js-harness uninstall --global\` — remove exactly what install wrote.
+- \`js-harness uninstall --global\` — remove exactly what install wrote; it keeps the memory snapshots, the only copy of what a memory pass changed, and \`--full\` removes them too.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run. Where the project's \`codexReview\` switch is off at HEAD it starts nothing and records nothing.
 - \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone ${ruleValue('gate-wait', 'minutes')} minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
 - \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after ${ruleValue('gate-max', 'minutes')} minutes (\`--max <minutes>\`), and its exit code is the command's.
@@ -1292,7 +1293,14 @@ export function sync(home, version, deps = {}) {
 export function uninstall(home, deps = {}) {
   // The folder of memory hygiene first, on its own: what is left of `.js-harness` once it is gone is then removed
   // by the steps below, with a manifest and without, as when `memory` never ran.
-  const memory = removeMemoryHygieneFolder(home, deps.removeFile ?? fs.rmSync, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync);
+  const memory = removeMemoryHygieneFolder(home, {
+    removeFile: deps.removeFile ?? fs.rmSync,
+    statFile: deps.statFile ?? fs.statSync,
+    listDir: deps.listDir ?? fs.readdirSync,
+    renameFile: deps.renameFile ?? fs.renameSync,
+    alive: deps.alive ?? isAlive,
+    full: deps.full === true,
+  });
   const result = uninstallInstalled(home, deps);
   return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory), ...throughputResult(home, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync) };
 }
@@ -1531,40 +1539,106 @@ function removeChannelFolder(home, removeFile, statFile) {
   return { removed: [dir], kept: [] };
 }
 
-/** Removes the folder of memory hygiene under `home` (`hygieneDir` of `memory-hygiene.mjs`), as `{ removed, kept }`
- * (odd/tasks/memory-hygiene.md, D4 and T9). A project's folder that holds a snapshot is kept, with the stamps of its
- * snapshots and whether its journal is beside them: a snapshot is the only copy of what a memory pass changed, so it
- * is never removed on its way out. The other projects' folders go; with none kept, the whole folder goes. A folder
- * that cannot be looked at or removed is kept with the error code, like the channel's, one project at a time, so
- * one held open does not hide what was removed before it, the projects after it, or the stamps kept. */
-function removeMemoryHygieneFolder(home, removeFile, statFile, listDir) {
+/** Removes the folder of memory hygiene under `home` (`hygieneDir` of `memory-hygiene.mjs`), as
+ * `{ removed, kept, snapshotsRemoved }` (odd/tasks/memory-hygiene.md, D4, T9 and D7).
+ *
+ * The normal uninstall keeps a project's folder that holds a snapshot, with the stamps of its snapshots and whether
+ * its journal is beside them: a snapshot is the only copy of what a memory pass changed. The other projects' folders
+ * go; with none kept, the whole folder goes. One that cannot be looked at or removed is kept with the error code,
+ * one project at a time, so one held open does not hide what was removed before it or the stamps kept.
+ *
+ * `full` (`uninstall --global --full`, D7.2) removes the snapshots too: the folder is moved aside in one rename and
+ * removed there, and `snapshotsRemoved` names each project that held snapshots, with their stamps. A removal that
+ * fails puts the folder back (`partial`: it may be partly removed), or names where it was left (`aside`).
+ *
+ * Neither mode removes a project under a pass, whose `lock` (`readLock` of `memory-pass.mjs`) is kept as
+ * `locked` with what the lock says (D7.4); the full one then removes nothing (`locked-whole`), since it takes the
+ * folder whole. While it works it holds a marker beside the folder (`purgeMarker`, D7.5), which every writer of a
+ * pass checks after taking its lock: a plan either holds its lock when the locks are read, or sees the marker and
+ * stops. A marker already there is another uninstall's, or one a killed run left: nothing is touched, and `purging`
+ * says whether its pid is `alive`. A folder a killed run left aside is named (`aside-found`), never removed. */
+function removeMemoryHygieneFolder(home, { removeFile, statFile, listDir, renameFile, alive, full }) {
   const dir = hygieneDir(home);
+  const marker = purgeMarker(dir);
   const unremovable = (folder, err) => ({ path: folder, reason: 'unremovable', code: err.code ?? 'unknown error' });
+  const asides = asideFolders(dir, listDir);
+  const purging = (held) => ({ removed: [], kept: [{ path: dir, reason: 'purging', marker, pid: held.pid, alive: held.pid !== null && alive(held.pid) }, ...asides], snapshotsRemoved: [] });
+  const held = readMarker(marker);
+  if (held !== null) return purging(held);
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: asides, snapshotsRemoved: [] };
+  } catch (err) {
+    return { removed: [], kept: [unremovable(dir, err), ...asides], snapshotsRemoved: [] };
+  }
+  try {
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { flag: 'wx' });
+  } catch (err) {
+    if (err.code === 'EEXIST') return purging(readMarker(marker) ?? { pid: null });
+    return { removed: [], kept: [unremovable(dir, err), ...asides], snapshotsRemoved: [] };
+  }
+  try {
+    const result = full ? removeHygieneWhole(dir, { removeFile, statFile, listDir, renameFile }) : removeHygieneProjects(dir, { removeFile, statFile, listDir });
+    const kept = [...result.kept, ...asides].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return { removed: result.removed, kept, snapshotsRemoved: result.snapshotsRemoved ?? [] };
+  } finally {
+    fs.rmSync(marker, { force: true });
+  }
+}
+
+/** The project folders of the hygiene folder `dir`, each as `{ path, stamps, journal, lock }` (`lock` from
+ * `readLock`, null when there is none), or `{ path, reason: 'unremovable', code }` for one that cannot be looked at. */
+function hygieneProjects(dir, statFile, listDir) {
+  return listDir(dir).sort().map((name) => {
+    const project = path.join(dir, name);
+    // The lock first, which never throws: a project whose snapshots cannot be looked at is still seen under a pass.
+    const lock = readLock(project);
+    try {
+      const snapshots = path.join(project, 'snapshots');
+      const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
+      return { path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile), lock };
+    } catch (err) {
+      return lock ? { path: project, lock } : { path: project, reason: 'unremovable', code: err.code ?? 'unknown error' };
+    }
+  });
+}
+
+/** What `uninstall` says of a project under a pass: the lock, and the memory folder its plan's manifest records. */
+function lockedProject(project) {
+  const { lock } = project;
+  let folder = null;
+  if (lock.manifest) {
+    try {
+      const recorded = JSON.parse(fs.readFileSync(path.join(project.path, 'snapshots', lock.stamp, 'manifest.json'), 'utf8')).folder;
+      if (typeof recorded === 'string') folder = recorded;
+    } catch {
+      // a manifest that cannot be read names no folder
+    }
+  }
+  return { path: project.path, reason: 'locked', lock: path.join(project.path, 'lock'), ...lock, folder };
+}
+
+/** The normal mode: each project's folder goes, unless it holds a snapshot or a lock. */
+function removeHygieneProjects(dir, { removeFile, statFile, listDir }) {
   let projects;
   try {
-    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
-    projects = listDir(dir).sort().map((name) => path.join(dir, name));
+    projects = hygieneProjects(dir, statFile, listDir);
   } catch (err) {
-    return { removed: [], kept: [unremovable(dir, err)] };
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
   }
   const kept = [];
   const goes = [];
   for (const project of projects) {
-    try {
-      const snapshots = path.join(project, 'snapshots');
-      const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
-      if (stamps.length > 0) kept.push({ path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile) });
-      else goes.push(project);
-    } catch (err) {
-      kept.push(unremovable(project, err));
-    }
+    if (project.reason) kept.push(project);
+    else if (project.lock) kept.push(lockedProject(project));
+    else if (project.stamps.length > 0) kept.push({ path: project.path, stamps: project.stamps, journal: project.journal });
+    else goes.push(project.path);
   }
   if (kept.length === 0) {
     try {
       removeFile(dir, { recursive: true, force: true });
       return { removed: [dir], kept: [] };
     } catch (err) {
-      return { removed: [], kept: [unremovable(dir, err)] };
+      return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
     }
   }
   const removed = [];
@@ -1573,15 +1647,89 @@ function removeMemoryHygieneFolder(home, removeFile, statFile, listDir) {
       removeFile(project, { recursive: true, force: true });
       removed.push(project);
     } catch (err) {
-      kept.push(unremovable(project, err));
+      kept.push({ path: project, reason: 'unremovable', code: err.code ?? 'unknown error' });
     }
   }
-  kept.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { removed, kept };
 }
 
-/** `memoryKept` of `uninstall`'s result, there only when a folder of memory hygiene is kept, the one case it speaks of. */
-const memoryResult = (memory) => (memory.kept.length > 0 ? { memoryKept: memory.kept } : {});
+/** The full mode: nothing while a project is under a pass; else the folder moved aside in one rename and removed
+ * there, put back when that fails. A project that cannot be looked at is removed with the rest, unnamed. */
+function removeHygieneWhole(dir, { removeFile, statFile, listDir, renameFile }) {
+  let projects;
+  try {
+    projects = hygieneProjects(dir, statFile, listDir);
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  const locked = projects.filter((project) => project.lock).map(lockedProject);
+  if (locked.length > 0) return { removed: [], kept: [{ path: dir, reason: 'locked-whole' }, ...locked] };
+  const snapshotsRemoved = projects.filter((project) => project.stamps?.length > 0).map((project) => ({ path: project.path, stamps: project.stamps }));
+  const aside = `${dir}.purging-${process.pid}-${Date.now()}`;
+  try {
+    renameFile(dir, aside);
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  try {
+    removeFile(aside, { recursive: true, force: true, maxRetries: 3 });
+  } catch (err) {
+    const code = err.code ?? 'unknown error';
+    try {
+      renameFile(aside, dir);
+      return { removed: [], kept: [{ path: dir, reason: 'partial', code }] };
+    } catch {
+      return { removed: [], kept: [{ path: aside, reason: 'aside', code, dir }] };
+    }
+  }
+  return { removed: [dir], kept: [], snapshotsRemoved };
+}
+
+/** The marker `marker` as `{ pid }`, `pid` null for one that does not parse; null when there is none. */
+function readMarker(marker) {
+  let text;
+  try {
+    text = fs.readFileSync(marker, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    return { pid: null };
+  }
+  try {
+    const pid = JSON.parse(text).pid;
+    return { pid: Number.isInteger(pid) ? pid : null };
+  } catch {
+    return { pid: null };
+  }
+}
+
+/** The folders a full removal killed between its rename and its end left beside `dir`, as `aside-found`. */
+function asideFolders(dir, listDir) {
+  const prefix = `${path.basename(dir)}.purging-`;
+  try {
+    return listDir(path.dirname(dir))
+      .filter((name) => name.startsWith(prefix))
+      .sort()
+      .map((name) => ({ path: path.join(path.dirname(dir), name), reason: 'aside-found', dir }));
+  } catch {
+    return [];
+  }
+}
+
+/** Whether the process `pid` runs: `EPERM` is one that runs as someone else. */
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code === 'EPERM';
+  }
+}
+
+/** `memoryKept` and `memorySnapshotsRemoved` of `uninstall`'s result, each there only when it holds something. */
+const memoryResult = (memory) => ({
+  ...(memory.kept.length > 0 ? { memoryKept: memory.kept } : {}),
+  ...(memory.snapshotsRemoved.length > 0 ? { memorySnapshotsRemoved: memory.snapshotsRemoved } : {}),
+});
 
 /** Removes the folder `js-harness remote` writes under `home` (`remoteDir` of `remote.mjs`) with what is left in
  * it, the logs of the servers and the markers of their stops, as `{ removed, kept }`, like `removeChannelFolder`:

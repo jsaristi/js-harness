@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dueNotice, hygieneState, INDEX_BYTES, LINE_CHARS, readJournal, readMemory } from './memory-hygiene.mjs';
+import { dueNotice, hygieneDir, hygieneState, INDEX_BYTES, LINE_CHARS, purgeMarker, readJournal, readMemory } from './memory-hygiene.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse('2026-10-15T08:00:00Z');
@@ -127,6 +127,26 @@ test('dueNotice says a due pass at most once a day, says nothing when none is du
     fs.utimesSync(path.join(folder, 'a.md'), new Date(NOW), new Date(NOW));
     fs.utimesSync(path.join(folder, 'MEMORY.md'), new Date(NOW), new Date(NOW));
     assert.equal(dueNotice({ home, slug: 'p', folder, now: NOW + 3 * DAY }), null, 'nothing due after a verified pass');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// T10 (D7.5): while an uninstall holds its marker, the hook writes nothing into the folder it removes.
+test('dueNotice writes no stamp while an uninstall holds the marker beside the folder of memory hygiene', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-due-'));
+  try {
+    const folder = path.join(home, '.claude', 'projects', 'p', 'memory');
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, 'MEMORY.md'), `${line('a')}\n`);
+    fs.writeFileSync(path.join(folder, 'a.md'), note('user'));
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    const marker = purgeMarker(hygieneDir(home));
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, startedAt: new Date(NOW).toISOString() }));
+    assert.equal(dueNotice({ home, slug: 'p', folder, now: NOW }), null);
+    assert.equal(fs.existsSync(hygieneDir(home)), false, 'not even the folder');
+    fs.rmSync(marker);
+    assert.match(dueNotice({ home, slug: 'p', folder, now: NOW }), /is due/, 'and says it once the marker is gone');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

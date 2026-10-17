@@ -7,7 +7,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { hygieneState, readMemory } from './memory-hygiene.mjs';
+import { hygieneState, purgeMarker, readMemory } from './memory-hygiene.mjs';
 
 export class PassError extends Error {}
 
@@ -72,6 +72,45 @@ function releaseLock(stateDir, stamp) {
   if (lockHolder(stateDir) === stamp) fs.rmSync(lockFile(stateDir));
 }
 
+/** The lock of a project, read without ever throwing (D7.4): `null` when there is none, else `{ stamp, pid, manifest }`,
+ * `stamp` and `pid` null for a lock that is empty or does not parse (it is read in the instant `planPass` writes it),
+ * `manifest` whether that stamp's snapshot was written: a plan killed between its lock and its snapshot leaves none. */
+export function readLock(stateDir) {
+  let held;
+  try {
+    held = fs.readFileSync(lockFile(stateDir));
+  } catch (err) {
+    // No lock where the state folder is not a folder; one that cannot be read is held, by nobody it can name.
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
+    return { stamp: null, pid: null, manifest: false };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(held.toString('utf8'));
+  } catch {
+    parsed = null;
+  }
+  // Only the shape `planPass` writes is a stamp: anything else could name a path out of the snapshots.
+  const stamp = typeof parsed?.stamp === 'string' && /^\d{8}T\d{9}Z$/.test(parsed.stamp) ? parsed.stamp : null;
+  const pid = Number.isInteger(parsed?.pid) ? parsed.pid : null;
+  const manifest = stamp !== null && fs.existsSync(path.join(snapshotDir(stateDir, stamp), 'manifest.json'));
+  return { stamp, pid, manifest };
+}
+
+/** What can release the lock `lock` (from `readLock`) of the state folder `stateDir`, as one line: verify or undo for a
+ * finished plan, the file itself for one that is not. `uninstall` says the same (`bin/lib/manifest.mjs`). */
+export function lockLine(stateDir, lock) {
+  if (lock === null) return `the lock of ${stateDir} was released just now; run this again`;
+  if (lock.stamp !== null && lock.manifest) return `a memory pass is planned (${lock.stamp}); js-harness memory verify or memory undo ${lock.stamp} releases it`;
+  return `${lockFile(stateDir)} holds no finished plan (pid ${lock.pid ?? 'unknown'}); if that process is not running, remove the file`;
+}
+
+/** Throws when an uninstall holds the marker beside the hygiene folder (D7.5), after the lock was taken. */
+function refuseWhilePurging(stateDir) {
+  const marker = purgeMarker(path.dirname(stateDir));
+  if (fs.existsSync(marker)) throw new PassError(`an uninstall is removing the memory hygiene folder (${marker}); run this again after it, or remove that file if no uninstall runs`);
+}
+
 /** His words in a note: each `"…"` (or `“…”`, `«…»`) of at least twelve characters, outside the front
  * matter, fenced blocks and code spans, with its whitespace squashed; a quotation may wrap lines but not
  * cross a blank line. */
@@ -106,8 +145,23 @@ export function planPass({ folder, stateDir, writeSet, now }) {
   try {
     fs.writeFileSync(lockFile(stateDir), JSON.stringify({ stamp, pid: process.pid }), { flag: 'wx' });
   } catch (err) {
+    // A folder moved away meanwhile is an uninstall removing it (D7.5).
+    if (err.code === 'ENOENT') refuseWhilePurging(stateDir);
     if (err.code !== 'EEXIST') throw err;
-    throw new PassError(`a pass holds the lock: ${lockHolder(stateDir)} (memory verify or memory undo releases it)`);
+    throw new PassError(lockLine(stateDir, readLock(stateDir)));
+  }
+  try {
+    refuseWhilePurging(stateDir);
+  } catch (err) {
+    fs.rmSync(lockFile(stateDir), { force: true });
+    for (const dir of [stateDir, path.dirname(stateDir)]) {
+      try {
+        fs.rmdirSync(dir);
+      } catch {
+        // not empty, or gone
+      }
+    }
+    throw err;
   }
   const dir = snapshotDir(stateDir, stamp);
   fs.mkdirSync(path.join(dir, 'files'), { recursive: true });
@@ -203,7 +257,8 @@ export function verifyPass({ folder, stateDir, stamp, homes = '', approved = [],
 
   const at = new Date(now).toISOString();
   fs.writeFileSync(path.join(dir, 'after.json'), JSON.stringify(after, null, 2));
-  fs.writeFileSync(path.join(dir, 'after-index.txt'), currentText(INDEX) ?? '');
+  // Its bytes as they are, so their hash is the one after.json records and undo can check them.
+  fs.writeFileSync(path.join(dir, 'after-index.txt'), readOrNull(path.join(folder, INDEX)) ?? '');
   if (problems.length > 0) {
     appendJournal(stateDir, { kind: 'verify-refused', stamp, at, problems });
     return { ok: false, problems };
@@ -224,10 +279,47 @@ export function undoPass({ folder, stateDir, stamp, now }) {
   // pass's verify would record the undo as its own after-state.
   const holder = lockHolder(stateDir);
   if (holder !== null && holder !== stamp) throw new PassError(`pass ${holder} holds the lock; undo ${stamp} once it is verified or undone`);
+  // A verified pass holds no lock: the undo takes it for its run, so an uninstall sees it or it sees the uninstall (D7.5).
+  const took = holder === null;
+  if (took) {
+    try {
+      fs.writeFileSync(lockFile(stateDir), JSON.stringify({ stamp, pid: process.pid }), { flag: 'wx' });
+    } catch (err) {
+      // A folder moved away meanwhile is an uninstall removing it, as in `planPass`.
+      if (err.code === 'ENOENT') refuseWhilePurging(stateDir);
+      if (err.code !== 'EEXIST') throw err;
+      throw new PassError(lockLine(stateDir, readLock(stateDir)));
+    }
+  }
+  // The lock goes when this undo took it, or when the undo of the pass that held it ran: a refused undo leaves a
+  // planned pass its lock, so it can still be verified and no uninstall takes its snapshot.
+  let undone = false;
+  try {
+    refuseWhilePurging(stateDir);
+    const result = undoHeld({ folder, stateDir, stamp, now, manifest });
+    undone = true;
+    return result;
+  } finally {
+    if (took || undone) releaseLock(stateDir, stamp);
+  }
+}
+
+function undoHeld({ folder, stateDir, stamp, now, manifest }) {
   const dir = snapshotDir(stateDir, stamp);
   const afterText = readOrNull(path.join(dir, 'after.json'));
   if (afterText === null) throw new PassError(`run memory verify ${stamp} first: undo needs the after-state it records`);
   const after = JSON.parse(afterText.toString('utf8'));
+  // A removal that stopped halfway can leave a snapshot with some of its files: refused by name before anything is written.
+  for (const name of manifest.writeSet) {
+    if (manifest.before[name] === undefined) continue;
+    const kept = readOrNull(path.join(dir, 'files', name));
+    if (kept === null || sha256(kept) !== manifest.before[name]) throw new PassError(`snapshot ${stamp} is damaged: ${name} is missing or changed; nothing was undone`);
+  }
+  // The index after the pass, which a merge reads: an index absent after the pass was kept as empty.
+  const afterIndex = readOrNull(path.join(dir, 'after-index.txt'));
+  if (afterIndex === null || sha256(afterIndex) !== (after[INDEX] ?? sha256(Buffer.alloc(0)))) {
+    throw new PassError(`snapshot ${stamp} is damaged: after-index.txt is missing or changed; nothing was undone`);
+  }
   const restored = [];
   const removed = [];
   const refused = [];
@@ -251,7 +343,7 @@ export function undoPass({ folder, stateDir, stamp, now }) {
       // Someone wrote the index since: reverse only the pass's own changes. The lines before the pass come back,
       // except one the pass kept that someone removed since; the lines someone added since stay.
       const lines = (text) => text.split('\n').filter((line) => line !== '');
-      const afterLines = new Set(lines((readOrNull(path.join(dir, 'after-index.txt')) ?? Buffer.from('')).toString('utf8')));
+      const afterLines = new Set(lines(afterIndex.toString('utf8')));
       const currentLines = lines(current.toString('utf8'));
       const currentSet = new Set(currentLines);
       const kept = lines(fs.readFileSync(path.join(dir, 'files', name), 'utf8')).filter((line) => !(afterLines.has(line) && !currentSet.has(line)));
@@ -264,6 +356,5 @@ export function undoPass({ folder, stateDir, stamp, now }) {
     }
   }
   appendJournal(stateDir, { kind: 'undo', stamp, at: new Date(now).toISOString(), restored, removed, refused });
-  releaseLock(stateDir, stamp);
   return { restored, removed, refused, indexMerged };
 }
