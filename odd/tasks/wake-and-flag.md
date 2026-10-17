@@ -20,6 +20,7 @@ from `main`, so their branch names no session (the plan, `throughput-v3-plan.md`
 - `node --test bin/lib/channel.test.mjs` exits 0
 - `node --test bin/notify.test.mjs` exits 0
 - `node --test bin/lib/sessions.test.mjs` exits 0
+- `node --test bin/reply.test.mjs` exits 0
 
 ## In scope / Out of scope
 - In: `bin/lib/channel.mjs`, `bin/notify.mjs`, the board's channel lines (`bin/lib/sessions.mjs`), `bin/reply.mjs` and
@@ -44,8 +45,10 @@ Nothing of this feature is his: no spend, nothing irreversible, no product choic
 ## Tasks
 - [x] T1 (kind: build) S1: `--kind ready --pr <n>`, the record's `pr`, the board's line, the skill's line (route: inline;
   branch `feat/ready-notice`)
-- [ ] T2 (kind: build) S2: the Stop warning for handed work with no wait running (route: inline)
-- [ ] T3 (kind: build) S3: the board flags a tool call open more than N minutes (route: inline)
+- [x] T2 (kind: build) S2: the Stop warning for handed work with nothing to wake the session (route: inline;
+  branch `feat/stop-wake-warning`, from T1)
+- [x] T3 (kind: build) S3: the board flags a tool call open more than N minutes: already built, nothing to add
+  (route: none; L3)
 - [ ] T4 (kind: build) S4: the hour guard reads `notify` text sent through Bash (route: inline)
 
 ## Log
@@ -68,6 +71,23 @@ Nothing of this feature is his: no spend, nothing irreversible, no product choic
   - Not changed: `ready` is no status of the board (`STATUS_KINDS`), so it neither opens nor closes a session's handed
     work, and `session-stall` reads as before.
 
+- L3, T3 needs nothing: the board has flagged a tool call with no result after 15 minutes and woken a watch since
+  2026-10-13 (`PENDING_CALL_LIMIT_MS`, bin/lib/sessions.mjs:765; commits 6ab6958f and 567f81f8). Told to the lead.
+- L4, T2 built test first on `feat/stop-wake-warning`, by a design two readers changed (`jh26-aa-design.md`,
+  Version 2, in the lead's notes folder).
+  - Read from S2's need, not its letter: what wakes a session is the end of any background task or a cron of its own,
+    so any of them counts as armed, not only a `js-harness wait`; and a `waiting` notice does not give the work back,
+    since the work-session skill still asks for a wait after it (bin/lib/manifest.mjs:179-181).
+  - Correction of the plan: JH 5's 1,004 minutes were 8 waits running (`--for 120`), so this check could not have seen
+    them; it sees the stop after a wait ended with none armed again.
+  - Once a handing, read from the transcript's `hook_blocking_error` lines, and again after a later background launch.
+    A handing before the transcript began is another session of that number. A decision close and Codex are not
+    checked. The transcript is searched from its end, never parsed whole: 533 ms on the largest (64.7 MB), against
+    1.3-2.7 s for `sessionFacts` and the hook's 5 s.
+  - RED: 8 of 16 tests of `bin/reply.test.mjs` failed. GREEN: reply 16, lib/reply 18, stall 16.
+  - Run on this session's own transcript and the real record, it warned: it held the lead's note of 18:55 local
+    with nothing in its background.
+
 ## Next step
-T2, S2: amend `reply --hook` so a work session's turn that ends holding handed work, with no `js-harness wait` running,
-is warned once.
+T4, S4: the hour check on `notify` text, by its design of two readers (`jh26-t4-design.md`, Version 2, in the
+lead's notes folder).

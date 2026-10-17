@@ -1018,8 +1018,14 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
 - Seen: 2026-10-14 — relief file, line 758 — JH 13 idle from 03:13 and JH 15 from 03:44, both told to
   start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
   is armed before he leaves, in the orchestrator skill (JH 5)
-- Control: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
-  in its background work" — since 2026-10-14
+- Seen: 2026-10-16 — throughput-v3-measure.md (the lead's notes, the window 10-15T00Z to 10-17T00Z) — 31
+  turn ends followed by more than 30 minutes of silence with no background task, 64.4 session-hours
+  in two days (an upper bound: some had nothing to do)
+- Control: check — bin/reply.test.mjs — "a work session that ends its turn holding handed work with
+  nothing in the background is turned back once, with what to arm" — since 2026-10-16
+- Was: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
+  in its background work" — replaced on 2026-10-16, when the reply Stop hook began to check it
+  (odd/tasks/wake-and-flag.md, T2)
 
 ### session-opened-unseen
 A session was opened where he does not see it: a scheduled task opened it in the app's Routines, at
