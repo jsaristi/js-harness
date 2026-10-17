@@ -224,3 +224,13 @@ test('the claim is the rename of the file: of two gates that read the same ticke
   });
   assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\x', now: clock.now, fileSystem: io }), { ticket: null, expired: [] });
 }));
+
+test('a claim that names its tree takes only a ticket for that tree, never one that names none (odd/tasks/land-unattended.md)', withHome((home) => {
+  const clock = clockAt();
+  issue(home, clock, { session: 'sess-a' }, '0a0a0a0a');
+  const { ticket } = issue(home, clock, { session: 'sess-a', tree: 'D:\\work\\a' }, '0b0b0b0b');
+  assert.equal(claimTicket({ home, session: 'sess-a', cwd: 'D:\\work\\b', now: clock.now, named: true }).ticket, null);
+  assert.deepEqual(claimTicket({ home, session: 'sess-a', cwd: 'D:\\work\\a', now: clock.now, named: true }), { ticket, expired: [] });
+  assert.equal(claimTicket({ home, session: 'sess-a', cwd: 'D:\\work\\a', now: clock.now, named: true }).ticket, null);
+  assert.deepEqual(fs.readdirSync(gateFirstDir(home)), ['0a0a0a0a.json']);
+}));

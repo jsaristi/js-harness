@@ -25,7 +25,7 @@
 // what `cmd.exe` cannot be handed whole, and such a command goes as one argument.
 import os from 'node:os';
 import path from 'node:path';
-import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn, watchRun } from './check.mjs';
+import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, parseGateWait, runSensor, takeGateTurn, watchRun } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
 import { GateFirstError, TICKET_ID, cancelTicket, issueTicket, logTicket, readTickets } from './lib/gate-first.mjs';
@@ -230,7 +230,8 @@ function parseFirstArgs(argv, env) {
 
 /** `js-harness gate first`: the tickets that put one session's next whole check first in the line of the
  * machine's gate lock (./lib/gate-first.mjs). With `--session` and `--reason` it issues one for the next
- * check of that session (of the tree `--tree` where given), for `--minutes` at most 60; with `--cancel` it
+ * check of that session (of the tree `--tree` where given, which a `js-harness gate` run in that tree claims
+ * too: the merge queue's land, odd/tasks/land-unattended.md), for `--minutes` at most 60; with `--cancel` it
  * removes one; with neither it lists the open ones on stdout. The issuer is the session that runs this
  * (`CLAUDE_CODE_SESSION_ID`), written in the ticket for the board to name. The orchestrator issues them; a
  * work session only on its word, quoted in `--reason`. Each issue, expiry and cancellation is a line of the
@@ -513,7 +514,12 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     launchers ??= launcher.read();
     return launchers === null || launcher.alive(launchers);
   };
-  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null, stillWanted }, deps.takeGateLock);
+  // A ticket its session issued for this folder puts this gate first (odd/tasks/land-unattended.md): the
+  // merge queue's land asks one for the candidate's folder. Only a ticket that names the folder: one that
+  // names none is left to the session's next whole check, which `gate -- node --test x` is not.
+  const session = env.CLAUDE_CODE_SESSION_ID || null;
+  const ticket = claimOf({ home, session, log: !gateLogSwitchedOff(env) }, cwd, deps, { named: true });
+  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session, stillWanted, first: ticket && { id: ticket.id, reason: ticket.reason } }, deps.takeGateLock);
   // A turn that came after a wait has its last look before the command: a table not in yet is waited for
   // (Codex, 2026-10-15), never stopped, since an orphan would otherwise run with no look at all.
   if (looks > 1) launchers ??= launcher.settle ? await launcher.settle() : launcher.read();

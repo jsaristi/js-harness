@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
+import { GATE_NOT_RUN } from './gate.mjs';
 import { appendRelief, reliefPath } from './lib/channel.mjs';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
@@ -30,7 +31,9 @@ pull request adds to a feature document (odd/tasks/<name>.md) that says gentle-a
 each ready pull request the queue prints, commit by commit, the Codex record that covers it and that line.
 
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
---land tests the candidate: the whole suite on this machine under the gate lock, then CircleCI's run
+--land tests the candidate: the whole suite on this machine under the gate lock, its gate first in the
+line by a gate-first ticket for the running session (js-harness gate first; with no session id or a
+refused ticket it waits its turn, and says which), then CircleCI's run
 of a queue/* branch pushed for it and removed after. When both are green, main is pushed as the
 candidate, by fast-forward from the main it was built from. A candidate whose every changed path is a
 document main's harness.json declares runs no suite on this machine, as a commit of documents alone
@@ -40,8 +43,9 @@ pre-push hook refuses every other push of main. For each landed rule/ pull reque
 changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> landed on main <sha> from
 <branch>: confirms relief line <n>", for the newest "rule:<id> proposed on <branch>, not landed" line whose
 declaration hash is the landed head's that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
-write none. Exit 0 landed or nothing to land, 4 red, 3 main moved meanwhile (nothing pushed), 1 anything
-else.
+write none. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped before it
+ended is no red: nothing is pushed or bisected. Exit 0 landed or nothing to land, 4 red, 3 main moved
+meanwhile (nothing pushed), 5 the suite did not run (nothing pushed), 1 anything else.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.`;
 
@@ -54,7 +58,7 @@ function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
   } catch (err) {
     return { ok: false, status: null, out: '', err: err.message };
   }
-  return { ok: !result?.error && result?.status === 0, status: result?.status ?? null, out: String(result?.stdout ?? ''), err: String(result?.stderr ?? result?.error?.message ?? '').trim() };
+  return { ok: !result?.error && result?.status === 0, status: result?.status ?? null, out: String(result?.stdout ?? ''), err: String(result?.stderr || result?.error?.message || '').trim() };
 }
 
 function parseArgs(argv) {
@@ -121,12 +125,32 @@ export function failedRows(output) {
   return rowsWith(output, 'FAIL');
 }
 
-/** The whole suite on the candidate at `place`, under the gate lock, by the candidate's own commands. */
-function localSuite(run, place) {
+/** The whole suite on the candidate at `place`, under the gate lock, by the candidate's own commands:
+ * `{ ok, notRun, said }`. The land asks first for a gate-first ticket (`gate first`, for the session in `env`
+ * and the tree `place`), so it does not wait behind the line, and `say`s whether it got one; with no session or
+ * a refused ticket it waits its turn. A gate that exits `GATE_NOT_RUN` (no turn, or a waiting push took it) or
+ * that is stopped before it ends ran nothing: `notRun`, which is no red (odd/tasks/land-unattended.md). */
+export function localSuite(run, place, { env = process.env, say = () => {} } = {}) {
   const bin = path.join(place, 'bin', 'js-harness.mjs');
+  const session = env.CLAUDE_CODE_SESSION_ID;
+  let issued = null;
+  if (!session) {
+    say('No gate-first ticket for the land (no session id): it waits its turn in the gate line.');
+  } else {
+    const ticket = answer(run, process.execPath, [bin, 'gate', 'first', '--session', session, '--tree', place, '--minutes', '60', '--reason', 'the merge queue lands a candidate'], place);
+    say(ticket.ok
+      ? `The land goes first in the gate line: ${ticket.out.trim().split('\n')[0]}`
+      : `No gate-first ticket for the land (${ticket.err.split('\n')[0] || `gate first exited ${ticket.status}`}): it waits its turn in the gate line.`);
+    if (ticket.ok) issued = /^ticket ([0-9a-f]{8}):/.exec(ticket.out.trim())?.[1] ?? null;
+  }
   const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
+  // A ticket the gate did not claim (it ran nothing, or an older candidate's gate claims none) would hold one
+  // of the two open slots for an hour: cancelled. One the gate claimed is gone, and its cancel exits 1 unsaid.
+  if (issued) answer(run, process.execPath, [bin, 'gate', 'first', '--cancel', issued], place);
+  if (done.status === GATE_NOT_RUN) return { ok: false, notRun: true, said: done.err.split('\n')[0] || 'the gate ran nothing' };
+  if (done.status === null) return { ok: false, notRun: true, said: `the gate was stopped before it ended${done.err ? ` (${done.err.split('\n')[0]})` : ''}` };
   const last = failedRows(done.out);
-  return { ok: done.ok, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
+  return { ok: done.ok, notRun: false, said: last.length ? last.join('; ') : 'the gate exited non-zero' };
 }
 
 /** The commits of `main..head` read in `cwd` that change a file that is not Markdown, newest first
@@ -353,7 +377,13 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
 async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail, landed }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
+  // A suite that did not run judged nothing: no red to bisect, and nothing to push (odd/tasks/land-unattended.md).
+  const notRun = (result) => {
+    stdout(`The suite did not run on this machine (${result.said}): nothing was pushed, and nothing was bisected.`);
+    return 5;
+  };
   const local = suite(place);
+  if (local.notRun) return notRun(local);
   if (!local.ok && merged.length > 1) {
     // Bisected (S8): the candidate of the first k pull requests is the commit after the k-th merge, so the
     // shortest red prefix names the pull request that turns it red. It leaves, the ones after it are merged
@@ -368,7 +398,9 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       const mid = Math.floor((low + high) / 2);
       const failed = resetTo(merged[mid - 1].merge, `the merge of PR ${merged[mid - 1].number}`);
       if (failed !== null) return failed;
-      if (suite(place).ok) low = mid + 1;
+      const half = suite(place);
+      if (half.notRun) return notRun(half);
+      if (half.ok) low = mid + 1;
       else high = mid;
     }
     const culprit = merged[low - 1];
@@ -559,7 +591,7 @@ export async function mergeQueueMain(argv = process.argv.slice(2), { run = spawn
       stdout('Dry run: nothing was tested or pushed, and the candidate was removed.');
       return 0;
     }
-    const local = documents ? () => ({ ok: true, skipped: true }) : (suite ?? ((dir) => localSuite(run, dir)));
+    const local = documents ? () => ({ ok: true, skipped: true }) : (suite ?? ((dir) => localSuite(run, dir, { env, say: stdout })));
     // The relief file is found as `notify` finds it: the harness home, and the slug of the main checkout.
     const landed = (candidate, landedPrs) => recordLandings({
       gitIn, place, main, candidate, merged: landedPrs, now, stdout,
