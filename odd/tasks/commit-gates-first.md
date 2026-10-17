@@ -360,3 +360,7 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
 - L12 (2026-10-17, state): Codex's recheck of 1c7d985..eeeeb2e: 1 of 1 fixed, correct, 0.99, recorded. Pushed;
   PR 367 opened (0 $ stated); the lead told --kind ready --pr 367. Left: after it lands, one `gh workflow run
   windows-daily.yml` on main, whose result is the first daily run.
+- L13 (2026-10-17, gentle-ai evidence for the land, which left PR 367 out for want of it):
+  - gentle-ai approved 8b96b9d2 and its correction e251c12e (lineage review-64a52f3e0ae9f6fa, acknowledged; L10).
+  - gentle-ai assess of 1c7d985d alone (--base-ref e251c12e --committed-only): medium, review not due (under_budget).
+  - gentle-ai assess of eeeeb2e5 (--base-ref 1c7d985d --committed-only): medium, review not due (under_budget).
