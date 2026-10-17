@@ -56,3 +56,59 @@ All of these are merged unless marked otherwise. The state comes from `gh pr vie
 - Time: the first notice in the channel was 2026-10-15T13:29Z, after an earlier compaction, so the session started before that. The last delivery notice was 2026-10-17T09:29Z.
 - Context: 32% at the last notice (161,577 tokens), with ten "compacted at" notes from this session in the channel.
 - Reviews in the last feature (T23): three gentle-ai reviews, all high and approved (lineages b1e9abe1c7d3de6e, 8ca44ae7bf3aaf32, 590e7f52c48d9770), and three Codex runs. The second used 91,903 input tokens and the third 46,203, as their output says; the first one's figure was not reread. Over the whole session the reviews and gate runs were not counted; each PR body names its own.
+
+## Second stretch
+After the summary above, from 2026-10-17 ~10:40Z to 13:25Z. The work came from the lead's notes of 11:59Z (items 8, 9 and 10 of its open-work triage) and 12:31Z ("drop the review-starts priority: JH 5 fixed it […] Commit (e) once it lands, then (f), (g)"). They are the lead's claims, not his words. The host compacted this session once in this stretch, at about 12:38Z.
+
+### Delivered
+The state comes from `gh pr view <n>` at about 13:25Z.
+- 395 `docs/open-work-text` (67e04cb5), merged: stale text fixed and nine finished tasks ticked, from the open-work triage.
+- 397 `fix/doctor-rules-row` (fdd47940), merged: doctor asks for main's rules beside the version lookups. A copy whose version cannot be read is unknown.
+- 398 `fix/summary-fences` (1f2ff3f3), merged: a backtick line whose text holds a backtick opens no fence.
+- 399 `fix/peer-text-blocks` (67896ece), merged: a queued message from another session, written as a list of blocks, is read. This closes the `peerTextOf` gap named under "Left" above.
+- 402 `feat/landing-rule-hash` (1e5b2ee8), merged. This is rule-hierarchy T16e-f, item (e):
+  - a relief proposal line hashes the rule together with its `docs/rule-sources.json` entry;
+  - old lines still match.
+- 404 `feat/citations-reachable`, open. This is commands-and-doctor T6, item (g):
+  - the `citations` row reads each task a change checks off;
+  - such a task must name a commit HEAD reaches, or ride with staged work;
+  - the Control of `record-states-wrong-fact` in `docs/FAILURES.md` is now its test.
+- 405 `feat/rules-reach-rest`, open. These are three of the parts left in rule-hierarchy T16f, item (f):
+  - the practice proves the rules hook at its three events, in a real run on Claude Code 2.1.301 (0.0159 USD);
+  - the orchestrator skill reads `js-harness rules`;
+  - sync renders the harness's block of `AGENTS.md` again while it is unedited.
+  - The fourth part, "which shipped rules reach an installed project", is his.
+
+### Findings and decisions
+- The count in commands-and-doctor T6b is 37 compactions told since PR 275, not 41 (PR 395).
+- The control of `asked-yes-not-his` moved to section 1 of the protocols skill (PR 395).
+- The `maintenance.auto` finding did not hold. The fixture kit already writes `maintenance.auto = false` into every template repository (`bin/lib/git-fixture.testkit.mjs:43-50`).
+- (g) has a reading of its own: a task checked off beside staged work outside `odd/tasks/` needs no commit named, because a tick cannot name its own commit. Its own gate row said "1 task checked off, each in a commit HEAD reaches or in this one". This is recorded as commands-and-doctor L10.
+- The lead asked Codex to read `ac6cf2c..9c3f41a` again. `codex-review --base ac6cf2c --again`, run from a detached worktree at `9c3f41a`, refused it as a second recheck of the review that ended at `12773f4`. The range keeps its skip record. The review of `db31c96..b9fd628` read the matching code that replaced it and found it correct. This is recorded in rule-hierarchy T16e-f.
+
+### Reviews
+- (e):
+  - gentle-ai rated it high by escalation (item 3), with lenses risk and reliability, and approved it (`review-82c5317205449ba6`);
+  - an advisory was fixed in `b9fd628`: a sources file that does not parse no longer blocks the declaration match;
+  - Codex rated `db31c96..b9fd628` correct (0.91; 88,847 input tokens).
+- (f):
+  - gentle-ai rated `968f0fc` medium (`under_budget`);
+  - gentle-ai rated `968f0fc..cf820d2` high by escalation (item 3), with lenses risk, resilience and reliability, and approved it (`review-442164ed6054f39b`);
+  - an advisory was fixed in `1bf827e`: a block that could not be written now exits 1;
+  - Codex found a P2 in `db31c96..1bf827e` (121,867 input tokens): sync wrote through an `AGENTS.md` that is a link. It was fixed in `37037bb`, and the recheck was correct (0.98; 32,356 input tokens).
+- (g):
+  - gentle-ai rated it medium (`under_budget`) twice;
+  - Codex found two P2s in `db31c96..0308678` (87,653 input tokens): an unrelated history read as no claim, and a nested task borrowed its siblings' commit. Both were fixed in `96cd531`, and the recheck was correct (0.98; 39,295 input tokens).
+
+### Failures and lessons
+- Main's `bin/lib/review-starts.test.mjs:62` failed on every gate (a fixed NOW of 12:00Z), so the gate refused (e)'s commit. This session reported it to the lead and did not fix it. JH 5 fixed it in PR 400, and (e) was committed after that landed.
+- A gentle-ai transaction opened on the wrong base (`16301239`) for an earlier slice. It was left uncaptured on the lead's word, and is recorded here only.
+- (e)'s first `notify --kind ready` was refused: no gentle-ai line named `b9fd628`. Committing that line and running it again was refused once more, apparently because the pull request's head was read before GitHub held the push. The third run, after `gh pr view` showed the new head, was recorded. The lesson is that a fix commit needs its own gentle-ai line in the feature document before the push.
+- Shell heredocs ate the backslashes of edit scripts twice (`g-docs.mjs`, `e-docs.mjs`). The Edit tool did those edits. This repeats the memory note "Heredoc backslashes".
+- A `sed` meant for one function added `const lstat` to three others in `bin/lib/project.mjs`. It was caught in the diff and removed before the commit.
+
+### Cost
+- Gates: 14 commits through the gate on GitHub's machines in this stretch (4 for (e), 6 for (f), 4 for (g)), about 130-150 s each. Two of them were merges of main.
+- Codex: five runs, 370,018 input tokens in all, as their outputs say. A sixth, on the skipped range, was refused before it started.
+- gentle-ai: two reviews (two and three lenses). The other commits were assessed only.
+- Context: 52% at the last notice (13:24Z).
