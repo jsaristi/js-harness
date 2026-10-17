@@ -245,6 +245,8 @@ cuts) shortens the run but does not make any fixed figure true for a growing sui
 - [x] T6e (kind: design) S6: `check` on Windows fits its tests sensor's bound: the whole suite took 1,398 s there, the `sensor-timeout` rule gives 1,200 (L18, finding 1) (above, L21; the figure is his, asked through the lead)
 - [x] T6f (kind: build) S6: the bound T6e's design gives, once he answers L21's question; inline, test first; his answer in L28, built in L29
 - [x] T6g (kind: build) S6: `bin/gate.test.mjs`, "a real gate leaves its two lines in the log of its home", passes inside a Claude Code session as on CI: its helper drops the host's session and the test sets one itself (L25, the one red of T6's second pass); built inline
+- [x] T6h (kind: build) S6: the T6f verifier's advisory "A pre-existing microsecond race in `runSensor`": "If a timer fires after the process has ended but before Node delivers `exit`, the result is still reported as a timeout" (JH 25's summary and transcript); test first (L32)
+- [x] T6i (kind: build) S6: the T6f verifier's advisory "No gate-level run in which the silence bound stops a real 20-minute hang": its probes covered it "at the runSensor level (Windows tree and WSL2) with bounds of seconds, not with the 20-minute rule"; test first (L32)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -494,3 +496,28 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   line; both now use the 4 s the steady test uses. The third: no test said the WSL2 run is given the silence
   bound; the silent fallback test now asserts both runs get `SENSOR_SILENCE_MS`. 5 of 5 of those tests pass.
 - L31 (2026-10-17, JH 25): gentle-ai evidence, one line a land reads: 7a19ed98..99316599 approved and acknowledged (lineage `review-eecd8b566b6888dd`, high, item 4 escalated); 08214376 assessed medium, not due (under_budget), its three advisories fixed.
+- L32 (2026-10-17, JH 21, on `fix/sensor-silence-advisories`): T6h and T6i, item 14 of the lead's triage (its note of
+  14:37Z, a claim, not his words), from the verifier's text in JH 25's transcript (`2fd3f776`, line 10072). T6h:
+  `runSensor` (`bin/check.mjs`) decides a time that ran out one turn of the loop later (`setImmediate`), since an
+  exit the system already holds is delivered after the timers; a command that ended as its bound ran out is then
+  reported by its exit, and a silence a chunk broke in that turn kills nothing. `runSensor` takes `spawn` for the
+  test. RED: the new test of `bin/check.test.mjs` (a fake child whose exit fires right after the bound's timer, for
+  the ceiling and for the silence) got a timeout. T6i: `checkSensor` with the real `runSensor` and a sensor that
+  writes once, starts a child that holds on, and says nothing more: the row says "wrote nothing for 4 s and was
+  stopped" and the child is gone. It passed at once and stays as a pin, since the behavior was there and only its
+  proof was missing; the bound is 4 s, not the rule's 20 minutes, and the rule's value reaching `checkSensor` is
+  the test "checkSensor gives every sensor the silence bound and the ceiling of the rules by default". GREEN: the
+  twelve tests of the sensor's bounds in `bin/check.test.mjs`.
+  Committed as `22455a7`. gentle-ai on `3586f40..22455a7`: high by escalation (item 4, the order of a timer and an
+  exit), lenses resilience and reliability, approved and acknowledged (lineage `review-cdd7f329fb92c696`), three
+  advisories. R3: a killed child may answer `kill(pid, 0)` while it is reaped; the test now waits up to 5 s for it to
+  be gone (next commit). Left: the order of two timers of one duration is node's, which the test leans on (R3, a
+  suggestion), and no test breaks a silence with a chunk inside the deferred turn (R3).
+  That wait is `9a62f82`; gentle-ai on `22455a7..9a62f82`: medium, not due (`under_budget`). Codex on
+  `3586f40..9a62f82`: one P2, R3's suggestion made a finding: two timers set apart can land a clock tick apart, so
+  the deferred decision could run before the fake exit and fail a correct `runSensor`. The T6h test now emits the
+  exit inside the sensor's own timer, right after it runs (it wraps `setTimeout` only while `runSensor` arms it);
+  it passes, and fails against a copy without the deferral (next commit).
+  That test is `2531fa8`; gentle-ai on `9a62f82..2531fa8`: medium, not due (`under_budget`). Codex recheck of
+  `9a62f82..2531fa8`: correct (0.98), its one finding fixed. Left: no test breaks a silence with a chunk inside the
+  deferred turn (R3's advisory).

@@ -932,13 +932,13 @@ const SENSOR_OUTPUT_LIMIT = 64 * 1024 * 1024;
  * `silence` (ms) bounds the stretch with no output instead: each chunk the command writes restarts it, and
  * past it the tree is killed as at `timeout`, the error then saying `silent: true`. It needs the pipes, so
  * with `inherit` it does nothing; 0 or none is no such bound. */
-export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors }) {
+export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors, spawn: start = spawnChild }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
     const startedAt = Date.now(); // before the spawn: the shell cannot have been created earlier
     try {
-      child = spawnChild(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+      child = start(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       resolve({ status: null, signal: null, ...out, error });
       return;
@@ -983,9 +983,19 @@ export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = f
       const error = extra ?? (timedOut ? timedOutError() : undefined);
       resolve({ ...exit, ...out, ...(error && { error }), ...(sweepError && { sweepError: sweepError.message }) });
     };
-    // Kills the tree for a time that ran out, the silence's or the whole run's, whichever came first.
+    // Kills the tree for a time that ran out, the silence's or the whole run's, whichever came first. The decision
+    // waits one turn of the loop: an exit the system already holds is delivered after the timers, so a command that
+    // ended as its time ran out is reported by its exit, not as a timeout (first-version T6h, JH 25's verifier).
+    let chunks = 0;
     const outOfTime = (bySilence) => {
       if (timedOut || exitedAt !== undefined) return;
+      const seen = chunks;
+      setImmediate(() => {
+        if (done || timedOut || exitedAt !== undefined || (bySilence && chunks !== seen)) return;
+        kill(bySilence);
+      });
+    };
+    const kill = (bySilence) => {
       timedOut = true;
       silent = bySilence;
       clearTimeout(timer);
@@ -1003,6 +1013,7 @@ export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = f
     for (const stream of inherit ? [] : ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
       child[stream].on('data', (chunk) => {
+        chunks += 1;
         if (out[stream].length < SENSOR_OUTPUT_LIMIT) out[stream] += chunk;
         if (!timedOut && exitedAt === undefined) listen();
       });
