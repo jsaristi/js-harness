@@ -623,7 +623,8 @@ Dry run: nothing was tested or pushed, and the candidate was removed.
 ### js-harness functions
 
 Shows each function the project can turn off and on in `harness.json` under `"functions"`: its
-value here and why.
+value here and why. `doctor` follows them: where `languageServer` is off it shows no row for the
+TypeScript plugin, and where `codexReview` is off no row for Codex.
 
 ```console
 $ js-harness functions

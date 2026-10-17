@@ -144,6 +144,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] `sync` moves a project to its pinned version
 - [x] The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and the machine commands outside one
 - [x] `doctor` reports the Codex CLI (installed and logged in) when the project's codexReview switch is on, with its fix command
+- [x] `doctor` shows no TypeScript plugin row where the project's languageServer switch is off, so it never offers to enable what the switch turned off
 - [x] The Codex review of each approved code slice leaves a record a check verifies, so a skipped review is caught
 
 ### F3 Task contract

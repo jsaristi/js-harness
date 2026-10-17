@@ -897,6 +897,48 @@ test('doctorMain on auto shows the codex row only for a project with a program f
   }
 });
 
+// --- the typescript-lsp row follows the project's languageServer switch: off is the control of language-server-load ---
+
+test('doctorMain leaves the typescript-lsp row out, and offers no enable, when the project declares languageServer off', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeJson(path.join(project, 'harness.json'), { functions: { languageServer: 'off' } });
+    const spawn = fakeSpawn({ codexLogin: 'in', lsFiles: 'src/app.ts\0' });
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(JSON.parse(json.output).some((r) => r.id === 'typescript-lsp'), false);
+    assert.doesNotMatch(text.output, /typescript-lsp/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain on auto shows the typescript-lsp row only for a project with a TypeScript file', async () => {
+  for (const [lsFiles, shown] of [
+    ['README.md\0bin/app.mjs\0', false],
+    ['README.md\0src/app.ts\0', true],
+  ]) {
+    const home = makeTmpHome();
+    const project = makeTmpHome();
+    try {
+      seedHealthyHome(home);
+      const spawn = fakeSpawn({ codexLogin: 'in', lsFiles });
+
+      const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+      assert.equal(JSON.parse(output).some((r) => r.id === 'typescript-lsp'), shown, JSON.stringify(lsFiles));
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  }
+});
+
 test('doctorMain shows codegraph project n/a, with no gap and no init offered, where codeMap is off', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
