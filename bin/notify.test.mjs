@@ -7,6 +7,8 @@ import { notifyMain, readyProblems } from './notify.mjs';
 import { sessionsMain } from './sessions.mjs';
 import { channelDir, findOpenings, openingFileName, openingsDir, readNotices, recordPath, reliefPath, reliefStamp } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { summaryTemplate } from './lib/summary.mjs';
+import { spawnSync } from 'node:child_process';
 
 // Every test has a machine of its own in the temp folder: a harness home, a Claude home with synthetic
 // transcripts and the names of a checkout and a worktree (`git` is a fake). Nothing reads or writes the
@@ -1259,4 +1261,29 @@ test('an answer quotes his words, so an hour that opens them is not held to the 
   const { code } = await runNotify(machine, ['--to', '5', '--kind', 'answer', '--transcript', '1d16beeb', '--line', '406', words]);
   assert.equal(code, 0);
   assert.equal(recorded(machine).notices[0].text, words);
+}));
+
+// The close check as notify runs it, with its own git, on a real clone (gentle-ai, 2026-10-17, R3).
+test('a closed notice runs the real summary check with notify\'s own git: refused unpushed, recorded once pushed', withMachine(async (machine) => {
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8' });
+    assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+  };
+  git(machine.dir, 'init', '-q', '--bare', 'origin.git');
+  git(machine.dir, 'clone', '-q', 'origin.git', 'work');
+  const work = path.join(machine.dir, 'work');
+  git(work, 'checkout', '-q', '-b', 'feat/x');
+  const file = 'docs/sessions/2026-01-01-jh-5.md';
+  fs.mkdirSync(path.join(work, 'docs', 'sessions'), { recursive: true });
+  fs.writeFileSync(path.join(work, file), summaryTemplate('JH 5', NOW).replace(/^<.*>$/gm, '- a fact (#379).'));
+  git(work, 'add', file);
+  git(work, 'commit', '-q', '-m', 'summary');
+  const close = () => notifyMain(['--home', machine.home, '--claude-home', machine.claudeHome, '--to', 'orchestrator', '--kind', 'closed', '--summary', file, 'delivered'], {
+    cwd: work, stdout: () => {}, stderr: (line) => errors.push(line), env: { CLAUDE_CODE_SESSION_ID: SENDER }, now: () => NOW, homedir: () => path.join(machine.dir, 'os-home'),
+  });
+  const errors = [];
+  assert.equal(await close(), 1);
+  assert.match(errors.join('\n'), /is not pushed: neither origin\/main nor origin\/feat\/x holds it/);
+  git(work, 'push', '-q', 'origin', 'feat/x');
+  assert.equal(await close(), 0, errors.join('\n'));
 }));
