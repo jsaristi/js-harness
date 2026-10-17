@@ -21,21 +21,11 @@ test('worktreesInMain bounds every git call it makes with a timeout', () => {
   for (const call of asked) assert.ok(Number.isInteger(call.timeout) && call.timeout > 0, JSON.stringify(call));
 });
 
-// A git killed at its limit must not leave an index.lock behind: that would break a worktree that was only slow
-// (gentle-ai, 2026-10-17, R4).
-test('worktreesInMain runs git without optional locks, so a call killed at its limit leaves no index.lock', () => {
-  const envs = [];
-  const run = (command, args, options) => {
-    envs.push(options.env?.GIT_OPTIONAL_LOCKS);
-    return { status: 1, stdout: '', stderr: 'no' };
-  };
-  worktreesInMain({ cwd: '/main', run });
-  assert.ok(envs.length > 0);
-  assert.deepEqual([...new Set(envs)], ['0']);
-});
-
 // The promise the README makes: a worktree whose git hangs is not counted, and the others still are (gentle-ai, R3).
-test('worktreesInMain leaves out a worktree whose git call timed out and still counts the others', () => {
+// And no call takes optional locks: a `git status` killed at its limit must not leave an index.lock that breaks a
+// worktree that was only slow (gentle-ai, 2026-10-17, R4); the status calls are the ones that matter.
+test('worktreesInMain leaves out a worktree whose git call timed out, still counts the others, and takes no optional lock', () => {
+  const locks = [];
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'worktrees-'));
   const [one, two] = ['one', 'two'].map((name) => {
     const dir = path.join(home, name);
@@ -47,6 +37,7 @@ test('worktreesInMain leaves out a worktree whose git call timed out and still c
   });
   try {
     const run = (command, args, options) => {
+      locks.push(`${args[0]}=${options.env?.GIT_OPTIONAL_LOCKS}`);
       if (args[0] === 'rev-parse' && args[1] === '--verify') return { status: 0, stdout: 'abc\n' };
       if (args[0] === 'rev-parse' && args[1] === '--git-path') return { status: 0, stdout: 'index\n' };
       if (args[0] === 'rev-parse') return { status: 0, stdout: '/main\n' };
@@ -61,6 +52,8 @@ test('worktreesInMain leaves out a worktree whose git call timed out and still c
       return { status: 1, stdout: '', stderr: 'unexpected' };
     };
     assert.deepEqual(worktreesInMain({ cwd: '/main', run }), [{ path: one, branch: 'feat/one' }]);
+    assert.deepEqual(locks.filter((call) => call.startsWith('status=')), ['status=0', 'status=0']);
+    assert.deepEqual(locks.filter((call) => !call.endsWith('=0')), []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
