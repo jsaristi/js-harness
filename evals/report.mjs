@@ -16,6 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArm } from './arms.mjs';
 
 /** A reason the report cannot be made, or a result file it will not read: printed as it is, exit 1. */
 export class ReportError extends Error {}
@@ -253,11 +254,23 @@ const effortRank = (effort) => (EFFORT_ORDER.includes(effort) ? EFFORT_ORDER.ind
 const byEffort = (a, b) => effortRank(a) - effortRank(b) || (a < b ? -1 : a > b ? 1 : 0);
 const trialLabel = (entry) => `${entry.task} ${entry.config} ${entry.effort} #${entry.repeat}`;
 
-function checkTrial(entry, where) {
+/** The arm of one component that `config` names for `agent` (`evals/arms.mjs`), or `null` for a base or a name that is
+ * no arm of that agent's. */
+const armOf = (config, agent) => {
+  try {
+    return parseArm(config, agent);
+  } catch {
+    return null;
+  }
+};
+
+function checkTrial(entry, where, agent) {
   if (!isObject(entry) || ![entry.task, entry.config, entry.effort].every((value) => typeof value === 'string' && value !== '') || !Number.isInteger(entry.repeat)) {
     throw new ReportError(`${where} holds a trial without a task, config, effort and repeat`);
   }
-  if (!CONFIGS.includes(entry.config)) throw new ReportError(`${where} holds a trial of config ${JSON.stringify(entry.config)}: the report compares ${CONFIGS.join(' and ')}`);
+  if (!CONFIGS.includes(entry.config) && armOf(entry.config, agent) === null) {
+    throw new ReportError(`${where} holds a trial of config ${JSON.stringify(entry.config)}: the report compares ${CONFIGS.join(' and ')}, and the arms of one component (evals/arms.mjs)`);
+  }
 }
 
 function readRun(file, name) {
@@ -270,7 +283,7 @@ function readRun(file, name) {
   if (!isObject(doc) || doc.format !== FORMAT || !Array.isArray(doc.trials)) throw new ReportError(`${file} is not a results file of format ${FORMAT}`);
   // How a record's tokens and cost are read depends on the agent, so one the report does not know cannot be read.
   if (!AGENTS.includes(agentOf(doc))) throw new ReportError(`${file} is a run of agent ${JSON.stringify(doc.agent)}: the report reads the runs of ${AGENTS.join(' and ')}`);
-  doc.trials.forEach((entry) => checkTrial(entry, file));
+  doc.trials.forEach((entry) => checkTrial(entry, file, agentOf(doc)));
   return { name, file, doc };
 }
 
@@ -372,8 +385,12 @@ export function buildReport(runs) {
   const agent = agentOf(runs[0].doc);
   const { model } = runs[0].doc;
   const cells = buildCells(trials, { agent, model });
-  const efforts = [...new Set(cells.map((cell) => cell.effort))].sort(byEffort);
+  // The minimal-against-current table reads the cells of its two configs alone, so an arm beside them changes nothing
+  // in it (G2 of `odd/tasks/future-model-protocol.md`).
+  const bases = cells.filter((cell) => CONFIGS.includes(cell.config));
+  const efforts = [...new Set(bases.map((cell) => cell.effort))].sort(byEffort);
   const cellOf = (task, effort, config) => cells.find((cell) => cell.task === task && cell.effort === effort && cell.config === config) ?? null;
+  const arms = [...new Set(cells.map((cell) => cell.config).filter((config) => !CONFIGS.includes(config)))].sort();
   return {
     runs: runs.map((run) => run.name).sort(),
     ...(agent !== 'claude' && { agent }),
@@ -382,13 +399,63 @@ export function buildReport(runs) {
     stack: runs[0].doc.stack,
     ...(agent === 'codex' && { costEstimate: codexCostEstimate(trials, model) }),
     efforts: efforts.map((effort) => {
-      const tasks = [...new Set(cells.filter((cell) => cell.effort === effort).map((cell) => cell.task))].sort();
+      const tasks = [...new Set(bases.filter((cell) => cell.effort === effort).map((cell) => cell.task))].sort();
       const rows = tasks.map((task) => compareCells(cellOf(task, effort, 'minimal'), cellOf(task, effort, 'current')));
       const count = (verdict) => rows.filter((row) => row.verdict === verdict).length;
       return {
         effort,
         rows,
         counts: { tasks: rows.length, score: count('score'), cost: count('cost'), none: count('none'), incomplete: count('incomplete'), discriminating: count('score') + count('cost') },
+      };
+    }),
+    ...(arms.length > 0 && { arms: arms.map((name) => armSection(name, armOf(name, agent), cells, cellOf)) }),
+  };
+}
+
+/** The total of the mean costs of `cells` and its spread: the standard error of that sum, the square root of the summed
+ * squared standard errors of the means (sd / sqrt(known)), `null` when a cell has fewer than 2 known costs. */
+function costTotal(cells) {
+  const errors = cells.map((cell) => (finite(cell.cost.sd) && cell.cost.known > 0 ? cell.cost.sd / Math.sqrt(cell.cost.known) : null));
+  return {
+    usd: cells.reduce((sum, cell) => sum + cell.cost.mean, 0),
+    se: errors.every(finite) ? Math.sqrt(errors.reduce((sum, error) => sum + error * error, 0)) : null,
+  };
+}
+
+/** One arm against its base, per task and effort: `{ arm, base, direction, components, efforts: [{ effort, rows,
+ * summary }] }`. A row is `compareCells(base, arm)` relabelled by the component: `with` is the cell that holds it
+ * (the base of a current-without arm, the arm of a minimal-with one) and `without` the other, and `winner` is `with`
+ * or `without`; the differences and `costRatio` stay as `compareCells` gives them, arm minus (or over) base. The summary is Step 6 of `docs/future-model.md`: on how many tasks each side scores higher or wins
+ * on cost, and the total cost of each side with its spread (`costTotal`) and the ratio with / without, over the tasks
+ * where both cells have a known mean cost. */
+function armSection(name, { base, direction, components }, cells, cellOf) {
+  const efforts = [...new Set(cells.filter((cell) => cell.config === name).map((cell) => cell.effort))].sort(byEffort);
+  const side = (winner) => (winner === null ? null : (winner === 'current') === (direction === 'without') ? 'without' : 'with');
+  return {
+    arm: name,
+    base,
+    direction,
+    components,
+    efforts: efforts.map((effort) => {
+      const tasks = [...new Set(cells.filter((cell) => cell.effort === effort && (cell.config === name || cell.config === base)).map((cell) => cell.task))].sort();
+      const rows = tasks.map((task) => {
+        const [baseCell, armCell] = [cellOf(task, effort, base), cellOf(task, effort, name)];
+        const { minimal, current, winner, ...rest } = compareCells(baseCell, armCell);
+        return { ...rest, with: direction === 'without' ? baseCell : armCell, without: direction === 'without' ? armCell : baseCell, winner: side(winner) };
+      });
+      const paired = rows.filter((row) => finite(row.with?.cost.mean) && finite(row.without?.cost.mean));
+      const won = (verdict, winner) => rows.filter((row) => row.verdict === verdict && row.winner === winner).length;
+      const total = { with: costTotal(paired.map((row) => row.with)), without: costTotal(paired.map((row) => row.without)) };
+      return {
+        effort,
+        rows,
+        summary: {
+          tasks: rows.length,
+          higher: { with: won('score', 'with'), without: won('score', 'without') },
+          cheaper: { with: won('cost', 'with'), without: won('cost', 'without') },
+          total,
+          ratio: paired.length > 0 && total.without.usd !== 0 ? total.with.usd / total.without.usd : null,
+        },
       };
     }),
   };
@@ -611,7 +678,34 @@ export function formatReport(report, { minDiscriminating } = {}) {
     const { ok } = checkDiscriminating(report, minDiscriminating);
     lines.push(`  required: at least ${minDiscriminating} at every effort, ${ok ? 'met' : 'not met'}`);
   }
+  if (report.arms !== undefined) lines.push('', ...armLines(report.arms, codex ? ESTIMATED_COST : 'cost'));
   return `${lines.join('\n')}\n`;
+}
+
+/** The arms section of the report (`armSection`): per arm and effort, a table of each task's two sides, "with X" and
+ * "without X", and the summary line of Step 6 of `docs/future-model.md`. */
+function armLines(arms, costLabel) {
+  const lines = ['Arms of one component (each against its base, per task and effort; "with" and "without" name the side that holds the component):'];
+  const per = (cell, pick) => (cell === null ? '-' : pick(cell));
+  const spread = (total) => `${costText(total.usd)} ${finite(total.se) ? `±${total.se.toFixed(2)}` : '±?'}`;
+  for (const { arm, base, components, efforts } of arms) {
+    const what = components.join(' and ');
+    lines.push('', `${arm}, against ${base}`);
+    for (const { effort, rows, summary } of efforts) {
+      const body = rows.map((row) => [
+        row.task,
+        `${row.with?.n ?? 0}/${row.without?.n ?? 0}`,
+        spreadText(row.with), spreadText(row.without),
+        per(row.with, (cell) => costText(cell.cost.mean)), per(row.without, (cell) => costText(cell.cost.mean)),
+        row.winner === null ? row.verdict : `${row.verdict}: ${row.winner} ${what}`,
+      ]);
+      lines.push(`effort ${effort}`, ...table(['task', 'n with/without', 'score with', 'score without', `${costLabel} with`, `${costLabel} without`, 'verdict'], body));
+      const { total } = summary;
+      lines.push(`  ${what} at ${effort}: scores higher with it on ${summary.higher.with} of ${summary.tasks} tasks and without it on ${summary.higher.without}; `
+        + `total cost ${spread(total.with)} with it, ${spread(total.without)} without, with/without ${finite(summary.ratio) ? `${summary.ratio.toFixed(2)}x` : '?'}`);
+    }
+  }
+  return lines;
 }
 
 /** The comparison (`buildComparison`) as text: what each side was, one table with a row per task, config and effort

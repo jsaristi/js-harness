@@ -233,8 +233,9 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
 - [x] T6 G3, a cost statement before a run (S3; route: inline): `--plan` on `evals/suite.mjs`, with `evals/plan.mjs`
 - [ ] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
   C1 `fa39244` and C2 `21a06bf` merged in #141; C3a `776b03a`, the filters of paths and JSON keys,
-  see L17; C3b `9d82100`, the marker blocks, see L18; C3c, Codex's TOML tables and hook trust, see
-  L19; C4, the suite's wiring and pins, next)
+  see L17; C3b `9d82100`, the marker blocks, see L18; C3c `dde2216`, Codex's TOML tables and hook
+  trust, see L19; C4 `8ce28f0`, the suite's wiring and pins; C5, the report's arms section, see
+  L21; C6a, C6b and C7 next)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
@@ -456,3 +457,15 @@ check that `node evals/report.mjs` over the committed F5 and F6 files prints the
 after; then gentle-ai assess over the slice from `924d29e`, Codex review, push, PR. T11: first
 fingerprints at 22:20 in `scratchpad/fp-1.json` (claude `a021507a2128`, codex `8fbed9dbd3b9`),
 built by `scratchpad/fp-build.mjs <worktree> <out> D:/jh23-fp-scratch`; rebuild hours later.
+
+L21 (2026-10-17, 22:38 by `date`) The host compacted this session at 22:34; resumed from L20. C4
+committed `8ce28f0` (gate green; the whole evals suite was 336 tests, 0 failing, before it). C5,
+the report's arms section: `checkTrial` takes the arms `parseArm` names; the minimal-against-current
+tables are built from `minimal` and `current` cells only; an `arms` section is added last, and only
+when a run holds arm trials, each arm compared with its base per task and effort through
+`compareCells`, its verdict named "with X" or "without X", and a summary line per effort (tasks
+scored higher with and without, total cost with its standard error, the with/without ratio).
+RED observed, then 62 report tests GREEN. Differential check, the report of `8ce28f0` against
+this one over the committed results (`evals/results`, `evals/results/codex`), with no flag,
+`--json`, `--min-discriminating 3`, `--require-complete` and `--codex-results-dir`: every output
+and exit code the same bytes.
