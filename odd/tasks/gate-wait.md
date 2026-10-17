@@ -1050,7 +1050,7 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       fails; that `git status` takes git's optional index lock beside other commands.
 - [x] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice. Evidence: the entry of T10 in Progress.
-- [ ] T11 · `review-tool-timeout` (docs/FAILURES.md): three of its four sightings ran beside
+- [x] T11 · `review-tool-timeout` (docs/FAILURES.md): three of its four sightings ran beside
       a gate or a full machine (2026-10-11 beside a gate; 2026-10-15, host-update-check L4,
       while a retry on a quiet machine answered in 23 s, L6; 2026-10-16, first-version L10, at
       100% CPU with `--base-ref=origin/main`, then 9 s with the merge-base commit). M2 read "no
@@ -2954,6 +2954,16 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     no candidate; the orchestrator skill's line points there. The entry's Control is the guard's test.
     Tests first: the lib tests failed before (no export, then the merge case let through); after,
     guard 25, lib guard 23, manifest 173, protocols-skill 11 pass.
+  - *Reviews.* Codex e20291a..5533618 incorrect (0.99), two P2 (a newline did not end a command; a
+    `cd` before it was not followed); the independent verifier (risk item 2) found the same `cd` case
+    and heredoc bodies read as commands, both false refusals at 55336181. All fixed test first in
+    1cebd69a with its advisories (a 5 s git timeout, the protocols wording, a protocols test, the
+    help lines): lib guard 24, guard 25, protocols-skill 12, manifest 173, js-harness 44 pass.
+    Codex recheck e20291a..1cebd69 found three new P2 (a `\` line continuation, a relative `--cwd`
+    after a `cd`, a `#` comment), left as later work by the correction bound. gentle-ai
+    e20291ab..1cebd69a high (item 2), lenses risk and reliability: approved and acknowledged
+    (`review-ea14564f6a7371ed`), three warnings left as later work (the first-parent listing has no
+    depth bound; a relative `--cwd`; a test's unquoted temp dir).
 
 ## Next
 
