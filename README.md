@@ -79,7 +79,9 @@ branch, and lets the commit through only on green. The `tests` row then names th
 gets no answer from GitHub (a remote not on GitHub, no push, `gh` not signed in, no run within 3
 minutes, a run cancelled or timed out, or one not done within `rule:ci-gate-bound` of the push,
 which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. The gate log keeps both: a run's red tests by name, read from its log with gh's prefix taken off, and a `ci-fallback` line with why and what the wait cost, under the id of the gate that then runs here. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
-on Windows is left to the merge queue's run on this machine.
+on Windows is left to the daily Windows suite: `.github/workflows/windows-daily.yml` runs the whole suite once a day on
+GitHub's Windows machines, off the land's path, and `js-harness windows-daily` tells the lead the
+failing test names of a red run.
 
 The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,
 before any work: the median of the latest five sessions, read from their transcripts under
@@ -170,9 +172,14 @@ an hour). It prints a `STALLED:` line naming the session, since when it is quiet
 and says it again each time that quiet doubles. `js-harness sessions` lists the same sessions in
 its `Stalled` section, and its `--watch` says each one as it crosses.
 
+Every `--windows` minutes (an hour; `0` for never) it also reads the daily Windows run, as
+`js-harness windows-daily` does, and ends with a `WINDOWS:` line when that run is red and was not
+told before. The time of the last reading is kept in a file, so a heartbeat started again after a
+`STALL` still reads it once an hour.
+
 ```console
 $ js-harness loop heartbeat
-js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours
+js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours; every 60 minutes, the daily Windows run is read, and a red one told now ends it
 STALLED: JH 19 · skill del orquestador (T8) — no commit, notice or gate since 11:49, holding a note from JH ORQ · js-harness (350k) of 11:49: 17:00 JH ORQ: first-version T3 moved to JH 25 after 6h without an answer…
 ```
 
@@ -507,6 +514,27 @@ Left out of the review: 5 Markdown documents, 818 changed lines.
 Allowance of this plan: 872,400 input tokens, the larger of 300,000 a review and 1,200 a changed line, for the 727 changed lines it reads. Its estimate, about 470,000, is inside it. …
 ```
 
+### js-harness windows-daily
+
+The gates run on Linux, so the whole suite also runs once a day on GitHub's Windows machines
+(`.github/workflows/windows-daily.yml`: at 07:23 UTC and by hand with `gh workflow run
+windows-daily.yml`, never for a push or a pull request, so it holds up no gate and no land; free on
+a public repository). This command reads the newest completed run on the default branch of the
+GitHub repository `origin` names and says whether it passed. A red run (`failure`, `timed_out` or
+`cancelled`) not told before is told to the orchestrator once, with the run's address, how many
+tests failed and their names, unless every file it failed in has a current entry in
+`docs/FLAKY.md`; a red run whose names cannot be read is told all the same. A schedule whose newest
+run ended more than 26 hours ago is told once too: GitHub drops scheduled runs under load and
+switches a schedule off after 60 days with no activity. Each run is told by whoever first creates
+its marker under `.js-harness/channel/windows-daily/` in the home, so the heartbeat and a hand run
+never both tell it. The lead's `js-harness loop heartbeat` reads it every hour.
+
+```console
+$ js-harness windows-daily
+windows-daily: the newest run, https://github.com/jsaristi/js-harness/actions/runs/39007607383, failed (failure, ended 1 h ago), 168 failing: in shadow the gate traces its suite under the git dir and its end line keeps the counts; …
+WINDOWS: https://github.com/jsaristi/js-harness/actions/runs/39007607383 failure, 168 failing: in shadow the gate traces its suite under the git dir and its end line keeps the counts; …
+```
+
 ### js-harness merge-queue
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in
@@ -567,8 +595,12 @@ brings past the remote's default branch, and the merge door refuses it.
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
 the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's
-gate. After each landed batch, the one who landed it runs the whole suite once on Windows, in a lock
-turn on the main just landed, with the temporary files inside the drive the antivirus excludes:
+gate. The daily Windows suite (`js-harness windows-daily`) runs them once a day on GitHub's Windows
+machines. That run was chosen over one after each landed batch, which would hold the gate lock 15 to
+19 hours a day (docs/ROADMAP.md, "Windows suite"); it cannot see this machine's antivirus, its
+temporary folders or its paths. To reproduce a red daily run here, or to test a change to the
+Windows paths before it lands, run the whole suite once on Windows, in a lock turn, with the
+temporary files inside the drive the antivirus excludes:
 
 ```console
 $ TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node bin/check.mjs

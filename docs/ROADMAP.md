@@ -66,7 +66,7 @@ First request of a one-word prompt, estimated tokens:
 | First version's scope | New work that is not a defect (follow-ups, design ideas) keeps entering the first version, rather than waiting for after 1.0.0 so it can close in a day or two. Asked whether it should wait, between "Sí, después de 1.0 (Recomendada)" and "No, sigue entrando", he tapped "No, sigue entrando" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z) |
 | 1.0.0 and gentle-ai #4036 | 1.0.0 waits for the three tasks that wait for gentle-ai to publish its issue #4036, though nobody knows whether it will. Asked, between "No la espera (Recomendada)" and "Sí, la espera", he tapped "Sí, la espera" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z) |
 | Throughput review protocol | A fixed procedure with a command measures where the time goes, keeps a dated snapshot a day, enters each improvement with its baseline, target and cost, and measures it again after it ships; two readers run only before a proposal reaches him, and two runs in a row that find nothing worth building make it weekly (the lead's `throughput-v3-plan.md`, version 2, in the side-session notes). Asked whether he approved it, he tapped "Sí, aprobalo (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z) |
-| Windows suite | The Windows suite, which no gate runs today though `README.md` promises it, runs once a day, off the land's path, after the Windows sensor bound is settled (`odd/tasks/first-version.md`, T6f); running it on every batch would take 15 to 19 hours of the gate lock a day. Asked how often, he tapped "Una vez por día (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z) |
+| Windows suite | The Windows suite, which no gate ran though `README.md` promised it, runs once a day (`.github/workflows/windows-daily.yml`, read by `js-harness windows-daily` and the lead's heartbeat; `odd/tasks/commit-gates-first.md`, T4), off the land's path, after the Windows sensor bound is settled (`odd/tasks/first-version.md`, T6f); running it on every batch would take 15 to 19 hours of the gate lock a day. Asked how often, he tapped "Una vez por día (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z) |
 
 ## Phases
 
@@ -985,7 +985,9 @@ these items inside the first version despite the freeze; that reading is the lea
 The stop rule, the lead's reading: each item carries its baseline, its target and its cost, and
 items stop being added when the next one is estimated to return less than it costs, which the lead
 tells him. Nothing that lowers quality or reliability is an item: no dropping the Windows run from
-a land, no skipped review, no weaker test. Version 1 of this list was the lead's and reached him
+a land, no skipped review, no weaker test. (The Windows run after each land, a hand step no land
+made, became the daily run he chose, row "Windows suite" above: an automated run replaced a promise,
+odd/tasks/commit-gates-first.md, L8.) Version 1 of this list was the lead's and reached him
 unreviewed; two readers on Opus 5.5 at high then found most of it built or mismeasured (the
 docs-only skip, the same-tree skip, exact tests, the rerun of a failed test file and the pnpm lock
 fix already ship; suite gates are about 2.9 per merged PR, not 5.5; the lock was idle about 30% of
