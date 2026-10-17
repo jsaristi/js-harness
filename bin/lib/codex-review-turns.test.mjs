@@ -8,7 +8,7 @@ import { reviewCoverage } from './codex-review-coverage.mjs';
 import { leftOutSaid } from './codex-review-scope.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
-import { addTurnWorktree, mergeTurn, PART_AS_CHANGED_LINES, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './codex-review-turns.mjs';
+import { addTurnWorktree, mergeTurn, PART_AS_CHANGED_LINES, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
 
 // Real git in every test, isolated from the host's config: where a review of a range holding a merge of
 // the default branch below HEAD is cut into turns (odd/tasks/merge-below-head.md, S1).
@@ -158,7 +158,7 @@ test('a turn worktree whose run is gone is removed by the next run, and one whos
   const gone = addTurnWorktree(root, merge, { commonGitDir, pid: 111, now: () => 1 });
   const going = addTurnWorktree(root, merge, { commonGitDir, pid: 222, now: () => 2 });
   assert.ok(fs.existsSync(path.join(gone, 'm.js')) && fs.existsSync(path.join(going, 'm.js')), 'both were made, at the merge');
-  sweepTurnWorktrees(root, { commonGitDir, running: (pid) => pid === 222 });
+  sweepTurnWorktrees(root, { commonGitDir, running: (pid) => pid === 222, now: () => 3 });
   assert.deepEqual([fs.existsSync(gone), fs.existsSync(going)], [false, true]);
   // A folder that cannot be removed throws nothing: the removal runs in a `finally` (gentle-ai, R3/R4).
   assert.doesNotThrow(() => removeTurnWorktree(root, going, { rm: () => { throw new Error('EBUSY'); } }));
@@ -166,4 +166,15 @@ test('a turn worktree whose run is gone is removed by the next run, and one whos
   assert.equal(fs.existsSync(going), false);
   // git holds no worktree of either: only the checkout itself is listed.
   assert.equal(git(root, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree ')).length, 1);
+});
+
+test('a turn worktree older than a turn can last is removed though a process of its pid runs: the pid was reused (gentle-ai R4, PR 338)', () => {
+  const { root, merge } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  const made = 1_000_000;
+  const old = addTurnWorktree(root, merge, { commonGitDir, pid: 333, now: () => made });
+  const young = addTurnWorktree(root, merge, { commonGitDir, pid: 444, now: () => made + TURN_WORKTREE_MAX_AGE_MS });
+  sweepTurnWorktrees(root, { commonGitDir, running: () => true, now: () => made + TURN_WORKTREE_MAX_AGE_MS + 1 });
+  assert.deepEqual([fs.existsSync(old), fs.existsSync(young)], [false, true]);
+  removeTurnWorktree(root, young);
 });
