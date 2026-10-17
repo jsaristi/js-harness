@@ -66,6 +66,11 @@ test('the bare template has every section empty, a filled one has no problem, an
   // A fence closes only on its own marker: a ~~~ line inside a ``` block is the block's text.
   const mixedOpen = filled.replace('## Failures and lessons\n', '```\n~~~\n```\n## Failures and lessons\n');
   assert.deepEqual(summaryProblems(mixedOpen), []);
+  // A fence closes only on a bare run of its marker at least as long as the one that opened it (Codex, gentle-ai).
+  const longer = filled.replace('## Delivered\n', '````\n```\n## Goal\n````\n## Delivered\n');
+  assert.deepEqual(summaryProblems(longer), []);
+  const infoString = filled.replace('## Delivered\n', '```\n```js\n## Goal\n```\n## Delivered\n');
+  assert.deepEqual(summaryProblems(infoString), []);
   // A code line indented four spaces does not open a fence.
   const indented = filled.replace('## Cost\n', '    ```\n## Cost\n');
   assert.deepEqual(summaryProblems(indented), []);
