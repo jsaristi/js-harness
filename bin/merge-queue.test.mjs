@@ -202,10 +202,10 @@ function landRunner(prs, checks, onChecks = () => {}) {
 
 const circle = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'circleci-checks' }, html_url: 'https://app.circleci.com/x' });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env } = {}) {
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks);
   const out = [];
-  const code = await mergeQueueMain(['--land', '--cwd', root], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
+  const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
   return { code, out, calls };
 }
 
@@ -1185,6 +1185,7 @@ test('--land writes one land record: the pull requests it looked at, each left o
     circleci: { state: 'green', name: 'check', conclusion: 'success', url: 'https://app.circleci.com/x' },
     candidate: landed,
     landed: [1, 2],
+    removed: [],
     exit: 0,
     said: out.at(-1),
   });
@@ -1414,4 +1415,91 @@ test('the land guard reads a merge-queue with Windows line ends as origin/main\'
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
+});
+
+// After a land, the worktree of each landed pull request goes when nothing in it can be lost (odd/tasks/land-unattended.md,
+// T9): 151 of 184 worktrees were on branches already in main, and the board took 126 s over them (L22).
+const worktree = (root, dir, branch) => {
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  git(root, 'worktree', 'add', '--quiet', dir, branch);
+  return dir;
+};
+/** Puts the index of the worktree `dir` 20 minutes back, past the minutes a removal waits for. */
+const idle = (dir) => {
+  const back = (Date.now() - 20 * 60_000) / 1000;
+  fs.utimesSync(path.resolve(dir, git(dir, 'rev-parse', '--git-path', 'index')), back, back);
+  return dir;
+};
+const removedOf = (root) => landsOf(root).at(-1).removed.map((entry) => [entry.pr, path.basename(entry.path)]);
+
+test('a land removes the worktree of a landed pull request that is clean and idle, keeps its branch and names it in its record; a dirty one stays', async () => {
+  const { root, heads } = makeQueueRepo();
+  const top = path.dirname(root);
+  const clean = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  const dirty = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  fs.writeFileSync(path.join(dirty, 'notes.txt'), 'not committed\n');
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(clean), false, out.join('\n'));
+  assert.equal(fs.existsSync(path.join(dirty, 'notes.txt')), true);
+  assert.equal(git(root, 'rev-parse', 'feat/a'), heads['feat/a'], 'the branch of a removed worktree stays');
+  assert.deepEqual(removedOf(root), [[1, 'wt-a']]);
+  assert.ok(out.some((line) => line.startsWith('Removed the worktree of PR 1 at ')), out.join('\n'));
+  assert.match(landsOf(root).at(-1).said, /^Landed: /);
+});
+
+test('a land keeps a landed worktree under .claude/worktrees, the app\'s, and the worktree it runs from', async () => {
+  const { root, heads } = makeQueueRepo();
+  const top = path.dirname(root);
+  const apps = idle(worktree(root, path.join(top, '.claude', 'worktrees', 'a'), 'feat/a'));
+  const from = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { cwd: from });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(apps), true);
+  assert.equal(fs.existsSync(from), true);
+  assert.deepEqual(removedOf(root), []);
+});
+
+test('a land keeps a landed worktree with a commit beyond main, and one whose index changed in the last minutes', async () => {
+  const { root, heads } = makeQueueRepo();
+  const top = path.dirname(root);
+  const beyond = worktree(root, path.join(top, 'wt-a'), 'feat/a');
+  fs.writeFileSync(path.join(beyond, 'later.txt'), 'later\n');
+  git(beyond, 'add', 'later.txt');
+  git(beyond, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '--quiet', '-m', 'later');
+  idle(beyond);
+  const fresh = worktree(root, path.join(top, 'wt-b'), 'feat/b');
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(beyond), true);
+  assert.equal(fs.existsSync(fresh), true);
+  assert.deepEqual(removedOf(root), []);
+});
+
+test('a removal git refuses is said, and the land still exits 0', async () => {
+  const { root, heads } = makeQueueRepo();
+  const kept = idle(worktree(root, path.join(path.dirname(root), 'wt-a'), 'feat/a'));
+  // Only its removal: the land's own worktrees are removed by the same verb.
+  const wrap = failingGit((args) => args[0] === 'worktree' && args[1] === 'remove' && path.basename(args.at(-1)) === 'wt-a', refused);
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(kept), true);
+  assert.ok(out.some((line) => line.startsWith('Could not remove the worktree of PR 1 at ') && line.includes('refused by the test')), out.join('\n'));
+  assert.deepEqual(removedOf(root), []);
+});
+
+// `git worktree remove` takes a worktree's ignored files with it, and `git status` does not show them: an eval run kept
+// under `evals/runs/` would be lost with no branch to bring it back (Codex, 2026-10-17, P1).
+test('a land keeps a landed worktree that holds an ignored file', async () => {
+  const { root, heads } = makeQueueRepo();
+  fs.appendFileSync(path.join(root, '.git', 'info', 'exclude'), '*.log\n');
+  const top = path.dirname(root);
+  const holds = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  fs.writeFileSync(path.join(holds, 'run.log'), 'a result no commit holds\n');
+  const clean = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.readFileSync(path.join(holds, 'run.log'), 'utf8'), 'a result no commit holds\n');
+  assert.equal(fs.existsSync(clean), false, out.join('\n'));
+  assert.deepEqual(removedOf(root), [[2, 'wt-b']]);
 });

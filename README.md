@@ -584,6 +584,14 @@ as the gate log names them, by a note to that session's number in the channel, w
 (`js-harness notify --kind ready --pr <n>`); one that sent none is not told, and the lead relays it. The
 same reason is told once for one ready notice. Each left-out entry of the record keeps the failing
 tests of a red (`failing`) and the number of the session told (`told`, or `null`).
+After it lands, a land removes the worktree of each pull request it landed, with `git worktree remove` and
+never `--force`, when nothing in it can be lost: its head is in the main it pushed, `git status` shows
+nothing, ignored files included (the removal takes them, and no branch brings them back), its index has
+not changed for 10 minutes, and it is neither the Claude app's (under `.claude/worktrees`),
+the main one, a locked one nor the one the land runs from. The branch stays, so `git worktree add` brings
+it back; the record names each one removed (`removed`, each `{ pr, path }`). A session still open in such a
+worktree that staged nothing for 10 minutes is not seen: on Windows the removal of a folder in use fails
+and is said; elsewhere the session loses its folder.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
