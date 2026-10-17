@@ -271,7 +271,11 @@ export function throughputRows(days) {
   const hours = days.length * 24;
   const gates = all('gates');
   const unread = (source) => days.filter((day) => unreadOf(day, source)).map((day) => `${day.day} ${unreadOf(day, source)}`);
-  const partial = days.filter((day) => day.partialFrom).map((day) => (Date.parse(day.partialFrom) >= dayBounds(day.day).to ? `partial: ${day.day} not in the gate log` : `partial: ${day.day} from ${day.partialFrom.slice(11, 16)}Z`));
+  const partial = days.flatMap((day) => [
+    day.partialFrom && (Date.parse(day.partialFrom) >= dayBounds(day.day).to ? `partial: ${day.day} not in the gate log` : `partial: ${day.day} from ${day.partialFrom.slice(11, 16)}Z`),
+    // A day kept from a copy of the log made before the day settled: its last gates may be missing.
+    day.partialUntil && `partial: ${day.day} until ${day.partialUntil.slice(0, 16)}Z`,
+  ]).filter(Boolean);
   const row = (label, source, value) => {
     const missing = unread(source);
     if (missing.length > 0) return { label, value: `not read: ${missing.join('; ')}`, source: SOURCES[source] };
@@ -377,15 +381,27 @@ const ownEnded = (day) => day.gates.filter((gate) => gate.lock === 'own' && gate
 export function dailyValues(day) {
   const values = {};
   for (const [label, source, read] of DAILY) {
-    const missing = unreadOf(day, source) || (source === 'gates' && day.partialFrom);
+    const missing = unreadOf(day, source) || (source === 'gates' && (day.partialFrom || day.partialUntil));
     values[label] = missing ? null : round1(read({ prs: [], gates: [], codex: [], ...day }));
   }
   return values;
 }
 
+/** How often, when nothing changed, the median of `m` after values falls outside the range of `n` before values: the
+ * values exchangeable, it is above the range when its rank and all above it, ceil(m/2) of them, are the highest of
+ * n + m, and below it likewise, so 2 * prod (m - i) / (n + m - i) over those ranks. An even `m`'s median is the mean
+ * of two, which may lie outside with only m/2 past the range: that product is then a bound. A percentage, as said. */
+export function outsideChance(n, m) {
+  if (n === 0 || m === 0) return '0%';
+  const far = Math.ceil(m / 2);
+  let chance = 2;
+  for (let i = 0; i < far; i += 1) chance *= (m - i) / (n + m - i);
+  return `${m % 2 === 0 ? 'at most ' : ''}${Math.round(Math.min(chance, 1) * 100)}%`;
+}
+
 /** Compares a window of days before a change with an equal window after it, row by row, daily value with daily
  * value: `[{ label, before, after, verdict }]`. Under `COMPARE_DAYS` days a side it judges nothing and says how often
- * a window that did not change falls outside the before range, 2/(n+1); from there a row moved only when the after
+ * the after median of a window that did not change falls outside the before range (`outsideChance`); from there a row moved only when the after
  * window's median daily value lies outside the before range. */
 export function compareWindows(beforeDays, afterDays) {
   if (beforeDays.length !== afterDays.length) throw new Error(`a comparison reads equal windows: ${beforeDays.length} days before, ${afterDays.length} after`);
@@ -395,8 +411,8 @@ export function compareWindows(beforeDays, afterDays) {
     const was = before.map((values) => values[label]).filter((value) => value !== null);
     const is = after.map((values) => values[label]).filter((value) => value !== null);
     const n = Math.min(was.length, is.length);
-    const chance = `${Math.round((200 / (was.length + 1)))}%`;
-    if (n < COMPARE_DAYS) return { label, before: was, after: is, verdict: `not judged: ${n} days a side, under ${COMPARE_DAYS}; a window that did not change falls outside a ${was.length}-day range ${chance} of the time` };
+    const chance = outsideChance(was.length, is.length);
+    if (n < COMPARE_DAYS) return { label, before: was, after: is, verdict: `not judged: ${n} days a side, under ${COMPARE_DAYS}; with nothing changed, the after median falls outside the before range ${chance} of the time` };
     const low = Math.min(...was);
     const high = Math.max(...was);
     const mid = round1(median(is));

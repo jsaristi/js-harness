@@ -36,7 +36,7 @@ export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 
 const USAGE = [
   'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--against <since>..<until>] [--json]',
-  '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]...',
+  '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]... [--copied-at <YYYY-MM-DDTHH:MMZ>]',
   '       js-harness throughput status',
   '       (each also takes --cwd <path> and --home <path>)',
   '  The table: the UTC days [since, until), by default the day before today. The gates of a day are read from its',
@@ -47,10 +47,12 @@ const USAGE = [
   '  snapshot: keeps the gates of one UTC day (default yesterday) in <home>/.js-harness/throughput/<project>/<day>.json,',
   '    once the day has settled, two gate-max after its midnight. A kept day is written again only by a fuller one,',
   '    the replacement recorded (exit 1 otherwise). --gate-log reads copies of the gate log instead of the live one,',
-  '    at most two (the log and its rotated file), for a day the live log has rotated away.',
+  '    at most two (the log and its rotated file), for a day the live log has rotated away; a copy made before the',
+  '    day settled keeps it as partial until then. A copy is made no earlier than its modification time; one that kept',
+  "    its source's time says when it was made with --copied-at.",
   '  --against: the window compared with an equal window before it, a row each, daily value with daily value. Under 7',
-  '    days a side it prints both and how often a window that did not change falls outside the before range, 2/(n+1),',
-  '    and judges nothing; from 7, a row moved only when the after median lies outside the before range.',
+  '    days a side it prints both and how often the after median of a window that did not change falls outside the',
+  '    before range, and judges nothing; from 7, a row moved only when the after median lies outside the before range.',
   '  status: the days kept, each partial one with why, and each day since the first one kept that has none (exit 1).',
   '  Exit 2: a usage error, and nothing is done.',
 ].join('\n');
@@ -61,7 +63,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const VERBS = new Set(['snapshot', 'status']);
 const FLAGS_OF = {
   table: ['--since', '--until', '--against', '--json', '--cwd', '--home'],
-  snapshot: ['--day', '--gate-log', '--cwd', '--home'],
+  snapshot: ['--day', '--gate-log', '--copied-at', '--cwd', '--home'],
   status: ['--cwd', '--home'],
 };
 
@@ -91,12 +93,16 @@ function parseArgs(argv) {
       const [since, until] = value.split('..');
       if (!isDay(since) || !isDay(until) || !(since < until)) throw new ThroughputArgError(`--against takes the window before as <since>..<until>, each YYYY-MM-DD: ${value}`);
       flags.against = { since, until };
+    } else if (arg === '--copied-at') {
+      if (!(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/.test(value) && Number.isFinite(Date.parse(value)))) throw new ThroughputArgError(`--copied-at takes a UTC time as YYYY-MM-DDTHH:MMZ: ${value}`);
+      flags['copied-at'] = Date.parse(value);
     } else if (arg === '--gate-log') {
       flags['gate-log'] = [...(flags['gate-log'] ?? []), value];
       if (flags['gate-log'].length > 2) throw new ThroughputArgError('--gate-log takes two copies at most: the newer, then the older');
     } else flags[arg.slice(2)] = value;
     i += 1;
   }
+  if (flags['copied-at'] !== undefined && !flags['gate-log']) throw new ThroughputArgError('--copied-at says when the --gate-log copies were made, and needs them');
   return { verb, flags };
 }
 
@@ -182,8 +188,8 @@ function branchConflicts(run, root, { from, to, until }) {
 
 /** The facts of `day` that a rotating record holds, the only ones a snapshot keeps: the gates. `gateLogs`, when
  * given, are archived copies of the gate log read in its place, the newer first. */
-function rotatingFacts(day, ctx, gateLogs = null) {
-  const facts = { partialFrom: null, gates: [], unavailable: {} };
+function rotatingFacts(day, ctx, gateLogs = null, copiedAt = null) {
+  const facts = { partialFrom: null, partialUntil: null, gates: [], unavailable: {} };
   const files = gateLogs ? { 'log.jsonl': gateLogs[0], 'log.1.jsonl': gateLogs[1] } : null;
   const fileSystem = files
     ? { readFileSync: (file, encoding) => { const copy = files[path.basename(file)]; if (!copy) throw Object.assign(new Error('none'), { code: 'ENOENT' }); return ctx.fileSystem.readFileSync(copy, encoding); } }
@@ -191,6 +197,13 @@ function rotatingFacts(day, ctx, gateLogs = null) {
   const log = readGateLog(ctx.home, { fileSystem });
   if (log.unavailable) facts.unavailable['gate log'] = log.unavailable.join(', ');
   else Object.assign(facts, gateFacts(log.events, dayBounds(day)));
+  // The live log holds every gate up to now; a copy only up to when it was made, which is no earlier than its newest
+  // event nor than its modification time. Made before the day settled, it may lack the day's last gates.
+  if (gateLogs && log.events?.length) {
+    // A copy that kept its source's time says only its last write: `--copied-at` says when it was made.
+    const madeAt = Math.max(...log.events.map((event) => Date.parse(event.at)).filter(Number.isFinite), copiedAt ?? ctx.fileSystem.statSync(gateLogs[0]).mtimeMs);
+    if (madeAt < settlesAt(day)) facts.partialUntil = new Date(madeAt).toISOString();
+  }
   return facts;
 }
 
@@ -296,12 +309,12 @@ function table(ctx, flags) {
   if (flags.against) return compared(ctx, flags, { since, until }, days);
   const rows = throughputRows(days);
   if (flags.json) {
-    ctx.out(JSON.stringify({ since, until, days: days.map(({ day, source, partialFrom, unavailable }) => ({ day, source, partialFrom, unavailable })), rows }, null, 2));
+    ctx.out(JSON.stringify({ since, until, days: days.map(({ day, source, partialFrom, partialUntil = null, unavailable }) => ({ day, source, partialFrom, partialUntil, unavailable })), rows }, null, 2));
     return 0;
   }
   ctx.out(`Throughput  ${since} to ${until} (UTC, until excluded; ${localWindow(since, until, ctx.timezoneOffset())})  ${ctx.root}`);
   ctx.out('  gates: every project of this machine, as the gate lock is; the other rows: this project');
-  for (const day of days) ctx.out(`  ${day.day}  ${day.source === 'snapshot' ? 'snapshot' : 'live records'}${day.partialFrom ? `, the gate log from ${day.partialFrom}` : ''}${day.snapshotUnreadable ? ` (its snapshot is unreadable: ${day.snapshotUnreadable})` : ''}`);
+  for (const day of days) ctx.out(`  ${day.day}  ${day.source === 'snapshot' ? 'snapshot' : 'live records'}${day.partialFrom ? `, the gate log from ${day.partialFrom}` : ''}${day.partialUntil ? `, the gate log until ${day.partialUntil}` : ''}${day.snapshotUnreadable ? ` (its snapshot is unreadable: ${day.snapshotUnreadable})` : ''}`);
   const width = Math.max(...rows.map((row) => row.label.length));
   for (const row of rows) ctx.out(`${row.label.padEnd(width)}  ${row.value}  [${row.source}]`);
   return 0;
@@ -312,6 +325,7 @@ function compared(ctx, flags, after, afterDays) {
   const before = flags.against;
   const beforeDays = daysBetween(before.since, before.until);
   if (beforeDays.length !== afterDays.length) throw new ThroughputArgError(`--against reads equal windows: ${beforeDays.length} days before, ${afterDays.length} after`);
+  if (before.until > after.since) throw new ThroughputArgError(`--against takes the window before: ${before.since}..${before.until} does not end by ${after.since}`);
   const rows = compareWindows(beforeDays.map((day) => dayFacts(day, ctx)), afterDays);
   if (flags.json) {
     ctx.out(JSON.stringify({ before, after, rows }, null, 2));
@@ -326,14 +340,21 @@ function compared(ctx, flags, after, afterDays) {
   return 0;
 }
 
-/** Whether `next` covers more of its day than `kept`: no start lost to the rotation, or an earlier one. */
-const fuller = (next, kept) => kept.partialFrom !== null && (next.partialFrom === null || Date.parse(next.partialFrom) < Date.parse(kept.partialFrom));
+/** Whether `next` covers more of its day than `kept`: as much at both ends, and more at one, a start lost to the
+ * rotation or an end a copy made too early lacks. */
+function fuller(next, kept) {
+  const start = (facts) => (facts.partialFrom ? Date.parse(facts.partialFrom) : -Infinity);
+  const end = (facts) => (facts.partialUntil ? Date.parse(facts.partialUntil) : Infinity);
+  return start(next) <= start(kept) && end(next) >= end(kept) && (start(next) < start(kept) || end(next) > end(kept));
+}
+
+/** When every gate of `day` has its end: a gate's start line is written after its wait and its run is bounded by
+ * gate-max, so two gate-max after midnight. */
+const settlesAt = (day) => dayBounds(day).to + 2 * ruleValue('gate-max', 'minutes') * 60000;
 
 function snapshot(ctx, flags) {
   const day = flags.day ?? yesterday(ctx.now());
-  // A gate's start line is written after its wait and its run is bounded by gate-max, so two gate-max after
-  // midnight every gate of the day has its end.
-  const settles = dayBounds(day).to + 2 * ruleValue('gate-max', 'minutes') * 60000;
+  const settles = settlesAt(day);
   if (settles > ctx.now()) {
     ctx.err(`js-harness throughput: ${day} settles at ${new Date(settles).toISOString()}: only a day whose gates have ended is kept`);
     return 2;
@@ -348,7 +369,7 @@ function snapshot(ctx, flags) {
   }
   const file = path.join(ctx.folder, `${day}.json`);
   const kept = readSnapshot(file, ctx.fileSystem);
-  const facts = rotatingFacts(day, ctx, flags['gate-log'] ?? null);
+  const facts = rotatingFacts(day, ctx, flags['gate-log'] ?? null, flags['copied-at'] ?? null);
   if (facts.unavailable['gate log']) {
     ctx.err(`js-harness throughput: the gate log could not be read (${facts.unavailable['gate log']}): nothing is kept of ${day}`);
     return 1;
@@ -359,7 +380,7 @@ function snapshot(ctx, flags) {
   }
   const record = {
     schema: SNAPSHOT_SCHEMA, day, writtenAt: new Date(ctx.now()).toISOString(), from: flags['gate-log'] ?? ['the live gate log'], ...facts,
-    ...(kept && { replaced: { at: kept.writtenAt ?? null, partialFrom: kept.partialFrom } }),
+    ...(kept && { replaced: { at: kept.writtenAt ?? null, partialFrom: kept.partialFrom, partialUntil: kept.partialUntil ?? null } }),
   };
   ctx.fileSystem.mkdirSync(ctx.folder, { recursive: true });
   // Written whole beside it first and moved, so a reader never meets half a snapshot.
@@ -367,7 +388,7 @@ function snapshot(ctx, flags) {
   ctx.fileSystem.writeFileSync(aside, `${JSON.stringify(record, null, 2)}
 `);
   ctx.fileSystem.renameSync(aside, file);
-  const notes = [kept && 'replaced a partial snapshot', facts.partialFrom && `partial: the gate log begins at ${facts.partialFrom}`, ...Object.entries(facts.unavailable).map(([what, why]) => `${what} not read: ${why}`)].filter(Boolean);
+  const notes = [kept && 'replaced a partial snapshot', facts.partialFrom && `partial: the gate log begins at ${facts.partialFrom}`, facts.partialUntil && `partial: the copies end at ${facts.partialUntil}, before the day settles; --copied-at <time> says when it was made`, ...Object.entries(facts.unavailable).map(([what, why]) => `${what} not read: ${why}`)].filter(Boolean);
   ctx.out(`js-harness throughput: kept ${day} in ${file}${notes.length ? ` (${notes.join('; ')})` : ''}`);
   return 0;
 }
@@ -387,10 +408,11 @@ function status(ctx) {
   }
   for (const day of kept) {
     const facts = readSnapshot(path.join(ctx.folder, `${day}.json`), ctx.fileSystem);
-    const notes = facts?.unreadable ? [`unreadable: ${facts.unreadable}`] : [facts.partialFrom && `partial from ${facts.partialFrom}`, ...Object.keys(facts.unavailable ?? {}).map((what) => `${what} not read`)].filter(Boolean);
+    const notes = facts?.unreadable ? [`unreadable: ${facts.unreadable}`] : [facts.partialFrom && `partial from ${facts.partialFrom}`, facts.partialUntil && `partial until ${facts.partialUntil}`, ...Object.keys(facts.unavailable ?? {}).map((what) => `${what} not read`)].filter(Boolean);
     ctx.out(`${day}  kept${notes.length ? `  ${notes.join('; ')}` : ''}`);
   }
-  const missing = daysBetween(kept[0], utcDay(ctx.now())).filter((day) => !kept.includes(day));
+  // A day that has not settled cannot be kept yet, so it is not missing.
+  const missing = daysBetween(kept[0], utcDay(ctx.now())).filter((day) => !kept.includes(day) && settlesAt(day) <= ctx.now());
   for (const day of missing) ctx.out(`${day}  MISSING: no snapshot (js-harness throughput snapshot --day ${day})`);
   return missing.length > 0 ? 1 : 0;
 }
