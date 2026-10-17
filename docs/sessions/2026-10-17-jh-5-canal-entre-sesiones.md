@@ -94,3 +94,18 @@ Left:
 - Advisories of T7: a mark removed after the merge (as at the baseline); an `unavailable` skip on a stacked base counts as coverage.
 
 Cost of the stretch: 2 Codex runs recorded (both correct); 1 gentle-ai review acknowledged, 1 not due; 1 explorer and 1 independent verifier (opus).
+
+## Fourth stretch (2026-10-17, from 16:16Z)
+At 16:16Z, after 413, 416 and 417 landed (main 644ef5d), the lead sent the gate-first T6 advisories of this summary: "EACCES is retried on POSIX too, and the retry bound has no test".
+
+Delivered:
+- PR 418, gate-first T8 and T9 (`fix/claim-retry-posix`, `odd/tasks/gate-first.md` L-T8): a held ticket rename is tried again only on Windows; on POSIX EPERM, EBUSY and EACCES are tried once and said. The bound of three tries on Windows has its test. Test first: the POSIX test failed before. gentle-ai medium, not due; Codex correct (0.98). Ready at 16:22Z.
+
+Lessons:
+- The two T6 hold tests had relied on the platform of the machine running them; they now name Windows, which they meant.
+- The context pause came at 86% in this stretch; the state went into L-T8 and the resume prompt before the next step.
+
+Left:
+- PR 418: landing is the lead's. Worktrees `claim-retry-posix`, `jh5-fourth` and those of the third stretch: their removal is the lead's.
+
+Cost of the stretch: 1 Codex run (correct); 1 gentle-ai assess, not due; no sub-agent.
