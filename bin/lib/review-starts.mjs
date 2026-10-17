@@ -65,17 +65,19 @@ const isStart = (value) =>
   typeof value.at === 'string' && !Number.isNaN(Date.parse(value.at)) && (value.from === 'birthtime' || value.from === 'seen') &&
   typeof value.seenAt === 'string' && !Number.isNaN(Date.parse(value.seenAt));
 
-/** The lines of the starts file `file`, whole ones only: a torn line, or one of another shape, is left out. None where
- * the file is not there; one that is there and cannot be read throws its code, so a row says it was not read. */
-export function readReviewStarts(file, { fileSystem: io = fs } = {}) {
-  let text;
+/** The text of the starts file, `''` where it is not there; one that is there and cannot be read throws its code. */
+function startsText(file, io) {
   try {
-    text = io.readFileSync(file, 'utf8');
+    return io.readFileSync(file, 'utf8');
   } catch (err) {
-    if (err?.code === 'ENOENT') return [];
+    if (err?.code === 'ENOENT') return '';
     throw new Error(err?.code ?? err?.message ?? String(err));
   }
-  return text.split(/\r?\n/).flatMap((line) => {
+}
+
+/** The whole lines of the starts text `text`: a torn line, or one of another shape, is left out. */
+const startsOf = (text) =>
+  text.split(/\r?\n/).flatMap((line) => {
     try {
       const parsed = JSON.parse(line);
       return isStart(parsed) ? [parsed] : [];
@@ -83,37 +85,38 @@ export function readReviewStarts(file, { fileSystem: io = fs } = {}) {
       return [];
     }
   });
+
+/** The lines of the starts file `file`, whole ones only: a torn line, or one of another shape, is left out. None where
+ * the file is not there; one that is there and cannot be read throws its code, so a row says it was not read. */
+export function readReviewStarts(file, { fileSystem: io = fs } = {}) {
+  return startsOf(startsText(file, io));
 }
 
 /** Appends to the project's starts file one line `{ v, lineage, at, from, seenAt }` for each live lineage not recorded
  * yet, and says how many. A lineage is recorded by its id and birthtime, so an id used again after a burn is a new
- * start; one seen where no birthtime is kept is recorded once, by its id. The folder is made only to write a line, so
- * a project where no review ran gets none. Two sessions recording at once may both write a line: readers keep one. */
+ * start, even after a first start only seen, unless that sight came after this folder was born; one seen where no
+ * birthtime is kept is recorded once, by its id. The file is read once a call, and the folder is made only to write a
+ * line, so a project where no review ran gets none. Two sessions recording at once may both write a line: readers
+ * keep one. */
 export function recordReviewStarts({ commonDir, home, slug, now = Date.now(), platform = process.platform, fileSystem: io = fs }) {
   const live = liveLineages(commonDir, { fileSystem: io });
   if (live.length === 0) return 0;
   const file = reviewStartsFile(home, slug);
-  const kept = readReviewStarts(file, { fileSystem: io });
-  const known = new Set(kept.map((one) => (one.from === 'birthtime' ? `${one.lineage}@${one.at}` : one.lineage)));
+  const text = startsText(file, io);
+  const kept = startsOf(text);
   const seenAt = iso(now);
   const lines = live.flatMap(({ lineage, info }) => {
     const start = startOf(info, now, platform);
-    if (known.has(start.from === 'birthtime' ? `${lineage}@${start.at}` : lineage)) return [];
-    // A lineage first recorded with its birthtime is not recorded again as seen, nor the other way round.
-    if (kept.some((one) => one.lineage === lineage && (start.from === 'seen' || one.from === 'seen'))) return [];
-    return [JSON.stringify({ v: 1, lineage, at: start.at, from: start.from, seenAt })];
+    const same = kept.filter((one) => one.lineage === lineage);
+    const recorded = start.from === 'seen'
+      ? same.length > 0
+      : same.some((one) => (one.from === 'birthtime' ? one.at === start.at : Date.parse(one.seenAt) >= Date.parse(start.at)));
+    return recorded ? [] : [JSON.stringify({ v: 1, lineage, at: start.at, from: start.from, seenAt })];
   });
   if (lines.length === 0) return 0;
   io.mkdirSync(path.dirname(file), { recursive: true });
   // A line left without its newline (a writer stopped mid-line) is ended first, so the new line is whole.
-  const unterminated = (() => {
-    try {
-      const text = io.readFileSync(file, 'utf8');
-      return text !== '' && !text.endsWith('\n');
-    } catch {
-      return false;
-    }
-  })();
+  const unterminated = text !== '' && !text.endsWith('\n');
   io.appendFileSync(file, `${unterminated ? '\n' : ''}${lines.join('\n')}\n`, 'utf8');
   return lines.length;
 }

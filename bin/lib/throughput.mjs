@@ -249,7 +249,15 @@ export function reviewFacts({ starts, ends, live }, { from, to }) {
     if (Number.isFinite(at) && !(at >= (first.get(one.lineage) ?? Infinity))) first.set(one.lineage, at);
   }
   const alive = new Set(live);
-  const endOf = new Map(ends.filter((one) => !alive.has(one.lineage)).map((one) => [one.lineage, Date.parse(one.at)]));
+  // An id used again after a burn can have two records: the end kept is the first at or after its start, else the
+  // earliest, so the row does not hang on the order the records were listed in.
+  const endOf = new Map();
+  for (const at of ends.filter((one) => !alive.has(one.lineage)).map((one) => [one.lineage, Date.parse(one.at)]).filter(([, at]) => Number.isFinite(at)).sort((a, b) => a[1] - b[1])) {
+    const [lineage, when] = at;
+    const kept = endOf.get(lineage);
+    const began = first.get(lineage);
+    if (kept === undefined || (began !== undefined && kept < began && when >= began)) endOf.set(lineage, when);
+  }
   const inDay = (at) => at >= from && at < to;
   const started = [...first].filter(([, at]) => since !== null && at >= since && inDay(at)).sort((a, b) => a[1] - b[1]).map(([lineage, at]) => ({ lineage, at: new Date(at).toISOString() }));
   const ended = [...endOf].filter(([, at]) => inDay(at)).sort((a, b) => a[1] - b[1]).map(([lineage, at]) => {
@@ -473,11 +481,14 @@ export function throughputRows(days) {
     const timed = ended.map((one) => one.minutes).filter(Number.isFinite);
     const since = read.map((day) => day.reviews.since).find(Boolean) ?? null;
     const sinceDay = since === null ? null : since.slice(0, 10);
-    const early = read.filter((day) => sinceDay === null || day.day < sinceDay).map((day) => day.day);
-    const counted = read.filter((day) => sinceDay !== null && day.day >= sinceDay);
+    // A day whose starts file could not be read keeps its acknowledgements, which come from gentle-ai's records.
+    const startsUnread = read.filter((day) => day.unavailable?.['review starts']);
+    const early = read.filter((day) => !startsUnread.includes(day) && (sinceDay === null || day.day < sinceDay)).map((day) => day.day);
+    const counted = read.filter((day) => !startsUnread.includes(day) && sinceDay !== null && day.day >= sinceDay);
     const count = (key) => counted.reduce((sum, day) => sum + day.reviews[key].length, 0);
     const parts = [`${ended.length} acknowledged${timed.length ? `, median ${Math.round(median(timed))} min (${timed.length} timed, one lineage each)` : ''}`];
     if (counted.length > 0) parts.push(`${count('started')} started, ${count('open')} open, ${count('gone')} gone without acknowledgement`);
+    if (startsUnread.length > 0) parts.push(`started not read: ${startsUnread.map((day) => `${day.day} ${day.unavailable['review starts']}`).join('; ')}`);
     if (early.length > 0) parts.push(`started not recorded: ${early.join(', ')} (${since === null ? 'no review start recorded on this machine' : `this machine records starts from ${sinceDay} ${since.slice(11, 16)}Z`})`);
     return row(label, 'reviews', parts.join('; '));
   };

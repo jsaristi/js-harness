@@ -435,3 +435,19 @@ test('a day\'s gentle-ai reviews: acknowledged once the record is there and the 
   assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', reviews: none })]), 'gentle-ai reviews').value, '0 acknowledged; started not recorded: 2026-10-17 (no review start recorded on this machine)');
   assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', unavailable: { reviews: 'EACCES' } })]), 'gentle-ai reviews').value, 'not read: 2026-10-17 EACCES');
 });
+
+test('the reviews row keeps the acknowledgements when only the starts could not be read, and ties between ends of one lineage are settled by time', () => {
+  const start = (lineage, at) => ({ v: 1, lineage, at, from: 'birthtime', seenAt: '2026-10-17T08:00:00.000Z' });
+  const ends = [{ lineage: 'again', at: '2026-10-17T11:00:00.000Z' }, { lineage: 'again', at: '2026-10-17T09:10:00.000Z' }];
+  const starts = [start('again', '2026-10-17T10:00:00.000Z')];
+  // The end kept is the first at or after the lineage's start, whatever order the records were listed in.
+  for (const order of [ends, [...ends].reverse()]) {
+    assert.deepEqual(reviewFacts({ starts, ends: order, live: [] }, dayBounds('2026-10-17')).ended, [{ lineage: 'again', at: '2026-10-17T11:00:00.000Z', minutes: 60 }]);
+  }
+  const acked = reviewFacts({ starts: [], ends: [{ lineage: 'x', at: '2026-10-17T09:00:00.000Z' }], live: [] }, dayBounds('2026-10-17'));
+  const row = rowOf(throughputRows([dayOf({ day: '2026-10-17', reviews: acked, unavailable: { 'review starts': 'EBUSY' } })]), 'gentle-ai reviews');
+  assert.equal(row.value, '1 acknowledged; started not read: 2026-10-17 EBUSY');
+  // A day whose store could not be read beside one that was: the row says what was not read.
+  const mixed = rowOf(throughputRows([dayOf({ day: '2026-10-16', unavailable: { reviews: 'EACCES' } }), dayOf({ day: '2026-10-17', reviews: acked })]), 'gentle-ai reviews');
+  assert.equal(mixed.value, 'not read: 2026-10-16 EACCES');
+});

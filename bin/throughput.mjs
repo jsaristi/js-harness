@@ -266,20 +266,30 @@ function appendOnlyFacts(day, ctx) {
     }
   })();
   if (ctx.reviews.unavailable) facts.unavailable.reviews = ctx.reviews.unavailable;
-  else facts.reviews = reviewFacts(ctx.reviews.record, bounds);
+  else {
+    const { startsUnavailable, ...record } = ctx.reviews.record;
+    if (startsUnavailable) facts.unavailable['review starts'] = startsUnavailable;
+    facts.reviews = reviewFacts(record, bounds);
+  }
   return facts;
 }
 
-/** The record of the project's gentle-ai reviews (B6): the starts the pause hook kept, and gentle-ai's terminal records
- * and live lineages in the store under the git common dir. A part that is there and cannot be read throws its code. */
+/** The record of the project's gentle-ai reviews (B6): gentle-ai's terminal records and live lineages in the store
+ * under the git common dir, and the starts the pause hook kept under the harness home. A store that cannot be read
+ * throws its code; a starts file that cannot be read is said apart (`startsUnavailable`), since the acknowledgements
+ * do not need it. */
 function readReviewRecord(root, home, slug, run, fileSystem) {
   const { commonGitDir } = gitDirs(root, run);
   if (!commonGitDir) throw new Error('no git common dir');
-  return {
-    starts: readReviewStarts(reviewStartsFile(home, slug), { fileSystem }),
+  const record = {
     ends: readReviewEnds(commonGitDir, { fileSystem }),
     live: liveLineages(commonGitDir, { fileSystem }).map((one) => one.lineage),
   };
+  try {
+    return { ...record, starts: readReviewStarts(reviewStartsFile(home, slug), { fileSystem }) };
+  } catch (err) {
+    return { ...record, starts: [], startsUnavailable: err.message };
+  }
 }
 
 /** The merge queue's land records (`<git common dir>/js-harness/lands.jsonl`): none where the file is not there, a

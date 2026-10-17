@@ -433,3 +433,14 @@ test('the gentle-ai reviews row reads the store and the starts once a run, and a
   await main({ fileSystem: denied });
   assert.match(out.join(String.fromCharCode(10)), /gentle-ai reviews +not read: 2026-10-16 EACCES; 2026-10-17 EACCES/);
 });
+
+test('a starts file that cannot be read leaves the acknowledgements from gentle-ai\'s store on the row', async () => {
+  const home = makeHome(GATES);
+  const out = [];
+  const starts = (file) => String(file).replace(/[\\/]+/g, '/').endsWith('/review-starts.jsonl');
+  const fileSystem = { ...fs, readFileSync: (file, ...rest) => (starts(file) ? (() => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); })() : fs.readFileSync(file, ...rest)) };
+  await throughputMain(['--since', '2026-10-17', '--until', '2026-10-18'], {}, {
+    cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], readLands: () => [], fileSystem,
+  });
+  assert.match(out.join(String.fromCharCode(10)), /gentle-ai reviews +0 acknowledged; started not read: 2026-10-17 EBUSY/);
+});

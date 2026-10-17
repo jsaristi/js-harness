@@ -104,3 +104,16 @@ test('the ends are the terminal records gentle-ai keeps, each its lineage at the
   const denied = { ...fs, readdirSync: () => { throw Object.assign(new Error('denied'), { code: 'EPERM' }); } };
   assert.throws(() => readReviewEnds(commonDir, { fileSystem: denied }), /EPERM/);
 }));
+
+test('an id used again after a burn is a new start, even when its first start was only seen', withStore(({ commonDir, v2, home }) => {
+  const file = reviewStartsFile(home, 'D--repo');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // The id's first life, seen before this folder was born.
+  fs.writeFileSync(file, `${JSON.stringify({ v: 1, lineage: 'review-ddd', at: '2000-01-01T00:00:00.000Z', from: 'seen', seenAt: '2000-01-01T00:00:00.000Z' })}\n`);
+  fs.mkdirSync(path.join(v2, 'review-ddd'));
+  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now: Date.now() + 1000, platform: 'win32' }), 1);
+  assert.deepEqual(readReviewStarts(file).map((one) => one.from), ['seen', 'birthtime']);
+  // A seen line written after the folder was born is that folder's: no second line for it.
+  fs.writeFileSync(file, `${JSON.stringify({ v: 1, lineage: 'review-ddd', at: new Date().toISOString(), from: 'seen', seenAt: new Date().toISOString() })}\n`);
+  assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now: Date.now(), platform: 'win32' }), 0);
+}));
