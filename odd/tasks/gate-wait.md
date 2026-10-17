@@ -2960,18 +2960,20 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     1cebd69a with its advisories (a 5 s git timeout, the protocols wording, a protocols test, the
     help lines): lib guard 24, guard 25, protocols-skill 12, manifest 173, js-harness 44 pass.
     Codex recheck e20291a..1cebd69 found three new P2 (a `\` line continuation, a relative `--cwd`
-    after a `cd`, a `#` comment), left as later work by the correction bound. gentle-ai
-    e20291ab..1cebd69a high (item 2), lenses risk and reliability: approved and acknowledged
-    (`review-ea14564f6a7371ed`), three warnings left as later work (the first-parent listing has no
-    depth bound; a relative `--cwd`; a test's unquoted temp dir).
+    after a `cd`, a `#` comment). gentle-ai e20291ab..1cebd69a high (item 2), lenses risk and
+    reliability: approved and acknowledged (`review-ea14564f6a7371ed`), three warnings left as later
+    work (the first-parent listing has no depth bound; a relative `--cwd`; a test's unquoted temp
+    dir). The pre-push hook refused the branch while the recheck's findings stood, so the three P2
+    were fixed test first in 93f8a8d (lib guard 24, guard 25 pass; it also settles the relative
+    `--cwd` warning); gentle-ai on it: medium, 15 lines, not due (under_budget). Codex recheck
+    946df82..93f8a8d correct (0.98), 3 of 3 fixed. Left as later work: the listing's depth bound and
+    the test's unquoted temp dir.
 
 ## Next
 
-T11 (JH 5, `feat/review-timeout-rule`): design settled (version 2) and built (7c44b96e, 55336181,
-then the batch for Codex's two P2 and the verifier's two blockers: a newline as a separator, a `cd`
-followed, heredoc bodies skipped, a 5 s git timeout, the protocols wording). Next: a protocols-skill
-test pinning the new text, the guard's help lines, commit, Codex `--again`, gentle-ai with
-`--escalate-item 2`, tick T11 with its evidence, PR, `notify --kind ready`; then JH 5's closing
-summary section (draft in its scratchpad) and `notify --kind closed`. Before T11, nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
+T11 (JH 5, `feat/review-timeout-rule`): built, reviewed and ticked (7c44b96e, 55336181, 1cebd69a,
+93f8a8d). Next: its PR and `notify --kind ready`; then JH 5's closing summary section and
+`notify --kind closed`. Later work from T11: a depth bound on the first-parent listing, and the
+quoted temp dir in its test. Before T11, nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
 Progress. Spent on Codex in the feature: 4,854,672 input tokens to 2026-10-13, and 206,415 on
 2026-10-16 by the session "JH 21".
