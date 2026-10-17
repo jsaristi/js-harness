@@ -4497,12 +4497,23 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     roadmap's Stack doctor list, and the three texts that still called the repository private (the comment on
     `DEFAULT_REPO`, the roadmap's "Release source", the help line of `update`). The README's example keeps no
     line for the row: its hash moves with every rule change, so a printed one would go stale.
+  - The independent verifier of `cd6a8e1` (Risk item 3): no blocker, every probe passed; its advisory that
+    `init` pins the copy's version in every project, which made the row `n/a` in each, fixed test first in
+    `34931d8` (a pin of the copy's own version is compared).
+  - gentle-ai approved `53f79c4..34931d8` (`cd6a8e1`, `34931d8`), escalated to high by item 3, lenses resilience,
+    reliability and readability; lineage `review-39e8773f218a735e`, acknowledged, authority burned. Its eleven
+    findings are advisory: R4-checkout-parse-unguarded does not hold (`readListText` catches its parse and
+    `readRules` never throws, `bin/lib/rules.mjs:300-304`); R4-serial-uncached-latency (the request runs after the
+    lookups, so a dead network adds up to 5 s) and R3-pin-null-version (an unreadable `package.json` gives `n/a`,
+    not `unknown`) are follow-ups; R2-update-help-text: the help line of `update` stopped saying "private" because
+    the repository is public, named in "What else changes".
+  - Codex reviewed `53f79c4..34931d8` in 2 parts: correct (0.88 and 0.96), recorded.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
 (worktree `D:/js-harness-worktrees/rules-installed-hash`): designed with two readers and a second round,
-built test first (see "Progress"). Next: commit through the gate; Risk item 3, so an independent verifier,
-then gentle-ai escalated at its commit, Codex, pull request, notify the lead. T18b is on `main` (pull request
+built test first, verified, approved by gentle-ai and Codex (see "Progress"). Next: the pull request and the
+lead's notice; the follow-ups above. T18b is on `main` (pull request
 345).
 
 **State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai
