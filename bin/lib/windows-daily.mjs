@@ -82,9 +82,9 @@ export function readDaily({
   return { state: 'red', run, ageMs, names, total, files, quarantined };
 }
 
-/** What `read` (`readDaily`) tells the lead, or null: `{ key, line, text }`, `key` the marker that tells it once,
- * `line` the heartbeat's end line and `text` the notice, at most NOTICE_TEXT_MAX characters and with no clock time
- * (notify refuses a stamp that is off). A red run comes first; a run that ended over STALE_MS ago is told as stale. */
+/** What `read` (`readDaily`) tells the lead of a red run, or null: `{ key, line, text }`, `key` the marker that tells
+ * it once, `line` the heartbeat's end line and `text` the notice, at most NOTICE_TEXT_MAX characters and with no clock
+ * time (notify refuses a stamp that is off). */
 export function tellingOf(read) {
   if (read.state === 'red' && !read.quarantined) {
     const { run } = read;
@@ -99,6 +99,12 @@ export function tellingOf(read) {
     }
     return { key: `told-${run.id}-${run.attempt}`, line: `WINDOWS: ${head}${read.names.length === 0 ? '' : `: ${read.names.join('; ')}`}`, text };
   }
+  return null;
+}
+
+/** What `read` tells the lead of a schedule whose newest run ended over STALE_MS ago, red or green, or null; in the
+ * shape of `tellingOf`, apart from it, so a red run told before never hides a schedule that stopped. */
+export function staleOf(read) {
   if ((read.state === 'red' || read.state === 'green') && read.ageMs > STALE_MS) {
     const why = `no run of ${DAILY_WORKFLOW} has ended in ${hoursOf(STALE_MS)} h: the newest, ${read.run.url}, ended ${hoursOf(read.ageMs)} h ago, so its schedule may be off`;
     return { key: `stale-${read.run.id}`, line: `WINDOWS: ${why}`, text: `Windows daily suite: ${why}` };
@@ -123,19 +129,25 @@ function sayRead(read) {
 export async function windowsDaily({ home, slug, cwd, notify = (argv, out) => notifyMain(argv, { cwd, stdout: out, stderr: out }), ...options }) {
   const read = readDaily({ cwd, ...options });
   const lines = [sayRead(read)];
-  const telling = tellingOf(read);
-  if (telling === null) return { lines, told: null, failed: null };
   const dir = dailyDir(home, slug);
-  fs.mkdirSync(dir, { recursive: true });
-  try {
-    fs.writeFileSync(path.join(dir, telling.key), `${telling.line}\n`, { flag: 'wx' });
-  } catch (err) {
-    if (err.code !== 'EEXIST') throw err;
-    lines.push(`windows-daily: told before (${path.join(dir, telling.key)})`);
-    return { lines, told: null, failed: null };
+  for (const telling of [tellingOf(read), staleOf(read)]) {
+    if (telling === null) continue;
+    const marker = path.join(dir, telling.key);
+    fs.mkdirSync(dir, { recursive: true });
+    try {
+      fs.writeFileSync(marker, `${telling.line}\n`, { flag: 'wx' });
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      lines.push(`windows-daily: told before (${marker})`);
+      continue;
+    }
+    const code = await notify(['--to', 'orchestrator', '--kind', 'note', telling.text], (line) => lines.push(line));
+    if (code === 0) return { lines, told: telling.line, failed: null };
+    // A notice not written is not told: the marker goes, so the next reading tries again.
+    fs.rmSync(marker, { force: true });
+    return { lines, told: telling.line, failed: `the notice to the orchestrator could not be written (notify exited ${code}); the next reading tries again` };
   }
-  const code = await notify(['--to', 'orchestrator', '--kind', 'note', telling.text], (line) => lines.push(line));
-  return { lines, told: telling.line, failed: code === 0 ? null : `the notice to the orchestrator could not be written (notify exited ${code})` };
+  return { lines, told: null, failed: null };
 }
 
 /** `windowsDaily` when the last ask of the project is `everyMs` old or older, or null. The time of the last ask is kept

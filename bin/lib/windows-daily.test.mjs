@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { STALE_MS, readDaily, tellingOf, windowsDaily, windowsDailyTick } from './windows-daily.mjs';
+import { STALE_MS, readDaily, staleOf, tellingOf, windowsDaily, windowsDailyTick } from './windows-daily.mjs';
 
 const NOW = Date.parse('2026-10-17T12:00:00Z');
 const REPO = 'owner/project';
@@ -101,7 +101,8 @@ test('no workflow, no run yet and a gh that cannot answer are said, and tell not
 
 test('a run that ended more than 26 hours ago is told as stale', () => {
   const read = readDaily({ ...base, gh: fakeGh({ run: runOf('success', { msAgo: STALE_MS + 60_000 }) }) });
-  const telling = tellingOf(read);
+  assert.equal(tellingOf(read), null);
+  const telling = staleOf(read);
   assert.equal(telling.key, 'stale-77');
   assert.match(telling.line, /^WINDOWS: no run of windows-daily\.yml has ended in 26 h/);
   assert.doesNotMatch(telling.text, /\d{1,2}:\d{2}/, 'no clock time: notify refuses a stamp that is off');
@@ -143,10 +144,26 @@ test('a red run is told once, by the one that creates its marker', async (t) => 
   assert.notEqual(rerun.told, null);
 });
 
-test('a notice that cannot be written is said', async (t) => {
-  const result = await windowsDaily({ ...base, home: tempHome(t), slug: 's', notify: async () => 1, gh: fakeGh({ run: runOf('failure'), log: RED_LOG }) });
+test('a notice that cannot be written is said, and the next reading tries it again', async (t) => {
+  const options = { ...base, home: tempHome(t), slug: 's', gh: fakeGh({ run: runOf('failure'), log: RED_LOG }) };
+  const result = await windowsDaily({ ...options, notify: async () => 1 });
   assert.notEqual(result.told, null);
   assert.match(result.failed, /notice/);
+  const sent = [];
+  const retry = await windowsDaily({ ...options, notify: async (argv) => sent.push(argv) && 0 });
+  assert.notEqual(retry.told, null);
+  assert.equal(retry.failed, null);
+  assert.equal(sent.length, 1);
+});
+
+test('a red run already told does not hide a schedule that stopped', async (t) => {
+  const options = { ...base, home: tempHome(t), slug: 's', notify: async () => 0 };
+  const red = await windowsDaily({ ...options, gh: fakeGh({ run: runOf('failure'), log: RED_LOG }) });
+  assert.match(red.told, /^WINDOWS: \S+ failure/);
+  const later = await windowsDaily({ ...options, gh: fakeGh({ run: runOf('failure', { msAgo: STALE_MS + 60_000 }), log: RED_LOG }) });
+  assert.match(later.told, /^WINDOWS: no run of windows-daily\.yml has ended in 26 h/);
+  const again = await windowsDaily({ ...options, gh: fakeGh({ run: runOf('failure', { msAgo: STALE_MS + 120_000 }), log: RED_LOG }) });
+  assert.equal(again.told, null);
 });
 
 test('the tick asks only when the last ask is older than the interval, the first tick of a new process included', async (t) => {

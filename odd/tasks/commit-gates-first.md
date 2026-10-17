@@ -340,3 +340,14 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   which this branch's test replaces. The TEMP change cleared the other 167. `windows-try/r1` is deleted
   (`git ls-remote origin 'refs/heads/windows-try/*'` lists nothing). Next: commit through the gate, gentle-ai (item
   5), Codex, push, PR, notify the lead --kind ready; after it lands, one `gh workflow run windows-daily.yml` on main.
+- L10 (2026-10-17, state): gentle-ai reviewed 8b96b9d2 (assess high, item 5; lenses risk, resilience, reliability;
+  consent granted as pre-granted; lineage review-64a52f3e0ae9f6fa). Its base was main as it was then (65a1ba4d,
+  tree 5affd6e7), while the commit sat on fe98af86: main's PRs 363 and 364 read as reverted, and two CRITICAL
+  findings asked for that. The correction was merging main (e251c12e, 120 lines, gate on GitHub 138 s); the plan
+  was submitted with one token added by me (`--cwd`, the same folder), which the contract says not to do. The
+  targeted validator approved it, and the exact acknowledgement burned the authority. Of its non-blocking findings,
+  two broke S5's words and are fixed test first in the next commit: a red run told before hid a stopped schedule
+  (`staleOf`, tried after `tellingOf`), and a notice that failed kept its marker and was never retried (the marker
+  now goes). Left as said: a slow GitHub can hold one heartbeat tick up to about 4 minutes (four gh calls of at
+  most 60 s), once an hour. The Stop hook then offered the whole branch: only its read-only status ran, nothing
+  started.
